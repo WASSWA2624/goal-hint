@@ -2,6 +2,8 @@
 
 # Monetization: phone accounts and manual mobile-money subscriptions
 
+**Repository layout:** The existing web application, supporting documentation, development tracker, assets, and tooling live in `next-js/`. File paths below are relative to the repository root; run web commands from `next-js/`. Shared `app-write-up.md` and `prompts/` remain at the root, including numbered implementation prompts in `prompts/dev-plan/`. The planned `flutter/` shell is outside this implementation plan.
+
 **Status:** Plan only, not implemented. **Date:** 2026-10-19 (plans and period start set by the owner the same day). **File:** `prompts/monetization.md`.
 
 Visitors sign in with their phone number only and pay the owner by MTN MoMo or Airtel Money. On one simple "Get access" page they report the payment: the number they paid from, the transaction ID, the amount and a screenshot, mostly filled in for them. The owner finds the money in their own mobile-money account, approves with one tap on a phone-friendly `/admin` dashboard, and sends a 12-character access code by WhatsApp or SMS. The message carries a one-tap unlock link. The code works only on the account that paid. It shows picks, probabilities and AI analysis for upcoming and live matches from the moment the payment is confirmed until the paid period ends: Daily (24 hours) UGX 1,000, Weekly (7 days) UGX 5,000 or Monthly (30 days) UGX 20,000. Every plan gives full access to every feature; only the length differs. A new number can ask for one free 2-day (48-hour) trial code. A renewal paid from an unlocked phone extends that phone by itself. Fixtures, scores, factual insights and finished-match results stay free. Everything ships behind a dashboard switch that stays **off** until the owner turns it on.
@@ -72,7 +74,7 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 | Payment report | The subscriber sends payer number (prefilled), network (auto), transaction ID, amount (prefilled with the price) and a screenshot. A pasted payment SMS fills the ID, amount and network. Payer, network and amount sit behind one "Change" line. | Owner requirement: payer number, transaction ID, amount and screenshot, as easy as possible. |
 | Payment proof | Approve only after finding the money, from the right sender, in the owner's **own** MTN or Airtel account. Claims are prefilled and editable. Automatic checks help but never replace that look. Never auto-approve. | Edited screenshots and false claims pass every automatic check. The wallet does not lie. |
 | Transaction ID | Shown upper-case without spaces; matched by `txnKey` (upper-case, every non-letter, non-digit removed). (network, `txnKey`) is unique among approved payments, enforced in the approval transaction; owner-recorded payments use the same key. An ID approved on either network is refused at submission; an ID pending in another submission is accepted and flagged. | A stranger cannot block the real payer; punctuation or a network swap cannot approve one payment twice. |
-| Gating rule | One module, `src/domain/paywall.ts` (new). A fixture is free when finished (`isPlayedFinalStatus` in `src/domain/market-settlement.ts`), canceled or awarded; everything else is gated, by status alone. | One place for policy. Settled or void picks have no betting value and form a public track record. Postponed and abandoned matches can be replayed (`docs/schedule-lifecycle.md`), so they stay gated. |
+| Gating rule | One module, `next-js/src/domain/paywall.ts` (new). A fixture is free when finished (`isPlayedFinalStatus` in `next-js/src/domain/market-settlement.ts`), canceled or awarded; everything else is gated, by status alone. | One place for policy. Settled or void picks have no betting value and form a public track record. Postponed and abandoned matches can be replayed (`next-js/docs/schedule-lifecycle.md`), so they stay gated. |
 | Gating seam | Redact on the server after the MySQL cache read and before serialization, in one gated-read module that every page factory and API handler must use. | One cached body serves both tiers; no viewer dimension in the cache key. |
 | Gated representation | Explicit `gated` variants in the wire schemas; stored schemas unchanged. Never null out fields. Never say "locked", which means cutoff-locked. | The type checker forces every consumer to handle the gated case. |
 | Paywall switch | `paywallMode`: `off` (default, subscriptions closed; predictions remain gated), `test` (anonymous and signed-in member sessions are gated), `on`. | Ships dark; the owner tests on a phone first. |
@@ -97,8 +99,8 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 - **Switch, card and policy.** Three switch states (off, test, on) with preconditions for on. The card pick line is plain text and the tile still opens the match; the feed banner and Verdict panel carry the Get access links. `publicPolicy.access` changes in 061, not Phase 0, so it always describes the running code.
 - **SMS paste.** A payer's MoMo or Airtel SMS names the recipient, not the payer. The parser fills transaction ID, amount and the receiving network, and warns when the recipient is not one of the owner's numbers; the payer number stays prefilled. The primary control is a visible paste box: long-press and Paste works in every browser with no permission prompt. The `navigator.clipboard.readText` button is an extra where the browser has it.
 - **AI reading of screenshots: not built now.** The blockers below were checked in the code:
-  - The only AI path is the worker's predictor. `assertOperationAllowed` needs `GOAL_HINT_AI_ENABLED=true` and `AI_API_KEY` (`src/server/config/runtime-policy.ts:367-375`). That same switch starts paid AI predictions for every fixture (`src/server/live/live-runtime.ts:100,129`).
-  - `createOpenAiBinding` accepts only a prepared predictor prompt with the fixed schema `goal_hint_prediction` (`src/server/predictor/openai-transport.ts:77-81`). Its byte bound would reject any image.
+  - The only AI path is the worker's predictor. `assertOperationAllowed` needs `GOAL_HINT_AI_ENABLED=true` and `AI_API_KEY` (`next-js/src/server/config/runtime-policy.ts:367-375`). That same switch starts paid AI predictions for every fixture (`next-js/src/server/live/live-runtime.ts:100,129`).
+  - `createOpenAiBinding` accepts only a prepared predictor prompt with the fixed schema `goal_hint_prediction` (`next-js/src/server/predictor/openai-transport.ts:77-81`). Its byte bound would reject any image.
   - The live cost authority approves only refresh-plan jobs.
   - A synchronous call would hold a slow-3G request open, so it could never prefill the subscriber's form, which was its purpose.
 
@@ -131,7 +133,7 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 
 ### 5.1 Data model
 
-All tables are new. Every `CREATE TABLE` states `ENGINE=InnoDB`. Instants are `DATETIME(3)` UTC; phones, hashes and codes use `utf8mb4_bin`. Each Prisma model gets a privacy comment (`prisma/schema.prisma`). Phones are canonical digits (5.2).
+All tables are new. Every `CREATE TABLE` states `ENGINE=InnoDB`. Instants are `DATETIME(3)` UTC; phones, hashes and codes use `utf8mb4_bin`. Each Prisma model gets a privacy comment (`next-js/prisma/schema.prisma`). Phones are canonical digits (5.2).
 
 | Table | Key columns | Constraints and notes |
 | --- | --- | --- |
@@ -143,24 +145,24 @@ All tables are new. Every `CREATE TABLE` states `ENGINE=InnoDB`. Instants are `D
 | `AccessCode` | `id`, `accountId` FK, `codeSalt Binary(16)`, `codeHash Char(64)`, `reference Char(4)` (`C-XXXX`), `source` (`payment`/`manual`/`reissue`/`number-change`/`trial`), `paymentSubmissionId?`, `replacedById?`, `planId?`, snapshot `planName`, `durationDays`, `priceUgx` (0 allowed), `amountReceivedUgx?` (manual only), `extensionDays` (default 0), `createdAt`, `createdBy`, `activatedAt`, `startsAt`, `endsAt` (all set at creation), `termsVersion?`, `revokedAt?`, `revokedReason?`, `note VarChar(200)?` | `paymentSubmissionId` unique, set only on the code created at approval. `replacedById` points from a reissued or number-changed code to its successor. Index `accountId`, (`accountId`,`endsAt`), `replacedById`. |
 | `SubscriptionSettings` | Single row `id = 1`; columns in 5.7; `paymentNumbersChangedAt?`, `lastMembersPurgeAt?`, `updatedAt`, `updatedBy` | A missing row means defaults (`paywallMode = off`). |
 | `RateLimitBucket` | `key Char(64)` PK (HMAC of purpose + value), `count`, `bytes`, `windowStartedAt`, `lockedUntil?` | Atomic `INSERT … ON DUPLICATE KEY UPDATE`. Do not copy the read-then-create of `AnalyticsLoginThrottle`, which races under ReadCommitted. |
-| `OwnerAuditEvent` | `id BigInt` autoincrement, `at`, `actor`, `action VarChar(48)`, `accountId?` (no FK), `targetType`, `targetId`, `details Json` | Index (`accountId`,`action`,`at`) for unlock counts. Never holds a subscriber phone, a full code or an image. Operational, not tamper-proof: the app account has `ALL PRIVILEGES` (`deploy/how-to-deploy.md:87`). |
+| `OwnerAuditEvent` | `id BigInt` autoincrement, `at`, `actor`, `action VarChar(48)`, `accountId?` (no FK), `targetType`, `targetId`, `details Json` | Index (`accountId`,`action`,`at`) for unlock counts. Never holds a subscriber phone, a full code or an image. Operational, not tamper-proof: the app account has `ALL PRIVILEGES` (`next-js/deploy/how-to-deploy.md:87`). |
 
 Code status, in order: `revoked`; `queued` (now < `startsAt`); `active` (now < `endsAt`); else `expired`. There is no unused state: every code gets its period when it is created.
 
 **Migration workflow**
-1. `npm run db:migrate -- --name subscriptions` (diffs `prisma/schema.snapshot.prisma`). Add `ENGINE=InnoDB` and collations to every `CREATE TABLE`. Commit migration and snapshot together.
-2. `prisma/mariadb/<stamp>_subscriptions.sql` (new), in this order:
+1. `npm run db:migrate -- --name subscriptions` (diffs `next-js/prisma/schema.snapshot.prisma`). Add `ENGINE=InnoDB` and collations to every `CREATE TABLE`. Commit migration and snapshot together.
+2. `next-js/prisma/mariadb/<stamp>_subscriptions.sql` (new), in this order:
    - A failing guard first (`BEGIN NOT ATOMIC … SIGNAL SQLSTATE '45000'` inside a `DELIMITER` change). It stops the import if any of the nine tables exists with another engine. The runbook runs the guard query by hand first.
    - `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB`, with FKs inline or `ADD CONSTRAINT … FOREIGN KEY IF NOT EXISTS`.
    - The `_prisma_migrations` insert, copied from `20261014131920_first_party_analytics.sql`, with the final checksum.
    - A closing check of engines, collations and the FK count.
-3. `tests/subscription_migration_test.py` (new; `test:scripts`) asserts `ENGINE=InnoDB` on every `CREATE TABLE` in both files. Integration tests cannot catch it: the isolated MySQL starts with `--no-defaults` (`src/server/backup/isolated-mysql.mjs:180`).
-4. Local grants (`docs/local-database.md`): SELECT, INSERT, UPDATE on all nine tables; DELETE only on `MemberAccount`, `MemberSession`, `PaymentScreenshot`, `RateLimitBucket`.
-5. `tests/backup-restore.integration.mjs:68` asserts 68 tables; the real count is 81 and becomes 90.
+3. `next-js/tests/subscription_migration_test.py` (new; `test:scripts`) asserts `ENGINE=InnoDB` on every `CREATE TABLE` in both files. Integration tests cannot catch it: the isolated MySQL starts with `--no-defaults` (`next-js/src/server/backup/isolated-mysql.mjs:180`).
+4. Local grants (`next-js/docs/local-database.md`): SELECT, INSERT, UPDATE on all nine tables; DELETE only on `MemberAccount`, `MemberSession`, `PaymentScreenshot`, `RateLimitBucket`.
+5. `next-js/tests/backup-restore.integration.mjs:68` asserts 68 tables; the real count is 81 and becomes 90.
 
 ### 5.2 Phone sign-in and sessions
 
-- `src/domain/phone.ts` (new, pure):
+- `next-js/src/domain/phone.ts` (new, pure):
   - `normalizePhone(input)` works in five steps:
     1. Remove spaces, dashes, dots and brackets.
     2. If the value starts with `256` and the rest starts with `+`, `0` or `256`, a full number was typed after the prefill: keep only the rest.
@@ -172,27 +174,27 @@ Code status, in order: `revoked`; `queued` (now < `startsAt`); `active` (now < `
   - `formatPhone` groups in threes: `256 772 123 456`. `maskPhone` gives "ending 456". `localUgandaPhone` gives `0772123456` (Copy button only, when settings say so).
   - `networkForPrefix(phone)`: `mtn`, `airtel` or null, from a canonical prefix table the owner confirms (section 12).
   - `waHref(phone, text)` (`https://wa.me/256772123456?text=…`) and `smsHref(phone, text)` (`sms:+256772123456?&body=…`) encode the text with `encodeURIComponent`; `telHref` adds `+` inside the link only.
-- **`PhoneInput`** (new, `src/components/ui/controls.tsx`): `type=tel`, `inputMode=tel`, `autoComplete=tel`, starts with `256`. A paste replaces the whole value. Each change normalizes and shows "256 772 123 456" under the field, or the hint. No confirm step. Without JS the server normalizes and answers `?status=invalid-phone`.
+- **`PhoneInput`** (new, `next-js/src/components/ui/controls.tsx`): `type=tel`, `inputMode=tel`, `autoComplete=tel`, starts with `256`. A paste replaces the whole value. Each change normalizes and shows "256 772 123 456" under the field, or the hint. No confirm step. Without JS the server normalizes and answers `?status=invalid-phone`.
 - **`POST /api/account/sign-in`** (new): same-origin check; refused while `paywallMode = off`; normalize.
   - Without a code: insert the account, or re-read it after a unique conflict. Delete the session named by any member cookie the browser sent, create a session, set the cookie.
   - With a code (signed-out code link, 5.3): look up the account; never create one. No account, or no matching code: the generic "Code not recognized", no session, a wrong attempt counted for the IP. A match: create the session and redeem (5.3) in the same transaction.
   - JS callers get JSON. Plain form posts get a 303 to `account` or `subscribe`, plus an optional `return` that must match `/en` or `/en/matches/<id>/<slug>`. A number never appears in a URL.
-- **Token.** `randomBytes(32).toString("base64url")`; only its SHA-256 is stored, as in `src/server/analytics/analytics-auth.ts`. Expiry `lastSeenAt + 90 days`, touched at most once a day.
+- **Token.** `randomBytes(32).toString("base64url")`; only its SHA-256 is stored, as in `next-js/src/server/analytics/analytics-auth.ts`. Expiry `lastSeenAt + 90 days`, touched at most once a day.
 - **Sign-out.** The button first removes the payment draft from `sessionStorage`. Then `POST /api/account/sign-out` deletes the row, clears the cookie, sends `Clear-Site-Data: "cache"` and 303-redirects (full navigation).
 - **Other devices.** `POST /api/account/devices` signs out the account's other sessions. Any unlocked session may use it, even after its period ended; others get 403.
 - **In-app browsers** (Facebook, Instagram) keep separate cookies and count as devices. `/en/account` checks the user agent at render time (never stored) and shows "Open this page in Chrome or Safari", with a **Copy code** button when a code was prefilled.
 - **Blocked accounts.** All sessions are deleted at block time. Sign-in still works. Code entry and upload return the generic "We couldn't complete this. Please contact us." The same message is used for other refusals.
 - **CSRF.** Every state-changing POST checks `isSameOrigin` and returns 403 otherwise.
-- **Shared helpers** move from `src/server/analytics/analytics-http.ts` to `src/server/http/private-http.ts` (new): `readCookie`, `cookie` (gains `sameSite`; analytics stays Strict), `isSameOrigin`, `clientAddress`, `readLimitedBody` (gains a deadline), `privateHeaders`, `json`, `empty`, `redirect`. `analytics-http.ts` re-exports them.
+- **Shared helpers** move from `next-js/src/server/analytics/analytics-http.ts` to `next-js/src/server/http/private-http.ts` (new): `readCookie`, `cookie` (gains `sameSite`; analytics stays Strict), `isSameOrigin`, `clientAddress`, `readLimitedBody` (gains a deadline), `privateHeaders`, `json`, `empty`, `redirect`. `analytics-http.ts` re-exports them.
 
 ### 5.3 Access codes and subscription periods
 
-- `src/domain/access-code.ts` (new):
+- `next-js/src/domain/access-code.ts` (new):
   - alphabet `0123456789ABCDEFGHJKMNPQRSTVWXYZ`; `formatCode`;
   - `extractCode(text)` takes the first dashed `XXXX-XXXX-XXXX` group in pasted text; otherwise the input, without spaces and dashes, must be 12 symbols;
   - `codeFromFragment(hash)` accepts only `#code=` plus a valid code;
   - the code field uses `autocapitalize=characters`, `autocorrect=off`, `spellcheck=false`, `autoComplete=off`.
-- `src/server/members/access-codes.ts` (new): `generateCode()` (`crypto.randomInt(32)` × 12), `newSalt()`, `hashCode(salt, code)`, `newReference()`, `activate(code, account, now, termsVersion)`. `src/domain/subscription-period.ts` (new, pure): `codeStatus(code, now)`, `chainPeriods(codes, now)`, `remainingDays(codes, now)`.
+- `next-js/src/server/members/access-codes.ts` (new): `generateCode()` (`crypto.randomInt(32)` × 12), `newSalt()`, `hashCode(salt, code)`, `newReference()`, `activate(code, account, now, termsVersion)`. `next-js/src/domain/subscription-period.ts` (new, pure): `codeStatus(code, now)`, `chainPeriods(codes, now)`, `remainingDays(codes, now)`.
 - **Activation** happens when the payment is confirmed, in the transaction that creates the code: approval of a reported payment, or the owner creating a manual or number-change code. It sets:
   - `activatedAt = now`, and `termsVersion` from the submission when there is one;
   - `startsAt = max(now, latest endsAt of the account's non-revoked codes)`;
@@ -209,7 +211,7 @@ Code status, in order: `revoked`; `queued` (now < `startsAt`); `active` (now < `
 - **Code link.** The account route's root client component handles it in every state, including mode off and refusals:
   - On load and on `hashchange`, it reads `location.hash` with `codeFromFragment` and prefills the code box.
   - It then clears the fragment with `setTimeout(() => history.replaceState(null, "", pathname + search), 0)`. The deferral lets Next's history patch install first, and `null` lets Next update its own canonical URL.
-  - Do not copy `history.state`, as `src/components/analytics/tracker.ts:76` does. In Next 16.4 that skips the router sync (`node_modules/next/dist/client/components/app-router.js:302-310`), so a later `router.refresh()` would write `#code=` back.
+  - Do not copy `history.state`, as `next-js/src/components/analytics/tracker.ts:76` does. In Next 16.4 that skips the router sync (`node_modules/next/dist/client/components/app-router.js:302-310`), so a later `router.refresh()` would write `#code=` back.
   - It never submits on its own. Signed out, it shows the phone field (`256` prefilled, focused with the cursor at the end) above the code. Signed in, it focuses Unlock.
   - On goalhint.com, the code never enters a query string, title, analytics label or server log.
 - **Entitlement** is checked on every request in one SQL round trip (session primary key, (`accountId`,`endsAt`) index). It needs all of these:
@@ -243,7 +245,7 @@ Code status, in order: `revoked`; `queued` (now < `startsAt`); `active` (now < `
     5. audits each revoke and the new code with `verifiedBy`.
 
     It then opens the code ready panel for the new number. Old-account sessions lose entitlement.
-- **Throttles** use `RateLimitBucket` with keys from `config.key(purpose, value)` (`src/server/analytics/analytics-config.ts`). They only shed load. Per-IP limits are skipped when `clientAddress` returns `unknown`. Any tripped upload cap answers "Busy, try again later" with Call and WhatsApp buttons.
+- **Throttles** use `RateLimitBucket` with keys from `config.key(purpose, value)` (`next-js/src/server/analytics/analytics-config.ts`). They only shed load. Per-IP limits are skipped when `clientAddress` returns `unknown`. Any tripped upload cap answers "Busy, try again later" with Call and WhatsApp buttons.
 
 | What | Limit |
 | --- | --- |
@@ -272,7 +274,7 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 | Screenshot | Required; "Screenshot of the payment or its SMS"; preview after choosing |
 | Checkbox | "18 or older, I accept the Terms" (records `termsVersion`). For an unlocked session whose account already accepted the current version, a one-line notice instead (the version is still recorded). |
 
-- **Paste payment SMS** (`src/domain/payment-sms.ts`, new, pure, browser-safe):
+- **Paste payment SMS** (`next-js/src/domain/payment-sms.ts`, new, pure, browser-safe):
   - The Paste button calls `navigator.clipboard.readText()` directly in the click handler. It does not call `permissions.query` first, because that throws in Safari and Firefox and can lose the iOS gesture. Any rejection focuses the box.
   - `parsePaymentSms(text, ownerNumbers)` is tolerant. It finds:
     - the UGX amount after send/paid/received wording, never the fee or balance;
@@ -291,11 +293,11 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
   - Send with `XMLHttpRequest` and a `FormData` built from exactly the six fields plus the image; it sends `Content-Length`. `xhr.upload.onprogress` shows a percentage.
   - On error or timeout, Retry keeps the fields. After success, call `router.refresh()`.
   - Without JS, step 4 shows "This form needs JavaScript. Send your screenshot on WhatsApp instead" with Call and WhatsApp buttons. The owner then uses a manual code with the ID.
-- **Server** (`POST /api/account/payments`, new; `src/server/members/payments.ts` and `src/server/images/image-format.ts`, new):
+- **Server** (`POST /api/account/payments`, new; `next-js/src/server/members/payments.ts` and `next-js/src/server/images/image-format.ts`, new):
   1. Same-origin, mode not `off`, a valid session, an account not blocked.
   2. Caps before reading the body (5.3). A tripped site-wide ceiling also writes an `uploads_busy` audit event.
   3. Require `Content-Length` ≤ 3.2 MB. Read with `readLimitedBody` under the same cap and a 90 s deadline, and parse the multipart from those bytes. Any field name outside the expected seven returns 400. The file must be ≤ 3 MB.
-  4. `imageInputFormat(bytes, { formats: ["jpeg"], maxBytes, minSide: 200, maxSide: 4096, maxPixels: 12_000_000 })` replaces `badgeInputFormat` in `src/server/images/provider-badge.ts`; the badge call keeps PNG/JPEG, 1 MB and 2048 px. Never trust the client's content type. Store the bytes as received with their SHA-256.
+  4. `imageInputFormat(bytes, { formats: ["jpeg"], maxBytes, minSide: 200, maxSide: 4096, maxPixels: 12_000_000 })` replaces `badgeInputFormat` in `next-js/src/server/images/provider-badge.ts`; the badge call keeps PNG/JPEG, 1 MB and 2048 px. Never trust the client's content type. Store the bytes as received with their SHA-256.
   5. Validate fields: payer number (`normalizePhone`), network with a configured number, transaction ID and its `txnKey`, amount, active plan (snapshot name, days, price), and the checkbox unless the notice rule applies.
   6. If an approved submission has this `txnKey` on either network: 409 "This transaction ID was already used. If you made this payment, WhatsApp us with the ID." Nothing is stored.
   7. One transaction under the account row lock: mark any pending submission of the account `superseded` (`decidedAt = now`, `decidedBy = "system:superseded"`); insert the submission and screenshot; count the stored upload; audit.
@@ -328,7 +330,7 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 
 ### 5.5 Prediction gating
 
-**Access resolution.** `src/server/members/viewer-access.ts` (new) exports `resolveViewerAccess()` for pages (React `cache()`, reads `cookies()`) and `viewerAccessFromRequest(request)` for handlers. Both return `{ tier: "full" | "free", signedIn, mode }`, in this order:
+**Access resolution.** `next-js/src/server/members/viewer-access.ts` (new) exports `resolveViewerAccess()` for pages (React `cache()`, reads `cookies()`) and `viewerAccessFromRequest(request)` for handlers. Both return `{ tier: "full" | "free", signedIn, mode }`, in this order:
 1. Every mode enforces entitlement; `off` closes new paid actions while allowing identity sign-in.
 2. A valid owner session → full. It is checked only when the owner cookie is present, with `verify(token, { touch: false })`, so pages and polls never extend the owner's 2 h idle window.
 3. An entitled member session → full.
@@ -336,48 +338,48 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 5. Anything else, including any error → free.
 
 **Policy and composition**
-- `src/domain/paywall.ts` (new, pure) is the only place policy lives:
+- `next-js/src/domain/paywall.ts` (new, pure) is the only place policy lives:
   - `isFreeFixture(status)`;
   - `usesSubscriberFeedOracle(query)`, on the **parsed** query: true when the probability range is not "any", `sort.by` is `probability`, `picks` is `only`, or `odds` is set;
   - `gateFeedResponse`, `gateDetailResponse`, `gateInsights`.
-- `src/server/members/gated-reads.ts` (new) wraps the raw readers (`readPublicMatchFeed`, `readPublicMatchDetail`, `readPublicMatchInsights`, `readPublicSlipBuild`, signatures unchanged). For free viewers it parses the output with the strict wire schema and throws `MatchFeedError("unavailable")` on failure (fail closed).
+- `next-js/src/server/members/gated-reads.ts` (new) wraps the raw readers (`readPublicMatchFeed`, `readPublicMatchDetail`, `readPublicMatchInsights`, `readPublicSlipBuild`, signatures unchanged). For free viewers it parses the output with the strict wire schema and throws `MatchFeedError("unavailable")` on failure (fail closed).
 - `createFeedRoute`, `createMatchDetailRoute`, `createSlipsRoute`, `createMatchFeedHandler`, `createMatchDetailHandler` and `createMatchInsightsHandler` take an injectable raw reader and `resolveAccess`, and always gate. Tests and fixtures inject raw readers only.
 
-**Wire schemas** (`src/domain/fixture-snapshot.ts`, `match-feed.ts`, `match-detail.ts`, `match-insights.ts`):
+**Wire schemas** (`next-js/src/domain/fixture-snapshot.ts`, `match-feed.ts`, `match-detail.ts`, `match-insights.ts`):
 - Rename the full cached types (`StoredMatchFeedResponse`, `StoredMatchDetailResponse`, …). The existing exported names become the wire unions, so every consumer fails to compile until it handles gated data. The cache keeps parsing stored schemas; no projection bump.
 - `gatedForecastSchema`: `{ gated: true, runId, runSequence?, revisionId, publishedAt, provisional?, updateDelayed?, families }`. `families` is in `publicPolicy.markets` order and counts in the family-total invariant; `prices: []`.
-- `gatedDetailSnapshotSchema`: `{ gated: true, revisionId, cycleId, historical, applicability, publishedAt, families }`. The identity invariants in `src/domain/match-detail.ts:81` apply to both variants; market equality only to the full one. A gated detail omits `odds` and has `history: { gated: true }`.
+- `gatedDetailSnapshotSchema`: `{ gated: true, revisionId, cycleId, historical, applicability, publishedAt, families }`. The identity invariants in `next-js/src/domain/match-detail.ts:81` apply to both variants; market equality only to the full one. A gated detail omits `odds` and has `history: { gated: true }`.
 - Feed, detail and insights responses carry `access: { tier, signedIn }`.
-- The gate keys on fixture status only. A gated fixture's `?cycle=` or `?revision=` snapshot is gated even when its current forecast is null (`src/server/matches/detail-service.ts:45-63` loads them regardless).
+- The gate keys on fixture status only. A gated fixture's `?cycle=` or `?revision=` snapshot is gated even when its current forecast is null (`next-js/src/server/matches/detail-service.ts:45-63` loads them regardless).
 
 **Leak points**
 
 | Leak point | File | Change |
 | --- | --- | --- |
-| Feed records (all families, prices) | `src/server/matches/public-feed.ts`, `fixture-read.ts`, `feed-http.ts` | Served through the gated reads |
-| Oracle filters and sort | `src/domain/feed-query.ts`, `src/server/matches/feed-read.ts`, `feed-error.ts`, `public-http.ts`, `src/domain/match-feed.ts:59` | `MatchFeedError("subscription-required")` in `matchFeedErrorSchema`; `publicMatchFailure` maps it to 403, non-recoverable |
-| Feed page | `src/app/_components/feed-route.tsx`, `src/server/matches/feed-page.ts` | 307 to `serializeFeedQuery` with oracle fields reset |
-| Detail current, `?revision=`, `?cycle=` | `src/server/matches/public-detail.ts`, `detail-http.ts` | `gateDetailResponse`, by status |
-| Server-rendered history | `src/app/_components/revision-history.tsx`, `match-detail-content.tsx` | Gated note; only gated data reaches them |
-| Insights analysis copies | `src/server/matches/insights-read.ts:126-133`, `insights-service.ts` | `gateInsights` drops `analysis` news items for free viewers unless the fixture is free |
-| Insights preview prop | `src/app/_components/match-detail-route.tsx` `loadPreview` | Built from gated insights |
-| Meta description, OG, Twitter | `src/server/matches/detail-page.ts` `matchDetailMetadata` | Always `detail.datedMetadataDescription` (or `metadataDescription` without a date); subscriber line only when `on` and not free; stop using `forecastMetadataDescription` and `voidForecastMetadataDescription` |
-| Indexability | `src/domain/discovery.ts:43` `matchPageIndexable` | Count families from either variant |
-| Slips | `src/server/slips/public-slips.ts`, `src/app/_components/slips-route.tsx` | Free viewers: no read; Get access empty state |
-| Card | `src/components/match/match-card.tsx:703-764`, `src/domain/match-card.ts` | Gated `shownFamily` = first eligible family in policy order; never `bestCardFamily`; no values in `data-prediction`/`data-outcome`; no tooltip, odds or hidden pick text |
-| Detail UI | `src/components/match/details/verdict.tsx`, `markets-card.tsx`, `analysis-drawer.tsx`; `src/domain/match-details.ts`, `market-ranking.ts`, `feed-presentation.ts`, `detail-presentation.ts` | Never `featuredFamily`, `bestPublishedFamily` or `noPickReason` on gated data; no values in `data-featured-pick`/`data-verdict`; no counts or pick aria-labels |
-| Client fetches | `src/state/refresh-base.ts:19`, `src/domain/feed-pagination-error.ts` | `credentials: "same-origin"`; 403 becomes `subscription-required`, which triggers `router.refresh()` |
-| Live merge and pagination | `src/domain/fixture-reconciliation.ts`, `live-refresh.ts`, `feed-pagination.ts:35-60`, `match-card.ts` `sameCardFixture`, `src/app/_components/feed-surface.tsx:158`, `src/components/match/live-match-detail.tsx:65`, `src/state/detail-api.ts` | A different `access.tier` raises `FeedPaginationError("changed")` and `router.refresh()`; provider keys include the tier; `sameCardFixture` compares the variant |
-| API headers | `src/server/matches/public-http.ts` | `privateMatchHeaders` (`private, no-store`, `vary: Cookie`) for feed, detail, insights; `/api/performance` keeps `publicMatchHeaders` |
-| Pending prompts 053–056 | `dev-plan/053-…` to `056-…` | Edited in Phase 0 (section 7) |
+| Feed records (all families, prices) | `next-js/src/server/matches/public-feed.ts`, `fixture-read.ts`, `feed-http.ts` | Served through the gated reads |
+| Oracle filters and sort | `next-js/src/domain/feed-query.ts`, `next-js/src/server/matches/feed-read.ts`, `feed-error.ts`, `public-http.ts`, `next-js/src/domain/match-feed.ts:59` | `MatchFeedError("subscription-required")` in `matchFeedErrorSchema`; `publicMatchFailure` maps it to 403, non-recoverable |
+| Feed page | `next-js/src/app/_components/feed-route.tsx`, `next-js/src/server/matches/feed-page.ts` | 307 to `serializeFeedQuery` with oracle fields reset |
+| Detail current, `?revision=`, `?cycle=` | `next-js/src/server/matches/public-detail.ts`, `detail-http.ts` | `gateDetailResponse`, by status |
+| Server-rendered history | `next-js/src/app/_components/revision-history.tsx`, `match-detail-content.tsx` | Gated note; only gated data reaches them |
+| Insights analysis copies | `next-js/src/server/matches/insights-read.ts:126-133`, `insights-service.ts` | `gateInsights` drops `analysis` news items for free viewers unless the fixture is free |
+| Insights preview prop | `next-js/src/app/_components/match-detail-route.tsx` `loadPreview` | Built from gated insights |
+| Meta description, OG, Twitter | `next-js/src/server/matches/detail-page.ts` `matchDetailMetadata` | Always `detail.datedMetadataDescription` (or `metadataDescription` without a date); subscriber line only when `on` and not free; stop using `forecastMetadataDescription` and `voidForecastMetadataDescription` |
+| Indexability | `next-js/src/domain/discovery.ts:43` `matchPageIndexable` | Count families from either variant |
+| Slips | `next-js/src/server/slips/public-slips.ts`, `next-js/src/app/_components/slips-route.tsx` | Free viewers: no read; Get access empty state |
+| Card | `next-js/src/components/match/match-card.tsx:703-764`, `next-js/src/domain/match-card.ts` | Gated `shownFamily` = first eligible family in policy order; never `bestCardFamily`; no values in `data-prediction`/`data-outcome`; no tooltip, odds or hidden pick text |
+| Detail UI | `next-js/src/components/match/details/verdict.tsx`, `markets-card.tsx`, `analysis-drawer.tsx`; `next-js/src/domain/match-details.ts`, `market-ranking.ts`, `feed-presentation.ts`, `detail-presentation.ts` | Never `featuredFamily`, `bestPublishedFamily` or `noPickReason` on gated data; no values in `data-featured-pick`/`data-verdict`; no counts or pick aria-labels |
+| Client fetches | `next-js/src/state/refresh-base.ts:19`, `next-js/src/domain/feed-pagination-error.ts` | `credentials: "same-origin"`; 403 becomes `subscription-required`, which triggers `router.refresh()` |
+| Live merge and pagination | `next-js/src/domain/fixture-reconciliation.ts`, `live-refresh.ts`, `feed-pagination.ts:35-60`, `match-card.ts` `sameCardFixture`, `next-js/src/app/_components/feed-surface.tsx:158`, `next-js/src/components/match/live-match-detail.tsx:65`, `next-js/src/state/detail-api.ts` | A different `access.tier` raises `FeedPaginationError("changed")` and `router.refresh()`; provider keys include the tier; `sameCardFixture` compares the variant |
+| API headers | `next-js/src/server/matches/public-http.ts` | `privateMatchHeaders` (`private, no-store`, `vary: Cookie`) for feed, detail, insights; `/api/performance` keeps `publicMatchHeaders` |
+| Pending prompts 053–056 | `prompts/dev-plan/053-…` to `056-…` | Edited in Phase 0 (section 7) |
 
 ### 5.6 Owner dashboard (`/admin`)
 
-Pages live under `src/app/admin/` (new):
-- Each page uses the server gate pattern of `src/app/analytics/page.tsx` (`connection()`, `cookies()`, `auth.verify()`) and shows the owner login when signed out.
-- Client parts use `src/components/analytics/dashboard/dashboard-styles.tsx`; owner copy is hard-coded English.
+Pages live under `next-js/src/app/admin/` (new):
+- Each page uses the server gate pattern of `next-js/src/app/analytics/page.tsx` (`connection()`, `cookies()`, `auth.verify()`) and shows the owner login when signed out.
+- Client parts use `next-js/src/components/analytics/dashboard/dashboard-styles.tsx`; owner copy is hard-coded English.
 - Phone-first: one column, 44 px targets, and a top tab strip with the pending count, which also shows in the document title.
-- Actions are JSON POSTs to `/api/admin/*` (new) through the shared guard in `src/server/admin/admin-http.ts` (new). Each is same-origin checked and audited.
+- Actions are JSON POSTs to `/api/admin/*` (new) through the shared guard in `next-js/src/server/admin/admin-http.ts` (new). Each is same-origin checked and audited.
 - Phone searches travel in POST bodies; links use `accountId` only.
 
 | Page | Shows | Actions |
@@ -412,7 +414,7 @@ Below the checks:
 - **WhatsApp** and **SMS** buttons built with `waHref` and `smsHref` to the account's number, opened with `target="_blank" rel="noopener noreferrer"`.
 - It stays until "Done, sent". Until then the code is kept in that tab's `sessionStorage`, so it survives the tab reloading while the owner is in WhatsApp.
 - It warns: "If it is lost, use Reissue; the old code stops working."
-- The link origin is `publicPolicy.origin` (`src/domain/public-policy.ts`) in production and the request's own origin locally.
+- The link origin is `publicPolicy.origin` (`next-js/src/domain/public-policy.ts`) in production and the request's own origin locally.
 
 Messages make no accuracy claims. New code (the account has no unlocked device):
 
@@ -433,17 +435,17 @@ Works only on your Goal Hint number ending 456.
 - **Erase personal data:** delete sessions and screenshots; clear notes, `rejectText` and `payerPhone`; set `phone = NULL` and `erasedAt`. Keep amounts, plan snapshots and transaction IDs. Audit.
 
 **Owner auth**
-- `src/server/admin/owner-auth.ts` (new) wraps `getAnalyticsServices().auth` and `requireAdmin`. `admin-http.ts` holds the one guard (owner session, plus same-origin for POSTs). Every `/admin` page and `/api/admin` route except login uses it.
+- `next-js/src/server/admin/owner-auth.ts` (new) wraps `getAnalyticsServices().auth` and `requireAdmin`. `admin-http.ts` holds the one guard (owner session, plus same-origin for POSTs). Every `/admin` page and `/api/admin` route except login uses it.
 - `createLoginHandler` and `createLogoutHandler` (`analytics-http.ts:161,189`) gain a fixed `home` option and an audit callback; mounted at `/api/admin/login` and `/api/admin/logout` (new).
-- `AnalyticsLogin` (`src/components/analytics/dashboard/analytics-login.tsx:28,33`) takes `action` and `title` ("Owner sign-in" on `/admin`); its small print (line 38) matches the new throttle. Its fields already carry `username` and `current-password` autocomplete, so the phone's password manager fills them.
+- `AnalyticsLogin` (`next-js/src/components/analytics/dashboard/analytics-login.tsx:28,33`) takes `action` and `title` ("Owner sign-in" on `/admin`); its small print (line 38) matches the new throttle. Its fields already carry `username` and `current-password` autocomplete, so the phone's password manager fills them.
 - In `analytics-auth.ts`, the login throttle locks per (username, IP) and per IP; a username-wide lock applies only after 50 failures an hour. Settings password re-entry uses the same check and throttle without a session. `verify` gains `{ touch: false }`.
 - The session keeps the same cookie and the 12 h / 2 h limits (`adminSessionRules`, `analytics-auth.ts:8-10`) unless the owner chooses otherwise (section 12). The analytics TopBar links to `/admin` and back.
 
 **Private exclusion points** cover `/admin`, `/api/admin/*`, `/en/account`, `/en/subscribe`, `/api/account/*`:
-- Metadata robots noindex: `src/app/admin/layout.tsx` (new); account and subscribe use `pageMetadata` (default `index: false`).
-- `privateHeaders` (no-store, noindex, DENY, frame-ancestors, `Referrer-Policy: same-origin`): `next.config.ts` `headers()` adds `/admin`, `/admin/:path*`, `/api/admin/:path*`, `/en/account`, `/en/subscribe`, `/api/account/:path*`.
-- Proxy X-Robots-Tag: in `src/server/seo/proxy.ts:44` the exact `/analytics` check becomes a prefix list. robots.txt (`src/server/seo/discovery-routes.ts:38`): add `/admin` only, so crawlers can see the member pages' noindex.
-- Tracker: `src/components/analytics/analytics-tracker.tsx:23` also excludes `/admin`. The collector already drops requests carrying the owner cookie (`analytics-http.ts:125`); the member cookie name must not match.
+- Metadata robots noindex: `next-js/src/app/admin/layout.tsx` (new); account and subscribe use `pageMetadata` (default `index: false`).
+- `privateHeaders` (no-store, noindex, DENY, frame-ancestors, `Referrer-Policy: same-origin`): `next-js/next.config.ts` `headers()` adds `/admin`, `/admin/:path*`, `/api/admin/:path*`, `/en/account`, `/en/subscribe`, `/api/account/:path*`.
+- Proxy X-Robots-Tag: in `next-js/src/server/seo/proxy.ts:44` the exact `/analytics` check becomes a prefix list. robots.txt (`next-js/src/server/seo/discovery-routes.ts:38`): add `/admin` only, so crawlers can see the member pages' noindex.
+- Tracker: `next-js/src/components/analytics/analytics-tracker.tsx:23` also excludes `/admin`. The collector already drops requests carrying the owner cookie (`analytics-http.ts:125`); the member cookie name must not match.
 
 ### 5.7 Dashboard-managed settings
 
@@ -460,8 +462,8 @@ Works only on your Goal Hint number ending 456.
 | Free trial for new numbers | 0–7 days, **2** (0 hides the offer) | Trial offer and trial codes (5.10) |
 | Screenshot retention after approval | 7–365 days, **90** | Purge |
 
-- `src/server/members/settings.ts` (new) caches per process for 30 s. A failed read uses the last good value; with none, access resolves to free.
-- `test` or `on` requires an active plan, one payment number with its name, and a contact or WhatsApp number. `on` also requires `privacyNotice.releaseReady` and `termsNotice.releaseReady` (`src/domain/privacy-notice.ts`, `terms-notice.ts`).
+- `next-js/src/server/members/settings.ts` (new) caches per process for 30 s. A failed read uses the last good value; with none, access resolves to free.
+- `test` or `on` requires an active plan, one payment number with its name, and a contact or WhatsApp number. `on` also requires `privacyNotice.releaseReady` and `termsNotice.releaseReady` (`next-js/src/domain/privacy-notice.ts`, `terms-notice.ts`).
 - While `off`, sign-in, code entry and uploads are refused, and both pages say "Subscriptions are not open yet". A network without a number is hidden. No new env keys.
 
 ### 5.8 Security and abuse controls
@@ -471,7 +473,7 @@ Works only on your Goal Hint number ending 456.
 | Someone knows a subscriber's number | Not unlocked: no picks, payment status, periods or history. |
 | Code guessing | 60-bit salted codes, account-scoped comparison, per-IP throttle, generic error. |
 | Code sharing or forwarding | Binding: the code works only with the account's full number, which the message does not contain; device cap with eviction (the payer notices); unlock counts; Reissue plus Sign out all devices. |
-| Code link leaks | Fragments never reach a server or the `Referer`. The page clears the fragment at once in every state, with Next's router kept in sync. The proxy adds no `#gh_attr=` on member pages. The tracker records `pathname` only and acts only on `#gh_attr=` (`src/components/analytics/tracker.ts:63-77`). The collector's `sanitizeTarget` drops fragments (`src/domain/analytics-classify.ts:180`). The code stays in that browser's history, like the message itself. |
+| Code link leaks | Fragments never reach a server or the `Referer`. The page clears the fragment at once in every state, with Next's router kept in sync. The proxy adds no `#gh_attr=` on member pages. The tracker records `pathname` only and acts only on `#gh_attr=` (`next-js/src/components/analytics/tracker.ts:63-77`). The collector's `sanitizeTarget` drops fragments (`next-js/src/domain/analytics-classify.ts:180`). The code stays in that browser's history, like the message itself. |
 | Fake, edited or reused payments | The owner checks their own wallet and the sender (primary control). (network, `txnKey`) is unique among approved payments, with lookups across networks, and owner-recorded payments share the key. Pending duplicates and identical images are flagged; reversals revoke. |
 | A stranger reports the real payer's transaction ID | Uniqueness applies only among approved payments, so the real payer is never blocked. Warnings: "payer has an account", "payer differs" and "same ID pending". The approve button names the receiving number. Owner checklist: approve the account whose number is the sender, else WhatsApp the sender first. Recovery: Reverse (`wrong-account`) and a manual code for the real payer. |
 | A stranger submits under a real user's number | New uploads supersede, never block; approve works on superseded items; sessions with a pending or superseded submission are evicted last; per-session and per-IP caps. |
@@ -481,22 +483,22 @@ Works only on your Goal Hint number ending 456.
 | CSRF and missing guards | `isSameOrigin` on every POST; Lax member cookie, Strict owner cookie; one admin guard and a structural route-guard test; table-driven 401/403 tests. |
 | Stolen owner session or owner lockout | Password re-entry for payment and contact numbers, names and menu shortcuts (the numbers Safety tips vouch for); audit with old and new values; owner sign-in audit; public pages never extend the owner session; throttle keyed by username and IP. |
 | Session fixation, cache poisoning, Back after sign-out | Fixation: a new token on unlock, and sign-in deletes the browser's previous member session. Cache poisoning: redaction happens after the cache read, and the cache stores only full bodies. Back: full navigation, no-store pages, `Clear-Site-Data: "cache"` and a `pageshow` reload from the back/forward cache. |
-| Codes or phones in logs, analytics or shared phones | Never in URLs, titles or logs on goalhint.com. `data-analytics-ignore` on code, phone, Copy, Paste and owner controls and on `tel:`, wa.me and `sms:` links. `normalizeFreeText` redacts long digit runs. The code field has `autoComplete=off`. The draft lives only in that tab and is cleared on Send and sign-out. Residual: the owner's wa.me link holds the message in its query, so it sits in the owner's browser history. Send from the phone with the WhatsApp app (`docs/subscriptions.md`). |
-| Impersonation and refund scams | Safety tips (section 6); owner checklist in `docs/subscriptions.md`: send codes only from the listed numbers. |
+| Codes or phones in logs, analytics or shared phones | Never in URLs, titles or logs on goalhint.com. `data-analytics-ignore` on code, phone, Copy, Paste and owner controls and on `tel:`, wa.me and `sms:` links. `normalizeFreeText` redacts long digit runs. The code field has `autoComplete=off`. The draft lives only in that tab and is cleared on Send and sign-out. Residual: the owner's wa.me link holds the message in its query, so it sits in the owner's browser history. Send from the phone with the WhatsApp app (`next-js/docs/subscriptions.md`). |
+| Impersonation and refund scams | Safety tips (section 6); owner checklist in `next-js/docs/subscriptions.md`: send codes only from the listed numbers. |
 | Secret dependency | Throttle HMACs use `GOAL_HINT_ANALYTICS_SECRET`; if missing, member features report "unavailable". Code hashes do not use it. |
 
 ### 5.9 SEO, caching and analytics
 
 - Crawlers are anonymous and get exactly the free view. There is no user-agent branching: it would be cloaking, and it is trivially spoofed. No paywall structured data.
-- Metadata is viewer-independent; `matchPageIndexable` keeps match pages indexable; sitemaps (`src/server/seo/discovery-read.ts`) unchanged. In past archives, finished, canceled and awarded fixtures are free.
-- `/en/subscribe` and `/en/account` are noindex and no-store, out of sitemaps and of `informationPages` (`src/domain/navigation-paths.ts`). Their titles are fixed ("Get access", "Account").
-- Pages are already dynamic (`getShellInstant` awaits `connection()` in `src/app/_components/public-shell.tsx`). Confirm on the host that HTML is `private, no-store` and that no LiteSpeed cache or CDN stores it. Anonymous GETs set no cookies.
-- Fragments: nothing server-side sees them. `createDiscoveryProxy` (`src/server/seo/proxy.ts:36-43`) puts `#gh_attr=…` on its click-ID redirect, which would replace `#code=…`. For `/en/account` and `/en/subscribe` it still strips the click IDs but sets no fragment, so the browser keeps the original one.
-- Analytics (`src/domain/analytics.ts`):
+- Metadata is viewer-independent; `matchPageIndexable` keeps match pages indexable; sitemaps (`next-js/src/server/seo/discovery-read.ts`) unchanged. In past archives, finished, canceled and awarded fixtures are free.
+- `/en/subscribe` and `/en/account` are noindex and no-store, out of sitemaps and of `informationPages` (`next-js/src/domain/navigation-paths.ts`). Their titles are fixed ("Get access", "Account").
+- Pages are already dynamic (`getShellInstant` awaits `connection()` in `next-js/src/app/_components/public-shell.tsx`). Confirm on the host that HTML is `private, no-store` and that no LiteSpeed cache or CDN stores it. Anonymous GETs set no cookies.
+- Fragments: nothing server-side sees them. `createDiscoveryProxy` (`next-js/src/server/seo/proxy.ts:36-43`) puts `#gh_attr=…` on its click-ID redirect, which would replace `#code=…`. For `/en/account` and `/en/subscribe` it still strips the click IDs but sets no fragment, so the browser keeps the original one.
+- Analytics (`next-js/src/domain/analytics.ts`):
   - Goals: `subscribe-view` (pageview of `/[locale]/subscribe`), `trial-requested`, `payment-submitted` and `code-entered`, never with values.
-  - The last three are custom events named `trial_requested`, `payment_submitted` and `code_entered`. The tracker and the collect schema accept only `^[a-z][a-z0-9_]{0,47}$` (`src/components/analytics/tracker.ts:273`, `src/domain/analytics.ts:36`).
+  - The last three are custom events named `trial_requested`, `payment_submitted` and `code_entered`. The tracker and the collect schema accept only `^[a-z][a-z0-9_]{0,47}$` (`next-js/src/components/analytics/tracker.ts:273`, `next-js/src/domain/analytics.ts:36`).
   - `routeLabels` for both pages.
-  - Document all of this in `docs/analytics.md`, noting that no-JS code entries are not counted.
+  - Document all of this in `next-js/docs/analytics.md`, noting that no-JS code entries are not counted.
 
 ### 5.10 Free trial for new numbers
 
@@ -518,7 +520,7 @@ Free trial: access until Tue 21 Oct, 14:30 EAT. Works only on your Goal Hint num
 
 ## 6. Subscriber UI changes
 
-**Routes (new).** `src/app/[locale]/account/page.tsx` and `src/app/[locale]/subscribe/page.tsx` are thin; they delegate to `src/app/_components/account-route.tsx` and `subscribe-route.tsx` (new), wrapped in `PublicShell` (non-app, like `information-shell.tsx`). Server-rendered first, small client islands; no new npm dependencies; no OCR or image libraries.
+**Routes (new).** `next-js/src/app/[locale]/account/page.tsx` and `next-js/src/app/[locale]/subscribe/page.tsx` are thin; they delegate to `next-js/src/app/_components/account-route.tsx` and `subscribe-route.tsx` (new), wrapped in `PublicShell` (non-app, like `information-shell.tsx`). Server-rendered first, small client islands; no new npm dependencies; no OCR or image libraries.
 
 **Get access page** (`/en/subscribe`), one column, numbered steps, 48 px buttons:
 
@@ -530,7 +532,7 @@ Free trial: access until Tue 21 Oct, 14:30 EAT. Works only on your Goal Hint num
 | 4 Tell us | The form in 5.4: SMS box, summary line, transaction ID, screenshot, checkbox, Send. Without JS: Call and WhatsApp fallback. |
 | After sending | Status line and "Got your code? Enter it here" with Unlock. Rejected: the reason and the form again. |
 
-One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": "Pay only to the numbers on this page, registered to {name}. Codes come only from {WhatsApp number} on WhatsApp or {contact number} by SMS. We never ask for your PIN or ask you to send money back. Checking usually takes {review time}, not guaranteed. Picks are estimates, not guarantees." No confirm dialogs, no reminder opt-in.
+One collapsed `Disclosure` (`next-js/src/components/ui/disclosure.tsx`), "Safety tips": "Pay only to the numbers on this page, registered to {name}. Codes come only from {WhatsApp number} on WhatsApp or {contact number} by SMS. We never ask for your PIN or ask you to send money back. Checking usually takes {review time}, not guaranteed. Picks are estimates, not guarantees." No confirm dialogs, no reminder opt-in.
 
 **Account page** (`/en/account`), minimal:
 
@@ -544,24 +546,24 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
 | Ended | Unlocked sessions only: "Your access ended on …", Renew (Get access), code box, Sign out others. |
 
 **Entry points**
-- **Account icon** (new `UserIcon` in `src/components/ui/icons.tsx`), beside `ThemeToggle` in three places:
+- **Account icon** (new `UserIcon` in `next-js/src/components/ui/icons.tsx`), beside `ThemeToggle` in three places:
   - `HeaderActions` (`public-shell.tsx:78`);
-  - `AppBrandBar` (`src/components/navigation/app-brand-bar.tsx:47`), with both buttons in a flex group;
-  - the match `PhoneBar` (`src/components/match/details/match-details.tsx:55`), as a fourth 2rem column.
+  - `AppBrandBar` (`next-js/src/components/navigation/app-brand-bar.tsx:47`), with both buttons in a flex group;
+  - the match `PhoneBar` (`next-js/src/components/match/details/match-details.tsx:55`), as a fourth 2rem column.
 
   It is labelled "Account" and shown only when the mode is `on`, through a `showAccount` prop from routes that already resolve access. Information pages show no icon and stay free of DB reads. No new tab-bar item.
 - **Card pick line:** plain "Pick for subscribers" with a new `SubscriberIcon` (star or key), never a padlock ("Locked prediction"). The tile still opens the match.
 - **Feed banner** for free viewers: "Picks are for subscribers · Get access".
 - **Verdict gated panel:** "Picks and probabilities for this match are for subscribers. From UGX {price} for {days}.", with a plural-aware day count, using the cheapest active plan ("From UGX 1,000 for 1 day."). It always shows two buttons: "Get access" and "Have a code?" (to `/en/account` with `return` = this match).
 - **Markets, Analysis, History drawers:** one plain line each. **Slip builder:** an `EmptyState` with Get access.
-- **Feed filters:** probability range, probability sort and picks-only disabled with "Subscribers only" (`src/components/match/feed-filters.tsx`, `feed-controls.tsx`, sort options at `feed-header.tsx:163`).
-- **Controls** in `src/components/ui/controls.tsx`:
+- **Feed filters:** probability range, probability sort and picks-only disabled with "Subscribers only" (`next-js/src/components/match/feed-filters.tsx`, `feed-controls.tsx`, sort options at `feed-header.tsx:163`).
+- **Controls** in `next-js/src/components/ui/controls.tsx`:
   - `PhoneInput`;
   - `FileInput`: any image the browser can decode, always re-encoded to JPEG, with a preview and a size hint;
   - `SegmentedChoice`: two 3rem buttons (`choice-picker.tsx` is a small dropdown and does not fit);
-  - a `size="large"` option on `Button` and `ButtonLink` (3rem, body font) for Get access and the approve button. Phone buttons are 2.25rem today (`theme.control.compactHeight`, `src/styles/theme.ts:274`).
+  - a `size="large"` option on `Button` and `ButtonLink` (3rem, body font) for Get access and the approve button. Phone buttons are 2.25rem today (`theme.control.compactHeight`, `next-js/src/styles/theme.ts:274`).
 - **Copy:**
-  - New `account.*`, `subscribe.*` and `paywall.*` keys in `src/i18n/messages/en.ts`, with `{price}`, `{days}`, `{expiresAt}`, `{phone}` and plural `account.daysLeft` and verdict day count.
+  - New `account.*`, `subscribe.*` and `paywall.*` keys in `next-js/src/i18n/messages/en.ts`, with `{price}`, `{days}`, `{expiresAt}`, `{phone}` and plural `account.daysLeft` and verdict day count.
   - Short sentences. "Subscriber" and "gated", never "locked". References keep their `P-`/`C-` prefix. Phones always as `256 772 123 456`.
   - No accuracy, win-rate, ROI or "sure win" claims anywhere.
 
@@ -577,7 +579,7 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   - §13 line 438: data minimization with phone accounts;
   - §14 line 491: manual paid access;
   - §15 lines 499, 513: acceptance covers phone sign-in, manual payment, expiry, and no leaks to anonymous viewers or crawlers.
-- `dev-plan/000-index.md`:
+- `prompts/dev-plan/000-index.md`:
   - rewrite the line 41 invariant: phone accounts, sessions, payment reports, access codes and a private owner dashboard; still no betting;
   - amend the 028–031 Gate line (line 110): public reads still work anonymously and resolve viewer access from cookies;
   - add "every prediction-bearing read goes through the gated reads";
@@ -587,8 +589,8 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   - **056:** Tips is subscriber-only for unfinished fixtures, never a probability-ordered list for free viewers.
   - **055:** Profile ignores subscriber-only defaults for free viewers and reads through the gated reads. Its avatar becomes the account entry. The check reads "anonymous visitors get no cookies".
   - **053/054:** generalize `families` and the four-family invariant to `publicPolicy.markets`. Per-market performance stays aggregate-only.
-- `docs/implementation-decisions.md`: mark as superseded the Settled "Access and product scope" row (line 214) and the no-account/no-paywall statements in the 039–042 entries (e.g. lines 2576, 2597, 2647). New rows:
-  - **OP-37:** paid-access scope and the free/paid split. It also removes unfinished-fixture picks from the reuse licence in `terms.use.body`, which reverses the 12 Oct 2026 decision in `docs/terms-page.md`.
+- `next-js/docs/implementation-decisions.md`: mark as superseded the Settled "Access and product scope" row (line 214) and the no-account/no-paywall statements in the 039–042 entries (e.g. lines 2576, 2597, 2647). New rows:
+  - **OP-37:** paid-access scope and the free/paid split. It also removes unfinished-fixture picks from the reuse licence in `terms.use.body`, which reverses the 12 Oct 2026 decision in `next-js/docs/terms-page.md`.
   - **OP-38:** plans, prices, payment numbers, UGX payments to Ugandan wallets, accounts with any country code.
   - **OP-39:** refunds, extensions, reversals, outage compensation, Electronic Transactions Act 2011 duties.
   - **OP-40:** paid launch approval, depending on OP-06, OP-08, OP-17, OP-26, OP-27, OP-31, OP-34, OP-36 (same list as section 12).
@@ -598,11 +600,11 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   - OP-27: jurisdiction, governing law, tipping licence.
   - OP-31: backups of payment and code records.
   - OP-36: bookmaker prices are subscriber-only.
-- `dev-tracker.md`: rows 057–067 (section 8). `publicPolicy.access` waits for 061.
+- `next-js/dev-tracker.md`: rows 057–067 (section 8). `publicPolicy.access` waits for 061.
 
 **With the features** (066):
-- `src/i18n/messages/en.ts`: `metadata.description` (line 24), `privacy.description` (18), `terms.description` (20), `navigation.footerNote` (33, add 18+).
-- **Privacy** (`src/i18n/messages/privacy.ts`, `src/app/_components/privacy-content.tsx`, `src/domain/privacy-notice.ts`). The copy must be true whether or not subscriptions are open. It covers:
+- `next-js/src/i18n/messages/en.ts`: `metadata.description` (line 24), `privacy.description` (18), `terms.description` (20), `navigation.footerNote` (33, add 18+).
+- **Privacy** (`next-js/src/i18n/messages/privacy.ts`, `next-js/src/app/_components/privacy-content.tsx`, `next-js/src/domain/privacy-notice.ts`). The copy must be true whether or not subscriptions are open. It covers:
   - phone-only accounts and the member cookie;
   - what a payment report holds (payer number, transaction ID, amount, screenshot), and that a pasted SMS and the form draft stay in the browser;
   - screenshot handling: owner-only access, DB storage, deletion after N days, copies in backups;
@@ -612,7 +614,7 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   - a one-line notice by the phone field and the form.
 
   Add the notice blockers `payments`, `refunds` and `data-protection` until OP-39 and OP-26 are resolved.
-- **Terms** (`src/i18n/messages/terms.ts`, `terms-content.tsx`, `terms-notice.ts`) cover:
+- **Terms** (`next-js/src/i18n/messages/terms.ts`, `terms-content.tsx`, `terms-notice.ts`) cover:
   - plans and prices, and that changes apply only to new purchases;
   - the free trial: once per number, no payment, 2 days from when the owner sends the code;
   - manual approval with no guaranteed turnaround;
@@ -624,29 +626,29 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   - 18+, no guarantee, responsible gambling;
   - the weak protection of a phone-number login;
   - the narrowed `terms.use.body`.
-- **Help** (`src/i18n/messages/help.ts`, `help-content.tsx`): replace the "free … no account" intro. Add a "Get access" topic: the free trial for new numbers, paste the SMS, tap the code link then Unlock, renewals on an unlocked phone, and open in Chrome if it opens inside Facebook. It must be true in both states.
-- `src/i18n/messages/contact.ts`: one line pointing to Get access. Keep `contactNotice.releaseReady` true, because it gates indexing in `src/server/seo/policy.ts`. Keep the contact page free of DB reads.
-- `src/domain/public-operator.ts`: keep `audience`; add a `paidAccess` fact ("paying in UGX to our Ugandan MTN or Airtel numbers").
+- **Help** (`next-js/src/i18n/messages/help.ts`, `help-content.tsx`): replace the "free … no account" intro. Add a "Get access" topic: the free trial for new numbers, paste the SMS, tap the code link then Unlock, renewals on an unlocked phone, and open in Chrome if it opens inside Facebook. It must be true in both states.
+- `next-js/src/i18n/messages/contact.ts`: one line pointing to Get access. Keep `contactNotice.releaseReady` true, because it gates indexing in `next-js/src/server/seo/policy.ts`. Keep the contact page free of DB reads.
+- `next-js/src/domain/public-operator.ts`: keep `audience`; add a `paidAccess` fact ("paying in UGX to our Ugandan MTN or Airtel numbers").
 - **Docs:**
-  - `docs/subscriptions.md` (new): model, flows, settings, purge, host checks, breach procedure, and the glossary "gated = subscriber-only; locked = cutoff-locked". Its owner checklist covers the wallet and sender check, the stolen-ID and number-change steps, sending codes only from the listed numbers, and the wa.me history residual.
-  - `docs/database.md`; `docs/local-database.md` (grants); `deploy/how-to-deploy.md` (overlay list).
-  - `docs/privacy-page.md`; `docs/terms-page.md` (41, 48).
-  - `docs/seo-discovery.md` (49–54, 128); `docs/match-feed-api.md:13`; `docs/match-detail-api.md` (8–9, 140); `docs/slip-builder.md:193`.
-  - `docs/analytics.md`, `docs/help-page.md`, `docs/contact-page.md`.
-  - `docs/development-progress.md` for each prompt.
+  - `next-js/docs/subscriptions.md` (new): model, flows, settings, purge, host checks, breach procedure, and the glossary "gated = subscriber-only; locked = cutoff-locked". Its owner checklist covers the wallet and sender check, the stolen-ID and number-change steps, sending codes only from the listed numbers, and the wa.me history residual.
+  - `next-js/docs/database.md`; `next-js/docs/local-database.md` (grants); `next-js/deploy/how-to-deploy.md` (overlay list).
+  - `next-js/docs/privacy-page.md`; `next-js/docs/terms-page.md` (41, 48).
+  - `next-js/docs/seo-discovery.md` (49–54, 128); `next-js/docs/match-feed-api.md:13`; `next-js/docs/match-detail-api.md` (8–9, 140); `next-js/docs/slip-builder.md:193`.
+  - `next-js/docs/analytics.md`, `next-js/docs/help-page.md`, `next-js/docs/contact-page.md`.
+  - `next-js/docs/development-progress.md` for each prompt.
 
 ## 8. Implementation phases
 
-Phase 0 has no code: do the section 7 Phase 0 items, then create `dev-plan/057…067` and the tracker rows below. Each prompt follows the dev-plan format (Feature / Depends on / Source / Prompt / Acceptance checks / Handoff), names its npm commands and updates `docs/development-progress.md`. Every prompt that adds an `/api/admin` route or `/admin` page extends `tests/admin-routes.test.mjs`.
+Phase 0 has no code: do the section 7 Phase 0 items, then create `prompts/dev-plan/057…067` and the tracker rows below. Each prompt follows the `prompts/dev-plan/` format (Feature / Depends on / Source / Prompt / Acceptance checks / Handoff), names its npm commands and updates `next-js/docs/development-progress.md`. Every prompt that adds an `/api/admin` route or `/admin` page extends `next-js/tests/admin-routes.test.mjs`.
 
-Manual checks are recorded in `docs/development-progress.md`:
+Manual checks are recorded in `next-js/docs/development-progress.md`:
 - Layout: at 375 px in the Browser pane.
 - Throttled checks: in desktop Chrome DevTools (device mode, Slow 3G or a 200 kbit/s custom profile), because the Browser pane cannot throttle.
-- Phone-only behaviour (clipboard, file picker, tab discard): on a real Android phone over HTTPS dev (`npx next dev --experimental-https`, with its CA trusted on the phone). `navigator.clipboard` needs a secure context, and plain-http LAN dev through `allowedDevOrigins` (`next.config.ts:10`) has none. Otherwise, in test mode after an owner-requested deploy.
+- Phone-only behaviour (clipboard, file picker, tab discard): on a real Android phone over HTTPS dev (`npx next dev --experimental-https`, with its CA trusted on the phone). `navigator.clipboard` needs a secure context, and plain-http LAN dev through `allowedDevOrigins` (`next-js/next.config.ts:10`) has none. Otherwise, in test mode after an owner-requested deploy.
 
 **057 Owner admin foundation.** After Phase 0.
 - Scope: shared private HTTP helpers; owner auth wrapper and the shared admin guard; the structural route-guard test; login `home` option, `AnalyticsLogin` props and small print; throttle keying and `verify({ touch: false })`; `/admin` login and empty shell; `/api/admin/login|logout`; all private exclusion points.
-- Files: `src/server/http/private-http.ts`, `src/server/admin/owner-auth.ts`, `src/server/admin/admin-http.ts`, `src/app/admin/layout.tsx`, `src/app/admin/page.tsx`, `src/app/api/admin/login/route.ts`, `src/app/api/admin/logout/route.ts`, `tests/admin.test.mjs`, `tests/admin-routes.test.mjs` (new); `analytics-http.ts`, `analytics-auth.ts`, `analytics-login.tsx`, `next.config.ts`, `src/server/seo/proxy.ts`, `discovery-routes.ts`, `analytics-tracker.tsx`, `tests/discovery.test.mjs:120`, `package.json` (`test:admin`).
+- Files: `next-js/src/server/http/private-http.ts`, `next-js/src/server/admin/owner-auth.ts`, `next-js/src/server/admin/admin-http.ts`, `next-js/src/app/admin/layout.tsx`, `next-js/src/app/admin/page.tsx`, `next-js/src/app/api/admin/login/route.ts`, `next-js/src/app/api/admin/logout/route.ts`, `next-js/tests/admin.test.mjs`, `next-js/tests/admin-routes.test.mjs` (new); `analytics-http.ts`, `analytics-auth.ts`, `analytics-login.tsx`, `next-js/next.config.ts`, `next-js/src/server/seo/proxy.ts`, `discovery-routes.ts`, `analytics-tracker.tsx`, `next-js/tests/discovery.test.mjs:120`, `next-js/package.json` (`test:admin`).
 - Checks (`npm run test:analytics`, `npm run test:admin`):
   - sign-in from `/admin` lands on `/admin` under "Owner sign-in";
   - `/analytics` is unchanged apart from its small print;
@@ -662,7 +664,7 @@ Manual checks are recorded in `docs/development-progress.md`:
   - `phone.ts`;
   - the settings service: mode, preconditions, menu shortcuts, copy format, password re-entry;
   - plans; the free-trial setting and account columns (5.10); the audit writer and owner sign-in audit; Plans and Settings pages and routes.
-- Files: `prisma/schema.prisma`, `prisma/schema.snapshot.prisma`, `prisma/migrations/<stamp>_subscriptions/`, `prisma/mariadb/<stamp>_subscriptions.sql`, `tests/subscription_migration_test.py`, `src/domain/phone.ts`, `src/server/members/settings.ts`, `src/server/members/plans.ts`, `src/server/admin/audit.ts`, `src/app/admin/plans/`, `src/app/admin/settings/`, `src/app/api/admin/plans/route.ts`, `src/app/api/admin/settings/route.ts`, `tests/phone.test.mjs`, `tests/members.test.mjs`, `tests/members.integration.mjs` (new); `tests/backup-restore.integration.mjs:68`, `package.json` (`test:members`).
+- Files: `next-js/prisma/schema.prisma`, `next-js/prisma/schema.snapshot.prisma`, `next-js/prisma/migrations/<stamp>_subscriptions/`, `next-js/prisma/mariadb/<stamp>_subscriptions.sql`, `next-js/tests/subscription_migration_test.py`, `next-js/src/domain/phone.ts`, `next-js/src/server/members/settings.ts`, `next-js/src/server/members/plans.ts`, `next-js/src/server/admin/audit.ts`, `next-js/src/app/admin/plans/`, `next-js/src/app/admin/settings/`, `next-js/src/app/api/admin/plans/route.ts`, `next-js/src/app/api/admin/settings/route.ts`, `next-js/tests/phone.test.mjs`, `next-js/tests/members.test.mjs`, `next-js/tests/members.integration.mjs` (new); `next-js/tests/backup-restore.integration.mjs:68`, `next-js/package.json` (`test:members`).
 - Checks (`npm run test:members`, `npm run test:admin`, `npm run check`):
   - `db:deploy`, `db:status`, `db:verify` and the engine test pass;
   - a missing settings row reads `off`;
@@ -674,7 +676,7 @@ Manual checks are recorded in `docs/development-progress.md`:
 
 **059 Phone sign-in and member sessions.** Depends on 058.
 - Scope: `PhoneInput` with live preview (no confirm step), the sign-in upsert, sessions and eviction order, cookie, throttles, sign-out, devices, the mode-off refusal, the in-app browser hint, the signed-out and signed-in account states.
-- Files: `src/server/members/member-sessions.ts`, `rate-limit.ts`, `member-http.ts`, `src/app/api/account/sign-in/route.ts`, `sign-out/route.ts`, `devices/route.ts`, `src/app/[locale]/account/page.tsx`, `src/app/_components/account-route.tsx` (new); `controls.tsx`.
+- Files: `next-js/src/server/members/member-sessions.ts`, `rate-limit.ts`, `member-http.ts`, `next-js/src/app/api/account/sign-in/route.ts`, `sign-out/route.ts`, `devices/route.ts`, `next-js/src/app/[locale]/account/page.tsx`, `next-js/src/app/_components/account-route.tsx` (new); `controls.tsx`.
 - Checks (`npm run test:members`):
   - every input in the section 9 table normalizes or is refused as listed, including inputs typed after the `256` prefill;
   - cookie flags: HttpOnly and Lax; Secure and `__Host-` in production;
@@ -694,7 +696,7 @@ Manual checks are recorded in `docs/development-progress.md`:
   - the signed-out phone-plus-code path;
   - the `#code` link: deferred `replaceState(null, …)`, full navigation after Unlock, focus rules, Copy code in in-app browsers;
   - the proxy's fragment exception; the code-accepted state; status visibility.
-- Files: `src/domain/access-code.ts`, `src/domain/subscription-period.ts`, `src/server/members/access-codes.ts`, `src/server/members/viewer-access.ts`, `src/app/api/account/code/route.ts` (new); `account-route.tsx`, `src/server/seo/proxy.ts`, `tests/discovery.test.mjs`, `src/components/analytics/tracker.ts` (line 76, same `replaceState` fix for `#gh_attr=`).
+- Files: `next-js/src/domain/access-code.ts`, `next-js/src/domain/subscription-period.ts`, `next-js/src/server/members/access-codes.ts`, `next-js/src/server/members/viewer-access.ts`, `next-js/src/app/api/account/code/route.ts` (new); `account-route.tsx`, `next-js/src/server/seo/proxy.ts`, `next-js/tests/discovery.test.mjs`, `next-js/src/components/analytics/tracker.ts` (line 76, same `replaceState` fix for `#gh_attr=`).
 - Checks (`npm run test:members`, `npm run test:seo`):
   - Periods: a code's period starts when it is created (approval or owner creation), never at unlock; two codes created concurrently for one account chain without overlap; a queued period starts at the previous end; a code entered late unlocks only the remaining time; unlock records `termsVersion` on a code without one.
   - Unlock: a device unlocked once stays entitled across renewals; the cap evicts the oldest unlock; unlock issues a new token; a correct code works while the IP bucket is locked; expiry flips without a job.
@@ -709,11 +711,11 @@ Manual checks are recorded in `docs/development-progress.md`:
 **061 Server-side prediction gating.** Depends on 060.
 - Scope: `paywall.ts`, the gated reads, wire schemas and type renames; injectable `resolveAccess` in the six factories; oracle refusal end to end, generic metadata, indexability, headers and `credentials`; a minimal neutral render in every consumer the compiler flags; `publicPolicy.access = "free-with-subscriber-predictions"`; the paywall rendering fixture and scan.
 - Files:
-  - section 5.5, plus `src/server/members/gated-reads.ts`, `tests/paywall.test.mjs`, `scripts/verify-paywall-rendering.py` and `tests/helpers/rendering/paywall/` (new);
-  - `src/domain/public-policy.ts`, `scripts/verify-seo-rendering.py:136-141`;
+  - section 5.5, plus `next-js/src/server/members/gated-reads.ts`, `next-js/tests/paywall.test.mjs`, `next-js/scripts/verify-paywall-rendering.py` and `next-js/tests/helpers/rendering/paywall/` (new);
+  - `next-js/src/domain/public-policy.ts`, `next-js/scripts/verify-seo-rendering.py:136-141`;
   - the tests that inject readers or assert headers: `device-feed-query`, `discovery` (176–195), `discovery.integration`, `feed-page`, `feed-page.integration`, `match-detail-metadata`, `match-detail-page`, `match-detail`, `match-detail.integration`, `match-feed`, `match-feed.integration`, `match-insights`, `revision-history-page`, `slip-service`, `detail-state` (47), `live-client-refresh` (108);
-  - fixture pages under `tests/helpers/rendering/{seo,match-feed-detail,slips,match-feed,match-feed-live,match-card,client-state}`, with `verify-match-feed-rendering.py`, `verify-match-card-rendering.py` and `verify-client-state-rendering.py`;
-  - `package.json` (`test:paywall`, `test:paywall:rendering`).
+  - fixture pages under `next-js/tests/helpers/rendering/{seo,match-feed-detail,slips,match-feed,match-feed-live,match-card,client-state}`, with `verify-match-feed-rendering.py`, `verify-match-card-rendering.py` and `verify-client-state-rendering.py`;
+  - `next-js/package.json` (`test:paywall`, `test:paywall:rendering`).
 - Checks (`npm test`, `npm run typecheck`, `npm run test:paywall`, `npm run test:paywall:rendering`, `test:card:rendering`, `test:state:rendering`, `test:feed-page:rendering`, `test:live-client:rendering`, `test:detail-page:rendering`, `test:history-page:rendering`, `test:seo:rendering`, `test:slips:rendering`):
   - mode `off` equals today apart from `access` and the generic metadata;
   - with mode `on`, viewers (a), (b) and (d)–(g) of section 9 get no pick, probability, reason, alternative, price or analysis item for unfinished fixtures in any page, RSC or API response;
@@ -724,7 +726,7 @@ Manual checks are recorded in `docs/development-progress.md`:
 
 **062 Gated UI, transitions and entry points.** Depends on 061.
 - Scope: the designed gated card, verdict (with "Have a code?"), markets, analysis, history, slips, filters and feed banner; account icons; `Button size="large"` and `SegmentedChoice`; tier-aware pagination, polling and insights.
-- Files: section 6 entry points; `match-card.tsx`, `verdict.tsx`, `markets-card.tsx`, `analysis-drawer.tsx`, `revision-history.tsx`, `src/components/slips/slip-builder.tsx`, `slip-table.tsx`, `feed-filters.tsx`, `feed-header.tsx`, `feed-surface.tsx`, `live-match-detail.tsx`, `feed-pagination.ts`, `fixture-reconciliation.ts`, `live-refresh.ts`, `match-card.ts`, `match-details.ts`, `feed-presentation.ts`, `detail-presentation.ts`, `controls.tsx`, `icons.tsx`, `en.ts`.
+- Files: section 6 entry points; `match-card.tsx`, `verdict.tsx`, `markets-card.tsx`, `analysis-drawer.tsx`, `revision-history.tsx`, `next-js/src/components/slips/slip-builder.tsx`, `slip-table.tsx`, `feed-filters.tsx`, `feed-header.tsx`, `feed-surface.tsx`, `live-match-detail.tsx`, `feed-pagination.ts`, `fixture-reconciliation.ts`, `live-refresh.ts`, `match-card.ts`, `match-details.ts`, `feed-presentation.ts`, `detail-presentation.ts`, `controls.tsx`, `icons.tsx`, `en.ts`.
 - Checks (`npm test`, `npm run typecheck`, `npm run test:card`, `npm run test:live-client`, `npm run test:state`, `npm run test:card:rendering`, `npm run test:paywall:rendering`):
   - Unit: a tier change yields the refresh signal; `sameCardFixture` is false when only the variant changes; gated card props carry no pick attributes; tier-mismatched pages throw `changed`.
   - Rendering scan: no probability-ranked `data-market`, no `data-featured-pick` or `data-verdict` values, and a banner that links to `/en/subscribe`.
@@ -736,7 +738,7 @@ Manual checks are recorded in `docs/development-progress.md`:
   - the form with SMS box, summary line and draft; status and code box; Safety tips; the no-JS fallback;
   - `parsePaymentSms`; browser downscale and XHR upload;
   - the upload endpoint with caps, Busy ceiling, field whitelist, transaction-ID rules, supersede and assent.
-- Files: `src/app/[locale]/subscribe/page.tsx`, `src/app/_components/subscribe-route.tsx`, `src/app/api/account/payments/route.ts`, `src/server/members/payments.ts`, `src/server/images/image-format.ts`, `src/domain/payment-sms.ts`, `tests/fixtures/payment-sms/`, `tests/payment-sms.test.mjs`, `tests/payments.test.mjs`, `tests/payments.integration.mjs` (new); `provider-badge.ts`, `controls.tsx`, `package.json` (`test:payments`).
+- Files: `next-js/src/app/[locale]/subscribe/page.tsx`, `next-js/src/app/_components/subscribe-route.tsx`, `next-js/src/app/api/account/payments/route.ts`, `next-js/src/server/members/payments.ts`, `next-js/src/server/images/image-format.ts`, `next-js/src/domain/payment-sms.ts`, `next-js/tests/fixtures/payment-sms/`, `next-js/tests/payment-sms.test.mjs`, `next-js/tests/payments.test.mjs`, `next-js/tests/payments.integration.mjs` (new); `provider-badge.ts`, `controls.tsx`, `next-js/package.json` (`test:payments`).
 - Checks (`npm run test:payments`):
   - SMS parsing: every owner-provided fixture parses to the expected ID, amount and network; fee and balance amounts are never taken; a foreign recipient warns; garbage leaves fields untouched.
   - Rejected uploads: oversize, chunked oversize, slow, PNG, WebP, wrong-magic-byte and huge-dimension files, and a request with an extra field such as `sms`. Badges keep their limits.
@@ -764,7 +766,7 @@ Manual checks are recorded in `docs/development-progress.md`:
   - manual codes with a day count, or with network and ID (owner payment);
   - free-trial cards with Send free trial and Dismiss, and the trial message (5.10);
   - revoke, extend and reissue.
-- Files: `src/app/admin/payments/`, `src/app/admin/codes/`, `src/app/api/admin/payments/[id]/route.ts`, `src/app/api/admin/payments/[id]/screenshot/route.ts`, `src/app/api/admin/codes/route.ts` (new); `tests/admin-routes.test.mjs`.
+- Files: `next-js/src/app/admin/payments/`, `next-js/src/app/admin/codes/`, `next-js/src/app/api/admin/payments/[id]/route.ts`, `next-js/src/app/api/admin/payments/[id]/screenshot/route.ts`, `next-js/src/app/api/admin/codes/route.ts` (new); `next-js/tests/admin-routes.test.mjs`.
 - Checks (`npm run test:admin`, `npm run test:payments`):
   - The screenshot route is 401 without an owner session and sends the sandbox headers.
   - Each automatic check fires on its fixture, and "payer differs" turns to a warning with either companion check.
@@ -784,13 +786,13 @@ Manual checks are recorded in `docs/development-progress.md`:
   - Overview cards (Busy alert, trials sent; revenue never counts trial codes);
   - Subscribers (search, history, sign out, block, Change number with `verifiedBy`, erase) and its routes;
   - the Audit page;
-  - the members purge for every 5.4 rule, inside the worker's maintenance loop (`src/server/live/live-runner.ts`, cron `scripts/cpanel-worker.sh`). It is claimed hourly through `lastMembersPurgeAt` with a conditional UPDATE and runs in batches of 100. Admin page loads and `npm run members:purge` are backup triggers.
-- Files: `src/app/admin/subscribers/`, `src/app/admin/audit/`, `src/app/api/admin/subscribers/route.ts`, `src/app/api/admin/subscribers/[id]/route.ts`, `src/server/members/purge.ts`, `src/workers/members.ts` (new); `live-runner.ts`, `tests/admin-routes.test.mjs`, `package.json`.
+  - the members purge for every 5.4 rule, inside the worker's maintenance loop (`next-js/src/server/live/live-runner.ts`, cron `next-js/scripts/cpanel-worker.sh`). It is claimed hourly through `lastMembersPurgeAt` with a conditional UPDATE and runs in batches of 100. Admin page loads and `npm run members:purge` are backup triggers.
+- Files: `next-js/src/app/admin/subscribers/`, `next-js/src/app/admin/audit/`, `next-js/src/app/api/admin/subscribers/route.ts`, `next-js/src/app/api/admin/subscribers/[id]/route.ts`, `next-js/src/server/members/purge.ts`, `next-js/src/workers/members.ts` (new); `live-runner.ts`, `next-js/tests/admin-routes.test.mjs`, `next-js/package.json`.
 - Checks (`npm run test:admin`, `npm run test:members`):
   - revenue sums approved, non-reversed amounts of both sources plus manual amounts by EAT week and month, never reissue or number-change codes;
   - unlock counts match `device_unlocked` rows; block signs out every device;
   - Change number requires `verifiedBy`, writes one audit row per revoke plus one for the new code, and opens the panel for the new number;
-  - a structural test in `tests/admin-routes.test.mjs` finds no code path that updates `accountId` on `AccessCode`, `PaymentSubmission` or `MemberSession` after insert;
+  - a structural test in `next-js/tests/admin-routes.test.mjs` finds no code path that updates `accountId` on `AccessCode`, `PaymentSubmission` or `MemberSession` after insert;
   - erase clears phone, payer numbers, sessions and images but keeps amounts and IDs;
   - each purge rule has an injected-clock test; pending images are never purged; superseded images purge 7 days after supersede;
   - the purge is idempotent, and two concurrent runs purge once;
@@ -798,7 +800,7 @@ Manual checks are recorded in `docs/development-progress.md`:
 
 **066 Legal, help, policy copy and analytics.** Depends on 062 and 063.
 - Scope: section 7 copy; analytics goals, event names and route labels; docs; rendering scripts that assert the old copy.
-- Files: section 7; `src/domain/analytics.ts`; `scripts/verify-terms-rendering.py`, `verify-privacy-rendering.py`, `verify-contact-rendering.py`, `verify-navigation-rendering.py:67-68`, `scripts/lib/policy_rendering.py`.
+- Files: section 7; `next-js/src/domain/analytics.ts`; `next-js/scripts/verify-terms-rendering.py`, `verify-privacy-rendering.py`, `verify-contact-rendering.py`, `verify-navigation-rendering.py:67-68`, `next-js/scripts/lib/policy_rendering.py`.
 - Checks (`npm test`, `npm run test:privacy:html`, `npm run test:terms:html`, `npm run test:contact:html`, `npm run test:navigation:html`):
   - no "free, account-free" or "no payments" statements remain;
   - the copy is true with the mode off and on, and makes no accuracy or win-rate claims;
@@ -808,9 +810,9 @@ Manual checks are recorded in `docs/development-progress.md`:
   - the account icon (`href="/en/account"`, "Account") passes that check and appears only when `on`.
 
 **067 Launch readiness.** Depends on 057–066.
-- Scope: host-check runbook and switch-on checklist in `docs/subscriptions.md`; read-only production checks.
-- Files: `scripts/verify-production-paywall.py` (new); `scripts/verify-production-seo.py` (lines 46–47, plus noindex and no-store checks for `/admin`, `/en/account`, `/en/subscribe`, and the robots `/admin` rule).
-- Checks: `npm run check` and every `test:*` above pass; real SMS fixtures for both networks are in `tests/fixtures/payment-sms/`; the copy format, menu shortcuts and prefix table match the owner's tests; the checklist is complete apart from owner items.
+- Scope: host-check runbook and switch-on checklist in `next-js/docs/subscriptions.md`; read-only production checks.
+- Files: `next-js/scripts/verify-production-paywall.py` (new); `next-js/scripts/verify-production-seo.py` (lines 46–47, plus noindex and no-store checks for `/admin`, `/en/account`, `/en/subscribe`, and the robots `/admin` rule).
+- Checks: `npm run check` and every `test:*` above pass; real SMS fixtures for both networks are in `next-js/tests/fixtures/payment-sms/`; the copy format, menu shortcuts and prefix table match the owner's tests; the checklist is complete apart from owner items.
 
 **dev-tracker rows to add**
 
@@ -830,7 +832,7 @@ Manual checks are recorded in `docs/development-progress.md`:
 
 ## 9. Testing and verification
 
-**Unit tests** (`node --conditions=react-server --test`, deterministic clocks, injected services, as in `tests/analytics.test.mjs`):
+**Unit tests** (`node --conditions=react-server --test`, deterministic clocks, injected services, as in `next-js/tests/analytics.test.mjs`):
 - `phone`: the table below; `formatPhone`, `maskPhone`, `localUgandaPhone`; `telHref`; `networkForPrefix`. `waHref` and `smsHref` round-trip a message with `#code=`, `&` and line breaks (`new URL(waHref(p, m)).searchParams.get("text") === m`).
 - `payment-sms`: every fixture; fee and balance never taken; unknown text changes nothing.
 - `access-code`: extraction from the whole message (including the link line), `codeFromFragment` (accepts only `#code=` + valid code), salted hashing.
@@ -846,13 +848,13 @@ Manual checks are recorded in `docs/development-progress.md`:
 | `256254712345678` | refused, hint "For a number outside Uganda, delete 256 …" |
 | `25677212345` (short), `256672123456` (not 2567), `0201234567`, `012345678901` | refused |
 
-**Route guards** (`tests/admin-routes.test.mjs`, from 057, in the style of `tests/boundaries.test.mjs`):
-- Every `src/app/api/admin/**/route.ts` and `src/app/admin/**/page.tsx` except login uses the shared guard.
+**Route guards** (`next-js/tests/admin-routes.test.mjs`, from 057, in the style of `next-js/tests/boundaries.test.mjs`):
+- Every `next-js/src/app/api/admin/**/route.ts` and `next-js/src/app/admin/**/page.tsx` except login uses the shared guard.
 - Every `/api/admin` route and `POST /api/account/devices` give 401/403 to no session, a cross-site request or a not-unlocked member session.
 - `POST /api/account/sign-in`, `/code` and `/payments` accept a not-unlocked session, but refuse cross-site requests (403) and mode `off`. Code and payments give a blocked account the generic refusal.
 - No code path rewrites `accountId` after insert (065).
 
-**Integration tests** run on an isolated MySQL 8.4 (`tests/members.integration.mjs`, `tests/payments.integration.mjs`). They cover:
+**Integration tests** run on an isolated MySQL 8.4 (`next-js/tests/members.integration.mjs`, `next-js/tests/payments.integration.mjs`). They cover:
 - periods chained by concurrent approvals; concurrent first sign-ins and throttle upserts; supersede under concurrency;
 - approved-key uniqueness under concurrent approvals, across punctuation variants and between owner-recorded and reported payments;
 - pending duplicates accepted, and approved IDs refused at submission on either network;
@@ -864,14 +866,14 @@ Manual checks are recorded in `docs/development-progress.md`:
 - `resolveViewerAccess` and `viewerAccessFromRequest` against real sessions and codes;
 - the purge.
 
-**Static check:** `tests/subscription_migration_test.py`.
+**Static check:** `next-js/tests/subscription_migration_test.py`.
 
-**Leak scan** (`scripts/verify-paywall-rendering.py`, new). The fixture `tests/helpers/rendering/paywall/` injects raw scenario readers and a fake access resolver keyed by a test-only header, and mounts the real API handler factories.
+**Leak scan** (`next-js/scripts/verify-paywall-rendering.py`, new). The fixture `next-js/tests/helpers/rendering/paywall/` injects raw scenario readers and a fake access resolver keyed by a test-only header, and mounts the real API handler factories.
 - Sentinels: probability 0.6173 (shown as "62%" and "61.73"), reason `SENTINEL-REASON-7Q`, uncertainty `SENTINEL-RISK-4K`, a unique selection.
 - Fixtures: scheduled; live; postponed with a void cycle; scheduled with a null forecast plus a prior cycle carrying sentinels; finished; canceled.
 - Viewers: (a) anonymous; (b) signed in, not unlocked; (c) entitled; (d) unlocked, period expired; (e) unlocked with a revoked code; (f) blocked account; (g) evicted device.
 - Fetch:
-  - every page's **raw** HTML, not `visible_html()` from `scripts/lib/rendering.py`, which strips RSC flight scripts;
+  - every page's **raw** HTML, not `visible_html()` from `next-js/scripts/lib/rendering.py`, which strips RSC flight scripts;
   - the same URLs with `RSC: 1`;
   - `/api/matches`, and `/api/matches/{id}` with and without `?revision=` and `?cycle=`;
   - the match page with `?cycle=`;
@@ -900,19 +902,19 @@ The running app has no test clock; exact timing is covered by injected-clock tes
 
 1. Build and verify everything locally. The mode stays `off`.
 2. **No production deploy unless the owner explicitly asks.** When asked, continue with the steps below.
-3. Take a private MariaDB backup, record its checksum, and verify a restore to a separate target (`deploy/how-to-deploy.md`, step 2).
+3. Take a private MariaDB backup, record its checksum, and verify a restore to a separate target (`next-js/deploy/how-to-deploy.md`, step 2).
 4. Run the overlay's engine pre-check by hand. Apply the reviewed overlay **before** the release that reads the new tables, then confirm InnoDB and the FKs. A missing settings table fails closed and hides picks for everyone.
 5. Host checks, read-only first:
    - `curl -I` on `/en` and a match page: expect `private, no-store` and no `x-litespeed-cache` or CDN cache headers;
    - `SHOW VARIABLES LIKE 'max_allowed_packet'` (≥ 8 MB) and `'innodb_log_file_size'` (> 10× 3 MB);
-   - after deploy, the Settings diagnostics show which header carries the client address and whether a forged `X-Forwarded-For` passes; record the trusted entry in `docs/subscriptions.md`;
+   - after deploy, the Settings diagnostics show which header carries the client address and whether a forged `X-Forwarded-For` passes; record the trusted entry in `next-js/docs/subscriptions.md`;
    - a 3 MB upload passes the LiteSpeed/Passenger body limit (if not, lower the cap), and a slow upload survives 90 s;
    - owner login from the owner's phone.
-6. Deploy the app and the worker (`scripts/deploy-worker-cpanel.py`; the worker's DB account needs DELETE on the purged tables) with the mode `off`. Visitors see no change except that match descriptions no longer quote the pick.
+6. Deploy the app and the worker (`next-js/scripts/deploy-worker-cpanel.py`; the worker's DB account needs DELETE on the purged tables) with the mode `off`. Visitors see no change except that match descriptions no longer quote the pick.
 7. The owner enters plans, numbers, names, menu shortcuts and the copy format, and switches to `test`. In a browser without the owner session, the owner opens goalhint.com/en/account directly (the icon is hidden in test mode). They sign in with their own number and send a real small payment from another phone, or create a manual code. On a phone they check gated → unlocked, including the code link, a renewal and the phone-only checks of 063.
 8. Switch-on gate: OP-40 approved; privacy and terms release-ready and effective; section 12 legal items confirmed. Then:
    - switch to `on`;
-   - run `scripts/verify-production-paywall.py`: cookie-less GETs to `/en`, an upcoming match, `/api/matches` and insights news must show no pick, probability or analysis for unfinished fixtures, no `Set-Cookie`, and `private, no-store`;
+   - run `next-js/scripts/verify-production-paywall.py`: cookie-less GETs to `/en`, an upcoming match, `/api/matches` and insights news must show no pick, probability or analysis for unfinished fixtures, no `Set-Cookie`, and `private, no-store`;
    - if it fails, switch back to `off`;
    - watch the queue, Busy alerts and errors for the first week.
 9. **Rollback:** switch to `off` (effective within 30 s). A code rollback to a release before 061 removes the gate while periods run and restores the old copy, so prefer a forward fix and extend affected codes. No env keys were added, so older releases still start.

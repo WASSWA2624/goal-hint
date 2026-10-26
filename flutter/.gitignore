@@ -1,0 +1,18 @@
+# Flutter/Dart dependencies and generated output.
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+**/ephemeral/
+
+# Local SDK paths, signing credentials, and build secrets.
+android/local.properties
+android/key.properties
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+*.jks
+*.keystore
+.env*
+!.env.example

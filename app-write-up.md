@@ -9,10 +9,16 @@ verified registration/recovery supersede the historical phone-only/no-password/n
 default verification channel, with SMS selectable. Either account change requires a code sent to the registered phone,
 valid for five minutes; no old password or different new password is required. Private environment-listed administrator
 numbers use a code instead of a password, retain their verified session until logout/expiry and receive both full member
-content and dashboard access without a subscription. See [member authentication](docs/member-authentication.md) and
-[gateway setup](docs/message-gateway-setup.md).
+content and dashboard access without a subscription. See [member authentication](next-js/docs/member-authentication.md) and
+[gateway setup](next-js/docs/message-gateway-setup.md).
 
 Prepared for Wasswa Wilson • 7 October 2026 • Version 1.11 (Best Slips home, all-status subscription gates and open local test flows, 20 October 2026; paid access 1.9, 19 October 2026)
+
+## Repository architecture and implementation status
+
+- **`next-js/` — implemented web application.** The Next.js app owns screens, navigation, business logic, APIs, data access, workers, and web theming. Its source, tests, database files, scripts, deployment instructions, documentation, development tracker, and branding assets live together in this directory. Run web development, test, build, and deployment commands from `next-js/`.
+- **`flutter/` — planned installable shell.** No Flutter application source is implemented yet. The planned minimal wrapper will display the hosted Next.js app on Android, iOS, Windows, macOS, and Linux, with centrally configured development/production URLs and matching installed branding. After a successful online load, it must support persistent offline startup using permitted cached assets and content and refresh safely when connectivity returns. Next.js remains the single implementation of app screens and business logic; native configuration may require a new Flutter build. See [the Flutter shell requirements](prompts/flutter-app-shell.md).
+- **Repository root — shared project material.** Keep this specification and `prompts/` at the root, including the numbered implementation prompts in `prompts/dev-plan/`. Web-specific references below point into `next-js/`. The historical launch scope below describes the web product; the Flutter wrapper is a separate planned addition.
 
 | Product setting | Decision |
 | --- | --- |
@@ -88,7 +94,7 @@ Best Slips is the default homepage (`/en`). Daily slips target combined odds aro
 
 ### Search and filters
 
-The feed screens follow the layout templates in `dev-plan/templates/` on phones and desktops; the templates fix layout, while theme tokens and stored data supply branding and content. Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range. Offer a single date or a range of up to 31 days with Today, Next 3 days, Next 7 days and Next 30 days presets; multi-select league, country and market filters; a probability range; and an odds range once provider odds are stored. Use clear active states, Reset and an Apply action that shows the matching count. Live and Results are navigation sections over the same feed. When paid access is on, the probability range, probability sort, picks-only and odds filters are for entitled viewers: other viewers see them disabled with "Subscribers only", pages drop them with a redirect and the API refuses them with 403 `subscription-required`.
+The feed screens follow the layout templates in `prompts/dev-plan/templates/` on phones and desktops; the templates fix layout, while theme tokens and stored data supply branding and content. Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range. Offer a single date or a range of up to 31 days with Today, Next 3 days, Next 7 days and Next 30 days presets; multi-select league, country and market filters; a probability range; and an odds range once provider odds are stored. Use clear active states, Reset and an Apply action that shows the matching count. Live and Results are navigation sections over the same feed. When paid access is on, the probability range, probability sort, picks-only and odds filters are for entitled viewers: other viewers see them disabled with "Subscribers only", pages drop them with a redirect and the API refuses them with 403 `subscription-required`.
 
 Each card shows one pick: the most likely available pick among the selected markets, ties broken in policy order. Probability sorting and the probability range use that shown pick, so different markets may be ranked together; the card always names the market. Default to kickoff order with fixture ID as a stable tie-breaker; either order can be reversed, and missing probabilities sort last. When paid access is on and the viewer is not entitled, a card for an unfinished fixture shows "Pick for subscribers" for the first market family with a published pick, in policy order, instead of the pick and probability.
 
@@ -234,7 +240,7 @@ Third-party team, competition and editorial images remain approved HTTPS URL str
 
 Confirm public display rights, credential-free URLs and media limits. API-Football’s media CDN has separate throttling, so direct logo display must be tested for the expected audience. [6]
 
-Original Goal Hint logos, wordmarks, favicons and social graphics are first-party build assets and may be bundled in the repository. Use the [brand guide](assets/brand/README.md) and named assets in `public/brand/`. Keep reusable sources; this exception does not permit copying provider imagery.
+Original Goal Hint logos, wordmarks, favicons and social graphics are first-party build assets and may be bundled in the repository. Use the [brand guide](next-js/assets/brand/README.md) and named assets in `next-js/public/brand/`. Keep reusable sources; this exception does not permit copying provider imagery.
 
 ## 7 How AI produces a prediction
 

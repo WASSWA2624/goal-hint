@@ -1,0 +1,4990 @@
+# Development progress
+
+## Gateway choice, administrator code login and compact headers
+
+The full Goal Hint wordmark now remains visible on mobile, including match details. Shared square header controls are
+32px high on phones and 36px on desktop; Login/Register use less vertical padding and the theme icon has a visible border.
+Verification forms default to WhatsApp and offer explicit SMS selection, with shared resend/rate limits and the same
+five-minute code/proof lifetime. The official Meta adapter sends approved authentication copy-code templates; SMS uses
+the existing Android gateway adapter. Neither falls back silently or claims a delivery receipt.
+
+Added a private JSON administrator phone allowlist. Fresh admin logins require a phone-ownership code instead of a
+password, even for accounts that previously had a password. Current allowlisted, unblocked authenticated members receive
+full subscriber content and dashboard access; dashboard settings use this verified session without a password prompt.
+Removing a number removes its privilege. Normal phone changes cannot claim another configured administrator number.
+Dashboard and Account logout revoke the member session. Admin labels remain readable while audits retain opaque actors.
+Account and Subscribe omit purchase prompts for these administrators.
+
+The supplied administrator number is saved only in the existing ignored .env.local. A private .env.development.local
+contains the hosted SMS endpoint and empty provider credential fields. Gateway installation/credentials and Meta
+onboarding/template approval remain operator steps; no live verification message has been sent. See message-gateway-setup.md.
+
+Validation: production build, full zero-warning ESLint and typecheck pass; 1,626 Node tests pass with one existing skip.
+Twelve real isolated MySQL integration cases include passwordless admin identity/session persistence, whitelist removal,
+shared delivery limits, escalation refusal and protected settings/audit writes under the restricted application role.
+Browser checks pass 24 header combinations plus 48 verification observations (60 intercepted requests), covering phone
+widths, both themes, expiry/resend, selected channels, phone/password changes and admin redirects. Main-app registration
+and theme interaction also pass a local browser smoke check. Logs: .tmp/member-channels-admin-*; screenshots: output/playwright/.
+
+## 20 October 2026 — Single Rail member accounts
+
+Implemented the owner-selected Single Rail header for desktop, mobile feeds, match details and information pages.
+Login/Register retain icons and labels beside the persistent icon-only theme toggle; authenticated members see a
+generic avatar, registered number, Account and Log out. Account details use the compact shared square surface, phone
+and password actions, and a second Log out button at the bottom. Subscription/device controls remain available in a
+collapsed Subscription & access section.
+
+Added password login, SMS registration/recovery and a reusable verification flow for either account change. Codes and
+their single-use proofs expire at the same original five-minute deadline, including database lock waits; no old
+password or password-history restriction applies. Passwords reuse salted scrypt, challenges use keyed hashes and
+durable throttles, and successful changes rotate sessions while retaining account/payment identity and this device's
+subscription unlock. Historical number-only cookies are rejected by both session verification and gated SQL reads.
+Existing accounts establish their first password through SMS recovery. No credentials enter URLs or browser storage.
+
+The outbound adapter supports the owner-requested open-source SMS Gateway for Android through its verified HTTPS
+messages contract. Gateway installation, Android phone/SIM pairing and server-only credentials are still needed for
+real delivery; missing setup fails closed. No external SMS was sent. See member-authentication.md.
+
+Validation: full Node suite passes sequentially (1,606 passed, one existing skip); full zero-warning ESLint, typecheck,
+18 Python tests and the production build pass. Auth/member/payment checks include real isolated MySQL migration,
+registration, phone identity preservation, same-password changes, replay/concurrency, five-minute expiry and legacy
+session rejection. Account HTML passes seven injected viewer states. Browser checks cover both themes at 320/375/768/
+1440px, guest controls, signed-in dropdown dismissal/focus and the full SMS UI flows using explicitly synthetic API
+responses, including invalid codes, expiry, resend and password mismatch. Logs are under .tmp/account-*; screenshots
+are under output/playwright/single-rail-*. The local forward migration and narrow verification-table CRUD grant are
+applied. A rolled-back application-role CRUD probe passed and database readiness reports ready. The local service was
+restored through its existing launcher after identifying MSIX filesystem redirection to a stale shadow directory;
+the actual database required no reconstruction. Its identity, 93 application-table schemas, 32 migration-history rows
+and core account/payment counts match the inventory taken before shutdown. See local-database.md for the path caveat.
+
+## 20 October 2026 — local repair and Best Slips follow-up
+
+Owner authorized non-destructive drift/restore repair, visible auth/access entry
+points, all-status subscription gates and Best Slips as home. Public Best Slips
+summaries alone are the approved exception; match selections stay private.
+The owner later requested that nothing remain closed and supplied the MTN registered name. Local test mode is now open with the approved receiving/contact details and three plans; existing data/plans were preserved and changes audited. Nothing was deployed.
+
+The follow-up moves both receiving-wallet numbers/names and independent support
+call/WhatsApp numbers to typed environment configuration. Admin Settings exposes
+managed fields read-only and rejects API edits before password/database work.
+The same environment overlay controls locked payment-submission decisions;
+historical database values are retained. A MySQL regression proves that an
+environment-only Airtel wallet accepts reports and a stale stored wallet cannot.
+The owner-supplied Airtel identity is configured only in the ignored local env.
+
+The shared phone field now covers sign-in, payment and admin phone forms, with
+the existing server normalizer, telephone keyboard/autofill, a forwarded native
+ref, canonicalization on blur, complete/partial paste handling, bounded input
+and native/linked inline validation. Square 44px/16px mobile controls match the
+existing chrome. Browser checks cover caret preservation, keyboard order,
+controlled updates, read-only behaviour and zero overflow at 375px. No real
+member/payment was created by browser acceptance. Both original network logos
+load on the real local payment page. The 39 real-MySQL member/payment/admin checks
+pass without skips; Python passes 18; final lint and the actual-env production
+build pass. See subscriptions.md for configuration and payment-branding.md for
+artwork sources.
+
+The forward repair preserves 91 durable tables and all 29 historical migration
+rows. Drift verification passes. The 93-table backup suite passes 10 real isolated
+MySQL base/PITR/tamper/least-privilege checks without skips. No reset or source
+data deletion was used. Original migration files remain unchanged.
+
+Best Slips now owns `/en`; Matches uses `/en/matches`, preserving old feed-query
+bookmarks by redirect. The generator reuses the existing bounded stored cohort
+and price checks, requires a qualified calibrated joint model, ranks joint
+probability/count/odds and sorts matches by individual probability. Page/API
+projections omit selections and internal IDs for free viewers and recheck access
+after generation. Account/Get access stay visible. Closed mode remains supported; the local app now uses open test mode. Valid existing unlocked periods are honored until expiry.
+
+The final full unit suite passes 1,593 checks with one existing Windows skip (1,594 total); Python passes 18. The final sweep updated stale anonymous-test-mode and dashboard identity-edit expectations to the owner-approved rules. Raw production HTML/RSC/API checks pass 696 cases across nine viewer states. The production build now passes with the actual local environment, without the former database-disabled override: analytics availability resolves at request time before initializing runtime database policy. Runtime production checks remain enforced.
+
+Actual daily slip publication remains unavailable while public odds rights and
+model qualification are unresolved (OP-15/17/36). No arithmetic mean or fabricated
+estimate is presented as a joint win probability. See [Best Slips](best-slips.md).
+
+## 001 — Project foundation
+
+Date: 7 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 001 acceptance checks passed; the development-tool
+maintenance limitations below remain open. There are no unresolved application
+blockers for this foundation.
+
+### Scope and changes
+
+Implemented the private Next.js App Router package and a minimal English page
+that explicitly says predictions are not yet available. It requires no visitor
+account, credentials, tokens, cookies, database or provider access. Product UI,
+styled-components rendering, Redux providers and database integration remain
+with their owning prompts. No deployment or service purchase was made.
+
+The repository initially had no application manifest, lockfile, runtime pin or
+repository AGENTS.md file; the instructions supplied in the chat apply. npm was
+selected to match the installed Node LTS toolchain. Existing specification,
+development plans, brand sources, asset-generation scripts and public assets
+are preserved.
+
+Changed/added files:
+
+- `package.json`, `package-lock.json`, `.npmrc`, `.node-version`, `.nvmrc`:
+  exact dependency/runtime pins and reproducible install/check commands.
+- `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`: strict TypeScript,
+  standard App Router configuration and enforced server/worker import markers.
+- `.gitignore`, `.env.example`: generated-file and secret exclusions; no runtime
+  settings required yet.
+- `src/app/layout.tsx`, `src/app/page.tsx`: minimal server-rendered entry.
+- `src/components/README.md`, `src/domain/README.md`, `src/server/README.md`,
+  `src/workers/README.md`: reusable runtime boundaries without speculative code.
+- `tests/boundaries.test.mjs`: permitted/rejected dependency directions,
+  mandatory server markers and a real rejected transitive client compilation.
+- `README.md`, `docs/implementation-decisions.md`, this file: local setup,
+  compatibility evidence and implementation handoff.
+
+### Version rationale
+
+Next.js 16.4.0 and the Prisma 7 baseline were checked against official sources
+and publisher package metadata. Node 24.18.1 LTS/npm 11.16.0 match this machine;
+TypeScript 5.9.3 and ESLint 9.39.5 fit the framework and lint-plugin support
+ranges. All direct dependencies are exact pins; the lockfile fixes transitive
+resolution. See the [decision register](implementation-decisions.md) for the
+complete version table, dated links and deferred integration decisions.
+
+### Verification
+
+All commands used Node `v24.18.1` and npm `11.16.0` on Windows. Next telemetry
+was disabled for verification processes. No application secrets were configured.
+
+| Check | Result |
+| --- | --- |
+| `npm install` | Passed; created the npm v3 lockfile with exact direct dependencies. |
+| `npm ci` | Passed from the lockfile; SHA-256 before/after confirmed the lockfile was unchanged. |
+| `npm ls --depth=0` | Passed; installed direct versions match the decision register. |
+| `npm run lint` | Passed with zero warnings. |
+| `npm run typecheck` | Passed, including route generation before the first production build. |
+| `npm test` | Passed: five tests, zero failures/skips. The real transitive client import failed compilation with the expected `server-only` diagnostic; temporary fixtures were removed. |
+| `npm run build` | Passed with the default Turbopack bundler; `/` and the framework not-found page prerendered. |
+| `npm run check` after `npm ci` | Passed (exit 0): lint, route generation/type-check, all five boundary tests, and production build against the clean locked install. |
+| `npm start -- --hostname 127.0.0.1 --port 3101` | Started the production server successfully; stopped after verification. |
+| Anonymous PowerShell HTTP checks | `/` returned 200 with heading and honest unavailable copy, without sending credentials or receiving `Set-Cookie`; `/brand/goal-hint-logo-primary.svg` returned 200 and matched the source exactly; an unknown route returned 404. |
+| In-app browser inspection | Production page displayed the heading and development notice; no browser console warnings/errors were captured. The temporary browser tab was closed. |
+| `git diff --exit-code -- app-write-up.md dev-plan assets public scripts` | Passed; all original specification, plan, script and brand files are unchanged. |
+| `git diff --check` | Passed. |
+| `npm audit --omit=dev --json` | Passed: zero reported production vulnerabilities. |
+| `npm audit --json` | Exit 1: five high-severity package entries in one development-only dependency chain; see limitations below. |
+
+The first test run found a lint-reserved test variable name and an assertion
+depending on an intermediate module appearing in Turbopack's error trace. Both
+were corrected; the final test asserts the private source, client entry and
+specific server-only diagnostic while retaining the transitive import fixture.
+
+### Limitations and pending work
+
+- ESLint 9 is end-of-life, but the current Next.js React lint plugin excludes
+  ESLint 10 from its declared peer support. The compatible pin is retained
+  without forced dependency resolution.
+- The full audit's five entries all derive from the development-only `braces`
+  stack-exhaustion advisory. No compatible patched release is published. The
+  audit's proposed Next lint configuration downgrade was not applied. The
+  [decision register](implementation-decisions.md) records evidence and the
+  maintenance follow-up. This audit remains open despite passing app checks.
+- npm also reports an unapproved `unrs-resolver` postinstall script. Installation
+  and the checks passed under npm's existing policy; no script-policy override
+  was needed or applied.
+- Prisma/database checks, styled-components rendering/hydration, Redux behavior,
+  provider calls, workers and deployment checks are deferred to their owning
+  prompts. None is represented as implemented or verified here.
+
+### Handoff
+
+Only prompt 001 was implemented. Prompt 002 owns runtime-policy validation
+and the broader operating decision register; prompt 003 owns Prisma/PostgreSQL.
+No product, provider, quality, staging or release gate is claimed by this
+foundation. Deferred choices and their first affected prompts are listed in the
+[decision register](implementation-decisions.md).
+
+## 002 — Runtime policy
+
+Date: 7 October 2026 (Africa/Kampala).
+
+Status: implemented; runtime-policy acceptance checks and nodemon save/restart
+verification passed. External integrations and unresolved choices remain pending
+at their owning prompts.
+
+### Implemented behavior
+
+Added one immutable public product projection and a typed server-owned runtime
+contract. Settled identity/origin, English/light/free access, regulation-time
+markets and 2.5 goals line, EAT/seven-day/daily cadence, strict five-minute
+publication cutoff, AI priority/fallback, shared provider quotas, direct Mega and
+the US$45 payable ceiling have discoverable definitions. Ads, extra locales,
+dark mode and exact scores stay disabled; contradictory overrides fail.
+
+Private secrets require explicit reads and redact string/JSON serialization.
+Environment parsing rejects malformed supplied values, unknown app settings,
+public environment exports, duplicate IDs, invalid/unsafe numbers, excessive
+allowances and equal declared live/test database targets. Missing optional
+choices remain `null`. Enabled affected capabilities fail structural validation
+when required configuration is unresolved.
+
+Next's Node instrumentation validates the process policy once. Service/worker
+operation guards additionally require trusted verification of the relevant
+rights, budget, account and pipeline records; arbitrary reference strings grant
+no authority. Individual paid calls cannot bypass their enclosing phase gate.
+Private shadow may gather quality evidence after its applicable private-use,
+budget and pipeline prerequisites; production additionally requires public
+rights, actual quality qualification and release approval. Test mode cannot
+authorize paid/provider or forecasting work, and database tests never fall back
+to the live URL. No live evidence verifier/provider/worker was created.
+
+At the user's added request, `npm run dev` now uses pinned nodemon to restart the
+Next development server on saved source, asset, configuration and environment
+changes, including files created after startup. Next.js continues browser Fast
+Refresh.
+
+### Changed files
+
+- `src/domain/public-policy.ts`: immutable browser-safe settings and type.
+- `src/server/config/runtime-policy.ts`: schemas, private policy, redacted
+  errors/secrets, configuration validation and trusted-evidence operation guards.
+- `src/instrumentation.ts`: Node startup validation without importing private
+  configuration into Edge/client modules.
+- `src/app/layout.tsx`, `src/app/page.tsx`: reuse the shared brand/locale settings.
+- `scripts/check-runtime-policy.py`, `.env.example`, `README.md`: structural
+  configuration command and documented local workflow without credentials.
+- `package.json`, `package-lock.json`, `tsconfig.json`: exact Zod/nodemon pins,
+  Node server condition for tests, native TypeScript import support and commands.
+- `nodemon.json`: scoped save watching and restart debounce.
+- `tests/runtime-policy.test.mjs`: synthetic configuration, redaction, readiness,
+  immutable projections, example environment and live-gate failure cases.
+- `docs/implementation-decisions.md`, this file: preserved prior records and
+  comprehensive settled/unresolved operating handoff with first dependencies.
+
+### Verification
+
+Node `v24.18.1`, npm `11.16.0`; Next telemetry disabled for verification. All
+credential, policy and evidence fixtures were explicitly synthetic. No real
+provider/database calls, purchases, messages or deployment occurred.
+
+| Command/check | Result |
+| --- | --- |
+| `npm install zod@4.6.5`; `npm install --save-dev nodemon@3.1.14` | Passed; exact manifest/lockfile pins. |
+| `npm run check` | Passed: lint with zero warnings, strict type-check, then-current 25 tests, and production Turbopack build. |
+| Final `npm test` after test refinements | Passed: **26 tests**, zero failures/skips (5 boundary + 21 runtime-policy groups). |
+| `npm run policy:check` | Passed with no local configuration required; prints structural readiness only. |
+| `python scripts/check-runtime-policy.py` | Passed with the complete committed example; no credentials/approvals enabled. |
+| Production instrumentation with synthetic provider key and enabled trial capability but missing payable/budget/use-rights policy | Rejected server preparation; HTTP 500, no synthetic credential in logs or response. Next remained listening until the owned test process was stopped; no healthy startup or affected operation was claimed. |
+| Default `npm start -- --hostname 127.0.0.1 --port 3101` and anonymous HTTP check | Passed: HTTP 200, shared heading, no visitor cookie or private policy fields in HTML. Owned server stopped afterward. |
+| Nodemon isolated save/restart smoke on port 3104 | Passed: source edit restarted the real Next child and returned updated HTTP 200 output; existing `.env.local` edits restarted; final glob configuration detected initially absent `.env.local` creation and subsequent edits with distinct child processes and updated HTTP 200 output. 137 generated files plus an explicit `.next` write caused no further restart. Owned servers stopped, port 3104 closed. |
+| `git diff --exit-code -- app-write-up.md dev-plan assets public`; `git diff --check` | Passed; specification, plans and brand assets preserved. Existing staged/unrelated foundation work retained. |
+| `npm audit --omit=dev --json` | Passed: zero reported production vulnerabilities. |
+| Full `npm audit --json` | Seven high-severity development-only package entries from the same unpatched braces advisory; historical 001 had five. Nodemon/chokidar add two affected chain entries. |
+
+One malformed-URL refinement initially propagated a native URL exception. It
+was replaced with a guarded validator; sentinel-based tests now confirm static
+redacted errors across message, stack, JSON and inspection. Reviews also exposed
+the need to verify underlying evidence, rather than accept nonempty references;
+the final operation guard fails closed without a trusted verifier.
+
+The first repo-local nodemon smoke encountered the user's already-running Next
+development lock; that process was left running. Isolated synthetic Next projects
+were used instead. Literal absent environment paths and a plain `.env*` glob
+missed newly created files on Windows. The final `.env{,.*}` pattern, with the
+tracked `.env.example` explicitly watched to enable dotfile monitoring, passed
+creation/edit checks in a fixture without a dot-directory ancestor.
+
+### Handoff and unresolved dependencies
+
+The [decision register](implementation-decisions.md) contains 35 current
+unresolved/evidence items, with source, unknown ownership where appropriate,
+affected accepted configuration or explicitly deferred fields, and first prompt.
+The next dependency is the database target/connection/privilege and isolated-test
+choice in **003**. Numeric tolerances follow in **005**; account/credentials,
+competitions and rights in **006–008**; spending/providers/evidence/model choices
+in **010–014**. Queue/private jobs (**020**), status/polling (**022/026**), public
+claims/legal/contact (**030/038–041**), recovery/monitoring/backups (**043–045**),
+hosting/shadow qualification/release/domain (**046–049**) remain explicitly
+pending. No missing choice is treated as approved or requested prematurely.
+
+Actual evidence verification, quota/spend accounting, database target isolation,
+workers, prospective quality and deployment checks belong to their owning
+prompts. No live capability is enabled by the defaults/example. Existing ESLint
+EOL, braces audit and npm optional postinstall-policy limitations remain recorded.
+Prompt 003 was not started.
+
+Automatic approval review rejected recursive removal of the verified owned
+nodemon smoke fixture with “blocked by policy” and supplied no further reason.
+The ignored synthetic fixture/logs remain under `.tmp`; no alternate deletion
+route was attempted. Further watcher verification output remains under ignored
+`out/`. All owned test processes were stopped; the user's development process
+was preserved.
+
+## 003 — MySQL and Prisma runtime
+
+Date: 8 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 003 acceptance checks and final repository checks passed
+on the pinned runtime. Live database approval and deployment evidence remain
+unresolved in the decision register.
+
+### Implementation and fixes
+
+Completed the existing minimal MySQL/Prisma foundation without adding domain
+models. Services and workers reuse one lazy, bounded process pool and generated
+server client. The runtime exposes guarded query and transaction callbacks,
+sanitized readiness and errors, and explicit shutdown; development module reloads
+reuse the same client. UTC sessions and millisecond/exact-decimal conventions,
+application/migration privileges and compatible schema evolution are documented
+in the [database runbook](database.md).
+
+Fixed the targetless Prisma config to supply an empty datasource object. The
+pinned native schema engine needs it for offline diff; without it, the CLI could
+return exit 0 and empty SQL despite a changed schema. Offline migration generation
+now creates real reviewed SQL in an isolated fixture, advances its snapshot only
+for an actual change and rejects unexpectedly blank output. The committed
+model-free schema and baseline migration are preserved.
+
+Disabled checkpoint/update requests for Prisma child commands, guarded debug
+settings that can expose child environment credentials, and redacted unexpected
+wrapper failures. Client generation restores server-only markers even after a
+failed partial generation, preserving headers and avoiding duplicate imports.
+Real Next client-compilation tests enforce both direct and transitive boundaries.
+
+The runtime now sanitizes all pool/adapter/client initialization failures and
+releases an owned pool when initialization fails. It refuses server-directed
+redirects. Cold MySQL 8.4 `caching_sha2_password` authentication uses RSA key
+retrieval only for nonproduction, TLS-disabled loopback connections; remote,
+TLS and production connections keep retrieval disabled and retain verified TLS.
+A fresh application account reproduced the failure and verified the fix before
+any other client login could populate its authentication cache.
+
+The reusable integration harness owns a new data directory, loopback server and
+disposable database. It rechecks the ownership marker, directory, server UUID
+and port before administrative mutations, subtests and shutdown. Test clients
+exclude inherited login-path files and `MYSQL_PWD`. Separate schema-scoped
+migration and fixture-table DML accounts prove the documented privilege design.
+All owned diagnostic and acceptance instances shut down and removed their
+verified disposable directories; existing services and data were preserved.
+
+### Changed files
+
+- `prisma.config.ts`: targetless datasource object required by the native engine.
+- `src/server/database/client.ts`, `connection.ts`: initialization cleanup and
+  redaction, direct-target protection and local cold-authentication support.
+- `scripts/database.py`: reliable offline commands, static failures, debug
+  protection and generated-client guarding on success and failure.
+- `tests/database.test.mjs`, `database-cli.test.mjs`: meaningful runtime, offline
+  migration, redaction and failed-generation regressions. Database test child
+  processes share a bounded 30-second cold-start timeout.
+- `tests/database.integration.mjs`, `helpers/mysql-instance.mjs`: genuine isolated
+  MySQL transactions, privileges, drift and repeated ownership verification.
+- `docs/database.md`, `implementation-decisions.md`, this progress record and
+  `dev-tracker.md`: connection decisions, procedures and actual handoff status.
+
+### Verification
+
+The final acceptance run uses Node `24.18.1`, npm `11.16.0`, Prisma `7.10.0`
+and Oracle MySQL Community `8.4.11`. Rechecked publisher metadata and official
+adapter/generator/runtime documentation; retained the existing exact dependency
+pins and scoped connector/config overrides. See the
+[decision register](implementation-decisions.md) for sources and constraints.
+
+The official portable MySQL ZIP remains under ignored `.tmp/mysql-tools` for
+repeat testing, without a service installation or changes to global MySQL
+configuration. The published MD5 matched, and Oracle's detached signature
+verified using its official release key. The portable binary was selected with
+`MYSQL_TEST_SERVER_BINARY` for the acceptance run.
+
+| Command/check | Result |
+| --- | --- |
+| `npm ls --depth=0`; `npm ls @prisma/adapter-mariadb mariadb mysql2 deepmerge-ts` | Passed; exact installed versions and all three scoped overrides resolve correctly. |
+| Focused database runtime tests on Node 24 | Passed: 10 tests, including cold-auth settings, initialization cleanup/redaction and singleton lifecycle. |
+| Focused database CLI tests | Passed: 6 tests covering offline SQL/snapshot generation, target isolation, argument validation, diagnostics and failed-generation guards. |
+| `npm run check` on pinned Node/npm | Passed (exit 0): client generation, schema validation, lint with zero warnings, route/type generation, strict type-check, all 48 tests with zero failures/skips, and the production Turbopack build. |
+| `npm run test:db` with the portable MySQL 8.4.11 binary on Node 24 | Passed: 8 tests, zero failures/skips. Fresh/repeated deployment, migration status and schema verification; restricted account access; drift detection without repair; real InnoDB commit, exact decimals and UTC `DATETIME(3)` round trip; DML rollback; concurrent durable uniqueness; process singleton and shutdown. |
+| `npm run db:migrate -- --name verify_foundation` | Passed; unchanged committed schema produces no new migration or snapshot change. |
+| `npm run db:health` without local database configuration | Passed; reports `disabled` without a connection or private diagnostics. |
+| `npm audit --omit=dev --json` | Passed: zero reported production vulnerabilities. |
+| `npm audit --json` | Exit 1: seven existing high-severity development-only entries in the recorded `braces` chains; no new database-package advisory remains. |
+| `git diff --check`; committed schema/migration comparison; disposable-directory check | Passed: no whitespace errors, committed schemas and migrations unchanged, zero remaining disposable MySQL directories. |
+
+The real run exposed uncached local authentication that the earlier migration
+account's warmed cache had masked; the final restricted application account
+connects without a warmup workaround. A parallel repository run hit a 10-second
+singleton subprocess cold-start limit with no output. That test exited naturally
+in 848 ms on a pinned-runtime isolated rerun; its shared bounded timeout now
+allows cold Windows imports while preserving every assertion and natural exit.
+An initial shell run selected Node 26; the final acceptance results above use
+the explicitly selected pinned Node 24 runtime.
+
+### Handoff and unresolved inputs
+
+Prompt 003 introduces no football, authentication, job or quota tables and does
+not enable live access. OP-01 still requires an approved hosted target,
+credentials, actual least-privilege grants, TLS evidence and process/replica
+capacity; OP-12 still requires itemized infrastructure approval. Remote/production
+operator commands remain gated until a trusted evidence-verifier integration
+exists. A local test success does not supply those approvals or qualify backups,
+hosting or production operations. No provider calls, purchase or deployment was
+performed. Prompt 003 is ticked in the root development tracker; prompt 004 was
+not started.
+
+## 004 — East Africa calendar
+
+Date: 8 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 004 implementation and acceptance checks passed on the
+pinned runtime. Prompt 005 was not started.
+
+### Implemented behavior and shared API
+
+Added a reusable browser-safe calendar domain using `Africa/Kampala` reporting
+dates and integer UTC epoch milliseconds. Strict parsers reject impossible,
+noncanonical and normalized dates/times, including trailing line terminators;
+Gregorian increments cover month/year/leap-century boundaries. Date inputs are
+copied into primitives. Frozen run/query boundaries preserve original identity
+without retaining mutable Date objects.
+
+The 7 October 2026 run begins at `2026-10-06T21:00:00.000Z` and ends exclusively
+at `2026-10-13T21:00:00.000Z`, covering 7–13 October EAT. Current decisions capture
+an injected clock once, derive a new rolling window, and require original
+manifest/window and current-window membership together. Historical bounded query
+ranges remain valid outside prediction eligibility. Named-zone day boundaries
+also handle historical 23.5-hour and 24.5-hour Kampala days.
+
+Publication is strictly before scheduled kickoff minus 300 seconds. A supplied
+earlier closing instant reduces the deadline; a later instant cannot extend it.
+Kickoff display returns language-neutral `Intl` inputs with an explicit timezone
+and unchanged reporting date/UTC value. An optional visitor-local date never
+changes run identity or eligibility.
+
+`calendarRules` is now the shared source of the existing runtime calendar policy.
+The daily trigger contract remains 00:00 EAT and UTC cron `0 21 * * *` on the
+preceding date. The module does not install or activate a scheduler.
+
+| Shared API | Purpose |
+| --- | --- |
+| `parseReportingDate`, `addReportingDays` | Canonical Gregorian dates and validated increments. |
+| UTC parsers/factories and `toUtcIsoString` | Millisecond instants, copied Date inputs and explicit UTC serialization. |
+| `getReportingDate`, `getReportingDayBounds`, `createPredictionWindow`, `isInWindow` | Named-zone reporting dates and immutable inclusive/exclusive boundaries. |
+| `validateReportingDateRange` | Mandatory inclusive endpoints and caller-supplied finite day cap, independently of prediction eligibility. |
+| `getPublicationDeadline`, `isBeforePublicationCutoff`, `isEligibleForPrediction`, `isTemporallyEligibleForPublication` | Standard/earlier deadlines and original/current/manifest temporal eligibility. |
+| `createCalendar`, `getKickoffDisplayInput` | Injected current decisions and separate locale-compatible display values. |
+
+Full types, inputs, examples, supported years and later integration responsibilities
+are documented in the [calendar contract](calendar.md).
+
+### Changed files
+
+- `src/domain/calendar.ts`: shared temporal rules, values, validation and clock API.
+- `src/server/config/runtime-policy.ts`: references the same frozen calendar rules.
+- `src/domain/README.md`, `docs/calendar.md`: discoverable API and scheduling contract.
+- `tests/calendar.test.mjs`: 16 meaningful calendar acceptance/regression groups.
+- `docs/implementation-decisions.md`, this record and `dev-tracker.md`: decisions,
+  actual check results and completed prompt status.
+
+### Verification
+
+Node `24.18.1`, npm `11.16.0`; no dependency changes. Next telemetry was disabled
+for the repository check. All timestamps/manifests/clocks are synthetic test
+inputs; no external provider or database access was needed by the calendar tests.
+
+| Command/check | Result |
+| --- | --- |
+| Focused calendar tests on pinned Node 24 | Passed: final **16 groups**, zero failures/skips. |
+| Exact 7 October window | Passed: start/end and adjacent milliseconds, seven EAT dates and exclusive day-seven boundary. |
+| Calendar transitions and strict inputs | Passed: EAT midnight, month/year/leap-century transitions, supported year limits, impossible dates, UTC precision and trailing-line rejection. |
+| Host `TZ=UTC`, `America/Los_Angeles`, `Asia/Tokyo` child processes | Passed: same reporting/window/cutoff/display inputs; each process confirmed its different configured host timezone. |
+| Publication and display separation | Passed: cutoff equality rejects, one millisecond before accepts, earlier closure only reduces deadline, both windows plus manifest required, clock read once, visitor display changes local date without changing EAT identity. |
+| Historical named-zone boundaries | Passed: exact UTC boundaries and neighbor instants for Kampala days of 23.5 and 24.5 hours; independently valid historical query ranges. |
+| `npm run check` | Passed (exit 0): generation, schema validation, zero-warning lint, strict type-check, then-current **63 tests** without failures/skips and production Turbopack build. |
+| Final file lint after historical regression addition | Passed: `npm exec -- eslint tests/calendar.test.mjs --max-warnings=0`. The added regression and shared-rule identity assertion also passed in the final focused 16-group run. |
+| `git diff --check` | Passed; no database models/migrations, dependency or specification changes. |
+
+Independent review caught JavaScript regex end anchors accepting trailing line
+terminators; exact input length/full-match checks fixed this before final
+verification. The additional historical regression was added after the full
+repository suite had loaded its 15 calendar groups; its final focused run is
+recorded separately above.
+
+### Handoff and unresolved dependencies
+
+No input blocks prompt 004. Public query services in 028/030 must supply their
+approved maximum date spans. Persistence adapters enforce their storage bounds;
+reporting dates support `0001–9999` while JavaScript instants have a wider range.
+Prompts 019–025 own persisted manifests, actual-start/schedule evidence, status
+freshness, cycle closure, run ordering and atomic publication. Temporal eligibility
+does not grant operation approval or reopen locked cycles. Durable triggering and
+deployment remain with 020/021/046–049. No live scheduler, provider call, purchase
+or deployment was performed. Prompt 004 is ticked in the root tracker.
+
+## 005 — Regulation-time market domain
+
+Date: 8 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 005 implementation, acceptance checks and full repository
+verification passed on the pinned runtime. Prompt 006 was not started.
+
+### Shared behavior and rule decisions
+
+Added reusable browser-safe contracts for match result, derived double chance,
+over/under 2.5 and BTTS. Every family uses regulation including stoppage time,
+excluding extra time and penalties. Stable selection codes and exact tie order
+remain independent of display language. Exact-score families remain excluded.
+
+The user explicitly chose sum tolerance **0.001** and consistency tolerance
+**0.002**. These are shared source-owned defaults in `regulation-markets-v1`;
+different runtime overrides fail. OP-02 is resolved for this version, while
+independent provider/evidence/production gates remain intact.
+
+Validation requires complete finite probabilities strictly inside `(0, 1)` and
+uses exact canonical-decimal comparisons to include tolerance equality without
+an extra floating-point epsilon. It never infers missing values, converts odds,
+normalizes accepted distributions or substitutes verbal confidence. Result and
+double chance form one source group; derivation and strict bounds succeed or
+reject together.
+
+The two feasible-marginal consistency constraints relate draw, over 2.5 and BTTS.
+Conflicts omit all participating fallback groups ahead of valid AI. Same-source
+contradictions omit all joint participants with audited reasons, preserving no
+arbitrary family preference. Available/unavailable snapshot entries are explicit,
+immutable and independent of input property order.
+
+`probability-display-v1` allocates exclusive display groups to 100% by exact
+largest remainders and specification tie order. Overlapping double-chance values
+round independently. Original precision and unrounded selected picks remain
+unchanged; outputs carry Estimated probability and boundary-label keys.
+
+Pure settlement requires an eligible final context and a separately verified
+regulation score. Live/nonfinal/unknown or invalid/missing score evidence stays
+Pending; ineligible cycles and void fixture statuses retain reasons; missing or
+unsupported picks remain Unavailable. Eligible final picks settle independently
+to Correct or Incorrect. Extra-time and penalty totals never replace regulation
+scores. All outcomes carry the rule version.
+
+Full APIs, types, conflict/rounding rules and result precedence are documented in
+the [market contract](markets.md).
+
+### Changed files
+
+- `src/domain/markets.ts`: versioned codes, strict validation, atomic derivation,
+  consistency, deterministic selection, frozen snapshots and presentation.
+- `src/domain/market-settlement.ts`: pure five-outcome adjudication and stable reasons.
+- `src/server/config/runtime-policy.ts`: shared approved defaults/version and
+  rejection of differing overrides, preserving all independent evidence gates.
+- `tests/markets.test.mjs`, `market-settlement.test.mjs`: 20 validation/display
+  groups and 11 regulation settlement groups.
+- `tests/runtime-policy.test.mjs`: approved-default/override regression coverage.
+- `.env.example`, `README.md`, `src/domain/README.md`, `docs/markets.md`: workflow
+  and shared-contract documentation.
+- `docs/implementation-decisions.md`, this progress record and `dev-tracker.md`:
+  recorded user choice, OP-02 resolution and actual implementation status.
+
+### Verification
+
+Pinned Node `24.18.1`, npm `11.16.0`; no dependency or database schema changes.
+Probabilities, scores and source labels are synthetic fixtures, not live provider
+support or forecast-quality evidence. Next telemetry was disabled for checks.
+
+| Command/check | Result |
+| --- | --- |
+| Focused market validation/presentation tests | Passed: **20 groups**, zero failures/skips; exact sum/consistency equality and next-representable rejection, derived strict bounds, all mixed-source conflicts, deterministic picks, group rounding, subnormal/boundary labels, unsupported families and immutable inputs/outputs. |
+| Focused settlement tests | Passed: **11 groups**, zero failures/skips; draws/0–0/1–1, two/three goals, BTTS zero boundaries, live and final status, extra-time/penalty regulation evidence, void/unavailable precedence, malformed inputs and unchanged caller context. |
+| Focused runtime-policy tests | Passed: **27 tests**, zero failures/skips; approved defaults/equivalent decimals, drift rejection in all modes and independent publication evidence gates. |
+| Focused ESLint and strict type-check | Passed with zero warnings/errors after final domain metadata/type fixes. |
+| `npm run check` | Passed (exit 0): generation, schema validation, zero-warning lint, strict type-check, all **96 tests** with zero failures/skips and production Turbopack build/prerendering. |
+| Whitespace and schema/dependency/specification scope checks | Passed: no migrations, dependency changes or original specification/plan edits. |
+
+Review tightened presentation to reject inconsistent deserialized selection,
+probability, period/source/line and derivation metadata. Distributive market types
+preserve family-specific complete distributions. Final focused checks include
+these refinements.
+
+### Handoff and remaining dependencies
+
+No unresolved input blocks the domain feature. Provider support/precision,
+freshness and source mappings remain with 007/008/013; model/evidence sufficiency
+and calibration/quality remain with 011/012/014. Persistence owners choose exact
+database precision/scale from validated contracts. Forecast locks, cycles,
+publication, result verification, corrections and headline aggregation remain
+with 019–030. No external provider calls, purchase, live forecast, scheduler or
+deployment was performed. Prompt 005 is ticked in the root tracker.
+
+## 006 — Shared API-Football quota limiter
+
+**Date:** 8 October 2026. **Scope:** `prompts/dev-plan/006-api-quota-limiter.md`.
+
+### Implementation
+
+Added server-only durable quota contracts, MySQL coordination, reservations,
+single-use dispatch claims and an authorized bounded gateway for ordinary calls
+and reset probes. All replicas/tools/trials/retries use the same canonical account
+identity and shared database. Migration `20261008182528_api_quota_limiter` adds
+`ApiQuotaAccount`, `ApiQuotaPeriod` and `ApiQuotaAttempt`, with account foreign keys,
+nullable unique owned-work keys and rolling/priority/sequence indexes. Generated
+schema snapshot advances with that incremental migration; foundation SQL remains
+unchanged. No dependency versions changed.
+
+The account lock encloses all checks and writes. MySQL UTC is authoritative;
+transactions are bounded and external I/O runs after commit. Verified active
+terms cap 12 per rolling second, 720 per rolling minute and 120,000 per provider
+day, with even 84 ms default pacing and protected 20,000 essential capacity.
+Priority orders safety/recovery, near-kickoff and live/date work, daily inputs and
+enrichment; ordinary work cannot consume reserve. Queued duplicates can inherit
+essential urgency. Prior spending, uncertain attempts, unused permits and crashes
+remain counted. Retrying needs a new counted ID; joining never invokes transport.
+
+Lower limits apply immediately, including between reservation and launch. Header
+floors account for subsequent reservations and unresolved work; stale responses
+cannot refill allowance. The gateway enforces runtime/evidence authority, short
+permit windows, single use, remaining lease timeouts, AbortSignal transport and
+redacted structured outcomes. HTTP/body rate limits pause all callers; expired
+subscriptions/credentials and unavailable/corrupt shared state fail closed while
+stored reads remain usable.
+
+Verified boundary evidence allows one counted candidate probe. Bulk dispatch
+requires successful probe-bound trusted reset confirmation. Old counters persist;
+uncertain probes, stale old replies, higher headers and EAT midnight cannot enable
+bulk traffic. Same-period refresh/reset cannot restore lower active terms. All
+reset/account evidence in tests is synthetic; real database behavior is not.
+
+### Changed files and handoff
+
+- `src/server/football/quota-contract.ts`, `quota-limiter.ts`,
+  `quota-mysql-store.ts`, `quota-gateway.ts`: shared typed state, durable safety
+  rules, account locking and guarded one-request transport.
+- `prisma/schema.prisma`, `schema.snapshot.prisma`, incremental quota migration:
+  three coordination/usage tables; no forecast/catalog/job implementation.
+- `tests/quota.integration.mjs`: genuine isolated MySQL concurrency and failure
+  acceptance; `tests/quota-gateway.test.mjs`: gateway authority/transport cases.
+- `package.json`: explicit `test:quota` integration command.
+- `docs/quota-limiter.md`, `README.md`, decision register, this record and root
+  tracker: caller contract, rollout dependencies and actual progress.
+
+### Verification
+
+Pinned Node `24.18.1`, npm `11.16.0`; owned genuine MySQL `8.4.11` fixtures with
+separate migration DDL and narrowly scoped application DML roles. The existing
+ownership-checked helper starts a fresh loopback server/data directory and removes
+only its own fixture after shutdown. No installed service, external database,
+provider account or live API request is used.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): client generation, schema validation, zero-warning lint, strict type-check, **113 tests**, zero failures/skips, and production Turbopack build/prerendering. |
+| Final scoped ESLint, `tsc --noEmit`, gateway tests | Passed after the final limiter refinements: zero warnings/errors and **17 gateway tests**, zero failures/skips. Covers authorization revocation, single-use claims, ordinary/probe parity, delayed commits/process pauses, remaining lease bounds, AbortSignal timeout, late success/rejection, body errors and storage failure. |
+| `npm run test:db` | Passed on owned genuine MySQL **8.4.11**: **8 tests**, zero failures/skips. Applies the new migration, repeats deployment, checks status/schema, denies DDL/history access to the application role, detects drift without repair, verifies InnoDB/UTC/exact values, rollback, concurrent uniqueness and singleton shutdown. |
+| Final unfiltered `npm run test:quota` | Passed on owned genuine MySQL **8.4.11**: **25 tests**, zero failures/skips, about 124 seconds. Separate pools serialize/deduplicate concurrent work; **725 counted reservations and single-use claims** satisfy every rolling second/minute and 84 ms pacing interval. Covers lower rates/day terms, cap/headroom/reserve, priorities/promotion, uncertain retries, crash/restart, stale/in-flight headers, contention, unavailable/corrupt storage, expiry and clock regression. |
+| Provider-period/reset checks within that quota suite | Passed using explicitly synthetic evidence: one counted candidate probe; no bulk traffic on uncertainty or without exact trusted confirmation; old counters/stale replies cannot reset daily allowance; lower probe terms survive confirmation; minute floors cross daily boundaries and expire only at their trailing-minute boundary. |
+| Actual MySQL UTC-clock gateway check within that quota suite | Passed: one authorized mocked transport, three authority checks, durable count **1**, completed outcome. Final gateway latency about **95 ms** (reserve 36 / claim 33 / complete 25); no network I/O. |
+| Whitespace/scope checks | Passed. Incremental migration explicitly selects InnoDB; foundation migration, dependency versions and specification/dev-plan files remain unchanged. All owned fixture servers/data directories were cleaned up. |
+
+Review tightened same-period verified refreshes, lower terms between reservation
+and launch, urgent queued deduplication, candidate lower-term preservation and
+account-wide minute protection across daily boundaries. The final unfiltered
+quota suite includes every correction.
+
+The first actual-clock gateway check exposed an 84 ms permit freshness window
+that could expire during real MySQL commits. The final permit freshness window
+is independently bounded to one second (or its shorter lease/deadline), while
+launch claims recheck account pacing/windows and the gateway checks elapsed time
+immediately before I/O. Real-clock checks then passed without increasing the
+test request's 5-second transport budget. One repeated 725-attempt stress run
+under parallel build load exceeded its original 180-second test allowance; the
+fixture-only stress allowance is now 300 seconds, parent 600 seconds. Earlier
+and final full runs passed; the final stress loop took about **92 seconds**.
+This changes test infrastructure timing, not application job/time budgets.
+
+Implementation and all local acceptance checks are complete. Prompt 006 is
+ticked in the root tracker; provider-account/reset qualification is still pending.
+
+### Remaining external evidence
+
+OP-03 remains pending: canonical authorized account identity, actual limits,
+daily boundary/reset protocol, candidate probe confirmation, expiry, current
+payable total within US$45 and egress/IP protection evidence. Prompt 008 owns that
+authorized trial; 007 owns header/body parsing and real HTTP integration. OP-11
+job request/time/fallback budgets remain with 010/025; the gateway requires caller
+bounds and supplies no invented job defaults. No purchase, provider request,
+scheduler, forecast, deployment or notification was performed.
+
+## 007 — API-Football adapter
+
+**Completed:** 8 October 2026. **Scope:** protected direct-v3 retrieval and
+normalization, with no polling, catalog persistence or publication.
+
+### Implemented behavior and changed files
+
+- `src/server/football/api-football-contract.ts`, `api-football-adapter.ts` and
+  `api-football-normalize.ts`: fixed-origin typed endpoints, private credentials,
+  bounded streamed JSON reads, separately counted retries with jitter and honored
+  provider delays, explicit failure/completeness/coverage metadata and immutable
+  normalized records. Supported operations cover fixtures/date/live/IDs,
+  teams/competitions, statistics/player aggregates, lineups/injuries and separate
+  fallback predictions.
+- `src/server/football/quota-gateway.ts`: an early-observation callback preserves
+  already received lower quota headers and known failures if a body stalls.
+  Observations cannot establish success and are ignored after abort, elapsed
+  deadline or completion; conservative final reconciliation precedes exposure.
+- `tests/api-football-adapter.test.mjs` and
+  `tests/api-football-normalize.test.mjs`: **48 transport/contract** and **18
+  normalization** cases using explicitly labeled synthetic payloads and injected
+  HTTP. `tests/quota-gateway.test.mjs` adds **8** early-observation regressions;
+  `tests/quota.integration.mjs` adds actual durable adapter/header acceptance.
+- `docs/api-football-adapter.md`, `docs/quota-limiter.md`, `README.md`, decision
+  register, this progress record and root tracker: usage, official provenance,
+  normalization decisions, honest local results and pending external evidence.
+
+No dependency, database schema, migration, specification or dev-plan changes were
+needed. Every provider HTTP attempt uses the existing durable limiter/gateway;
+uncertainty is never refunded. Account work identity survives credential rotation.
+Local fresh/in-flight reuse remains bounded and policy-authorized; fallback
+reuse additionally requires a job scope. Structured cache admission waits for
+complete correlation/retrieval, preserves original times and excludes failed or
+partial responses. No image HTTP request, binary storage or proxy exists.
+
+### Official evidence and normalization decisions
+
+Reviewed on 8 October 2026:
+
+- [Official beginner guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
+  (13 March 2026): direct v3 origin/header, endpoint shapes, fixture single-response
+  behavior and `/players` pagination at 20 items per page.
+- [Fixture-ID tutorial](https://www.api-football.com/news/post/how-to-get-all-fixtures-data-from-one-league)
+  (12 December 2024): hyphen-separated IDs, at most 20; actual batching requires
+  trusted evidence or falls back to individually reserved lookups.
+- [Rate-limit article](https://www.api-football.com/news/post/how-ratelimit-works)
+  (12 June 2026): daily/minute headers, rate-limit bodies and HTTP 429.
+- [Coverage guidance](https://www.api-football.com/news/post/how-to-optimize-api-sports-calls-and-quota-usage)
+  and [provider terms](https://www.api-football.com/terms): field population and
+  reuse/media rights need independent qualification.
+
+The interactive reference and public schema download could not provide readable
+schemas in this session; the accessible official guides support the implemented
+endpoint subset. No claim of a verified full current schema or account contract
+is made. Fixtures never receive an invented page parameter. Unexpected pages,
+short player pages, drifting totals, duplicates, mismatched/missing selector
+echoes, foreign identities and exhausted bounds stay incomplete.
+
+Kickoff/date checks use the shared Africa/Kampala calendar, including UTC day
+boundaries. Original response retrieval time is independent of the unavailable
+per-record provider update time; update fields remain null. Failed received
+responses retain time/quota provenance without payloads or fabricated paging.
+Empty enrichment and unavailable injury information never imply complete field
+coverage or squad fitness. All known status codes map explicitly; unknowns and
+live disappearance never establish a final score. FT/AET/PEN `score.fulltime`
+candidates require exact trusted verification; extra-time/penalty totals cannot
+substitute. Approved third-party images remain credential-free HTTPS URL metadata
+only. Predictions remain fallback-only and do not become validated market groups.
+
+### Verification
+
+Pinned Node **24.18.1**, npm **11.16.0**. Genuine MySQL **8.4.11** runs only in the
+ownership-checked throwaway harness, with separate migration and application
+roles. Provider responses, account/reset evidence, cache/media approvals and
+regulation verifiers in all tests are synthetic. No credentialed provider HTTP,
+live account probe, paid operation or image fetch ran.
+
+| Command/check | Result |
+| --- | --- |
+| Final `npm run check` | Passed (exit 0): client generation, schema validation, zero-warning lint, strict type-check, **187 tests**, zero failures/skips, production Turbopack build and prerendering. |
+| Focused adapter and normalization checks | Passed: **48 adapter** and **18 normalization** tests, with normal Node 24 strip-only execution; scoped ESLint and TypeScript checks passed. |
+| Final focused quota gateway | Passed: **25 tests**, including eight new early-observation cases, zero failures/skips. |
+| `npm run test:quota` | Passed on owned genuine MySQL **8.4.11**: **26 tests**, zero failures/skips, about **100 seconds**. The 725 counted-reservation stress loop passed, about 66 seconds. |
+| New durable adapter case | Passed: one mocked HTTP 200 response with a stalled body retains received lower limit/zero remaining headers; the stream is canceled, the attempt stays uncertain/count **1**, and a separate MySQL-backed replica is denied with no second HTTP dispatch. |
+| Actual-clock gateway case | Passed with real MySQL UTC time: counted single-use mocked transport, about **76 ms** total (reserve 31 / claim 23 / completion 22 ms). No network I/O. |
+| Scope/cleanup | Whitespace and local-link checks passed. Owned MySQL instance/data directory cleaned up; no existing service or external database was used. |
+
+Review found and corrected premature caching of missing requested IDs, unrelated
+selector/row acceptance, duplicate observations, empty coverage implications,
+deadline crossings during cache approval and loss of quota headers on stalled
+bodies. Meaningful regressions cover those cases, body-level errors, HTTP 499,
+bounded response cancellation, retry identity, permission revocation, original
+times, fallback scopes and regulation-score safety.
+
+Implementation and local acceptance checks are complete; prompt 007 is ticked in
+the root tracker. The [008 handoff](implementation-decisions.md#unverified-mappings-and-coverage-questions-for-008)
+keeps actual account limits/reset/expiry, full query/body contracts, representative
+field/status/score coverage and data/media rights unverified. OP-11 job bounds,
+OP-12 billable egress and OP-24 shared cache strategy retain their existing
+owners. Nothing activates polling or paid/provider/publication operations.
+
+## 008 — Football provider trial (9 October 2026 EAT)
+
+Implemented the internal bounded trial command, durable private journal and
+34-requirement report format described in
+[008](../../prompts/dev-plan/008-football-provider-trial.md). The dated evidence collection
+and report generation occurred on 8 October UTC. Provider suitability remains
+incomplete; local tooling completion does not establish actual account, field,
+market, price or rights qualification.
+
+### Delivered files and behavior
+
+- `src/server/football/provider-trial-{contract,input,journal,runner,command,evaluation}.ts`:
+  strict immutable plans, exclusive process ownership, atomic synced intent/result
+  records, cumulative request budgets, bounded adapter operations, trusted source
+  verification and JSON/Markdown findings. Crashes retain the full uncertain
+  reservation; zero-I/O quota waits can defer safely; completed responses never
+  replay. Absolute deadlines and timed observations survive restarts.
+- `scripts/football-provider-trial.py` and `npm run trial:football`: private
+  `init`, `report` and explicitly gated `run` actions. Offline actions need no
+  credentials/database. Reports distinguish confirmed, failed and untested
+  findings, retain source/test timestamps and state separate catalog/live/launch
+  gates. Unknown inputs are not assigned invented defaults.
+- Existing adapter contracts/normalization: counted `/status` diagnostic with its
+  documented object response and optional paging. It strips account holder data
+  and preserves actual plan, active state, expiry and counters without activating
+  capacity or supplying account reset evidence.
+- `tests/provider-trial-*.test.mjs`, `tests/api-football-account.test.mjs` and an
+  additional `tests/quota.integration.mjs` case: offline output, source/rights
+  gates, budget/retry accounting, crash recovery, cross-process locking, symlink
+  safety, immutable completed results, safe deferral and shared market/calendar
+  contract checks. All provider payloads and account/rights approvals are
+  explicitly synthetic development fixtures.
+- [Trial runbook](football-provider-trial.md), README, decision register and
+  sanitized baseline reports:
+  [Markdown](reports/provider-trial-008.md) /
+  [JSON](reports/provider-trial-008.json).
+
+No dependencies, database schema/migrations, public routes or UI were added.
+Every live transport would use the existing MySQL limiter/gateway, including
+diagnostics, retries and pagination. The CLI requires trusted runtime, quota,
+private retention and observation authority; no permissive live verifier was
+created. Fallback context and predictions reuse shared identity, regulation,
+probability, settlement, Kampala-day and five-minute cutoff rules. Missing
+provider update time requires an explicit verified freshness policy. Advice and
+goal picks cannot manufacture totals/BTTS distributions.
+
+### Reproducible offline report and pending live evidence
+
+Executed with pinned Node **24.18.1** and npm **11.16.0**:
+
+```sh
+npm run trial:football -- report --directory .tmp/provider-trial-008
+```
+
+The command resumed its existing immutable offline journal and generated
+`.tmp/provider-trial-008/provider-trial-report.md` and
+`.tmp/provider-trial-008/provider-trial-report.json`. The sanitized tracked copies
+above contain **34 untested requirements**, **0 dispatched/charged requests**,
+an unresolved allowance and `liveSuitability: incomplete`. No actual provider,
+account probe, remote image, purchase, renewal or plan change occurred. Private
+journals and verification modules remain ignored; no raw provider/account
+payload was copied into the tracked baseline reports.
+
+Primary pricing, rate-limit, terms, predictions and `/status` reference sources
+were reviewed on 8 October UTC and are linked in the runbook/decision register.
+Published Mega limits and the advertised US$39 price are background evidence;
+actual limits/reset/expiry and an itemized payable total within US$45 remain
+pending. Public redistribution/logo permissions are not inferred from private
+entitlement or provider terms. Source-specific mappings, update/freshness policy
+and media restrictions require actual verified evidence.
+
+OP-05 competition IDs/seasons and trial allowance remain unanswered; no live
+credentials, account/payment records or applicable verification authority are
+configured. OP-03–08 remain explicitly pending. **009** may implement catalog
+structure with those gates; live import/reuse and public data/prediction/media
+operations remain blocked. AI-quality qualification belongs to **014**, and
+launch requires later release checks.
+
+### Verification
+
+| Command/check | Result |
+| --- | --- |
+| Final `npm run check` | Passed (exit 0): client generation, schema validation, zero-warning lint, strict type-check, **274 tests: 273 passed, 1 platform skip**, and production Turbopack build/prerendering. |
+| Trial/account tests within the full suite | **87 cases: 86 passed, 1 skip** — 11 account diagnostic, 7 command, 18 runner, 33 evaluator and 18 journal cases. |
+| Journal process/filesystem acceptance | Real child-process crash recovery, live-owner locking and symlink/junction rejection passed. One POSIX file-mode check is skipped on Windows; private inherited ACLs remain an operator responsibility. |
+| Final `npm run test:quota` | Passed on owned genuine MySQL **8.4.11**: **27 tests**, zero failures/skips, about **132 seconds**. `MYSQL_TEST_SERVER_BINARY` points to the existing ignored `.tmp/mysql-tools/mysql-8.4.11-winx64/bin/mysqld.exe`. |
+| New durable trial acceptance | Passed: unknown-account denial dispatches zero and persists deferral; reopening after verified synthetic initialization counts a 503→200 retry as **2** durable requests, exhausts the trial allowance and cannot replay the completed sample after another reopen. |
+| Offline command/report | Passed without credentials or database; generation/resume records all 34 live requirements untested and zero requests. Missing-authority `run` returns exit **2** with an incomplete report. |
+| Scope/cleanup | Owned MySQL instance/data directory was cleaned up. No existing service/external database or actual provider/account/media operation was used. Whitespace and local-link checks passed. |
+
+Early parallel attempts encountered local Prisma/MySQL startup timeouts during
+heavy CPU/paging pressure. Diagnostic client generation briefly overlapped a
+generated-client boundary test. The final ordered repository check ran after
+all 11 generated server-only guards were restored and passed, including that
+boundary test; database/schema scripts required no changes.
+
+Implementation and local acceptance checks are complete; prompt **008** is
+ticked in the root tracker. The tracked offline report deliberately leaves
+actual provider suitability incomplete and live/launch gates blocked. No live
+trial result or permission is claimed by this completion checkbox.
+
+## 009 — Canonical football catalog
+
+Implemented on **9 October 2026 EAT**, building on the 003 database runtime,
+004 calendar, 005 settlement rules, 006 quota gateway, 007 sole provider adapter
+and the explicitly incomplete 008 trial. Local persistence acceptance is
+independent of live account/coverage/rights qualification.
+
+### Delivered files and migration
+
+- `src/server/football/catalog-contract.ts` and `catalog-input.ts`: strict
+  immutable import selections/bounds, provenance/scope validation, safe normalized
+  identities/search, attributable regulation proof and explicit degraded-subset
+  authority. Missing fixture season rejects the row without guessing a season.
+  Only privately registered validated batches bound to the same trusted authority
+  can enter the writer.
+- `catalog-service.ts`: reusable private imports through the existing adapter;
+  pre-I/O authorization/retention, identical in-flight request sharing, committed
+  request replay without I/O and conflict rejection for reused IDs. No additional
+  HTTP client, quota counter, live verifier or public import path was created.
+- `catalog-mysql-store.ts`: canonical identities/aliases/seasons, transactional
+  provider locks and fixture mutations, shared metadata updates, private mapping
+  review, exact versions/audits and consistent exact-scope coverage reads.
+  Original source times are retained; outages/disappearance never delete records
+  or imply final/canceled status. Missing fields preserve reliable values under
+  the documented update rules.
+- `prisma/schema.prisma`, the matching snapshot and incremental migration
+  `20261008214325_canonical_football_catalog/migration.sql`: **12 new InnoDB
+  tables**, binary collations, restrictive relationships, unique provider IDs,
+  season/search/date/round indexes and reviewed SQL checks. Existing foundation
+  and quota table definitions/migration history remain compatible. The import
+  sequence resolves equal-time coverage ordering without comparing UUIDs.
+- `tests/catalog-input.test.mjs`, `catalog-service.test.mjs`,
+  `catalog.integration.mjs` and `helpers/catalog-fixtures.mjs`: deterministic
+  validation/service cases plus genuine MySQL multi-replica identity, uniqueness,
+  version, coverage, mapping, permission and coordinator acceptance.
+- `package.json`: `npm run test:catalog`; [catalog runbook](football-catalog.md),
+  README, decision register and root tracker handoff.
+
+Fresh approved shared names/logo URLs and attributable aliases advance every
+referencing fixture version once per import. Audits preserve normalized old/new
+attributes and alias additions alongside fixture-owned changes. Coordinators
+receive the original shared attributes and all writes roll back on failure.
+Regulation scores require exact verified fixture/status/period evidence and
+never use extra-time/shootout totals. Third-party images remain approved remote
+URL strings; no binary image is downloaded or stored.
+
+`coordinateFixtureMutation` and `withFixtureTransaction` expose one consistent
+provider-then-fixture transaction boundary for later cycle/schedule services.
+Custom callbacks are never automatically retried. Those future services must
+wire the coordinator into every importer; direct fixture writes cannot become
+an alternative schedule/status mutation path. Daily selection, cycle lifecycle,
+polling, predictions, settlement jobs and public endpoints remain with their
+own prompts.
+
+### Verification
+
+Commands used pinned Node **24.18.1** and npm **11.16.0**. Genuine MySQL checks
+used the existing ignored portable **8.4.11** binary, a new loopback server/data
+directory and separate migration DDL/application DML credentials. Each owned
+target was verified before writes and cleanup; no existing service/database,
+actual provider/account or remote image operation was used.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run check` | Passed: guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **311 tests: 310 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. |
+| New input/service tests | **37 passed**: 27 input cases and 10 service cases, including pre-I/O denial, source/scope validation, unknown seasons, immutable receipt replay, in-flight sharing and permission revocation. |
+| Final `npm run test:catalog` | **28 passed, no failures/skips**, about **29 seconds**, on genuine owned MySQL 8.4.11. Concurrent/repeated imports across competitions/seasons reuse canonical identities; distinct same-name IDs remain distinct. |
+| Catalog database acceptance | Passed: native uniqueness/constraints, exact BigInt IDs/versions, direct/shared version races and audits, alias search, safe URL retention, verified regulation periods, stale/null preservation, outage/disappearance, exact filtered/empty/degraded coverage and equal-time sequence ordering. |
+| Mapping/coordinator acceptance | Passed: attributable alternate identity, pending conflicts, older/weaker proof preservation, future-time rejection, operation/retention revocation rollback, coordinator old/new snapshots, duplicate/omitted/unawaited-failed apply rollback and future-service lock serialization. |
+| Incremental schema review | Schema validation and empty offline diff passed; genuine migration deployment and drift verification passed with least-privilege role separation. |
+| `npm run test:db` regression | **8 passed, no failures/skips**, about **21 seconds**: repeat deployment/status, drift detection, exact UTC/value round trips, rollback, concurrent uniqueness, privilege separation and pool shutdown with the new migration. |
+| Final handoff checks | Whitespace checks passed; **104 local Markdown links** resolve. Final ordered repository and catalog checks passed after the authority-bound prepared-batch guard was added. |
+
+The initial catalog run exposed two test assumptions: JSON serialization needed
+an explicit BigInt representation, and 007 rejects pre-1970 kickoffs. The corrected
+historical EAT check uses a clearly synthetic normalized future-contract
+observation to verify catalog/calendar storage; it does not extend or claim live
+provider historical coverage. Final database acceptance passed after those
+corrections and the audit/coordination hardening.
+
+### Pending live evidence
+
+The 008 baseline remains **34 untested requirements and zero actual requests**.
+OP-03–08 still require authorized account/reset/expiry/payable records, initial
+competition IDs/seasons and allowance, private/structured retention and audit
+reuse terms, source-specific identity/score/freshness mapping, and public/logo
+rights. Synthetic normalized timestamps, mappings, permissions and provider
+bodies prove local behavior only. No actual pending provider mapping was
+collected; contradictory synthetic mappings stay in private test review rows.
+
+Live catalog imports/reuse and public data/prediction/media operations remain
+blocked until those actual evidence gates pass. No retention period, account
+capacity, enabled competition or unlimited raw/structured entitlement is invented.
+
+Implementation and local acceptance checks are complete; **009** is ticked in
+the root tracker. Actual provider qualification and live/public permissions
+remain separate pending gates.
+
+## 010 — Research and AI cost control
+
+Implemented on **9 October 2026 EAT** using the existing 002 runtime operation
+gates and 003 MySQL runtime. AI and research have independent account/category
+ledgers; neither changes API-Football quotas or its US$45 payable ceiling.
+
+### Delivered files and invariants
+
+- `src/server/cost-control/cost-contract.ts`, `cost-input.ts`, `cost-pricing.ts`
+  and `cost-totals.ts`: strict immutable policy/usage parsing, opaque identities,
+  exact USD picodollar arithmetic, explicit versioned rational conversions and
+  conservative financial/count projections. Estimates, observations and
+  invoices stay separately labeled.
+- `cost-service.ts`: atomic maximum reservations, stable work/job ceilings,
+  one-use owner permits, verified completion/reconciliation, confirmed
+  cancellation, explicit eligible nearest-kickoff priority and distinct budget,
+  request/token/unit/time/fallback/timeout outcomes. Unknown and partial usage
+  retains the maximum; actual overages and opening debt block later paid work.
+- `cost-mysql-store.ts`: account/category row locks across replicas, exact native
+  sums with sealed JSON projection checks, immutable period/job/attempt metadata,
+  append-only receipt history and guarded lifecycle transitions. Provider I/O
+  stays outside transactions; caller callbacks are never automatically replayed.
+- `cost-policy.ts`: existing runtime scope, credentials, trusted approvals and
+  provider/model selection plus explicit verified joint AI/research allocations
+  within global job request/token/time limits, with fallback reserved once.
+- `cost-gateway.ts`: one authorized transport callback after durable claim,
+  bounded reservation/claim/settlement waits and transport timeout, abort and
+  drained late results. A real late receipt can still be verified and accounted
+  for without exposing its timed-out value or inventing usage. Verified cached
+  evidence reuse dispatches zero requests and preserves original source times.
+- `cost-observability.ts`: private JSON-safe aggregate records with exact string
+  amounts/counters and no copied prompts, credentials, owner tokens, source
+  bodies or driver errors.
+- Schema/snapshot and migration `20261008221928_research_ai_cost_control`:
+  **four new InnoDB tables**, `DECIMAL(38,12)` monetary columns, native unique
+  work/attempt identities, restrictive foreign keys, indexes and reviewed
+  nonnegative/state/priority/count/identity/period checks. Existing migrations
+  remain intact.
+- Focused input/pricing/service/policy/gateway/telemetry tests, genuine MySQL
+  `tests/cost.integration.mjs` and reusable synthetic fixture/memory helpers;
+  `npm run test:cost`, [cost runbook](research-cost-control.md), README/boundary
+  guidance, decision-register and tracker handoff.
+
+Verified historical receipt quantities combine componentwise, so a later smaller
+receipt cannot erase known measured charges. Original `observedAt` selects the
+latest usage; older verified invoices still contribute their actual charges.
+An invoice with unknown quantities can settle money while preserving conservative
+request/token/unit/time bounds. Monotonic account-clock checks also apply to
+reconciliation, cancellation and private reads; late bills can reconcile against
+their original closed period after a new period is explicitly approved.
+
+### Verification
+
+Commands use pinned Node **24.18.1** and npm **11.16.0**. Database acceptance uses
+the existing ignored portable MySQL **8.4.11** binary, a fresh owned loopback
+server/data directory and separate migration DDL/application DML roles. Source
+prices, receipts, approvals and clocks are explicitly synthetic. No actual paid
+AI, research or football request is made.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run check` | Passed: guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **382 tests: 381 passed, 1 existing Windows POSIX-mode skip**, production build and prerendering. |
+| New focused cost tests | **71 passed** across input, pricing/projections, service, runtime policy, gateway/cache and telemetry contracts. |
+| Final `npm run test:cost` | **29 passed, no failures/skips**, about **27 seconds**, with 28 genuine MySQL acceptance subchecks and their parent. |
+| Concurrent durable accounting | Passed aggregate and per-job worker races, stable work/attempt identities, single-use claims, retries, restart, cancellation, unknown/partial usage and immutable period/cap behavior. |
+| Billing and operating bounds | Passed measured/invoice separation, invoice-only unknown count reservations, original source chronology, componentwise historical maxima, observed overages, exact EUR-to-USD rounding and distinct request/token/unit/time/fallback outcomes. |
+| Storage integrity and isolation | Passed corrupt JSON/native projection rejection; identity and inactive opening-debt bindings; seven valid-shaped direct-store reset/mutation/history attacks; native uniqueness/foreign keys; separate AI/research/football allowances and least-privilege roles. |
+| `npm run test:db` regression | **8 passed, no failures/skips**, about **25 seconds**: repeat deployment/status/drift, exact UTC/value round trips, rollback, concurrent uniqueness, role separation and pool shutdown with the new migration. |
+| Final handoff | Whitespace checks passed and **100 local Markdown links** resolve. Ignored logs: `.tmp/cost-full-check.log`, `.tmp/cost-acceptance-final.log` and `.tmp/cost-database-regression.log`. |
+
+The final migration uses explicit boolean guarded CHECK expressions compatible
+with MySQL 8.4. Native bindings cannot detach charged rows from their sealed
+account/job/period or erase prior opening debt. Final genuine acceptance also
+verifies incremental deployment and schema drift against the snapshot.
+
+### Pending live decisions
+
+OP-09–11 still need actual AI/research providers/accounts/model, rate versions,
+billable units/fees, source currencies and conversion rules, accounting windows,
+opening charges, separate monthly caps, per-job monetary/request/token/unit/time
+allocations and usable fallback time. OP-13 still needs actual licensed research
+source, extraction/attribution/reuse/display and retention evidence. There is no
+live rate resolver, receipt verifier, provider adapter or enabled paid path.
+Configuration references and synthetic tests do not approve these decisions.
+Stored forecast reads remain independent of accounting storage availability.
+
+This feature starts no predictions, fixture selection, scheduled workers,
+public cost endpoint or monitoring destination. Those integrations remain with
+their respective later prompts.
+
+Implementation and local acceptance checks are complete; **010** is ticked in
+the root tracker. Actual paid-operation configuration and evidence remain
+separate pending gates.
+
+## Prompt 011 — Fixture evidence foundation (partial)
+
+**Date:** 9 October 2026 EAT. Independent local collection, immutable snapshots,
+security and persistence are implemented. The licensed research provider and
+OP-13/14 operating choices have not been supplied; no provider-specific news
+adapter or live source qualification is claimed. **011 remains unchecked** in
+[the root tracker](../dev-tracker.md).
+
+### Changed files and behavior
+
+- Eight server evidence modules provide strict contracts/parsers, deterministic
+  snapshots, bounded collection/replay, canonical football observations,
+  cost-controlled research integration, safe source fetching and immutable
+  MySQL persistence. Explicit fixture/version/team/time inputs and nullable
+  caller cycle/run references are retained; no production references are made up.
+- Football collection uses the existing adapter and shared quota gateway.
+  Accepted history proves canonical identities and regulation scores before
+  deriving form/rest or collecting supported statistics. Catalogue snapshots
+  expose all approved API-Football team aliases. Missing injuries, neutral venue
+  and unsupported xG remain unknown; provider predictions cannot enter this path.
+- Snapshot eligibility excludes wrong identities and future/stale/unapproved
+  evidence, retains source times and versions, deduplicates syndicated coverage,
+  and preserves conflicts, rumor and missingness. Minimum coverage and source
+  freshness rules require explicit verified policy. Missing news yields
+  `Limited news coverage`; a denied optional search does not erase sufficient
+  structured facts.
+- Research integration requires a reviewed actual binding, separate existing
+  cost reservations/receipts and verified license/evidence/freshness policies.
+  One callback permits one bounded attempt. Extraction text remains inert data;
+  it cannot authorize actions, read credentials or invoke tools.
+- Source fetching uses approved HTTPS hosts, safe query names, public DNS
+  address validation, pinned connections and fresh checks across redirects.
+  Strict synchronous authority results, final dispatch expiry checks and shared
+  abort/deadline checks prevent late work from gaining permission.
+- Schema/snapshot and migration `20261008225550_fixture_evidence` add **three
+  InnoDB tables** with restrictive/composite foreign keys, positive identity and
+  chronology checks, sealed native/JSON projections and immutable source links.
+  Evidence application grants require SELECT/INSERT only. The writer rechecks
+  canonical mappings, fixture version and permissions before committing.
+- Focused evidence tests, genuine MySQL acceptance, reusable synthetic fixtures,
+  `npm run test:evidence`, [evidence runbook](fixture-evidence.md), README and
+  server/worker guidance accompany the implementation.
+
+### Confirmed acceptance
+
+Pinned Node **24.18.1**, npm **11.16.0** and the existing ignored genuine MySQL
+**8.4.11** binary were used. The database helper starts a fresh owned loopback
+server with separate migration/application roles and removes only its owned
+datadir after shutdown. All source responses, prices, receipts, licenses,
+policies and credentials in these tests are synthetic. No paid research, AI or
+football call was made and no live credentials were read.
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **472 tests: 471 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/evidence-full-check.log`. |
+| New focused evidence contracts | **90 passed** across strict input/snapshots, football collection, cost-gateway research integration, source-network security and orchestration/replay. |
+| Genuine evidence MySQL acceptance | **20 passed, no failures/skips**, about **29 seconds**: incremental migration drift, role separation, concurrent idempotency, immutable source deduplication, original timestamps, wrong fixture/team bindings, composite foreign keys, changed schedule/version denial, authority rollback, null cycle/run refs, exact bigint versions, checksum/native projection corruption and protected archives. Log: `.tmp/evidence-acceptance.log`. |
+| Genuine catalogue regression | **28 passed, no failures/skips**, about **26 seconds** after the alias snapshot extension. Log: `.tmp/evidence-catalog-regression.log`. |
+| Handoff | Whitespace checks passed and **487 local Markdown links** resolve. The 011 tracker row remains empty because the selected news adapter and approved operating rules are still required. |
+
+### Remaining decisions and checks
+
+Select the licensed research/news provider and approved sources, attribution,
+original-summary/extraction permissions, reuse/display/archive retention rights,
+minimum evidence thresholds, source age/clock policy and conflict/unknown-time
+rules. OP-09–11 still govern actual pricing, caps and job allocations. The
+provider-specific implementation and its bounded live integration/coverage
+qualification depend on these decisions. Completing the independent foundation
+does not resolve them or enable paid operations.
+
+## Prompt 012 — Primary AI predictor foundation (partial)
+
+**Date:** 9 October 2026 EAT. The independent local registry, prompt, validation,
+calibration hooks and cost-controlled candidate flow are implemented. No actual
+AI provider, exact model/version or calibration configuration was supplied.
+The required provider-specific transport, current official API/rate verification
+and live integration remain incomplete. **012 remains unchecked** in
+[the root tracker](../dev-tracker.md).
+
+### Changed files and behavior
+
+- Nine server predictor modules implement immutable model configuration/parsing,
+  bounded registry pinning, append-only MySQL persistence, prepared evidence
+  prompts, provider integration contracts, output validation, evaluated
+  calibration hooks and one bounded candidate invocation. Existing evidence,
+  market and cost services supply shared rules and accounting.
+- Model identities cover provider/model/version, reviewed API contract,
+  `regulation-ai-prompt-v1`, `regulation-ai-output-v1`, known chronological
+  training/validation/calibration/final-test windows, evaluation configuration,
+  explicit clock policy and input/output bounds. Job/invocation pins prevent
+  silent model switches; restarting jobs require independently verified prior
+  pins. No prediction result or durable job tables are introduced.
+- Prompts verify genuine retained facts and current source/transmission rights,
+  preserve unknown/conflicting/missing evidence and keep source text inert.
+  Prepared object provenance blocks copied/forged worker instructions. Primary
+  input excludes provider forecast votes, raw articles, tools and credentials.
+- Output validation binds exact canonical fixture/version/team/cycle/run,
+  evidence/model identity and original clocks. Genuine source/fact/claim/team
+  reference tuples and independent semantic grounding proof are mandatory.
+  Shared 005 rules validate distributions and derive double chance. Valid
+  independent families survive invalid or missing ones without complements,
+  normalization, guessed numerical news effects or public publication.
+- Candidates retain explicit evidence coverage/missingness, attribution,
+  timestamps, pin/model provenance and provisional/evaluation state. Calibration
+  requires an exact evaluated artifact; transformed distributions pass shared
+  rules again. Current model, source, transport and calibration authority is
+  checked after callbacks; a final clock check rejects newly stale output.
+- The provider bridge runs one approved attempt through the existing cost
+  gateway, verifies/reconciles usage before returning output and retains unknown
+  liability. Invalid output remains charged and attempts are not automatically
+  retried. Shared `cost-dispatch.ts` replaces duplicated research final-dispatch
+  guards and counts approval/credential latency against launch/workflow bounds.
+- The service includes preflight and registry wait in wall/monotonic time,
+  reserves explicit fallback time, prevents dispatch after cancellation/expiry,
+  joins identical concurrent intents and rejects conflicting or excess inflight
+  requests. Distinct denials cover timeout, insufficient evidence, budget/token
+  limits, invalid output/citations, uncertain usage and absent configuration.
+  It starts no research, fallback selection, revisions, locks or scheduling.
+- Schema/snapshot and migration `20261008232332_ai_predictor_model_registry`
+  add **one InnoDB ModelVersion table** with binary identities, chronological
+  windows, sealed native/JSON projections and SELECT/INSERT application grants.
+  Three synthetic fixture helpers, focused tests, genuine registry acceptance,
+  `npm run test:predictor`, [predictor runbook](ai-predictor.md), README and
+  server/worker guidance accompany the implementation.
+
+### Remaining decisions and checks
+
+OP-15 needs the actual provider, exact immutable model/version, approved
+calibration policy/artifact and applicable model/evaluation windows. OP-09–11
+still need actual account/rates/monthly and job budgets, request/token/unit/time
+allocations and fallback opportunity. OP-13–14 still govern the licensed evidence
+adapter, coverage/freshness and source use/transmission permissions; OP-16 owns
+independent quality evaluation. Implement the selected provider using current
+official structured-output and rate documentation, then run bounded accounted
+integration smoke checks when approved credentials exist. Synthetic approvals
+and passing contract tests establish no provider rights or prediction quality.
+
+### Confirmed acceptance
+
+Checks used pinned Node **24.18.1**, npm **11.16.0** and genuine MySQL **8.4.11**.
+The database helper owned a fresh isolated loopback server/data directory with
+separate DDL and SELECT/INSERT application roles, then shut it down and removed
+only its owned temporary data. All provider responses, model identifiers,
+prices, receipts, credentials and authority/evaluation records are synthetic.
+No live AI, research or football request was made.
+
+| Check | Result |
+| --- | --- |
+| Final `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **554 tests: 553 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/predictor-full-check.log`. |
+| New focused predictor contracts | **82 passed**: 11 registry, 14 prompt, 30 output/calibration, 13 real-cost-gateway adapter and 14 full-chain service checks. |
+| Genuine `test:predictor` acceptance | **12 passed, no failures/skips**, about **23 seconds**: incremental deployment/drift, native projections/hash/window constraints, role separation, concurrent idempotency, original millisecond windows, immutable versions, revoked-authority rollback, restart pin proof and corrupt archive rejection. Log: `.tmp/predictor-acceptance.log`. |
+| Existing research regression | All 12 research bridge tests passed after sharing final dispatch guards; the final full suite passed them again. |
+| Handoff | Whitespace and local Markdown link checks passed. The 012 tracker row remains empty because actual provider/model/calibration selection and the selected adapter are still required. |
+
+The final service checks include original generation after evidence cutoff,
+partial valid families, charged invalid responses without retries, precise
+fallback-ready denials, concurrent joining/conflicts/capacity, rejected async
+approvals, mid-call permission/retention revocation, blocking preflight against
+fallback time, and freshness expiring during semantic verification. Synthetic
+valid outputs remain provisional; these checks establish contract behavior,
+not football prediction accuracy or calibration quality.
+
+## Prompt 013 — Validated provider fallback
+
+**Date:** 9 October 2026 EAT. The local adapter, complete candidate resolver and
+bounded refresh service are implemented. They use the existing API-Football
+transport and quota gateway with independently verified policy and ownership
+contracts. Local implementation and acceptance are complete; the recorded live
+trial, freshness, retention/rights, account and selected AI integration remain
+pending. Read the [fallback runbook](provider-fallback.md).
+
+### Changed files and behavior
+
+- Five server-only modules under `src/server/fallback/` define strict context,
+  receipts, provenance, explicit freshness policy, private adapter, resolution
+  rules and one bounded refresh service. Three focused suites and three
+  synthetic helpers exercise the actual 012 validation/calibration, 013
+  resolver/collector, 007 normalization and 006 quota gateway together.
+- The adapter verifies exact canonical fixture/version, cycle/run, home/away
+  aliases, kickoff, scheduled status, current permissions and approved response
+  mapping before and after collection. The original job identity and request
+  allowance persist across accesses; quotas remain account-wide through the
+  existing durable gateway. Approved cache hits preserve original clocks and
+  incur no new request. Exhausted cache misses are stopped before reservation.
+- `api-football-contract.ts` and `api-football-adapter.ts` add a private fallback
+  workflow with shared abort/deadline checks, before-reservation and final HTTP
+  dispatch hooks. Each retry consumes the owning allowance. Rejected asynchronous
+  approvals cannot authorize work; uncertain attempts retain their liability.
+  Four additional 007 regressions cover the extended workflow.
+- Valid AI groups retain priority. Complete provider match-result percentages
+  supply one distribution and its derived double chance under the shared 005
+  rules. Incomplete, unsupported or conflicting groups stay explicitly
+  unavailable. No source mixing, averaging, guessed complements, odds conversion
+  or exact-score output is introduced. Every result contains the complete set
+  of family availability decisions rather than inheriting old markets.
+- `predictor-output.ts` carries the pinned model's original `outputTiming` policy
+  and exposes a pure freshness check after authenticated receipt verification.
+  Candidates preserve AI evidence-grounded reasons, genuine source references,
+  uncertainty, coverage/missingness and immutable model/evidence provenance.
+  Provider reasons describe the supported statistical basis with permitted
+  real attribution only.
+- Generation, retrieval and update times remain distinct. Unknown provider
+  generation/update times require separate explicit approved policies and stay
+  flagged. Cached data cannot reset its age. Final checks cover source expiry,
+  context/permission changes and the complete wall/monotonic deadline. One
+  bounded recomposition can discard a newly expired source while preserving the
+  other, with no additional HTTP request.
+- The service preserves valid AI through failed or malformed fallback receipts,
+  records conservative request accounting, joins identical inflight requests
+  and rejects conflicting or excess work. Original job bounds remain separate
+  from shorter per-call deadlines so later permitted cache reuse stays valid.
+  Zero surviving families return `retain-previous-or-unavailable`; no prediction
+  revision, lock, schema migration, public provider route or scheduler is added.
+- README, private server/worker guidance, the fallback runbook and
+  [implementation decisions](implementation-decisions.md) document the caller
+  contracts and remaining live evidence.
+
+### Market-support evidence and remaining live checks
+
+Reviewed current official API-Sports endpoint guidance on 9 October 2026 EAT;
+the precise source links and limits are recorded in the runbook. The current
+normalized contract supports complete home/draw/away percentages under verified
+regulation mapping. Derived double chance shares that same source. Provider
+total-goals and BTTS remain unsupported because their required complete
+distributions or validated derivation are absent. Advice, winner picks, goal
+thresholds and comparison statistics cannot fill those gaps.
+
+The committed [008 trial report](reports/provider-trial-008.md) records **zero
+real observations and zero dispatched requests**. Actual fallback coverage,
+pre-match availability, source freshness and rights remain untested. OP-03/04/06,
+OP-07/08, OP-11 and OP-15 retain their account/rights, mapping/freshness/retention,
+job-allocation and selected AI integration requirements. No numeric freshness
+choice, unknown-time acceptance, live permission or supported binary distribution
+has been invented.
+
+### Confirmed acceptance
+
+Checks use pinned Node **24.18.1**, npm **11.16.0** and genuine MySQL **8.4.11**.
+The quota regression helper owned an isolated throwaway loopback server with
+separate migration/application roles, then stopped and cleaned only its owned
+data. All provider responses, credentials, source approvals, account evidence
+and AI receipts are synthetic; no live football, AI or research request was made.
+
+| Check | Result |
+| --- | --- |
+| Final `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **650 tests: 649 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/fallback-full-check.log`. |
+| New fallback scenarios | **92 passed**: 27 provider adapter, 23 source-group resolution and 42 service-chain checks. They cover every failure trigger, complete AI priority, partial/unsupported groups, incomplete distributions, mixed-source conflicts, exact context, age/unknown clocks, revoked proof, quota/time exhaustion and original same-job cache provenance. |
+| Existing adapter regressions | All **52** API-Football tests passed, including **4 new** workflow/cancellation/final-dispatch checks, bringing this prompt's added checks to **96**. |
+| Genuine `npm run test:quota` | **27 passed, no failures/skips**, about **129 seconds** on the owned MySQL 8.4.11 server. Durable account-wide concurrency, rolling limits, reset uncertainty, single-use claims, header reconciliation, dispatch freshness, adapter retries and storage failures remain valid. Log: `.tmp/fallback-quota-regression.log`. |
+| Handoff | Tracked and untracked changed files pass whitespace checks; local Markdown links resolve. The 013 row is ticked in [the root tracker](../dev-tracker.md). Live provider qualification remains pending; 011 and 012 remain unchecked for their outstanding selected integrations. |
+
+The final service regression repeats one original job request with a ten-second
+job deadline and a one-second per-call allowance. After advancing the clock,
+the second resolution reuses the cached provider candidate with identical
+original timestamps, zero new dispatches and only one total quota reservation.
+Other final checks prove source expiry/revocation drops only affected groups,
+blocking approval time counts against the deadline, and a second expiry during
+the bounded recomposition prevents a late candidate. These checks establish
+contract and accounting behavior, not football prediction accuracy or live
+coverage.
+
+## Prompt 014 — Chronological evaluation harness (partial operating setup)
+
+**Date:** 9 October 2026 EAT. The independent offline harness, deterministic
+metrics, reconstructable baselines, immutable archives and private report command
+are implemented. Actual chronological periods, cohort/parameter choices, sample
+and quality/public-claim thresholds, selected AI configuration and genuine
+forecast observations remain pending. **014 remains unchecked** in
+[the root tracker](../dev-tracker.md). No model was promoted or qualified.
+
+### Changed files and behavior
+
+- Eight server-only modules in `src/server/evaluation/` implement versioned
+  protocol/dataset contracts, strict bounded parsing, metrics, baselines,
+  cohort/gate evaluation, readable reports, immutable archives and the local
+  command. Six focused suites and a reusable synthetic helper cover actual
+  shared market/settlement, predictor and filesystem behavior.
+- Protocol identities freeze half-open chronological assessment windows,
+  competition/horizon selections, baseline settings, reliability bins,
+  uncertainty parameters and original gate criteria. Model fitting/prior
+  evaluation periods remain separate from the planned assessment schedule;
+  012's existing known-window cutoff guards stay unchanged. A future planned
+  final assessment is not represented as already completed model fitting.
+- Datasets bind fixture/version/cycle, canonical teams, exact evidence cutoff,
+  forecast-as-of time, original capture/generation/update times, source/model
+  versions and independently verified regulation results. News/football input
+  must be available by the evidence cutoff; provider forecast receipts must be
+  captured by the forecast-as-of time. Later news, revised hindsight forecasts,
+  future fitting artifacts, overlapping splits and changed hashes are rejected.
+- Kickoff assigns each fixture/cycle to one split. Each horizon contains one
+  selected capture per fixture/cycle; repeated revisions cannot inflate counts.
+  AI/provider/combined and baseline comparisons use identical matched keys and
+  expose their intersection counts. Source-specific and combined metrics retain
+  unique picks, while unavailable, void and pending denominators reconcile.
+- Metrics report selected-pick hit rate, full-distribution Brier/log loss and
+  selection-specific reliability bins with counts, observed frequencies and
+  Wilson uncertainty. Double chance averages three overlapping binary events
+  per fixture and contributes one headline pick. No distribution normalization,
+  probability clipping or hidden alternatives inflate the results.
+- League frequencies use explicit additive smoothing of available regulation
+  history. Team strength uses chronological Elo updates and a configured
+  Davidson draw weight for result/double chance only. Approved parameters are
+  required; no-history output stays unavailable. Shared validators own sums,
+  strict probability bounds, derivation and joint consistency. Original history
+  receipt hashes preserve batch provenance and deterministic ordering.
+- Gates retain their actual frozen criteria and separate diagnostics from
+  passed/failed/pending qualification. Synthetic data, insufficient samples,
+  unknown fitting provenance, unapproved settings and unverified independent
+  final tests cannot qualify a model or public claim. Failure retains a verified
+  previous approved model; where none exists, status stays provisional with a
+  launch blocker. Source/history/model authority is checked again at return.
+- Only an original issued harness report can create an evaluation archive;
+  copied/rehashed invented results and revoked proofs are rejected. Exclusive
+  bounded writes preserve `protocol.json`, `dataset.json`, `report.json` and
+  `report.md`; the first final-test protocol/selection/dataset/report binding
+  rejects silently changed reruns. Identical reruns preserve their artifacts.
+  JSON decodes bigint only at the native fixture-version field.
+- `scripts/forecast-evaluation.py` and `npm run evaluation:report` provide the
+  local command. It reads an explicit private protocol/dataset and trusted
+  authority module, or writes factual readiness artifacts with no data arguments.
+  It constructs no runtime policy, database, credential lookup or provider
+  transport. README, server/worker guidance, the
+  [evaluation runbook](forecast-evaluation.md) and
+  [decision register](implementation-decisions.md) accompany the implementation.
+  No database migration or public performance route is introduced.
+
+### Actual datasets, report paths and remaining shadow requirements
+
+No genuine evaluation dataset or selected model was supplied. The committed
+[readiness Markdown report](reports/forecast-evaluation-014-readiness.md) and
+[canonical JSON report](reports/forecast-evaluation-014-readiness.json) record
+**zero actual forecast observations, zero live requests in this evaluation,
+unavailable historical AI/provider comparisons and provisional/unapproved model
+status**. They were generated by the actual local command and copied to the
+committed handoff paths. Synthetic fixture policies and metric results remain
+test data, not an actual dataset or operating approval.
+
+OP-15–18 and OP-33 retain actual model/calibration, evaluation periods, selected
+competitions/horizons, baseline values, sample/quality/coverage/public-claim
+gates, source availability/rights, budgets and bounded prospective shadow
+requirements. Freeze the complete actual protocol before inspecting the final
+test. The runbook/readiness report give a concrete capture plan: retain every
+predeclared fixture/horizon and missing attempt, original evidence/source and
+forecast receipts, immutable manifests and separately verified regulation
+results/corrections. Later approved private shadow work must use the existing
+cost/quota controls and passed pipeline-integrity checks. No hindsight forecast,
+fixed accuracy promise, automatic promotion or public calibration claim follows.
+
+### Confirmed local acceptance
+
+Checks use pinned Node **24.18.1** and npm **11.16.0**. Fixtures, source/model
+versions, periods, thresholds, credentials and authority records are explicitly
+synthetic. Filesystem archive checks use owned temporary directories. No live
+football, AI, research or database request was made by this feature.
+
+| Check | Result |
+| --- | --- |
+| Final `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **746 tests: 745 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/evaluation-full-check.log`. |
+| New evaluation checks | **96 passed**: 15 input/integrity, 17 metric arithmetic/calibration, 20 historical baseline, 29 full harness/cohort/gate and 15 report/archive/CLI checks. All six suites passed again in the full check. |
+| Genuine predictor integration | The harness test uses actual 012 prompt construction, output validation and calibration hooks with one immutable model's completed fitting windows and a future planned assessment period. It produces a scored synthetic capture without qualification or public claims. |
+| Reproducibility and archive integrity | Frozen reruns and reordered fixture/history batches reproduce hashes/metrics. Exact native bigint versions survive JSON/archive reads. Identical archives are reused; copied/rehashed invented reports, revoked authority, traversal/linked paths, size limits, changed datasets and final-test replacement are denied. |
+| Actual readiness command | `npm run evaluation:report` succeeded and generated report **a0fb4f64b50d0971cde249f8b690a9140a600ec89e4d419a8c2d3502c186dfde**. Its canonical JSON and Markdown were copied to the two `docs/reports/forecast-evaluation-014-readiness` handoff paths. |
+| Handoff | Whitespace and local Markdown links checked. 014 stays empty while its approved protocol and selected configuration remain unresolved. No actual forecast-quality claim or model promotion is recorded. |
+
+The two readiness files accidentally created by an early path-traversal test
+remain under `C:/Users/WASSWA WILSON/AppData/Local/Temp/unapproved-target/`, outside
+the repository. Automatic approval review rejected the verified narrow cleanup
+with **“blocked by policy”**; cleanup was not retried. The corrected test preserves
+the literal traversal input and rejects it before creating files. These two
+temporary files contain factual zero-observation readiness data and are not
+included in repository changes.
+
+## Prompt 015 — Shared brand styling
+
+Implemented the light-theme design system using the existing named first-party
+brand assets and local Manrope source. **015 is complete** and its row is ticked
+in [the root tracker](../dev-tracker.md). The independent styling work does not
+resolve the recorded operating prerequisites for 011/012/014.
+
+### Implemented and changed files
+
+- `src/styles/theme.ts` and `styled.d.ts` define the typed palette, semantic
+  surfaces/borders/outcomes, typography, spacing, breakpoints, focus and control
+  dimensions. `global-style.tsx`, `registry.tsx` and `provider.tsx` implement the
+  single client styling arrangement with initial and streamed server insertion.
+- `src/components/ui/brand.tsx`, `layout.tsx`, `controls.tsx` and `feedback.tsx`
+  provide the reusable exports listed in the [styling runbook](brand-styling.md).
+  Native controls have accessible names, stable IDs, preserved hint/error
+  associations, visible focus, square corners and 44px minimum targets. Status
+  presentations combine text with decorative icons.
+- `src/app/layout.tsx` loads the existing licensed font, integrates the root
+  provider and named favicon assets. `page.tsx` uses the shared layout and honest
+  empty-state presentation. `src/components/dev/brand-demo.tsx` is imported only
+  in development, with interface examples and a local form that sends no data.
+- `next.config.ts` enables the styled-components compiler. The documented
+  `agentRules: false` setting keeps this development check from creating
+  unrelated managed instruction files. `eslint.config.mjs` extends the private
+  import guard to styles. `.gitignore` excludes Playwright captures and CLI
+  session artifacts.
+- `scripts/verify-brand-rendering.py` and the `test:styling` package script
+  build and verify an isolated production acceptance fixture under `.tmp`.
+  README/component guidance, this handoff, the decision register and tracker
+  document the exports and results. No dependency version, lockfile or schema
+  migration changed.
+
+### Validation and evidence
+
+All commands ran with Node.js **24.18.1** and npm **11.16.0**. Browser checks used
+Playwright CLI with Chromium. No live football/AI/database calls were dispatched.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed guarded Prisma generation/schema validation, zero-warning ESLint, strict type-check, **746 tests: 745 passed and 1 existing Windows POSIX-mode skip**, plus production build/prerendering. Log: `.tmp/brand-015-full-check.log`. |
+| Production styling fixture | `python scripts/verify-brand-rendering.py --serve` passed on the final theme. Artifact directory: `.tmp/brand-styling-evUVVA/`, with build log, `initial.html`, `streamed.html`, `stream-chunks.json` and `verification.json`. One initial style element contains 35 registered rules. The delayed response contains two emitted style elements, 12 unique registered rules and six response chunks. A genuinely new CSS rule precedes its actual streamed DOM and is emitted once. Global style/reset occurs once per response. |
+| Production client boundary | All 13 fixture browser chunks exclude the fake secret/private canary and checked private service names. Rendered HTML excludes transient styling attributes. Actual application production chunks/reference manifest and HTML omit the development demo module and copy. No provider services are imported into the style/component graph. |
+| Production without JavaScript | The actual application homepage returned 200 at 320px with JavaScript disabled. Readable heading/body, navy text, paper background, one styled-components style element and the named primary SVG rendered without hydration. Body is 16px; document width is 320px with no horizontal overflow. Screenshot: `output/playwright/brand-015-actual-production-no-js-320.png`. |
+| Phone/desktop and long text | Production fixture checked at **320, 360, 390, 430 and 1280px**, including long labels, errors and a 270-character unbroken identifier. No horizontal document overflow; control/link minimum height is 44px, all inspected component corners are 0px. Desktop/320 captures: `output/playwright/brand-015-production-desktop.png` and `brand-015-production-320.png`. |
+| Doubled text | The base font was explicitly doubled from 16px to 32px at 320px; body computed at 32px and document width remained within the viewport. Long text, control labels and feedback wrap. Spacing/gutter tokens were adjusted to fixed pixel values after inspection to preserve usable width. Screenshot: `output/playwright/brand-015-production-320-text-200.png`. |
+| Keyboard and fields | Visible focus follows native tab order; a disabled button is skipped. Shared field labels each associate with their control, all referenced description IDs exist, the invalid field is marked, and the existing description remains beside hint/error IDs. A real interactive status update proves hydration; icons are decorative and status labels remain visible. Focus screenshot: `output/playwright/brand-015-production-keyboard-focus.png`. |
+| Streamed browser navigation | Three primitive → delayed → primitive cycles retained the same document. New delayed content had its expected CSS marker when displayed. The adopted sheet remained **one element / 78 CSSOM rules** after every cycle, with no growth. No console warnings, hydration errors or page errors occurred during initial hydration and the navigation checks. |
+| Motion and contrast | Reduced-motion media emulation is honored; computed animation/transition duration is 0.00001s. White/teal text is 4.86:1; navy/white 16.69:1; muted/white 5.98:1; outcome text/background at least 6.10:1. Control boundaries exceed 3:1 on white/paper. Focus CSS uses a navy 3px outline with a 3px offset; Windows display scaling returns fractional pixel measurements. |
+| Handoff | Changed-file whitespace and repository-local Markdown links checked. First-party brand files and font source/license are reused unchanged. No synthetic football data, feed/card feature, locale shell or extra theme ships. |
+
+The scoped fixture and temporary production server were stopped after checks;
+the development homepage provides the preview for later primitive work. Live
+device performance and full feed/navigation acceptance belong to their later
+prompts and are not claimed by these isolated browser checks.
+
+## Prompt 016 — English locale navigation
+
+Implemented and verified on **9 October 2026 EAT**. **016 is complete** and its
+row is ticked in [the root tracker](../dev-tracker.md). The [navigation runbook](locale-navigation.md)
+documents route, message and component contracts. Existing operating gates for
+011/012/014 remain unchanged and do not block this independent public shell.
+
+### Implemented and changed files
+
+- `src/domain/navigation.ts` defines the shared dated-feed view, strict parsing,
+  Today/Results date/status defaults, information links and future match links.
+  Today uses current EAT day/all statuses; Results uses previous EAT
+  day/finished statuses. Both use `/en/predictions/YYYY-MM-DD`; `/en` renders the
+  same feed shell and `/en/results` is not a separate application.
+- `src/i18n/locales.ts`, `messages.ts` and `messages/en.ts` provide English-only
+  publication, fallback, stable externalized keys, cardinal plural messages and
+  `Intl` number/reporting-date formatting. Domain market/status IDs stay neutral.
+- `src/proxy.ts` redirects unsupported locale-like prefixes to English while
+  preserving path/query and excluding APIs/framework/assets. `src/app/page.tsx`
+  permanently redirects `/` to `/en`. `src/app/layout.tsx` externalizes metadata
+  copy while retaining the one shared provider, local font and English language.
+- `src/app/[locale]/layout.tsx`, `page.tsx`, `predictions/[date]/page.tsx` and
+  `how-it-works`, `privacy`, `terms`, `contact` page modules provide locale
+  validation, interim noindex surfaces and semantic current locations.
+  `src/app/not-found.tsx` provides a navigable English 404.
+- `src/app/_components/public-shell.tsx`, `feed-shell.tsx` and
+  `information-shell.tsx` compose server content. Request-scoped EAT dates use
+  the existing calendar after `connection()`; no build-time date is cached.
+  `src/components/navigation/shell-styles.tsx` reuses brand tokens, named logo,
+  existing layout/link controls, wrapping and square corners. A native skip
+  anchor moves keyboard focus to the main landmark. The old public development
+  primitive demo is no longer mounted; its isolated styling fixture remains.
+- `tests/navigation.test.mjs` covers fallback, routing, EAT midnight/year
+  boundaries, historical views, malformed inputs, plural/count formatting and
+  per-key fallback. `scripts/verify-navigation-rendering.py` checks the actual
+  production HTML and redirects; `package.json` exposes `test:navigation` and
+  `test:navigation:html`. The private-import lint guard and its boundary test now
+  include i18n. Component guidance, styling/navigation runbooks, decision
+  register, this record and tracker document the handoff. No dependency version,
+  lockfile, schema or migration changed.
+
+### Validation and evidence
+
+Checks used Node.js **24.18.1**, npm **11.16.0** and Playwright CLI with installed
+Chrome. This shell dispatched no football/AI/provider or application database
+requests and issued no visitor cookies.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | Passed with zero warnings after the final native skip-link change. Server page composition lives in the app's private component directory, preserving browser import restrictions. |
+| `npm run typecheck`, `npm run build` | Passed. The final Next.js 16.4 production build compiled and type-checked all locale, information, dated-feed and 404 routes plus the locale proxy. Public date-dependent routes render on demand. |
+| `npm run test:navigation` | All **9** contract tests passed, including both sides of 21:00 UTC/EAT midnight, year rollover, old leap-day reporting, fallback and malformed paths/statuses. |
+| Full existing suite | The final `node --conditions=react-server --test --test-reporter=dot tests/*.test.mjs` run exited 0: **755 cases, 754 passed and 1 existing Windows POSIX-mode skip**. Log: `.tmp/016-tests.log`. The first parallel run hit the existing offline Prisma-generation test's 60-second timeout while builds/checks competed for resources; that file passed alone, then the complete suite passed on rerun. No unrelated test or timeout was changed. |
+| Production HTML | `python scripts/verify-navigation-rendering.py` passed on the final build. Eight anonymous feed/information pages have initial CSS before the shell, one main/h1, current-location markup before hydration, all links and `noindex, follow`. Root returns 308 to `/en` even with French browser headers. Locale fallbacks return 307 with route/query preserved. Invalid dates/statuses, repeated statuses, unknown matches and unknown routes return real 404s. No selector, auth UI, invented forecasts or misleading empty-fixture state appears. |
+| Existing styling regression | `npm run test:styling` passed with one initial style element/35 registered rules, delayed styles preceding streamed DOM, two streamed style elements/12 unique registered rules, six response chunks and 13 browser chunks free of the private canary. Transient props remain absent. Final application chunks omit `BrandDemo` and the private canary. |
+| Fresh browser navigation | An isolated French-language/Los Angeles context followed root, Today, Results, home, every information link, Back and `/fr/predictions/...?...` fallback. Targets, EAT dates, headings and server/current markers matched. Zero visitor cookies; zero page errors and zero console warnings/errors. |
+| Keyboard | Tab order is skip → home → Today → Results → How it works → Privacy → Terms → Contact, with visible outlines. Shift+Tab reverses correctly. Activating the native skip link focuses `main-content`; the next Tab reaches footer navigation. The initial framework-link implementation scrolled without moving focus and was replaced before completion. |
+| Phone, desktop and expansion | Checked **320px** and **1280px**, 16→32px base-text enlargement at 320px, tripled English labels/body copy plus a long unbroken identifier, and **200% CSS layout zoom at 640px (320px effective width)**. Document width stays within the viewport. Text and navigation wrap without clipping; screenshots were visually inspected. |
+| Without JavaScript | A second isolated Swahili-language/Honolulu context disabled JavaScript. The inline Next queue remained undefined, with correct English language, 16px type, paper background, EAT date and a 320px document. Root, native skip, all six shell links and home worked with server-rendered current markers and zero cookies. The script assertion result was `passed: true`; its later optional console command was canceled during browser cleanup. |
+
+Browser scripts/configs and screenshots remain ignored under
+`output/playwright/locale-navigation-*`, including `320.png`,
+`320-text-200.png`, `expanded.png`, `zoom-200.png`, `desktop.png` and `nojs.png`.
+The production HTML verifier and domain tests are committed source; no browser
+test dependency was added. Local Markdown targets and changed-file whitespace
+were checked. Temporary acceptance browsers and the production server were
+stopped after verification.
+
+### Temporary surfaces and remaining scope
+
+| Surface | Replacement owner |
+| --- | --- |
+| `/en` and dated feed, including Results' finished filter | 032 supplies the real stored match feed; 017/028/033 extend shared URL/query/filter behavior. |
+| `/en/how-it-works` preparation notice | 038 supplies methodology and measured performance. |
+| `/en/privacy` preparation notice | 039 supplies the actual privacy notice. |
+| `/en/terms` preparation notice | 040 supplies actual terms. |
+| `/en/contact` preparation notice | 041 supplies verified owner contact information. |
+
+All interim surfaces remain `noindex, follow`; 042 owns final discovery and
+indexing. The reserved match helper creates no public fixture placeholder;
+035 owns verified match pages and canonical slugs. Already-open-tab midnight
+rollover belongs to 037. No unimplemented locale, language selector, decorative
+hero, feed query, simulated forecast/live state or legal assertion ships.
+**No blocker remains for 016.**
+
+## 017 — Request-safe client state
+
+Date: **9 October 2026 (Africa/Kampala)**.
+
+Implemented the client-state feature and its integration with the existing feed
+preview. The [state runbook](client-state.md) and
+[decision register](implementation-decisions.md#prompt-017--request-safe-state-and-versioned-handoff)
+record the contracts for subsequent API, feed, filter, pagination and polling
+prompts. No dependency version, lockfile, schema or migration changed.
+
+### Scope and changed files
+
+- `src/domain/feed-query.ts` owns reusable validated URL queries, canonical
+  serialization/hrefs/list keys and shared Today/Results defaults. It supports
+  EAT-relative dates, explicit historical dates and bounded ranges, normalized
+  search, league/status/market, market-attached probability sort and pagination.
+  Unknown, repeated, ambiguous and incompatible parameters fail closed.
+- `src/domain/fixture-snapshot.ts` validates a typed public fixture projection
+  with a coherent nullable cycle/run/revision forecast. It reuses the calendar,
+  market validation and settlement status contract. Fixture data versions are
+  exact unsigned BIGINT decimal strings; opaque IDs never determine freshness.
+- `src/state/{contracts,feed,store,hooks,provider,preferences}.ts[x]` supplies
+  per-provider stores, typed hooks, stable SSR/hydration handoff, mutable drafts,
+  allowlisted anonymous preferences, numeric version reconciliation and
+  generation/sequence/query/page request fencing. Whole snapshots replace only
+  at strictly newer versions. Stale batches and failed refreshes retain accepted
+  records, list membership and loaded position.
+- Serializable Back checkpoints hold loaded page extent/IDs/scroll against a
+  navigation entry, canonical query and starting page, bounded to 20 entries and
+  30 minutes. Explicit EAT events roll relative selections to page 1 and preserve
+  historical applied dates/ranges and historical drafts.
+- Both locale feed pages use the shared URL parser and pass an explicit unloaded
+  bootstrap into the provider through `src/app/_components/feed-shell.tsx`.
+  Date ranges and additional canonical status labels reuse the existing UI and
+  `src/i18n/messages/en.ts`. The feed still clearly identifies its preview state.
+  `src/domain/navigation.ts` reuses and re-exports the shared defaults/statuses.
+- `tests/{feed-query,client-state}.test.mjs` and the synthetic helper cover the
+  contracts. `scripts/verify-client-state-rendering.py` builds an isolated real
+  Next production fixture with two providers and verifies concurrent requests.
+  `package.json` exposes `test:state` and `test:state:rendering`.
+- `scripts/verify-navigation-rendering.py` adds valid full-query/range HTML and
+  invalid-query 404 checks. `eslint.config.mjs` and its boundary test protect
+  `src/state` from private imports; generated Playwright artifacts are excluded
+  from lint. State/domain guidance, navigation runbook, decision register, this
+  progress record and the tracker document the handoff.
+
+### Validation and evidence
+
+Checks ran on pinned **Node.js 24.18.1 / npm 11.16.0**. Browser checks used the
+Playwright skill/CLI and installed Chrome. Synthetic fixture data was confined
+to tests and temporary acceptance apps; it was never added to public routes.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): Prisma generation/schema validation, zero-warning lint, strict type-check, all **771 cases: 770 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the final Next.js production build. Log: `.tmp/017-check.log`. |
+| `npm run test:state` | All **16** focused tests passed: URL round trips/defaults/malformed values, sort-market validation, isolation, exact numeric versions above JS precision, changed probability/source/explanation snapshots, older/equal versions, cycle changes, unavailable forecasts, request/query races, atomic stale/invalid pages, append/refresh failures, Back identity/page/expiry/bounds, empty-vs-unloaded state, EAT rollover and historical drafts, preference allowlist. |
+| Isolated production SSR | Four concurrent requests each rendered two distinct providers with request-specific applied queries/drafts, version 9 fixture handoff and comfortable initial preferences. No response contained another request's query and no visitor cookie was issued. `test:state:rendering` passed. |
+| Hydration and provider isolation | Browser JavaScript was gated until the real server DOM was inspected with an existing compact preference. Both providers initially rendered comfortable; after scripts were released both hydrated to compact without warnings/errors. Updating A's draft left its applied query and B's state intact. Parent rerenders with changed bootstrap props retained each mounted store. |
+| Optional local storage | A context whose local-storage getter throws still hydrated and updated preferences/drafts. Sibling providers stayed isolated. A fresh context persisted only `goal-hint:preferences:v1` containing version/density; reload applied that preference after hydration. No fixtures, forecasts or queries were written. |
+| Integrated production HTML | Ten feed/information URLs passed, including a sorted relative Tomorrow view and a seven-day historical range with search/league/page inputs. Initial styles, navigation/current markers, range endpoints, noindex and anonymous access remain correct. Malformed/mixed/repeated/unknown queries and incompatible probability sorts return real 404s; root and locale fallbacks remain correct. |
+
+The browser acceptance result was `passed: true`, with `hydrationErrors: 0`.
+The screenshot `output/playwright/client-state-hydration.png` was visually
+inspected; the gated script/config remain beside it in ignored browser output.
+SSR fixture HTML/build logs are under `.tmp/client-state-*`. The initial fixture
+omitted public favicons, producing two resource 404s; the fixture builder was
+corrected to copy the real first-party brand assets before the clean browser
+acceptance run. No application behavior or test timeout was weakened.
+
+### Remaining scope
+
+The implementation deliberately provides state and reconciliation contracts.
+028 supplies public stored-data endpoints; 032 supplies the real match feed;
+033 wires controls to URLs; 034 chooses the persistent provider boundary and
+wires real Back/session/DOM restoration; 037 adds EAT triggers and polling.
+Current pages pass `data: null`; they do not imply empty fixture availability.
+There are no invented RTK Query endpoints, browser provider/AI requests,
+forecast persistence or active polling. Existing operating/launch gates remain
+with their owning prompts. **No blocker remains for 017.**
+
+## 018 — Reusable match card
+
+Date: **9 October 2026 (Africa/Kampala)**.
+
+Implemented shared match-card presentation and its public-data contract. The
+[runbook](match-card.md) and
+[decision register](implementation-decisions.md#prompt-018--selected-market-match-card-presentation)
+describe the handoff to later feed/detail pages. No dependency version, lockfile,
+schema or migration changed.
+
+### Scope and changed files
+
+- `src/components/match/{match-card,team-row,probability-label,outcome-badge,match-card-list}.tsx`
+  supplies the article, separate Home/Away scores, selected-family prediction,
+  estimated probability, five explicit/icon outcomes, source/publication and
+  supplied notices, plus canonical analysis navigation. Shared tokens/primitives
+  keep square corners, visible focus and a one-column/mobile, two-column/large
+  native list. `src/components/ui/visually-hidden.tsx` supplies reusable heading
+  and score-label semantics without duplicate logo announcements.
+- `src/domain/match-card.ts` selects only the requested family, reuses complete
+  market probability presentation, binds supplied outcomes and derives Unicode
+  initials. `market-settlement.ts` exports the existing played-final predicate;
+  card code never adjudicates display scores or synthesizes missing forecasts.
+- `src/domain/fixture-snapshot.ts` adds optional logo, coverage, delayed,
+  provisional and per-market outcome metadata. It validates cycle/revision/pick
+  coherence, public Void reasons and final-status correctness. These fields use
+  the existing atomic whole-version state replacement.
+- `src/domain/remote-image.ts` shares structural HTTPS URL checks with
+  `src/server/football/{catalog-input,api-football-normalize,provider-trial-evaluation}.ts`.
+  Existing server media approval remains authoritative. Native 32px images use
+  direct supplied URLs, lazy/eager loading, cached-load detection and initials on
+  missing/failed images. Changed URLs can recover without retry loops.
+- `src/i18n/messages.ts` reuses immutable number/date formatters and adds
+  one-pass interpolation plus actual EAT instant labels. `messages/en.ts` owns
+  the card, market, probability and outcome copy.
+- `tests/match-card.test.mjs`, `tests/helpers/match-card-fixtures.mjs` and
+  `tests/fixtures/match-card/preview.tsx` provide deterministic synthetic cases.
+  `scripts/verify-match-card-rendering.py` builds a temporary production app
+  with the real components/root provider and an isolated analysis destination.
+  `package.json` exposes `test:card` and `test:card:rendering`.
+- Component/domain guidance, styling/state runbooks, this progress record,
+  implementation decisions, the new match-card runbook and tracker document
+  the shared contracts and completed acceptance.
+
+### Validation and evidence
+
+Checks used pinned **Node.js 24.18.1 / npm 11.16.0**. Browser checks used the
+Playwright skill/CLI and installed Chrome. All example teams, scores, predictions
+and image responses were synthetic, confined to tests/temporary apps.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): Prisma generation/schema validation, zero-warning lint, strict type-check, **780 cases: 779 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/018-check.log`. |
+| `npm run test:card` | All **9** focused tests passed: family/outcome independence, absent forecasts, score/settlement separation, identity binding and Void reason, sources/notices, group rounding/boundaries, Unicode initials, URL structure, literal interpolation/EAT publication and whole-version metadata replacement. |
+| Isolated production SSR | `test:card:rendering` passed with **12** labeled examples, every outcome and both sources, correct reading order, one link per card, initial styles, actual publication time, notice scope, direct HTTPS native images/reserved dimensions, and no visitor cookie. Repeated after simplifying the unavailable label. Final artifacts: `.tmp/match-card-L2q8B0/`. |
+| Hydration and family selection | Gated JavaScript allowed inspection of server markup and eager logo completion before hydration. Releasing scripts produced no hydration/page errors. Switching the first card from match result to total goals changed Correct/54% to Incorrect/70% and back, without coloring the card. |
+| Reading and keyboard order | All articles have unique accessible headings, Home/Away score labels, decorative logo/initial containers and text plus non-color outcome icons. Tab followed preview controls then all 12 links in source order, with visible focus; Enter reached the canonical isolated fixture destination. |
+| Responsive/text checks | At **320, 360, 390, 430 and 1280px**, no document/card overflow; logos remained 32px square, score columns aligned, long words wrapped and corners stayed square. Mobile lists had one column, desktop two. At 320px with **200% text**, the same layout checks passed. |
+| Images and no-JavaScript behavior | Browser requests used the exact synthetic HTTPS URLs as image requests, without optimizer/proxy requests. 404 and 429 removed failed images and retained initials; a replacement URL loaded. A JavaScript-disabled 320px context retained readable server cards/initials and working keyboard analysis navigation. |
+| Integrated public regression | All **10** feed/information URLs passed `test:navigation:html`, including historical ranges and selected-market sorting; redirects, locale fallback and invalid-query 404s stayed correct. Production browser chunks contained no card-example headings, URLs or synthetic team names. |
+
+The browser acceptance result was `passed: true`, `cards: 12`,
+`hydrationErrors: 0`. Expected image failures were synthetic 404/429 responses,
+not application errors. The final unavailable copy was separately checked in
+the rebuilt browser fixture. Screenshots visually inspected under ignored
+`output/playwright/` include `match-card-{desktop,320,text-200,long-320,void,unavailable,limited,partial,delayed,broken}.png`.
+The fixture uses intercepted synthetic HTTPS images, so these checks establish
+component transport/fallback behavior rather than real-provider media approval
+or CDN uptime. Acceptance scripts/config remain beside the screenshots.
+
+### Remaining scope
+
+The public feed still passes unloaded data and contains no fabricated matches.
+028 supplies public DTO reads, 032 composes the real feed, 035 owns real analysis
+destinations and 037 owns refresh/polling. Locked-revision projection and settled
+outcomes remain server responsibilities. Real media rights, provider operations,
+forecast qualification and launch gates retain their existing owners.
+**No blocker remains for 018.**
+
+## 019 — Immutable prediction history
+
+Date: **9 October 2026 (Africa/Kampala)**.
+
+Implemented prediction-history persistence and private read repositories. The
+[history runbook](prediction-history.md) and
+[decision register](implementation-decisions.md#prompt-019--immutable-prediction-cycle-and-revision-storage)
+document invariants, transaction handoff, least-privilege grants and rollback
+that preserves history. No dependency version or lockfile changed.
+
+### Scope and changed files
+
+- `prisma/schema.prisma`, its schema snapshot and migration
+  `20261009121009_prediction_history/migration.sql` add minimal `DailyRun`
+  identity/order, `PredictionCycle`, immutable `PredictionSet`/`MarketPrediction`,
+  and append-only `PredictionSchedule`/`PredictionAudit`. They extend existing
+  fixtures with an active-cycle reference and reuse evidence/model records.
+  Composite foreign keys bind cycle/fixture/current/locked/predecessor, run/order,
+  schedule and exact evidence identity/version/hash. Native probability, state,
+  timing, projection/integrity checks and lookup/uniqueness indexes supplement
+  the shared application rules. The migration contains no forecast seeds.
+- `src/server/predictions/{history-contract,history-input,history-read,history-mysql-store}.ts`
+  supplies strict commands/types, idempotent run/cycle creation, immutable
+  complete revisions, scoped serialized transactions and expected-version
+  cycle/reference changes. All four families are stored explicitly; unsupported
+  new families never inherit old values. Original provenance/fallback reasons,
+  evidence/model/rule versions and distinct clocks survive unchanged.
+- Mutations reuse the existing catalog provider→fixture lock order and increment
+  exact fixture data versions with their audit records. Failed callbacks roll
+  back all related SQL; caught writer errors also prevent commit. Immutable
+  payloads have no supported update/delete method, and test application grants
+  deny those operations. Closed/locked cycles cannot reopen or substitute picks.
+- Coherent read-only current/locked/display, revision/cycle history, audit and
+  schedule repositories use stable bounded cursors. Open reads current, closed
+  reads locked or unavailable, and void retains its last applicable prediction
+  and reason even without a lock. Empty cycles never invent a forecast.
+- `src/server/fallback/fallback-input.ts` adds reusable strict archive parsing
+  for resolved candidates, preserving the existing complete market validator,
+  coherent match-result/double-chance provenance, original clocks and flags.
+- `tests/prediction-history.{test,integration}.mjs` and its synthetic helper
+  exercise contracts and genuine isolated database behavior. `package.json`
+  exposes `test:history`. The server guidance, database/history runbooks,
+  implementation decisions, progress record and tracker document the handoff.
+
+### Validation and evidence
+
+Checks used pinned **Node.js 24.18.1 / npm 11.16.0** and owned throwaway
+**MySQL Community Server 8.4.11** instances selected with
+`MYSQL_TEST_SERVER_BINARY`. Separate migration/application users exercised real
+permissions. Tests made no football, news or AI provider request; all decisions,
+forecast inputs and permissions were synthetic. No installed MySQL service or
+application database was used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): Prisma generation/validation, zero-warning lint, strict type-check, **785 cases: 784 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/019-check.log`. |
+| `npm run test:history` | **22 passed, 0 failed/skipped**: five deterministic archive/command tests plus the database harness and 16 database cases. Log: `.tmp/019-history.log`. |
+| Migration/schema | All committed migrations deployed to fresh InnoDB databases. `db:verify` confirmed schema agreement with no drift; application DDL and migration-table access were denied. No live rows or seeds were introduced. |
+| Concurrency and bindings | Six independent-client retries each shared one run, cycle and refresh publication. Conflicting inputs, stale schedules/versions, older new runs, wrong evidence/fixture/cycle references and invalid probabilities were refused. Native composite keys also rejected cross-cycle/fixture refs and malformed probability payloads. |
+| Precision/provenance | Binary64 thirds, complete source provenance, explanations, model/evidence bindings, original publication/evidence/source times and unknown provider clocks round-tripped. Fixture versions above JavaScript's safe integer range remained exact. A newer partial fallback snapshot removed unsupported older AI families. |
+| Immutability/atomicity | Application UPDATE/DELETE attempts on sets/markets/schedules/audits and cycle identity edits failed. Throwing after revision/reference changes rolled back payloads, markets, references, audits and fixture versions. Catching a writer failure inside the callback still rolled back the entire transaction. Escaped writer calls failed. |
+| Read/lifecycle storage | Chronological cursors did not alter references/versions. Closed cycles used locked or unavailable data; locked picks could not be replaced/reopened. Schedule corrections appended observations/audits while preserving picks. Void cycles retained reasons/predictions without a lock; empty closed/void cycles stayed unavailable. Activating a new explicit cycle retained old history. |
+| Existing catalog integration | **28 passed, 0 failed/skipped** on MySQL 8.4.11. Canonical identities, import coordination, exact versions, concurrency and result provenance remained valid. Log: `.tmp/019-catalog.log`. |
+| Existing evidence integration | **20 passed, 0 failed/skipped** on MySQL 8.4.11. Immutable requests/sources, precision, native constraints, nullable cycle/run refs and archive preservation remained valid. Log: `.tmp/019-evidence.log`. |
+| Existing model integration | **12 passed, 0 failed/skipped** on MySQL 8.4.11. Immutable model configurations, pins, authority checks, native constraints and least privilege remained valid. Log: `.tmp/019-predictor.log`. |
+
+The initial isolated migration attempt caught MySQL's requirement for an
+explicit boolean comparison around COALESCE in CHECK expressions; the migration
+was corrected before acceptance. Real round trips also identified unsigned
+32-bit raw-query decoding and the evidence fixture's original authority binding;
+those were corrected without weakening validation or permissions. Later clean
+runs passed. The owned test instances were shut down and removed by their
+ownership-checked harness. No UI changed, so visual acceptance was not required.
+
+### Deferred interfaces and blockers
+
+020 owns durable job/lease identity, 021 committed daily manifests, 022
+transactional publication eligibility, 023 eligible cutoff locking, 024 lifecycle
+decisions/canonical schedule coordination, and 027 settlement/corrections.
+The provided transaction writer is their storage boundary; it is not an active
+publication service or a scheduler. Public read endpoints and history UI remain
+with 028/029/036. Rollback preserves additive schema and immutable history while
+disabling writers; corrections use reviewed forward migrations and drift checks.
+
+Live evidence/model/source approvals and quality gates in 011/012/014 remain
+pending with their existing tracker state, alongside production database
+grants/retention/recovery qualification. They do not block independent local
+storage acceptance. **No blocker remains for 019.**
+
+## Prompt 020 — Durable jobs
+
+**Date:** 9 October 2026 EAT. **Status:** local implementation and required
+acceptance checks complete; 020 ticked in `dev-tracker.md`. Production activation
+is blocked by the explicit deployment decisions below. No later prompt was run.
+
+### Changes
+
+- `prisma/schema.prisma`, its schema snapshot and additive migration
+  `20261009123830_durable_jobs` add durable jobs, actual attempts, append-only
+  events/usage and 64 sharded enqueue-control locks. Existing daily runs/cycles
+  gain inverse relations. Native refresh uniqueness, fixture/cycle/run FKs,
+  envelope seals/projections and state/deadline/owner checks preserve identities.
+  Only static lock rows are initialized; no runnable job or forecast is seeded.
+- `src/server/jobs/` adds strict versioned typed envelopes/handler registry,
+  the MySQL queue and private identity/trigger adapter. Enqueue and caller effects
+  can share one transaction; caught writer errors still roll back. Committed rows
+  are their own durable delivery intent, so no broker send can disappear after
+  commit. Claims recover expired leases without changing the business job key.
+- Renewable leases, actual attempt IDs and monotonic fencing check ownership on
+  every mutation/finalization. Original deadlines stay bounded. Capped
+  exponential equal-jitter retries and structured failure/expiry reasons retain
+  audit evidence. Request/cost references, actual counts/duration and uncertainty
+  phases append without raw errors, responses or credentials.
+- The worker exposes abort/checkpoint eligibility and separate primary/fallback
+  time budgets, serializes heartbeats, stops new claims on shutdown and closes
+  its pool. `src/workers/jobs.ts` uses pinned Node 24 native TypeScript stripping,
+  relative `.ts` imports and `react-server`; a trusted operator binding is
+  mandatory. No production handler, public/internal route or scheduler is mounted.
+- `tests/durable-jobs.{test,integration}.mjs` and three test-only helpers cover
+  contracts, genuine MySQL contention/recovery and actual child-process death
+  and restart. `package.json` adds `test:jobs` and `worker:jobs` without changing
+  dependencies/lockfile. `docs/durable-jobs.md`, database/server/worker guidance,
+  decision register, progress and tracker record the handoff.
+
+### Validation and recovery evidence
+
+Checks used **Node.js 24.18.1 / npm 11.16.0** and owned throwaway
+**MySQL Community Server 8.4.11** instances selected through
+`MYSQL_TEST_SERVER_BINARY`. All identities, approvals, handlers and effects were
+synthetic. No application database, installed MySQL service, provider call,
+subscription or live deployment was used. The ownership-checked harness shut
+down and removed its owned servers and test data.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed, exit 0: Prisma generation/validation, zero-warning lint, strict type-check, **790 cases: 789 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/020-check.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped**: five deterministic tests plus the database harness and 17 substantive database/process cases. Log: `.tmp/020-jobs.log`. |
+| Migration/grants | All committed migrations deployed to fresh InnoDB databases and `db:verify` found no drift. Application DDL, operational payload/attempt identity edits, job deletion and event/usage changes were denied; native checks rejected invalid attempt counters. |
+| Contention/idempotency | Six independent duplicate enqueue clients shared one job and initial event. Two competing workers created one attempt; only its actual owner could finish. Changed payload/model keys and mismatched refresh fixture/cycle bindings were refused. |
+| Death/restart | A real child worker committed an idempotent business effect, was killed, then another process recovered its expired lease. Job identity stayed fixed, attempt/fence changed and exactly one business effect remained. Closing/recreating a database connection also resumed a committed pending row with no external send. |
+| Ownership/atomicity | Already expired owners could not renew, retry or acknowledge even before takeover. Fenced effect/ack transactions rolled back together. Enqueue/caller effects rolled back after a caught writer failure; escaped enqueue calls were refused. |
+| Bounds/privacy | Heartbeat renewal did not extend hard deadlines. Tests verified fallback reserve, current eligibility stop, bounded timeout, capped retry/non-retryable reasons, graceful retry/drain, idempotent usage references, read-only history/cursors and raw-error redaction. Unauthorized triggers rejected before enqueue and never ran handlers. |
+| Standalone runtime | Actual Node `.ts` entry loaded a trusted synthetic binding, handled durable work and exited cleanly after shutdown. Missing bindings failed closed with static diagnostics and no credential output. |
+| `npm run test:history` | **22 passed, 0 failed/skipped** on MySQL 8.4.11; immutable forecast, schedule/audit, precision, transaction and closed/void read contracts remained valid. Log: `.tmp/020-history.log`. |
+| `npm run test:catalog` | **28 passed, 0 failed/skipped** on MySQL 8.4.11; canonical identities, import coordination, exact versions and provider→fixture locking remained valid. Log: `.tmp/020-catalog.log`. |
+| Review | Tracked diff/new-file whitespace, local documentation links, schema snapshot agreement, server-only markers and explicit worker imports checked. Public routes remain unchanged; no UI visual check was required. |
+
+The first contention run exposed duplicate-insert lock-upgrade deadlocks. Sharded
+enqueue locks fixed the race while preserving the rule against retrying arbitrary
+business callbacks. A positive standalone test then exposed its test-only IPC
+channel remaining open after shutdown; the binding now closes that channel and
+the harness bounds exit waiting. Only the verified owned stuck test child was
+terminated. Clean final runs passed all required checks.
+
+### Explicit deployment blockers and deferred work
+
+The local MySQL-backed implementation creates no managed subscription or hosted
+approval. OP-19 still requires confirmation of the deployed queue/worker host,
+actual service/workload identity, operator ownership and representative capacity;
+OP-01 actual target/TLS/grants/pool capacity, OP-11 approved per-workload
+time/request/token/fallback/retry/concurrency bounds, OP-12 itemized infrastructure
+budgets and OP-32 environment/host isolation remain pending. The worker's trusted
+binding fails closed until authorized; synthetic test bindings are not approval.
+At-least-once external effects still need provider idempotency and the existing
+shared quota/cost ledgers. Uncooperative in-process JavaScript needs a qualified
+supervisor/termination policy; queue fencing protects supported finalization.
+
+021 owns committed manifests and their enqueue transaction; 022–024 own
+publication/locking/lifecycle, 025 prediction orchestration, 026 the continuous
+poller, 043 watchdog/recovery thresholds and 044/046 hosted monitoring/capacity.
+Rollback stops writers/workers and retains additive schema and all job/forecast
+history; reviewed corrections roll forward after schema-state inspection.
+011/012/014 retain their existing unresolved live qualification state. No local
+implementation or acceptance blocker remains for 020.
+
+## Prompt 021 — Daily selection
+
+**Date:** 9 October 2026 EAT. **Status:** local implementation and required
+acceptance checks complete; 021 ticked in `dev-tracker.md`. Live scheduling
+remains blocked by the decisions below. No later prompt was implemented.
+
+### Changes and schedule setup
+
+- `src/server/selection/selection-{contract,input,mysql-store,service,read,trigger}.ts`
+  add the strict policy/authority contract, seven-date orchestration, renewable
+  database-UTC ownership/fencing, coverage-aware date projection, typed durable
+  selection handler and authenticated scheduler adapter. The schedule constant
+  is `0 21 * * *` UTC, midnight `Africa/Kampala`. The scheduler must retain the
+  original occurrence; retries never derive another date from invocation time.
+- `prisma/schema.prisma`, its snapshot and additive migration
+  `20261009131134_daily_selection` extend `DailyRun` and add append-only
+  `DailyRunManifest`, durable `DailyRunImport`, immutable `RunFixture` membership
+  and explicit `SelectionCycleEligibility`. Native date/identity/rank/state
+  checks, refresh uniqueness and composite fixture/cycle/job FKs preserve the
+  cohort. Application column grants separate immutable content from progress.
+- Each date request is saved before I/O. Complete receipts are reused, incomplete
+  imports retried, original bounds retained, and receipt-commit crashes recovered
+  without fetching again. Existing API-Football adapter/gateway own requests and
+  pagination; unexpected fixture pages stay incomplete. Retained canonical
+  fixtures remain known data even after a newer empty response.
+- `src/server/football/catalog-mysql-store.ts` and
+  `src/server/predictions/history-mysql-store.ts` accept a caller-owned transaction
+  for the existing provider → fixture lock/writer boundary. Initial cycles,
+  selection entries and manifest commit now roll back together. Open cycles are
+  reused; a new ordinal after closure needs an explicit recorded eligible
+  postponed/void input. No cycle is reopened and no lifecycle event is inferred.
+- A committed manifest seals boundaries, policy hash, coverage/page evidence,
+  exclusions, fixture/cycle/kickoff identities and nearest-kickoff rank/envelope.
+  Reconciliation transactionally enqueues/links only missing entries, recovering
+  crashes before dispatch or partway through it. Later discoveries wait for
+  another eligible daily selection. Total/successful-completed/terminal counts
+  and per-entry queue outcomes persist separately without membership changes.
+- Partial finalization requires both a configured degradation policy and a
+  separately verified recorded action after import retries. Incomplete dates
+  return partial/data-unavailable, including zero-row dates. A committed partial
+  manifest is never silently completed or changed.
+- `src/server/jobs/job-trigger.ts` exports its existing bounded private body
+  parser for reuse. `tests/daily-selection.{test,integration}.mjs` and
+  `tests/helpers/selection-fixtures.mjs` exercise the feature through the real
+  catalog adapter/gateway, history and queue. `package.json` adds `test:selection`
+  without dependency changes. The runbook, server/worker guidance, operating
+  decisions and tracker document the handoff.
+
+### Verification and recovery evidence
+
+Checks used the available bundled **Node.js 24.19.0 / npm 11.17.0**, and owned
+throwaway **MySQL Community Server 8.4.11** instances selected through
+`MYSQL_TEST_SERVER_BINARY`. The repository's existing runtime pins remain
+24.18.1/11.16.0; exact-pin execution was not claimed. All provider bodies,
+permissions, policies and lifecycle inputs were synthetic. No application
+database, installed server service, provider/media request or hosted schedule
+was used. The ownership-checked harness removed its test servers/data.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:selection` | **18 passed, 0 failed/skipped**: five deterministic tests, the database harness and twelve substantive MySQL cases. Log: `.tmp/021-selection.log`. |
+| EAT boundaries | Proved 7 October starts at 6 October 21:00 UTC, includes 7–13 October, includes the last millisecond and excludes the next midnight boundary. Original scheduled occurrence remains identical on repeated trigger delivery. |
+| Migration/permissions | Fresh InnoDB deployment and `db:verify` passed without drift. Application DDL, manifest/membership/import/evidence changes and deletion were denied. Native progress checks and composite cross-refresh job links were verified. |
+| Concurrency/ownership | Competing triggers produced one active selector and one refresh per selected key. Heartbeats kept slow provider work owned; expired owners could neither renew nor commit before/after takeover. Fences increased monotonically. |
+| Import/restart | Unexpected pagination retried without dispatch or false completeness. Restart fetched only the incomplete date. A committed catalog receipt resumed without another fetch. A precommit crash rolled back cycle, membership and manifest effects. |
+| Commit/dispatch recovery | A committed manifest with zero dispatches resumed unchanged. A crash after a linked enqueue prefix recovered only the missing suffix; duplicate enqueue stayed one job per refresh. |
+| Partial/late discovery | Missing-date finalization required a verified recorded action. The partial date never became No fixtures. A late fixture could not join that manifest and was selected by another eligible daily run. |
+| Cycles/progress | Open cycles were reused. Unapproved closed/void cycles were excluded; explicit void and postponed inputs created later ordinals while prior cycles stayed closed. Queue success/failure outcomes persisted with unchanged manifest membership. |
+| `npm run test:history` | **22 passed, 0 failed/skipped** on MySQL 8.4.11. Log: `.tmp/021-history.log`. |
+| `npm run test:catalog` | **28 passed, 0 failed/skipped** on MySQL 8.4.11. Log: `.tmp/021-catalog.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped** on MySQL 8.4.11, including existing actual child-process crash/restart checks. Log: `.tmp/021-jobs.log`. |
+| Existing fallback timing test | The first full check overlapped database work and hit an existing short-deadline fallback test. Its isolated suite passed **42/42**, with no fallback code change. Log: `.tmp/021-fallback.log`. |
+| `npm run check` | Passed, exit 0: Prisma generation/validation, zero-warning lint, strict type-check, **795 cases: 794 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/021-check.log`. |
+
+The first fresh migration attempt caught the need to match existing binary
+identity collations on foreign keys; the new migration was corrected before
+acceptance. Test wiring was also corrected to use the existing history writer's
+explicit transaction API and coherent closed-without-prediction references.
+Final MySQL runs passed. No UI changed, so visual acceptance was not required.
+
+### Live blockers and later integration
+
+OP-05/20 still need approved competitions/trial-backed eligibility evidence and
+an actual degraded-finalization policy/action authority. A complete manifest can
+commit without a degraded action; missing degradation approval blocks only the
+affected incomplete live path. OP-03–08 provider/account/retention qualification,
+OP-11 approved bounds and OP-19 hosting/workload identity remain unresolved.
+The protected factory and schedule configuration are ready, but no route,
+production binding or hosted cron is mounted or activated.
+
+022–025 own publication, locking, lifecycle detection/transitions and the refresh
+handler. The latter should synchronize the provided progress projection after
+terminal work; persisted queue outcomes remain authoritative until synchronized.
+026 polling cannot add selection jobs. 043 may call the same original-occurrence
+recovery contract. Rollback stops bindings/workers while retaining additive schema
+and immutable manifests, imports, cycles and jobs; repairs roll forward after
+schema-state inspection. Earlier live qualification gates remain unchanged.
+
+## Prompt 022 — Revision publication
+
+**Date:** 9 October 2026 EAT. **Status:** implementation and required local
+verification complete. The tracker row is ticked; live activation remains gated.
+
+### Changed files and behavior
+
+- `src/server/predictions/publication-{contract,input,eligibility,read,service}.ts`
+  add the single complete-snapshot acceptance path, explicit policy/authority,
+  transactional manifest/window/cycle/schedule/status/source validation,
+  database-time cutoff and ownership checks, immutable result recovery and
+  coherent current/locked/void reads with ordered refresh/delay status.
+- `prisma/schema.prisma`, its snapshot and additive migration
+  `20261009134454_revision_publication` add append-only
+  `PredictionRefreshResult`, `PredictionPublicationBarrier` and
+  `PredictionChangeEvent`. Binary identities, restrictive composite FKs, unique
+  attempt/event bindings and native checks protect the records. Application
+  access to new tables is SELECT/INSERT only.
+- `history-mysql-store.ts` uses MySQL UTC time by default, preserving its
+  explicit test clock. `history-read.ts` shares the existing coherent display
+  rules with publication. Evidence/model stores expose their existing validated
+  reads inside the caller's transaction; no second connection or source reader
+  is used while publishing.
+- The shared provider → fixture → job locking boundary serializes publication
+  with catalog, cycle close and schedule changes. Commit atomically appends the
+  set/four markets, moves current, advances fixture version and writes history
+  audit, refresh result and durable invalidation event. Final ownership, source/
+  observation freshness and strict cutoff are checked after provisional writes.
+- Original manifest membership/window and the current rolling EAT window must
+  agree with the active open cycle and accepted schedule. Exact stored evidence,
+  model pin/configuration, AI source attributions/coverage, provider support
+  receipts and full probability/source consistency are revalidated. No visitor
+  or completion-time/source-confidence ordering is introduced.
+- Verified early observed/canonical play persists a publication barrier, even
+  before 023's final lock operation exists. Later scheduled responses cannot
+  reopen eligibility. Shared barrier/schedule helpers prepare 023/024 without
+  implementing their final lock or lifecycle coordinator.
+- New fallback can replace old AI. Partial snapshots drop unsupported families;
+  zero-family outcomes create no set and retain only an eligible previous
+  revision with original clocks and Update delayed, otherwise unavailable.
+  Accepted refresh replay returns the original receipt after changed model/
+  composition, acknowledgement, closure or lost commit response, without moving
+  current back. Exact unpublished attempts replay; later attempts can recover.
+- `tests/revision-publication.{test,integration}.mjs` and the publication helper
+  use genuine MySQL, independently pooled clients, the real selection/catalog/
+  evidence/model/history/queue contracts and deterministic MySQL session clocks.
+  Existing forecast helpers accept an optional real job ID. `package.json` adds
+  `test:publication`; no dependencies changed. The publication runbook, server
+  guide and implementation register document grants, recovery and live gates.
+
+### Verification
+
+Checks use bundled **Node.js 24.19.0 / npm 11.17.0** and owned throwaway
+**MySQL Community Server 8.4.11** via `MYSQL_TEST_SERVER_BINARY`. Existing
+24.18.1/11.16.0 pins remain unchanged; exact-pin execution is not claimed.
+Provider/model bodies, permission decisions and MySQL session clocks are
+synthetic. No application database, installed service, live provider request,
+deployment or hosted schedule is used. Harnesses clean their owned test targets.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:publication` | **25 passed, 0 failed/skipped**: six deterministic tests, the MySQL harness and eighteen substantive transaction/concurrency cases. Log: `.tmp/022-publication.log`. |
+| Migration/permissions | All migrations deployed on InnoDB and `db:verify` found no drift. New-table DDL/deletion was denied to the application role; composite bindings and sealed result/barrier reads were exercised through actual inserts. |
+| Duplicate/order races | Eight same-key calls across two clients yielded one set, current pointer, result and event. Overlapping older/newer runs left the newer reference current; a newer partial fallback replaced older AI. Old accepted-key replay returned its original receipt without restoring current. |
+| Eligibility/time | Rejected exactly-at/after cutoff, cutoff crossing during provisional writes, early observed and canonical play, stale/future observations, stale source output, wrong active cycle, changed schedule, missing manifest identity and original/current-window violations. Later scheduled evidence could not remove the durable play barrier. |
+| Atomicity/recovery | Failure after set/reference/result/event writes rolled everything back. A simulated lost response after actual commit recovered the original immutable publication. Acknowledged/restarted deliveries with a changed model pin still returned that original publication. Unpublished attempts could recover without duplicating a set. |
+| Lifecycle/read races | Publication losing a close/schedule race refused the write. Publication winning the lock was visible to the subsequent close decision. Retention kept original forecast timestamps/provenance and Update delayed; empty history stayed unavailable. Bounded event replay and coherent current/locked reads passed. |
+| `npm run test:history` | **22 passed, 0 failed/skipped**. Log: `.tmp/022-history.log`. |
+| `npm run test:selection` | **18 passed, 0 failed/skipped**. Log: `.tmp/022-selection.log`. |
+| `npm run test:evidence` | **20 passed, 0 failed/skipped**. Log: `.tmp/022-evidence.log`. |
+| `npm run test:predictor` | **12 passed, 0 failed/skipped**. Log: `.tmp/022-predictor.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped** on its isolated final run. Log: `.tmp/022-jobs.log`. |
+| `npm run check` | Prisma generation/validation, zero-warning lint and strict type-check passed. The default-concurrency unit step hit the existing 25 ms fallback timing test, so this invocation stopped before build. Log: `.tmp/022-check-first.log`. All check stages subsequently passed as recorded below. |
+| `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs` | **801 cases: 800 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Reduced concurrency resolved the scheduler-sensitive fallback assertion without code/test changes. Log: `.tmp/022-unit-serial.log`. |
+| `npm run build` | Passed, exit 0: Next.js production compilation, TypeScript and page generation. Log: `.tmp/022-build.log`. |
+
+The **120 affected unit/integration cases** passed in their final runs. All
+database acceptance used genuine MySQL rather than an in-memory transaction
+substitute. The initial jobs regression overlapped several database suites and
+hit an existing short backoff timing expectation: a claim was already due when
+the test expected null. The isolated rerun passed 23/23 without job-code or
+test changes; the earlier log remains `.tmp/022-jobs-overlap.log`. The first full
+check also hit the existing fallback test's 25 ms deadline before its collector
+started, making its unknown-request expectation scheduler-sensitive. Its
+isolated suite passed **42/42** (`.tmp/022-fallback.log`), and the entire unit
+suite then passed with test concurrency set to one. The normal test script and
+fallback implementation/tests remain unchanged. Initial publication test setup
+was corrected to reuse each immutable committed cohort and actual owning job
+identities. No live operation or qualification result is inferred.
+
+### Live blockers and handoff
+
+OP-21 still requires trial-backed status/kickoff observation age and conflict
+decisions. OP-07/14 source/evidence freshness and unknown-time rules, actual
+provider/redistribution/retention rights, separate budgets, model/calibration/
+quality qualification, selection choices and deployed identity remain pending.
+No permissive production binding or freshness allowance was invented.
+
+The authority must enforce the existing runtime publication approval gate and
+independently prove owning job/model/evidence/source receipts. 023 owns final
+locking, 024 schedule/actual-start corrections, 025 orchestration/failure costs,
+and 031 event consumption/caching. Scheduled predictions stay disabled until
+023–025 and the live gates pass. Rollback stops bindings and preserves additive
+schema plus immutable forecasts, barriers, results and events; repairs roll
+forward after inspecting actual schema/migration state. No UI changed.
+
+## Prompt 023 — Cutoff locking
+
+**Date:** 9 October 2026 EAT. **Status:** implementation and required local
+verification complete. The tracker row is ticked; live activation remains gated.
+
+### Changed files and behavior
+
+- cutoff-{contract,input,eligibility,read,service}.ts implement explicit policy
+  and synchronous workload/evidence authority, stable durable close/recovery
+  envelopes, strict history reconstruction, irreversible single-reference
+  closure, immediate observed-play closure and an audited immutable void.
+- publication-barrier.ts shares the existing append-only safety-barrier write
+  with publication. Selection requires the implemented cutoff scheduler after
+  refresh dispatch and checks ownership again afterward. The actual close handler
+  integrates with the existing registry/renewable worker rather than a new runner.
+- Prisma schema/snapshot and additive migration 20261009142724_cutoff_locking
+  introduce sealed append-only PredictionCycleOperation receipts and extend
+  PredictionChangeEvent with exactly-one refresh/operation bindings and native
+  checks. Existing publication events remain valid; application grants need only
+  SELECT/INSERT on the new table.
+- The shared provider → fixture → job transaction replays schedule and actual
+  start evidence; selects the latest eligible accepted run rather than the current
+  pointer; preserves an eligible earlier-day forecast; and atomically closes,
+  increments fixture version and records audit/receipt/invalidation. Effective
+  close time remains separate from delayed lock execution. Void never substitutes
+  another locked pick or rewrites a forecast.
+- tests/cutoff-locking.{test,integration}.mjs and its synthetic helper exercise
+  genuine MySQL clocks, real publication/selection/evidence/model/queue contracts,
+  competing clients and the durable worker. Existing selection/publication tests
+  stub only their newly required scheduler dependency. The cutoff runbook, existing
+  selection/history/publication guides, server README and decision register describe
+  bindings, recovery, grants, events and outstanding live gates.
+- `.env.example` restores the documented empty provider-key setting. A populated
+  value in the current commit was retained in ignored `.env.local` without being
+  printed; it must be rotated because it already exists in GitHub history.
+
+### Verification
+
+Checks use bundled **Node.js 24.19.0 / npm 11.17.0** and owned throwaway
+**MySQL Community Server 8.4.11** via MYSQL_TEST_SERVER_BINARY. Repository pins
+24.18.1/11.16.0 remain unchanged; exact-pin execution is not claimed. Provider,
+model, policy, permission and session-clock data are synthetic. No live provider,
+application database, installed service, deployment or hosted schedule is used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:cutoff` | **26 passed, 0 failed/skipped**: eight deterministic tests, the MySQL harness and seventeen substantive database/worker cases. Log: `.tmp/023-cutoff.log`. |
+| Cutoff migration/permissions | Fresh InnoDB deployment and `db:verify` passed with no drift. Application DDL, operation deletion/update and unbound change events were denied. Existing publication events remained valid. |
+| Scheduling/recovery | A simulated crash after one cutoff enqueue preserved the committed manifest and refresh jobs. Retry performed no imports, filled the remaining cutoff jobs and retained stable identities. Superseded jobs scheduled the accepted cutoff; the real worker closed after downtime. |
+| Eligibility/races | Proved one millisecond before, exactly at and after cutoff; early play/barrier consumption; previous-day early-morning forecasts; earlier schedule corrections that skip the newest pointer; and past deadlines that later extensions cannot erase. Publication/closure and schedule races used the shared real MySQL locks. |
+| Outcome independence | A delayed lock chose the newer eligible away pick even though the older home pick would have won the stored 8–0 final score. Changing that result afterward preserved the same immutable lock. |
+| Atomicity/immutability | Eight competing closes produced one receipt/reference/event. Final authority failure or actual lease expiry rolled back provisional closure, audit/version/result/event effects. Ambiguous committed responses and restart returned the original lock. Void retained the original pick/payload/close/lock times and emitted its own stable audit/event. |
+| `npm run test:publication` | **25 passed, 0 failed/skipped**. Log: `.tmp/023-publication.log`. |
+| `npm run test:history` | **22 passed, 0 failed/skipped**. Log: `.tmp/023-history.log`. |
+| `npm run test:selection` | **18 passed, 0 failed/skipped**. Log: `.tmp/023-selection.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped** in its isolated run. Log: `.tmp/023-jobs.log`. |
+| Environment-example correction | The initial full unit run had **807 passed, 1 failed, 1 existing skip** because the tracked example contained a populated provider key. After restoring its safe blank value, the isolated runtime-policy suite passed **27/27**. Logs: `.tmp/023-check.log`, `.tmp/023-runtime-policy.log`. |
+| Repository validation | All `npm run check` stages passed, using `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs` for the unit stage to avoid the known scheduler-sensitive fallback test. Prisma generation/validation, zero-warning lint and strict type-check passed; the final unit rerun had **809 cases: 808 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Logs: `.tmp/023-check.log`, `.tmp/023-unit-final.log`. |
+| `npm run build` | Passed, exit 0: Next.js production compilation, TypeScript and page generation. Log: `.tmp/023-build.log`. |
+
+Initial acceptance setup exposed existing provider integer-second timestamp and
+verified regulation-score constraints; test fixtures were corrected to satisfy
+those existing parser/database contracts. The MySQL acceptance exercises cutoff boundaries,
+early play, previous-day retention, historical eligibility instead of a newest
+pointer, outcomes-independent selection, duplicate closes, shared-lock races,
+full rollback, ambiguous committed-response recovery, void immutability and a
+real expired lease/fence recovery. All **114 affected unit/integration cases**
+passed in final runs. Repository-wide validation and the production build also
+passed after the environment-example correction. No prediction or fallback
+implementation was changed to make an existing timing test pass.
+
+### Live blockers and handoff
+
+Actual close-job workload bounds/hosting identity (OP-19), provider and reuse
+rights, independent budgets, model/evaluation qualification and publication's
+approved timing/conflict choices remain unresolved. Synthetic approvals grant
+no live operation permission. 024 owns detecting/coordinating kickoff/start
+corrections, 025 refresh orchestration, 027 settlement, 031 cache consumption and
+043 watchdog discovery. Scheduled predictions remain disabled pending 024–025
+and the live gates. Rollback disables bindings and retains additive schema and
+immutable forecasts, schedules, audits, receipts and events; repairs roll forward.
+No UI changed, so visual acceptance is not required.
+
+## Prompt 024 — Schedule lifecycle
+
+**Date:** 9 October 2026 EAT. **Status:** implementation and required local
+acceptance complete. The tracker row is ticked; live activation remains gated.
+
+### Changed files and behavior
+
+- `predictions/lifecycle-{contract,input,policy,read,service}.ts` provide one
+  normalized, attributable observation service with explicit mapping/evidence
+  policy, immutable receipt replay, monotonic source ordering, conflict holds,
+  actual-start safety, cutoff corrections, postponement/terminal voids and
+  next-daily-selection rescheduling handoffs. No polling loop is introduced.
+- Catalog coordination now receives original normalized observations and an
+  explicit apply/retain choice, including stale/unchanged rows. Active-cycle
+  kickoff/status changes without coordination fail closed. Publication and
+  selection check the stored conflict projection. Refresh eligibility remains
+  separate from result tracking outside the rolling window.
+- Cutoff operations reuse the caller's transaction, enqueue updated cutoff jobs
+  atomically and permit audited pre-lock voids while preserving existing
+  closed-lock behavior. The shared queue exposes transactional enqueue. No
+  lifecycle observation creates a prediction-refresh job or edits a manifest.
+- Prisma schema/snapshot and migration `20261009150750_schedule_lifecycle`
+  add InnoDB/binary-identity lifecycle cursor and append-only observation tables,
+  a next-run handoff boundary, and composite lifecycle/fixture/version change
+  event bindings with native checks. Existing refresh/cycle event rows remain valid.
+- `tests/schedule-lifecycle.{test,integration}.mjs`, the synthetic lifecycle helper
+  and reusable prediction-pipeline harness cover real MySQL/selection/publication/
+  queue/history behavior. Existing cutoff/selection/publication harness grants
+  add SELECT on the conflict projection; forecasts and observations remain immutable.
+- The new [schedule runbook](schedule-lifecycle.md), cutoff/selection/publication
+  guides, server README and decision register describe evidence ordering, conflict
+  resolution, coordination, grants and live handoff. No UI changed.
+
+### Verification
+
+Checks use bundled **Node.js 24.19.0 / npm 11.17.0** and owned throwaway
+**MySQL Community Server 8.4.11** via MYSQL_TEST_SERVER_BINARY. Repository pins
+24.18.1/11.16.0 remain unchanged. Provider observations, clocks, policies and
+approvals are synthetic; no provider, production database or installed service
+is used. Initial lifecycle acceptance passed **23/23**, expanded acceptance
+passed **26/26**, and final acceptance passed **27/27**, including retained
+regulation scores after missing-score observations and final-to-live regression
+holds. No feature check remains skipped or pending.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:lifecycle` | **27 passed, 0 failed/skipped**: five deterministic tests, the genuine MySQL harness and twenty-one substantive database/concurrency cases. Log: `.tmp/024-lifecycle.log`. |
+| Migration and permissions | Fresh deployment and `db:verify` passed without drift. New tables use InnoDB and binary identity collation. Observation edits/deletes and unbound change events were denied. Existing publication/cycle events still passed their regressions. |
+| Lifecycle and selection | Ordinary delay preserves cycle/job/manifest identity. Passed corrected/previously elapsed cutoffs close from eligible history. Repeated postponements void/preserve earlier forecasts and create ordinals two/three only in later daily selections; unchanged polls retain the handoff boundary. Terminal statuses preserve normalized result observations and known verified scores. |
+| Safety and conflicts | Early play and earlier-start corrections close/void before and after locking. Same-time/unknown-mapping/regressed-status conflicts remain explicit and block publication. Stale evidence cannot roll back schedule fields; verified older start proof still invalidates a lock. Missing provider entries do not invent a terminal status. |
+| Races and atomicity | Competing lifecycle/publication/lock clients preserve irreversible closure and never replace a locked selection. Six duplicate observations create one receipt/transition. Failed scheduling, authority or identity validation rolls back canonical/history/event effects. Ambiguous committed-response replay returns the original receipt. No extra refresh job or changed committed manifest membership was observed. |
+| Affected MySQL regressions | `node --conditions=react-server --test --test-concurrency=2 tests/catalog.integration.mjs tests/prediction-history.integration.mjs tests/daily-selection.integration.mjs tests/revision-publication.integration.mjs tests/cutoff-locking.integration.mjs tests/durable-jobs.integration.mjs`: **113 passed, 0 failed/skipped**. Log: `.tmp/024-regression.log`. |
+| Repository units | `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`: **814 cases, 813 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Reduced concurrency avoids the previously documented scheduler-sensitive fallback test. Log: `.tmp/024-unit.log`. |
+| Prisma, lint and types | Prisma format/generation/validation, zero-warning lint and strict type-check passed. Schema and snapshot agree. Exact pinned runtime execution is not claimed. |
+| `npm run build` | Passed, exit 0: production compilation, TypeScript and page generation. Log: `.tmp/024-build.log`. |
+
+### Live blockers and handoff
+
+Actual provider mappings, evidence/conflict/unknown-update and retention approval,
+rights, publication freshness, separate budgets, model/evaluation qualification,
+workload bounds and hosting identity remain live gates (OP-07/14/19/21). Synthetic
+authority proves local failure behavior and grants no live operation permission.
+025 owns spending/refresh orchestration, 026 shared polling/result synchronization,
+027 settlement, 031 event consumption and 043 watchdog discovery. No later prompt
+is implemented or ticked. Rollback disables bindings and preserves additive schema,
+canonical identities and immutable forecasts/schedules/evidence/audits/events;
+inspect actual DDL state and repair forward. Visual acceptance is not required.
+
+## Prompt 025 — Prediction refresh worker
+
+Implemented `prompts/dev-plan/025-prediction-refresh-worker.md` as an operator-bound
+durable job definition, composing the existing services without another forecast
+validation/publication path. Public routes remain stored-data consumers.
+
+### Changed files and behavior
+
+- `src/server/refresh/refresh-{contract,input,mysql-store,observation,service}.ts`:
+  sealed manifest/current fixture/cycle/run eligibility; immutable reviewed plan
+  and model pin; explicit total football and separate research/AI allocations;
+  bounded evidence, primary prediction, fallback and final observation phases;
+  lifecycle recheck and atomic publication; five operational outcomes and precise
+  phase reasons/cost summaries; published replay and terminal progress repair.
+- `prisma/schema.prisma`, matching snapshot and
+  `20261009153335_prediction_refresh_worker/migration.sql`: additive append-only
+  `PredictionRefreshIntent`, `PredictionRefreshStage`, `PredictionRefreshOutcome`,
+  job foreign keys, existing binary identity collation and JSON shape checks.
+- Evidence/predictor/fallback services accept parent cancellation workflows.
+  Evidence reports separate football/research usage. Fallback's shared pure
+  resolver preserves valid AI after an interrupted provider attempt. Football
+  fixture lookup accepts the existing workflow boundary for final status checks.
+- Job contracts/registry/worker/MySQL queue: transaction-aware usage recording and
+  an optional awaited settled hook. Stage completion and usage commit together;
+  replay adds no duplicate count. Selection progress updates only changed member
+  state projections.
+- `tests/prediction-refresh.test.mjs`, `.integration.mjs`,
+  `tests/helpers/refresh-fixtures.mjs` and the extended reusable MySQL pipeline
+  harness; `npm run test:refresh`; `docs/prediction-refresh-worker.md` and the
+  decision register. No frontend/UI change.
+
+### Verification
+
+Used bundled **Node.js 24.19.0 / npm 11.17.0**, with repository pins unchanged,
+and owned throwaway **MySQL Community Server 8.4.11**. All provider transports,
+credentials, policy approvals, observations and model outputs were synthetic.
+No live provider, installed database service or application database was used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:refresh` | **30 passed, 0 failed/skipped**: four cancellation/resolution units, two real MySQL harnesses and twenty-four end-to-end cases. Log: `.tmp/025-refresh-final.log`. |
+| Final usage rollback check | Re-ran the complete manifest-owned harness after adding failure injection: **19 passed, 0 failed/skipped**. Invalid usage rolls back the completed stage; published replay preserves one AI usage count. Log: `.tmp/025-atomic-usage.log`. |
+| AI/fallback behavior | Valid AI, invalid output, provider/AI outage, actual AI timeout, insufficient evidence, AI budget exhaustion, partial fallback, no supported source and fallback timeout passed. Valid AI survives fallback failure; provider forecasts remain outside primary input. Limited news does not force fallback; research and AI ledger summaries remain separate. |
+| Durability/concurrency | Immutable model/cost intent survives restart; an unfinished AI boundary never redispatches. A real cost-gateway dispatch interrupted by worker shutdown retains charged liability and falls back without a second AI call. Ambiguous publication response returns the original revision without new usage. Two workers claim one delivery. Append-only worker grants and invalid allocation identities/budgets/reserves are enforced. |
+| Lifecycle/age/progress | Fresh early play and an earlier kickoff whose cutoff has passed close before publication. Stale original status cannot authorize publication. A newer daily run supersedes a leased older member; old work is ineligible. Zero valid families retain the previous complete set with original evidence/generation/publication times. Terminal progress distinguishes queue completion from publication and repairs expired/unclaimed work. |
+| Affected MySQL regressions | Eight suites (cost, cutoff, selection, jobs, evidence, predictor, publication, lifecycle), concurrency two: **151 passed, 0 failed/skipped**. Fresh migrations and component drift checks passed. Log: `.tmp/025-regression.log`. |
+| Repository units | `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`: **818 cases, 817 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Log: `.tmp/025-unit.log`. |
+| Prisma, lint and types | Generation, schema validation, zero-warning lint and strict type-check passed; schema and snapshot match. Logs: `.tmp/025-schema.log`, `.tmp/025-lint.log`, `.tmp/025-typecheck.log`. |
+| Production build | `npm run build` passed: compilation, TypeScript and production page generation. Log: `.tmp/025-build.log`. |
+
+The synthetic timeout test was expanded to allow database reservation time before
+the transport timeout, avoiding an overloaded test host exercising a different
+earlier timeout boundary. This changes no production allowance. Migration
+collation was aligned with existing job keys before final fresh deployments.
+
+### Live blockers and handoff
+
+The worker definition is ready for a reviewed trusted binding. Existing provider
+coverage/quota and reuse rights, research provider/license, model/calibration and
+evaluation proof, rates and separate account/job budgets, freshness/conflict
+policies, workload and hosting/worker identity remain OP-07/14/19/21 live gates.
+No production behavior is enabled by synthetic tests. Rollback disables the
+binding and preserves additive tables and immutable forecasts/evidence/history;
+inspect DDL and repair forward. 026 polling, 027 settlement, 031 event consumption
+and 043 watchdog discovery remain separate prompts. No later prompt is ticked.
+
+## Prompt 026 — Fixture and result synchronization
+
+Implemented and locally verified on **9 October 2026 EAT**. Prompt 026's
+implementation and acceptance checks are complete; its tracker row is ticked.
+Live activation still requires the operating inputs below. No later prompt is
+implemented or ticked.
+
+### Changed files and behavior
+
+- `src/server/results/result-sync-{contract,policy,mysql-store,service,command}.ts`:
+  one renewable account-wide fenced lease; persisted 15-second live/60-second
+  EAT-date cadence; idle pause/resume; locally filtered coverage; fresh-record
+  deduplication; at-most-20-ID missing-live/cross-midnight batches; finite slower
+  unresolved/correction tiers; persisted quota/outage backoff and delay reads.
+- `prisma/schema.prisma`, matching snapshot and
+  `20261009164940_fixture_result_sync/migration.sql`: additive InnoDB lease,
+  sealed response batch, result state, append-only result and provider observation
+  tables; same-fixture lifecycle/result foreign keys and four-way event binding.
+  Result revisions advance the shared fixture version and retain predecessors,
+  original clocks, separately verified regulation and extra-time/penalty totals.
+- Existing provider live/date/ID methods accept the shared cancellation/dispatch
+  workflow. Lifecycle exposes a validated transaction-scoped projection entry
+  point, keeping schedule/cutoff/result application under the same fixture lock.
+  No additional prediction validation/publication path is introduced.
+- `src/workers/results.ts`, `worker:results` and `test:results` package scripts;
+  result unit/integration suites and synthetic helper; extended reusable MySQL
+  pipeline grants; server/worker READMEs, the decision register and
+  [result synchronization runbook](fixture-result-sync.md).
+
+Responses commit before application. Recovery drains pending batches before new
+dispatch and resumes partial application per fixture without duplicate results
+or events. Original accepted lifecycle receipts cannot apply old cached scores
+over a newer cursor. Known catalog final timestamps anchor correction horizons;
+new retrievals and corrections cannot restart them. Exhaustion retains visible
+unresolved state. Forecast payloads, locked references and committed manifests
+remain immutable; polling does not enqueue refresh jobs or call AI.
+
+### Verification
+
+Used the pinned **Node.js 24.18.1 / npm 11.16.0** and owned throwaway
+**MySQL Community Server 8.4.11** via MYSQL_TEST_SERVER_BINARY. Provider transports,
+clocks, account evidence, score/mapping approvals and policies are synthetic.
+No live provider, application database or installed database service was used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:results` | **25 passed, 0 failed/skipped**: five units, a genuine MySQL harness and nineteen substantive database cases. Final log: `.tmp/026-results-final.log`. |
+| Cadence/ownership | Controlled exact 15s/60s boundaries, idle pause/resume, graceful restart without duplicate polls, six competing cold-start owners, exact lease expiry takeover, stale renew/release fencing and twenty concurrent ticks passed. Late in-flight old-owner responses cannot persist. |
+| Cross-midnight/missing data | Forty-six fixtures use **20/20/6** ID groups; already refreshed records avoid ID work. Missing live/ID entries preserve live status and explicit missing reasons. Outside-window unresolved fixtures slow down and remain stored after their polling horizon. |
+| Result integrity/recovery | Unverified regulation remains unknown despite extra-time/shootout totals. Verification and corrections append predecessor-linked versions/events. Unchanged results keep original observation/update clocks while actual sync advances. Saved-response and partial-application interruption recover without another fetch. Stale, conflicting and originally accepted cached observations cannot roll back newer scores. |
+| Quota/outages | The real shared limiter denies optional work at the essential reserve and permits one final ID batch before stopping exactly at **120,000** accounted requests. No cap excess occurred. Provider failures back off across restart while stored data remains readable. Unexpected pagination/date-boundary rows do not overwrite fixtures. |
+| Forecast invariants | Polling early play closes through lifecycle/cutoff handling; later final corrections retain the exact locked revision, picks, payload and manifest. Refresh job count is unchanged. The synthetic transport accepts only fixture endpoints; no AI calls occur. |
+| Migration/permissions | Fresh deployment and `db:verify` passed without drift. New tables use InnoDB; binary identities and quota-account FK collation agree. Result/observation/body UPDATE and DELETE are denied. Invalid unbound result events are rejected. |
+| Affected database regressions | Eight suites (catalog, cutoff, selection, jobs, refresh, quota, publication, lifecycle), concurrency two: **171 passed, 0 failed/skipped**. Log: `.tmp/026-regression.log`. |
+| Repository units | `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`: **823 cases, 822 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Log: `.tmp/026-unit.log`. |
+| Schema, lint and types | Prisma format/generation/validation and migration drift check passed; schema/snapshot match. Final `npm run lint` and `npm run typecheck` passed. Logs: `.tmp/026-lint.log`, `.tmp/026-typecheck.log`. |
+| Production build | Final `npm run build` passed: compilation, strict TypeScript and page generation. Log: `.tmp/026-build.log`. |
+
+Initial acceptance exposed a quota-account FK collation mismatch and concurrent
+first-lease insertion lock upgrades. The migration now matches the existing
+account columns, and acquisition locks the permanent account row before insert.
+Controlled clock jumps also verified immediate reacquisition after expiry.
+Expanded recovery checks caught the original-accepted-receipt cache edge case;
+application now checks the current lifecycle/canonical cursor before using its
+scores. All fixes passed the final acceptance suite.
+
+### Live blockers and handoff
+
+An approved approach threshold, active window, finite unresolved/correction
+tiers, resource/backoff bounds, competition/season coverage, retention/rights,
+real batch support, lifecycle mappings/conflict policy, verified account evidence
+and trusted continuous-host binding remain required. Missing settings fail
+configuration validation; no permissive live values or approval are inferred
+from tests. Existing OP-07/14/19/21 operating gates continue to apply.
+
+027 owns settlement against verified regulation and immutable locked selections;
+031 owns result-event delivery/cache invalidation; 043 owns watchdog discovery.
+Rollback stops the binding and retains additive schema, canonical identities,
+responses, result revisions, forecasts, manifests and audit/events. Inspect actual
+DDL state and repair forward. No UI change requires visual acceptance.
+
+## Prompt 027 — Market settlement
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [027](../../prompts/dev-plan/027-market-settlement.md) only. Applied additive
+migrations to owned throwaway MySQL 8.4.11 instances; no installed/production
+database, provider network, AI invocation or live activation was used.
+
+### Implemented and changed files
+
+- `src/server/settlement/settlement-contract.ts` and `settlement-service.ts`:
+  immutable locked-pick settlement, independent four-family outcomes, correction
+  chains, atomic fixture invalidations, durable source receipts, bounded missed
+  work discovery/reconciliation and an existing-worker job definition with lease
+  fencing. Reuses shared regulation domain/history/cutoff/catalog/job services.
+- `src/server/results/result-read.ts` and `result-sync-mysql-store.ts`: shared
+  sealed result reader validating identity, version, body and indexed score
+  fields/content hash; the synchronization read now reuses that reader.
+- `prisma/schema.prisma`, snapshot and migration
+  `20261009181240_market_settlement`: SettlementBatch, MarketSettlement,
+  MarketSettlementRevision and SettlementEventReceipt; composite restrictive
+  foreign keys, one active family pointer, append-only correction chains and an
+  exactly-one-source settlement event extension. InnoDB/binary identities.
+- `tests/market-settlement.integration.mjs`, `tests/prediction-pipeline.mjs` and
+  `package.json`: genuine MySQL acceptance, least-privilege settlement grants and
+  `npm run test:settlement`. Existing pure market rules/tests are reused.
+- `docs/market-settlement.md`, decision register and tracker: evidence,
+  correction/applicable-cycle contracts, private worker integration, recovery,
+  grants, rollout boundaries and completion handoff.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| `npm run test:settlement` | **28 passed, 0 failed/skipped**: 11 domain checks, 16 substantive genuine MySQL cases and their harness. Log `.tmp/027-settlement-final.log`. |
+| Regulation rules | Draws, 0–0, BTTS, exactly two/three goals, live reported scores, extra time and penalties with/without separately verified regulation passed. |
+| Missing/void outcomes | Partial provider families, closed no prediction, canceled/abandoned/awarded/postponed locks, early-start cutoff invalidation, historical void cycles and a new applicable cycle passed. |
+| Corrections/integrity | Prior badge/reason/sealed result, visible correction time, unchanged badge corrections, repeated score confirmation, exact immutable locked picks, stale canonical/result disagreement, corrupt seals and crossed family pointers passed. |
+| Concurrency/recovery | Twelve competing replica deliveries create one batch/four active outcomes. Duplicate replay, rollback before commit, lost acknowledgement after commit, bounded omitted-delivery/cycle discovery, expired lease fencing and successful replacement durable delivery passed. |
+| Migration/grants | Fresh deployment and `db:verify` passed without drift. Foreign keys, event shape, binary InnoDB tables and denial of audit UPDATE/DELETE passed. |
+| Affected database regressions | Cutoff, selection, prediction history, result sync, publication and lifecycle: **109 passed**, no failures/skips. Durable jobs standalone rerun: **18 passed**, no failures/skips (`.tmp/027-jobs-repeat.log`). |
+| Repository units | **823 cases: 822 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`, log `.tmp/027-unit.log`. |
+| Schema/lint/types | Prisma format/generation/validation, schema/snapshot equality, `npm run lint` and final `npm run typecheck` passed. Logs `.tmp/027-lint.log`, `.tmp/027-typecheck.log`. |
+| Production build | `npm run build` passed compilation, strict TypeScript and page generation (`.tmp/027-build.log`). |
+
+The combined seven-suite regression run recorded 125 passes and two failures
+(one existing durable-job wall-clock expiry assertion and its parent harness).
+The short jitter backoff had already elapsed by the next claim under concurrent
+load, so that claim legitimately returned a replacement lease. The isolated
+durable-job rerun passed all 18 cases; no queue implementation/test change was
+made for this feature. Combined log `.tmp/027-regression.log` retains the result.
+
+Repeated-score acceptance exposed a real projection edge case: canonical score
+verification can advance while material result synchronization preserves its
+original sealed timestamp. Settlement now accepts the original verification
+when score/evidence still agree and canonical verification is no earlier. An
+unchanged confirmation no longer creates a false correction or Pending badge.
+
+### Remaining operating gates and handoff
+
+No feature implementation/acceptance blocker remains. Synthetic evidence does
+not establish live provider rights, regulation mapping, quality or approvals.
+Existing provider/model/rights/database/hosting gates continue to apply; private
+job execution bounds and binding must be supplied by the operator. No scheduler
+or worker was activated. 030 owns hit-rate aggregation, 031 owns result-event
+delivery/cache invalidation and 043 owns watchdog activation. Rollback stops the
+private binding and retains additive schema, immutable locks, result/correction
+evidence and durable events. No UI change requires visual acceptance.
+
+## Prompt 028 — Match feed API
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [028](../../prompts/dev-plan/028-match-feed-api.md) only. Added GET /api/matches
+and its reusable stored-data server service. Database acceptance deployed all
+migrations to owned throwaway MySQL 8.4.11 instances. No installed/production
+database, football/research provider, AI invocation or live worker was used.
+
+### Implemented and changed files
+
+- `src/app/api/matches/route.ts` and `src/server/matches/`: anonymous Node route,
+  shared query service, parameterized SQL filtering/search/sorting before
+  pagination, coherent card projections, exact-date coverage, real daily-run
+  progress, structured errors and a replica-safe public search budget. Reuses
+  the existing URL/EAT/catalog/forecast/result/settlement contracts.
+- `src/domain/match-feed.ts`, `fixture-snapshot.ts` and English messages: public
+  response/error schemas and backwards-compatible shared card metadata for cycle
+  modes/void reasons, unavailable families, update observations, correction time,
+  score period and seven-day availability. No UI change or later detail/cache
+  feature is implemented.
+- `src/server/settlement/settlement-read.ts`, `settlement-service.ts`,
+  `results/result-read.ts`, `selection/selection-read.ts` and
+  `selection/selection-mysql-store.ts`: extracted reusable sealed read paths and
+  canonical result agreement without changing private write behavior. Public
+  reads suppress stale outcome badges and never write settlement or jobs.
+- Prisma schema/snapshot and additive migration
+  `20261009184740_match_feed_api`: one permanent binary-collated InnoDB
+  PublicSearchLimit row, with a scope CHECK and migration seed. Public runtime
+  grants need SELECT/UPDATE on that row, with SELECT on shared read tables.
+- `tests/match-feed.test.mjs`, `match-feed.integration.mjs`,
+  `prediction-pipeline.mjs`, `helpers/lifecycle-fixtures.mjs` and `package.json`:
+  028 acceptance and `npm run test:feed`. Shared synthetic helpers now derive
+  canonical provider team IDs rather than assuming every fixture uses 10/20;
+  the pipeline adds minimal search-counter grants.
+- `docs/match-feed-api.md`, implementation decisions and tracker: complete
+  response/error/pagination/search/privacy/grants/rollout contracts; OP-23's
+  initial bounds are settled, with production tuning left to workload evidence.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| `npm run test:feed` | **47 passed, 0 failed/skipped**: 31 input/HTTP/schema checks, 15 substantive genuine MySQL checks and their harness. Log `.tmp/028-feed-final.log`. |
+| Queries/pagination | 75 synthetic fixture inputs; matching aliases beyond page one, renamed canonical names, league/country aliases, wildcard/injection literals, exact inclusive/exclusive EAT boundaries, a historical date and a two-day range passed. Default 30/max 100, page links, stable ties, selected-family unrounded sorting, missing values last and out-of-range recovery passed. |
+| Coherent projections | Current AI and provisional provider snapshots, missing families, immutable locks, a closed cycle with an ineligible retained preview, pre-lock void reasons, a new applicable cycle with no duplicate, verified regulation, correction timestamps and stale-settlement Pending behavior passed. Historical forecasts remain readable after competition removal and outside the current window. |
+| Coverage/progress | Partial/failed/unknown imports retain rows and cannot establish authoritative empty dates. Newer unfinished/failed attempts suppress an older complete-empty receipt; later complete coverage restores it. Progress uses actual durable successes despite stale DailyRun counters; missing/uncommitted runs keep unknown totals. |
+| Public security | Anonymous success, no auth/set-cookie requirements, 400 validation before database/limiter access, 429/503 recoverable JSON and diagnostic redaction passed. Across two replicas, a 130-request burst admits exactly 120; expiry resets atomically, ordinary browsing continues, and no visitor identity/search text is stored. Adapter counts, fetch interception and job/result/forecast/version totals prove no visitor-triggered work. |
+| Migration/schema | Fresh deployment and `db:verify` passed on genuine MySQL; counter InnoDB/binary collation and denial of runtime INSERT/DELETE passed. Prisma generation/validation and schema/snapshot equality passed. |
+| Affected database regressions | **126 passed, 0 failed/skipped** across selection, prediction history, publication, cutoff, lifecycle, result sync and settlement. Command uses `--test-concurrency=2`; log `.tmp/028-regression.log`. |
+| Repository units | **854 cases: 853 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/028-unit.log`. |
+| Lint/types/build | `npm run lint`, final `npm run typecheck` and `npm run build` passed. Production route manifest includes dynamic /api/matches. Logs `.tmp/028-lint.log`, `.tmp/028-typecheck.log`, `.tmp/028-build.log`. |
+| Production HTTP smoke | An owned loopback Next production server with database capability disabled returned uncached structured 400s for invalid/duplicate/oversized inputs, a recoverable 503 for the disabled database, no locale redirect/cookie, and 405 for POST. Temporary harness/log `.tmp/028-http-smoke.mjs`, `.tmp/028-http.log`; no provider request or live DB was possible. |
+
+### Remaining operating gates and handoff
+
+No feature implementation or local acceptance blocker remains. Apply the additive
+migration and runtime grants before enabling the route against a configured
+database/competition set. Existing production budget/access verification,
+provider/model/rights/quality and hosting gates remain in force; these tests do
+not establish production coverage, rights, throughput, forecast quality or
+successful deployment. The initial shared search budget is conservative and may
+return busy responses across visitors; tune with real workload evidence.
+
+The public canonical fixture version is separate from asOf-dated operational
+job/coverage/window observations. Future client integration must refresh those
+observations without treating them as a new forecast/result revision. 029 owns
+match detail, 030 hit rates, 031 event/cache work and 032 real feed composition.
+No later prompt, worker or scheduler was activated. Rollback disables the route
+and retains additive schema and immutable history. No UI change requires visual
+acceptance.
+
+## Prompt 029 — Match detail API
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [029](../../prompts/dev-plan/029-match-detail-api.md) only.
+Added anonymous GET /api/matches/{id}, explicit revision/cycle selection and
+bounded stable history. Genuine database acceptance used owned throwaway MySQL
+8.4.11 instances with synthetic observations, policies and forecasts. No live
+provider, AI invocation, production database, worker or scheduler was used.
+
+### Changed files and behavior
+
+- `src/app/api/matches/[id]/route.ts`, `src/server/matches/detail-query.ts`,
+  `detail-service.ts`, `detail-read.ts` and `detail-http.ts`: reusable repeatable
+  stored queries, owned revision/cycle selection, anchored history, safe source
+  attribution and analysis, explicit historical identities, applicable audited
+  outcomes, and canonical UUID/slug route data. Current fixture metadata remains
+  distinct from an explicitly selected historical snapshot.
+- `src/domain/match-detail.ts`, `fixture-snapshot.ts` and `navigation.ts`: strict
+  public DTOs, reusable validated forecast schema and future detail route identity.
+  Complete source-owned probabilities and alternatives preserve deterministic
+  picks. Unknown provider clocks remain null; expired/unapproved analysis is
+  withheld without replacing stored forecasts or inventing explanations.
+- `src/server/matches/public-http.ts`, `feed-http.ts`, `feed-error.ts`,
+  `fixture-read.ts` and `src/domain/match-feed.ts`: shared uncached public errors
+  and void-reason projection, including a nonrecoverable 404. Existing feed
+  success/error behavior and aggregate anonymous search policy are preserved.
+  Detail reads do not search or mutate its counter. No migration/grant is added.
+- `tests/match-detail.test.mjs`, `match-detail.integration.mjs` and `package.json`:
+  `npm run test:detail`, input/privacy/HTTP acceptance, genuine MySQL scenarios,
+  immutable history pagination under publication and cycle creation, and read-only
+  interception plus before/after database checks.
+- `docs/match-detail-api.md`, implementation decisions and tracker: DTO,
+  selection/pagination, source permission, privacy and operating contracts.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Feed/detail acceptance | **80 passed, 0 failed/skipped**, including both genuine MySQL suites. Command `node --conditions=react-server --test --test-concurrency=2 tests/match-feed.test.mjs tests/match-feed.integration.mjs tests/match-detail.test.mjs tests/match-detail.integration.mjs`; log `.tmp/029-api-final.log`. Final `npm run test:detail` rerun: **34 passed, 0 failed/skipped**, including the added shared UTC/unsigned-version boundary check; log `.tmp/029-detail-complete.log`. |
+| Detail state/ownership | Open, locked, unpublished, closed-without-lock, pre-lock void, old void cycles, corrected results, selected earlier revisions, unknown fixture/history UUIDs and cross-fixture references passed. The database wrapper initially redacted intentional 404s to 503; domain failures are now preserved across that wrapper and both API suites pass. |
+| Consistency/history | Complete probabilities, derived double chance, alternatives, mixed-family provenance, original clocks, explicit current/selected identities and monotonic versions passed. Anchored revision pagination remains stable after another publication; cycle pagination remains stable after another cycle; zero anchors pin empty membership. |
+| Privacy/read-only | Only approved original explanations/attribution leave the whitelist. Expired or unapproved citations withhold analysis; unknown update times remain null. Model/raw/private fields are absent. A transaction proxy rejects writes/non-SELECT SQL, fetch interception sees zero calls, and forecasts/evidence/results/jobs/audits/settlement/cycles/versions/search counter remain identical before/after history reads. |
+| Lint/types | Lint and TypeScript passed; logs `.tmp/029-lint-final.log`, `.tmp/029-types-final.log`. |
+| Build/production HTTP | Final `npm run build` passed and lists dynamic /api/matches/[id]. An owned loopback production server with database capability disabled passed input/duplicate/oversize rejection, shared feed errors, uncached 503, async route identity params, no locale redirect/cookie and POST 405. Logs `.tmp/029-build.log`, `.tmp/029-http.log`; temporary smoke harness `.tmp/029-http-smoke.mjs`. |
+| Repository units | **878 cases: 877 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/029-unit-final.log`. The initial concurrent run had one timing-sensitive existing cost-gateway test expire before its controlled stage; the unchanged isolated cost suite passed all 14 checks, followed by this successful quiet full run. No cost code was changed. |
+
+### Handoff
+
+No feature implementation or local acceptance blocker remains; 029 is checked
+in the tracker. Existing provider/model/reuse/budget/database/hosting gates remain effective;
+synthetic acceptance establishes local behavior, not live rights, quality,
+capacity or deployment readiness. No new schema, grants or private write path
+is required. Public canonical fixture versions remain separate from asOf-dated
+operational observations and permission filtering. 030 owns performance, 031
+cache/event work, 035 detail-page rendering and 036 history UI. No later prompt
+was started. Rollback disables the detail route while retaining immutable data.
+No UI change requires visual acceptance.
+
+## Prompt 030 — Performance API
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [030](../../prompts/dev-plan/030-performance-api.md) only.
+Added anonymous GET /api/performance and bounded stored-data aggregation.
+Acceptance uses owned throwaway MySQL 8.4.11 databases and synthetic forecasts,
+observations, approvals and policies. No live provider/AI, production database,
+worker, scheduler or independent quality claim was exercised.
+
+### Changed files and behavior
+
+- `src/app/api/performance/route.ts`, `src/server/performance/performance-query.ts`,
+  `performance-read.ts`, `performance-service.ts`, `performance-http.ts` and
+  `src/domain/performance.ts`: strict bounded public query/response contracts,
+  indexed batch reads, repeatable snapshots, locked forecast coverage/scoring,
+  explicit source/version/horizon scopes, policy verification and correction
+  freshness. Unavailable comparisons do not substitute unmatched fixtures.
+- `src/server/evaluation/evaluation-gates.ts`, `evaluation-service.ts`: reuse
+  numeric quality diagnostics in chronological evaluation and public reporting.
+  Existing `evaluateMarketMetrics` remains the sole probability scoring and
+  calibration implementation, including overlapping binary double chance.
+- `src/server/predictions/history-read.ts`, `src/server/results/result-read.ts`,
+  `src/server/settlement/settlement-read.ts`, `src/server/predictor/predictor-mysql-store.ts`
+  and `src/server/matches/feed-read.ts`: shared sealed row parsers, settlement
+  projection and indexed public fixture scope. The raw MySQL result boundary
+  normalizes unsigned goal bigints and booleans while preserving seal/index/hash
+  checks. No migration, write grants or private worker behavior changes.
+- `tests/performance.test.mjs`, `performance.integration.mjs`,
+  `tests/helpers/performance-fixtures.mjs`, `package.json`: `npm run test:performance`,
+  hand calculations, genuine MySQL reconciliation, corrections, policy gates,
+  bounds, privacy and read-only/outbound interception.
+- `docs/performance-api.md`, implementation decisions and tracker: cohort,
+  metric/claim, evidence, correction, resource and future invalidation contracts.
+
+### Reconciliation and math
+
+The 30-fixture synthetic cohort contains one applicable void, one old postponed
+cycle plus its new applicable cycle, open/no-lock forecasts, unsupported provider
+families, mixed-family sources and a newer ineligible stored revision. The cutoff
+locks the earlier eligible publication; reporting uses that exact lock even when
+the newer current pointer would select a different outcome.
+
+- Match result and double chance each reconcile to **5 available, 24 unavailable,
+  1 void; 4 settled and 1 pending**, with 3 AI and 2 provider available forecasts.
+  Source filters account for nonmatching forecasts separately as filteredOut.
+- Totals and BTTS each reconcile to **4 available, 25 unavailable, 1 void**, with
+  all four available picks settled. The unsupported fallback families are not
+  borrowed from older AI revisions.
+- Combined match result starts at **2 correct / 4 settled = 0.5**, full-distribution
+  Brier **0.78**, and log loss
+  `(-ln(.4)-ln(.3)-ln(.5)-ln(.1))/4`. Double-chance Brier is **0.26**; four selected
+  picks produce twelve calibration events across the three overlapping selections,
+  without multiplying the hit-rate denominator.
+- Correcting the first regulation result invalidates its old audit immediately:
+  **3 settled / 2 pending** until private resettlement. Afterwards match result is
+  **1 correct / 4 settled = 0.25**, Brier **0.83**, with the same locked evidence
+  links and the actual audited correction/read time. Both snapshot transitions
+  change the fingerprint.
+- Moving the current postponed fixture outside the date range reduces headline
+  fixture count to 29 while the old postponed cycle remains in its original date
+  period; the four scored picks and their metrics remain unchanged. Failed jobs
+  and retained refreshes are separate operational counts.
+- Zero denominators, insufficient samples, failed quality gates, missing matched
+  baseline evidence, mixed horizons, foreign provider versions, absent/forged/
+  asynchronous/revoked policies and unapproved production thresholds withhold
+  numeric values. Explicit calibration counts and Wilson uncertainty appear only
+  with the verified synthetic fixed-band policy. No public claim is authorized.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Performance acceptance | **36 passed, 0 failed/skipped**, including eight genuine MySQL subcases. `npm run test:performance`; log `.tmp/030-performance-final.log`. Covers hand counts/math, two cycles, ignored unselected revisions, mixed sources, pending/void/unsupported families, filters, matched-comparison unavailability, actual correction clocks and immutable evidence. |
+| Public quality/limits | Unit cases prove zero/null denominators, minimum samples, coverage/loss gates, missing matched baselines, policy scope and mixed horizons. The coverage denominator retains all nonvoid known fixtures, including filtered origins/versions; filtering cannot inflate coverage. 1,001 fixtures stop before snapshot loading; an intercepted oversized JSON preflight stops before payload reading. |
+| Read-only/privacy | A genuine transaction proxy rejects writes and non-SELECT SQL, observes bounded batch operations, and sees zero outbound fetches. Before/after jobs, revisions, evidence, results, audits, settlements, cycle pointers, fixture versions and search counters remain identical. No cookie or private proof/raw/model configuration fields escape. |
+| Shared reader regressions | **98 passed, 0 failed/skipped** on owned MySQL. Command `node --conditions=react-server --test --test-concurrency=2 tests/prediction-history.integration.mjs tests/result-sync.integration.mjs tests/market-settlement.integration.mjs tests/match-feed.integration.mjs tests/match-detail.integration.mjs tests/cutoff-locking.integration.mjs`; log `.tmp/030-regressions.log`. Includes native checks/grants, unchanged results, extra-time/penalty rules, late locks, audited voids, corrupt evidence, atomic rollback and readonly feed/detail/history. |
+| Lint/types/build | Lint and typecheck passed; final production build also passed TypeScript and lists dynamic /api/performance. Logs `.tmp/030-lint-final.log`, `.tmp/030-types-final.log`, `.tmp/030-build.log`. |
+| Production HTTP | Owned loopback Next server with database capability disabled passed malformed/duplicate/oversize filters, shared feed errors, safe uncached 503, no locale redirect or cookie and POST 405. Harness `.tmp/030-http-smoke.mjs`; final log `.tmp/030-http-final.log`. Genuine successful HTTP handler reads are covered in the MySQL suite. |
+| Repository units | **905 cases: 904 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Quiet command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/030-unit-final.log`. Includes chronological evaluation regressions for the extracted shared quality diagnostics. |
+
+### Operating gates and scope
+
+OP-16/OP-17 remain unresolved: actual approved sample/quality/coverage thresholds,
+calibration bands/confidence and independent chronological qualification are not
+supplied. The production route binds no policy, serves factual counts and explicit
+unavailable null metrics, and retains provisional estimates. Synthetic verified
+policies establish implementation behavior only. Existing provider/model/reuse/
+budget/database/hosting gates remain effective. No cache/UI/later prompt is added;
+031 receives stable snapshot keys and explicit invalidation categories. Rollback
+disables the performance route while retaining stored immutable data. No UI
+change requires visual acceptance. No feature implementation or local acceptance
+blocker remains; 030 is checked in the tracker. Later rows remain unchanged.
+
+## 031 — Public response cache (9 October 2026)
+
+### Implemented behavior and changed files
+
+Completed the shared server-only cache for feed, detail/history and performance.
+It reuses MySQL rather than provisioning another service. Canonical keys include
+validated query/history/filter/sort/page fields, locale, resolved EAT dates and
+competition/evaluation scope. Search accounting and live policy verification
+remain outside cache reuse. Hits retain response/source clocks, data versions,
+coverage, run progress, revision references and correction fingerprints.
+
+- Added `src/server/cache/public-cache.ts` and `mysql-public-cache.ts`; integrated
+  the three API routes and `feed-service.ts`, `detail-service.ts`, `detail-read.ts`
+  and `performance-service.ts`.
+- Added three disposable-cache/generation/journal models to both Prisma schema
+  files and migration `20261009183000_public_response_cache`, with 30 transactional
+  invalidation triggers. Existing prediction changes invalidate fixture/current
+  and original cycle dates; fixture changes invalidate old/new dates. Job, run,
+  import, lifecycle and catalog changes also cover progress/coverage without a
+  prediction event.
+- Added bounded private `scripts/public-cache-reconcile.py`, `cache:reconcile`
+  and `test:cache` commands. Maintenance acknowledges only applied generations,
+  recovers late commits without a global watermark and sweeps expired bodies.
+- Added cache unit/integration suites and extended the shared pipeline grants.
+  Existing integration harness migration roles now have schema-scoped `TRIGGER`;
+  the owned throwaway MySQL enables binary-log trigger creation explicitly.
+- Added `docs/public-response-cache.md`; updated database instructions, the OP-24
+  decision and tracker. No UI or later browser refresh feature is implemented.
+
+Mutable envelopes have a five-second maximum lifetime, capped by EAT midnight
+and applicable source permissions. Immutable revision markets/analysis can last
+six hours, capped by source permission expiry. Generation stamps captured before
+loading are checked at fill and every hit, including invalidation racing a fill's
+commit. Failed lookups/fills use bounded stored reads; a database outage remains
+unavailable. Cache rows cannot turn errors into authoritative empty responses.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Cache acceptance | **24 passed, 0 failed/skipped**: eight units and 16 genuine MySQL cases, including the parent scenario. Covers replica hits, normalized isolation, publication/locking, score/status/reschedule old/new dates, settlement/corrections, job/import progress, source expiry, midnight, rollback and absence of forecast/provider side effects. |
+| Races, recovery and outages | Passed both stale-fill windows, concurrent consumers, missed notification/downtime recovery, duplicate passes, a late lower-ID commit, incomplete-generation acknowledgment rollback, SQL cache-access revocation, simulated cache/database outage, failed fills and replica clock skew. The old-snapshot insert may safely lose a unique-key race instead of overwriting the newer row. |
+| Freshness | Genuine MySQL hits at virtual age 4,999 ms and refreshes at 5,000 ms; immutable payload creation times survive result corrections while mutable badges update. Simulated 15/60-second observations plus the independent five-second expiry fit 20/65-second budgets before worker/network processing. Hits preserve original sync times. This is not a hosted SLA. |
+| Database regressions | **345 final passing cases across 20 root scenarios**, combining 320 unaffected cases in the full sweep with the successful 25-case performance/cache rerun. Full command: `node --conditions=react-server --test --test-concurrency=2 tests/*.integration.mjs`; log `.tmp/031-database-regressions.log`. The sweep exposed a policy-revocation response regression and an overly strict cache-race assertion; both were corrected. The final targeted command uses concurrency 1 with `tests/performance.integration.mjs tests/public-cache.integration.mjs`; **25 passed, 0 failed/skipped**, log `.tmp/031-cache-performance-final.log`. |
+| Repository units | **913 cases: 912 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Quiet command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/031-units-final.log`. |
+| Migration and permissions | Fresh deploy, repeated deploy and `db:verify` pass on genuine MySQL 8.4.11. All 30 triggers are present; the application cannot forge generations/journals or gain trigger DDL rights. Source transaction rollback also rolls back invalidation. |
+| Static/build checks | `npm run db:generate`, `npm run db:validate`, `npm run lint`, `npm run typecheck`, `npm run build` and `git diff --check` pass. Final build keeps all three API routes dynamic. |
+| Production HTTP | Owned loopback `next start` passes 12 invalid/unavailable GET cases plus GET-only method enforcement, with no redirect, cookie or HTTP cache. The database-disabled profile remains truthful 503. Log `.tmp/031-http-final.log`; owned server stopped. |
+
+### Operating gates and handoff
+
+OP-24's local strategy is settled. OP-01/12/19/32 still require an actual approved
+hosted target, trigger/definer/binlog capabilities, per-table grants, maintenance
+scheduling, infrastructure budget and workload/latency evidence. No remote server
+setting, subscription, provider operation or deployment was changed. Generation
+and journal retention remains subject to the later approved recovery policy;
+schedule bounded expired-body cleanup before hosted operation.
+
+Rollback can remove the route wrappers while retaining cache tables, generations,
+journals and trigger-definer rights. Repair partially applied DDL forward; do not
+erase source or forecast history. No local feature or acceptance blocker remains.
+031 is checked in the tracker; later rows are unchanged.
+
+## 032 — Match feed page (10 October 2026)
+
+### Implemented behavior and changed files
+
+Completed the shared server-rendered Today/Results feed with real stored-data
+reads, initial match HTML/CSS, EAT reporting dates, ordinary Today/Tomorrow/Next
+7 days and adjacent historical-date links, truthful coverage/error states and a
+shared stored run-status area. Current and locked forecasts use the existing
+projection; closed cycles without a selection stay unavailable. Actual publication,
+last-sync, coverage-observation and projection-observation clocks remain distinct.
+
+- Added `server/matches/public-feed.ts` and `feed-page.ts`; the page and matches
+  API share database/competition/cache composition, without an internal HTTP call.
+- Replaced the interim `feed-shell.tsx`; added `match-feed-page.tsx`,
+  `feed-date-links.tsx` and `feed-run-status.tsx`. Reused shared shell, controls,
+  feedback, card/list components and the per-provider client bootstrap. Added
+  optional composition slots for 033/034, with no unfinished public control.
+- The two locale feed routes share API query validation and stored-year limits.
+  `public-shell.tsx` now provides one request instant to date and service reads.
+- Added `domain/feed-date-navigation.ts`; extracted `domain/match-slug.ts` from
+  the detail service while preserving its public export and canonical behavior.
+- Extended the existing match card/messages with cycle state, missing lock,
+  update/availability and original last-sync presentation. First two cards use
+  eager remote logos; the remainder retain lazy native images and reserved sizes.
+- Added `tests/feed-page.test.mjs`, `feed-page.integration.mjs` and
+  `scripts/verify-match-feed-rendering.py`, with package commands. Updated the
+  navigation HTML check to allow actual stored forecast/empty content, the
+  navigation/card documentation and added `docs/match-feed-page.md`.
+- Updated this record, implementation decisions and tracker. No migration or
+  database schema change is required.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Page contracts | Five new unit tests pass: filters retained and page reset for every date link, EAT midnight and seven-day range, calendar endpoints, exact query/clock handoff, original cached response identity and sanitized failures. |
+| Genuine stored page handoff | **6 passed, 0 failed/skipped** on owned MySQL 8.4.11. Covers 30-card stable order/ties from 32 matches, run 2/34 counts, future boundaries, coverage states, missing lock, historical verified score/settlement, original clocks, repeated shared-cache reads and zero provider/prediction side effects. Log `.tmp/032-page-integration.log`. |
+| Existing feed regressions | **16 passed, 0 failed/skipped** on owned MySQL. Includes full-cohort search/aliases, ordering, coverage authority, progress, locks, voids, corrected settlement, no side effects and atomic shared search limits. Log `.tmp/032-feed-regression.log`. |
+| Production component HTML | `npm run test:feed-page:rendering -- --serve` builds an isolated Next production app from actual MySQL-captured projections. **23 scenarios pass** initial names/kickoff/prediction, original publication/sync clocks, CSS-before-content, exact card order, honest states, all run phases and seven-day messaging. Four run-phase presentation variants are explicitly synthetic. Artifacts `.tmp/match-feed-nS3vVG/`; the harness's repeated SQL preparation also passes all six cases. |
+| Browser acceptance | **72 assertions pass** through the Playwright skill/CLI using installed Chrome, French locale and Los Angeles timezone. Tests scripts held before hydration, unchanged labels after hydration, 404/429 logos, 320/360/390/430/1280 widths, one/two columns, 200% text, skip link/focus, all 30 keyboard analysis destinations, one Enter to an isolated canonical analysis target, date links/boundaries, every data/error state, retry and JavaScript-disabled date browsing. No hydration/browser errors or visitor cookies; no browser API polling. Log `.tmp/032-browser-final.log`; screenshots and acceptance source under ignored `output/playwright/feed-page-*`. |
+| Repository units | **918 cases: 917 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/032-units.log`. |
+| Static/build | Typecheck, lint, tracked/new-file whitespace checks and production build pass. Build retains dynamic dated/home feeds and all three APIs. Client chunk audit finds no database credentials/configuration, provider endpoint or worker/service implementation. Logs `.tmp/032-types-final.log`, `.tmp/032-lint-final.log`, `.tmp/032-build.log`. |
+| Actual production routes | Owned loopback production server with database capability disabled passes Today/Tomorrow/7-day/history/beyond-window failure rendering, actual EAT date after midnight, anonymous no-store/no-cookie behavior and no sample fallback. Existing navigation HTML checks pass all ten valid surfaces, redirects and invalid-route cases. API composition retains 400/503 and years below 1000 return 404. Log `.tmp/032-production.log`; server stopped. |
+
+### Operating gates and handoff
+
+No local implementation or required acceptance blocker remains. Prompt 032 is
+checked; 033 and subsequent rows remain unchanged. Search controls, Load more,
+Back restoration, real match analysis and live refresh retain their separate
+033–037 ownership. Browser analysis activation uses the isolated test destination;
+production match-detail pages are still supplied by 035.
+
+Existing approved database/provider/competition/model/reuse/budget/hosting inputs
+and launch qualification remain required for live public content. Nothing here
+claims real coverage, forecast quality or a deployed service. Genuine MySQL tests
+use owned throwaway servers and synthetic stored forecasts; installed services
+and remote databases are unchanged. The page exposes a truthful temporary-failure
+surface for an unavailable production configuration. No paid call or schedule was
+activated. Rollback can restore the previous feed composition without altering
+source history, locks, results or response-cache schema.
+
+## 033 — Search and filter controls (10 October 2026)
+
+**Complete.** Added shareable, accessible search/league/status/market/order
+controls over the complete stored date cohort. Prompt 033 is checked in the
+tracker; 034 and later prompts remain unchanged.
+
+### Changes
+
+- Added reusable `SearchInput`/`FilterControl` to shared controls and
+  `components/match/feed-controls.tsx` for the native GET form, disclosure,
+  applied summary, Apply/Reset, focus return and selected-family ordering.
+- Added `domain/feed-controls.ts`. Draft text retains spaces until Apply;
+  `state/feed.ts` now preserves raw text without weakening applied-query checks.
+  Empty native GET league values normalize to null in the shared parser.
+- Added `app/_components/feed-surface.tsx`; simplified server page composition
+  and reused date/run presentation in the client surface. Server query changes
+  synchronize the per-provider draft while retaining field/panel focus. Explicit
+  transitions discard superseded navigation and preserve prior cards on failure,
+  with original reporting dates, filters and market clearly labeled.
+- Extended the public feed DTO/service with bounded full-cohort league options
+  and cache projection version 2. Options use the same RepeatableRead snapshot
+  as records and cannot disappear merely because search returns no cards.
+- Added draft/Reset/native URL tests, strict league projection checks, and genuine
+  SQL capture cases for aliases beyond the first page, countries, league aliases,
+  empty results and all market orders. Updated rendering/navigation verification
+  and the client state, feed page/API and new search/filter documentation.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **921 cases: 920 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Log `.tmp/033-units.log`. |
+| Final contract checks | **34 passed** after adding strict league option validation. Covers raw draft spaces, normalization/limits, native GET equivalence, Reset dates/page size and API projection bounds/privacy. Log `.tmp/033-contracts-final.log`. |
+| Genuine stored page handoff | **7 passed, 0 failed/skipped** using owned MySQL 8.4.11, including full-cohort aliases/countries/league searches and options after an empty filter result. Logs in `.tmp/match-feed-71Ogu7/database.log`. |
+| Feed/cache regressions | **32 passed, 0 failed/skipped** on owned MySQL. Covers distinct unrounded selected-market ordering/ties/missing values, history/settlement, coverage, search limits, cache invalidation/recovery and zero provider/prediction side effects. Log `.tmp/033-db-regression.log`. |
+| Production rendering | **36 isolated SQL-captured scenarios pass**, including exact card order, original timestamps, initial CSS and all coverage/failure states. Four run-phase presentation variants remain explicitly synthetic. Final client code rebuilt against the same captures. Logs `.tmp/033-rendering.log`, `.tmp/033-fixture-final-build.log`; artifacts `.tmp/match-feed-71Ogu7/`. |
+| Browser | **66 assertions pass** in installed Chrome through the Playwright skill/CLI, French locale/Los Angeles timezone. Covers alias beyond the first page, country/league search, reload/Back/Forward/shared page, league/status controls, selected-market order, failed market change retaining original cards, rapid queries and A → B → A Reset, pagination reset, reporting date/range Reset, Escape/Close and submission focus, 320–1280 widths, 200% text, labels/focus/touch sizes, one status region, native forms/Reset without JavaScript, invalid URLs, no cookies/polling and no hydration errors. Expected logo 404s exercise fallback. Logs `.tmp/033-browser-final.log`, `.tmp/033-extra.log`; source/screenshots `output/playwright/033-*`. |
+| Static/build | Final lint, typecheck, production build and whitespace checks pass. Logs `.tmp/033-lint-final.log`, `.tmp/033-types-final.log`, `.tmp/033-build.log`. |
+| Actual production routes | Existing navigation HTML checks pass ten anonymous surfaces, redirects and invalid queries against the owned loopback production server with database capability disabled. Native GET empty-league/probability input is accepted and unavailable storage remains a truthful failure. Log `.tmp/033-production.log`. |
+
+The browser acceptance found and fixed Reset refreshing an unfinished search;
+the final A → B → A test passes. An initial generated-file encoding error was also
+corrected before final builds. No implementation or required acceptance blocker
+remains. Live operating/launch gates remain unchanged; these tests establish
+stored-query/UI behavior with synthetic inputs, not real forecast quality or
+hosted availability. No paid call, schedule or remote database change was made.
+No migration is required. Owned acceptance servers and browser sessions are
+stopped after verification; the installed database service remains untouched.
+
+## 034 — Pagination and navigation restoration (10 October 2026)
+
+**Complete.** The stored feed retains crawlable, date-pinned pagination links
+and progressively enhances Load more. Back/reload restore validated filters,
+loaded extent, scroll and analysis-link focus after fetching the necessary
+stored pages. Prompt 034 is checked; 035 and subsequent rows remain unchanged.
+
+### Changes
+
+- Added `domain/feed-pagination.ts` for pinned links, response checks, contiguous
+  append and atomic prefix replacement with whole-record version protection.
+  Added `domain/feed-navigation.ts` for bounded, expiring metadata checkpoints;
+  `state/feed.ts` reuses its existing restoration limits.
+- Added `components/match/feed-pagination.tsx`, `feed-page-client.ts`,
+  `feed-restoration.ts` and `use-feed-pagination.ts`. They implement shared square
+  controls, anonymous stored API reads, duplicate-load locking, cancellation,
+  retry/refresh, history-entry scoping and focus/scroll restoration. Storage is
+  optional and contains no fixture records. Appended extent is capped at ten
+  pages; ordinary Next links continue beyond it.
+- Updated `app/_components/feed-surface.tsx`, the shared match card and messages
+  for retained loaded pages, focused new articles, errors and one polite status
+  region. Query changes reset pages and cancel obsolete loads. Link/form departure
+  captures the current position before route changes.
+- Added opaque `paginationVersion` to the public DTO/service using committed
+  date/catalog generations from the same RepeatableRead snapshot. Reused the
+  MySQL cache generation reader and bumped feed cache projection to 3. No schema
+  or migration change is required.
+- Added meaningful pagination/checkpoint units and real MySQL mutation cases.
+  Extended the isolated production rendering harness with a stored-data API and
+  canonical analysis destinations for fixtures beyond the first page. Updated
+  the state/feed/filter documentation, implementation decisions and tracker;
+  added `docs/pagination-navigation.md`.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **925 cases: 924 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/034-units.log`. |
+| Final query/state contracts | **23 passed**, including four new cases covering fully preserved URLs, overlap/cohort rejection, atomic whole-record version handling, entry/query/page isolation, expiry, malformed data and storage bounds. Log `.tmp/034-contracts-final.log`. |
+| Genuine MySQL page handoff | **8 passed, 0 failed/skipped**, owned MySQL 8.4.11. Includes 95 fixtures over four pages, repeated stable markers, last-page fixture moving to the first through the authorized lifecycle, publication invalidation, unchanged marker after acknowledgment and zero provider/prediction side effects. Log `.tmp/match-feed-KkJh2p/database.log`. |
+| Feed/cache regressions | **32 passed, 0 failed/skipped** on owned MySQL. Covers selected-market ordering/ties, coverage, history/settlement, search budgets, transactional invalidation, cache recovery and side-effect-free reads. Log `.tmp/034-db-regression.log`. |
+| Production rendering | **47 isolated SQL-captured scenarios pass**, preserving exact card order, timestamps, initial CSS and honest coverage/error states. Four run-phase variants remain explicitly synthetic. The final hook was rebuilt against the same captured projections. Logs `.tmp/034-rendering.log`, `.tmp/034-fixture-final-build.log`; artifacts `.tmp/match-feed-KkJh2p/`. |
+| Browser acceptance | **76 assertions pass** through the Playwright skill/CLI and installed Chrome, French locale/Los Angeles timezone. Covers four-page append without gaps/duplicates, no scroll loading, keyboard Load more/Tab/Enter/Back focus, one live region, 503/429/retry, duplicate clicks, query cancellation, concurrent schedule changes and atomic refresh failure, three-page Back/reload on desktop/mobile, failed restoration with full-extent retry, direct page three, history-entry isolation, blocked storage, form-departure position, no-JavaScript discovery of all 95 fixtures, 320–1280 widths, 200% text, square controls, reserved lazy native logos, no visitor cookies and no browser/hydration errors. Logs `.tmp/034-browser-final.log`, `.tmp/034-extra-final.log`, `.tmp/034-keyboard-final.log`; sources/screenshots `output/playwright/034-*`. Mobile/desktop card and pagination screenshots visually reviewed. Expected injected HTTP failures exercise recovery. |
+| Static/build | Final typecheck, lint, production build and tracked/new-file whitespace checks pass. Logs `.tmp/034-types-final.log`, `.tmp/034-lint-final.log`, `.tmp/034-build-final.log`. |
+| Actual production routes | Ten anonymous surfaces, redirects and invalid queries pass existing navigation HTML checks against the owned loopback production server with database capability disabled. Actual reporting dates remain EAT and unavailable storage is a truthful failure. Log `.tmp/034-production.log`. |
+
+No implementation or required acceptance blocker remains. Browser navigation uses
+an isolated canonical analysis route; prompt 035 must repeat Back acceptance
+through its real detail page. An initial test setup attempted a schedule change
+through catalog import; it was corrected to use the existing coordinated lifecycle.
+The isolated generated analysis route also needed an explicit shared DTO type.
+Both final preparation/build checks pass.
+
+Existing live operating, source-rights, forecast-quality and hosting gates remain
+unchanged. Synthetic stored forecasts and local acceptance do not claim real
+coverage or deployment. No paid operation, provider call, schedule, remote database
+change or migration was activated. Owned acceptance servers/browser sessions are
+stopped after verification; the installed database service remains untouched.
+
+## 035 — Match detail page (10 October 2026)
+
+**Complete.** Added the reusable server-rendered detail route and completed
+034's deferred Back check through the real match destination. Prompt 035 is
+checked; 036 and subsequent rows remain unchanged.
+
+### Changes
+
+- Added `[locale]/matches/[fixtureId]/[slug]/page.tsx` and reusable server route,
+  page and content composition in `app/_components/match-detail-{route,page,content}.tsx`.
+  UUID is authoritative; changed slugs/uppercase IDs redirect canonically, unknown
+  fixtures return 404, and unavailable storage retains an explicit retry state.
+  Request-scoped caching shares one stored response between metadata and content.
+- Added `server/matches/public-detail.ts`, `detail-page.ts` and
+  `detail-presentation.ts`. API/page now share stored-service/cache composition,
+  page preflight and sanitized failures. The HTML boundary reuses offline safe
+  source URL checks and withholds unsafe/unattributed explanations.
+- Added `components/match/detail-styles.tsx`; reused the shell, team rows,
+  probability labels, outcome badges, native disclosures and square tokens.
+  All four available/unavailable families come from one selected snapshot.
+  Original sources/fallback reasons, alternatives, explanations, uncertainty,
+  publication/evidence/source clocks and honest freshness states remain visible.
+- Kept live/verified regulation scores separate from per-family outcomes and
+  settlement/correction clocks. Void reasons survive absent predictions; closed
+  cycles never substitute unlocked previews. Exact-score prediction remains
+  disabled. Added only an optional server history slot for 036.
+- Added unique metadata and canonical/social previews using the existing brand
+  Open Graph image. Existing prelaunch `noindex, follow` remains unchanged.
+- Added `tests/match-detail-page.test.mjs`, shared owned-directory capture helper
+  and genuine SQL detail/navigation capture cases. Extended the existing production
+  rendering harness with `--detail` and validated reuse for UI-only iterations.
+  Updated API/state/feed/pagination documentation, implementation decisions and
+  tracker; added `docs/match-detail-page.md`. No schema or migration is required.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **930 cases: 929 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/035-units.log`. |
+| Final detail contracts | **29 passed**, including five new tests for identity/query preflight before reads, original projection/clock handoff, distinct sanitized failures, whole-revision market isolation, outcome identity independent of score, unsafe/missing attribution and fixture-derived metadata. Log `.tmp/035-contracts-final.log`. |
+| Genuine MySQL qualification | **18 passed, 0 failed/skipped** in fresh feed/detail capture, owned MySQL 8.4.11. Includes four-page feed navigation, open/locked/void/closed-without-lock, partial and mixed-family snapshots, expiry, verified/corrected results and read-only anonymous requests with zero outbound work. Original log `.tmp/match-feed-gIlpKV/database.log`. After adding explicit permitted linked-evidence publication, the detail suite repeats with **10 passed, 0 failed/skipped**, preserving cited URLs and independent source clocks; log `.tmp/035-detail-final.log`. |
+| Production HTML | **47 feed and 22 detail scenarios pass** initial CSS/content, exact stored identities/clocks, all lifecycle states, unsafe URL suppression, permanent slug redirect, canonical/social metadata and genuine unknown-fixture 404. Seventeen detail projections are SQL-captured; five long-name/unsafe-link/delayed-coverage/failure variants are explicitly synthetic. The existing four feed run-phase variants remain synthetic. Final code rebuilt against the qualified captures without repeating SQL; log `.tmp/035-rendering-accepted.log`, artifacts `.tmp/match-feed-gIlpKV/`. |
+| Browser | **322 assertions pass**, installed Chrome through the Playwright skill/CLI, French locale/Los Angeles timezone. Covers selected snapshot/source/alternatives across all states, independent correct/incorrect badges, missing lock/void forecast, correction clocks, fallback unknown times, limited-news/age/partial/delayed disclosures, escaped summaries and rejected unsafe links, 404/redirect/metadata, keyboard/source focus, native no-JavaScript markets/alternatives/permitted citations, 320–1280 widths, 200% text, long names, throttled logos, reserved native images, no client detail polling/provider API work/cookies and no browser/hydration errors. Real-detail Back restores filters, 90 ordered cards, scroll and analysis focus on desktop/mobile after three stored-page reads. Log `.tmp/035-browser-accepted.log`; source/screenshots `output/playwright/035-*`. Screenshots visually reviewed. |
+| Static/build | Final build, typecheck and lint pass; dynamic detail route is present. Client chunks exclude stored reader, evidence store, database configuration, provider API and synthetic fixture markers. Tracked/new-file whitespace checks pass. Logs `.tmp/035-build-accepted.log`, `.tmp/035-types-accepted.log`, `.tmp/035-lint-accepted.log`. |
+| Actual production routes | Existing navigation HTML checks pass ten anonymous surfaces, redirects and invalid routes. Additional real-route checks confirm malformed IDs/reserved revision queries return 404, disabled storage produces truthful retryable detail HTML, and detail API preserves anonymous 400/503 behavior with safe bodies and no cookies. Log `.tmp/035-production.log`; owned loopback server runs with database capability disabled. |
+
+No implementation or required acceptance blocker remains. The SQL test gained a
+permitted linked-source scenario because the earlier structured evidence correctly
+had no attributable URL; the page does not invent one. The initial HTML reason
+assertion was corrected to compare escaped text, and server presentation was
+placed under the app boundary to preserve the repository's client import rules.
+Final checks pass. Read-only history browsing and live refresh remain 036/037.
+
+Existing real provider/model/competition/rights/budget/hosting and launch gates
+remain unchanged. Synthetic permissions, predictions and attribution URLs prove
+stored contracts and UI behavior, not forecast quality, real source rights or
+deployment. No paid football/research/AI operation, scheduler, remote database
+change or migration was activated. Owned acceptance servers/browser sessions are
+stopped after verification; the installed database service remains untouched.
+
+## 036 — Read-only revision history (10 October 2026)
+
+**Complete.** Added expandable publication/cycle history within the canonical
+match page. Prompt 036 is checked; 037 and later prompts remain unchanged.
+
+### Changes
+
+- Added `app/_components/revision-history.tsx` and
+  `server/matches/history-page.ts`. Publications use persisted fixture revision
+  order, EAT run dates, cycle/revision counters, source kinds, actual publication
+  times and reference-derived current/locked/superseded/void labels. Cycles keep
+  their separate ordinals, safe reasons and exposed schedule/lifecycle clocks.
+- Extended `domain/match-detail.ts` and `server/matches/detail-service.ts` with
+  bounded public publication summaries. Sealed revision/cycle readers and a
+  batch daily-run lookup supply provenance; no migration is required.
+- Extended `match-detail-{route,page,content}.tsx` and
+  `server/matches/detail-page.ts` to validate history queries and keep an
+  independent applicable forecast as primary content. One selected complete
+  snapshot appears below it, with all four available/unavailable families,
+  alternatives, original analysis, permitted sources and separate evidence clocks.
+  Superseded selections do not acquire settlement badges or performance entries.
+- Added reusable `components/ui/disclosure.tsx`, shared by history and existing
+  alternatives/sources. Native keyboard and accessible expanded state work before
+  hydration. Plain nested disclosures preserve readable 320 px market widths;
+  outer surfaces retain square borders and visible focus. DOM IDs are scoped per
+  snapshot. Updated shared detail styles and English messages.
+- Chose ordinary server-rendered selection/pagination/retry links. Both lists
+  retain the 029 ten/default, twenty/maximum bounds, independent keyset cursors
+  and pinned high-water marks. Failed historical reads preserve primary content
+  and available initial history with inline retry. Cross-fixture/missing IDs are
+  safe 404s. Canonical redirects preserve validated queries; canonical metadata
+  excludes them, with explicit existing `noindex, follow` on history views.
+- Added `tests/revision-history-page.test.mjs`, expanded detail SQL/page checks
+  and the production rendering harness's `--history` mode. Added package commands
+  `test:history-page` and `test:history-page:rendering`. Updated API/page contracts,
+  implementation decisions and `docs/revision-history-page.md`.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **933 cases: 932 passed, 0 failed, 1 existing Windows POSIX-mode skip**. `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/036-units.log`. |
+| History/detail contracts | **32 passed**, covering bounded/duplicate/invalid queries, fixture identity, canonical links, both anchors and independent cursors, current/locked/void labels, snapshot isolation, attribution and sanitized failures. Log `.tmp/036-contracts-complete.log`. |
+| Genuine MySQL page preparation | **18 passed, 0 failed/skipped**, owned MySQL 8.4.11. Covers stored feed membership/navigation plus older/current/locked/partial/void/corrected snapshots, accurate run/source clocks, anchored pagination during publication, source permissions and zero prediction/settlement/provider side effects. Log `.tmp/match-feed-w3KhSp/database.log`. |
+| Final SQL detail qualification | **10 passed, 0 failed/skipped**, explicitly capturing historical locked selection and its independent primary projection, permitted older explanations/links, partial prior revisions and old cycles. Proxy rejects writes and outbound calls; full reference/job/result/settlement/version invariants remain unchanged. Log `.tmp/036-detail-final.log`. |
+| Cache/performance regressions | **25 passed, 0 failed/skipped** on owned MySQL. Includes historical/void/superseded cohort counts, original locks, result corrections, policy revocation, cache invalidation, source expiry and recovery. Log `.tmp/036-db-regression.log`. |
+| Production HTML | **47 feed and 22 regular detail scenarios pass**, plus dedicated history checks for separate primary/historical/partial content, safe 404s, canonical noindex, unique IDs and failed-read retry. Final build reuses the qualified SQL captures without repeating their checks. Log `.tmp/036-rendering-complete.log`; artifacts `.tmp/match-feed-w3KhSp/`. |
+| Browser | **119 assertions pass**, installed Chrome through the Playwright skill/CLI. Covers keyboard Enter/Space/Tab and native accessibility-tree expanded state; complete older/current/locked/partial/void snapshots; permitted original links/timestamps; both-list anchors, older pages and Back; inline busy/retry preserving primary content; cross-fixture/missing/invalid 404s; 320–1280 widths, 200% text, square controls, no-JavaScript disclosure/analysis and EAT under French locale/Los Angeles timezone; no client provider/history polling, visitor cookies or hydration/page errors. Expected blocked-logo/404 network errors are injected acceptance cases. Log `.tmp/036-browser-final.log`, source/screenshots `output/playwright/036-*`. Desktop/mobile/market screenshots visually reviewed. |
+| Static and production routes | Final production build, typecheck, lint and whitespace checks pass. Logs `.tmp/036-build-final.log`, `.tmp/036-types-final.log`, `.tmp/036-lint-complete.log`. Actual build rejects malformed history before storage, preserves truthful disabled-storage retry HTML and anonymous API 400/503 responses without cookies; log `.tmp/036-production.log`. |
+
+No implementation or required acceptance blocker remains. An initial concurrent
+fixture run timed out during an owned migration; the independent rerun passed all
+18 cases. The isolated reader's optional query argument was corrected before its
+production build passed. Browser assertions were corrected to inspect Chrome's
+native disclosure expanded property and identify publication labels when void
+and publication times coincide. Visual review then removed unnecessary nested
+padding; final layout, HTML and browser checks pass.
+
+Existing live provider/model/rights/budget/hosting and release gates remain
+unchanged. Synthetic policies/forecasts/source permissions are isolated test
+evidence, not qualification of live predictions or redistribution rights. No
+paid provider/AI/research call, scheduled prediction, migration to an existing
+database, deployment or later feature was activated. Owned acceptance servers and
+browser were stopped; the user's development server and installed MySQL service
+remain untouched.
+
+
+## 037 - Live client refresh
+
+Complete. The implementation and required acceptance checks pass; tracker row
+037 is ticked. Work on 038 has not started.
+
+### Changed behavior and files
+
+- Added `state/refresh-api.ts` and extended the per-provider store with RTK Query
+  reducer/middleware. Pagination and current-detail reads share typed anonymous
+  stored-data endpoints, validation, deadlines, normalized request deduplication
+  and cancellation that preserves other subscribers.
+- Added `domain/live-refresh.ts`, `fixture-reconciliation.ts`, shared browser
+  lifecycle hook, refresh-status feedback and `live-match-detail.tsx`.
+  Integrated the feed's loaded-prefix hook and detail SSR boundary. Current data
+  remains visible on transient, malformed, stale or unstable-cohort failures.
+- Added run sequences to stored feed forecasts and shared daily-run counts to
+  detail responses; tightened current card/detail snapshot coherence. Extended
+  equal-version observation/job handling without changing forecast content or
+  timestamps. Updated feed/detail cache projection versions.
+- Extracted reusable offline evidence URL/presentation helpers so current detail
+  can hydrate without importing server networking. Historical content remains
+  server rendered, isolated and labeled with its original read clock.
+- Added deterministic live-refresh tests and real SQL assertions for shared
+  progress/repeated visitor reads. Extended isolated rendering with stored detail
+  GETs and a generated test-only EAT clock; added package verification commands.
+- Added `docs/live-client-refresh.md`; updated state, API, pagination and history
+  documentation and implementation decisions. No schema migration is required.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Focused live/feed/detail contracts | 64 passed, zero failures; `.tmp/037-contracts-final.log`. Covers reversed publication/lock/result correction, earlier cycles/runs, partial replacement, equal-version observation updates, deduplication, cancellation, serial cadence, visibility/reconnect and exact EAT midnight. |
+| Genuine MySQL read/cache acceptance | 26 passed, zero failures/skips on owned MySQL 8.4.11; `.tmp/037-db-real.log`. |
+| Final SQL detail/provenance acceptance | 10 passed, zero failures/skips; `.tmp/037-detail-qualified.log`. Confirms shared run counts and twelve additional independent visitor ticks with writes/network blocked, unchanged jobs/revisions/locks/results/settlement/version state and no cookies. Captured projections remain under `.tmp/live-refresh-037/`. |
+| Production rendering | 47 feed and 22 detail scenarios plus dedicated history isolation/404/canonical/retry checks pass; `.tmp/037-rendering-final.log`. |
+| Production build/typecheck/lint | Pass; `.tmp/037-build-final.log`, `.tmp/037-types-final.log`, `.tmp/037-lint-final.log`. |
+| Full repository units | **942 cases: 941 passed, zero failures, one existing Windows POSIX-mode skip**, on pinned Node 24.18.1; `.tmp/037-units-node24.log`. Final expanded live-client assertions also pass (25 cases); `.tmp/037-live-accepted.log`. |
+| Browser acceptance | **54 assertions pass** in installed Chrome using Playwright CLI: 25 feed, 14 rollover and 15 detail checks. Covers the 20-second cadence, hidden pause/reconnect, shared counts, retained/partial/error snapshots, quiet repeated failures, stale rejection, three-page refresh, focus/scroll, obsolete requests, seven-day rollover, relative page reset and explicit historical position, current/history isolation, retry, 320–1280 widths, anonymous GET-only reads and zero page/hydration errors. Logs `.tmp/037-browser-feed.log`, `.tmp/037-browser-rollover-accepted.log`, `.tmp/037-browser-detail.log`; source/screenshots `output/playwright/037-*`. Mobile/current/history screenshots visually reviewed. |
+
+The first SQL command lacked MYSQL_TEST_SERVER_BINARY and skipped; it was rerun
+with the existing genuine test binary and passed. A capture-only rerun initially
+used the temporary root rather than a nested owned output directory; corrected
+capture and final SQL qualification pass. Browser checks found initial pageshow
+could duplicate the first read; it now resumes only persisted restoration.
+An existing cost-gateway timing assertion failed during a competing build; its
+targeted rerun and the final serial full-suite rerun both passed. Final lint and
+changed-file whitespace checks pass; `.tmp/037-lint-accepted.log`.
+Browser clock setup was adjusted to use a fixed date and real elapsed timers for
+rollover/detail acceptance after Playwright's paused-clock setup stalled. Detail
+response variants retain their captured daily-run identity; the earlier run was
+correctly rejected before this test input was corrected. No application defect
+remains from those harness retries.
+
+External production provider/model/rights/budget/hosting and release gates remain
+unchanged. Synthetic response/clock variants are acceptance inputs only. No
+production forecasts, external paid calls or deployment were activated.
+Owned acceptance server/browser processes were stopped; existing services and
+the user's development server were left untouched.
+
+## 038 - Methodology and measured performance
+
+Complete. The implementation and required local acceptance checks pass; tracker
+row 038 is ticked. Work on 039 has not started. Public release remains blocked by
+the explicitly deferred correction/dispute policy and existing operating gates.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/how-it-works` page with accessible server-rendered
+  methodology content and a stored performance report. Added externalized
+  English messages, section navigation, concise source attribution and truthful
+  explanations of probabilities, evidence, daily EAT cadence, cutoff, regulation
+  settlement, locked revisions and audited corrections.
+- Added `public-performance.ts`, `performance-page.ts` and the injectable server
+  route. The page and API share the same scope, cache and counts-only production
+  policy. Native GET controls select bounded EAT dates, market, source and exact
+  model/provider version. Invalid queries fail before storage; unavailable reads
+  retain valid controls and the same-query retry instead of showing empty counts.
+- Added reusable definition-list/table primitives and `performance-report.tsx`.
+  Reports preserve service coverage, denominators, source/version provenance,
+  horizons, original clocks and separate operational measures. Numeric rates,
+  scores and calibration require the service's sample and quality gates. Narrow
+  calibration tables retain readable widths inside named keyboard scroll regions.
+- Added canonical exact-locked-revision match links and labels to performance
+  evidence using batch-selected team names and shared slug rules. Retained API
+  evidence links and bumped the performance cache projection to 2. Results and
+  probability help now link to the relevant methodology sections; the existing
+  footer link remains. Metadata retains prelaunch noindex and the canonical URL.
+- Added six page contract tests, expanded genuine SQL captures/link checks and
+  an isolated production rendering harness. Added `test:methodology` and
+  `test:methodology:rendering`; documented the contract and release blockers in
+  `docs/methodology-performance.md`, the API and implementation decisions.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Focused page/performance/evaluation contracts | **50 passed, zero failures**; `.tmp/038-contracts-final.log`. Covers bounded filters, native-form normalization, EAT rollover, exact stored identity, metric gates, sanitized failures and canonical locked links. |
+| Genuine MySQL performance acceptance | **9 passed, zero failures/skips**, owned MySQL 8.4.11; `.tmp/methodology-038/database.log`. Captures 15 projections, reconciles locked page links to detail, covers mixed sources, empty/small/gated reports and corrections, and rejects visitor writes/outbound calls while preserving jobs, locks, settlements and fixture versions. |
+| Genuine MySQL cache regression | **16 passed, zero failures/skips**; `.tmp/038-cache-db.log`. Covers policy revocation, source expiry, result corrections, projection reuse, invalidation races and outage recovery. |
+| Production HTML | **13 scenarios and 1,554 coverage counts pass** against SQL captures; `.tmp/038-rendering-final.log`, artifacts `.tmp/methodology-038/`. Checks initial CSS, metric gates, clocks, immutable links, escaped long labels, empty/error states and canonical/noindex metadata. |
+| Browser | **360 assertions pass**, installed Chrome through the Playwright skill/CLI; `.tmp/038-browser-final.log`, source/screenshots `output/playwright/038-*`. Covers native GET and no-JavaScript filters, service counts/gates, correction states, exact locked history, Enter/Space/Tab disclosures, calibration column/row labels, empty bands and uncertainty, keyboard horizontal scrolling, 320–1280 widths and 200% text. No visitor cookies, browser API reads or hydration/page errors. Mobile screenshots visually reviewed. |
+| Full repository units | **948 cases: 947 passed, zero failures, one existing Windows POSIX-mode skip**, pinned Node 24.18.1; `.tmp/038-units-final.log`. |
+| Static/build checks | Final production build, typecheck, lint and changed-file whitespace checks pass; `.tmp/038-build-final.log`, `.tmp/038-types-accepted.log`, `.tmp/038-lint-accepted.log`. |
+| Actual production routes | Six anonymous responses pass initial HTML, truthful disabled-storage state, preserved filter/retry, duplicate-query rejection, Results navigation, canonical/noindex and API 400/503 checks; `.tmp/038-production.log`. |
+
+Acceptance setup initially lacked its nested capture directory and strict
+generated-route null assertions; both were corrected before successful runs.
+Rendering found the canonical needed an absolute origin. Browser checks found
+the calibration table compressed its columns on phones; readable minimum widths
+and keyboard scrolling now pass. A production assertion was adjusted to remove
+script blocks rather than truncate HTML at the first head script. No unresolved
+implementation or acceptance failure remains.
+
+**OP-25 remains a release blocker.** The user explicitly chose "Keep unresolved
+and record the release blocker." A responsible owner, intake channel,
+review/evidence process and response commitment remain unapproved. Public copy
+states that submissions are not yet available; no operational policy or contact
+details are invented. OP-16/OP-17 also remain unapproved: production shows counts
+and withholds numeric performance metrics. Synthetic acceptance policies do not
+qualify live predictions or authorize public accuracy/calibration claims.
+
+No production forecast, paid provider/model call, worker activation, migration
+to an existing database, deployment or later feature was activated. Owned
+acceptance servers and browser were stopped; existing services and the user's
+development server remain untouched.
+
+## 039 - Privacy page
+
+Complete. The implementation and required local acceptance checks pass; tracker
+row 039 is ticked. Work on 040 has not started. The final privacy notice and
+public release remain blocked by the owner-deferred operating/legal facts.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/privacy` surface with externalized English content
+  in the existing reusable information/public shell. `InformationShell` now
+  accepts content while retaining truthful interim fallbacks for later pages.
+  Added semantic sections, native topic links, shared readable typography,
+  square components, canonical metadata and the existing footer/current-page
+  navigation. Existing prelaunch noindex remains.
+- Added `domain/privacy-notice.ts`, `privacy-content.tsx` and the privacy message
+  catalog. The page explicitly identifies itself as a prelaunch data-handling
+  summary, with `releaseReady: false`, no effective date and the actual technical
+  review date, 10 October 2026. It contains no invented operator, email, address,
+  jurisdiction, regulator or response commitment.
+- Audited actual visitor flows and documented purposes, recipients and retention
+  distinctions in `docs/privacy-page.md`: request/log exposure, URL queries,
+  shared search protection/cache, optional local preference, session/history
+  restoration, page memory/refresh, remote images and external source records.
+  The search counter retains no search text, but cached pagination links can
+  contain it. Hash keys, reuse deadlines and age rejection do not prove physical
+  deletion or anonymity. No arbitrary source/log/backup retention was introduced.
+- Added production privacy HTML verification and `test:privacy:html`. Updated
+  shared navigation assertions to reject actual authentication controls/targets
+  while allowing factual prose explaining account-free access. Updated central
+  OP-26/27/28 release-blocker statuses and implementation decisions, including the
+  owner's explicit deferrals and conditional authoritative review references.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Data-flow inventory | Compared every public assertion with the referenced handlers, browser storage/history code, query/cache schemas, native logo component, source-permission rules, dependencies and runtime/public configuration. Hosting/log/source-retention contracts remain unresolved; no live provider or hosting facts are inferred. Detailed evidence: `docs/privacy-page.md`. |
+| Relevant behavior contracts | **47 passed, zero failures/skips**: navigation, client state, Back restoration, cache reuse/invalidation, live refresh and match-card behavior. Command: `node --conditions=react-server --test --test-concurrency=1 tests/navigation.test.mjs tests/client-state.test.mjs tests/feed-navigation.test.mjs tests/public-cache.test.mjs tests/live-client-refresh.test.mjs tests/match-card.test.mjs`; `.tmp/039-contracts.log`. |
+| Actual production privacy HTML | Both ordinary and untrusted-query requests pass initial content/CSS, semantic anchors, review date, canonical/noindex, release gate, disclosure values, no cookies/form/fake contact and query isolation; `.tmp/039-html.log`. |
+| Shared navigation HTML | All ten anonymous page cases, root redirect, English fallbacks and invalid/unknown-route 404 checks pass against the actual production server; `.tmp/039-navigation.log`. Includes footer/current-page links and unchanged interim terms/contact behavior. |
+| Browser | **59 assertions pass**, installed Chrome through the Playwright skill/CLI; `.tmp/039-browser.log`, source/screenshots `output/playwright/039-*`. Covers skip focus, visible focus, ten topic links in Tab order, Enter/hash/history Back, methodology/footer navigation, 320/360/390/430/1280 widths, 200% text, readable line lengths, square status surface, no-JavaScript and blocked-storage access. No third-party requests, storage writes, browser API polling, non-GET requests, visitor cookies or page/hydration errors on the privacy flow. Desktop/mobile/storage/no-JavaScript screenshots visually reviewed. |
+| Static/build checks | Production build, final typecheck/lint and changed-file whitespace checks pass; `.tmp/039-build.log`, `.tmp/039-types-final.log`, `.tmp/039-lint-final.log`. No database migration or data-service behavior changed. |
+
+Initial verification assumptions were corrected: raw server HTML uses a
+case-insensitive dateTime attribute; legal prose can mention signing in without
+creating authentication UI. The browser harness was corrected to use the CLI's
+page argument and await App Router anchor completion. Final checks pass; no
+product defect or required local acceptance check remains unresolved.
+
+**Release blockers remain explicit.** The user chose "Keep unresolved and record
+release blockers" for operator identity, audience/jurisdiction and public privacy
+contact, and "Keep current implementation; record unresolved decisions" for
+hosting/logs, analytics and retention. OP-26/27/28 and related OP-08/13/31/32 facts
+must be supplied and reviewed before final notice/public release. The current
+application remains without visitor analytics; ads remain disabled. A review date
+does not establish legal applicability, approval or an effective notice.
+
+No tracking, authentication, consent platform, advertising, contact backend,
+hosting, paid provider/model call, new retention service, deployment or later
+feature was activated. Owned acceptance server and browser were stopped;
+existing services and the user's development server remain untouched.
+
+## 040 - Terms page
+
+Complete. The supported factual draft, reusable layout and required local
+acceptance checks pass; tracker row 040 is ticked. Final terms publication and
+public release remain blocked by the deferred owner/legal/permission facts.
+Prompt 041 has not been started.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/terms` document with externalized English content in
+  the existing public/information shell. Added semantic topic links and concise
+  service, forecast, availability, correction, use, source and privacy sections,
+  with the existing square typography/layout components and footer access.
+  Metadata has the absolute canonical terms URL and retains prelaunch noindex.
+- Added `src/domain/terms-notice.ts`, `src/i18n/messages/terms.ts` and
+  `src/app/_components/terms-content.tsx`. The notice is explicitly a prelaunch
+  draft, with `releaseReady: false`, no effective date and the actual technical
+  review date, 10 October 2026. No identity, jurisdiction, mailbox, licence,
+  liability waiver, eligibility restriction or service guarantee is invented.
+- Extracted `src/app/_components/information-notice.tsx` for the common terms/
+  privacy introduction, technical-review date and publication-status surface.
+  Privacy continues to show its existing factual summary and unresolved gate.
+- Linked the real methodology's probability, evidence, performance, schedule,
+  settlement and correction sections and the current privacy summary. Described
+  the free account-free service, four regulation markets, AI-first/fallback
+  sources, daily EAT window, strict cutoff, original timestamps and pending/void/
+  audited correction limits without duplicating detailed operational documents.
+- Added `docs/terms-page.md` with the factual evidence matrix, inherited owner
+  decisions, conditional authoritative references and final-publication checklist.
+  Updated `docs/implementation-decisions.md`, including OP-25's central release-
+  blocker status. Added the production verifier `scripts/verify-terms-rendering.py`
+  and the `test:terms:html` package script.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Factual/legal evidence | Compared public statements with the specification, published methodology, public policy, calendar/selection/refresh, publication/cutoff, settlement/correction, performance and source-permission code. Actual operator/jurisdiction/contact and public-use rights are not established; the draft and documentation preserve those release gates. WIPO and current CMA guidance were reviewed as limited/conditional references, not legal signoff or a jurisdiction decision. Evidence and links: `docs/terms-page.md`. |
+| Relevant behavior contracts | **26 passed, zero failures/skips**: public navigation, regulation-market settlement and performance-page qualification/evidence behavior. Command: `node --conditions=react-server --test --test-concurrency=1 tests/navigation.test.mjs tests/market-settlement.test.mjs tests/performance-page.test.mjs`; `.tmp/040-contracts.log`. |
+| Actual production terms HTML | Ordinary and untrusted-query requests pass initial content/CSS, semantic/unique anchors, canonical/noindex, review date, honest publication gate, anonymous access and absence of fabricated contact/forms/query reflection. Every linked methodology/performance/settlement/correction anchor and privacy destination exists in the actual server HTML; `.tmp/040-html.log`. |
+| Shared privacy/navigation HTML | Privacy's two production requests pass unchanged disclosures, review date and release gate after the shared-header extraction; `.tmp/040-privacy.log`. All ten anonymous navigation pages, root/English redirects and invalid/unknown-route 404s pass; `.tmp/040-navigation.log`. |
+| Browser and visual review | **71 assertions pass** in installed Chrome via the Playwright skill/CLI; `.tmp/040-browser.log`, source/screenshots `output/playwright/040-*`. Covers skip/visible focus, eight topic links in Tab order, native anchor/history Back, keyboard navigation to every linked policy section, footer/current page, 320/360/390/430/1280 widths, 200% text, bounded line lengths, square status surface, no-JavaScript and blocked-storage access. English review day remains fixed with a French browser locale/Los Angeles timezone. Shared privacy header is checked with and without JavaScript. Desktop/mobile/release/no-JavaScript screenshots visually reviewed. No page/hydration errors, visitor cookies, browser storage writes, client API polling, non-GET requests or third-party requests occurred in the checked flow. |
+| Static/build checks | Production build, lint, final typecheck and changed-file whitespace checks pass; `.tmp/040-build.log`, `.tmp/040-lint.log`, `.tmp/040-types-final.log`. No database schema or data-service behavior changed. |
+
+No implementation defect or required local acceptance check remains unresolved.
+**External release blockers remain:** OP-25/27/28 owner, operator, audience/
+jurisdiction and verified contact/dispute decisions; OP-06/08/13 source/logo/
+reporting rights and an approved original-material ownership/reuse statement;
+the privacy page's OP-26 and related hosting/logging/analytics/retention gates;
+and applicable legal review, approved final wording and a genuine effective date.
+The owner's prior explicit deferrals were retained without requesting the same
+facts again. A visible draft status and noindex document the gate; they do not
+automatically prevent a deployment, and release review must enforce it.
+
+No account, paywall, betting/payment, acceptance tracking, contact backend,
+analytics, paid provider/model call, worker activation, migration, deployment or
+later feature was introduced. Owned acceptance server and browser were stopped;
+existing services and the user's development server remain untouched.
+
+## 041 - Contact availability and correction guidance
+
+Complete within the prompt's explicit missing-contact fallback: the reusable
+page, supported guidance and executable local acceptance checks pass. Tracker
+row 041 is ticked. A real public reporting route and launch remain blocked by
+the deferred owner/contact/correction decisions; destination verification is
+not claimed. Prompt 042 has not been started.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/contact` surface with short externalized English
+  content, semantic headings and shared square components. Added meaningful
+  metadata, the absolute canonical contact URL and the existing prelaunch
+  noindex/footer/current-page behavior in `src/app/[locale]/contact/page.tsx`.
+- Added `src/app/_components/contact-content.tsx`, `src/i18n/messages/contact.ts`
+  and `src/domain/contact-notice.ts`. The notice records a prelaunch unavailable
+  state, `releaseReady: false`, null destination and technical review date
+  10 October 2026. Extended `InformationNotice` to reuse the privacy/terms header.
+  The page explicitly says it collects/sends no reports and promises no response
+  time. No operator, address, phone or inbox is invented.
+- Added future report guidance for fixture/team identity, source and result/
+  outcome concerns: public match/revision URL, observed issue/proposed correction
+  and supporting public source if available. Explained audited result correction
+  against the same immutable locked pick without selecting a favorable revision.
+- Added ordinary privacy, terms, methodology and settlement links. Added the
+  shared contact-availability link beside the privacy choices, terms outcomes
+  and methodology corrections disclosures. Those pages retain their unresolved
+  process statements and publication gates.
+- Added `scripts/verify-contact-rendering.py` and `test:contact:html`. All page
+  navigation links use fixed internal paths via `informationHref`; query input
+  never supplies contact destinations, operators, markup or mail headers.
+  Added `docs/contact-page.md`, updated the OP-28 decision row and recorded the
+  owner-dependent destination/ownership checks in the decision log.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Correction guidance/evidence | Checked the specification, published methodology, immutable forecast/history contracts, stored result synchronization and settlement/audit readers. Reports do not themselves mutate results; audited verified result correction preserves the locked pick. No new review/response policy is inferred. Details: `docs/contact-page.md`. |
+| Relevant behavior contracts | **20 passed, zero failures/skips**: `node --conditions=react-server --test --test-concurrency=1 tests/navigation.test.mjs tests/market-settlement.test.mjs`; `.tmp/041-contracts.log`. No settlement, database or worker behavior changed. |
+| Actual production contact HTML | Four ordinary/hostile-query requests pass initial content/CSS, semantic anchors, review date, canonical/noindex, unavailable/release state, anonymous access, fixed same-origin link schemes and absence of forms/fake contact. CRLF mail-header, script/body, executable-destination and operator query fields do not enter visible copy or link attributes. Actual contextual links in all three policy sections and the settlement target pass; `.tmp/041-html.log`. |
+| Shared policy/navigation HTML | Existing privacy and terms production verifiers pass after adding contextual links and extending the notice component; `.tmp/041-privacy.log`, `.tmp/041-terms.log`. All ten anonymous navigation pages, root/English fallbacks and invalid/unknown-route 404s pass; `.tmp/041-navigation.log`. |
+| Browser and visual review | **67 assertions pass** in installed Chrome through the Playwright skill/CLI; `.tmp/041-browser.log`, source/screenshots `output/playwright/041-*`. Covers skip/visible focus, logical Tab order, keyboard policy/settlement links, contextual return links, history Back, footer/current page, 320/360/390/430/1280 widths, 200% text, bounded desktop lines, square status surface, no-JavaScript and blocked-storage access. The English review day stays fixed with a French browser locale/Los Angeles timezone. Desktop/mobile/report/no-JavaScript screenshots visually reviewed. The checked flow has no page/hydration errors, visitor cookies, storage writes, browser API polling, non-GET requests or third-party requests. |
+| Static/build checks | Typecheck, lint, production build and changed-file whitespace checks pass; `.tmp/041-types.log`, `.tmp/041-lint.log`, `.tmp/041-build.log`. |
+| Real public destination and ownership verification | **Blocked, not passed.** No owner-supplied lawful contact destination, approved public operator facts or responsible correction owner exists. No test inbox, message or fictitious evidence substitutes for OP-25/27/28. When supplied, the exact approved mailto/HTTPS destination and encoding/control/header boundaries need structural verification without sending a message. |
+
+The browser harness initially treated a fragment link's resolved absolute URL as
+a literal contact target; browsers retain the current page query when resolving
+`#main-content`. It now checks literal link attributes separately from same-origin
+resolution. Final browser checks pass; no product change was needed for that
+test assumption and no local implementation defect remains.
+
+**Launch blockers remain:** OP-25 correction/dispute owner, intake, evidence/
+review rules and real response capacity; OP-27 publication-approved operator/
+legal facts; OP-28 verified public contact. The owner's explicit 038/039 deferrals
+persist without repeated clarification. Incident/alert ownership (OP-29/30) and
+the prior privacy/terms/source-rights gates also remain unresolved. Visible
+unavailability and noindex document the gate; release review must enforce it.
+
+No mailbox, form backend, messaging service, test message, account, upload,
+comments system, analytics, paid provider call, worker activation, migration,
+deployment or later feature was introduced. Owned acceptance server/browser
+were stopped; existing services and the user's development server are untouched.
+
+## 042 - SEO and crawlable discovery
+
+Complete for local implementation and acceptance; tracker row 042 is ticked.
+Public indexing remains disabled pending verified release/publication decisions.
+Prompt 043 has not been started.
+
+### Changed behavior and files
+
+- Added `src/domain/discovery.ts` and `src/server/seo/{policy,metadata,proxy}.ts`
+  for fixed canonical origins, reusable complete social metadata, indexing policy,
+  safe WebSite JSON-LD and request-time noindex response headers. Preserved the
+  English locale/fallback, first-party brand assets and exact homepage title.
+- Added the stored-read `feed-route.tsx` factory and reused it in the home/date
+  routes; removed the superseded feed-shell wrapper. Metadata and initial HTML
+  share a request clock/read. Unique archive/page titles and genuine pagination
+  canonicals retain each collection/page identity. Match metadata uses the shared
+  helper, with revision/history variants noindex and canonicalized to the fixture.
+- Updated all four information routes and locale/root layouts to use consistent
+  canonical/social fields and dynamic indexing decisions. Root and stale-slug
+  redirects, known unavailable pages and unknown-fixture 404s are preserved.
+  Added the www HTTPS host redirect seam in `next.config.ts`.
+- Added `discovery-read.ts`, `discovery-routes.ts` and native robots/static/match/
+  archive sitemap routes. Reused the feed's public fixture SQL predicate, including
+  retained historical closed/void forecasts. Bounded 2,000-entry shards use stored
+  identity and material audit/change timestamps, not retrieval/request clocks.
+  Invalid/absent shards fail before a large-offset read. Robots advertises each
+  populated shard when indexing is approved and allows noindex variants to be read.
+- Added `GOAL_HINT_DEPLOYMENT_ENVIRONMENT` to `.env.example` and the recognized
+  runtime environment contract. Production classification and `NODE_ENV` cannot
+  replace verified release evidence or the privacy/terms/contact publication gates.
+  Their current false state retains noindex and empty prelaunch discovery XML.
+- Added `tests/discovery.test.mjs`, `tests/discovery.integration.mjs`,
+  `scripts/verify-seo-rendering.py`, `test:seo` and `test:seo:rendering`. Updated
+  the runtime-policy example contract and methodology rendering harness for the
+  metadata generator exports. Added `docs/seo-discovery.md` and the 042 decisions.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Whole unit suite | **953 passed, zero failures, one existing Windows/POSIX-mode skip**: `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/042-contracts-final.log`. The initial environment-example contract failure was corrected by registering the new classification field. Focused runtime/discovery/detail verification subsequently passed all **38** checks; final discovery boundary assertions passed all **6** checks. |
+| Genuine stored discovery | **Passed, no skips**, using owned isolated MySQL Community Server **8.4.11**; `.tmp/seo-capture-042/database.log`. Thirty-five genuine stored fixture projections exercised inventory, date/match queries, retrieval-only lastmod stability, audited rename/new canonical, closed historical retention after a competition-scope change, feed/detail/revision handoffs and no provider work. Missing-binary and an early owned-server identity-check failure did not count as acceptance; the clean isolated run passed. No installed service or existing database was targeted. |
+| Controlled production/staging HTML/XML | **84 passed: 24 staging, 60 synthetic approved production**; `.tmp/042-rendering-final.log`. The same staging-built artifact was restarted under each classification. Tests cover metadata/social assets, root/www/stale-slug redirects, true 404s, search/revision noindex, pagination self-canonicals, robots readability, native XML membership/lastmod and all 35 sitemap match destinations. Synthetic release evidence is bound only inside an ignored acceptance app. Node HTTP verifies the actual Host redirect because Node fetch ignores a custom Host header. |
+| Actual production release gate | **10 HTML/XML checks passed** with `GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production`; `.tmp/042-actual.log`. The real final build retains noindex headers/metadata, no visitor cookies, empty discovery XML and no advertised sitemap while verified release and publication facts remain false. |
+| No-JavaScript browser and visual review | **69 passed** in installed Chrome via the Playwright skill/CLI; `.tmp/042-browser.log`, ignored scripts/screenshots `output/playwright/042-*`. Native keyboard skip/next-page/detail navigation and Back work; all 35 fixture links are reachable across two pages; stored prediction content, unavailable states, metadata and revision/search directives remain readable. Tests cover 320/390/1280 widths and English/EAT content under French locale/Los Angeles timezone. No visitor cookies, API polling, non-GET requests or page errors; remote requests were blocked. Desktop archive/mobile match screenshots were visually reviewed. |
+| Shared information integration | Actual production navigation, privacy, terms and contact HTML verifiers pass; `.tmp/042-{navigation,privacy,terms,contact}.log`. Updated methodology harness passes **13 stored presentation scenarios**, reconciling **1,554** counts, gates, links, clocks and canonical/noindex behavior; `.tmp/042-methodology.log`. |
+| Static/build checks | Typecheck, lint, final production build and whitespace checks pass; `.tmp/042-types.log`, `.tmp/042-lint-final.log`, `.tmp/042-build-final.log`. The final isolated native-metadata build/crawl also passes after shard-bound enforcement. |
+
+**Launch blockers remain:** OP-25 correction/dispute policy and ownership;
+OP-27 operator/legal publication facts; OP-28 verified public contact; prior
+source/public redistribution rights, forecast qualification, hosting and
+operational release decisions. The owner's 038/039 deferrals persist without
+another clarification or fabricated approval. The source-owned release record
+remains unverified and the three policy publication flags remain false. Prompts
+048–049 must integrate actual reviewed evidence before indexing or deployment.
+Noindex is a crawl directive, not access control or a deployment lock.
+
+No paid/provider call, subscription, worker activation, production migration,
+deployment, analytics, mailbox, external message or search-engine submission was
+introduced. Owned MySQL instances, acceptance servers and browser contexts were
+stopped after verification; existing services and the user's development server
+remain untouched. Details and reproduction: [seo-discovery.md](seo-discovery.md).
+
+## 043 - Private recovery watchdog
+
+Complete for local implementation and acceptance; tracker row 043 is ticked.
+Live activation remains blocked by OP-29 and the existing domain/hosting gates.
+Prompt 044 has not been started.
+
+### Changed behavior and files
+
+- Added `src/server/recovery/{recovery-input,recovery-scan,recovery-service,
+  recovery-command}.ts`, `src/workers/recovery.ts`, `recovery` and
+  `test:recovery` commands. Private inspection/dry-run planning uses bounded,
+  database-clock scans for missed EAT runs, stale/stalled jobs, missing locks,
+  result backlog and unsettled stored changes. Inspection performs no repair
+  writes, lease acquisition or provider calls. Jobs/locks/audits support keyset
+  pagination; reviewed plans expire and contain at most 50 actions.
+  Canonical settlement discovery runs before acquiring the scan transaction,
+  so inspection also works with a single-connection application pool.
+- Required trusted operator bindings validate current credentials/permissions,
+  exact threshold approval and exact reviewed plans. No permissive credentials,
+  production thresholds, HTTP administration route or automatic scheduler are
+  shipped. Every action rechecks authority and durable ownership; only the
+  current owner can record completion. Audits retain coded actor/reason/proof,
+  affected IDs, redacted previous state and fixed outcomes without job/provider
+  payloads, credentials, owner tokens or raw error messages.
+- Reused existing daily selection, refresh eligibility, queue transitions,
+  publication receipts, cutoff closure, fenced result polling, settlement and
+  canonical mapping services. Interrupted imports retain their original
+  receipts/policy; committed/degraded manifests retain their sealed membership.
+  Published refreshes return their existing revision. Immutable terminal refresh
+  receipts remain final. Eligible interrupted work retains its original job,
+  attempt cap, envelope, model/cost references, window and equal-jitter backoff.
+  Recovery cannot reopen cutoff/locked cycles or replace locked forecasts.
+- Extended `job-contract.ts`, `job-mysql-store.ts` and
+  `refresh-mysql-store.ts` with transactional, expected-version recovery of an
+  original job and reuse of its complete member eligibility checks. Preserved
+  classified lost-lease errors across the database's sanitized error boundary.
+  `result-sync-service.ts` now drains at most the existing configured batch cap
+  per invocation, resumes committed batches before fresh dispatch and honors
+  cancellation without bypassing account fencing, quotas or polling horizons.
+- Added append-only `RecoveryAudit` and stale/pending-job indexes in both Prisma
+  schema files and migration
+  `20261010123000_recovery_watchdog/migration.sql`. Audits have deterministic
+  intent/outcome/failure keys, restrictive job references and checked JSON hashes
+  on reads. The application/recovery role needs SELECT/INSERT only on this table;
+  migration credentials remain separate.
+- Added `tests/recovery-watchdog.{test,integration}.mjs` and
+  `tests/helpers/recovery-fixtures.mjs`. Scoped the existing daily-selection
+  progress test to its own job type so calendar-dependent higher-priority jobs
+  from other cohorts cannot consume its two intended claims. Production queue
+  priority and scheduling behavior are unchanged.
+  Hardened the shared owned-MySQL test helper against intermittent empty Windows
+  CLI captures: at most three read-only identity probes are attempted before
+  refusing access. Every mutation still requires the full owned directory,
+  live child, server UUID and port checks; missing or mismatched proof never
+  authorizes a write or cleanup.
+- Added [the operator runbook](recovery-watchdog.md), updated the worker README
+  and recorded OP-29 thresholds, identity, review and independent invocation
+  requirements in `implementation-decisions.md`. The CLI provides an independent
+  detection/repair route when an enqueue-only hosted cron fails; its supervision,
+  frequency, owners and escalation still require approval before live operation.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Whole unit suite | **957 passed, zero failures, one existing Windows/POSIX-mode skip**: `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/043-unit-final.log`. Includes four new policy/authentication/CLI/bounded-backlog tests. |
+| Genuine watchdog and selection acceptance | **32 passed, zero failures/skips**: four focused unit checks, 15 watchdog SQL checks and 13 existing daily-selection SQL checks; `.tmp/043-recovery-selection-final.log`. Used owned isolated MySQL Community Server **8.4.11**, synthetic clocks/policies/provider responses and separate application/migration accounts. |
+| Final inspection/pool acceptance | **19 passed, zero failures/skips** after the final scan/pool and owned-probe changes; `.tmp/043-recovery-owned-probe-final.log`. The genuine SQL dry-run test additionally proves canonical settlement inspection succeeds with a single-connection application pool and changes no rows. Earlier empty-capture identity refusals remain failed attempts, not acceptance. |
+| Recovery invariants | Real SQL checks cover worker crashes, duplicate/concurrent delivery, stale original and watchdog owners, crash after canonical commit, original attempt/jitter/cap preservation, expired plans and unauthorized/dry-run behavior. They also prove late lock reconstruction, existing revision reuse, missed EAT cron recovery, original interrupted-import receipt reuse, immutable degraded membership, no false emptiness, confirmed provider-ID alias review/conflict holds, unresolved settlement and quota-gated result polling without fabricated FT. |
+| Related SQL regression | **99 other checks passed, no skips** across durable jobs, cutoff locking, prediction refresh, refresh retention, result synchronization and settlement; `.tmp/043-sql-final.log`. That initial seven-file run reported 123/127 passes: the two failing subtests and their parents exposed the selection test's shared-type/calendar assumption and loss of the classified stale-owner error. Both were corrected and their complete suites subsequently passed in the 32-check acceptance run above. |
+| Migration/schema | Client generation and schema validation pass; `.tmp/043-generate.log`, `.tmp/043-validate.log`. Genuine SQL acceptance deploys committed migrations under the dedicated DDL account and explicitly verifies applied migration state and zero schema drift. The separately authorized local application installation is described below; no production database was migrated. |
+| Static/build checks | Whole-repository lint, final focused lint, typecheck, production build and whitespace checks pass; `.tmp/043-lint-final.log`, `.tmp/043-lint-changes.log`, `.tmp/043-typecheck-final.log`, `.tmp/043-build-final.log`. Final single-pool lint/types/build also pass in `.tmp/043-pool-{lint,types,build}.log`. No UI was changed. |
+
+Early owned-server startup/identity-check failures did not count as acceptance.
+Subsequent clean isolated SQL runs passed. The interrupted owned test processes
+and their temporary MySQL server were stopped after verifying the exact process,
+port and data-directory identity; the installed XAMPP service and the user's
+development server were left running.
+
+**Live blockers remain:** OP-29 owner/backup owner, exact thresholds, allowed
+automatic actions, repair reviewers, authenticated workload controls and an
+independently supervised detection schedule; OP-30 alert destinations, OP-31
+backup/restoration/retention and OP-32 hosting/capacity. Existing source rights,
+provider/account/model/quality/budget approvals and OP-25/27/28 publication
+decisions remain unresolved. No production binding, provider call, scheduler,
+external message, deployment or operational response commitment was introduced.
+
+### Separately authorized local database setup
+
+The owner created an empty `goal_hint_db` on XAMPP's MariaDB 10.4.32 at
+`localhost:3306`, then explicitly approved a separate compatible MySQL 8.4
+installation on port 3307. Installed the already verified MySQL Community Server
+8.4.11 binaries in the current user's private `%LOCALAPPDATA%\GoalHint` directory
+and created `goal_hint_db` there. The existing MariaDB server/database remain
+unchanged. All committed migrations, including RecoveryAudit, were deployed
+through a separate database-scoped migration account; actual schema verification
+and application readiness pass (`.tmp/043-local-db-{verify,health}.log`).
+
+The ignored, ACL-protected `.env.local` selects `127.0.0.1:3307` and enables only
+the database capability. The application account uses the owner-supplied password;
+root and migration administration use separate generated private secrets. The
+application reads all 61 models and has constrained domain writes, no DDL or
+migration-history reads, and DELETE only on disposable response cache. Actual
+application probes verify committed/rolled-back writes and refusal of audit
+updates, prediction deletion and migration reads
+(`.tmp/043-local-db-application.log`). No fixture or prediction data was seeded.
+An initial local grant-column typo and a numeric conversion in the private
+verification probe were corrected; the complete application checks then passed.
+Controlled shutdown/restart preserved the server UUID and exact data directory.
+Repeat deployment, drift verification, application read/write/rollback/privilege
+checks and readiness all passed again after restart.
+The production build also passes with the wired local environment
+(`.tmp/043-wired-build.log`). Actual development HTTP checks return 200 for
+`/en` and the existing 503 unavailable response for the match API because its
+required competition list remains unselected before feed SQL is executed
+(`.tmp/043-local-web.log`). The database contains 18 applied migrations and zero
+football fixtures; no provider or forecast data was fabricated for verification.
+
+Registered an idempotent hidden launcher in the current user's Windows login
+startup. This is a persistent local development instance, independent of both
+XAMPP and the disposable test servers. See [local-database.md](local-database.md)
+for private paths, account roles, start/stop commands and future migrations.
+No credentials are recorded in the repository. Live recovery, providers and
+publication retain their existing approval gates.
+
+## 044 — Operations monitoring (10 October 2026)
+
+**Status:** local implementation and acceptance complete; tracker 044 checked.
+**Scope:** private monitoring implementation and local verification, following
+the owner's explicit direction to keep incident ownership, destinations,
+thresholds and retention unresolved. Live activation and field/search/analytics
+evidence remain blocked. Prompt 045 was not started.
+
+### Implemented
+
+- `src/server/monitoring/monitoring-{contract,scan,rules}.ts`: strict allowlisted
+  database-clock snapshots, approved-policy/current-credential checks, bounded
+  EAT run/fixture/cycle/job/model breadcrumbs and fixed metric/reason dimensions.
+  Reads cover run progress, elapsed job duration/failures/retention, source
+  failures, cutoff misses/missing locks/stale data, poller ownership/delay,
+  unresolved/overdue results, unapplied batches, reliable final-badge delays and
+  recovery outcomes. Inspection never dispatches providers or mutates ownership,
+  quota, jobs, forecasts or recovery records.
+- Canonical quota-state schemas are reused from `football/quota-mysql-store.ts`.
+  Shared-account metrics distinguish conservative reservations from actual
+  launches/uncertainty; cover rolling second/minute use across provider periods,
+  remaining capacity, essential use/reserve consumption, 429s/provider errors,
+  pending reset reconciliation and credential/subscription failure/expiry.
+- `monitoring-alerts.ts` and `monitoring-mysql-store.ts`: one fixed-size durable
+  outbox, replica/restart deduplication, fenced notification claims/acknowledgment,
+  bounded delivery/deadlines, reminder/resolution/reopening and finite pruning.
+  Older/unknown evidence cannot clear newer incidents. Strict messages include
+  coded owner/destination/approval, severity, incident/delivery IDs and the runbook.
+  The local bounded memory sink makes no external/file writes.
+- `monitoring-evidence.ts`: eight separate budget categories; the monthly payable
+  football cap cannot exceed US$45. Canonical AI/research liability remains
+  estimated; exact integer usage/decimal rates and invoice/fee evidence stay
+  distinct. Stale/partial/missing bills stay pending and cannot clear known cost
+  alerts. No automatic plan change, increased cap or spending bypass exists.
+  Private mobile aggregate summaries preserve verified lab/field/environment
+  labels, units/sample counts and p75 targets. Actual field/search sources and
+  visitor usage metrics remain explicitly pending/disabled.
+- `server-measurements.ts`, public API route wrappers and the shared cache:
+  optional server latency/cache histograms with five fixed route families,
+  at most 25 series and explicit retention. Hooks start disabled, with no visitor
+  tracking or upload. Public stored reads remain usable if telemetry/cache fails.
+- Private `monitoring-command.ts` / `src/workers/monitoring.ts`, `npm run monitoring`
+  (`inspect`/`notify` with a trusted approved binding), `test:monitoring` and
+  `test:monitoring:overhead`. No permissive live binding, recipient, scheduler,
+  hosted account or public monitoring route is shipped.
+- Migration `20261010153000_operations_monitoring` adds the seeded singleton,
+  enforces `id=1`, and adds time-window indexes to existing operational tables;
+  Prisma schema and reviewed snapshot updated. The already-authorized local
+  MySQL instance now has 19 migrations/62 models. Its application receives only
+  SELECT/UPDATE (`stateJson`) on the new table; INSERT/DELETE/DDL remain denied.
+  The singleton stays empty/unapproved; this activates no monitor or telemetry.
+- Added `docs/operations-monitoring.md`; updated the privacy data-flow register,
+  OP-30/implementation decisions and local database runbook. The prelaunch public
+  privacy summary remains accurate; no public policy, owner/contact fact or
+  analytics consent assumption was invented.
+
+### Verification
+
+| Check | Actual result / evidence |
+| --- | --- |
+| Whole unit suite | **965 passed, zero failures, one existing Windows/POSIX-mode skip** (966 checks): `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/044-unit-final.log`. Eight new tests cover strict inputs/redaction/authorization, representative actionable alerts, concurrency/retry/revocation, unknown/older evidence, notification fencing, retention, separate budgets/rates, disabled bounded server hooks and lab/field labels. |
+| Genuine MySQL monitoring/cache acceptance | **32 passed, zero failures/skips**, including eight monitoring units, eight monitoring SQL checks (parent plus seven cases) and 16 shared-cache SQL checks: `.tmp/044-monitoring-sql-final.log`. Owned isolated MySQL Community Server **8.4.11**, synthetic clocks/policies/provider responses and separate DDL/application roles; no external provider call. Proves read-only collection, canonical correlations/quota reconciliation, replica/restart deduplication, stale locks/jobs/data, reliable final-result delay then canonical settlement, policy revocation/change refusal, bounded retention, permission denial and one-connection inspection. Cache regression proves original timestamps, invalidation/fill races, source permissions, outages and private maintenance. |
+| Final focused monitoring check | **16 passed, zero failures/skips** on the final code, including the whole-sample mobile-evidence verifier and launch guards; `.tmp/044-monitoring-accepted.log`. A stricter guard initially omitted MySQL's JSON `UNSIGNED INTEGER` subtype; genuine SQL assertions and a read-only literal probe caught the undercount. The final guard accepts signed/unsigned integer and double numeric representations while excluding null. Earlier guard attempts remain in `.tmp/044-monitoring-{final,confirmed,launch-diagnostic}.log` and do not count as acceptance. |
+| Measured overhead | `npm run test:monitoring:overhead`: five measured rounds of 250,000 records after warmup; median **0.841 µs/record**, disabled wrapper **0.267 µs/call**, exactly **25 series / 3,064 serialized bytes**; `.tmp/044-overhead.log`. This is a local CPU microbenchmark, not a load/uptime test or mobile production percentile. No live threshold was inferred. |
+| Static/build | Whole-repository lint, schema/client generation/validation, `npm run typecheck`, production build and whitespace checks passed; `.tmp/044-{lint-final,generate-final,validate,typecheck-final,build-final}.log`. Final focused lint/types passed in `.tmp/044-{lint-accepted,types-accepted}.log`. An initial direct TypeScript run raced the existing dev watcher's generated type files; normal Next type generation/typecheck subsequently passed. |
+| Installed local database | Forward migration, zero schema drift, readiness and actual application read/commit/rollback/protected-history checks passed for all **62 models**; `.tmp/044-local-db-{deploy,verify,health,application}.log`. No-op singleton update and denied INSERT/DELETE passed; `.tmp/044-local-monitoring.log`. No monitor policy, alert, recipient or provider data was seeded. |
+| Secret/flow review | Changed/untracked repository files were compared against configured private credential values without printing them. No local environment/admin file or configured credential is included. Privacy flow register distinguishes disabled hooks, the private outbox, local sink and unresolved hosted recipients/retention. |
+
+Early SQL attempts exposed two incorrect test-fixture calls (publication argument
+order and a null quota work key); corrected tests then passed on clean isolated
+servers. Those initial attempts do not count as acceptance. The existing XAMPP,
+persistent local MySQL and development processes were left running.
+
+**Remaining release/activation blockers:** OP-26 no visitor analytics decision/
+approved field source and privacy retention/recipients; OP-29/30 actual primary/
+backup incident owner, policy thresholds, destination/integration, independently
+supervised detection/heartbeat and approved live retention; OP-12/14 actual
+infrastructure and payable billing evidence; OP-31 backup/canonical retention;
+OP-32 hosting/account-wide deployment supervision. Search impressions/indexed
+pages/CTR have no authorized source, and returning visits/match-detail visitor
+use remain disabled. No production traffic percentile, uptime, final paid bill,
+provider qualification or live notification delivery is claimed. Existing
+OP-25/27/28 publication/legal/contact and source/model/quality gates persist.
+
+## 045 — Backup and restore (10 October 2026)
+
+**Status:** local implementation and acceptance complete; tracker 045 checked.
+The owner explicitly chose **keep unresolved; verify locally only**. Live
+recovery ownership, RPO/RTO, retention, storage/PITR and scheduled operation
+remain release blockers. Prompt 046 has not been started.
+
+**Changed files and behavior:**
+
+- `scripts/backup.py`, `scripts/lib/backup_{contract,crypto,engine}.py` and
+  `scripts/lib/mysql_{backup,tools}.py` implement private one-shot encrypted
+  snapshot, owned-log archive and disposable base/PITR restore. A trusted binding
+  verifies full policy, storage/access, writer/DDL fencing and current approvals.
+  There is no bundled live authorization, production target or promotion command.
+  Artifacts authenticate identity, exact coordinates, compatibility and inventory;
+  credentials/keys stay outside Git and raw private diagnostics are withheld.
+- `scripts/lib/isolated_mysql.py` reuses the existing ownership-checked local
+  server helper, with an explicit opt-in ROW-binlog drill and disabled events.
+  `tests/helpers/mysql-instance.mjs` preserves its existing import interface;
+  `tests/prediction-pipeline.mjs` accepts optional isolated instance settings.
+  No installed service, persistent database setting or application schema changed.
+- `src/server/monitoring/monitoring-backup.ts` and the existing monitoring
+  contract/rules/scan/command accept fresh approved aggregate backup evidence.
+  Fixed backup-failure, stale-backup and pending-restore conditions reuse the
+  private deduplicated outbox; missing/unverified evidence stays pending.
+  No live adapter, destination, visitor analytics or arbitrary cadence is enabled.
+- `tests/backup-restore.{test,integration}.mjs`,
+  `tests/helpers/backup-fixtures.mjs` and monitoring SQL assertions exercise
+  encryption, corruption, authorization, log continuity, real restoration,
+  permissions, original history and conservative worker/quota restart.
+  `package.json` adds `backup` and `test:backup`; `.gitignore` excludes artifacts.
+- `docs/backup-restore.md` supplies local/operator procedures, exact hosted
+  qualification steps, compatible rollback, source-permission reconciliation,
+  safe resumption and health requirements. Database/local-database/monitoring/
+  privacy inventories and implementation decisions record actual local scope and
+  unresolved release requirements without inventing retention or public promises.
+
+**Executed evidence:**
+
+| Check | Actual result |
+| --- | --- |
+| Encrypted backup and real restore | **9 passed, zero failures/skips**: `npm run test:backup`, genuine isolated MySQL Community Server **8.4.11**; `.tmp/045-restore-final.log`. Synthetic source, 19 migrations, 62 application models plus migration history (**63 tables**), two immutable forecasts, sealed manifests, locked/current references, schedule correction, recovery audits, result/settlement corrections and a counted uncertain dispatch. Base import and two-log replay matched complete-row counts/hashes, schema, FKs/orphan checks and triggers. Wrong keys/corruption and broken chains refuse; tampering refuses before account preparation. |
+| Measured recovery | Base restore **19,103 ms**, recoverable UTC **2026-10-10T06:17:17.203Z**; two-log PITR **13,300 ms**, recoverable UTC **2026-10-10T06:17:22.724Z**. Durations include target creation, import/replay, verification/reconciliation and cleanup. RPO/RTO comparison is **unapproved**; these are local observations, not hosted disaster-recovery qualification or future incident/cutover times. |
+| Restored access and safe restart | Fresh scoped principals/definers; events disabled; no initial app identity/provider credentials. Application DELETE against protected history, DDL and migration-history access are denied. Restored evidence is rebuilt under current authority, then revocation and expiry deny reuse without changing stored content. Publication/cutoff receipts return the original forecast, stale acknowledgement fails, expired work stays expired, and independently verified synthetic exhausted capacity prevents outbound reservation; older larger capacity cannot refill it and the next unconfirmed reset stays blocked. No upstream call occurs. |
+| Monitoring regression | **16 passed, zero failures/skips**: `npm run test:monitoring`; `.tmp/045-monitoring-final.log`. Genuine MySQL verifies existing collection/delivery/recovery/retention/grants and single-connection collection with pending or explicitly approved backup health. |
+| Whole unit suite | **970 passed, zero failures, one existing Windows/POSIX-mode skip** (971 checks): `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/045-unit-all.log`. Final backup units also passed in the restore command after import cleanup and the restored-evidence test correction. |
+| Static/build | Whole-repository lint, Next type generation/TypeScript, production build and whitespace checks passed: `.tmp/045-{lint-final,typecheck-final,build-final}.log`. Configured-credential review passed across all 28 changed/untracked files without exposing values; no local environment/admin file is included. No schema migration was needed. |
+
+Initial drill attempts exposed a slow per-table process collector, a Windows
+table-name casing assumption and a test that passed a deserialized snapshot to
+an in-process prepared-object assertion. The collector now batches queries;
+tests handle server casing and rebuild evidence with the same verified authority
+before exercising revocation/expiry. Final clean disposable drills passed;
+earlier attempts are not acceptance evidence. Owned sources, targets and artifacts
+were cleaned up. Existing XAMPP, persistent MySQL and development processes were
+left running.
+
+**Remaining release blockers:** OP-31 primary/backup owner, numeric RPO/RTO,
+approved snapshot/archive/drill cadence, per-class source/history/backup/binlog
+retention, storage/failure-domain/provider capability, TLS/access/key escrow and
+off-host restore proof; OP-08/13 permission-compatible reuse/deletion obligations;
+OP-26/30 telemetry retention and independently supervised approved alerts;
+OP-12/14/32 infrastructure budget/hosting; existing legal/contact/source/model/
+quality/release approval gates. There is no live backup schedule, hosted log
+transport, source-data deletion, production restore or claimed DR completion.
+
+## Live API-Football operation (10 October 2026)
+
+Status: implemented and verified against owned MySQL with synthetic provider responses.
+The owner's free-plan key verifies (`/status`), current-season fixtures are served, and 1,241
+current competitions are configured. No tracker row changes; 011/012/046–049 remain open.
+
+### Changes
+
+- `src/server/live/` composes the existing services into a fallback-only live runtime:
+  owner-approval register and verifier, `/status`-seeded provider-day quota router,
+  plan-sized workload and policies, trusted authorities, runtime composition and the runner
+  loop. `src/workers/live.ts` (`npm run live`), `scripts/live-status.py` and
+  `scripts/live-competitions.py` are the operator entry points.
+- Runtime policy: publication without AI when AI is disabled; a zero payable amount for free
+  plans; production scope in development mode for loopback databases only.
+- Refresh plans may omit AI (`ai: null`, null pin); migration
+  `20261010170000_fallback_only_refresh_intent` admits that shape. Single-dispatch phases may
+  retry limiter pacing.
+- Quota: the essential reserve keeps a one-sixth share below the 120,000 ceiling instead of
+  making small plans essential-only.
+- Optional `refreshCapacity` (daily selection) and `cadence` (result sync); both keep existing
+  policy hashes when omitted. `dailySelectionEnvelope` is shared by the HTTP trigger and the runner.
+- Docs: [live operations runbook](live-operations.md), README, decision register and the
+  quota/results/selection/refresh/local-database runbooks.
+
+### Local database
+
+`npm run db:deploy`, `db:status` and `db:verify` passed on the local MySQL 8.4.11 target;
+`PredictionRefreshIntent_shape_v2` is in place. The isolated end-to-end test mirrors the local
+application role's exact grants. It showed the catalog importer updating insert-only
+`FootballImport`/`FootballFixtureAudit` rows; the importer now inserts both once with final
+values, so no grant change is needed.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed: lint, type-check, **980 tests (979 passed, 1 existing Windows POSIX-mode skip)** and production build. |
+| Owned-MySQL suites | refresh 34, selection 19, results 26, cutoff 26, publication 25, lifecycle 27, settlement 28, monitoring 16, jobs 23, feed 47, catalog 28, quota 28, recovery 19: all passed, none skipped. |
+| `tests/live-runtime.integration.mjs` | 5/5 with the local role's exact grants: seven-date import, two published fallback forecasts, public feed, leased result polling and provider-free settlement/cache maintenance. |
+| `npm run live:status` | Configuration and owner approvals ready apart from the competition list; the account check reports `credential-failure` for the current key. |
+
+## 046–049 — Staging, shadow qualification, release readiness and production deployment (back-filled 11 October 2026)
+
+**Status:** not started; tracker rows 046–049 unchecked. No staging or production
+deployment configuration, qualification run, release-readiness command or
+production deployment exists in the repository. The local live operation above
+is a loopback fallback-only runtime, not a 046 staging environment or a 049
+production release.
+
+**Blockers (owner decisions or evidence):** OP-32 hosted deployment and account
+isolation (046); OP-33 quality qualification and measured commitments (047, which
+also needs 011/012/014); OP-34 release decision and signoff (048); OP-35 domain
+and production operation (049). Earlier operating gates (OP-12/14/26/29–31)
+also remain open.
+
+## 050 — Feed query extensions (verified 11 October 2026)
+
+**Status:** implementation and acceptance complete; tracker 050 checked. The code
+landed in commit `3d827f4` ("Redesign the feed screens…"), and commit `68605aa`
+added the `picks` filter. The `3d827f4` message records that the MySQL checks
+had not been run; they were run and passed on 11 October 2026.
+
+**Changed behavior and files:**
+
+- `src/domain/feed-query.ts`: `league`/`country`/`market` comma lists (repeated
+  form keys join identically; deduplicated, sorted or policy-ordered; at most 50
+  leagues and 50 countries), `prob=MIN-MAX`, `picks=all|only`, `sort` with
+  `dir=asc|desc` (defaults omitted), presets Today/Tomorrow/Next 3/7/30 days and
+  explicit ranges up to 31 days. `sortMarket` is removed and rejected.
+- `src/server/matches/feed-read.ts` and `feed-service.ts`: one shown-pick join per
+  fixture (highest selected probability among the selected families, ties in
+  policy order), league/country/probability/picks filters, ordering in both
+  directions with missing picks last and kickoff/ID ties, and league options with
+  approved logos and cohort fixture counts. Feed cache projection 4 → 5.
+- `src/domain/fixture-snapshot.ts`, `fixture-read.ts` and `match-feed.ts`:
+  `competition.logoUrl`, option `logoUrl`/`fixtures`, and coverage dates up to 31.
+- `src/domain/feed-presentation.ts` (new): `bestCardFamily` mirrors the SQL shown
+  pick. Also `paginationItems` (at most seven slots), `feedRowNumber`, and league
+  and country option ordering.
+- `src/domain/feed-controls.ts`, `feed-date-navigation.ts` and `src/state/feed.ts`:
+  Reset semantics and preset handling.
+- Tests: `tests/feed-query`, `feed-controls`, `feed-presentation` (new) and
+  `match-feed.test.mjs`; `tests/match-feed.integration.mjs` covers best-pick order
+  in both directions, ties and the probability window. On 11 October 2026 it also
+  gained MySQL assertions for the `country` filter, mixed known/unknown list
+  members and league option fixture counts.
+- Docs (11 October 2026): [stored match feed](match-feed-api.md) and
+  [search and filters](search-filter-controls.md) now describe 050 behavior;
+  decisions are in [implementation decisions](implementation-decisions.md).
+
+**Executed evidence (11 October 2026, pinned Node 24.18.1 from fnm, owned
+isolated MySQL Community Server 8.4.11 under `.tmp/mysql-tools`):**
+
+| Check | Actual result |
+| --- | --- |
+| Feed API and MySQL (`test:feed`) | **55 passed, zero failures/skips**: `node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs`; `.tmp/052-stage0-feed-final.log`. The run includes the new country/list assertions. An earlier run without them also passed 55/55 (`.tmp/052-stage0-feed.log`). |
+| Feed page and MySQL (`test:feed-page`) | **13 passed, zero failures/skips**: `.tmp/052-stage0-feed-page.log`. |
+| Query, controls, pagination, presentation and card units | **46 passed, zero failures**: feed-query, feed-controls, feed-pagination, client-state, feed-presentation, match-card and feed-page units; `.tmp/052-stage0-state.log`. |
+| Lint | ESLint passed with no warnings on the feed query, read, service and presentation sources and on the edited integration test. |
+| Types | `tsc --noEmit` reports 4 errors, all in `src/server/football/provider-trial-evaluation.ts` (unfinished 052 trial evaluation); none in 050 code; `.tmp/052-stage0-tsc.log`. |
+
+These runs used the working tree, which also contains uncommitted, partial 052
+edits to `feed-read.ts`, `feed-service.ts` and `fixture-read.ts`. While
+`publicPolicy.features.providerOdds` is false those paths omit the odds join and
+prices, and `odds=` is rejected as an unknown key.
+
+## 051 — Feed screen layout (status recorded 11 October 2026)
+
+**Status:** implemented, acceptance not complete; tracker 051 unchecked. The
+screens landed in commit `3d827f4` and were refined in `64c8b9e`, `52ce20f`,
+`68605aa`, `7a82bb1` and `4239ba1`: phone filter card, chip rows and compact
+cards; desktop top bar, filter panel, Apply with live count, table and numbered
+pagination; disabled odds controls. A separate workflow is still changing
+`src/components/**`, `src/app/_components/**` and the theme.
+
+**Checks:**
+
+- `npm run test:feed-page:rendering` passed 47 server-rendered scenarios on
+  10 October 2026 (`.tmp/051-feed-page-rendering.log`). That run predates later
+  UI edits and did not record its Node version.
+- `npm run test:detail-page:rendering` failed: the redesigned match details page
+  no longer renders the `detail.result` text "Match result and settlement" that
+  `scripts/verify-match-feed-rendering.py` asserts
+  (`.tmp/051-detail-page-rendering-rerun.log`). That page belongs to 035 and the
+  UI workflow.
+- Not re-run on 11 October 2026: both rendering checks run an isolated
+  `next build`, which this run excluded. The default local Node is 26.4.0, not the
+  pinned 24.18.1.
+- Row numbering and page sequences are unit-tested (`feedRowNumber`,
+  `paginationItems`).
+
+**Blockers:** the 051 acceptance needs a browser. It has not been run: template
+comparisons at 320/375/400/430/768/1024/1280/1440 px, keyboard paths, focus
+rings, screen-reader names, reduced motion and no-JavaScript chip links. The
+detail rendering regression above must be fixed or the check updated by the UI
+workflow. The concurrent UI work must land first.
+
+## 052 — Provider odds import (10–11 October 2026)
+
+**Status:** implementation complete for the rights-off state; tracker 052
+**unchecked**. Named blockers:
+
+1. **Counted odds trial pending the plan upgrade.** The real `/odds` envelope
+   (parameter echo, 10-row paging, whether `date` honours the timezone, the
+   `update` format, string prices, label shapes, bytes per page, the launch bet
+   ids and names, per-bookmaker coverage and plan inclusion) is unconfirmed. The
+   owner decided on 10 October 2026 not to run it on the current Free plan. The
+   command, findings and ~20-request allowance are ready in
+   [football-provider-trial.md](football-provider-trial.md#odds-qualification-prompt-052).
+2. **OP-36 odds display rights.** They are unconfirmed, so odds are stored
+   privately, `publicPolicy.features.providerOdds` stays `false`, the public
+   projection and responses carry no prices, and `odds=` is rejected as an
+   unknown key. The odds UI controls stay disabled; the UI step (price beside
+   each pick, live odds slider, market-implied labels and copy) follows a
+   recorded rights decision, after the concurrent UI workflow lands.
+
+Owner decisions and every technical choice are recorded in
+[implementation decisions](implementation-decisions.md) (052 section and OP-36).
+The runbook is [provider odds](provider-odds.md).
+
+### Changed behavior and files
+
+- **Adapter contract** (`src/server/football/api-football-contract.ts`,
+  `api-football-normalize.ts`, `api-football-adapter.ts`): `/odds` (10-row
+  pages), `/odds/bets` and `/odds/bookmakers` in a separate `adapter.odds`
+  namespace outside evidence and fallback; `ODDS_CONTRACT_VERSION`; strict
+  normalization with string prices, per-row `update` times and bet-level
+  quarantine; `pageSizeOf`.
+- **Counted trial** (`provider-trial-contract.ts`, `-input.ts`, `-runner.ts`,
+  `-evaluation.ts`, `scripts/football-provider-trial.py`): odds, odds-bets and
+  odds-bookmakers tasks; findings `odds-pagination`, `odds-update-times`,
+  `odds-bet-catalog`, `odds-coverage` and `odds-display-rights`; a separate
+  `oddsSuitability` verdict.
+- **Pure domain** (new `src/domain/odds.ts`, `src/domain/odds-markets.ts`):
+  exact decimal parsing, half-up hundredths, `odds=` range parsing,
+  `proportional-v1` de-margin and the versioned `launch-odds-v1` mapping.
+- **Schema** (`prisma/schema.prisma`, snapshot, reviewed migration
+  `20261010200505_provider_odds_import`): five odds tables, NULL-safe CHECKs, a
+  composite snapshot foreign key and two `publicVersion`-keyed cache triggers.
+  67 models; backup inventory 68 tables.
+- **Import modules** (new `src/server/odds/`): contract, input validation,
+  MySQL store, import service, read helpers and durable jobs (`odds.import`,
+  `odds.catalog`).
+- **Configuration** (`runtime-policy.ts`, `live-approvals.ts`,
+  `public-policy.ts`, `.env.example`): `GOAL_HINT_ODDS_IMPORT_ENABLED` (default
+  `false`), `GOAL_HINT_ODDS_BOOKMAKER_ID`, `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF`,
+  the `football-odds-rights` evidence requirement (never required to start the
+  runner) and `features.providerOdds: false`.
+- **Live runtime** (`live-plan.ts`, `live-account.ts`, `live-authorities.ts`,
+  `live-runtime.ts`, `live-runner.ts`, `scripts/live-status.py`,
+  `recovery-service.ts`, `monitoring-contract.ts`, `monitoring-scan.ts`): the
+  odds workload (floor, spare, reserve, eligibility), a quota gate fed by the
+  open provider day's counters (`counters()`) and the enrichment attempts, a
+  separate odds registry and dedicated worker, slot
+  scheduling with the catalog first, write-time expiry each tick, expiry of
+  odds jobs past their slot, the informational `odds-requests` metric and status
+  output.
+- **Read path** (`src/domain/feed-query.ts`, `feed-controls.ts`,
+  `fixture-snapshot.ts`, `match-feed.ts`, `match-detail.ts`,
+  `fixture-reconciliation.ts`, `match-card.ts`, `live-refresh.ts`,
+  `src/state/feed.ts`, `src/server/matches/feed-read.ts`, `feed-service.ts`,
+  `fixture-read.ts`, `detail-service.ts`): the `odds=MIN-MAX` key (accepted only
+  with the effective flag on; extremes omitted), the shown-pick price join and
+  filter driven by the same effective flag as record prices, record `prices`,
+  the detail `odds` envelope, equal-version merges, `selectedCardPrice`, feed
+  cache projection 6 and detail projection 4.
+- **Tests:** new `tests/odds.test.mjs`, `tests/odds-import.test.mjs`,
+  `tests/odds.integration.mjs`, `tests/fixture-prices.test.mjs` and
+  `tests/helpers/odds-fixtures.mjs`; odds cases in the adapter, normalizer,
+  provider-trial, runtime-policy, live-binding, feed-query, feed-controls,
+  match-feed, public-cache, client-state, match-detail and live-client-refresh
+  unit tests; and in the match-feed, match-detail, quota, live-runtime,
+  recovery-watchdog and operations-monitoring integration tests. Integration
+  helpers grant the odds tables, and the backup count is 68. `package.json`
+  gains `test:odds`.
+- **Docs:** new [provider-odds.md](provider-odds.md); updated
+  [api-football-adapter.md](api-football-adapter.md),
+  [football-provider-trial.md](football-provider-trial.md),
+  [quota-limiter.md](quota-limiter.md), [live-operations.md](live-operations.md),
+  [durable-jobs.md](durable-jobs.md), [recovery-watchdog.md](recovery-watchdog.md),
+  [operations-monitoring.md](operations-monitoring.md), [database.md](database.md),
+  [local-database.md](local-database.md), [backup-restore.md](backup-restore.md),
+  [match-feed-api.md](match-feed-api.md),
+  [public-response-cache.md](public-response-cache.md),
+  [client-state.md](client-state.md), [match-details.md](match-details.md),
+  [match-detail-api.md](match-detail-api.md), `README.md`, `src/server/README.md`
+  and `src/workers/README.md`.
+
+No UI component, theme or brand file was changed: `src/components/**`,
+`src/app/_components/**` and the brand files belong to the concurrent UI
+workflow, and 052 needs no UI change while `providerOdds` is false.
+
+### Acceptance checks
+
+- **Quota budgets and the essential reserve hold with odds polling enabled.**
+  Odds use the existing `enrichment` priority above a floor that protects
+  selection, refreshes, results and the reserve. `tests/live-binding.test.mjs`
+  checks limits 100/7,500/75,000/150,000: Free and slow plans are ineligible, the
+  floor covers every ordinary need and stays within the usable limit, and Mega
+  keeps 2,000 refreshes on 6 workers. `tests/quota.integration.mjs` shows
+  enrichment refused at the essential reserve while results-cutoff work still
+  dispatches, with the day total exactly 7,500. The job gate gives odds only the
+  spare (861 on Pro), counting odds' own enrichment dispatches, and never lets
+  them take the reserve; `tests/odds-import.test.mjs` and
+  `tests/live-binding.test.mjs` cover the arithmetic, including a Pro day with
+  the one-minute date poll partly spent. `tests/live-runtime.integration.mjs`
+  shows zero `/odds` requests and zero reservations while odds are off or past
+  the reserve, and a sweep still running after 800 ordinary requests.
+- **Costs are recorded against the US$45 ceiling.** Football money remains the
+  flat `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS` (≤ 4,500); odds stay out of the
+  AI/research ledger. With odds on (Pro-sized synthetic plan), every odds request
+  is counted three ways and the counts agree: `OddsImportBatch.requestsDispatched`,
+  `DurableJobUsage` (provider `football`) and `ApiQuotaAttempt` at priority 3.
+  The real per-day and per-month odds share, and evidence that `/odds` is
+  included in the plan at US$0 marginal cost, need the counted trial
+  (blocker 1).
+- **Stale or missing odds never fill another market's price; filters exclude
+  fixtures without a price.** Price rows exist only for complete groups; the
+  feed join is exact on family, selection and `stale = FALSE`. On MySQL,
+  `tests/match-feed.integration.mjs` shows inclusive bounds, exclusion of
+  fixtures with no pick, no price or only another family's price, record prices
+  equal to the SQL rule, a withdrawn fixture's stale prices leaving both the
+  filter and the record, and `paginationVersion` moving on a price change or
+  withdrawal but not on a reconfirmation. `tests/odds.integration.mjs` covers
+  12-hour expiry, the frozen closing price and withdrawal only after a complete
+  sweep. `tests/match-detail.integration.mjs` shows market-implied groups kept
+  apart from the revision and the AI probabilities.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm); owned isolated MySQL Community Server 8.4.11 under
+`.tmp/mysql-tools` (`MYSQL_TEST_SERVER_BINARY`). The developer database on
+:3306/:3307 was never touched. Logs are in `.tmp/052-*.log`.
+
+| Check | Actual result |
+| --- | --- |
+| Review fixes (11 October): odds gate counts ordinary use once, write-phase budget, rights withdrawal sweep, receipt provenance, grant order | `npx eslint . --max-warnings=0` exit 0; `npx tsc --noEmit` exit 0; `npm test` 1,082 tests, 1,081 pass, 0 fail, 1 skipped (the same skip; a first run under concurrent MySQL load failed once in the 25 ms timing test of `fallback-service.test.mjs`, which passed unloaded); `test:odds` 32/32, including the rights withdrawal and receipt-provenance cases; `tests/live-runtime.integration.mjs` 9/9, including a sweep after 800 ordinary requests and an expiry past the reserve; `test:feed` 61/61; `test:quota` 30/30; `test:detail` 36/36; `test:monitoring` 17/17; `test:recovery` 20/20 (`.tmp/052-review3-*.log`). See [implementation decisions](implementation-decisions.md) "Review fixes". |
+| Stage 4 (11 October): read path and docs | `npx tsc --noEmit` exit 0; `npx eslint . --max-warnings=0` exit 0; unit suite (`node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`) 1,080 tests, 1,079 pass, 0 fail, 1 skipped (the same skip as before); `test:feed` 61/61, including the odds filter subtest and five `odds=` rejections; `test:detail` 36/36, including the market-implied envelope; `test:cache` 25/25; `test:feed-page` 13/13; `test:odds` 30/30 (`.tmp/052-stage4-*.log`). |
+| Stage 3 (11 October): live, quota, recovery, monitoring | `test:live` 9/9; `tests/live-runtime.integration.mjs` 8/8 in two runs; `test:quota` 30/30; `test:recovery` 20/20; `test:monitoring` 17/17; `test:odds` 30/30; unit suite 1,056 tests, 1,055 pass, 1 skipped (`.tmp/052-stage3-*.log`). |
+| Stage 2 (11 October): persistence | Migration deploys twice and verifies; `test:odds` 26/26; `test:backup` 9/9 asserting 68 tables; `test:feed` 55/55; `test:detail` 34/34; `test:cache` 24/24; `db:validate` passed (`.tmp/052-stage2-*.log`). |
+| Stage 1 (11 October): provider contract | Adapter 62/62, normalizer 25/25, provider-trial suites 83 tests (82 pass, 1 skipped as before); `test:quota` 29/29 (`.tmp/052-stage1-*.log`). |
+
+**Not run:** the counted odds trial (owner decision; needs the plan upgrade),
+`next build`, the rendering checks and browser checks (excluded in this run),
+`npm run live:status` (it reads the real account) and any command against the
+developer database.
+
+**Owner commands (not run):** against 127.0.0.1:3307, in this order:
+(1) `npm run db:deploy`, which creates the five odds tables; (2) add the grants
+from [provider-odds.md](provider-odds.md#application-grants) to
+`%LOCALAPPDATA%\GoalHint\application-grants.sql` and apply them as the
+administrative account (MySQL refuses grants on tables that do not exist yet,
+so they cannot go first); (3) `npm run db:status`, `npm run db:verify` and
+`npm run db:health`. Do not start `npm run live` between (1) and (2): the
+runner's every-tick `expire()` and the monitoring collector read the odds
+tables as soon as the migration is deployed. After the plan upgrade, run the odds trial from
+[football-provider-trial.md](football-provider-trial.md#odds-qualification-prompt-052),
+then set `GOAL_HINT_ODDS_BOOKMAKER_ID` and `GOAL_HINT_ODDS_IMPORT_ENABLED=true`
+in `.env.operations` ([live operations](live-operations.md#odds-imports-052)).
+
+**Flagged, not fixed:** the pre-existing refresh `verifyPlan` pacing omission in
+`live-authorities.ts` (refreshes on slow plans are refused) was raised as a
+separate task.
+
+Prompt 053 has not been started.
+
+## Team codes for phone cards (11 October 2026)
+
+**Status:** implemented and verified on synthetic data. Owner decision: API team
+codes stand in for long names on phone cards ("Team names stay abbreviated"),
+filled by a low-priority import that spends spare quota only. The design and
+every choice are in [implementation decisions](implementation-decisions.md)
+("Team codes for tight phone cards"); the runbook is
+[live operations](live-operations.md#team-codes) and the catalog side is
+[football catalog](football-catalog.md#team-codes-spare-quota-import). The phone
+card itself (how a code or a derived abbreviation is shown) is the UI
+workflow's, in [match card](match-card.md).
+
+**Current data:** 0 of 5,251 stored teams have a code. The live pipeline imports
+teams through `/fixtures`, which carries no code; only `/teams?league&season`
+does. On the current Free plan the import does not run at all: the ordinary
+floor is 99 of 100 requests (spare 1) and pacing is slow, so the odds gate never
+opens. After an upgrade to a 7,500-a-day plan the spare is 861, and team codes
+can take up to 8 requests an hour (about 96 leagues a day) while odds are off.
+"Off on Free" does not meet the owner's "slow on Free", so it is an open owner
+decision (see **Owner actions** below). Until the owner decides, the code stays
+off on Free, and the phone card shows its derived abbreviation for every
+codeless team, which today is every team. Either way, team names on the card
+stay abbreviated.
+
+### Changed behavior and files
+
+- **Read path.** `src/domain/fixture-snapshot.ts`: fixture teams carry an
+  optional, nullable `code` matching `^[A-Z0-9]{2,5}$` (optional, so payloads
+  cached before codes still parse). `src/server/matches/fixture-read.ts`
+  publishes `validTeamCode(FootballTeam.code)` (trimmed ASCII letters and digits,
+  uppercased, else null) for the feed, the detail read and the client refresh,
+  which all reuse the same team schema. Cache projections: feed 6 → 7, detail
+  4 → 5.
+- **Import job** (new `src/server/teams/`): `team-code-mysql-store.ts`
+  (candidate competition-seasons and their checked-at markers, read from the
+  catalog's own `teams` receipts, so no migration), `team-code-service.ts`
+  (selection and the sweep through the ordinary catalog teams import) and
+  `team-code-jobs.ts` (`teams.codes` v1, one job per UTC hour, priority 0, the
+  odds quota gate with the slot's whole ceiling of 8 requests).
+- **Wiring.** `src/server/config/runtime-policy.ts` and `.env.example`:
+  `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED` (default `true`, still spare-gated).
+  `src/server/live/live-plan.ts` (`teamCodeImportsEnabled`, `teamCodeBounds`),
+  `live-runtime.ts` (shared enrichment registry), `live-runner.ts` (hourly
+  scheduling, `ready` fields), `src/server/recovery/recovery-service.ts` (a stalled
+  job expires after its slot), `src/server/monitoring/` (informational
+  `team-code-requests`), `scripts/live-status.py` (`teamCodes` block).
+- **Review fix (this run).** The selection read the nearest 200 candidates and
+  only then dropped recently checked leagues, so leagues that stay codeless after
+  their check could crowd unchecked ones out of every sweep. It now pages through
+  the kickoff order with a keyset cursor (200 per page, at most five pages) until
+  it has the sweep's due seasons.
+- **Review finding: Free plan (documentation only).** A later review confirmed
+  that `teamCodeImportsEnabled` uses the odds eligibility, which is false on
+  Free (`liveWorkload(100, 1, "Free", 10)`: floor 99, spare 1, reserve 14, slow
+  pacing). So the current plan makes no `/teams` requests, and the earlier
+  "Owner actions: none required" line hid that gap. It is a quota decision for
+  the owner, so this run changed no code. The **Owner actions** line below now
+  lists the decision and both options.
+- **Tests.** `tests/team-codes.test.mjs` (code validation and old-payload parsing,
+  markers, selection and paging, sweep bounds, envelopes, eligibility, the
+  shared spare gate and outcomes), `tests/team-codes.integration.mjs` (MySQL:
+  candidates and keyset pages, a bounded sweep storing codes and bumping fixture
+  versions, the feed read publishing `ARS` for a stored `ars`, 30-day and 1-day
+  markers, append-only receipts), plus team-code cases in
+  `tests/live-runtime.integration.mjs`, `tests/runtime-policy.test.mjs`,
+  `tests/recovery-watchdog.integration.mjs` and
+  `tests/operations-monitoring.integration.mjs`. `npm run test:team-codes` runs
+  the focused set.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm); owned isolated MySQL 8.4.11 under `.tmp/mysql-tools`
+(`MYSQL_TEST_SERVER_BINARY`). Logs are `.tmp/teamcodes-r2-*.log`.
+
+| Check | Actual result |
+| --- | --- |
+| `npx tsc --noEmit` | Exit 0 before the review fix and at the end of the run. One run in between reported a transient error in the UI workflow's in-progress `src/components/match/short-team-name.tsx`, which that workflow then deleted; none in the files this run changed. |
+| `npx eslint . --max-warnings=0` | Exit 0 before the review fix, after it and at the end of the run. |
+| `npm test` (unit suite) | Before the review fix: 1,094 tests, 1,093 pass, 0 fail, 1 skipped (the existing Windows POSIX-mode skip). After it: 1,090 tests, 1,088 pass, 1 fail, 1 skipped. The failure is `tests/team-name.test.mjs`, which no longer loads: it imports `shortTeamName`, which the UI workflow's in-progress `src/domain/team-name.ts` removed. Every team-code test passed. |
+| `npm run test:team-codes` | 24/24 before the UI workflow's `team-name.ts` change, including the new paging unit test and the keyset subtests on MySQL. After it, `tests/team-codes.test.mjs` plus `tests/team-codes.integration.mjs` 18/18; the script's third file is the UI workflow's `tests/team-name.test.mjs` (above). |
+| `npm run test:feed` | 61/61. |
+| `npm run test:detail` | 36/36. |
+| `npm run test:catalog` | 28/28. |
+| `tests/live-runtime.integration.mjs` | 11/11, including the team-code sweep on the enrichment worker and the Pro/reserve gating. An earlier run (`.tmp/teamcodes-final-live-runtime-2.log`) failed once in the unrelated "one selection imports seven dates" subtest (1 of 2 `/predictions?fixture` calls in its fixed worker loop); it passed on rerun with no change. |
+
+**Not run:** `next build`, browser checks, `npm run live:status` (it reads the
+real account), any live API-Football call and any command against the developer
+database except one read-only `SELECT` of 30 team names for the card sample.
+
+**Owner actions:** one decision is open. Team-code imports on the Free plan:
+"slow on Free" is not met, because today the import makes no requests on Free.
+Choose one:
+
+- **(a) Accept "off on Free".** No code change. Codes start to fill after the
+  plan upgrade. Until then, phone cards show the derived abbreviation for
+  codeless teams. The choice is then recorded as an owner decision in
+  [implementation decisions](implementation-decisions.md).
+- **(b) A Free trickle with its own gate.** At most one league a day: one
+  `/teams` page plus one retry, so 2 requests. It runs only after the day's
+  refresh jobs (21:00–24:00 UTC) have run. It also needs the provider-reported
+  remaining quota to cover the 2 requests, the 14-request reserve and every
+  ordinary request still due before the UTC rollover. That gate is new code,
+  separate from `oddsQuotaAllows`, so the shared odds gate is not loosened and
+  odds stay off on Free. Expected yield is about 30 leagues per 30 days, nearest
+  kickoff first. It spends only slack that would otherwise expire at the
+  rollover.
+
+Until the owner chooses, the code behaves as (a).
+
+Nothing else is needed. There is no migration and no new grant: the job reads
+`FootballFixture`, `FootballTeam`, `FootballSeason`,
+`FootballCompetitionProvider` and `FootballImport`, and writes only through the
+catalog import, all under the existing catalog grants. To keep imports off on a
+paid plan, set `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED=false` in `.env.operations`.
+
+## Country flags beside competitions (11 October 2026)
+
+Owner: "The country should be displayed alongside its flag on the left." The
+card is the UI workflow's ([match card](match-card.md)); this records the data
+side. Decisions are in [implementation decisions](implementation-decisions.md)
+(Country flags beside competitions) and the storage rules in
+[football catalog](football-catalog.md#country-flags).
+
+### Changed behavior and files
+
+- **Provider fields.** `src/server/football/api-football-normalize.ts` reads
+  `/fixtures` `league.flag` and `/leagues` `country.flag` into the competition's
+  `countryFlag`, through the same rights path as logos. Absent, `null` or
+  non-string values mean "no flag" and never reject a row.
+- **Batch, store and rights.** `catalog-input.ts` re-checks flag rights like
+  logos. `catalog-mysql-store.ts` stores `FootballCompetition.countryFlagUrl`. A
+  later missing flag keeps the stored one, but a row that changes the country
+  keeps no old flag. A flag change alone bumps no fixture version; next to a
+  versioned change it is audited with it. `live-authorities.ts` approves
+  `https://media(-N).api-sports.io/flags/<xx>.svg` and `<xx>-<sub>.svg`.
+- **Migration.** `20261011075627_competition_country_flag`: one nullable
+  `VARCHAR(2048)` column, with `schema.prisma` and the schema snapshot updated.
+- **Publication.** Optional nullable `competition.countryFlagUrl` on the
+  fixture snapshot (feed record, detail fixture, client refresh). Older cached
+  payloads still parse. Feed cache projection 8, detail 6.
+- **Team-code review (third pass).** The keyset cursor, page limits, Free/slow
+  gate and per-slot bound were re-checked and kept. `checks()` now reads one
+  latest receipt per league and status (a grouped read) instead of a capped
+  newest-first scan that could drop a settled marker.
+- **Tests.** `tests/competition-flags.test.mjs`, plus flag subtests in
+  `tests/catalog.integration.mjs`, `tests/match-feed.integration.mjs` and
+  `tests/match-detail.integration.mjs`, and the marker assertion in
+  `tests/team-codes.integration.mjs`.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm); owned isolated MySQL 8.4.11 under `.tmp/mysql-tools`
+(`MYSQL_TEST_SERVER_BINARY`).
+
+| Check | Actual result |
+| --- | --- |
+| `npx tsc --noEmit` | Exit 0. |
+| `npx eslint . --max-warnings=0` | Exit 0. |
+| `npm test` (unit suite) | Before this pass's edits: 1,105 tests, 1,104 pass, 0 fail, 1 skipped. Final run: 1,108 tests, 1,106 pass, 1 fail, 1 skipped. The failure is the 25 ms timing test in `tests/fallback-service.test.mjs` ("an unfinished collector times out"), untouched by this work; it fails only under the suite's concurrent load and passed when rerun alone with `tests/database-cli.test.mjs` (48/48). |
+| `npm run test:team-codes` | 21/21. |
+| `npm run test:catalog` | 29/29. |
+| `npm run test:feed` | 62/62. |
+| `npm run test:detail` | 37/37. |
+| `npm run test:cache` | 25/25. |
+| `tests/live-runtime.integration.mjs` | 11/11, including the team-code sweep on the enrichment worker. |
+
+**Not run:** `next build`, browser checks, any live API-Football call and any
+command against the developer database.
+
+**Owner actions:** apply the migration to the developer database with
+`npm run db:deploy`, then `npm run db:verify` ([local database](local-database.md)).
+Until it is applied, the web app's feed and detail reads and the runner's
+catalog writes fail on the missing column. Then restart the live runner. Flags
+fill in at the next daily selection (21:00 UTC, or at runner start when that
+night's run is missing) for every competition with a fixture in its seven
+dates. International competitions have no flag.
+
+## 057 — Owner admin foundation (19 October 2026)
+
+**Status:** implemented; every acceptance check passes, including the manual
+375 px Browser pane check. Tracker 057 is ☑ **Completed**. This is the
+first paid-access prompt and builds the owner foundation only: no member tables,
+settings, sign-in or payments, and `paywallMode` does not exist yet (058). The
+public site behaves as before. No migration, env key or npm dependency was
+added, and nothing was deployed. Decisions are in
+[implementation decisions](implementation-decisions.md) (057 section).
+
+### Changed behavior and files
+
+- **Shared private helpers** (new `src/server/http/private-http.ts`):
+  `readCookie`, `cookie` (gains `sameSite`, default Strict), `isSameOrigin`,
+  `clientAddress`, `readLimitedBody` (gains an optional deadline and
+  `BodyDeadlineError`), `privateHeaders` (now also `X-Frame-Options: DENY`,
+  `frame-ancestors 'none'` and `Referrer-Policy: same-origin`), `json`, `empty`
+  and `redirect`. `src/server/analytics/analytics-http.ts` re-exports them.
+- **Private paths** (new `src/domain/private-paths.ts`): the owner pages
+  (`/analytics`, `/admin`) and member pages (`/en/account`, `/en/subscribe`), with
+  prefix checks that stop at a segment boundary (`/administrator` is not under
+  `/admin`).
+- **Owner auth and guard** (new `src/server/admin/owner-auth.ts`,
+  `src/server/admin/admin-http.ts`): `Owner`, the fixed `ownerRoutes`,
+  `verifyOwner`, `requireOwner`, the owner sign-in and sign-out handlers, and
+  the one guard. `adminRoute` refuses cross-site writes with 403 before any
+  lookup, then answers 503 without storage and 401 without an owner session;
+  sign-out alone uses `session: "optional"`. `adminPageGate` is the page side.
+- **Login and logout** (`analytics-http.ts`): `createLoginHandler` and
+  `createLogoutHandler` gain a fixed `home` and an `audit` callback (defaults
+  `/analytics` and none). `SignInAuditEvent` reports sign-in and sign-out with
+  the username, and a refusal with its reason only, for counted attempts on the
+  owner's username. 058 connects the writer. `loginNotice` moves here from
+  `src/app/analytics/page.tsx`. Routes: new `src/app/api/admin/login/route.ts`
+  (unguarded) and `src/app/api/admin/logout/route.ts`.
+- **Throttle and verify** (`src/server/analytics/analytics-auth.ts`): HMAC keys
+  per address and per (username, address) lock after 5 failures in 15 minutes;
+  the username-wide key locks only after 50 in an hour. Each lock lasts 15
+  minutes. Every attempt is reserved under `FOR UPDATE` row locks, in one key
+  order, before scrypt runs. A right password clears the address keys and hands
+  its attempt back to the username-wide key. `LoginResult` gains `username`,
+  `ownerUsername` and `newlyLocked`. `verify(token, { touch: false })` never
+  writes `lastSeenAt`. The cookie, the 12 h / 2 h limits and every env key are
+  unchanged.
+- **Shell** (new `src/app/admin/layout.tsx`, `src/app/admin/page.tsx`,
+  `src/components/admin/admin-shell.tsx`): robots noindex for every `/admin`
+  page. "Owner sign-in" when signed out; when signed in, an empty Overview in one
+  column with a top tab strip, 44 px targets, a skip link, a no-JavaScript
+  Sign out and the development-credentials warning. `dashboard-styles.tsx`
+  gains `HeaderLink`. The analytics top bar
+  (`analytics-dashboard.tsx`) links to `/admin`, and the admin top bar links back.
+- **Login form** (`analytics-login.tsx`): takes `action` and `title` (defaults
+  unchanged); new small print "Five failed attempts from one network pause
+  sign-in there for 15 minutes; 50 in an hour pause it everywhere." The
+  `username` and `current-password` autocomplete stay.
+- **Private exclusion points:** `next.config.ts` `headers()` applies the private
+  headers to `/analytics`, `/api/analytics/:path*`, `/admin`, `/admin/:path*`,
+  `/api/admin/:path*`, `/en/account`, `/en/subscribe` and `/api/account/:path*`.
+  `src/server/seo/proxy.ts` sends `noindex, nofollow` for every private page by
+  prefix. robots.txt (`src/server/seo/discovery-routes.ts`) disallows `/api/`,
+  `/analytics` and `/admin`. `src/components/analytics/analytics-tracker.tsx`
+  skips every owner page.
+- **Tests:** new `tests/admin.test.mjs` (15 tests) and
+  `tests/admin-routes.test.mjs` (6 tests: the structural scan, the env-key
+  check, and table-driven 401/403 cases); `tests/discovery.test.mjs` (prefix
+  test and the robots line); `tests/analytics.integration.mjs` (per-address
+  lock, sign-in from another address, a 30-attempt concurrent burst,
+  `touch: false`, the 50-an-hour username lock and the hand-back);
+  `package.json` gains `test:admin`.
+- **Docs:** `docs/analytics.md` (new throttle wording, `/admin` shares the login,
+  robots).
+
+### Acceptance checks
+
+- **Sign-in from `/admin` lands on `/admin` under "Owner sign-in": passed.**
+  `tests/admin.test.mjs`: the right password gives a 303 to `/admin` with the
+  Strict owner cookies, and every refusal lands on `/admin?login=...`. A source
+  check asserts the page renders `action={ownerRoutes.login}
+  title="Owner sign-in"`.
+- **`/analytics` is unchanged apart from its small print: passed.** The analytics
+  suite passes unchanged; `createLoginHandler` still defaults to `/analytics`, and
+  `AnalyticsLogin` keeps its action and "Analytics sign-in" title by default. The
+  new throttle applies to the shared owner login, as the prompt requires.
+- **`/admin` is no-store, noindex and DENY, and robots.txt disallows it: passed.**
+  `tests/admin.test.mjs` checks the eight `headers()` sources and their headers,
+  the proxy's `noindex, nofollow`, the robots disallow list and the layout's
+  robots metadata.
+- **Failures from one IP do not lock the owner out from another: passed.** Unit
+  and MySQL: an address locked after 5 failures still lets the owner sign in from
+  another address. A concurrent burst of 30 from one address gives 4 invalid,
+  1 newly locked and 25 locked.
+- **`verify({ touch: false })` leaves `lastSeenAt` unchanged: passed.** Unit, and
+  on MySQL `lastSeenAt` reads back unchanged and the idle limit still expires the
+  session.
+- **The route-guard test passes, and no new env key exists: passed.**
+  `tests/admin-routes.test.mjs`; no env key or npm dependency was added.
+- **Manual: owner sign-in and the empty shell work at 375 px in the Browser
+  pane:** see below.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm). The MySQL integration tests start their own isolated
+MySQL 8.4.11 and skip themselves unless `MYSQL_TEST_SERVER_BINARY` points at
+`mysqld`; these runs used `%LOCALAPPDATA%\GoalHint\mysql-8.4.11\bin\mysqld.exe`.
+The developer database on 127.0.0.1:3307 was not used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:admin` | 21/21 pass, including the concurrent burst, the audit bound, the hand-back and the route-guard suite. |
+| `npm run test:analytics` (MySQL) | 27/27 pass, 0 skipped. The integration run includes the burst ([4, 1, 25]) and the second sign-in after the username-wide lock. |
+| `npm run test:seo` (MySQL) | 28/28 pass, 0 skipped. |
+| `npm run lint` | `eslint . --max-warnings=0` exit 0. |
+| `npm run typecheck` | `next typegen && tsc --noEmit` exit 0. |
+| `npm test` (unit suite) | 1,517 tests: 1,516 pass, 0 fail, 1 skipped (the existing Windows-only POSIX-mode check in `tests/provider-trial-journal.test.mjs`, unrelated to 057). |
+
+These were rerun on 19 October 2026 after the review fixes; the implementer's
+final round reported the same results.
+
+**Manual checks:**
+
+- Manual 375 px Browser pane check (19 October 2026, local dev server): passed.
+  Signed out, `/admin` shows "Owner sign-in" with the new small print. With a
+  throwaway local owner session, the empty shell shows the brand bar, "Signed in
+  as admin", Analytics and Sign out, and the Overview tab. The page has no
+  horizontal scroll at 375 px, and every target is 44 px tall. Sign out lands
+  on `/admin?login=signed-out`.
+- Throttled desktop Chrome (DevTools device mode, Slow 3G or 200 kbit/s): not
+  run; 057's acceptance does not require it. It must run in desktop Chrome,
+  because the Browser pane cannot throttle.
+- Real Android phone (password-manager autofill of the owner sign-in): not run;
+  057's acceptance does not require it. It must run on a real Android phone over
+  HTTPS dev (`npx next dev --experimental-https`, its CA trusted on the phone),
+  or in test mode after an owner-requested deploy.
+
+**Not run:** `next build`, the rendering scripts, and anything against the
+developer database or goalhint.com.
+
+**Outstanding inputs:** none block 057. The owner's choice of sign-in length
+(plan §12: keep the 2 h idle limit, or a longer session that also applies to
+`/analytics`) is still open, so the 12 h / 2 h limits stay. 058 must connect the
+audit writer, and keep it self-contained: refusal reports finish after the
+response.
+
+## 058 — Data model, settings, plans and audit (19 October 2026)
+
+**Status:** implemented; tracker 058 is ◐ **Partial** only because the owner
+has not yet confirmed each network's prefixes (OP-38), so
+`networkPrefixes` ships empty. Three local commands fail for reasons that
+predate 058: `npm run check` (at `next build`), `db:verify` on the developer
+database, and the restores in `test:backup`. Every 058-specific check passes.
+Paid access stays `off`: nothing is seeded, and a missing settings row reads
+`off` with a 2-day trial. One migration (`20261019142209_subscriptions`) and its
+MariaDB overlay; no env key or npm dependency; nothing deployed. Decisions are
+in [implementation decisions](implementation-decisions.md) (058 section). The
+overlay steps are in [database](database.md) ("Paid-access tables on MariaDB").
+
+### Changed behavior and files
+
+- **Tables** (`prisma/schema.prisma`, `prisma/schema.snapshot.prisma`, new
+  `prisma/migrations/20261019142209_subscriptions/migration.sql`):
+  `MemberAccount` (unique canonical `phone`, nullable on erase,
+  `trialRequestedAt`, `trialDismissedAt`), `MemberSession`, `SubscriptionPlan`,
+  `PaymentSubmission` (`source`, claim columns with `claimedTxnKey`, unique
+  nullable `approvedTxnKey`), `PaymentScreenshot`, `AccessCode` (`source`,
+  `replacedById`, plan snapshot, unique `paymentSubmissionId`, `activatedAt`,
+  `startsAt`, `endsAt`), `SubscriptionSettings`, `RateLimitBucket` and
+  `OwnerAuditEvent`, each with a privacy comment. Every `CREATE TABLE` states
+  `ENGINE=InnoDB` and `utf8mb4_bin`. There are 9 foreign keys and 11 named
+  checks; a session's code is a composite foreign key to its own account's code.
+  Schema: 89 models.
+- **MariaDB overlay** (new `prisma/mariadb/20261019142209_subscriptions.sql`):
+  the failing engine guard, `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB` with
+  foreign keys and checks inline, a shape verification before anything is
+  recorded, the `_prisma_migrations` insert with the committed checksum (once),
+  and the closing check. Runbook in `docs/database.md`.
+- **Engine test** (new `tests/subscription_migration_test.py`, run by
+  `test:scripts`): InnoDB and `utf8mb4_bin` on every `CREATE TABLE` in both
+  files, the overlay matches the migration it records, guard first and record
+  after verification, and a privacy comment on every paid-access model.
+- **Grants** (`docs/local-database.md`): SELECT, INSERT and UPDATE on all nine;
+  DELETE only on `MemberAccount`, `MemberSession`, `PaymentScreenshot` and
+  `RateLimitBucket`. Applied to the developer database on 19 October 2026 as
+  section (H) of the local `application-grants.sql`.
+- **Phones** (new `src/domain/phone.ts`): `normalizePhone` (the five steps,
+  including a number typed after the `256` prefill), `isCanonicalPhone`,
+  `phoneHint` with the outside-Uganda hint, `formatPhone`, `maskPhone`,
+  `localUgandaPhone`, `networkForPrefix` (longest prefix; empty table until the
+  owner confirms it), `telHref`, `waHref` and `smsHref`.
+- **Settings** (new `src/domain/subscription-settings.ts`,
+  `src/server/members/settings.ts`): the row `id = 1` with the plan 5.7 fields,
+  defaults for a missing row, a 30 s per-process cache with the last good value
+  on failure (and `free` with none), mode requirements, menu shortcuts, copy
+  format, the device, trial and retention ranges, the eight protected fields
+  with password re-entry, and `paymentNumbersChangedAt`.
+- **Plans** (new `src/domain/subscription-plans.ts`,
+  `src/server/members/plans.ts`): create, edit, deactivate, reactivate and
+  reorder; no delete. Nothing is seeded.
+- **Audit** (new `src/server/admin/audit.ts`): the `OwnerAuditEvent` writer and
+  its details filter, connected to the 057 sign-in callback on both
+  `/api/admin/login|logout` (`owner-auth.ts` defaults) and
+  `/api/analytics/login|logout`, since they share the owner login.
+- **Password re-entry** (`src/server/analytics/analytics-auth.ts`): the sign-in
+  check is extracted into `check` and `release`. New `confirmPassword` uses
+  the same check and throttle keys and creates no session.
+- **Owner routes and pages** (new `src/server/admin/plans-http.ts`,
+  `src/server/admin/settings-http.ts`, `src/app/api/admin/plans/route.ts`,
+  `src/app/api/admin/settings/route.ts`, `src/app/admin/plans/page.tsx`,
+  `src/app/admin/settings/page.tsx`, `src/components/admin/admin-form.tsx`,
+  `plans-editor.tsx`, `settings-editor.tsx`): JSON POSTs behind the 057 guard
+  (`readJsonBody` in `admin-http.ts`: JSON only, 16 KiB, 15 s). Plans and
+  Settings tabs in `admin-shell.tsx`; new Overview copy in
+  `src/app/admin/page.tsx`. Settings shows the client-address diagnostics
+  (`clientAddressDiagnostics` in `src/server/http/private-http.ts`).
+- **Tests:** new `tests/phone.test.mjs` (7), `tests/members.test.mjs` (12) and
+  `tests/members.integration.mjs` (1 test, 10 subtests);
+  `tests/admin.test.mjs` (password re-entry) and `tests/admin-routes.test.mjs`
+  (Plans and Settings scan, env-key list, audited sign-in and sign-out, JSON
+  and protected-field cases); `tests/backup-restore.integration.mjs` line 68
+  now expects 90 tables; `package.json` gains `test:members`.
+- **Review fixes** (19 October 2026): the audit's access-code and phone patterns
+  no longer match inside a UUID. About 1 random plan id in 120 read as a code,
+  so Reorder failed permanently with 503 for that plan. A committed save or
+  mode switch now answers 200 even when the follow-up page read fails; it was
+  a 503. The overlay runbook says to apply the tables before the 058 release,
+  which already reads and writes them, not from 059. And `test:backup`'s
+  remaining failure is recorded below as pre-existing.
+
+### Acceptance checks
+
+- **`db:deploy`, `db:status`, `db:verify` and the engine test pass: not met
+  locally.** `db:deploy` and `db:status` pass on the developer database, and the
+  engine test passes. `db:verify` there reports drift only from the local-only
+  migration `20261015072524_match_facts` (tables `fixturefacts`,
+  `footballvenue` and `seasonstandings`), which is not in the repository. The
+  058 tables show no drift. Inside `test:members`, deploy, status and verify all
+  pass on a clean isolated MySQL 8.4.11.
+- **`tests/phone.test.mjs` covers the section 9 table and the helpers, and the
+  links round-trip: passed.** Every row of the table, `formatPhone`,
+  `maskPhone`, `localUgandaPhone`, `telHref` and `networkForPrefix`. `waHref`
+  and `smsHref` round-trip a message with `#code=`, `&` and line breaks.
+- **A missing settings row reads `off`, with a 2-day trial: passed.**
+  `tests/admin-routes.test.mjs` and the integration subtest "settings default to
+  off with a 2-day trial".
+- **`test` and `on` are refused without their preconditions, and `on` until
+  privacy and terms are release-ready: passed.** Unit and MySQL. Both notices
+  are still not release-ready, so `on` is refused today.
+- **Settings numbers are stored as canonical digits: passed.** Unit parse test
+  and the integration subtest on the settings and plans services.
+- **The eight protected fields need the password, are throttled, and are
+  audited with old and new values: passed.** Unit, MySQL and the `test:admin`
+  re-entry test (re-entry failures lock sign-in from that address; another
+  address is unaffected).
+- **A payment-number change clears its menu shortcut: passed.**
+- **Plans are never deleted: passed.** No code path deletes a plan, settings or
+  audit row; the route answers 400 to `delete`; on MySQL the application role
+  has no DELETE on plans.
+- **`npm run test:members`, `npm run test:admin` and `npm run check`: not all
+  met.** The first two pass. `npm run check` fails at `next build` (below).
+- **Manual: the Plans and Settings pages work at 375 px in the Browser pane:**
+  see below.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm). `MYSQL_TEST_SERVER_BINARY` pointed at
+`%LOCALAPPDATA%\GoalHint\mysql-8.4.11\bin\mysqld.exe`, so the integration tests
+ran on their own isolated MySQL 8.4.11. The `db:*` commands used the developer
+database on 127.0.0.1:3307.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:members` (MySQL) | 30/30 pass, 0 skipped. Includes the new saved-reply test, the grants, constraints, concurrent upserts and the overlay run on MySQL. |
+| `npm run test:admin` | 23/23 pass. |
+| `npm run test:analytics` (MySQL) | 27/27 pass, 0 skipped. |
+| `npm run test:scripts` | 11 tests OK, including the engine test. |
+| `npm run db:validate` | Pass. |
+| `npm run lint` | `eslint . --max-warnings=0` exit 0. |
+| `npm run typecheck` | `next typegen && tsc --noEmit` exit 0. |
+| `npm test` (unit suite) | 1,538 tests: 1,537 pass, 0 fail, 1 skipped (the existing Windows-only POSIX-mode check). No flaky reruns were needed. |
+| `npm run check` | **Fail.** `db:generate`, `db:validate`, lint, typecheck, `npm test` and `test:scripts` pass. `next build` compiles and type-checks, then fails prerendering `/` with a `RuntimePolicyError`: `.env.local` turns the database capability on, and production mode then needs TLS, access and budget refs (via `analytics-provider` → `analytics-config`). Not caused by 058; the 057 run did not run `next build`. |
+| `GOAL_HINT_DATABASE_ENABLED=false npm run build` (command-line override only) | Exit 0; 9/9 static pages. `/admin/plans`, `/admin/settings`, `/api/admin/plans` and `/api/admin/settings` build as dynamic routes. |
+| `npm run db:deploy` (developer database) | Pass. `20261019142209_subscriptions` finished; all nine tables are InnoDB. |
+| `npm run db:status` | Pass. |
+| `npm run db:verify` | **Fail:** drift from the out-of-repo `20261015072524_match_facts` tables only (see above). |
+| `npm run test:backup` (MySQL) | **Fail**, 6/9 pass, reproduced on a second run. The 90-table snapshot assertion passes; both restores and the parent test fail with ERROR 1064 at dump line 993 (`ExtendedMarketPublishedPick_no_update`). The single-statement append-only triggers in `prisma/migrations/20261012153531_goal_market_extension/migration.sql` are stored with a trailing `;`, so mysqldump writes `…'append-only'; */;;` and the import stops. A throwaway load of the captured dump gave 9 errors, all on these triggers; without the semicolons it loaded cleanly (90 tables, 42 triggers, 11 paid-access checks). The stale 68-table assertion had hidden this. Not caused by 058. |
+| Read-only requests to the running dev server | `/admin/settings` 200 (the sign-in page) and `/api/admin/settings` 401 without a session. |
+
+**Manual checks:**
+
+- Manual 375 px Browser pane check (19 October 2026, local dev server, a
+  throwaway local owner session): passed. Plans and Settings have no horizontal
+  scroll and no target under 44 px. Adding "Test Daily" (1 day, UGX 1,000) on
+  Plans stored it and listed "24 hours · UGX 1,000" with Edit, Up, Down and
+  Deactivate (local dev data only). Settings shows the Off/Test/On switch with
+  the unmet requirements for Test and On, the password-protected numbers, and
+  the client-address diagnostics (`::1` locally).
+- How the orchestrator treats the three pre-058 local failures: the build stage
+  of `npm run check` is run as `GOAL_HINT_DATABASE_ENABLED=false npm run build`
+  (a command-line override, because `.env.local` enables the database without
+  the production TLS and access refs; no env key added). `db:deploy`, `db:status`
+  and `db:verify` pass with no drift on the fresh isolated MySQL in
+  `tests/members.integration.mjs`; the developer database drifts only by the
+  owner's stashed match-facts migration. The `test:backup` restore failure is
+  a separate pre-existing bug, proposed as its own session.
+- Throttled desktop Chrome (DevTools device mode, Slow 3G or 200 kbit/s): not
+  run; 058's acceptance does not require it. It must run in desktop Chrome,
+  because the Browser pane cannot throttle.
+- Real Android phone: not run; 058's acceptance does not require it. It must
+  run on a real Android phone over HTTPS dev (`npx next dev
+  --experimental-https`, its CA trusted on the phone), or in test mode after an
+  owner-requested deploy. The owner's own menu-shortcut and copy-format tests
+  (OP-38) also run on their phone.
+
+**Not run:** the rendering scripts, the overlay on MariaDB 11.4 (its
+`BEGIN NOT ATOMIC` blocks ran on MySQL as procedures), and anything against
+goalhint.com or cPanel.
+
+**Outstanding inputs:**
+
+- Owner (OP-38): each network's prefixes in full, for `networkPrefixes`. Until
+  then no number pre-picks a network. This keeps 058 ◐ Partial.
+- Owner, on the dashboard rather than in code: the three plans and the payment
+  and contact numbers. The MTN registered name, the Airtel details and the
+  tested menu shortcuts stay OP-38 blockers for 067.
+- Owner decision: what to do with the developer database's out-of-repo
+  `20261015072524_match_facts` migration and tables (removing them is
+  destructive).
+- Owner approval: a separate forward migration that recreates the
+  `20261012153531_goal_market_extension` triggers without the trailing `;`, so
+  backups restore again (OP-31). Done: see the next section.
+- Owner decision: how `npm run check` runs `next build` locally, for example
+  with the database capability off for the build only.
+- Still open from 057: the owner's sign-in length choice (plan §12).
+
+## Append-only trigger repair for backup restores (19 October 2026)
+
+**Status:** fixed locally on a side branch; not deployed, and the developer
+database is not migrated yet. `npm run test:backup`
+now passes all 9 checks with 90 tables. This closes the pre-058 restore failure
+flagged above, which plan §10 needs fixed before the paid-access overlay goes to
+production (OP-31). One migration and its MariaDB overlay; no env key or npm
+dependency.
+
+**Root cause.** Prisma applies a migration as one multi-statement script. In
+that mode MySQL stores a single-statement trigger body with its closing `;`. A
+`BEGIN … END` body ends at `END`, and the last statement of a script has no
+following `;`. So 9 of the 10 append-only triggers of
+`20261012153531_goal_market_extension` were stored as `SIGNAL …;`; only
+`ExtendedMarketPublishedPick_no_delete`, the file's last statement, was clean.
+mysqldump writes a trigger as `/*!50003 … */;;`, the stored `;` closes the
+statement inside the comment, and the mysql client refuses ` */` (ERROR 1064).
+Reproduced on a throwaway MySQL 8.4.11 by sending the original trigger SQL as
+one batch: 9 bodies ended in `;`, and the dump failed to import at the first.
+
+### Changed behavior and files
+
+- **Migration** (new
+  `prisma/migrations/20261019174619_append_only_trigger_blocks/migration.sql`):
+  `DROP TRIGGER IF EXISTS` and `CREATE TRIGGER` for each of the ten, with a
+  `BEGIN … END` body and the same name, table, timing, event and message. The
+  applied `20261012153531` migration is unchanged. A rerun after a partial
+  failure is safe. Each table is unguarded only between its own `DROP` and
+  `CREATE`, so writers pause while it runs, as for any schema change.
+- **MariaDB overlay** (new
+  `prisma/mariadb/20261019174619_append_only_trigger_blocks.sql`): a guard that
+  the goal-market migration is recorded and its five tables exist, then
+  `CREATE OR REPLACE TRIGGER` for each (one statement per trigger, so no gap),
+  a check that all ten are `BEGIN … END` blocks, the `_prisma_migrations`
+  insert with the committed checksum (once), and a closing list.
+- **Regression test** (new `tests/append_only_trigger_migration_test.py`, run by
+  `npm run test:scripts`): the migration and overlay recreate exactly the
+  original ten triggers as blocks, the overlay records the migration's SHA-256
+  only after verifying, and no other migration creates a single-statement
+  trigger.
+- **Docs:** [database](database.md) ("Append-only trigger repair on MariaDB",
+  with the production check query), [backup and restore](backup-restore.md)
+  (90-table evidence and the block-body rule), the
+  [deployment guide](../deploy/how-to-deploy.md) overlay list, and
+  [implementation decisions](implementation-decisions.md) (OP-31 and the new
+  section).
+
+The restore side (`src/server/backup/`, `scripts/lib/`) is unchanged.
+Rewriting the dump would still be wrong, because the verifier compares every
+trigger body after restore, and other dump tools would still fail.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm). `MYSQL_TEST_SERVER_BINARY` pointed at
+`%LOCALAPPDATA%\GoalHint\mysql-8.4.11\bin\mysqld.exe`.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:backup` (MySQL 8.4.11) | **9/9 pass**, 0 skipped. 90 tables. Base restore 28,295 ms, two-log restore 32,200 ms; both matched row hashes, schema, foreign keys and the 42 triggers. Tampering was refused. |
+| `npm run test:scripts` | 15 tests OK, the 4 new ones included. |
+| `npm run db:validate` | Pass. |
+| `npm run lint` | `eslint . --max-warnings=0` exit 0. |
+| `npm run typecheck` | `next typegen && tsc --noEmit` exit 0. |
+| Overlay on a throwaway MySQL 8.4.11 (`CREATE OR REPLACE` as `DROP`/`CREATE`, each `BEGIN NOT ATOMIC` block as a procedure) | Starting from the broken bodies: two imports, checksum recorded once, no body ends in `;`, and its mysqldump restored all 10 triggers, which still refused `UPDATE` and `DELETE`. Without the goal-market record the guard stopped the import and changed nothing. |
+
+**Not run:** the overlay on MariaDB 11.4, `db:deploy` on the developer
+database (the main checkout's agents share it, and the migration is not on
+`main` yet), and anything against goalhint.com or cPanel.
+
+**Outstanding inputs:**
+
+- Owner, when production is next migrated: run the check query in
+  [database](database.md), import the overlay, then take and verify the backup
+  that the paid-access overlay needs first.
+- After merge: `npm run db:deploy` on the developer database.
+
+## 059 — Phone sign-in and member sessions (19 October 2026)
+
+Implemented on the existing 057–058 foundation, with the public shell, shared
+navy/teal controls, square panels and translated `account.*` copy. No migration,
+npm dependency, environment key, deployment or paywall setting change.
+
+### Behavior and files
+
+- `member-sessions.ts` creates random 32-byte tokens and stores only SHA-256
+  hashes. Account upserts serialize concurrent first sign-ins and the ten-session
+  cap. Old, non-unlocked sessions without a pending/superseded payment go first;
+  those with payment reports go last. Sign-in replaces the browser's prior
+  session. Server expiry slides by 90 days at most once daily.
+- `rate-limit.ts` reuses the analytics HMAC key and atomic MySQL upserts for
+  1,000 sign-ins/hour and 1,000 newly created accounts/day per known IP.
+  Concurrent first sign-ins count one new account. Unknown addresses skip the
+  per-IP buckets. Missing keying/storage refuses member operations.
+- `member-http.ts` shares the existing private HTTP helpers and settings cache.
+  All three account POST routes check same origin; sign-in refuses mode off;
+  devices additionally requires an unlocked session, even after access ended.
+  JSON and native form sign-ins normalize the same phone inputs. Bodies are
+  bounded, timed and restricted to named fields. Destinations and return paths
+  are validated; no phone is placed in a URL.
+- Member cookies are HttpOnly, Lax, Path=/, 400 days, with Secure and the
+  `__Host-` prefix in production. Sign-out clears the tab's payment draft first,
+  deletes the session, clears the cookie and cache, then navigates fully.
+- `/en/account` is dynamic, noindex, outside information-page navigation and
+  sitemaps, and inherits 057's private path headers. It renders mode off, signed
+  out, unavailable and number-only signed-in states. The latter shows only the
+  number, Get access and Sign out. It never exposes periods or payment details.
+  The render-time in-app-browser hint stores no user agent. Restored pages
+  reload on `pageshow` to recheck the session.
+- `PhoneInput` extends the existing labeled field in `controls.tsx`; paste
+  replaces the prefill, and normalization supplies its accessible preview/hint.
+  The account panel and actions reuse existing UI primitives with 44 px targets.
+  `tests/helpers/rendering/members/` and `verify-member-rendering.py` exercise
+  synthetic states separately from the real application and developer database.
+
+### Verification
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:members` with isolated MySQL 8.4.11 | 34/34 pass, none skipped. Includes concurrent first sign-ins, concurrent first throttle hits, one account counted, daily session touch, expiry, cookie replacement, payment-aware eviction and ended-device sign-out. Initial concurrent-build run timed out during migration deployment; the next isolated run passed deploy, status, verify and all tests. |
+| `npm run test:admin` | 24/24 pass, including member route factories and table-driven origin/mode/unlock refusals. |
+| `npm run test:analytics` | 18 pass, one MySQL integration skip because this invocation did not supply the binary. Added assertion that a member cookie does not exclude consented visitors. |
+| Lint | Initial full scan found one static-component issue in the isolated fixture. Moved its route factories outside render; lint passes on every changed source and test file. |
+| `npm run typecheck` | Pass. |
+| Production build with command-line `GOAL_HINT_DATABASE_ENABLED=false` | Pass; nine static pages and the new dynamic account page and account routes. Uses 058's recorded build-only override; no environment file changed. |
+| Local production `GET /en/account` | 200; `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, `X-Frame-Options: DENY`, noindex HTML and no `Set-Cookie`. |
+| `python scripts/verify-member-rendering.py --serve` | Four initial-HTML states pass, with no anonymous cookies, noindex metadata, the native tel field and no number-only subscription details. |
+| Full unit suite, `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs` | 1,541 tests: 1,540 pass, none fail, one existing Windows skip. The parallel run had five timing failures in the existing database-boundary/predictor tests; all 15 tests in those files and then the entire suite passed sequentially after the production build finished. |
+
+Manual Browser-pane checks at **375 × 812**: mode off, signed out,
+number-only signed in and unavailable states fit without horizontal scrolling.
+Account inputs/actions measure 44 px. All thirteen valid phone-table inputs show
+the expected preview; the foreign-number hint appears on the refused prefixed
+input; clipboard paste replaces `256`. The temporary viewport override was reset.
+Throttled desktop Chrome and real Android were not required by 059 and were not
+run. No production requests or owner settings were changed.
+
+**Owner follow-up:** the owner accepted leaving network auto-selection unset.
+Keep `networkPrefixes` empty; do not re-request this choice. OP-38's other inputs
+remain recorded for their owning prompts. Existing 058 local build/drift/backup
+issues remain as previously documented; this prompt changes none of those systems.
+
+**Status:** 059 acceptance passed; tracker row is ☑ Completed. Continue with 060.
+
+## 060 — Access codes, periods and viewer resolution (19 October 2026)
+
+Implemented the pure code and period helpers, transactional code lifecycle and
+shared payment approval services, account-bound code entry, device rotation and
+eviction, phone-plus-code sign-in, and a common page/API viewer resolver. The
+account page now renders unlocked, active, queued, ended and blocked states with
+the existing chrome. Number-only sessions receive no period/device history.
+Code fragments prefill without submission, clear in every state and survive
+Next refresh correctly. Member attribution redirects preserve browser fragments;
+the analytics fragment cleanup also uses `replaceState(null, ...)`.
+
+Changed files: `src/domain/{access-code,subscription-period}.ts`,
+`src/server/members/{access-codes,viewer-access,member-sessions,member-http}.ts`,
+the account code route, account form/page composition, English messages, audit
+actions, discovery proxy and analytics tracker. Extended member/admin/discovery
+tests and the existing production member-rendering fixture; `test:members` now
+includes the pure access-code suite.
+
+| Check | Result |
+| --- | --- |
+| `npm run test:members`, isolated MySQL 8.4.11 | 43 tests pass, no skips, including account binding, concurrent periods, token rotation, device cap, correct code through a locked throttle, renewal entitlement, reissue, cross-network approval race, reversal through number change and trial restrictions. |
+| `npm run test:seo`, isolated MySQL 8.4.11 | 29 pass, no skips; member click-ID redirects have no replacement fragment. |
+| `npm run test:admin` | 25 pass, including code-route origin/mode/member/blocked guard matrix. |
+| Changed-file ESLint and `npm run typecheck` | Pass. |
+| Production build | Pass with the previously recorded process-only `GOAL_HINT_DATABASE_ENABLED=false` override; no env file changed. |
+| `python scripts/verify-member-rendering.py --serve` | Seven production HTML states pass; code fields disable autocomplete, and number-only HTML has no subscription details. |
+
+Manual Browser-pane checks at 375 × 812: closed, unavailable, blocked,
+number-only, active and ended views fit without horizontal overflow; code inputs
+measure 44 px. Code links prefill on load and hash changes without submitting;
+signed-out focus is on the phone with its caret after `256`, signed-in focus is
+on Unlock. After `router.refresh()`, the fragment stays empty and the fixture
+reports `history.state.__PRIVATE_NEXTJS_INTERNALS_TREE` present. Typing only the
+phone and pressing Unlock navigates to the accepted account state with the
+fragment cleared. The viewport override was reset.
+
+Existing 058 local database/build/backup issues remain separate. No deployment,
+real payment, external message, owner mode change or new dependency/env key.
+
+**Status:** 060 acceptance passed; tracker row is ☑ Completed. Continue with 061.
+
+## 061 — Server prediction gating (19 October 2026)
+
+Implemented the shared pure policy, strict stored/wire contracts, fail-closed
+read boundary, page/API factory injection, oracle refusal, generic metadata,
+private API headers, minimal gated consumers and live access-transition handling.
+The existing raw cache projections and viewer-independent keys remain intact.
+Added paywall unit tests and a synthetic production leak fixture covering raw
+HTML, RSC, feed/detail/history/insights APIs, oracle requests, slips and private
+route policy across eight viewer states. Updated legacy fixtures to request
+explicit full access and to keep cache/service assertions on stored schemas.
+
+Changed files include the domain fixture/feed/detail/insights contracts and
+presentation helpers, members gated reads, match services/HTTP/page composition,
+card/detail/live consumers, shared refresh transport, English messages, rendering
+fixtures/checks and package scripts. No dependency, env key, production setting,
+real payment or external message was added. Paid access remains off.
+
+Acceptance passes: `npm test -- --test-concurrency=1` (1,557 pass, one existing
+Windows-specific skip), `npm run typecheck`, changed-file ESLint and
+`npm run test:paywall` (12 tests). `test:paywall:rendering` passes 585 raw-response
+checks. The required card, client-state, feed, live-client, detail, history,
+SEO and slips rendering commands all pass their isolated production builds.
+Feed/detail/history retain 48 feed and 22 detail scenarios plus the revision
+checks. SEO passes 40 staging and 47 synthetic-production HTTP/HTML checks;
+slips retain 10 states. Fresh real MySQL captures pass 20 feed/detail tests and
+one discovery test, with no skips or provider calls.
+
+Repaired stale rendering fixtures/assertions to follow the existing chrome:
+explicit 30-row feed capture cohorts, both responsive Apply controls, published
+predictions in the ascending cohort, full accessible horizon text and the current
+Our prediction label. Added an exact selected-probability check. Expanded SEO's
+cohort from 35 to 55 so its second page remains real at the existing 50-row
+default. No prediction-content assertion was weakened. These script repairs also
+resolve 051's previously recorded rendering failure; its manual checks remain.
+
+**Status:** all 061 acceptance checks pass; tracker 061 is ☑ Completed.
+No deployment or mode change. Existing 058 local build/database/backup blockers
+remain documented separately. Continue with 062 after committing and pushing.
+
+
+## 062 — Gated UI and entry points (19 October 2026)
+
+Implemented subscriber cards, the feed banner and filters, verdict offer and both
+return links, plain drawer rows and slip EmptyState. Added shared AccountLink,
+UserIcon/SubscriberIcon, large buttons and native-radio SegmentedChoice. Existing
+routes pass showAccount only for on mode; information pages do not resolve it.
+The cheapest active plan uses the existing plan service; absent plans expose no
+invented public price. Tier changes refresh and remount the feed. App pages use
+the existing pageshow recovery so Back rechecks the member session.
+
+Acceptance passes: `npm test -- --test-concurrency=1` (1,559 pass, one existing
+Windows-specific skip), `npm run typecheck`, changed-file ESLint, `test:card`
+(21), `test:live-client` (31), `test:state` (38), and `test:paywall` (14).
+`test:card:rendering` preserves all 13 full-content examples. The final isolated
+production `test:paywall:rendering -- --serve` passes 660 raw HTML/RSC/API checks
+across nine viewers. Parallel checks initially hit timing limits; the complete
+unit suite and card rendering pass when rerun sequentially without changed limits.
+
+Manual Browser-pane checks at 320×800 and 375×812: gated cards measure 75.5 px
+and 74.3 px respectively, show the first eligible family and subscriber line,
+open the match and have no premium attributes or horizontal overflow. Access
+buttons and both radio segments measure 48 px; native ArrowRight selects Airtel.
+The sheet disables probability bounds and Picks only and labels probability sort
+options. The real account/code factories with synthetic services return to the
+match after Unlock and reveal picks. Changing only the fake period to expired
+hides picks on the next poll; Back after real Sign out shows the gated panel with
+zero featured-pick attributes. Account → Renew reaches the explicitly synthetic
+063 plan destination in two taps. The production destination is verified in 063.
+Viewport override reset; screenshot: `.tmp/062-gated-feed-375.png`.
+
+**Status:** every 062 acceptance check passes; tracker 062 is ☑ Completed.
+No deployment, production setting, dependency or env-key change. Paid access
+remains off. Continue with 063 after committing and pushing.
+
+
+## 063 — Get access and payment reporting (19 October 2026)
+
+Added the thin /en/subscribe route and its existing-PublicShell page factory,
+numbered steps, owner-ordered plans, configured payment channels, safe Android
+menu links, shared help/Safety tips, inline/plain-post sign-in, account trial
+request and restricted payment status. Shared PhoneInput, AccountCodeForm,
+MemberPanel, controls, native segmented radios and Disclosure are reused;
+FileInput is added to the shared control module. Actions are 48 px and square.
+
+The client-only SMS parser has six explicitly synthetic owner-requested MTN and
+Airtel label examples. Amount/ID/network suggestions never block edits or take a
+fee/balance as the paid amount. Browser-only SMS/image handling, account-scoped
+scalar drafts, canvas JPEG preparation and XHR progress/retry live in small
+payment modules. The API uses the existing member guard and bounded body reader,
+a generalized badge signature reader, atomic budgets, account/confirmation locks,
+plan/terms snapshots and original JPEG/hash storage. Added a reusable owned
+throwaway paid-database helper and isolated production payment rendering app.
+
+Checks: required `npm run test:payments` passes 21 checks, including real MySQL
+concurrency/caps, duplicate IDs across networks, snapshots, assent, restricted
+status and trials; no skips. `tests/admin-routes.test.mjs` passes all 10 guard
+checks. The full unit suite passes 1,573 tests with its one existing Windows
+skip; the subsequently added client progress/retry test passes in the targeted
+16-test payment/guard run. `npm run typecheck`, changed-file ESLint and whitespace
+checks pass. Production payment rendering covers eight states and five user
+agents, including mode off, blocked, pre-hydration sign-in, no-name SMS, current
+assent, three ordered plans and private headers. No dependency or env key added.
+
+Browser pane at 375x812, synthetic services only: inline sign-in; canonical
+number; SMS suggests UGX 5,000 and TEST-MTN-001 while ignoring fee/balance; reload
+restores the plan/network/amount/ID/checkbox with empty SMS and no image. A real
+file-picker upload re-encodes a 1080x2400 synthetic image to 330 KB. A rejected
+send shows 100% progress and retains the fields and preview; correcting the ID
+and retrying reaches P-TEST/Checking with the reference-bearing WhatsApp link.
+The code control's Unlock is 48 px. Real Account -> Renew opens the production
+Get access page's visible #plans heading below the existing sticky header.
+A browser canvas probe prepares another 1080x2400 receipt at 393,307 bytes;
+1080x6000 becomes 737x4096 at 610,735 bytes, preserving the required 700 px width.
+Screenshot: `.tmp/063-payment-status-375.png`. Final browser checks confirm that
+sign-out clears the account draft, a matched SMS recipient takes precedence over
+another pay card, an edited amount survives plan changes, and the 320 px page has
+no horizontal overflow (`.tmp/063-get-access-320.png`).
+
+**Status: Partial.** Real anonymized network SMS/screenshot verification, the
+MTN registered name, optional Airtel channel and tested copy/menu/review details and physical Android/FB
+long-press, tab discard and 200 kbit/s upload checks remain OP-38/067 inputs.
+No production setting or data changed; paid access remains off. Continue with
+064 after committing and pushing 063.
+
+
+### 064 — owner payments queue and codes (19 October 2026)
+
+Added Payments/Codes pages, their guarded routes and owner-only JPEG route;
+`payment-review.ts` supplies safe DTOs, checks, trial cards, search and rejection.
+The existing 060 service supplies approval, trial send/dismiss and all code
+management. Shared CodeReadyPanel, ManualCodeForm, CodeActions and useCodeAction
+are available to 065. The shell now has Payments/Codes tabs and polls the pending
+count at 60 seconds. The Payments page's guarded metadata keeps the document
+count correct through refresh. No automatic approval or plaintext-code read API.
+
+Validation: `npm run test:admin` passes 28 tests, including every new route/page,
+owner screenshot sandbox headers and POST fallbacks. `npm run test:payments`
+passes 29 checks with no skips: real MySQL approval races, punctuation and
+cross-network/manual duplicates, edited final values, confirmation-time periods,
+renewal without code re-entry, trial send/dismiss, screenshot rejection/purge,
+once-only HTTP code delivery, immutable snapshots and audit actions. The
+stolen-ID recovery counts UGX 5,000 once and keeps the reversed ID reserved.
+Typecheck, changed-file lint and whitespace checks pass. The production rendering
+fixture passes both owner pages, private headers and the pending title count.
+
+Manual Browser pane (375 x 812), synthetic services only: owner SMS suggests
+UGX 5,500 and its ID, matches the sender to the payer, and leaves fields editable;
+approval opens the masked code message. Tapping WhatsApp, returning and reloading
+preserves the panel. Done, sent removes it across reload; another creation cannot
+replace an unsent panel. Manual generation on Codes uses the same panel. Both
+pages fit without horizontal overflow, with the existing square chrome and a
+48 px wallet-confirmation button. Evidence: `.tmp/064-code-ready-375.png` and
+`.tmp/064-codes-375.png`. No message was sent and no real wallet was used.
+
+**Status: Completed.** No production setting/data changed; paid access stays off.
+Commit and push 064 before starting 065.
+
+
+### 065 — overview, subscribers, audit and members purge (20 October 2026)
+
+Replaced the empty Overview and added Subscribers and Audit in the existing
+admin shell. New guarded subscriber routes provide POST phone search, notes,
+block/unblock, sign out all, confirmed number change and confirmed erasure.
+The read services return explicit browser DTOs; code generation and delivery
+reuse 064. Added the shared hourly members purge, worker/CLI entry, maintenance,
+cron and admin fallback triggers. Existing grants already cover the four purged
+tables; local-database documentation describes scheduling and the command.
+
+`npm run test:members` passes 50 checks with no skips, including the complete
+migration chain, genuine MySQL grants/constraints, member/code concurrency and
+new accounting/retention tests. The final focused seven-check real MySQL run also
+covers HTTP verification/confirmation, reason privacy and a 101-session batch.
+Every retention rule has injected-clock coverage; concurrent claims purge once,
+repeated runs are idempotent, pending screenshots survive, and configurable
+retention applies. Revenue is EAT-aligned, excludes reversals and trial/reissue/
+number-change amounts, and paid-active counts survive replacement chains.
+Erasure retains amounts/IDs while clearing personal fields and images.
+
+`npm run test:admin` passes 29 checks, including every new page/route, POST
+fallbacks and a TypeScript-AST scan of all handwritten application updates that
+forbids ownership-key mutation after insert. Typecheck, changed-file ESLint
+(with zero warnings) and whitespace checks pass. Production rendering verifies
+Overview/Subscribers/Audit alongside Payments/Codes and private headers.
+The payment suite passes all 29 checks after bucket writers gained window-end markers.
+
+Manual Browser pane, 375 x 812, synthetic services: Overview values and EAT
+labels, subscriber POST search without a phone URL, ID-only detail links, device
+and code tools, verification/erasure controls, and action-filtered Audit all fit
+without horizontal overflow. Screenshots: `.tmp/065-overview-375.png`,
+`.tmp/065-subscribers-375.png`, `.tmp/065-audit-375.png`. No real personal data was
+erased and no real member purge was run.
+
+**Status: Completed.** Paid access remains off. Commit and push before 066.
+
+
+## 066 — Legal, help, policy copy and analytics (20 October 2026)
+
+Implemented mode-independent metadata, footer, privacy/terms/help/contact copy in the existing information chrome. Added member-cookie and phone notices, local SMS/draft boundaries, screenshot/database/backup/Meta handling, retention/erasure limits and payment/refund/data-protection blockers. Terms cover offers, trial timing, manual review, EAT periods, renewals, personal codes/devices, weak phone login, suspension and unresolved legal/refund facts. Original-content reuse excludes unfinished-fixture subscriber material. Contact stays release-ready without database reads.
+
+Added four analytics goals and three successful-action, consent-gated name-only events; strict collection rejects attached payment values/identifiers. Added the owner runbook in subscriptions.md and reconciled database, grants, deployment-overlay, API, SEO and information-page docs. Rendering assertions decode HTML entities and follow current Help wording. The gated slip screen now uses the existing empty-state heading-level option to supply its missing h1. A small information-rendering wrapper reuses production route factories with explicitly synthetic off-mode access, avoiding any real database/settings change.
+
+Validation: npm test passed 1,579 tests with one existing skip (1,580 total); the new name-only analytics check and its suite passed all 19 tests. Typecheck, changed-file lint, whitespace and the production build pass with the previously recorded database-disabled process override. Privacy, terms, contact and navigation production HTML scripts pass against the isolated off-mode fixture; privacy/terms/contact also pass on the local production server. Navigation covers all information pages, no sign-in forms outside member pages, English redirects and invalid-query 404s. Mode-specific account-icon checks remain covered by 062’s nine-viewer rendering fixture. Logs: .tmp/066-tests.log, 066-analytics.log, 066-typecheck.log, 066-lint-final.log, 066-build.log, 066-information.log.
+
+Status: Partial. The owner explicitly chose to keep notices as drafts and paid access off; no legal/refund/hosting/retention/licensing facts or paid-provider rights were supplied. OP-26/27/39/40 remain activation blockers. Nothing was deployed and no live data or settings were changed.
+
+
+## 067 — Paid-access launch readiness (20 October 2026)
+
+Added scripts/verify-production-paywall.py and the shared scripts/lib/production_checks.py response guard; updated verify-production-seo.py for publication readiness, private noindex/no-store routes and the robots admin exclusion. Requests are cookie-less GETs with no redirects or authenticated action. The gate verifier checks feed/detail projections, raw upcoming HTML/flight data, filtered news and cache/cookie behavior; it requires a published scheduled forecast and allows public finished/canceled/awarded content. Added verify-launch-rendering.py to exercise both verifiers against local production route factories and explicitly synthetic data, plus five regression tests in tests/production_checks_test.py.
+
+Expanded docs/subscriptions.md with the rollout, host/backup/grant checks, test-mode phone exercise, activation and rollback procedure, and the complete OP-linked owner-input reconciliation. Updated implementation decisions and tracker. The owner retained draft notices and paid mode off. Empty network prefixes/manual selection and the six synthetic SMS drafts are accepted choices; genuine message/image and physical-device evidence remains distinct. No new environment key, npm dependency, schema or production setting was added.
+
+Validation: npm run check passes with the previously recorded process-only GOAL_HINT_DATABASE_ENABLED=false override: Prisma generate/validate, full zero-warning ESLint, typecheck, 1,580 passing Node tests with one existing Windows skip (1,581 total), 16 passing Python tests and the production build. The final Python rerun also passes all 16. All named service suites pass without skips: analytics 28, admin 29, members 51, SEO 27, payments 29, paywall 14, card 21, live-client 31 and state 38. Integration suites use restricted, disposable MySQL databases. Both production verifiers pass on the local production fixture (7 paywall and 16 SEO checks); no production host was contacted. Privacy, terms, contact and navigation HTML commands pass using the unchanged 066 production build.
+
+The full rendering regression found one stale absence assertion for the Picks only control introduced by 062. verify-match-feed-rendering.py now verifies both enabled full-access controls; the nine-viewer paywall fixture separately checks free-viewer restrictions. The unused member-test session result now asserts successful verification, resolving its lint warning without changing application code. An older SEO capture had outdated pagination defaults; regenerating the capture with the current genuine MySQL integration test passed without skips, instead of weakening the pagination assertions.
+
+Every rendering command named by 057–066 passes: paywall (660 raw HTML/RSC/API checks across nine viewer states), card (13 examples), state (four concurrent requests with two isolated providers each), feed-page (48 scenarios), live-client, detail-page (22 detail scenarios), history-page, SEO (40 staging and 47 synthetic production HTTP/HTML checks) and slips (10 isolated states and native form/cutoff/manual alternatives). The feed/detail/history variants rebuild current factories from the genuine SQL capture; SEO uses fresh SQL projections. Logs: .tmp/067-check.log, 067-test-*.log, 067-scripts-final.log, 067-information.log and 067-launch-rendering.log. All required local checks now pass with the recorded build override; physical/host/real-message acceptance remains pending.
+
+Status: Partial. Real anonymized SMS and screenshots, owner-tested menu/copy format and physical phone/slow-upload checks, legal/refund/hosting/retention/provider rights, backup/host evidence and release/activation approval remain pending as itemized in subscriptions.md. The existing developer runtime-policy/migration drift and append-only-trigger backup-restore failure are not repaired by the build override. No deployment, production request, real payment, member purge or real-data deletion was performed. Paid access remains off.
+
+
+## Provider-first baseline and private source comparison (25 October 2026)
+
+Checklist A01/A06/A07 ([decision](implementation-decisions.md#25-october-2026--provider-first-source-order-and-ai-promotion-gate)).
+A new genuine MySQL test first reproduced the latent refresh-stage defect: `store.start(lease, 'preparation')` failed with
+`unavailable` against the deployed check. Migration `20261025200000_refresh_stage_phases` (with its MariaDB overlay and static
+test) fixes it. With AI enabled, refresh plans now freeze `provider-first`: API-Football publishes the match result, AI is
+captured beside it, and both receipts are sealed in the fallback stage. `npm run evaluation:report` prints a model-bound
+promotion reference; `ai-first` needs that reference and an `ai-promotion` approval. The owner page `/admin/forecasts`
+shows the matched comparison as a diagnostic.
+
+Validation (Node 24.18.1, isolated MySQL 8.4.11 via `MYSQL_TEST_SERVER_BINARY`): `tests/refresh-stage-phases.integration.mjs`
+3/3 (failed before the migration); the provider-first scenario of `tests/prediction-refresh.integration.mjs` 6/6, including
+publication inserts passing `MarketPrediction_payload_check`, stage reuse without a second provider call, and a root-tampered
+stage body refused by the receipt reader. Unit suites for fallback resolution/service, source receipts, source comparison,
+evaluation input/service/report/promotion/archive, runtime policy, live AI/binding, match details, detail records and admin
+routes pass; `npm run test:scripts` 53/53; typecheck and changed-file ESLint pass. Not run here: the full `npm test`, the
+build and rendering verifiers, and the overlay on MariaDB 11.4. Nothing was deployed or applied to a configured database.

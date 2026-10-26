@@ -1,5 +1,7 @@
 # Admin navigation, UI stability, and performance optimization
 
+The web application lives in `next-js/`. Paths below are relative to the repository root; run web development, test, and build commands from `next-js/`. The planned Flutter wrapper belongs in `flutter/` and is outside this task.
+
 Optimize the existing Goal Hint app so that administrators retain access to regular site navigation and all admin screens feel stable, lightweight, and fast. Most of the app already works well. Preserve the existing interface and functionality while correcting navigation visibility and unnecessary reload or rendering behavior.
 
 This is a focused implementation task. Investigate the current behavior, make the smallest effective changes, and verify the result. Avoid a redesign or an architectural rewrite.
@@ -37,11 +39,11 @@ Inspect shared layout ownership, page-level wrappers, provider placement, loadin
 
 Useful starting points in this repository include:
 
-- `src/app/layout.tsx`, `src/app/admin/layout.tsx`, and `src/app/_components/admin-frame.tsx`
-- `src/components/admin/admin-shell.tsx` and `src/components/admin/admin-workspace.tsx`
-- `src/components/navigation/session-navigation.tsx`, `responsive-navigation.tsx`, and `navigation-link.tsx`
-- `src/domain/admin-navigation.ts`
-- The individual admin editors, their data/mutation helpers, and `src/components/analytics/dashboard/analytics-dashboard.tsx`
+- `next-js/src/app/layout.tsx`, `next-js/src/app/admin/layout.tsx`, and `next-js/src/app/_components/admin-frame.tsx`
+- `next-js/src/components/admin/admin-shell.tsx` and `next-js/src/components/admin/admin-workspace.tsx`
+- `next-js/src/components/navigation/session-navigation.tsx`, `responsive-navigation.tsx`, and `navigation-link.tsx`
+- `next-js/src/domain/admin-navigation.ts`
+- The individual admin editors, their data/mutation helpers, and `next-js/src/components/analytics/dashboard/analytics-dashboard.tsx`
 
 These are investigation starting points, not a mandatory edit list. The regular site's `SessionNavigation` already supports adding Dashboard for administrators; examine how the admin shell can reuse the established navigation behavior. Explicitly inspect Analytics because its route is outside `/admin`.
 

@@ -1,26 +1,11 @@
-node_modules/
-.next/
-out/
-dist/
-deploy/*.zip
-coverage/
-output/playwright/
-.playwright-cli/
-.playwright-mcp/
-.tmp/
-*.ghb
-src/server/generated/
-*.tsbuildinfo
-__pycache__/
-*.py[cod]
-next-env.d.ts
-npm-debug.log*
-.env*
-!.env.example
-.vercel/
+# Repository-wide local tooling and operating-system files.
+.claude/worktrees/
 .DS_Store
 Thumbs.db
-.goal-hint/
-deploy/deploy-credentials.md
-chrome-filters/
-public/ocr/
+*.log
+
+# Keep private environment files out of every project.
+.env*
+!.env.example
+
+# Each application owns its dependency, build, and runtime ignore rules.
