@@ -136,12 +136,18 @@ checked before rounding. For example, `1.01 × 1.99 = 2.0099` exceeds a 2.00
 maximum and is below a 2.01 minimum, even though its displayed total is 2.01.
 Only the displayed total is rounded half-up to two decimal places.
 
-Average probability is the arithmetic mean of the selected, unrounded forecast
-probabilities. Forecasts of 80% and 90% therefore display an average of 85%.
-This describes the selections' forecast strength, not the chance that the entire
-slip wins. Independent events would have a 72% joint probability; the builder
-does not assume independence. A combined estimate is exposed only through the
-verified joint-model binding described below.
+The shared slip summary multiplies the selected, unrounded forecast probabilities
+to show an independence-based combined estimate. Forecasts of 80% and 90% give
+`0.80 × 0.90 = 0.72`, displayed as 72.0%. The independence assumption is stated
+beside the slip; only the final displayed percentage is rounded. Invalid or empty
+inputs produce no estimate. This calculation also applies to saved slips using
+their original selections, without changing their stored snapshot.
+
+Average probability remains a separate arithmetic mean (85% in that example),
+describing the selections' forecast strength. When a verified joint-model estimate
+is supplied, it occupies the summary's whole-slip probability field instead of
+the independence estimate. Model qualification, search ranking and combined
+probability filters continue to use the verified binding described below.
 
 ## Ranking and separate slips
 
@@ -156,8 +162,8 @@ check, marginal probability bounds and estimator ranking between custom and
 daily Best Slips. A server-owned `SlipJointModelBinding` supplies the model and
 an independent `verifyModel` callback; reference strings alone cannot approve
 calibration or correlation evidence. `createStoredSlipBuild` accepts that
-optional binding. The production reader supplies none, so no actual combined
-forecast or qualification is invented.
+optional binding. The production reader supplies none; the displayed independence
+estimate does not qualify a model or enable model-dependent ranking and filters.
 
 `boundJointSlipModel` resolves the request-time binding for the stored reader and
 the page's capability check. The page offers combined bounds only with verified

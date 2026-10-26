@@ -196,6 +196,12 @@ export const SlipSummary = styled.dl`
   }
   ${media.desktop} { font-size: 0.75rem; }
 `;
+export const SlipProbabilityNote = styled.p`
+  margin: 0; padding: 5px 9px;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.4;
+  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  ${media.belowDesktop} { padding-inline: 12px; color: ${light.mutedText}; border-block-end-color: ${light.border}; }
+`;
 /** Phones: one leg's pick panel, tinted in its market's colour: icon, market over pick, then odds and chance in a
  * white box. The desktop table lays its parts out as before. */
 export const SlipPanel = styled.div<{ $family: MarketFamily }>`
