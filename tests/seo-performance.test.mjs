@@ -67,10 +67,18 @@ function clientGraph(roots) {
 const heavy = /^(?:libphonenumber-js|iso-3166)(?:\/|$)|^src\/(?:components\/ui\/phone-input\.tsx|domain\/phone-(?:mobile|countries)\.ts|components\/analytics\/dashboard\/dashboard-styles\.tsx)$/u;
 const leaks = (graph) => [...graph].filter(([name]) => heavy.test(name)).map(([, chain]) => chain.join(" -> "));
 
+// Every public page, found on disk so a new one is covered too; the account and subscribe pages hold the phone field.
+const publicPages = () => readdirSync(join(root, "src/app/[locale]"), { recursive: true }).map((path) => `src/app/[locale]/${path.replaceAll("\\", "/")}`)
+  .filter((path) => path.endsWith("/page.tsx") && !/^src\/app\/\[locale\]\/(?:account|subscribe)\//u.test(path)).sort();
+
 test("the root layout, public shell and public pages ship no phone library, country list or owner dashboard styles", () => {
-  const roots = ["src/app/layout.tsx", "src/app/[locale]/layout.tsx", "src/app/_components/public-shell.tsx", "src/app/_components/information-shell.tsx",
-    "src/app/_components/app-providers.tsx", "src/components/members/account-link.tsx", "src/components/members/member-login-notice.tsx",
-    "src/app/[locale]/page.tsx", "src/app/[locale]/matches/page.tsx", "src/app/[locale]/matches/[fixtureId]/[slug]/page.tsx", "src/app/[locale]/help/page.tsx"];
+  const pages = publicPages();
+  for (const page of ["page.tsx", "matches/page.tsx", "matches/[fixtureId]/[slug]/page.tsx", "performance/page.tsx", "slips/page.tsx", "predictions/[date]/page.tsx",
+    "contact/page.tsx", "privacy/page.tsx", "terms/page.tsx", "how-it-works/page.tsx", "help/page.tsx"]) assert.ok(pages.includes(`src/app/[locale]/${page}`), page);
+  assert.ok(!pages.some((path) => /\/(?:account|subscribe)\//u.test(path)), "the account and subscribe pages are left out");
+  const roots = ["src/app/layout.tsx", "src/app/page.tsx", "src/app/not-found.tsx", "src/app/[locale]/layout.tsx", "src/app/_components/public-shell.tsx",
+    "src/app/_components/information-shell.tsx", "src/app/_components/app-providers.tsx", "src/components/members/account-link.tsx",
+    "src/components/members/member-login-notice.tsx", ...pages];
   const graph = clientGraph(roots);
   for (const name of ["src/components/ui/controls.tsx", "src/components/members/account-link.tsx", "src/domain/phone.ts", "styled-components"]) {
     assert.ok(graph.has(name), `${name} is in the shell's client graph`);
