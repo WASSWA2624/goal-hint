@@ -16,7 +16,7 @@ export function SlipHistory({ slips, locale, statistics, period }: {
   const m = createMessages(locale);
   return <Results aria-labelledby="completed-slips" data-slip-history>
     {statistics && <PerformanceSummary counts={statistics} locale={locale} kind="slips" period={period}
-      title={m.text("performance.summary.savedTitle")} description={m.text("performance.summary.savedHint")} />}
+      title={m.text("performance.summary.savedTitle")} />}
     <HeadingRow><h2 id="completed-slips">{m.text("slips.history")}</h2></HeadingRow>
     <Note>{m.text("slips.historyHint")}</Note>
     {slips?.length ? <SlipStack>{slips.map((item, index) => <div key={item.id}>

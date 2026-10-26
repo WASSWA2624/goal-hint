@@ -336,8 +336,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} /> : generated ? <>
         <PerformanceSummary counts={{ total: data.slips.length, won: 0, lost: 0, pending: data.slips.length }} locale={locale} kind="slips"
           title={messages.text("performance.summary.generatedTitle")} headingLevel={3}
-          period={`${messages.reportingDateSpan(parseReportingDate(criteria.dateFrom), parseReportingDate(criteria.dateTo))}${criteria.timeFrom && !isAnyKickoffTime({ from: criteria.timeFrom, to: criteria.timeTo }) ? ` · ${criteria.timeFrom}–${criteria.timeTo}` : ""} · EAT`}
-          description={messages.text("performance.summary.generatedHint")} />
+          period={`${messages.reportingDateSpan(parseReportingDate(criteria.dateFrom), parseReportingDate(criteria.dateTo))}${criteria.timeFrom && !isAnyKickoffTime({ from: criteria.timeFrom, to: criteria.timeTo }) ? ` · ${criteria.timeFrom}–${criteria.timeTo}` : ""} · EAT`} />
         <Note>{messages.text(data.jointProbabilities ? "slips.jointRanking" : "slips.ranking")}</Note>
         {data.slips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
