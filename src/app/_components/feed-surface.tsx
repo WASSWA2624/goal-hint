@@ -70,7 +70,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     {data.performance && <PerformanceSummary counts={data.performance} locale={query.locale} kind="matches"
-      period={period} description={messages.text("performance.summary.matchBasis")} />}
+      period={period} />}
     <ResultsToolbar query={query} today={today} total={data.total} first={first}
       last={first + records.length - 1} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
