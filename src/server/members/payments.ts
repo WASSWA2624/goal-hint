@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import { formatPaymentReference, parseTransactionId, paymentRules, transactionKey, type PaymentFields, type PaymentStatus, type PaymentView } from "../../domain/payment.ts";
-import { validMobilePhone } from "../../domain/phone.ts";
+import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import type { SubscriptionIdentity, SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";

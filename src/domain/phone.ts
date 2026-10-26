@@ -8,10 +8,9 @@
  * accepted when typed in full (10–15 digits, no leading 0).
  *
  * A number being captured (sign-up, phone changes, payer and owner numbers) must also be a mobile number with its
- * country's length and leading digits (`validMobilePhone`). Looking up an existing account keeps `normalizePhone`, so
- * numbers stored before that rule still sign in and stay searchable.
+ * country's length and leading digits (`validMobilePhone` in `phone-mobile.ts`, which alone loads libphonenumber's metadata).
+ * Looking up an existing account keeps `normalizePhone`, so numbers stored before that rule still sign in and stay searchable.
  */
-import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 
 export const mobileNetworks = Object.freeze(["mtn", "airtel"] as const);
 export type MobileNetwork = (typeof mobileNetworks)[number];
@@ -65,25 +64,6 @@ export function normalizePhone(input: unknown): string | null {
   if (/^0\d{9}$/u.test(value)) value = ugandaCode + value.slice(1);
   else if (/^7\d{8}$/u.test(value)) value = ugandaCode + value;
   return isCanonicalPhone(value) ? value : null;
-}
-
-/**
- * The canonical number when it is also a valid mobile number for its country (libphonenumber's mobile metadata), else null.
- * Non-geographic codes (+800 freephone, +883 and the like) belong to no country and are refused.
- */
-export function validMobilePhone(input: unknown): string | null {
-  const phone = normalizePhone(input), parsed = phone ? parsePhoneNumberFromString(`+${phone}`) : undefined;
-  return phone && parsed?.country && parsed.isValid() ? phone : null;
-}
-
-export type PhoneInputIssue = "required" | "invalid" | "too-long" | "country-code" | "not-mobile";
-/** UI validation uses the same contract as the server: `validMobilePhone` for a new number, `normalizePhone` for a lookup. */
-export function phoneInputIssue(value: string, required = false, lookup = false): PhoneInputIssue | null {
-  if (!value.trim()) return required ? "required" : null;
-  if (lookup ? normalizePhone(value) : validMobilePhone(value)) return null;
-  if (normalizePhone(value)) return "not-mobile";
-  if (value.length > phoneInputMaxLength || (value.match(/\d/gu)?.length ?? 0) > 15) return "too-long";
-  return phoneHint(value) ? "country-code" : "invalid";
 }
 
 /** The hint for a refused or unfinished number that starts `256` and then a digit other than 7 or 0. */

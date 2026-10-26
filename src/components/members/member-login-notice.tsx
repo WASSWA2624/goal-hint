@@ -3,7 +3,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import styled from "styled-components";
-import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { Button } from "@/components/ui/controls";
 import { createMessages } from "@/i18n/messages";
 import { consumeMemberLoginFlash, type MemberLoginFlash } from "./member-login-flash";
@@ -22,10 +21,12 @@ function update(next: MemberLoginFlash | null) {
   for (const listener of listeners) listener();
 }
 
-const LoginNotice = styled(Notice)`
+// Local styles: the owner dashboard's Notice would pull all of its styles into every public page.
+const LoginNotice = styled.div`
   position: fixed; inset-block-start: max(12px, env(safe-area-inset-top)); inset-inline: 12px;
   z-index: 100; max-inline-size: 36rem; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
+  border-inline-start: 4px solid; border-radius: ${({ theme }) => theme.border.radius}; font-size: ${({ theme }) => theme.typography.scale.body};
   color: ${({ theme }) => theme.color.outcome.correct.text};
   background: ${({ theme }) => theme.color.outcome.correct.background};
   border-color: ${({ theme }) => theme.color.outcome.correct.border};
@@ -43,7 +44,7 @@ export function MemberLoginNotice() {
     if (saved) update(saved);
   }, [pathname]);
   if (!current) return null;
-  return <LoginNotice as="div" role="status" aria-live="polite" aria-atomic="true" data-login-notice>
+  return <LoginNotice role="status" aria-live="polite" aria-atomic="true" data-login-notice>
     <span>{messages.text(current === "other-device-signed-out" ? "account.otherDeviceSignedOut" : current === "signed-out" ? "account.signedOutBrowsing" : "account.loginSuccessful")}</span>
     <Button type="button" variant="secondary" onClick={() => update(null)}>{messages.text("account.dismissNotice")}</Button>
   </LoginNotice>;

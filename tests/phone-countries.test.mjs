@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
 import test from "node:test";
 import { composePhoneValue, isInternationalPhoneInput, phoneCountries, phoneCountry, searchPhoneCountries, splitPhoneValue } from "../src/domain/phone-countries.ts";
-import { normalizePhone, phoneInputIssue } from "../src/domain/phone.ts";
+import { normalizePhone } from "../src/domain/phone.ts";
+import { phoneInputIssue } from "../src/domain/phone-mobile.ts";
 
 test("country choices have unique identities, calling codes, immutable metadata and usable bundled flags", async () => {
   assert.ok(phoneCountries.length > 200);

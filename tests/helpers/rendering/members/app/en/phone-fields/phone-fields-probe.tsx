@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
-import { PhoneInput } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 /** Inspect native form serialization for required account fields and optional empty admin searches. */
 export function PhoneFieldsProbe() {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { PhoneInput, SegmentedChoice, TextInput, TextLink } from "@/components/ui/controls";
+import { SegmentedChoice, TextInput, TextLink } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/icons";
 import { messageChannels, supportedMessageChannels, type MessageChannel } from "@/domain/member-verification";
 import { normalizePhone } from "@/domain/phone";
