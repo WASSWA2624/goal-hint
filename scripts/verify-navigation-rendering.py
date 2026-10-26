@@ -21,7 +21,7 @@ def main() -> None:
     root = anonymous("/")
     assert root.status == 308
     assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
-    paths = ["/en", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live", "/en/predictions/2020-02-29?status=finished",
+    paths = ["/en", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live",
         "/en/matches?sort=kickoff", "/en/matches?from=2026-10-09&to=2026-10-16",
         "/en/matches?when=tomorrow&status=scheduled&market=total-goals&sort=kickoff",
         "/en/predictions/2020-02-29?to=2020-03-06&q=Synthetic&league=league-a&page=2&pageSize=40",
@@ -89,7 +89,8 @@ def main() -> None:
     legacy = anonymous("/en/how-it-works?from=2026-10-09&to=2026-10-11")
     assert legacy.status == 308
     assert urlsplit(urljoin(origin, legacy.headers.get("location"))).path == "/en/help"
-    for path in ["/en/predictions/2026-02-29", "/en/predictions/2026-1-01",
+    # A single empty day more than 31 days from today is not an archive page (ranges, like the one above, still render).
+    for path in ["/en/predictions/2026-02-29", "/en/predictions/2026-1-01", "/en/predictions/2020-02-29?status=finished",
             "/en/predictions/2026-10-09?status=correct", "/en/predictions/2026-10-09?status=all&status=finished",
             "/en/matches?sort=unsupported", "/en/matches?market=total-goals&sort=probability&sortMarket=match-result",
             "/en/matches?unknown=x", "/en/matches?page=0", "/en/matches?q=a&q=b", "/en/matches?from=2026-10-09",
