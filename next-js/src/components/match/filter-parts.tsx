@@ -22,6 +22,19 @@ export const focusRing = css`
   }
 `;
 
+/** Scoped feed colors: blend the panel into the page while keeping fields distinct. */
+export const filterPanelColors = css`
+  --filter-panel-background: color-mix(in srgb, ${({ theme }) => theme.color.surfaceMuted} 55%, ${({ theme }) => theme.color.page});
+  --filter-field-background: color-mix(in srgb, ${({ theme }) => theme.color.surface} 20%, ${({ theme }) => theme.color.page});
+  --filter-field-border: color-mix(in srgb, ${({ theme }) => theme.color.controlBorder} 97%, ${({ theme }) => theme.color.surfaceMuted});
+`;
+
+/** Reusable fields inherit the feed palette only inside a themed filter panel. */
+export const filterControlColors = css`
+  background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
+  border-color: var(--filter-field-border, ${({ theme }) => theme.color.controlBorder});
+`;
+
 /** Shared feedback for compact themed controls, without changing their dimensions. */
 export const controlFeedback = css`
   transition: border-color 120ms ease, background-color 120ms ease;
@@ -123,8 +136,8 @@ const SelectFace = styled.span`
   min-block-size: 1.875rem;
   padding-inline: 8px 22px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  ${filterControlColors}
   border-radius: ${({ theme }) => theme.border.radius};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.body};
@@ -175,8 +188,8 @@ const PickerSummary = styled.button`
   min-block-size: 2rem;
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  ${filterControlColors}
   border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.75rem;
@@ -201,7 +214,7 @@ const PickerPanel = styled.div`
   gap: ${({ theme }) => theme.space.sm};
   inline-size: min(20rem, var(--picker-max-width, calc(100vw - 32px)));
   padding: ${({ theme }) => theme.space.sm};
-  background: ${({ theme }) => theme.color.surface};
+  background: var(--filter-panel-background, ${({ theme }) => theme.color.surface});
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
@@ -220,8 +233,8 @@ const PickerSearch = styled.input`
   min-block-size: 2.25rem;
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  ${filterControlColors}
   border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.8125rem;

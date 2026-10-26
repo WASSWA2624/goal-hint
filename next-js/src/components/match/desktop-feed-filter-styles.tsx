@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
-import { controlFeedback, focusRing } from "./filter-parts";
+import { controlFeedback, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
   box-sizing: border-box;
@@ -14,7 +14,7 @@ const fieldControl = css`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  ${filterControlColors}
   font: inherit;
   font-size: 0.875rem;
   line-height: 1.3;
@@ -27,6 +27,7 @@ const fieldControl = css`
 
 /** Desktop-only exports keep the existing phone filter components independent. */
 export const Panel = styled.form`
+  ${filterPanelColors}
   display: grid;
   gap: 8px;
   inline-size: 100%;
@@ -36,7 +37,8 @@ export const Panel = styled.form`
   border-block-start: 2px solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  background: var(--filter-panel-background);
+  [data-criteria-dialog] { background: var(--filter-panel-background); }
 `;
 
 export const HeadingRow = styled.div`
@@ -78,7 +80,7 @@ export const SearchField = styled.label`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  ${filterControlColors}
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 17px; }
   > input {
     flex: 1;
@@ -116,7 +118,7 @@ export const SectionButton = styled.button`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  ${filterControlColors}
   font: inherit;
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -183,7 +185,7 @@ export const SortField = styled.label`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surface};
+  ${filterControlColors}
   font-size: 0.8125rem;
   > span { flex: none; }
   > select {
