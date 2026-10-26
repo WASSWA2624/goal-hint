@@ -100,7 +100,7 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   paymentNote: "Extra payment note",
   reviewTime: "Typical review time",
   maxUnlockedDevices: "Unlocked devices per account",
-  trialDays: "Free trial for new numbers (days)",
+  trialDays: "Free trial on registration (days)",
   screenshotRetentionDays: "Keep screenshots after approval (days)",
 });
 

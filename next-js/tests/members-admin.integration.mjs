@@ -28,7 +28,11 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const b=await member();assert.equal((await codes.manual({phone:b.phone,planId,network:"airtel",transactionRef:"OWNERREVENUE",amountReceivedUgx:7000,note:"Synthetic owner wallet"},"owner")).status,"created");
   const c=await member(),r=await manual(c);const reissue=await codes.reissue(r.id,"owner");assert.equal(reissue.status,"created");const moved=await codes.changeNumber(c.accountId,{newPhone:`25670000${++n}`,verifiedBy:"payment-details"},"owner");assert.equal(moved.status,"created");
   const d=await member(),reversed=await report(d,"REVERSEREVENUE");await codes.approvePayment(reversed.id,fields("REVERSEREVENUE",6000),"owner");await codes.reversePayment(reversed.id,"network-reversal","owner");
-  const trial=await member();await payments.trial(trial,"unknown");await codes.sendTrial(trial.accountId,2,"owner");
+  // A historical automatic-trial period is accounting data, never an owner queue action.
+  const trial=await member(),trialAt=new Date(clock);
+  await db.query(tx=>tx.accessCode.create({data:{id:randomUUID(),accountId:trial.accountId,codeSalt:new Uint8Array(16),
+   codeHash:createHash("sha256").update("synthetic-free-trial").digest("hex"),reference:"TRAL",source:"trial",planName:"Free trial",durationDays:2,
+   priceUgx:0,amountReceivedUgx:0,createdAt:trialAt,createdBy:"system:registration",activatedAt:trialAt,startsAt:trialAt,endsAt:new Date(clock+2*DAY)}}));
   clock=Date.parse("2026-11-05T21:30:00Z");await manual(await member(),2000);clock=base;
   await db.query(tx=>tx.ownerAuditEvent.create({data:{at:new Date(base),actor:"system",action:"uploads_busy",targetType:"payment",targetId:"ceiling",details:{}}}));
   const v=await members.overview();assert.equal(v.weekRevenue,15000);assert.equal(v.monthRevenue,17000);assert.equal(v.active,4);assert.equal(v.trials,1);assert.equal(v.busy,1);assert.equal(v.paymentNumbersChangedAt,new Date(base).toISOString());

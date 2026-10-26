@@ -48,12 +48,3 @@ export function createPaymentHandler(services: MemberServicesSource = getMemberS
     } finally { processState.goalHintPaymentUploads!--; }
   }, { services, access: "member" });
 }
-
-export function createTrialHandler(services: MemberServicesSource = getMemberServices) {
-  return memberRoute(async ({ request, services: resolved, member }) => {
-    if (member!.blocked) return json({ error: "forbidden", message: memberRefusal }, 403);
-    if (!resolved.payments) return busy(503);
-    const result = await resolved.payments.trial(member!, clientAddress(request.headers));
-    return result === "saved" ? json({ status: "saved" }) : result === "busy" ? busy() : json({ error: "forbidden", message: memberRefusal }, 403);
-  }, { services, access: "member" });
-}

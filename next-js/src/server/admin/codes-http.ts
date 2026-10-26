@@ -1,7 +1,6 @@
 import "server-only";
 import { normalizeTransactionId } from "../../domain/payment.ts";
 import { createAccessCodes, type CodeOutcome } from "../members/access-codes.ts";
-import { settingsServiceFor } from "../members/settings.ts";
 import { json, privateHeaders } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 import { createPaymentReview } from "./payment-review.ts";
@@ -49,8 +48,6 @@ export function createCodesHandlers({ notifications }: { notifications?: Payment
         switch (b.action) {
           case "revoke": return typeof b.reason === "string" ? codeAnswer(await codes.revoke(b.id, b.reason, owner.username)) : invalidAction();
           case "extend": return typeof b.days === "number" ? codeAnswer(await codes.extend(b.id, b.days, owner.username)) : invalidAction();
-          case "trial": { const settings = await settingsServiceFor(services.database).current(); return settings.settings ? codeAnswer(await codes.sendTrial(b.id, settings.settings.trialDays, owner.username)) : storageUnavailable(); }
-          case "dismiss-trial": return codeAnswer(await codes.dismissTrial(b.id, owner.username));
           default: return invalidAction();
         }
       } catch { return storageUnavailable(); }

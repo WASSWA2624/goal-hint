@@ -74,6 +74,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : action === "password" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),
         ...(result.requiresVerification ? { requiresVerification: true } : {}),
+        ...(result.trial ? { trial: result.trial } : {}),
         ...(typeof result.otherDeviceSignedOut === "boolean" ? { otherDeviceSignedOut: result.otherDeviceSignedOut } : {}) });
       response.headers.append("Set-Cookie", cookie(services.config, memberName, result.token, result.requiresPasswordChange ? 900 : memberSessionRules.cookieSeconds, "Lax"));
       response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.session, "", 0));

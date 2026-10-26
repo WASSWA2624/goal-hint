@@ -33,14 +33,6 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
     const list=await review.codes();assert.equal(list.find(c=>c.id===first.grant.id).planName,"Weekly");assert.ok(!JSON.stringify(list).includes("codeHash"));
     const sends=notifications.approvals.length;assert.equal((await codes.approvePayment(row.id,fields("EDIT-NEW"),"owner")).status,"duplicate");assert.equal(notifications.approvals.length,sends);
   });
-  await t.test("trial send and dismiss serialize once, use zero revenue and retain only hashed IP evidence",async()=>{
-    const who=await member();assert.equal(await payments.trial(who,"198.51.100.41"),"saved");const queue=await review.list();assert.equal(queue.trials.find(t=>t.id===who.accountId).ipCount,1);
-    const pendingSession=await db.query(tx=>tx.memberSession.findUniqueOrThrow({where:{tokenHash:who.tokenHash}}));assert.equal(pendingSession.codeEnteredAt,null);
-    const r=await Promise.all([codes.sendTrial(who.accountId,2,"owner"),codes.sendTrial(who.accountId,2,"owner")]);assert.deepEqual(r.map(x=>x.status).sort(),["created","refused"]);const ready=r.find(x=>x.status==="created").grant;assert.equal(+ready.endsAt-+ready.startsAt,2*86400000);assert.equal(ready.devicesUnlocked,1);
-    assert.equal((await codes.dismissTrial(who.accountId,"owner")).status,"refused");const row=await db.query(tx=>tx.accessCode.findUniqueOrThrow({where:{id:ready.id}}));assert.equal(row.amountReceivedUgx,0);assert.equal(row.source,"trial");
-    const other=await member();await payments.trial(other,"unknown");assert.equal((await codes.dismissTrial(other.accountId,"owner")).status,"saved");assert.equal((await codes.sendTrial(other.accountId,2,"owner")).status,"refused");
-    const audits=await db.query(tx=>tx.ownerAuditEvent.findMany());for(const a of audits)assert.ok(!JSON.stringify(a.details).includes("198.51.100.41"));for(const a of ["trial_sent","trial_dismissed"])assert.ok(audits.some(e=>e.action===a));
-  });
   await t.test("stolen-ID recovery keeps the ID unapprovable and records the real money once",async()=>{
     const stranger=await member(),payer=await member(),p=await report(stranger,"STOLEN.TEST",{payerPhone:payer.phone});await codes.approvePayment(p.id,fields("STOLEN.TEST"),"owner");
     assert.equal((await payments.submit(payer,{planId,payerPhone:payer.phone,network:"airtel",transactionId:"STOLENTEST",amount:5000,accepted:true},jpeg())).status,"duplicate");
@@ -65,6 +57,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
     await db.query(tx=>tx.subscriptionPlan.update({where:{id:planId},data:{name:"Changed plan",priceUgx:7000}}));
     assert.equal((await codes.extend(code.id,2,"owner")).status,"saved");assert.equal((await codes.revoke(code.id,"owner-revoked","owner")).status,"saved");
     const list=await createCodesHandlers().GET(context({}));const text=await list.text();assert.ok(!text.includes("codeHash"));assert.ok(!text.includes("codeSalt"));
+    for(const action of ["trial","dismiss-trial"])assert.equal((await createCodesHandlers().POST(context({action,id:who.accountId}))).status,400,"Automatic trials have no administrator grant or dismissal action.");
     const audit=await db.query(tx=>tx.ownerAuditEvent.findMany({where:{accountId:who.accountId}}));for(const action of ["code_created","payment_approved","code_extended","code_revoked"])assert.ok(audit.some(a=>a.action===action),action);
   });
 

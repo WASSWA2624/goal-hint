@@ -14,7 +14,7 @@ import { lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
 import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
 
-test("real MySQL payment transactions, budgets, snapshots, assent and trial limits", { timeout: 180_000 }, async (t) => {
+test("real MySQL payment transactions, budgets, snapshots, assent and retired trial requests", { timeout: 180_000 }, async (t) => {
   let fixture;
   try { fixture = await paidDatabase(); } catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
   const { database, config, root } = fixture;
@@ -166,15 +166,10 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
       await root.query("UPDATE SubscriptionSettings SET airtelNumber = '256700000902', airtelName = 'TEST AIRTEL' WHERE id = 1");
     }
   });
-  await t.test("trial requests are once per account, serialized, bounded by IP and refused after any code", async () => {
-    const who = await member(); assert.equal((await payments.view(who, settings)).trialEligible, true);
-    const requests = await Promise.all([payments.trial(who, "unknown"), payments.trial(who, "unknown")]); assert.equal(requests.filter((row) => row === "saved").length, 1);
-    assert.equal(await payments.trial(await member(who.phone), "unknown"), "refused");
-    const used = await member(); await codes.manual({ phone: used.phone, planId, amountReceivedUgx: 0, note: "Synthetic prior code" }, "synthetic-owner"); assert.equal(await payments.trial(used, "unknown"), "refused");
-    await setBudget("trial-ip", "198.51.100.20", { count: 19 });
-    const ipResults = await Promise.all([(async () => payments.trial(await member(), "198.51.100.20"))(), (async () => payments.trial(await member(), "198.51.100.20"))()]); assert.equal(ipResults.filter((row) => row === "saved").length, 1); assert.equal(ipResults.filter((row) => row === "busy").length, 1);
-    await root.query("UPDATE SubscriptionSettings SET trialDays = 0 WHERE id = 1"); assert.equal(await payments.trial(await member(), "unknown"), "refused");
-    await root.query("UPDATE SubscriptionSettings SET paywallMode = 'off', trialDays = 2 WHERE id = 1"); assert.equal(await payments.trial(await member(), "unknown"), "refused"); assert.equal((await payments.submit(await member(), fields(), image)).status, "refused");
-    instant += 86_400_000;
+  await t.test("payment views expose no manual trial-request workflow", async () => {
+    const view = await payments.view(await member(), settings);
+    assert.equal("trialEligible" in view, false); assert.equal("trialPending" in view, false); assert.equal("trial" in payments, false);
+    await root.query("UPDATE SubscriptionSettings SET paywallMode = 'off' WHERE id = 1");
+    assert.equal((await payments.submit(await member(), fields(), image)).status, "refused");
   });
 });

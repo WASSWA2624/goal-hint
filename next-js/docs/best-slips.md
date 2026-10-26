@@ -36,7 +36,7 @@ are private/no-store. Public DTOs omit even the internal slip ID, because it
 encodes fixture and selection identifiers. Shared caches never contain a viewer
 response. The page refreshes while visible and after a background tab returns.
 
-Local test mode exposes sign-in, plans, trial requests, payment reports and code
+Local test mode exposes sign-in, plans, automatic registration trials, payment reports and code
 activation. Every fixture's predictions/odds remain gated; valid unlocked periods
 are honored until expiry. Nothing was deployed or activated on a production host.
 

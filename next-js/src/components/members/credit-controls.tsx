@@ -60,9 +60,10 @@ async function postCredit(body: unknown) {
  * Buys the chosen plan from credit at once, after a confirmation. One request key per confirmation, so a repeated tap or a
  * retry after a lost answer returns the first purchase instead of buying twice.
  */
-export function CreditPurchase({ locale, credit, plan, acceptedTerms, accepted, disabled = false, onAccept }: {
+export function CreditPurchase({ locale, credit, plan, acceptedTerms, accepted, disabled = false, onAccept, retryKey }: {
   locale: string; credit: CreditView; plan: SubscriptionPlanView; acceptedTerms: boolean; accepted: boolean; disabled?: boolean;
   onAccept?: (accepted: boolean) => void;
+  retryKey?: Readonly<{ get: () => string; clear: () => void }>;
 }) {
   const m = createMessages(locale), router = useRouter(), canConfirm = useSyncExternalStore(subscribeNothing, modalDialogs, serverReady);
   const [confirming, setConfirming] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
@@ -73,12 +74,12 @@ export function CreditPurchase({ locale, credit, plan, acceptedTerms, accepted, 
   async function buy() {
     setConfirming(false);
     if (busy) return;
-    requestKey.current ??= crypto.randomUUID();
+    const key = retryKey?.get() ?? (requestKey.current ??= crypto.randomUUID());
     setBusy(true); setMessage("");
     try {
-      const { ok, status, answer } = await postCredit({ action: "purchase", planId: plan.id, requestKey: requestKey.current, accepted: accepted || acceptedTerms });
+      const { ok, status, answer } = await postCredit({ action: "purchase", planId: plan.id, requestKey: key, accepted: accepted || acceptedTerms });
       if (ok && typeof answer.endsAt === "string") {
-        requestKey.current = null;
+        requestKey.current = null; retryKey?.clear();
         setMessage(m.text("credit.bought", { end: formatPeriodEnd(new Date(answer.endsAt)) }));
         void refreshMemberSession(); router.refresh();
       } else { setMessage(status === 409 ? m.text("credit.insufficient") : typeof answer.message === "string" ? answer.message : m.text("account.unavailable")); router.refresh(); }

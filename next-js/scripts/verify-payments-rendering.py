@@ -23,6 +23,46 @@ class PaymentFields(HTMLParser):
         if tag == "details": self.details -= 1
 
 
+def package_step_rendering(html, state):
+    """The first plan-payment screen contains packages, progress and Continue only."""
+    assert 'data-subscribe-layout="stepwise"' in html and 'data-payment-step="1"' in html, state
+    assert "data-payment-progress" in html, "The four-stage journey remains visible."
+    text = unescape(re.sub(r'<[^>]+>', " ", html))
+    for label in ["Choose a package", "Continue", "Package", "Pay", "Proof", "Review", "1,000", "5,000", "20,000"]:
+        assert label in text, (state, label)
+    fields = PaymentFields(html).inputs
+    choices = [field for field, _ in fields if field.get("name") == "plan"]
+    assert [field.get("value") for field in choices] == [f"00000000-0000-4000-8000-00000000000{index}" for index in range(3)], \
+        "Package choices retain their configured order."
+    assert all(field.get("type") == "radio" for field in choices), "Packages use native radio controls."
+    assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), \
+        "The plan determines the amount."
+    for gone in ["data-payment-logo", "data-transaction-input", 'type="file"', "data-payment-confirmation", "data-credit-purchase", "Add credit instead",
+                 "0700000901", "0700000902", "TEST MTN PAYEE", "TEST AIRTEL PAYEE", "18 or older"]:
+        assert gone not in html, (state, gone)
+    assert not any("data-phone-input" in field for field, _ in fields), "Payer details belong to the proof step."
+    assert 'aria-label="Confirm payment"' not in html, "Plan payments use an inline review stage."
+    assert "Enter your code" not in html and "We sent your code" not in html, state
+
+
+def proof_fields_rendering(html):
+    """The unchanged top-up still renders the production proof fields together."""
+    fields = PaymentFields(html).inputs
+    transaction = [(field, depth) for field, depth in fields if "data-transaction-input" in field]
+    assert len(transaction) == 1 and "required" in transaction[0][0] and transaction[0][1] == 0, \
+        "Transaction ID remains required and outside disclosures."
+    assert "maxlength" not in transaction[0][0], "A whole SMS inserted from the keyboard's clipboard must reach the field uncut."
+    payer = [(field, depth) for field, depth in fields if "data-phone-input" in field]
+    assert len(payer) == 1 and "required" in payer[0][0] and payer[0][1] == 0, "The sending number remains required."
+    assert payer[0][0].get("value") == "700000101", "The signed-in account number prefills the payer field."
+    order = [html.index(marker) for marker in ("data-phone-input", "data-transaction-input", 'type="file"')]
+    assert order == sorted(order), "Payer comes first, then transaction ID and screenshots."
+    screenshots = [(field, depth) for field, depth in fields if field.get("type") == "file"]
+    assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), \
+        "Screenshot and camera controls remain optional and outside disclosures."
+    assert re.search(r'<legend\b[^>]*>Screenshot \(optional\)</legend>', html), "Screenshot controls have an explicit optional label."
+
+
 def compact_status_rendering(origin):
     states = ["pending", "pending-active", "pending-terms-required", "pending-call-only", "pending-whatsapp-only", "pending-no-contact",
         "rejected", "rejected-active", "rejected-fallback", "rejected-terms-required",
@@ -78,17 +118,17 @@ def add_credit_rendering(origin):
     for state, accepted in [("credit", True), ("signed-in", False)]:
         html = visible_html(request(origin, f"/en/subscribe?state={state}&add=credit", headers=android).text)
         text = unescape(re.sub(r'<[^>]+>', "", html))
-        assert 'data-subscribe-layout="plain-steps"' in html and 'data-subscribe-layout="compact-stacked"' not in html, state
+        assert 'data-subscribe-layout="plain-steps"' in html and 'data-subscribe-layout="stepwise"' not in html, state
         steps = re.search(r'<ol\b[^>]*data-subscribe-layout="plain-steps"[^>]*>([\s\S]*?)</ol>\s*<footer', html)
         assert steps and [unescape(re.sub(r'<[^>]+>', "", title)) for title in re.findall(r'<h3\b[^>]*>([\s\S]*?)</h3>', steps.group(1))] \
             == ["Choose amount", "Send the money", "Confirm with the payment message"], state
         for label in ["Add credit", "Amount to add (UGX)", "UGX 1,000 to 500,000", "Pay to", "Copy number", "Submit payment", "Safety tips", "Need help?"]:
             assert label in text, (state, label)
-        # The money-menu link needs an amount, which a server render never has; Add credit leaves it out in code, and the plan
-        # page check below shows the same user agent does get it there.
-        for gone in ["Pay for a plan instead", "Choose plan", "Synthetic fixture: never send money.", "I'm 18 or older"]:
+        # The top-up has no amount on its initial render. Plan payments reveal money-menu actions only in stage two.
+        for gone in ["Pay for a plan instead", "Choose plan", "Choose a package", "Synthetic fixture: never send money.", "I'm 18 or older"]:
             assert gone not in text, (state, gone)
         assert "data-credit-purchase" not in html and not re.search(r'<input\b[^>]*type="checkbox"', html), state
+        proof_fields_rendering(html)
         assert ("Your credit" in text and "UGX 12,000" in text) == (state == "credit"), state
         consent = "By clicking Submit payment, you confirm that you're 18 or older and accept the Terms."
         assert (consent in text) == (not accepted), state
@@ -97,10 +137,9 @@ def add_credit_rendering(origin):
             assert form.index("data-payment-consent") < form.index(re.search(r'<button\b[^>]*type="submit"', form).group(0)), "The consent sits above the button it describes."
             assert re.search(r'href="/en/terms"', html)
     plans = visible_html(request(origin, "/en/subscribe?state=signed-in", headers=android).text)
-    assert "Add credit instead" in plans and 'data-subscribe-layout="compact-stacked"' in plans and "18 or older" in plans, "The plan page keeps its switch and checkbox."
-    assert "Open MoMo menu" in plans, "Plan payments keep the money-menu link on Android."
-    assert re.search(r'<a\b[^>]*href="/en/subscribe\?add=credit#plans"[^>]*>\s*Add credit instead', plans), \
-        "Add credit is reached by a link, so Back returns to the plans."
+    package_step_rendering(plans, "signed-in Android")
+    assert "Add credit instead" not in plans, "Credit alternatives belong to the payment-method step."
+    assert "Open MoMo menu" not in plans and "*000*1000#" not in plans, "Money-menu instructions belong to the payment step."
 
 
 def account_reports(origin):
@@ -145,39 +184,16 @@ def main():
             assert ">Subscribe</h1>" in html
             if state == "off": assert "Subscriptions are not open yet" in html and "TEST MTN" not in html
             elif state == "blocked": assert "We couldn" in html and "TEST MTN" not in html
+            elif state == "signed-out":
+                assert 'action="/api/account/login"' in html and 'method="post"' in html and 'data-account-auth' in html
+                assert "Phone number" in html and "Forgot password?" in html and "Request 2-day free trial" not in html
+                for gone in ["data-subscribe-layout", "data-payment-progress", 'name="plan"', "data-payment-logo", "data-transaction-input", 'type="file"', "0700000901", "0700000902"]:
+                    assert gone not in html, (state, gone)
             else:
-                assert "MTN MoMo" in html and "Airtel Money" in html and "momoapi" not in html and "airtelstream" not in html
-                for label in ["Choose plan", "Pay UGX 1,000 to", 'data-subscribe-layout="compact-stacked"', "Names:", "0700000901", "0700000902", "TEST MTN PAYEE",
-                              ">1 day<", ">7 days<", ">30 days<", ">Copy number<", "Safety tips", "Need help?", "<small>UGX</small> <span>1,000</span>", "<small>UGX</small> <span>5,000</span>",
-                              "<small>UGX</small> <span>20,000</span>"]: assert label in html, (state, label)
-                assert not re.search(r">(Daily|Weekly|Monthly)<", html), "Plan choices show their length, not their name."
-                interactive = re.sub(r"<noscript\b[^>]*>[\s\S]*?</noscript>", "", html)
-                assert "0700000901" in interactive and "0700000902" not in interactive, state
-                assert 'aria-label="Confirm payment"' in html and ">Confirm payment</h2>" not in html, state
-                assert "Enter your code" not in html and "We sent your code" not in html, state
-                assert len(re.findall(r'<input\b[^>]*type="file"', html)) == (0 if state == "signed-out" else 2), state
-                if state == "signed-out":
-                    assert 'action="/api/account/login"' in html and 'method="post"' in html and 'data-account-auth' in html
-                    assert "Phone number" in html and "Forgot password?" in html and "Request 2-day free trial" not in html
-                else:
-                    assert ("Request 2-day free trial" in html) == (state not in ["active", "approved"]), state
-                    assert not re.search(r'<button\b[^>]*>\s*Change\s*</button>', html)
-                if state in ["signed-in", "active", "approved"]:
-                    fields = PaymentFields(html).inputs
-                    transaction = [(field, depth) for field, depth in fields if "data-transaction-input" in field]
-                    assert len(transaction) == 1 and "required" in transaction[0][0] and transaction[0][1] == 0, "The transaction ID is required and visible without opening details."
-                    assert "maxlength" not in transaction[0][0], "A whole SMS inserted from the keyboard's clipboard must reach the field uncut."
-                    payer = [(field, depth) for field, depth in fields if "data-phone-input" in field]
-                    assert len(payer) == 1 and "required" in payer[0][0] and payer[0][1] == 0, "Paid from must be visible and required, separate from the screenshot controls."
-                    order = [html.index(marker) for marker in ("data-phone-input", "data-transaction-input", 'type="file"')]
-                    assert order == sorted(order), "Paid from comes first, then the transaction ID, then the proof-of-payment upload."
-                    assert payer[0][0].get("value") == "700000101", "The signed-in account number prefills the payer field."
-                    screenshots = [(field, depth) for field, depth in fields if field.get("type") == "file"]
-                    assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), "Optional screenshot and camera controls must be visible without opening details."
-                    assert re.search(r'<legend\b[^>]*>Screenshot \(optional\)</legend>', html), "Visible screenshot controls need an explicit optional label."
-                    assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
-                    assert "Submit payment" in html and "Upload screenshot" in html and "This form needs JavaScript" in html and "Both are filled in for you" in html
-                    assert ("18 or older" in html) == (state not in ["active", "approved"])
+                package_step_rendering(html, state)
+                assert "momoapi" not in html and "airtelstream" not in html
+                assert "Request 2-day free trial" not in html, "Alternative actions belong after package selection."
+                assert not re.search(r'<button\b[^>]*>\s*Change\s*</button>', html)
                 if state == "approved": assert 'data-payment-status="approved"' not in html and "Payment approved" not in html, "An approval shows no card on the subscribe page."
         compact_status_rendering(server.origin)
         account = visible_html(request(server.origin, "/en/account?state=active").text)
@@ -186,20 +202,21 @@ def main():
         assert 'data-payment-status="approved"' not in account, "The account must not repeat its active subscription summary as an approval card."
         # Account credit: pay for a plan from credit, add credit (a top-up report), and the account's balance, auto-renewal and history.
         credit = visible_html(request(server.origin, "/en/subscribe?state=credit").text)
-        for label in ["data-credit-purchase", "Credit: UGX 12,000", "Pay UGX 1,000 from credit", "Add credit instead"]:
-            assert label in credit, label
+        package_step_rendering(credit, "credit")
+        assert "Credit: UGX 12,000" not in credit and "Pay UGX 1,000 from credit" not in credit, \
+            "The initial credit-member screen remains focused on package selection."
         add_credit_rendering(server.origin)
         account_credit = visible_html(request(server.origin, "/en/account?state=credit").text)
         for label in ["data-account-credit", "Your credit is", "UGX 12,000", "Auto-renew from credit is off", "Turn on", "Top-up · PCRED", "Add credit"]:
             assert label in account_credit, label
         account_reports(server.origin)
-        assert "Add credit instead" not in visible_html(request(server.origin, "/en/subscribe?state=signed-out").text), "Signed-out visitors see plans only."
+        assert "Add credit instead" not in visible_html(request(server.origin, "/en/subscribe?state=signed-out").text), "Signed-out visitors see sign-in only."
         assert "data-account-credit" not in account, "An account without credit shows no credit section."
-        for agent, allowed in [("Android Chrome", True), ("iPhone Safari", False), ("Android; wv) Chrome", False), ("Android FBAN", False), ("Android Instagram", False)]:
-            html = visible_html(request(server.origin, "/en/subscribe", headers={"User-Agent": agent}).text)
-            assert ("Open MoMo menu" in html) == allowed
-            if allowed: assert 'href="tel:*000*1000%23"' in html
-            else: assert "*000*1000#" in html
+        for agent in ["Android Chrome", "iPhone Safari", "Android; wv) Chrome", "Android FBAN", "Android Instagram"]:
+            html = visible_html(request(server.origin, "/en/subscribe?state=signed-in", headers={"User-Agent": agent}).text)
+            package_step_rendering(html, agent)
+            assert "Open MoMo menu" not in html and "*000*1000#" not in html and "tel:*000*1000%23" not in html, \
+                "The package screen never exposes payment instructions, regardless of user agent."
         phone = visible_html(request(server.origin, "/en/phone-input").text)
         national_inputs = re.findall(r'<input\b[^>]*data-phone-input[^>]*>', phone)
         assert len(national_inputs) == 4
@@ -210,7 +227,7 @@ def main():
         assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
         named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
         assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
-        print("PASS 19 server-rendered payment states, pending contact channels and fallbacks, compact pending/rejected/reversed status with visible rejection reasons, shared account login, 5 user agents, visible required transaction ID and payer, optional screenshot controls, automatic amount, assent, plan order and private headers.", flush=True)
+        print("PASS server-rendered payment states, package-only wizard entry, shared sign-in without payment fields, compact pending/rejected/reversed status, contact fallbacks, unchanged credit/top-up paths, 5 user agents, package order and private headers. Later wizard stages require browser acceptance checks.", flush=True)
         if args.serve: server.serve()
 
 

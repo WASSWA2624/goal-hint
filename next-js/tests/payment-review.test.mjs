@@ -28,11 +28,9 @@ function fixture(rows = [], accounts = []) {
       async count() { calls.push("count"); return rows.filter(row => row.status === "pending").length; },
     },
     memberAccount: { async findMany(query) {
-      calls.push(query.where.phone ? "payers" : "trials");
-      return query.where.phone ? accounts.filter(account => query.where.phone.in.includes(account.phone)) : accounts.filter(account => account.trialRequestedAt);
+      calls.push("payers");
+      return accounts.filter(account => query.where.phone.in.includes(account.phone));
     } },
-    ownerAuditEvent: { async findMany() { calls.push("trial-events"); return []; } },
-    rateLimitBucket: { async findMany() { calls.push("trial-buckets"); return []; } },
   };
   return { calls, review: createPaymentReview({ query: run => run(tx) }, () => clock, { notifications: silentPaymentNotifications }) };
 }
@@ -44,23 +42,21 @@ test("pending review is strict, oldest first, and invalid tabs use the same queu
     const queue = await f.review.list(tab);
     assert.deepEqual(queue.payments.map(row => row.id), ["oldest", "later"]);
     assert.equal(queue.pendingCount, 2);
+    assert.deepEqual(Object.keys(queue).sort(), ["payments", "pendingCount"]);
   }
 });
 
-test("history tabs keep superseded reports separate, retain reversals, and omit pending trial work", async () => {
-  const trial = { id: "trial-account", phone: "256700000108", trialRequestedAt: new Date(clock) };
+test("history tabs keep superseded reports separate and retain reversals without unrelated account work", async () => {
   const f = fixture([payment("pending"), payment("old", "superseded"), payment("approved", "approved"),
-    payment("reversed", "reversed", { submittedAt: new Date(clock + 1) }), payment("rejected", "rejected")], [trial]);
+    payment("reversed", "reversed", { submittedAt: new Date(clock + 1) }), payment("rejected", "rejected")]);
   assert.deepEqual((await f.review.list("approved")).payments.map(row => row.id), ["reversed", "approved"]);
   assert.deepEqual((await f.review.list("superseded")).payments.map(row => row.id), ["old"]);
   const rejected = await f.review.list("rejected");
   assert.deepEqual(rejected.payments.map(row => row.id), ["rejected"]);
-  assert.deepEqual(rejected.trials, []);
-  assert.ok(!f.calls.includes("trials"));
+  assert.deepEqual(Object.keys(rejected).sort(), ["payments", "pendingCount"]);
   const pending = await f.review.list();
-  assert.equal(pending.trials[0].id, trial.id);
-  assert.equal(pending.trials[0].ipCount, null);
-  assert.ok(!f.calls.includes("trial-buckets"), "No IP keys means no rate-bucket query.");
+  assert.deepEqual(pending.payments.map(row => row.id), ["pending"]);
+  assert.ok(!f.calls.includes("payers"), "No sending numbers means no account lookup.");
 });
 
 test("review exposes the saved duration and safe evidence while preserving duplicate and wallet warnings", async () => {
@@ -101,10 +97,10 @@ test("code lookup accepts current and legacy payment references and preserves ra
   }
 });
 
-test("empty queues avoid unrelated proof, payer and trial evidence queries", async () => {
+test("empty queues avoid unrelated proof and payer evidence queries", async () => {
   const f = fixture();
-  assert.deepEqual(await f.review.list(), { pendingCount: 0, payments: [], trials: [] });
-  assert.deepEqual(f.calls, ["payments", "trials", "count"]);
+  assert.deepEqual(await f.review.list(), { pendingCount: 0, payments: [] });
+  assert.deepEqual(f.calls, ["payments", "count"]);
   f.calls.length = 0;
   await f.review.list("approved");
   assert.deepEqual(f.calls, ["payments", "count"]);

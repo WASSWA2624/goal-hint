@@ -6,7 +6,7 @@ import { activeSubscriptionUntil } from "@/domain/subscription-summary";
 import type { MemberServices } from "@/server/members/member-http";
 import type { MemberIdentity } from "@/server/members/member-sessions";
 
-const state = globalThis as typeof globalThis & { syntheticPayments?: Record<string, PaymentStatus>; syntheticTerms?: Record<string, boolean>; syntheticApproved?: Record<string, boolean>; syntheticTrial?: boolean;
+const state = globalThis as typeof globalThis & { syntheticPayments?: Record<string, PaymentStatus>; syntheticTerms?: Record<string, boolean>; syntheticApproved?: Record<string, boolean>;
   syntheticCredit?: { balanceUgx: number; autoRenew: boolean; autoRenewPlanId: string | null; bought: number } };
 export const paymentScenarios = ["default", "signed-out", "signed-in", "active", "pending", "pending-active", "pending-terms-required",
   "pending-call-only", "pending-whatsapp-only", "pending-no-contact", "approved",
@@ -86,9 +86,8 @@ export function fixtureServices(scenario = "default"): MemberServices {
         purpose: fields.purpose === "topup" ? "topup" : "plan" };
       if (fields.accepted) (state.syntheticTerms ??= {})[scenario] = true;
       return { status: "saved", reference: "PTEST" };
-    }, async trial() { state.syntheticTrial = true; return "saved"; },
-    async view() { return { acceptedTerms: acceptedTerms(), trialEligible: !hasReport && !periods.length && !state.syntheticTrial, trialRequested: !!state.syntheticTrial,
-      trialPending: !!state.syntheticTrial && !periods.length, status: paymentStatus(),
+    },
+    async view() { return { acceptedTerms: acceptedTerms(), status: paymentStatus(),
       credit: credit && { balanceUgx: credit.balanceUgx, autoRenew: credit.autoRenew, autoRenewPlanId: credit.autoRenewPlanId, history: [
         ...credit.bought ? [{ id: "synthetic-purchase", kind: "purchase" as const, amountUgx: -5000, balanceAfter: credit.balanceUgx, createdAt: now.toISOString(), actor: "member" as const, note: null, payment: null, period: "C-SYNTH" }] : [],
         { id: "synthetic-topup", kind: "topup" as const, amountUgx: 12_000, balanceAfter: 12_000, createdAt: new Date(+now - 3_600_000).toISOString(), actor: "admin" as const, note: null, payment: "PCRED", period: null }] } }; } },

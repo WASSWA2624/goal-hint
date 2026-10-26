@@ -1,21 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "@/components/navigation/navigation-link";
-import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
-import { AlertIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
 import { formatPhone } from "@/domain/phone";
-import { formatPeriodEnd } from "@/domain/subscription-period";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
 import { ActionButton } from "./admin-form";
-import { ActionNotices, useCodeAction, type CodeAction } from "./code-tools";
+import { ActionNotices, useCodeAction } from "./code-tools";
 import { NetworkChip } from "./network-chip";
 import { paymentWarnings, PaymentReview, type PaymentRecovery } from "./payment-review";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueuePanel, QueueSummary, RefreshSquare, ReviewBack, ReviewNav, ReviewSection,
-  SearchField, StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketRef, TicketTime, TicketTray, TicketWarn, TrialDrawer, TrialList, TrialPopover } from "./payment-styles";
+  SearchField, StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketRef, TicketTime, TicketTray, TicketWarn } from "./payment-styles";
 
 const tabLabels = { pending: "Pending", approved: "Approved", rejected: "Rejected", superseded: "Replaced reports" };
 const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
@@ -27,13 +25,6 @@ function ticketTime(instant: string) {
   return `${parts.day} ${parts.month}, ${parts.hour}:${parts.minute}`;
 }
 
-type Trial = PaymentQueue["trials"][number];
-function TrialRequests({ trials, action, onStart }: { trials: readonly Trial[]; action: CodeAction; onStart: () => void }) {
-  return <TrialList>{trials.map(trial => <li key={trial.id}><span><strong>{phoneLabel(trial.phone)}</strong><small>Requested {formatPeriodEnd(new Date(trial.trialRequestedAt))}</small></span>
-    <div><ActionButton type="button" $variant="primary" disabled={action.busy} onClick={() => { onStart(); void action.send("/api/admin/codes", { action: "trial", id: trial.id }); }}>Grant free trial</ActionButton>
-      <ActionButton type="button" disabled={action.busy} onClick={() => { onStart(); void action.send("/api/admin/codes", { action: "dismiss-trial", id: trial.id }, "Trial request dismissed."); }}>Dismiss</ActionButton></div></li>)}</TrialList>;
-}
-
 /** Payment decisions share one queue; only the selected report mounts a review form. */
 export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; plans: readonly SubscriptionPlanView[]; tab: string }) {
   const mutation = useCodeAction(), [refreshMessage, setRefreshMessage] = useState("");
@@ -43,10 +34,10 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(queue.payments[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(false), [completed, setCompleted] = useState<readonly string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
-  const [actionReference, setActionReference] = useState(""), [trialsOpen, setTrialsOpen] = useState(false), [opened, setOpened] = useState(false);
+  const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(false);
   const focusNext = useRef(false), stepFocus = useRef<"previous" | "next" | null>(null);
   const refreshFocus = useRef<HTMLButtonElement | null>(null);
-  const lastHash = useRef<string | null>(null), trialMenu = useRef<HTMLDetailsElement>(null);
+  const lastHash = useRef<string | null>(null);
   const query = searchText(search);
   const payments = queue.payments.filter(payment => !(completed.includes(payment.id) && ["pending", "superseded"].includes(payment.status)) && (!query || searchText([
     payment.reference, payment.accountPhone ?? "", payment.payerPhone ?? "", payment.transactionId, payment.final?.transactionId ?? "", payment.planName,
@@ -56,8 +47,6 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   const reviewing = detailOpen && !!selected;
   const pendingCount = Math.max(0, queue.pendingCount - queue.payments.filter(payment => payment.status === "pending" && completed.includes(payment.id)).length);
   const queueChanged = liveCount !== null && liveCount !== pendingCount;
-  const closeTrials = useCallback(() => closeDetails(trialMenu.current, () => setTrialsOpen(false)), []);
-  useOutsideDismiss({ enabled: trialsOpen, root: trialMenu, onDismiss: closeTrials });
 
   useEffect(() => {
     if (action.busy || !refreshFocus.current) return;
@@ -131,11 +120,8 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
     void refreshPendingPayments(true);
     refreshAdmin();
   };
-  const trialStart = () => { setRefreshMessage(""); setActionReference("Free trial"); closeTrials(); };
   const feedback = { ...action, notice: action.notice && `${actionReference ? `${actionReference} · ` : ""}${action.notice}`,
     message: refreshMessage || (action.message && `${actionReference ? `${actionReference} · ` : ""}${action.message}`) };
-  const showTrials = tab === "pending" && queue.trials.length > 0;
-  const trialsLabel = `Free trial requests (${queue.trials.length})`;
   const nav = selected && <ReviewNav>
     <ReviewBack type="button" disabled={action.busy} onClick={back} data-review-back><ChevronLeftIcon />All payments</ReviewBack>
     {payments.length > 1 && <Stepper role="group" aria-label={`Report ${index + 1} of ${payments.length}`}>
@@ -155,11 +141,6 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
         onClick={event => { if (action.busy) event.preventDefault(); else { setDetailOpen(false); setRefreshMessage(""); } }}>{label}{value === "pending" && ` (${liveCount ?? pendingCount})`}</Link>)}</StatusTabs>
       <HeadEnd>
         <RefreshSquare type="button" $changed={queueChanged} aria-label="Refresh queue" title="Refresh queue" disabled={action.busy} onClick={refresh}><ResetIcon /></RefreshSquare>
-        {showTrials && <TrialPopover ref={trialMenu} onToggle={event => setTrialsOpen(event.currentTarget.open)} data-payment-trials
-          onKeyDown={(event: KeyboardEvent<HTMLDetailsElement>) => { if (event.key === "Escape" && trialsOpen) { event.preventDefault(); closeTrials(); trialMenu.current?.querySelector("summary")?.focus(); } }}>
-          <summary><GiftIcon />{trialsLabel}<ChevronDownIcon /></summary>
-          <div><TrialRequests trials={queue.trials} action={action} onStart={trialStart} /></div>
-        </TrialPopover>}
       </HeadEnd>
     </PaymentHead>
     {(feedback.notice || feedback.message) && <PaymentFeedback id="payment-feedback" tabIndex={-1} aria-label="Payment result"><ActionNotices action={feedback} /></PaymentFeedback>}
@@ -185,8 +166,6 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
         </Ticket></li>;
       })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{search ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</strong></QueueEmpty>}
     </QueuePanel>
-    {showTrials && <TrialDrawer $reviewing={reviewing} data-payment-trials><summary><GiftIcon />{trialsLabel}<ChevronDownIcon /></summary>
-      <div><TrialRequests trials={queue.trials} action={action} onStart={() => { setRefreshMessage(""); setActionReference("Free trial"); }} /></div></TrialDrawer>}
     {selected && <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}>
       <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
         onStart={() => { setRefreshMessage(""); setActionReference(selected.reference); }} onResolved={() => resolved(selected.id)}

@@ -164,9 +164,9 @@ test("concurrent rejections notify once, while a rolled back rejection sends not
   assert.equal(f.rejections.length, 1);
 });
 
-test("trial grants do not send payment notifications", async () => {
+test("manual trial approval actions are absent from payment notifications", () => {
   const f = fixture();
-  assert.equal((await f.codes().sendTrial(f.account.id, 2, owner)).status, "created");
+  assert.equal("sendTrial" in f.codes(), false); assert.equal("dismissTrial" in f.codes(), false);
   assert.equal(f.approvals.length, 0); assert.equal(f.rejections.length, 0);
 });
 

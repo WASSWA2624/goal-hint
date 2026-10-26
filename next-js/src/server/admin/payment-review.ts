@@ -21,7 +21,6 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
     async list(tab = "pending"): Promise<PaymentQueue> {
       const selected = ["pending", "approved", "rejected", "superseded"].includes(tab) ? tab : "pending";
       return database.query(async tx => {
-        const at = new Date(now());
         const rows = await tx.paymentSubmission.findMany({ where: { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected },
           orderBy: [{ submittedAt: selected === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100,
           select: { id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
@@ -29,21 +28,13 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
             transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } } } });
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
         const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
-        const [related, payers, trials, pendingCount] = await Promise.all([
+        const [related, payers, pendingCount] = await Promise.all([
           keys.length || hashes.length ? tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
             select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }) : [],
           phones.length ? tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }) : [],
-          selected === "pending" ? tx.memberAccount.findMany({ where: { trialRequestedAt: { not: null }, trialDismissedAt: null, blockedAt: null, erasedAt: null, codes: { none: {} } },
-            orderBy: { trialRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, trialRequestedAt: true } }) : [],
           tx.paymentSubmission.count({ where: { status: "pending" } }),
         ]);
-        const events = trials.length ? await tx.ownerAuditEvent.findMany({ where: { action: "trial_requested", accountId: { in: trials.map(t => t.id) } }, orderBy: { at: "desc" }, select: { accountId: true, details: true } }) : [];
-        const ipKeys = [...new Set(events.flatMap(e => { const d = e.details as { ipKey?: string }; return d.ipKey ? [d.ipKey] : []; }))];
-        const buckets = ipKeys.length ? await tx.rateLimitBucket.findMany({ where: { key: { in: ipKeys }, windowStartedAt: new Date(Math.floor(+at / 86_400_000) * 86_400_000) }, select: { key: true, count: true } }) : [];
-        return { pendingCount, trials: trials.map(t => {
-          const details = events.find(e => e.accountId === t.id)?.details as { ipKey?: string; ipCount?: number } | undefined;
-          return { ...t, trialRequestedAt: t.trialRequestedAt!.toISOString(), ipCount: details?.ipKey ? buckets.find(b => b.key === details.ipKey)?.count ?? 0 : null };
-        }), payments: rows.map(r => ({ id: r.id, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
+        return { pendingCount, payments: rows.map(r => ({ id: r.id, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx,
           purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, accountCreditUgx: r.account.creditUgx, planId: r.planId,
           planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,

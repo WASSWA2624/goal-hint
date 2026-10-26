@@ -12,6 +12,7 @@ import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, Accou
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
 import { saveMemberLoginFlash } from "./member-login-flash";
+import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 
 export type AccountAuthView = "login" | "register" | "forgot";
 
@@ -20,18 +21,21 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
   const m = createMessages(locale), [phone, setPhone] = useState("256");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [createdTrial, setCreatedTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const base = `/${resolveLocale(locale)}`;
   const href = (next: AccountAuthView) => `${base}/account?${new URLSearchParams({ view: next, ...(returnTo ? { return: returnTo } : {}) })}`;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string; otherDeviceSignedOut?: boolean }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
+      const result = await accountRequest<{ next: string; otherDeviceSignedOut?: boolean; trial?: FreeTrialAccess }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
       if (view === "login" && typeof result.otherDeviceSignedOut === "boolean") saveMemberLoginFlash(result.otherDeviceSignedOut);
+      if (view === "register" && result.trial) { setPassword(""); setCreatedTrial({ trial: result.trial, next: result.next }); return; }
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
   if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} contact={contact} />;
+  if (createdTrial) return <FreeTrialNotice locale={locale} {...createdTrial} />;
   return <AccountCard data-account-auth data-analytics-ignore>
     <AccountCardHeading><UserIcon /><h1>{m.text(view === "register" ? "account.register" : "account.login")}</h1></AccountCardHeading>
     <AccountCardBody>

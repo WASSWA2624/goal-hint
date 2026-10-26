@@ -77,65 +77,6 @@ export const RefreshSquare = styled.button<{ $changed: boolean }>`
   ${phoneOnly}
 `;
 
-/** Desktop: a compact button that opens the trial requests over the page. */
-export const TrialPopover = styled.details`
-  position: relative;
-  ${desktopOnly}
-  > summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-block-size: 40px;
-    padding: 0 12px 0 14px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: ${({ theme }) => theme.border.radius};
-    color: ${({ theme }) => theme.color.link};
-    background: ${({ theme }) => theme.color.surface};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    white-space: nowrap;
-    list-style: none;
-    cursor: pointer;
-    &::-webkit-details-marker { display: none; }
-    > svg { flex: none; font-size: 1rem; }
-    > svg:last-child { color: ${({ theme }) => theme.color.mutedText}; transition: transform 0.15s ease; }
-    ${focusRing}
-  }
-  &[open] > summary > svg:last-child { transform: rotate(180deg); }
-  > div {
-    position: absolute;
-    inset-inline-end: 0;
-    inset-block-start: calc(100% + 6px);
-    z-index: 6;
-    inline-size: 22rem;
-    max-inline-size: calc(100vw - 32px);
-    max-block-size: 24rem;
-    overflow-y: auto;
-    padding: 4px 16px;
-    ${panelLook}
-    border-color: ${({ theme }) => theme.color.controlBorder};
-  }
-  @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
-`;
-/** Phones: the same requests as a drawer panel under the queue. */
-export const TrialDrawer = styled(Drawer)<{ $reviewing: boolean }>`
-  ${panelLook}
-  &:last-child { border-block-end: ${hairline}; }
-  > div { padding-block-start: 0; }
-  ${phoneOnly}
-  ${({ $reviewing }) => $reviewing && css`display: none;`}
-`;
-export const TrialList = styled.ul`
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  > li { display: grid; gap: 10px; padding-block: 12px; border-block-start: ${hairline}; }
-  > li:first-child { border-block-start: 0; }
-  strong { display: block; font-variant-numeric: tabular-nums; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-  > li > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-`;
-
 /** Desktop: a panel with the toolbar above the ticket tray. Phones: the parts sit straight on the page. */
 export const QueuePanel = styled.section<{ $reviewing: boolean }>`
   display: grid;

@@ -664,24 +664,9 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal((await codes.manual({ phone: "256700000735", planId: weekly, amountReceivedUgx: 5000, note: "Synthetic duplicate", network: "airtel", transactionRef: "REVERSE100" }, "owner")).status, "duplicate");
     });
 
-    await t.test("a trial is issued only for a requested account with no prior code and is exactly trialDays from confirmation", async () => {
-      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
-      const codes = createAccessCodes({ database, config, now: () => +now, notifications: silentPaymentNotifications });
-      const requested = await account("256700000741");
-      assert.equal((await codes.sendTrial(requested, 2, "owner")).status, "refused");
-      await app.query("UPDATE MemberAccount SET trialRequestedAt = ? WHERE id = ?", [now, requested]);
-      const outcome = await codes.sendTrial(requested, 2, "owner");
-      assert.equal(outcome.status, "created");
-      const trial = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: outcome.ready.id } }));
-      assert.equal(+trial.endsAt - +trial.startsAt, 2 * day);
-      assert.equal(trial.amountReceivedUgx, 0);
-      assert.equal(trial.source, "trial");
-      assert.equal((await codes.sendTrial(requested, 2, "owner")).status, "refused");
-      assert.equal((await codes.dismissTrial(requested, "owner")).status, "refused");
-      const dismissed = await account("256700000742");
-      await app.query("UPDATE MemberAccount SET trialRequestedAt = ? WHERE id = ?", [now, dismissed]);
-      assert.equal((await codes.dismissTrial(dismissed, "owner")).status, "saved");
-      assert.equal((await codes.sendTrial(dismissed, 2, "owner")).status, "refused");
+    await t.test("access services no longer expose owner-issued trial request actions", async () => {
+      const codes = createAccessCodes({ database, now: () => +now, notifications: silentPaymentNotifications });
+      assert.equal("sendTrial" in codes, false); assert.equal("dismissTrial" in codes, false);
     });
 
     await t.test("the MariaDB overlay builds the same tables, records Prisma's checksum once and refuses a wrong engine or shape", async () => {

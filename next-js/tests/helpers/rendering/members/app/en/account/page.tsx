@@ -13,16 +13,16 @@ export const metadata = pageMetadata({ title: "Account", description: "Isolated 
 
 function fixtureServices(state: string) {
   const scenario = state === "ended" ? "expired" : state === "signed-in" ? "free" : state;
-  const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active"].includes(scenario), at = Date.now();
+  const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial"].includes(scenario), at = Date.now();
   return async () => ({ config: { production: false },
     settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "test" } },
-    sessions: { async verify() { return ["signed-in", "active", "ended", "blocked", "administrator", "free", "manual", "trial", "pending", "pending-renewal", "expired", "off-active"].includes(state)
+    sessions: { async verify() { return ["signed-in", "active", "ended", "blocked", "administrator", "free", "manual", "trial", "pending", "pending-renewal", "expired", "off-active", "registration-trial"].includes(state)
       ? { accountId: "00000000-0000-4000-8000-000000000101", tokenHash: "synthetic", phone: state === "administrator" ? fixtureAdminPhone : "256700000101", administrator: state === "administrator", blocked: state === "blocked", codeEnteredAt: unlocked ? new Date(at) : null } : null; } },
     auth: { async passwordResetSession() { return state === "password-reset" ? { phone: "256700000101" } : null; },
       async verificationSession() { return ["unverified", "sms-only", "unsupported"].includes(state) ? { phone: state === "unsupported" ? "5511999999999" : state === "sms-only" ? "447700900123" : "256700000101" } : null; } },
     codes: { async subscriptionStatus() { return fixtureSubscriptionStatus(scenario); },
       async accountView() { return { codes: fixtureSubscriptionPeriods(scenario), devices: [{ tokenHash: "synthetic", lastSeenAt: new Date(at) }] }; } },
-    payments: { async view() { return { acceptedTerms: unlocked, trialEligible: !unlocked, trialPending: false,
+    payments: { async view() { return { acceptedTerms: unlocked,
       status: fixtureSubscriptionStatus(scenario).paymentPending ? { reference: "PFAKE", status: "pending", planName: "Weekly", priceUgx: 5000,
         submittedAt: new Date(at).toISOString(), endsAt: null, rejectText: null, rejectReason: null } : null }; } },
   }) as unknown as MemberServices;
@@ -38,5 +38,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const cookieState = token === fixtureTokens.reset ? "password-reset" : token === fixtureTokens.pending ? "unverified"
     : token === fixtureTokens.administrator ? "administrator" : token === fixtureTokens.authenticated ? subscriptionState ?? "signed-in" : "signed-out";
   const Account = accountRoutes[typeof parameters.state === "string" ? parameters.state : parameters.status === "code-accepted" ? "active" : cookieState] ?? accountRoutes["signed-out"]!;
-  return <><Account locale="en" searchParams={searchParams} /><RefreshProbe initialScenario={typeof parameters.scenario === "string" ? parameters.scenario : "success"} /></>;
+  return <><Account locale="en" searchParams={searchParams} /><RefreshProbe initialScenario={typeof parameters.scenario === "string" ? parameters.scenario : jar.get("member-fixture-scenario")?.value ?? "success"} /></>;
 }

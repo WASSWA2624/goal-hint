@@ -5,7 +5,7 @@ export type OwnerPayment = Readonly<{ id: string; reference: string; accountId: 
   network: string; transactionId: string; amount: number; purpose: "plan" | "topup"; planId: string | null; planName: string; durationDays: number | null; price: number;
   submittedAt: string; status: string; hasImage: boolean; accountCreditUgx: number;
   final: Readonly<{ network: string | null; transactionId: string; amount: number | null }> | null; checks: readonly PaymentCheck[] }>;
-export type PaymentQueue = Readonly<{ pendingCount: number; trials: readonly Readonly<{ id: string; phone: string | null; trialRequestedAt: string; ipCount: number | null }>[]; payments: readonly OwnerPayment[] }>;
+export type PaymentQueue = Readonly<{ pendingCount: number; payments: readonly OwnerPayment[] }>;
 export type OwnerPaymentSummary = Pick<OwnerPayment, "id" | "reference" | "network" | "amount" | "submittedAt">;
 export type OwnerCode = Readonly<{ id: string; accountId: string; reference: string; phone: string | null; planName: string; source: string; startsAt: string; endsAt: string; status: "revoked" | "queued" | "active" | "expired"; daysLeft: number }>;
 /** An account-update SMS that needs the owner's attention; reference is the payment's (P…) or the renewal period's (C…). */

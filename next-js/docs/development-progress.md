@@ -5162,3 +5162,57 @@ after native qualification; the normal development server was preserved.
 **069 remains Partial:** Android testing is deferred by the owner, and
 Apple/Linux execution remains unqualified. Neither browser results nor an
 available native target qualify every platform.
+
+## 2026-10-26 — Compact payment wizard and automatic registration trials
+
+Implemented [071 — Stepwise subscription payment](../dev-plan/071-stepwise-subscription-payment.md)
+using the selected Sample 01: Package → Pay → Proof → Review. The centered card
+shows one task at a time, with compact spacing, readable inputs, consistent
+square navigation buttons and short instructions. Payment remains manual.
+Review is inline, retains edit/back navigation and binds the paid confirmation
+to the current details. Existing transaction-ID, screenshot/OCR, insufficient
+amount, duplicate submission, Terms and approval-refresh checks remain active.
+Account credit appears after package selection and retains its retry identity.
+The separate top-up journey retains its existing behavior.
+
+Implemented [072 — Automatic registration trial](../dev-plan/072-automatic-registration-trial.md).
+Registration atomically creates one trial period using Admin's configured
+duration; zero disables new trials. Its clock starts at registration. Existing
+phone verification, authenticated sessions, device limits and blocked-account
+checks remain required. Signup and verification show the trial duration/expiry
+and a clear next action. Removed the trial request endpoint, pending/request
+notices and administrator grant/dismiss workflow across payment, account and
+admin screens. Ordinary manual access grants remain available. Historical audit
+records and nullable database fields remain for compatibility; no migration or
+retrospective grant was performed.
+
+Executed verification:
+
+- TypeScript and targeted ESLint passed. The removed trial route left an ignored
+  generated development type file; removing that stale generated file allowed
+  the unchanged TypeScript command to pass.
+- The focused backend authentication/access/payment group passed 85 tests;
+  the separate registration collision/retry case also passed. The root
+  analytics/admin-route/payment-review group passed 39 tests, and the earlier
+  payment/SMS/Terms/wallet group passed 38. These groups overlap; no distinct-case
+  total is inferred.
+- Production payment, member and owner rendering fixtures passed. The owner
+  harness initially used a historical access period that had expired by the
+  test run; it now grants fresh synthetic access before its transfer assertion.
+  The complete owner checks then passed under Node 24.18.1.
+- Browser checks with synthetic data covered mobile/desktop navigation,
+  screenshot extraction, ID mismatch and insufficient-payment blockers,
+  draft/image retention, clearing stale evidence on package changes, failed
+  duplicate reports, successful pending status and administrator approval
+  refresh. The 320px phone layout has no horizontal overflow. Review uses a
+  compact image preview and shorter Send proof action.
+- The automatic-trial browser journey registered a synthetic account, displayed
+  its two-day expiry, verified the number with a fixture code, showed the active
+  trial notice and reached the app without administrator approval.
+
+Real MySQL integration checks were skipped because no genuine MySQL binary is
+available in this environment. Browser receipts, wallets, accounts and OTPs
+were synthetic; no real payment, provider message, live database change or
+production deployment was performed. Local captures are ignored under
+`output/playwright/stepwise-payments/`. See
+[stepwise-payments.md](stepwise-payments.md) for the final journey and safeguards.

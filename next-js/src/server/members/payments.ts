@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { formatPaymentReference, parseTransactionId, paymentRules, transactionKey, type PaymentFields, type PaymentStatus, type PaymentView } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
-import type { SubscriptionIdentity, SubscriptionSettings } from "../../domain/subscription-settings.ts";
+import type { SubscriptionIdentity } from "../../domain/subscription-settings.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
@@ -116,34 +116,17 @@ export function createPayments({ database, config, now = Date.now, environment =
       }
     },
 
-    async trial(member: MemberIdentity, address: string): Promise<"saved" | "busy" | "refused"> {
-      const at = new Date(now());
-      return decide(database, async (tx, rollback) => {
-        const current = await currentMember(tx, member, at);
-        if (!current || current.account.trialRequestedAt || await tx.accessCode.count({ where: { accountId: member.accountId } })) return rollback("refused" as const);
-        const settings = await lockSettings(tx, "system", at);
-        if (settings.paywallMode === "off" || settings.trialDays === 0) return rollback("refused" as const);
-        if (!await takeMemberLimit(tx, config, { purpose: "trial-session", value: member.tokenHash, maximum: 1, windowMs: memberRateRules.dayMs }, at)
-          || !await takeMemberLimit(tx, config, { purpose: "trial-ip", value: address, maximum: 20, windowMs: memberRateRules.dayMs }, at)) return "busy" as const;
-        await tx.memberAccount.update({ where: { id: member.accountId }, data: { trialRequestedAt: at } });
-        await writeOwnerAudit(tx, { at, actor: "member", action: "trial_requested", accountId: member.accountId,
-          targetType: "member", targetId: member.accountId, details: address === "unknown" ? {} : { ipKey: config.key("member-trial-ip", address),
-            ipCount: (await tx.rateLimitBucket.findUniqueOrThrow({ where: { key: config.key("member-trial-ip", address) } })).count } });
-        return "saved" as const;
-      });
-    },
-
     /** Account-level: any authenticated, current session of an open account sees the account's latest report (068). */
-    async view(member: MemberIdentity, settings: SubscriptionSettings): Promise<PaymentView> {
+    async view(member: MemberIdentity): Promise<PaymentView> {
       return database.query(async (tx) => {
         const reportOf = { accountId: member.accountId, account: { blockedAt: null, erasedAt: null,
           sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, expiresAt: { gt: new Date(now()) } } } } } as const;
         const shown = { reference: true, status: true, rejectText: true, rejectReason: true, planName: true, priceUgx: true, submittedAt: true, purpose: true,
           decidedAt: true, reversedAt: true, code: { select: { endsAt: true } } } as const;
-        const [account, codes, terms, status, history] = await Promise.all([
-          tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { trialRequestedAt: true, trialDismissedAt: true, creditUgx: true, autoRenew: true,
+        const [account, terms, status, history] = await Promise.all([
+          tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { creditUgx: true, autoRenew: true,
             autoRenewPlanId: true, blockedAt: true, erasedAt: true } }),
-          tx.accessCode.count({ where: { accountId: member.accountId } }), acceptedTerms(tx, member, new Date(now())),
+          acceptedTerms(tx, member, new Date(now())),
           tx.paymentSubmission.findFirst({ where: reportOf, orderBy: [{ submittedAt: "desc" }, { id: "desc" }], select: shown }),
           walletHistory(tx, member.accountId),
         ]);
@@ -160,8 +143,7 @@ export function createPayments({ database, config, now = Date.now, environment =
         // Credit is the account's, not a device's, so any current session of an open account sees it.
         const credit = account && !account.blockedAt && !account.erasedAt
           ? { balanceUgx: account.creditUgx, autoRenew: account.autoRenew, autoRenewPlanId: account.autoRenewPlanId, history } : null;
-        return { acceptedTerms: terms, trialEligible: !!account && !account.trialRequestedAt && codes === 0 && settings.trialDays > 0,
-          trialPending: !!account?.trialRequestedAt && !account.trialDismissedAt && codes === 0, credit, status: status ? view(status) : null, otherStatus };
+        return { acceptedTerms: terms, credit, status: status ? view(status) : null, otherStatus };
       });
     },
   });

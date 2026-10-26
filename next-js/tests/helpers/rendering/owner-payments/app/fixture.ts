@@ -68,12 +68,12 @@ function initialAudits(codeId: string): FixtureAudit[] {
 function initialState(): FixtureState {
   const primary: FixtureAccount = { id: accountId, phone: "256700000101", blockedAt: null, blockedReason: null,
     ownerNote: "Synthetic owner note", erasedAt: null, lastSignInAt: new Date("2026-10-23T09:42:00Z"),
-    trialRequestedAt: at, trialDismissedAt: null, passwordResetRequestedAt: at };
-  const other = { ...primary, trialRequestedAt: null, passwordResetRequestedAt: null, ownerNote: null };
+    trialRequestedAt: null, trialDismissedAt: null, passwordResetRequestedAt: at };
+  const other = { ...primary, passwordResetRequestedAt: null, ownerNote: null };
   const codes: FixtureCode[] = [{ id: "00000000-0000-4000-8000-000000000300", accountId, reference: "CODE",
     planName: "Weekly", durationDays: 7, extensionDays: 0, startsAt: at, endsAt: end, revokedAt: null, source: "payment", createdAt: at }];
   return structuredClone({ accounts: [primary,
-    { ...other, id: "00000000-0000-4000-8000-000000000102", phone: "256700000118", trialRequestedAt: at, lastSignInAt: new Date("2026-10-23T07:15:00Z") },
+    { ...other, id: "00000000-0000-4000-8000-000000000102", phone: "256700000118", lastSignInAt: new Date("2026-10-23T07:15:00Z") },
     { ...other, id: "00000000-0000-4000-8000-000000000103", phone: "256700000204", lastSignInAt: new Date("2026-10-22T18:32:00Z"), blockedAt: new Date("2026-10-22T19:00:00Z"), blockedReason: "Synthetic account review" },
     { ...other, id: "00000000-0000-4000-8000-000000000104", phone: null, lastSignInAt: new Date("2026-10-20T14:05:00Z"), erasedAt: new Date("2026-10-21T08:00:00Z") },
     { ...other, id: "00000000-0000-4000-8000-000000000105", phone: "447700900123", lastSignInAt: new Date("2026-10-18T11:20:00Z") },
@@ -170,7 +170,7 @@ export function fixtureSnapshot() {
     audits: state.audits.map(row => ({ accountId: row.accountId, action: row.action })), plans: [fixturePlan.id] };
 }
 
-type AccountQuery = { where?: { phone?: string | { in?: string[] }; passwordResetRequestedAt?: unknown; trialRequestedAt?: unknown; codes?: { none: object } } };
+type AccountQuery = { where?: { phone?: string | { in?: string[] }; passwordResetRequestedAt?: unknown } };
 type OwnedQuery = { where?: { accountId?: string; codeEnteredAt?: unknown } };
 type PaymentWhere = { accountId?: string; status?: string | { in: string[] }; claimedTxnKey?: { in: string[] };
   approvedTxnKey?: { in: string[] }; imageSha256?: { in: string[] }; OR?: PaymentWhere[] };
@@ -233,8 +233,6 @@ function createClient(emptySubscribers: boolean) {
       findMany: async (query: AccountQuery = {}) => {
         const where = query.where;
         if (where?.passwordResetRequestedAt) return state.accounts.filter(row => row.passwordResetRequestedAt && !row.blockedAt && !row.erasedAt && row.phone);
-        if (where?.trialRequestedAt) return state.accounts.filter(row => row.trialRequestedAt && !row.trialDismissedAt && !row.blockedAt && !row.erasedAt && row.phone
-          && (!where.codes || !state.codes.some(code => code.accountId === row.id)));
         const rows = emptySubscribers ? [] : [...state.accounts].sort((a, b) => +b.lastSignInAt - +a.lastSignInAt);
         if (typeof where?.phone === "string") return rows.filter(row => row.phone === where.phone);
         const phones = where?.phone?.in;

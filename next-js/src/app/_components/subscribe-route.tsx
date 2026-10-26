@@ -41,7 +41,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
         if (settings && settings.paywallMode !== "off" && !(member && !member.blocked && member.administrator)) {
           offers = (await plans()).filter((plan) => plan.active);
           if (member && !member.blocked) {
-            view = await resolved.payments?.view(member, settings) ?? null;
+            view = await resolved.payments?.view(member) ?? null;
           }
         }
       } catch { unavailable = true; }
@@ -57,7 +57,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
             // The URL decides plans or Add credit: moving between them starts the flow afresh (its draft is saved per account).
             : <SubscribeFlow key={`${member?.tokenHash ?? "signed-out"}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={settings!} plans={offers}
               account={member ? { id: member.accountId, phone: member.phone } : null} view={view} returnTo={returnTo} userAgent={userAgent}
-              trialPending={!!view?.trialPending && !activeUntil} startWithTopUp={parameters.add === "credit"} />}
+              startWithTopUp={parameters.add === "credit"} />}
     </SubscribeLayout></PublicShell>;
   };
 }

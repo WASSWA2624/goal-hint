@@ -51,7 +51,7 @@ export const helpMessages = {
   "help.contact": "Contact and correction guidance",
   "help.access.title": "Get access",
   "help.access.trial.title": "Try it first",
-  "help.access.trial.body": "When access is open, use Get access and sign in with your number. A new number can request one free trial without paying. The initial offer is 2 days from when the owner grants it; your signed-in device unlocks by itself and Account shows when it ends.",
+  "help.access.trial.body": "New accounts receive a free trial automatically when trials are enabled. Its duration is set by the administrator and starts at registration. Verify your number to use it; Account shows when access ends. No payment or trial request is needed.",
   "help.access.payment.title": "Report your payment",
   "help.access.payment.body": "Choose a plan and network, check the receiving name, then pay the amount shown. Confirm Paid from, which starts with your account number, and enter the transaction ID from your payment SMS. You can attach an optional screenshot of the payment message to help the administrator review it. Check the details and tap Submit payment. Your payment is reviewed before access opens. Use the support options if you need help.",
   "help.access.approval.title": "Approval and renewal",

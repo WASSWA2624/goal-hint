@@ -90,7 +90,6 @@ export function analyticsRouteLabel(route: string): string {
 /** Conversions are counted once per visit and goal. */
 export const analyticsGoals = Object.freeze([
   { id: "subscribe-view", label: "Viewed Get access", kind: "pageview", route: "/[locale]/subscribe" },
-  { id: "trial-requested", label: "Requested a trial", kind: "event", type: "custom", name: "trial_requested" },
   { id: "payment-submitted", label: "Submitted a payment", kind: "event", type: "custom", name: "payment_submitted" },
   { id: "match-analysis", label: "Opened a match analysis", kind: "pageview", route: "/[locale]/matches/[id]/[slug]" },
   { id: "slip-built", label: "Built a slip", kind: "event", type: "custom", name: "slip_build" },

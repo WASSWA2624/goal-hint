@@ -31,7 +31,7 @@ const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
 
 test("member write routes use the shared factories; sign-in and devices enforce origin, mode and device unlock", async () => {
-  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["payments", "createPaymentHandler"], ["trial", "createTrialHandler"]]) {
+  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["payments", "createPaymentHandler"]]) {
     const route = `src/app/api/account/${segment}/route.ts`;
     assert.ok(memberRoutes.includes(route));
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
@@ -51,8 +51,8 @@ test("member write routes use the shared factories; sign-in and devices enforce 
   }
 });
 
-test("account verification and recovery use the shared auth handler without exposing subscription code redemption", async () => {
-  for (const segment of ["code", "verification/confirm"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
+test("account verification and recovery use the shared auth handler without exposing subscription code redemption or manual trials", async () => {
+  for (const segment of ["code", "verification/confirm", "trial"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
   for (const action of ["verification", "verify", "forgot", "reset-code", "reset"]) {
     const route = `src/app/api/account/${action}/route.ts`;
     assert.ok(memberRoutes.includes(route));
@@ -259,21 +259,30 @@ test("Plans and Settings: reads expose managed identity, writes are JSON only, e
   assert.equal(down.status, 503, "A mode change runs in a transaction; storage that is down answers 503, never 500.");
 });
 
-// Payments and trials require an authenticated member, without requiring an unlocked subscription device.
-test("payment and trial writes guard origin, mode, session and blocked accounts before body or storage", async () => {
-  const { createPaymentHandler, createTrialHandler } = await import("../src/server/members/payment-http.ts");
+// Payment reports require an authenticated member, without requiring an unlocked subscription device.
+test("payment writes guard origin, mode, session and blocked accounts before body or storage", async () => {
+  const { createPaymentHandler } = await import("../src/server/members/payment-http.ts");
   const { paymentRequest } = await import("./helpers/payment-fixtures.mjs");
   for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null, blocked: false }, { codeEnteredAt: new Date(), blocked: true }]) for (const site of ["same-origin", "cross-site"]) {
     const services = async () => ({ config: { production: false }, settings: { settings: { paywallMode: mode } }, sessions: { verify: async () => member },
-      payments: { begin: async () => true, submit: async () => ({ status: "saved", reference: "P-TEST" }), trial: async () => "saved" } });
+      payments: { begin: async () => true, submit: async () => ({ status: "saved", reference: "P-TEST" }) } });
     const denied = mode === "off" || !member || member.blocked || site === "cross-site";
-    for (const [handler, request, status] of [[createPaymentHandler(services), await paymentRequest({ headers: { "sec-fetch-site": site } }), 201],
-      [createTrialHandler(services), new Request("http://localhost/api/account/trial", { method: "POST", headers: { "sec-fetch-site": site } }), 200]]) {
-      const response = await handler(request); assert.equal(response.status, denied ? 403 : status);
-      if (denied) assert.equal(request.bodyUsed, false);
-      if (member?.blocked && mode !== "off" && site === "same-origin") assert.equal((await response.json()).message, "We couldn't complete this. Please contact us.");
-    }
+    const request = await paymentRequest({ headers: { "sec-fetch-site": site } });
+    const response = await createPaymentHandler(services)(request); assert.equal(response.status, denied ? 403 : 201);
+    if (denied) assert.equal(request.bodyUsed, false);
+    if (member?.blocked && mode !== "off" && site === "same-origin") assert.equal((await response.json()).message, "We couldn't complete this. Please contact us.");
   }
+});
+
+test("retired manual trial grant and dismissal actions cannot write through the administrator endpoint", async () => {
+  const { POST } = await import(pathToFileURL(path.join(root, "src/app/api/admin/codes/route.ts")).href);
+  const before = calls.audit.length;
+  for (const action of ["trial", "dismiss-trial"]) {
+    const response = await POST(postJson("src/app/api/admin/codes/route.ts", { action, id: "00000000-0000-4000-8000-000000000001" }));
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+  assert.equal(calls.audit.length, before);
 });
 
 test("owner screenshot is private JPEG with a sandbox and cannot return data without the owner", async () => {

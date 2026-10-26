@@ -14,6 +14,7 @@ import { accountRequest } from "./account-security";
 import { AccountCard, AccountCardBody, AccountCardHeading, AccountCodeField, AccountError, AccountNote, AccountPrimary,
   AccountSteps, AccountSupport, AccountTextButton } from "./account-styles";
 import { MemberForm, MemberSignOut } from "./member-controls";
+import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 
 type CodeFormProps = { locale: string; returnTo: string | null; contact: AdminContact } & (
   { purpose: "account"; phone: string } | { purpose: "password-reset"; phone?: never }
@@ -26,6 +27,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
   const [step, setStep] = useState<"delivery" | "code">("delivery");
   const [requested, setRequested] = useState(false), [error, setError] = useState(""), [invalidCode, setInvalidCode] = useState(false);
   const [busy, setBusy] = useState<"request" | "verify" | null>(null);
+  const [verifiedTrial, setVerifiedTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const codeInput = useRef<HTMLInputElement>(null), codeRevision = useRef(0), clipboardPending = useRef(false);
   const recovery = flow.purpose === "password-reset", canonicalPhone = normalizePhone(phone);
   const channels = canonicalPhone ? supportedMessageChannels(canonicalPhone) : messageChannels;
@@ -76,10 +78,12 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
     if (parsed === null || invalidCode) { setInvalidCode(true); return; }
     setBusy("verify"); setError("");
     try {
-      const result = await accountRequest<{ next: string }>(recovery ? "reset-code" : "verify", { ...(recovery ? { phone } : {}), code: parsed, ...returnBody });
+      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(recovery ? "reset-code" : "verify", { ...(recovery ? { phone } : {}), code: parsed, ...returnBody });
+      if (!recovery && result.trial?.active) { setCode(""); setVerifiedTrial({ trial: result.trial, next: result.next }); return; }
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(null); }
   }
+  if (verifiedTrial) return <FreeTrialNotice locale={locale} {...verifiedTrial} />;
   return <AccountCard data-account-auth data-account-verification={flow.purpose} data-verification-step={step} data-analytics-ignore>
     <AccountCardHeading><LockIcon /><h1>{m.text(step === "code" ? "account.enterCode" : recovery ? "account.resetPassword" : "account.verifyAccount")}</h1></AccountCardHeading>
     <AccountCardBody>

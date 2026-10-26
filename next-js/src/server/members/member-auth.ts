@@ -7,8 +7,8 @@ import { passwordChangeWindowMs, supportedMessageChannels, type MessageChannel }
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, verifyPassword } from "../analytics/analytics-password.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
-import type { MemberAccount, Prisma } from "../generated/prisma/client.ts";
-import { lockMemberAccount } from "./access-codes.ts";
+import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
+import { accessCodeTransaction, grantRegistrationTrial, lockMemberAccount } from "./access-codes.ts";
 import { grantSessionAccess } from "./device-grants.ts";
 import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdentity } from "./member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, verifyMemberAdminCredential } from "./member-admin.ts";
@@ -21,7 +21,9 @@ import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts
 export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: 128 });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
 export type AuthFailure = Readonly<{ status: "invalid" | "unauthorized" | "busy" | "conflict" | "unavailable"; message: string }>;
-type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean; requiresVerification?: boolean; otherDeviceSignedOut?: boolean }>;
+export type RegistrationTrial = Readonly<{ days: number; startsAt: string; endsAt: string; active: boolean }>;
+
+type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean; requiresVerification?: boolean; otherDeviceSignedOut?: boolean; trial?: RegistrationTrial }>;
 type Requested = Readonly<{ status: "requested"; message: string }>;
 const invalid = (message: string): AuthFailure => ({ status: "invalid", message });
 const refused = (): AuthFailure => ({ status: "unauthorized", message: "We couldn't verify these details. Please try again." });
@@ -75,7 +77,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     return await verifyPassword(password, stored ?? await dummyHash()) && stored ? stored : wrongPassword();
   }
 
-  async function rotate(tx: Prisma.TransactionClient, account: MemberAccount, binding: AuthBinding, at: Date): Promise<AuthSuccess> {
+  async function rotate(tx: Prisma.TransactionClient, account: MemberAccount, binding: AuthBinding, at: Date, trial?: AccessCode | null): Promise<AuthSuccess> {
     const old = binding.member ? await tx.memberSession.findUnique({ where: { tokenHash: binding.member.tokenHash } }) : null;
     await tx.memberSession.deleteMany({ where: { accountId: account.id } });
     const verified = !!account.phoneVerifiedAt;
@@ -83,8 +85,10 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     // A profile change keeps this device's paid access; otherwise a live period unlocks the new device under the cap.
     if (verified && old?.codeEnteredAt && old.accessCodeId) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
       data: { codeEnteredAt: old.codeEnteredAt, accessCodeId: old.accessCodeId } });
-    if (verified) await grantSessionAccess(tx, { accountId: account.id, tokenHash: session.tokenHash, at, actor: "member" });
-    return { status: "authenticated", token, accountId: account.id, phone: account.phone!, ...(!verified ? { requiresVerification: true } : {}) };
+    const unlocked = verified && await grantSessionAccess(tx, { accountId: account.id, tokenHash: session.tokenHash, at, actor: "member" });
+    return { status: "authenticated", token, accountId: account.id, phone: account.phone!, ...(!verified ? { requiresVerification: true } : {}),
+      ...(trial ? { trial: { days: trial.durationDays, startsAt: trial.startsAt.toISOString(), endsAt: trial.endsAt.toISOString(),
+        active: !!unlocked && !trial.revokedAt && trial.startsAt <= at && trial.endsAt > at } } : {}) };
   }
 
   async function pendingAccount(tx: Prisma.TransactionClient, token: string | undefined, at: Date): Promise<MemberAccount | null> {
@@ -149,11 +153,12 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       if (!supportedMessageChannels(phone).length) return invalid("Messaging is unavailable for this country. Contact the admin for assistance.");
       const passwordHash = await hashPassword(password);
       try {
-        return await decide<AuthSuccess | AuthFailure>(database, async (tx) => {
+        return await accessCodeTransaction<AuthSuccess | AuthFailure>(database, async (tx) => {
           const existing = await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
           if (existing) return conflict();
           const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at } });
-          return rotate(tx, account, binding, at);
+          const trial = await grantRegistrationTrial(tx, account.id, at);
+          return rotate(tx, account, binding, at, trial);
         });
       } catch (error) { if (error instanceof DatabaseOperationError && error.code === "constraint") return conflict(); throw error; }
     },
@@ -183,7 +188,8 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         const at = new Date(now()), account = await pendingAccount(tx, token, at);
         if (!account || !await codes.consume(tx, account, "account", code, at)) return refused();
         const verified = await tx.memberAccount.update({ where: { id: account.id }, data: { phoneVerifiedAt: at, lastSignInAt: at } });
-        return rotate(tx, verified, { member: null }, at);
+        const trial = await tx.accessCode.findFirst({ where: { accountId: account.id, source: "trial", revokedAt: null, endsAt: { gt: at } }, orderBy: { createdAt: "asc" } });
+        return rotate(tx, verified, { member: null }, at, trial);
       });
     },
 

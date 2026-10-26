@@ -9,9 +9,8 @@ import { AccountSettings, ResetPasswordForm } from "@/components/members/account
 import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
-import { ApprovalRefresh, PaymentNotice, TrialNotice } from "@/components/members/payment-status";
+import { ApprovalRefresh, PaymentNotice } from "@/components/members/payment-status";
 import { richText } from "@/components/members/rich-text";
-import { TrialRequest } from "@/components/members/subscribe-controls";
 import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
@@ -62,7 +61,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const now = new Date();
     const [view, paymentView, subscription] = member && !member.blocked ? await Promise.all([
       member.codeEnteredAt ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
-      settings ? resolved.payments?.view(member, settings).catch(() => null) ?? null : null,
+      settings ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null,
     ]) : [null, null, null];
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
@@ -76,9 +75,6 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const credit = paymentView?.credit ?? null;
     const hasCredit = !!credit && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length > 0);
     const offers = hasCredit && salesOpen ? await plans().catch(() => []) : [];
-    // A granted trial unlocks the account's devices; a dismissed one stops waiting.
-    const trialPending = !!paymentView?.trialPending && !activeUntil;
-    const offerTrial = salesOpen && !!paymentView?.trialEligible && !trialPending;
     // A waiting, refused or reversed plan report sends the member back to it instead of to a second payment; a top-up has
     // its own notice and leaves Renew in place.
     const reports = paymentView ? [status, paymentView.otherStatus ?? null].filter((report) => report && report.purpose !== "topup") : null;
@@ -100,19 +96,17 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         <h1>{messages.text("account.yourAccount")}</h1>
         {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
-        <ApprovalRefresh waiting={waiting || trialPending} refreshAt={activeUntil} />
+        <ApprovalRefresh waiting={waiting} refreshAt={activeUntil} />
         <AccountBlock data-subscription-summary={!subscription ? "unavailable" : activeUntil ? "active" : "inactive"}>
           <AccountBlockText>
             <p>{access}</p>
             {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
           </AccountBlockText>
-          {(subscription && salesOpen || offerTrial) && <AccountBlockActions>
+          {subscription && salesOpen && <AccountBlockActions>
             {subscription && salesOpen && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
               {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.extend" : "account.subscribe")}</ButtonLink>}
-            {offerTrial && <TrialRequest locale={locale} days={settings!.trialDays} />}
           </AccountBlockActions>}
         </AccountBlock>
-        {trialPending && <TrialNotice locale={locale} settings={contact} phone={member.phone} />}
         <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
         {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
         {credit && hasCredit && <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} active={!!activeUntil} />}

@@ -20,12 +20,7 @@ export async function codeAction(request: Request) {
     const account = fixtureAccountForPhone(phone);
     return json(grantFixtureAccess(account, days, "manual", plan?.name ?? "Manual"), 201);
   }
-  if (action === "trial" || action === "dismiss-trial") {
-    const account = state.accounts.find(row => row.id === body.id);
-    if (!account || account.blockedAt || account.erasedAt) return json({ status: "refused", message: "This account is unavailable." }, 409);
-    if (action === "dismiss-trial") { account.trialDismissedAt = new Date();return json({ status: "saved" }); }
-    return json(grantFixtureAccess(account, 2, "trial", "Free trial"), 201);
-  }
+  if (action !== "revoke" && action !== "extend") return json({ message: "Unknown access action." }, 400);
   const code = state.codes.find(row => row.id === body.id);
   if (!code || code.revokedAt) return json({ status: "refused", message: "This access period is unavailable." }, 409);
   if (action === "revoke") {

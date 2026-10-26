@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import test from "node:test";
 import { hashPassword, verifyPassword } from "../src/server/analytics/analytics-password.ts";
+import { grantRegistrationTrial } from "../src/server/members/access-codes.ts";
+import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
+import { DatabaseOperationError } from "../src/server/database/client.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberAuthHandler } from "../src/server/members/member-auth-http.ts";
 import { createMemberSessions, issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
@@ -16,7 +19,7 @@ const DAY = 86_400_000, address = "198.51.100.1";
 const wrongCode = (code) => `${code[0] === "0" ? "1" : "0"}${code.slice(1)}`;
 
 /** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
-function fixture({ admins = [], adminHash = null, send } = {}) {
+function fixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
   const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), sent = [], messages = [];
   function matches(row, where = {}) {
@@ -52,12 +55,13 @@ function fixture({ admins = [], adminHash = null, send } = {}) {
       async deleteMany({ where }) { let count = 0; for (const [identifier, row] of rows) if (matches(row, where)) { rows.delete(identifier); count++; } return { count }; },
     };
   }
+  const settings = { ...defaultSubscriptionSettings, trialDays, updatedAt: new Date(time), updatedBy: "synthetic-owner" };
   const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null, passwordResetRequestedAt: null, blockedAt: null, erasedAt: null }),
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
     paymentSubmission: { async findMany() { return []; } },
-    accessCode: table(accessCodes, "id", { revokedAt: null }),
-    subscriptionSettings: { async findUnique() { return null; } },
+    accessCode: table(accessCodes, "id", { revokedAt: null, extensionDays: 0 }),
+    subscriptionSettings: { async findUnique() { return settings; }, async findUniqueOrThrow() { return settings; } },
     ownerAuditEvent: { async create({ data }) { sent.push(data); return data; } },
     rateLimitBucket: { async findUniqueOrThrow({ where }) { return buckets.get(where.key); } },
     async $queryRaw() { return []; },
@@ -65,14 +69,15 @@ function fixture({ admins = [], adminHash = null, send } = {}) {
       if (strings.join("").includes("RateLimitBucket")) {
         const [bucketKey, started] = values, existing = buckets.get(bucketKey);
         buckets.set(bucketKey, { count: existing?.started.getTime() === started.getTime() ? existing.count + 1 : 1, started });
-      } else throw new Error("Unexpected SQL in auth fixture");
+      } else if (!strings.join("").includes("SubscriptionSettings")) throw new Error("Unexpected SQL in auth fixture");
       return 1;
     },
   };
   const database = { async query(run) { return run(tx); }, transaction(run) {
     const result = queue.then(async () => {
-      const snapshots = [accounts, sessions, challenges, buckets].map((rows) => structuredClone(rows));
-      try { return await run(tx); } catch (error) { [accounts, sessions, challenges, buckets].forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
+      const snapshots = [accounts, sessions, challenges, buckets, accessCodes].map((rows) => structuredClone(rows));
+      const auditCount = sent.length;
+      try { return await run(tx); } catch (error) { sent.length = auditCount; [accounts, sessions, challenges, buckets, accessCodes].forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
     });
     queue = result.catch(() => {}); return result;
   } };
@@ -90,7 +95,7 @@ function fixture({ admins = [], adminHash = null, send } = {}) {
     const member = await sessionService.verify(logged.token); assert.ok(member);
     return { member, token: logged.token };
   }
-  return { service, database, tx, accounts, sessions, challenges, buckets, accessCodes, sent, messages, sessionService, account, authenticate, adminPhones, restart,
+  return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, sessionService, account, authenticate, adminPhones, restart,
     now: () => time, advance: (ms) => { time += ms; } };
 }
 
@@ -722,4 +727,69 @@ test("recovery cannot reset administrator environment credentials and requires s
   assert.equal(response.status, 403);
   assert.deepEqual(parseMemberAdminPhones(JSON.stringify([phone, phone])), [phone]);
   assert.equal(isMemberAdminPhone(phone, { GOAL_HINT_ADMIN_PHONES: JSON.stringify([phone]) }), true);
+});
+
+
+test("registration allocates a configured trial atomically and verification unlocks without approval", async () => {
+  const f = fixture({ trialDays: 5 }), registered = await f.service.register(phone, password, browser(), address);
+  assert.equal(registered.requiresVerification, true);
+  assert.deepEqual(registered.trial, { days: 5, startsAt: new Date(f.now()).toISOString(), endsAt: new Date(f.now() + 5 * DAY).toISOString(), active: false });
+  assert.equal(f.accessCodes.size, 1);
+  const period = [...f.accessCodes.values()][0];
+  assert.equal(period.source, "trial"); assert.equal(period.planName, "Free trial"); assert.equal(period.priceUgx, 0); assert.equal(period.amountReceivedUgx, 0);
+  assert.equal(+period.activatedAt, f.now()); assert.equal(+period.startsAt, f.now());
+  assert.equal([...f.sessions.values()][0].codeEnteredAt, null); assert.equal(await f.sessionService.verify(registered.token), null);
+  assert.equal(f.messages.length, 0, "Allocating access sends no verification message");
+  f.settings.trialDays = 1;
+  await f.service.requestVerification("sms", registered.token, address);
+  const verified = await f.service.verifyAccount(f.messages.at(-1).code, registered.token, address);
+  assert.equal(verified.trial.days, 5, "The original offer is a snapshot"); assert.equal(verified.trial.active, true);
+  const member = await f.sessionService.verify(verified.token);
+  assert.equal(member.accessCodeId, period.id); assert.ok(member.codeEnteredAt); assert.equal(f.accessCodes.size, 1);
+  assert.ok(!f.sent.some(row => ["trial_requested", "trial_sent", "trial_dismissed"].includes(row.action)));
+});
+
+test("disabled or expired registration trials do not unlock verified sessions", async () => {
+  const disabled = fixture({ trialDays: 0 }), registered = await disabled.service.register(phone, password, browser(), address);
+  assert.equal(registered.trial, undefined); assert.equal(disabled.accessCodes.size, 0);
+  await disabled.service.requestVerification("sms", registered.token, address);
+  const verified = await disabled.service.verifyAccount(disabled.messages.at(-1).code, registered.token, address);
+  assert.equal(verified.trial, undefined); assert.equal((await disabled.sessionService.verify(verified.token)).codeEnteredAt, null);
+  const expired = fixture({ trialDays: 1 }), pending = await expired.service.register(phone, password, browser(), address);
+  expired.advance(DAY);
+  await expired.service.requestVerification("sms", pending.token, address);
+  const afterExpiry = await expired.service.verifyAccount(expired.messages.at(-1).code, pending.token, address);
+  assert.equal(afterExpiry.trial, undefined); assert.equal((await expired.sessionService.verify(afterExpiry.token)).codeEnteredAt, null);
+  assert.equal(expired.accessCodes.size, 1, "Verification cannot restart a trial");
+});
+
+test("concurrent registration and repeated allocation cannot duplicate or extend a trial", async () => {
+  const f = fixture({ trialDays: 3 });
+  const results = await Promise.all([f.service.register(phone, password, browser(), address), f.service.register(phone, password, browser(), address)]);
+  assert.deepEqual(results.map(result => result.status).sort(), ["authenticated", "conflict"]);
+  const original = [...f.accessCodes.values()][0];
+  f.advance(4 * DAY); f.settings.trialDays = 7;
+  const again = await f.database.transaction(tx => grantRegistrationTrial(tx, original.accountId, new Date(f.now())));
+  assert.equal(again.id, original.id); assert.equal(+again.endsAt, +original.endsAt); assert.equal(f.accessCodes.size, 1);
+  assert.equal((await f.service.login(phone, password, address)).requiresVerification, true); assert.equal(f.accessCodes.size, 1);
+});
+
+test("failed registration rolls back its account, trial, session and audit", async () => {
+  const f = fixture();
+  f.tx.memberSession.create = async () => { throw new Error("Synthetic session failure"); };
+  await assert.rejects(f.service.register(phone, password, browser(), address), /Synthetic session failure/);
+  assert.equal(f.accounts.size, 0); assert.equal(f.accessCodes.size, 0); assert.equal(f.sessions.size, 0); assert.equal(f.sent.length, 0);
+});
+
+test("a rolled-back trial reference collision retries registration without duplicating its account or period", async () => {
+  const f = fixture(), create = f.tx.accessCode.create.bind(f.tx.accessCode);
+  let attempts = 0;
+  f.tx.accessCode.create = async query => {
+    if (++attempts === 1) throw new DatabaseOperationError("constraint");
+    return create(query);
+  };
+  const result = await f.service.register(phone, password, browser(), address);
+  assert.equal(result.status, "authenticated"); assert.equal(attempts, 2);
+  assert.equal(f.accounts.size, 1); assert.equal(f.accessCodes.size, 1); assert.equal(f.sessions.size, 1);
+  assert.equal([...f.accessCodes.values()][0].accountId, result.accountId);
 });

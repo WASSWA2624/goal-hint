@@ -42,13 +42,13 @@ const Item = styled.li<{ $ok: boolean }>`
 `;
 
 /** The three steps of reading a screenshot, with a bar for the current one, so the member sees the work as it happens. */
-export function ReadingProgress({ locale, state }: { locale: string; state: ReadingState }) {
+export function ReadingProgress({ locale, state, compact = false }: { locale: string; state: ReadingState; compact?: boolean }) {
   const m = createMessages(locale), current = stages.indexOf(state.stage);
   const label = m.text(`subscribe.reading.${state.stage}`);
   return <Panel data-reading-progress={state.stage}>
-    <Steps aria-hidden="true">{stages.map((stage, index) => <Step key={stage} $state={index < current ? "done" : index === current ? "active" : "waiting"}>
+    {compact ? <span>{m.text("subscribe.wizard.reading")}</span> : <Steps aria-hidden="true">{stages.map((stage, index) => <Step key={stage} $state={index < current ? "done" : index === current ? "active" : "waiting"}>
       {index < current ? <CheckIcon /> : index === current ? <Spinner /> : <Waiting />}<span>{m.text(`subscribe.reading.${stage}`)}</span>
-    </Step>)}</Steps>
+    </Step>)}</Steps>}
     <progress max={100} value={state.progress} aria-label={label} />
   </Panel>;
 }

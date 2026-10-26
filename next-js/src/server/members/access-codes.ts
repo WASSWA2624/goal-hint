@@ -83,30 +83,50 @@ async function codeTransaction<T>(database: DatabaseRuntime, run: (tx: Prisma.Tr
   }
 }
 
+/** The shared transaction retries only rolled-back database work. */
+export { codeTransaction as accessCodeTransaction };
+
+const audit = (tx: Prisma.TransactionClient, accountId: string, id: string, action: OwnerAuditAction, actor: string, at: Date,
+  details: Record<string, unknown> = {}, targetType: "access-code" | "member" | "payment" | "member-session" = "access-code") =>
+  writeOwnerAudit(tx, { at, actor, action, accountId, targetType, targetId: id, details });
+
+async function createAccessPeriod(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: Creation, actor: string, at: Date,
+  devices: Devices): Promise<AccessGrant> {
+  if (!account.phone) throw new Error("An erased account cannot receive access.");
+  // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
+  const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null);
+  const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
+    codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
+  await audit(tx, account.id, code.id, "code_created", actor, at, { source: fields.source, reference, durationDays: code.durationDays,
+    extensionDays: code.extensionDays, startsAt: code.startsAt, endsAt: code.endsAt });
+  const devicesUnlocked = await grantDevices(tx, { accountId: account.id, codeId: code.id, at, maximum: devices.maximum, prefer: devices.prefer ?? [], actor });
+  await audit(tx, account.id, code.id, "access_granted", actor, at, { source: fields.source, devicesUnlocked });
+  return { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt, source: fields.source, devicesUnlocked,
+    ...(fields.paymentSubmissionId ? { paymentSubmissionId: fields.paymentSubmissionId } : {}) };
+}
+
+/** One configured trial per newly registered account, created in the registration transaction.
+ * Existing historical periods are never replaced, extended or used to grant another trial. */
+export async function grantRegistrationTrial(tx: Prisma.TransactionClient, accountId: string, at: Date): Promise<AccessCode | null> {
+  const account = await lockMemberAccount(tx, accountId);
+  if (!account?.phone || account.blockedAt || account.erasedAt) return null;
+  const existing = await tx.accessCode.findFirst({ where: { accountId, source: "trial" }, orderBy: { createdAt: "asc" } });
+  if (existing) return existing;
+  if (await tx.accessCode.count({ where: { accountId } })) return null;
+  const settings = await lockSettings(tx, "registration", at);
+  if (!validDays(settings.trialDays, 7)) return null;
+  const grant = await createAccessPeriod(tx, account, { source: "trial", planName: "Free trial", durationDays: settings.trialDays,
+    priceUgx: 0, amountReceivedUgx: 0 }, "registration", at, { maximum: settings.maxUnlockedDevices });
+  return tx.accessCode.findUniqueOrThrow({ where: { id: grant.id } });
+}
+
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
 export function createAccessCodes({ database, now = Date.now, notifications = createQueuedPaymentNotifications() }: {
   database: DatabaseRuntime; now?: () => number; notifications?: PaymentNotifications;
   /** Accepted for existing callers; nothing here is keyed since code entry (and its throttle) was removed. */
   config?: Pick<AnalyticsConfig, "key">;
 }) {
-  const audit = (tx: Prisma.TransactionClient, accountId: string, id: string, action: OwnerAuditAction, actor: string, at: Date,
-    details: Record<string, unknown> = {}, targetType: "access-code" | "member" | "payment" | "member-session" = "access-code") =>
-    writeOwnerAudit(tx, { at, actor, action, accountId, targetType, targetId: id, details });
-
-  async function create(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: Creation, actor: string, at: Date,
-    devices: Devices): Promise<AccessGrant> {
-    if (!account.phone) throw new Error("An erased account cannot receive access.");
-    // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
-    const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null);
-    const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
-      codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
-    await audit(tx, account.id, code.id, "code_created", actor, at, { source: fields.source, reference, durationDays: code.durationDays,
-      extensionDays: code.extensionDays, startsAt: code.startsAt, endsAt: code.endsAt });
-    const devicesUnlocked = await grantDevices(tx, { accountId: account.id, codeId: code.id, at, maximum: devices.maximum, prefer: devices.prefer ?? [], actor });
-    await audit(tx, account.id, code.id, "access_granted", actor, at, { source: fields.source, devicesUnlocked });
-    return { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt, source: fields.source, devicesUnlocked,
-      ...(fields.paymentSubmissionId ? { paymentSubmissionId: fields.paymentSubmissionId } : {}) };
-  }
+  const create = createAccessPeriod;
 
   async function rechain(tx: Prisma.TransactionClient, accountId: string, at: Date) {
     const codes = await tx.accessCode.findMany({ where: { accountId, revokedAt: null, endsAt: { gt: at } } });
@@ -400,30 +420,6 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (outcome.status !== "retry") return outcome;
       }
       return refused();
-    },
-
-    async sendTrial(accountId: string, trialDays: number, actor: string): Promise<CodeOutcome> {
-      if (!validDays(trialDays, 7)) return invalid();
-      return codeTransaction(database, async (tx, rollback) => {
-        const account = await lockMemberAccount(tx, accountId);
-        if (!account || account.blockedAt || account.erasedAt || !account.trialRequestedAt || account.trialDismissedAt
-          || await tx.accessCode.count({ where: { accountId } })) return rollback(refused());
-        const at = new Date(now()), grant = await create(tx, account, { source: "trial", planName: "Free trial", durationDays: trialDays,
-          priceUgx: 0, amountReceivedUgx: 0 }, actor, at, { maximum: await unlockedDeviceLimit(tx) });
-        await audit(tx, accountId, grant.id, "trial_sent", actor, at, { days: trialDays });
-        return { status: "created", grant };
-      });
-    },
-
-    async dismissTrial(accountId: string, actor: string): Promise<CodeOutcome> {
-      return codeTransaction(database, async (tx, rollback) => {
-        const account = await lockMemberAccount(tx, accountId);
-        if (!account?.trialRequestedAt || account.trialDismissedAt || await tx.accessCode.count({ where: { accountId } })) return rollback(refused());
-        const at = new Date(now());
-        await tx.memberAccount.update({ where: { id: accountId }, data: { trialDismissedAt: at } });
-        await audit(tx, accountId, accountId, "trial_dismissed", actor, at, {}, "member");
-        return { status: "saved" };
-      });
     },
 
     /**

@@ -12,14 +12,14 @@ import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
 import { AccountBlock, AccountBlockActions, AccountBlockText, AccountContactLinks, AccountFine } from "./account-overview";
 import { richText } from "./rich-text";
 import { refreshMemberSession } from "./member-session";
-import { Action, Disclosure, Note, PaymentReviewBox, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
+import { Action, Disclosure, Note, PaymentReviewBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
 export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
 const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 type RejectReason = (typeof rejectReasons)[number];
 const reasonOf = (code: string | null): RejectReason => rejectReasons.find((reason) => reason === code) ?? "other";
 
-/** While a report or trial waits, re-read the page every 20 s and whenever the tab comes back. router.refresh also drops the
+/** While a report waits, re-read the page every 20 s and whenever the tab comes back. router.refresh also drops the
  * client router cache, so the render that first shows the approval already carries the unlocked tier to every gated page. */
 export function useApprovalRefresh(waiting: boolean, refreshAt: string | null = null) {
   const router = useRouter();
@@ -133,25 +133,4 @@ export function PaymentNotice({ locale, status, settings, phone }: { locale: str
       {pending && settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</AccountBlockText>
     <AccountBlockActions><AccountContactLinks locale={locale} contact={settings} text={supportText} /></AccountBlockActions>
   </AccountBlock>;
-}
-
-/** The account page's sentence for a requested free trial. */
-export function TrialNotice({ locale, settings, phone }: { locale: string; settings: StatusSettings; phone: string }) {
-  const m = createMessages(locale);
-  return <AccountBlock $attention role="status" data-trial-status="requested">
-    <AccountBlockText><p>{m.text("subscribe.trialWaiting")}</p>
-      {settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</AccountBlockText>
-    <AccountBlockActions><AccountContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpTrial", { phone: formatPhone(phone) })} /></AccountBlockActions>
-  </AccountBlock>;
-}
-
-/** A requested trial waits for the owner's Grant free trial, which unlocks the account's devices by itself. */
-export function TrialStatusCard({ locale, settings, phone, heading = "h3" }: { locale: string; settings: StatusSettings; phone: string; heading?: "h2" | "h3" }) {
-  const m = createMessages(locale);
-  return <StatusBox role="status" data-trial-status="requested">
-    <StatusTitle as={heading}>{m.text("subscribe.trialRequested")}</StatusTitle>
-    <p>{m.text("subscribe.trialWaiting")}</p>
-    {settings.reviewTime && <Note>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</Note>}
-    <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpTrial", { phone: formatPhone(phone) })} />
-  </StatusBox>;
 }

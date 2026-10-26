@@ -4,14 +4,15 @@ import { createMemberAuthHandler } from "@/server/members/member-auth-http";
 import type { MemberServices } from "@/server/members/member-http";
 import { fixtureMemberSessions, restoreFixtureSession } from "./fixture-admin";
 import { fixtureAdminPassword, fixtureAdminPhone, fixtureTokens } from "./fixture-identity";
+import { fixtureRegistrationTrial } from "./fixture-subscription";
 export { fixtureTokens } from "./fixture-identity";
 
 type FixtureAction = "register" | "login" | "verification" | "verify" | "forgot" | "reset-code" | "reset";
-export const fixtureScenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset"] as const;
+export const fixtureScenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset", "automatic-trial"] as const;
 
 /** Only the isolated rendering app imports this adapter. It never creates accounts, writes a database or sends messages. */
 export function fixtureAuthHandler(action: FixtureAction) {
-  return (request: Request) => {
+  return async (request: Request) => {
     const scenario = request.headers.get("x-member-fixture-scenario")
       ?? request.headers.get("cookie")?.match(/(?:^|;\s*)member-fixture-scenario=([^;]+)/u)?.[1]
       ?? "success";
@@ -32,11 +33,13 @@ export function fixtureAuthHandler(action: FixtureAction) {
     };
     const verify = (code: unknown, reset = false) => scenario === "unavailable" ? unavailable()
       : scenario === "invalid-code" || code !== "123456" ? invalid()
-      : authenticated(reset ? { token: fixtureTokens.reset, requiresPasswordChange: true } : {});
+      : authenticated(reset ? { token: fixtureTokens.reset, requiresPasswordChange: true }
+        : scenario === "automatic-trial" ? { trial: { ...fixtureRegistrationTrial, active: true } } : {});
     const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } },
       sessions: fixtureMemberSessions,
       auth: {
-        async register() { return scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.pending, requiresVerification: true }); },
+        async register() { return scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.pending, requiresVerification: true,
+          ...(scenario === "automatic-trial" ? { trial: { ...fixtureRegistrationTrial, active: false } } : {}) }); },
         async login(phone: unknown, password: unknown) {
           if (scenario === "unavailable") return unavailable();
           if (scenario === "rate-limited") return { status: "busy", message: "Synthetic sign-in requests are limited. Try again later." };
@@ -55,6 +58,9 @@ export function fixtureAuthHandler(action: FixtureAction) {
         async resetPassword() { return scenario === "unavailable" ? unavailable() : authenticated(); },
       },
     }) as unknown as MemberServices;
-    return createMemberAuthHandler(action, source)(request);
+    const response = await createMemberAuthHandler(action, source)(request);
+    if (response.ok && scenario === "automatic-trial" && (action === "register" || action === "verify"))
+      response.headers.append("Set-Cookie", "member-fixture-subscription=registration-trial; Path=/; SameSite=Lax");
+    return response;
   };
 }

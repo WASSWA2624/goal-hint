@@ -46,12 +46,11 @@ export const paymentRules = Object.freeze({ bodyBytes: 3_200_000, imageBytes: 3_
 export type PaymentStatus = Readonly<{ reference: string; status: string; rejectText: string | null; rejectReason: string | null;
   planName: string; priceUgx: number; submittedAt: string; endsAt: string | null; purpose?: "plan" | "topup" }>;
 /**
- * trialPending: a trial was requested and the owner has neither granted nor dismissed it (the account has no access period).
  * credit is the account's balance, auto-renewal and recent history; null when the session cannot see it. otherStatus is the
  * latest report of the other purpose (a plan report behind a newer top-up, or the reverse) while it still waits, or once it
  * was refused or reversed after the newer report was sent.
  */
-export type PaymentView = Readonly<{ acceptedTerms: boolean; trialEligible: boolean; trialPending: boolean; status: PaymentStatus | null; credit?: CreditView | null;
+export type PaymentView = Readonly<{ acceptedTerms: boolean; status: PaymentStatus | null; credit?: CreditView | null;
   otherStatus?: PaymentStatus | null }>;
 
 export function canOpenMoneyMenu(userAgent: string): boolean {

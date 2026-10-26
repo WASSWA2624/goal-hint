@@ -141,6 +141,8 @@ def subscriber_mutations(origin):
         assert next(row for row in snapshot()["codes"] if row["id"] == code["id"])["status"] == "revoked"
         action({"action": "manual", "phone": "256700000999", "amount": 0, "days": 3, "note": "Synthetic new account"}, 201, "/api/admin/codes")
         assert len(fixture_json(origin, "/api/admin/subscribers", {"search": "256700000999"})[1]["accounts"]) == 1
+        # The historical baseline expires; transfer checks need their own live period.
+        action({"action": "manual", "phone": "0700000101", "amount": 0, "days": 7, "note": "Synthetic transferable access"}, 201, "/api/admin/codes")
         transfer = {"action": "change-number", "newPhone": "256700000777", "verifiedBy": "payment-details"}
         action({**transfer, "confirmed": False}, 400)
         action({**transfer, "confirmed": True}, 201)
@@ -307,8 +309,7 @@ def payments_api(origin):
             result = queue(tab)
             assert [row["id"] for row in result["payments"]] == ids, (tab, result)
             assert result["pendingCount"] == 3
-            if tab != "pending":
-                assert result["trials"] == [], "Trial requests belong only to the pending queue."
+            assert set(result) == {"pendingCount", "payments"}, "Automatic trials never enter the payment-review queue."
         assert [row["id"] for row in queue("invalid")["payments"]] == expected["pending"]
         pending = queue()["payments"]
         assert [(row["amount"], row["durationDays"]) for row in pending] == [(4500, 7), (15000, 30), (1000, 1)]
@@ -403,10 +404,7 @@ def payments_rendering(origin):
                 assert html.count(warning) == 1, "Warnings stay visible without being repeated inside checks."
                 match(r'aria-label="Payment warnings"', html)
                 no_match(r'No screenshot available', html)
-                trials = match(r'<details\b(?=[^>]*data-payment-trials)[^>]*>', html).group(0)
-                no_match(r'\bopen(?:=""|\s|>)', trials)
-            else:
-                no_match(r'data-payment-trials', html)
+            no_match(r'data-payment-trials|Free trial requests|Grant free trial', html)
             no_match(r'<img\b[^>]*src="/api/admin/payments/', html, "The first report in these tab fixtures has no image.")
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
@@ -491,7 +489,7 @@ def main():
             for removed in ["#code=", 'href="sms:', 'href="https://wa.me/', "Reissue"]:
                 assert removed not in html, (path, removed)
             if path=="/admin/payments":assert "(1) Payments" in response.text
-        for action in ["approve", "trial", "manual"]:
+        for action in ["approve", "manual"]:
             endpoint = "/api/admin/payments/00000000-0000-4000-8000-000000000200" if action == "approve" else "/api/admin/codes"
             body = {"action": action, "id": "00000000-0000-4000-8000-000000000100", "phone": "256700000101", "planId": "00000000-0000-4000-8000-000000000001", "amount": 0, "note": "Synthetic acceptance grant"}
             if action == "approve":
@@ -505,6 +503,9 @@ def main():
                 assert payload["status"] == ("approved" if action == "approve" else "granted")
                 assert payload["devicesUnlocked"] >= 0 and payload["endsAt"]
                 assert not {"delivery", "code", "sms", "whatsapp"}.intersection(payload)
+        for action in ["trial", "dismiss-trial"]:
+            status, _ = fixture_json(server.origin, "/api/admin/codes", {"action": action, "id": "00000000-0000-4000-8000-000000000100"})
+            assert status == 400, "Former manual trial actions must not grant or dismiss access."
         subscriber_mutations(server.origin)
         settings_api(server.origin)
         settings_rendering(server.origin)

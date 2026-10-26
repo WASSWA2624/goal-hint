@@ -208,6 +208,18 @@ native feature implementation.
 | --- | --- |
 | [070 Interactive payment flow samples](070-payment-flow-samples.md) | Ten responsive manual-payment prototypes with a shared wizard, mobile/desktop previews, and a private review gallery. |
 
+### 071 Stepwise subscription payment
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [071 Stepwise subscription payment](071-stepwise-subscription-payment.md) | Implements Sample 01 as a four-stage subscription payment wizard with inline review, concise copy, and existing verification safeguards. |
+
+### 072 Automatic registration trial
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [072 Automatic registration trial](072-automatic-registration-trial.md) | Grants the configured trial at registration and removes the manual trial-request and approval workflow. |
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |

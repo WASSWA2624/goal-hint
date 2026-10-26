@@ -155,3 +155,46 @@ test("successful and concurrent password logins transfer one device and premium 
     assert.equal(await f.database.query(tx => tx.memberSession.count({ where: { accountId: first.accountId } })), kept.length, "Cleanup is idempotent");
   });
 });
+
+
+test("registration grants one configured trial atomically without bypassing verification on MySQL", { timeout: 180_000 }, async t => {
+  let f;
+  try { f = await paidDatabase(); }
+  catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
+  t.after(() => f.close());
+  let time = Date.parse("2026-10-26T09:00:00Z");
+  const now = () => time, messages = [];
+  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", trialDays: 4, maxUnlockedDevices: 1,
+    updatedAt: new Date(time), updatedBy: "synthetic-owner" } }));
+  const auth = createMemberAuth({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null,
+    delivery: { async send(message) { messages.push(message); } } });
+  const sessions = createMemberSessions({ database: f.database, config: f.config, now, adminPhone: () => false, adminPasswordHash: () => null });
+  const registrations = await Promise.all([auth.register(phone, password, { member: null }, address), auth.register(phone, password, { member: null }, address)]);
+  assert.deepEqual(registrations.map(result => result.status).sort(), ["authenticated", "conflict"]);
+  const registered = registrations.find(result => result.status === "authenticated");
+  assert.equal(registered.requiresVerification, true); assert.equal(registered.trial.days, 4); assert.equal(registered.trial.active, false);
+  assert.equal(await sessions.verify(registered.token), null); assert.equal(messages.length, 0);
+  const periods = await f.database.query(tx => tx.accessCode.findMany({ where: { accountId: registered.accountId } }));
+  assert.equal(periods.length, 1); assert.equal(periods[0].source, "trial"); assert.equal(periods[0].priceUgx, 0); assert.equal(periods[0].amountReceivedUgx, 0);
+  assert.equal(+periods[0].activatedAt, time); assert.equal(+periods[0].startsAt, time); assert.equal(+periods[0].endsAt - time, 4 * DAY);
+  const account = await f.database.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: registered.accountId } }));
+  assert.equal(account.trialRequestedAt, null); assert.equal(account.trialDismissedAt, null);
+  await f.database.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { trialDays: 1 } }));
+  await auth.requestVerification("sms", registered.token, address);
+  const verifications = await Promise.all([auth.verifyAccount(messages.at(-1).code, registered.token, address), auth.verifyAccount(messages.at(-1).code, registered.token, address)]);
+  assert.deepEqual(verifications.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
+  const verified = verifications.find(result => result.status === "authenticated");
+  assert.equal(verified.trial.days, 4); assert.equal(verified.trial.active, true);
+  assert.equal((await sessions.verify(verified.token)).accessCodeId, periods[0].id);
+  assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { accountId: registered.accountId } })), 1);
+  const logged = await auth.login(phone, password, address);
+  assert.equal((await sessions.verify(logged.token)).accessCodeId, periods[0].id);
+  assert.equal(await sessions.verify(verified.token), null, "The device/session gate remains in force");
+  await f.database.query(tx => tx.subscriptionSettings.update({ where: { id: 1 }, data: { trialDays: 0 } }));
+  const disabled = await auth.register("256700001002", password, { member: null }, "198.51.100.9");
+  assert.equal(disabled.trial, undefined); assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { accountId: disabled.accountId } })), 0);
+  time += 4 * DAY;
+  const expired = await auth.login(phone, password, address);
+  assert.equal((await sessions.verify(expired.token)).codeEnteredAt, null);
+  assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { accountId: registered.accountId } })), 1, "Login cannot renew an expired trial");
+});
