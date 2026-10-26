@@ -92,9 +92,12 @@ headings, optional time guidance and the browsing zone are visible. Desktop
 uses its compact dialog fields. There are no time mode menus. Focused controls
 and invalid values retain visible feedback.
 
-The phone day strip has no first or last day: it starts centred on the
+The phone day strip runs to the calendar's own ends (1000-01-01 and
+9999-12-31): it starts centred on the
 selected day (or the first day of a range) and adds 30 days whenever either
-end comes within a screen of view, keeping the visible days in place. It shows
+end comes within a screen of view, keeping the visible days in place. Links to
+days more than 31 days ahead are `rel="nofollow"`, and an empty day that far from
+today answers 404 on a full page load (see [SEO discovery](seo-discovery.md)). It shows
 three, five or seven whole days, depending on width, so the selected day sits
 exactly in the middle; it scrolls by touch, and the earlier/later buttons
 scroll it by a page of days without selecting anything. Tapping a day applies

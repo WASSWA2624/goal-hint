@@ -2,15 +2,17 @@
 
 import { memo, type ComponentPropsWithoutRef } from "react";
 import styled from "styled-components";
+import Link from "@/components/navigation/navigation-link";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { providerImageSource } from "@/components/ui/provider-image";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
+import { matchArchiveHref } from "@/domain/navigation";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { ShieldIcon } from "@/components/ui/icons";
 import { BothTeamsIcon, GoalsIcon, ResultIcon } from "./details-icons";
-import { Crest, FormLetters, desktop, scrollClearance, size, useStableDetails, type Messages } from "./details-ui";
+import { Crest, FormLetters, desktop, focusRing, scrollClearance, size, useStableDetails, type Messages } from "./details-ui";
 
 export const familyIcon: Record<MarketFamily, typeof ResultIcon> = {
   "match-result": ResultIcon, "double-chance": ShieldIcon, "total-goals": GoalsIcon, "both-teams-to-score": BothTeamsIcon,
@@ -77,12 +79,20 @@ const Context = styled.p`
   text-wrap: balance;
   > img { display: inline-block; inline-size: 16px; block-size: 16px; margin-inline-end: 6px; object-fit: contain; vertical-align: -3px; }
   > span { white-space: nowrap; }
+  /* Desktop clips the one line; the padding, taken back by the margin, keeps the day link's focus ring inside the clip. */
   ${desktop} {
-    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-block: 6px; margin-block: -6px;
     font-size: ${size("body")}; > img { inline-size: 18px; block-size: 18px; vertical-align: -4px; }
   }
 `;
 const CompetitionLogo = styled.img``;
+/** The kickoff day links to that EAT day's predictions in the line's own colour; hover and focus show it is a link. */
+const DayLink = styled(Link)`
+  color: inherit;
+  text-decoration: none;
+  ${media.hover} { &:hover { text-decoration: underline; } }
+  ${focusRing}
+`;
 /** Phones: 44px crests and 14px names; long names such as "Manchester United" wrap between words. */
 const Team = styled.div<{ $side: "home" | "away" }>`
   grid-area: ${({ $side }) => $side};
@@ -151,7 +161,7 @@ const Versus = styled.div`
  * the match is under way. It reads no view state, so section and filter changes skip it.
  */
 export const MatchBanner = memo(function MatchBanner() {
-  const { data, preview, messages, home, away } = useStableDetails();
+  const { data, preview, messages, locale, home, away } = useStableDetails();
   const fixture = data.fixture, context = preview?.sections.context;
   const played = fixture.score && (fixture.status === "live" || fixture.status.startsWith("finished") || fixture.status === "awarded");
   const form = (side: "home" | "away") => {
@@ -166,7 +176,8 @@ export const MatchBanner = memo(function MatchBanner() {
     <Context title={competition}>
       {fixture.competition.logoUrl && <CompetitionLogo src={providerImageSource(fixture.competition.logoUrl, 16)} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
       {competition}{"\u00a0· "}
-      {fixture.kickoffAt !== null ? <span><time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time>
+      {fixture.kickoffAt !== null ? <span><DayLink href={matchArchiveHref(fixture.kickoffAt, locale)!} prefetch={false}>
+        <time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time></DayLink>
         {"\u00a0· "}{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}
     </Context>
     <h1 id="match-banner-title" style={{ position: "absolute", inlineSize: 1, blockSize: 1, overflow: "hidden", clipPath: "inset(50%)" }}>

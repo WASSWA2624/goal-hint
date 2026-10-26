@@ -25,7 +25,7 @@ export const AnalysisDrawer = memo(function AnalysisDrawer() {
   const byDefault = useOpenByDefault();
   const [choice, setChoice] = useState<boolean | null>(null);
   const open = choice ?? byDefault;
-  if ("gated" in data.history) return <SubscriberRow><SubscriberNotice kind="analysis" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
+  if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="analysis" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
   return <Card data-section="analysis" data-open={open || undefined} data-open-by-default={(choice === null && byDefault) || undefined}
     aria-labelledby="section-analysis-title">
     <CardHeader icon={<ReasonIcon />} title={messages.text("details.why")} meta={summary(messages, data)} open={open} controls="section-analysis"

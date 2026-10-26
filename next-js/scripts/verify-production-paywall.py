@@ -8,6 +8,8 @@ from lib.runtime import main_guard
 
 FORECAST_KEYS = {"gated", "runId", "revisionId", "publishedAt", "families", "runSequence", "provisional", "updateDelayed"}
 SNAPSHOT_KEYS = {"gated", "revisionId", "cycleId", "historical", "applicability", "publishedAt", "families"}
+CARD_PICK = {"data-market", "data-prediction", "data-outcome", "data-pick-selection", "data-probability-meter", "data-pick-price", "data-pick-odds"}
+NO_PICK = {"data-prediction": "none", "data-outcome": "unavailable"}
 
 
 def free_access(value):
@@ -21,22 +23,39 @@ def gated_record(record):
         assert forecast.get("gated") is True and set(forecast) <= FORECAST_KEYS, "Subscriber forecast leaked."
 
 
-def gated_html(source):
-    # Inspect raw HTML and embedded flight data, including escaped JSON keys.
-    assert not re.search(r'data-(?:detail-market|prediction|outcome|featured-pick|verdict|market)=', source), "Subscriber markup leaked."
+def gated_html(source, *, cards=False):
+    # Inspect raw HTML and embedded flight data, including escaped JSON keys. A feed page leaves its card markup to FeedCards.
+    markup = "detail-market|featured-pick|verdict" + ("" if cards else "|prediction|outcome|market")
+    assert not re.search(rf'data-(?:{markup})=', source), "Subscriber markup leaked."
     assert not re.search(r'[\\]*"(?:probabilities|alternatives|reasons|uncertainty)[\\]*"\s*:', source), "Subscriber flight data leaked."
 
 
-class HomeCards(HTMLParser):
-    def __init__(self, source, unfinished):
+def forecast_ids(feed):
+    # The fixtures whose cards lock: those with a published family; forecast null or no family shows no prediction.
+    return {record["fixtureId"] for record in feed["records"] if (record.get("forecast") or {}).get("families")}
+
+
+class FeedCards(HTMLParser):
+    """A card over a published forecast carries no pick markup. A forecastless card names its market with no prediction,
+    as subscribers see it; nothing outside the cards carries pick markup."""
+
+    def __init__(self, source, published):
         super().__init__()
-        self.unfinished = unfinished
+        self.published, self.cards = published, []
         self.feed(source)
 
     def handle_starttag(self, tag, attributes):
         attributes = dict(attributes)
-        if attributes.get("data-fixture-id") in self.unfinished:
-            assert "data-market" not in attributes, "Unfinished home card exposed a pick."
+        if tag == "article":
+            self.cards.append(attributes.get("data-fixture-id"))
+        card = next((card for card in reversed(self.cards) if card), None)
+        for name in CARD_PICK & set(attributes):
+            assert card and card not in self.published and (name == "data-market" or attributes[name] == NO_PICK.get(name)), \
+                "Unfinished card exposed a pick."
+
+    def handle_endtag(self, tag):
+        if tag == "article" and self.cards:
+            self.cards.pop()
 
 
 def verify(origin):
@@ -54,8 +73,7 @@ def verify(origin):
     free_access(feed)
     for record in feed["records"]:
         gated_record(record)
-    home = read("/en/matches")
-    HomeCards(home, {record["fixtureId"] for record in feed["records"]})
+    FeedCards(read("/en/matches"), forecast_ids(feed))
     best = read("/api/best-slips", wire=True)
     for slip in best["slips"]:
         assert set(slip) == {"rank", "totalOdds", "estimatedProbability", "matchCount"}, "Best Slips selections leaked."
@@ -70,7 +88,9 @@ def verify(origin):
     assert candidate is not None, "No published upcoming forecast available to verify the gate."
     fixture_id = candidate["fixtureId"]
     assert re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", fixture_id)
-    gated_html(read("/en/matches?when=next-7-days&status=scheduled"))
+    page = read("/en/matches?when=next-7-days&status=scheduled")
+    gated_html(page, cards=True)
+    FeedCards(page, forecast_ids(upcoming))
     detail = read(f"/api/matches/{fixture_id}", wire=True)
     free_access(detail)
     gated_record(detail["fixture"])

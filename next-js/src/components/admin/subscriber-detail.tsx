@@ -7,7 +7,7 @@ import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { formatCredit, formatCreditChange, walletKindLabels, walletRules } from "@/domain/wallet";
-import { PhoneInput } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronDownIcon, GiftIcon, Icon, KeyIcon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
 import { ActionButton, Badge, DangerButton, FieldBlock, FieldRow } from "./admin-form";
 import { CodeActions, ManualCodeForm, type CodeAction } from "./code-tools";

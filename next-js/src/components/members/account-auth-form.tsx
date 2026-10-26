@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { PhoneInput, TextLink } from "@/components/ui/controls";
+import { TextLink } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { InfoIcon, UserIcon } from "@/components/ui/icons";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";

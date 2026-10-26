@@ -8,19 +8,21 @@ import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { contactNotice } from "../../domain/contact-notice.ts";
 import { createMessages } from "../../i18n/messages.ts";
-import type { InformationPage } from "../../domain/navigation.ts";
+import { homeHref, type InformationPage } from "../../domain/navigation.ts";
 import type { FeedPageResult } from "../matches/feed-page.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 
 const image = { url: canonicalUrl("/brand/goal-hint-open-graph.png"), width: 1200, height: 630,
   alt: createMessages().text("metadata.socialAlt") };
+/** Open Graph locales are language_TERRITORY; en_US is the protocol default for the one published language. */
+export const socialLocale = "en_US";
 export function pageMetadata({ title, description, path, index = false }: {
   title: string; description: string; path?: string; index?: boolean;
 }): Metadata {
   const url = path ? canonicalUrl(path) : undefined;
   return { title, description, ...(url ? { alternates: { canonical: url } } : {}), robots: { index, follow: true },
-    openGraph: { type: "website", siteName: publicPolicy.name, title, description, ...(url ? { url } : {}), locale: "en", images: [image] },
-    twitter: { card: "summary_large_image", title, description, images: [image.url] } };
+    openGraph: { type: "website", siteName: publicPolicy.name, title, description, ...(url ? { url } : {}), locale: socialLocale, images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [{ url: image.url, alt: image.alt }] } };
 }
 
 export function feedMetadata(query: FeedQuery, today: ReportingDate, result: FeedPageResult, policy: DiscoveryPolicy = getDiscoveryPolicy()): Metadata {
@@ -47,4 +49,17 @@ export function createInformationMetadata(page: InformationPage, policy = getDis
 export function informationPublicationReady(page: InformationPage): boolean {
   return page === "help" ? true : page === "privacy" ? privacyNotice.releaseReady : page === "terms" ? termsNotice.releaseReady
     : contactNotice.releaseReady;
+}
+
+/** Like information pages, home query variants (shared ?ref= links; feed bookmarks redirect first) keep the /en canonical but are noindex. */
+export function bestSlipsMetadata(locale: string, query: Readonly<Record<string, unknown>> = {}, policy = getDiscoveryPolicy): Metadata {
+  const messages = createMessages(locale);
+  return pageMetadata({ title: messages.text("bestSlips.metadataTitle"), description: messages.text("bestSlips.metadataDescription"),
+    path: homeHref(locale), index: policy().index && Object.keys(query).length === 0 });
+}
+
+/** Missing addresses: noindex, no canonical, and their own social tags instead of the root layout's feed defaults. */
+export function notFoundMetadata(): Metadata {
+  const messages = createMessages();
+  return pageMetadata({ title: messages.text("notFound.metadataTitle"), description: messages.text("notFound.description") });
 }

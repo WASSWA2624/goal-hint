@@ -1,4 +1,4 @@
-import { addReportingDays, parseReportingDate, type ReportingDate } from "./calendar.ts";
+import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
 import { feedDefaults, parseFeedStatus, type FeedStatus } from "./feed-query.ts";
 import { homeHref, type InformationPage } from "./navigation-paths.ts";
 
@@ -27,6 +27,11 @@ export function feedHref(view: FeedView, locale?: string): string {
   const parsed = parseFeedView(view.date, view.status);
   const path = `${homeHref(locale)}/predictions/${parsed.date}`;
   return parsed.status === feedDefaults.today.status ? path : `${path}?status=${parsed.status}`;
+}
+
+/** The kickoff's EAT-day predictions archive: the match banner's date links here and the breadcrumb's middle level names it. */
+export function matchArchiveHref(kickoffAt: number | null, locale?: string): string | null {
+  return kickoffAt == null ? null : feedHref({ date: getReportingDate(utcInstantFromEpochMilliseconds(kickoffAt)), status: feedDefaults.today.status }, locale);
 }
 
 /** Detail API supplies canonical identity/slug; page rendering belongs to prompt 035. */

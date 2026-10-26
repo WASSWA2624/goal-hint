@@ -10,6 +10,7 @@ import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
 import { TruncationTooltips } from "@/components/ui/truncation-tooltips";
 import { AnalyticsProvider } from "@/server/analytics/analytics-provider";
 import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
+import { socialLocale } from "@/server/seo/metadata";
 
 // Latin WOFF2 subset of the variable source TTF (see docs/brand-styling.md); other scripts use the fallback.
 const manrope = localFont({
@@ -26,10 +27,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(publicPolicy.origin),
   title: messages.text("metadata.homeTitle"),
   description: messages.text("metadata.description"),
-  openGraph: { type: "website", siteName: publicPolicy.name, locale: "en", title: messages.text("metadata.homeTitle"),
+  openGraph: { type: "website", siteName: publicPolicy.name, locale: socialLocale, title: messages.text("metadata.homeTitle"),
     description: messages.text("metadata.description"), images: [{ url: canonicalUrl("/brand/goal-hint-open-graph.png"),
       width: 1200, height: 630, alt: messages.text("metadata.socialAlt") }] },
-  twitter: { card: "summary_large_image", images: [canonicalUrl("/brand/goal-hint-open-graph.png")] },
+  twitter: { card: "summary_large_image", images: [{ url: canonicalUrl("/brand/goal-hint-open-graph.png"), alt: messages.text("metadata.socialAlt") }] },
   icons: {
     icon: [
       { url: "/brand/goal-hint-favicon.svg?v=20261017", type: "image/svg+xml" },

@@ -74,6 +74,7 @@ export class FeedQueryError extends RangeError {
 }
 function fail(): never { throw new FeedQueryError(); }
 const keys = new Set(["date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
+export const feedQueryKeys: ReadonlySet<string> = keys;
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
 

@@ -1,4 +1,5 @@
-import { normalizePhone, outsideUgandaHint, phoneHint, validMobilePhone } from "./phone.ts";
+import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
+import { validMobilePhone } from "./phone-mobile.ts";
 
 /**
  * Paid-access settings the owner edits on /admin/settings (prompts/monetization.md 5.7). They live in one row, id = 1, of

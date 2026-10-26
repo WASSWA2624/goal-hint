@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   formatPhone, isCanonicalPhone, localUgandaPhone, maskPhone, mobileNetworks, networkForPrefix, networkPrefixes, normalizePhone,
-  outsideUgandaHint, phoneHint, phoneInputIssue, smsHref, telHref, validMobilePhone, waHref,
+  outsideUgandaHint, phoneHint, smsHref, telHref, waHref,
 } from "../src/domain/phone.ts";
+import { phoneInputIssue, validMobilePhone } from "../src/domain/phone-mobile.ts";
 
 // Every number here is invented; none belongs to the owner or a subscriber.
 const ugandan = "256772123456";

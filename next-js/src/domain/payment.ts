@@ -1,4 +1,5 @@
-import { validMobilePhone, type MobileNetwork } from "./phone.ts";
+import type { MobileNetwork } from "./phone.ts";
+import { validMobilePhone } from "./phone-mobile.ts";
 import { validTopUp, type CreditView } from "./wallet.ts";
 
 // A plan report claims the chosen plan's price; a top-up (purpose "topup", no plan) claims the amount the member chose to add

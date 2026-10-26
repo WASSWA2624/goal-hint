@@ -21,7 +21,7 @@ def main() -> None:
     root = anonymous("/")
     assert root.status == 308
     assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
-    paths = ["/en", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live", "/en/predictions/2020-02-29?status=finished",
+    paths = ["/en", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live",
         "/en/matches?sort=kickoff", "/en/matches?from=2026-10-09&to=2026-10-16",
         "/en/matches?when=tomorrow&status=scheduled&market=total-goals&sort=kickoff",
         "/en/predictions/2020-02-29?to=2020-03-06&q=Synthetic&league=league-a&page=2&pageSize=40",
@@ -40,7 +40,7 @@ def main() -> None:
         visible = unescape(visible_html(html, comments=False))
         assert_navigation_overflow(visible,
             primary=["/en", "/en/matches", "/en/matches?status=live"],
-            overflow=[results_path, "/en/slips", *[f"/en/{page}" for page in information_pages]],
+            overflow=[results_path, "/en/slips", "/en/performance", *[f"/en/{page}" for page in information_pages]],
             footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
@@ -89,6 +89,7 @@ def main() -> None:
     legacy = anonymous("/en/how-it-works?from=2026-10-09&to=2026-10-11")
     assert legacy.status == 308
     assert urlsplit(urljoin(origin, legacy.headers.get("location"))).path == "/en/help"
+    # An empty single day far from today answers 404 only after a successful read, so its rule is covered by tests/seo-status-calendar.test.mjs.
     for path in ["/en/predictions/2026-02-29", "/en/predictions/2026-1-01",
             "/en/predictions/2026-10-09?status=correct", "/en/predictions/2026-10-09?status=all&status=finished",
             "/en/matches?sort=unsupported", "/en/matches?market=total-goals&sort=probability&sortMarket=match-result",

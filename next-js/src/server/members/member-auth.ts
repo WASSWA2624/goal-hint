@@ -1,7 +1,8 @@
 import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { normalizePhone, validMobilePhone } from "../../domain/phone.ts";
+import { normalizePhone } from "../../domain/phone.ts";
+import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { passwordChangeWindowMs, supportedMessageChannels, type MessageChannel } from "../../domain/member-verification.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, verifyPassword } from "../analytics/analytics-password.ts";
