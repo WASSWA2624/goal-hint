@@ -79,8 +79,9 @@ const Context = styled.p`
   text-wrap: balance;
   > img { display: inline-block; inline-size: 16px; block-size: 16px; margin-inline-end: 6px; object-fit: contain; vertical-align: -3px; }
   > span { white-space: nowrap; }
+  /* Desktop clips the one line; the padding, taken back by the margin, keeps the day link's focus ring inside the clip. */
   ${desktop} {
-    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-block: 6px; margin-block: -6px;
     font-size: ${size("body")}; > img { inline-size: 18px; block-size: 18px; vertical-align: -4px; }
   }
 `;
