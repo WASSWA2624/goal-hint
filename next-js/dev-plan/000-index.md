@@ -202,6 +202,12 @@ The web app owns cache eligibility, auth-safe projections, and update behavior.
 Flutter supplies only necessary platform integration; this plan adds no separate
 native feature implementation.
 
+### 070 Payment flow design samples
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [070 Interactive payment flow samples](070-payment-flow-samples.md) | Ten responsive manual-payment prototypes with a shared wizard, mobile/desktop previews, and a private review gallery. |
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |
