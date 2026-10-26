@@ -48,8 +48,9 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
     const discovery = feedDiscovery(query, today);
-    // An empty day beyond the archive window is not a page; the day's cohort count ignores every filter.
-    if (result.data && emptyArchiveIsMissing(discovery.range, today, result.data.coverage.knownFixtures)) notFound();
+    // An empty day beyond the archive window is not a page; the day's cohort count ignores every filter. Strip,
+    // calendar and adjacent-day taps keep the in-feed empty state, so only document requests answer 404.
+    if (result.data && emptyArchiveIsMissing(discovery.range, today, result.data.coverage.knownFixtures) && await document()) notFound();
     if (result.error === "unavailable" && policy().index && discovery.eligible && await document()) throw new PublicReadUnavailableError();
     return { query, today, result, discovery, access: await contentAccess(resolveAccess) };
   }

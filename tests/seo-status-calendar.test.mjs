@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -130,9 +130,24 @@ test('an empty date beyond the archive window is 404 on both feed routes; nearby
     const element = await feed({ dated: true, read: stored(known) }).Page(props(route, query));
     assert.equal(view(element, 'MatchFeedPage').result.data.coverage.knownFixtures, known, JSON.stringify({ route, query }));
   }
+  // Strip, calendar and adjacent-day taps are client navigations: they keep the in-feed empty state and the strip.
+  for (const [dated, route, query] of [[true, { date: '2099-01-01' }, {}], [true, { date: '1999-01-01' }, {}], [false, {}, { date: '2026-09-24' }]]) {
+    for (const document of [rscRequest, async () => false]) {
+      const page = feed({ dated, read: stored(0), document }), element = await page.Page(props(route, query));
+      assert.equal(view(element, 'MatchFeedPage').result.data.coverage.knownFixtures, 0, JSON.stringify({ route, query }));
+      assert.equal((await page.generateMetadata(props(route, query))).robots.index, false);
+    }
+  }
   // A failed far read is never mistaken for an empty date.
   const element = await feed({ dated: true, policy: closed }).Page(props({ date: '2099-01-01' }));
   assert.equal(view(element, 'MatchFeedPage').result.error, 'unavailable');
+});
+
+test('only the feed, archive and match routes carry the matches recovery boundary', () => {
+  const app = new URL('../src/app/', import.meta.url), file = (path) => readFileSync(new URL(path, app), 'utf8');
+  assert.equal(existsSync(new URL('[locale]/error.tsx', app)), false);
+  assert.match(file('[locale]/matches/error.tsx'), /^"use client";[\s\S]*retry\(\)[\s\S]*href="\/en\/matches"[\s\S]*href="\/en"/u);
+  assert.match(file('[locale]/predictions/error.tsx'), /^"use client";\s+export \{ default \} from "\.\.\/matches\/error";\s*$/u);
 });
 
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', slug = 'home-club-v-away-club';

@@ -6,9 +6,10 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Container, PageHeading, PageMain, Stack } from "@/components/ui/layout";
 import { createMessages } from "@/i18n/messages";
 
-/** The in-app recovery for a failed public read answered with 5xx (PublicReadUnavailableError) or any other page error.
+/** The feed, dated archive (predictions/error.tsx) and match pages' recovery for a failed public read answered with 5xx
+ * (PublicReadUnavailableError) or any other error there; other pages keep the default boundary, since this copy names matches.
  * Retry re-fetches the segment; the links are ordinary <a href> elements, so they also work without scripts. */
-export default function LocaleError({ retry }: { error: unknown; retry: () => void }) {
+export default function MatchesError({ retry }: { error: unknown; retry: () => void }) {
   const messages = createMessages(), detail = /^\/[^/]+\/matches\/[^/]+\/[^/]+/u.test(usePathname() ?? "");
   const title = messages.text(detail ? "detail.unavailableTitle" : "feed.unavailableTitle");
   // The 5xx document has no route metadata, so the heading also names the tab.
