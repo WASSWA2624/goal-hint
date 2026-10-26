@@ -12,6 +12,7 @@ import {
 } from "@/domain/match-insight-presentation";
 import { formWindows, openItem, type FormWindow, type MatchSection, type VenueFocus } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
+import { plainClick } from "@/components/match/filter-parts";
 import { CompareIcon, FormIcon, HeadToHeadIcon } from "./details-icons";
 import {
   Bar, ChoiceGroup, Crest, Facts, FormLetters, MiniForm, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong,
@@ -93,8 +94,10 @@ export function RecordPanel({ record }: { record: InsightResult }) {
   </ItemPanel>;
 }
 
+/** A stored result: plain clicks open it in place, while the row stays a real link to its own match page. */
 const RecordRow = styled(RowButton)`
   grid-template-columns: 4.25rem minmax(0, 1fr) auto auto;
+  text-decoration: none;
   > time { color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; }
   > span[data-teams] { display: flex; align-items: center; gap: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > b { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -102,13 +105,14 @@ const RecordRow = styled(RowButton)`
 function ResultRows({ records, perspective, section, show = "both" }: {
   records: readonly InsightResult[]; perspective: string; section: MatchSection; show?: "both" | "opponent";
 }) {
-  const { messages, update } = useStableDetails();
+  const { messages, locale, update } = useStableDetails();
   return <RowList>
     {records.map((record) => {
       const letter = resultFor(record, perspective), home = record.home.id === perspective;
       const opponent = home ? record.away : record.home;
       return <li key={record.fixtureId}>
-        <RecordRow type="button" data-item-key={record.fixtureId} onClick={() => update((current) => openItem(current, section, record.fixtureId))}>
+        <RecordRow as={Link} href={matchHref(record.fixtureId, record.slug, locale)} prefetch={false} data-item-key={record.fixtureId}
+          onClick={(event) => plainClick(event, () => update((current) => openItem(current, section, record.fixtureId)))}>
           <time dateTime={toUtcIsoString(at(record.kickoffAt))}>{messages.reportingDay(at(record.kickoffAt))}</time>
           <span data-teams>{show === "opponent" ? <>
             <Pill $accent={home ? "teal" : "violet"} title={messages.text(home ? "details.atHome" : "details.away")}>{messages.text(home ? "details.homeShort" : "details.awayShort")}</Pill>
