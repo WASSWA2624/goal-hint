@@ -1,0 +1,10 @@
+# Private source conversations and completed identity records stay local.
+/*.zip
+/private/
+/.work/
+
+# Requested Word files are generated locally from the reviewed source content.
+*.docx
+*.pdf
+*.png
+__pycache__/

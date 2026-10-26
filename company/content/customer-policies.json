@@ -1,0 +1,143 @@
+{
+  "documents": [
+    {
+      "filename": "Service_Terms_and_Refund_Policy.docx",
+      "title": "Goal Hint Service Terms and Refund Policy",
+      "subtitle": "For approval before publication",
+      "sections": [
+        {
+          "heading": "Approval before publication",
+          "paragraphs": [
+            "Proposed registration name: GOAL HINT SMC LTD, subject to URSB name reservation. Replace every bracketed field with verified information. The owner must approve this policy and confirm that checkout disclosures, refund handling, credit treatment and payment-provider arrangements match it before publication. This approval note is removed from the published policy.",
+            "Effective date: [EFFECTIVE_DATE]. Operator: [COMPANY_NAME], a Ugandan company limited by shares. Registration number: [REGISTRATION_NUMBER]. Registered office and address for service: [REGISTERED_OFFICE]. Directors: [DIRECTOR_NAMES]. Website: https://goalhint.com. Support: [SUPPORT_EMAIL], [SUPPORT_PHONE]. Accreditation, subscribed codes and alternative dispute scheme: [NONE_OR_DETAILS]."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "The service",
+          "paragraphs": [
+            "Goal Hint provides football fixtures, scores, statistical forecasts, probabilities, analysis and recorded outcomes. Optional subscriptions provide premium information, including selections and tools for organizing and tracking prediction slips. Goal Hint is not a betting company. We do not accept stakes or place bets for customers; saving a slip records selections and does not place a bet. Subscription fees purchase information rather than a chance to receive winnings.",
+            "The service is for adults aged 18 and above. Forecasts are estimates and can be wrong. Results, sources and publication times help you assess them. We do not promise a winning outcome, profit, uninterrupted service or complete coverage. A forecast being incorrect does not itself make a delivered subscription defective. Your legal rights for a service that is not supplied as agreed remain available."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Accounts plans and payment",
+          "paragraphs": [
+            "Use an accurate phone number, complete verification and protect your password. Access is personal; do not sell access or redistribute subscriber material. Original content and third-party data remain subject to their stated rights and permissions.",
+            "Before you pay, checkout shows the plan, full UGX price, duration, any applicable taxes or charges, payment method, delivery basis and these terms. The displayed offer controls your purchase. A day is 24 hours. Initial access starts on payment approval; a renewal extends any current unexpired access. We currently verify mobile money payments manually against the receiving account. Automated API collection applies only when activated and identified at checkout. Review and support hours: [PAYMENT_REVIEW_HOURS]. Expected approval period: [PAYMENT_REVIEW_PERIOD].",
+            "Keep your receipt and transaction reference. Your account shows the approved access period and payment status. You can save these terms and payment confirmation; records remain accessible for [CUSTOMER_TRANSACTION_RECORD_PERIOD]. Contact support if access is missing. We never ask for your mobile money PIN or one-time payment authorization code."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Account credit and renewal",
+          "paragraphs": [
+            "Approved top-ups and excess plan payments may create account credit, currently within UGX 1,000 to UGX 500,000 per top-up. Credit purchases Goal Hint plans only. It earns no interest and is not transferable to another person or a general payment account. A verified change of your own account number can move it with your subscription.",
+            "Automatic renewal is optional and spends existing account credit only. It does not automatically debit your mobile money or bank account. You can turn it off in Account at any time. Renewal follows the chosen plan and the price disclosed when renewal is authorized. Material price changes require notice and any renewed authorization required by law.",
+            "A reversed payment can reduce credit and, where already spent, leave an amount owing. We investigate disputed entries. Contact support before closing your account to arrange any refund or other treatment of unused credit required by law or the payment provider. Account deletion does not automatically forfeit an existing refund right."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Cancellation refunds and problems",
+          "paragraphs": [
+            "Email support with your account number, transaction reference and the problem. Send only necessary evidence; never send a PIN or password. We investigate duplicate or mistaken collections, failed delivery, wrong-account approvals and service faults. Verified duplicate collections are refunded. If paid access cannot be supplied, we offer a lawful refund; an extension or replacement may be agreed instead where permitted. We agree a fair remedy for a material outage affecting purchased access.",
+            "Where Uganda's statutory electronic-transaction cancellation right applies, cancellation is available within seven days and the corresponding refund is made within thirty days of cancellation. Any statutory exception must actually apply; using the website alone is not treated as waiving your rights. Mandatory rights under any other applicable law also remain available.",
+            "Approved refunds use the original payment route where available after payer verification. We do not require you to accept account credit instead of a refund legally due. Provider processing time is disclosed when the refund is arranged. We do not reimburse a separate betting loss merely because a forecast was wrong."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Fair use changes and complaints",
+          "paragraphs": [
+            "We may restrict access proportionately to investigate fraud, account misuse or reversed payments, explaining the reason where lawful and offering a review through support. Refund rights remain subject to law. We notify material changes before applying them to existing purchases. Ugandan law governs these terms, subject to mandatory consumer protections and access to competent courts or regulators. Complain first to [SUPPORT_EMAIL]; this does not limit any lawful complaint or remedy."
+          ],
+          "bullets": []
+        }
+      ]
+    },
+    {
+      "filename": "Privacy_Notice.docx",
+      "title": "Goal Hint Privacy Notice",
+      "subtitle": "For approval before publication",
+      "sections": [
+        {
+          "heading": "Approval before publication",
+          "paragraphs": [
+            "Proposed registration name: GOAL HINT SMC LTD, subject to URSB name reservation. Complete every bracketed field and verify processing locations, provider contracts, lawful bases, registration position, retention, deletion and breach procedures before publication. Confirm each stated safeguard operates. This approval note is removed from the published notice.",
+            "Effective date: [EFFECTIVE_DATE]. Controller: [COMPANY_NAME], [REGISTERED_OFFICE], Uganda. Privacy contact: [PRIVACY_CONTACT_ROLE], [SUPPORT_EMAIL], [SUPPORT_PHONE]. PDPO registration details: [PDPO_REGISTRATION_DETAILS]."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "What we collect and why",
+          "paragraphs": [
+            "You can browse public football information without an account. Page requests expose connection details to our hosting and security services. Accounts use a phone number, password hash, verification records, sign-in and session information, subscription periods, saved selections and support notes. Payment records include payer number, network, transaction reference, amount, plan, review history and any account-credit entries. Screenshots are optional; avoid unrelated personal information. We do not need a public personal profile or routine identity-document uploads.",
+            "We process necessary account, verification, subscription, payment and support data to perform the service contract or steps you request before purchase. Required accounting and regulatory records are processed to comply with applicable legal obligations. Necessary security records support service delivery and prevention or investigation of offences where the statutory conditions apply. Optional analytics uses your consent, which you can withdraw. These purposes and the applicable legal ground are confirmed in our processing register."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Browser storage and analytics",
+          "paragraphs": [
+            "An essential cookie keeps you signed in. Browser storage supports preferences, navigation, payment-form drafts and permitted offline public content; clearing site data can remove these conveniences. It does not erase server records. Only permitted public data should remain available offline.",
+            "If you allow first-party analytics, we record page and interaction information with pseudonymous identifiers and device summaries. Analytics is separate from account and payment forms and does not collect passwords or payment screenshot content. You can change your choice at any time; Global Privacy Control and Do Not Track signals are treated as a refusal. Advertising and affiliate promotions are disabled."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Who receives information",
+          "paragraphs": [
+            "Authorized staff and contracted hosting, security, email, verification and payment providers receive information needed for their tasks. Hosting and backup provider and countries: [HOSTING_PROVIDER_COUNTRIES]. Email provider and countries: [EMAIL_PROVIDER_COUNTRIES]. YoolaSMS delivers verification and account messages; selected WhatsApp delivery also involves Meta. Messaging processing countries: [MESSAGING_COUNTRIES]. The receiving mobile money network and any activated bank or payment processor process transactions under their own notices. Active processors and relevant countries: [PAYMENT_PROCESSORS_COUNTRIES].",
+            "Account-update messages direct you to sign in for details rather than including balances or payment references. Payment evidence is restricted to authorized reviewers. Completed saved slips can be public without the account identity. External links and directly loaded remote images can disclose connection details to their hosts. We do not send visitor searches to football or AI providers to generate forecasts.",
+            "We do not sell personal data. Necessary disclosures may be made to lawful authorities. For processing outside Uganda we verify the applicable legal conditions and safeguards: [CROSS_BORDER_SAFEGUARDS]."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Retention and protection",
+          "paragraphs": [
+            "Retention after the relevant purpose ends is limited by our approved schedule and any justified legal hold. Account and payment records: [RETENTION_ACCOUNT_AND_FINANCIAL]. Payment screenshots: [RETENTION_SCREENSHOTS]. Server and security logs: [RETENTION_LOGS]. Support and privacy correspondence: [RETENTION_CORRESPONDENCE]. Analytics: [RETENTION_ANALYTICS]. Backups and deletion cycle: [RETENTION_BACKUPS]. These periods must distinguish automatic deletion from later maintenance and expiry from actual removal.",
+            "Security measures include password hashing, access controls, protected sessions and restricted payment evidence. Confirmed additional safeguards: [SECURITY_MEASURES]. No system is completely secure. We assess incidents and notify the PDPO and affected people when required."
+          ],
+          "bullets": []
+        },
+        {
+          "heading": "Your choices and complaints",
+          "paragraphs": [
+            "Contact us to request access, correction, deletion or other applicable data rights, or to withdraw consent. We use proportionate identity checks and explain any lawful reason for keeping records. Account erasure can remove identifying data while necessary transaction and audit records remain for the approved retention period; backups expire separately. We respond within the applicable legal period. The service is intended for adults aged 18 and above.",
+            "You may complain to Uganda's Personal Data Protection Office at https://pdpo.go.ug/complaints. We publish a revised notice when handling materially changes, with an updated effective date."
+          ],
+          "bullets": []
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "title": "NITA Uganda Electronic Transactions Act consumer guidance",
+      "url": "https://oldsite.nita.go.ug/electronic-transactions-act-2011",
+      "checked_on": "2026-10-26",
+      "use": "Accessible terms, payment privacy and security, cancellation within seven days and refunds within thirty days, subject to applicable statutory conditions."
+    },
+    {
+      "title": "Uganda Electronic Transactions Act consolidated text",
+      "url": "https://ulii.org/en/akn/ug/act/2011/8/eng%402023-12-31",
+      "checked_on": "2026-10-26",
+      "use": "Supplier disclosure, cancellation, delivery and preservation of mandatory consumer rights. Section numbering differs from the original Gazette text."
+    },
+    {
+      "title": "Uganda Data Protection and Privacy Act official publication",
+      "url": "https://ict.go.ug/site/documents/Data-Protection-and-Privacy-Act-2019.pdf",
+      "checked_on": "2026-10-26",
+      "use": "Contract, consent and statutory grounds; privacy rights, necessary retention and data protection duties."
+    },
+    {
+      "title": "Uganda Personal Data Protection Office complaints",
+      "url": "https://pdpo.go.ug/complaints",
+      "checked_on": "2026-10-26",
+      "use": "Complaint route requested for notice; direct page unavailable through browsing tool during this review."
+    }
+  ]
+}
