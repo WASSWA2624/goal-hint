@@ -1,7 +1,19 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import 'app.dart';
+import 'config/app_config.dart';
 
 void main() {
-  runApp(const GoalHintApp());
+  try {
+    runApp(
+      GoalHintApp(
+        configuration: AppConfig.fromBuildEnvironment(
+          isAndroid: defaultTargetPlatform == TargetPlatform.android,
+        ),
+      ),
+    );
+  } on AppConfigException catch (error) {
+    runApp(GoalHintApp.configurationError(error.message));
+  }
 }

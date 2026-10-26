@@ -42,9 +42,10 @@ The complete web validation command is `npm --prefix next-js run check`.
 ## Flutter shell
 
 A minimal Flutter startup scaffold and Android, iOS, Windows, macOS, and Linux
-platform projects have been generated inside `flutter/`. Configurable URLs,
-embedded web integration, installed branding, persistent offline startup, safe
-reconnection updates, and release acceptance remain planned in steps 002–007.
+platform projects have been generated inside `flutter/`. Central development and
+production URL selection, validation, and native transport policy are implemented.
+Embedded web integration, installed branding, persistent offline startup, safe
+reconnection updates, and release acceptance remain planned in steps 003–007.
 See the [Flutter tracker](flutter/dev-tracker.md) for actual execution status and
 verification evidence, and the [implementation prompt](prompts/flutter-app-shell.md)
 for the full requirements. Normal product changes continue to belong in `next-js/`.

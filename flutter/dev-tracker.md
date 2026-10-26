@@ -1,14 +1,15 @@
 # Flutter development tracker
 
-**Current implementation: native foundation generated.** The project includes
-Android, iOS, Windows, macOS, and Linux runners and a minimal startup screen.
-Website loading, URL configuration, offline behavior, and release branding remain
-in steps 002–007. Use [the plan index](dev-plan/000-index.md) for dependencies.
+**Current implementation: native foundation and central URL configuration.**
+The project includes Android, iOS, Windows, macOS, and Linux runners, validated
+development/production origin selection, native network policy, and a safe
+startup error. Website loading, offline behavior, and release branding remain
+in steps 003–007. Use [the plan index](dev-plan/000-index.md) for dependencies.
 
 | Step | Feature | Status |
 | --- | --- | --- |
 | [001](dev-plan/001-foundation-and-platform-support.md) | Foundation and platform support | Completed — foundation and available Windows runtime verified |
-| [002](dev-plan/002-environment-urls.md) | Development and production URLs | Not started |
+| [002](dev-plan/002-environment-urls.md) | Development and production URLs | Partial — configuration/build/reachability verified; installed WebView loading awaits 003 |
 | [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Not started |
 | [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Not started |
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Not started |
@@ -100,3 +101,76 @@ screens or advancing integration implicitly. Offline work remains coordinated
 with [web 069](../next-js/dev-plan/069-offline-shell-support.md) and Flutter
 004–005. Generated icons/identifiers are provisional until 006; distribution and
 per-platform acceptance belong to 007.
+
+## 002 Environment handoff — 26 October 2026
+
+### Implementation
+
+- `lib/config/app_config.dart` is the single public environment/origin resolver.
+  Debug defaults to development: Android uses `http://10.0.2.2:3000`, other
+  targets use `http://localhost:3000`. `APP_ENV` and `DEV_APP_ORIGIN` are public
+  compile-time defines, with no runtime dependencies or copied web secrets.
+- Profile/Release default to the fixed `https://goalhint.com` origin. They
+  reject development configuration. Production rejects any development override,
+  including an empty one. Validation rejects unsupported schemes, credentials,
+  non-origin paths, queries/fragments, invalid ports, and malformed hosts.
+- `main.dart` passes valid configuration to `GoalHintApp`; a typed validation
+  error produces an accessible error screen without echoing input. The existing
+  valid startup screen remains until WebView integration in 003.
+- Android declares Internet access for all variants, with cleartext HTTP allowed
+  only in Debug. iOS/macOS Debug-specific plists allow local development HTTP
+  with local-network usage text and loopback/private-address exceptions;
+  Profile/Release retain their normal plists and certificate validation.
+  macOS has outgoing-network sandbox entitlement in Debug/Profile and Release.
+- Next.js development origins now include explicit IPv4/IPv6 loopback and the
+  Android emulator host alias alongside the existing private LAN pattern.
+  [The guide](docs/development-urls.md) explains server binding, target routing,
+  public defines, native policy, and platform limitations.
+
+### Commands and observed results
+
+Commands ran from `flutter/` unless another location is stated. The previously
+documented process-local JDK/temp setup was also used for the Android build.
+
+| Check | Actual result |
+| --- | --- |
+| `dart format --output=none --set-exit-if-changed lib test tool` | Passed |
+| `flutter analyze` | Passed, no issues |
+| `flutter test` | All 21 tests passed: resolver validation, startup/error UI, native security configuration |
+| `dart run tool/resolve_origin.dart` | Development, `http://localhost:3000` |
+| `dart run --define=APP_ENV=development --define=DEV_APP_ORIGIN=http://192.168.1.148:3000 tool/resolve_origin.dart --android` | Development, selected LAN origin |
+| `dart compile exe tool/resolve_origin.dart -o .dart_tool/url-checks/production-origin.exe`, then execute it | Production, `https://goalhint.com` |
+| AOT compile with `--define=APP_ENV=development`, then execute | Exited 64 with the debug-only development configuration error |
+| `flutter build windows --release` | Passed; x64 Release executable generated |
+| `flutter build apk --release` | Passed; APK generated without development defines |
+| Android compiled Release manifest and signature inspection | Internet permission present, target API 36, no cleartext/debuggable override or network security config; effective platform defaults deny cleartext and debugging. Signature verified with the template Android Debug certificate; local build validation only |
+| Apple source plist parse and configuration tests | Passed: Debug-only exceptions, matching shared metadata, Profile/Release selection, and macOS outgoing-network entitlement separation |
+| Host GET `/en` via loopback and LAN | HTTP 200 with the Goal Hint page |
+| Physical TECNO CL8, Android API 35, Wi-Fi LAN GET `/en` | HTTP 200 with the Goal Hint page, using central resolver origin `http://192.168.1.148:3000` |
+| Same physical phone GET of `/_next/static/chunks/main-app.js` with LAN Origin/Referer | HTTP 200 |
+| Next.js dev WebSocket upgrade from localhost, IPv4/IPv6 loopback, emulator alias, and LAN Origins | All trusted origins returned HTTP 101; an unrelated external origin was blocked |
+| Next.js `npm run lint` and `npm run typecheck` | Passed |
+
+The Next.js server listened on port 3000 on the development computer, whose
+observed LAN address was `192.168.1.148`. The phone used the same Wi-Fi network;
+the address is an observation, not a permanent project setting. Device probes
+used anonymous HTTP requests through `adb`/Toybox and sent no account cookies.
+No phone app installation, USB reverse mapping, or firewall changes were needed.
+Logs, probe output, APKs, executables, and other generated evidence remain in
+ignored `.dart_tool/`, `build/`, and web output directories.
+
+### Acceptance still requiring 003
+
+Configuration implementation, available Release builds, and desktop/physical
+Android HTTP reachability are verified. **002 remains Partial** because the
+installed Flutter shell has not loaded the website: that acceptance depends on
+the native WebView adapter implemented in 003. HTTP/socket checks do not verify
+WebView cleartext policy, cookies, navigation, native local-network prompts, or
+installed-app lifecycle behavior. Reuse this resolver directly in the adapter.
+
+Apple native builds, signed-plist inspection, and physical Apple network/privacy
+checks require macOS/Xcode and Apple hardware. Linux native execution remains
+untested on this Windows host. Verify those targets during their adapter/build
+work; the source-policy tests do not qualify their native runtime behavior.
+Offline startup and reconnection remain 004–005; identity and distribution
+remain 006–007. No WebView or offline package was introduced by this step.

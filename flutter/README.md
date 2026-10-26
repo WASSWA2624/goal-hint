@@ -5,8 +5,9 @@ Windows, macOS, and Linux runners and a minimal `GoalHintApp` startup screen.
 The Next.js app owns the product screens, authentication, data, and business logic.
 
 Follow [the local development plan](dev-plan/000-index.md) and
-[execution tracker](dev-tracker.md). URL configuration is step 002, WebView
-integration is 003, persistent offline startup and safe updates are 004–005,
+[execution tracker](dev-tracker.md). Central URL configuration from step 002 is
+implemented; installed-app loading awaits WebView integration in 003.
+Persistent offline startup and safe updates are 004–005,
 native branding is 006, and release packaging is 007. Generated launcher artwork
 and bundle identifiers remain provisional until the identity step.
 
@@ -28,14 +29,35 @@ From the repository root, enter `flutter/`, then run:
 flutter --version
 flutter doctor -v
 flutter pub get
-dart format --output=none --set-exit-if-changed lib test
+dart format --output=none --set-exit-if-changed lib test tool
 flutter analyze
 flutter test
 ```
 
-The widget tests exercise compact and desktop startup layouts with normal and
-200% system text scaling. Actual native build/run results are recorded separately
+The tests cover environment selection, origin validation, native policy, and
+compact/desktop startup layouts with normal and 200% system text scaling.
+Actual native build/run results are recorded separately
 in the tracker; a widget test or generated runner does not qualify another target.
+
+## Web origin configuration
+
+Debug builds default to development: Android uses `http://10.0.2.2:3000`
+for the standard emulator; other targets use `http://localhost:3000`.
+For a physical phone, supply the development computer's reachable LAN origin:
+
+```sh
+flutter run --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://192.168.1.148:3000
+```
+
+Replace that example IP with the server's current address. Profile and Release
+default to the fixed production origin, `https://goalhint.com`. They reject
+development configuration, and production rejects any `DEV_APP_ORIGIN` define.
+Invalid configuration shows a useful startup error without echoing its input.
+No credentials or Next.js environment files belong in these public defines.
+
+See [development URLs](docs/development-urls.md) for emulator/device routing,
+server binding, native transport policy, and configuration inspection commands.
+The shell still displays its startup screen; website rendering is step 003.
 
 ## Native development
 
