@@ -91,7 +91,7 @@ test("every card links its canonical match page, so crawlers and free viewers re
     assert.doesNotMatch(html, prediction);
     assert.deepEqual(cardPick(html), []);
     assert.match(html, />Locked prediction</u);
-    assert.match(html, /Subscribe to see the prediction/u);
+    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock prediction<\/span>/u);
     assert.match(html, /data-public-probability/u);
   }
   assert.equal(signedIn, guest);
