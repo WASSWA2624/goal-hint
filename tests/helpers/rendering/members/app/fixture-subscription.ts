@@ -19,7 +19,8 @@ export function subscriptionScenarioFromHeaders(headers: Headers): SubscriptionS
 
 export function fixtureSubscriptionStatus(scenario: string) {
   return { activeUntil: activeScenarios.includes(scenario) ? fixtureSubscriptionEnd : null,
-    paymentPending: ["pending", "pending-renewal"].includes(scenario), creditUgx: 0, autoRenew: false, renewsFromCredit: false };
+    paymentPending: ["pending", "pending-renewal"].includes(scenario), creditUgx: 0, autoRenew: false, renewsFromCredit: false,
+    ...(scenario === "expired" ? { expired: true } : {}) };
 }
 
 export function fixtureSubscriptionPeriods(scenario: string) {

@@ -4,16 +4,19 @@ import { type ReactNode, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { ChevronRightIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronRightIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
 import { Container } from "@/components/ui/layout";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { subscriptionExpiryParts, subscriptionTimeLeft } from "@/domain/subscription-expiry";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
-import { getServerSubscriptionSnapshot, getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
+import { getMemberSessionSnapshot, getServerMemberSessionSnapshot, getServerSubscriptionSnapshot, getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
 import { getPaymentPurpose, getServerPaymentPurpose, subscribePaymentPurpose } from "./payment-purpose";
 
 const Bar = styled.aside<{ $desktopOnly: boolean }>`
+  position: relative;
   display: ${({ $desktopOnly }) => $desktopOnly ? "none" : "block"};
   min-inline-size: 0;
   color: ${({ theme }) => theme.header.text};
@@ -34,6 +37,56 @@ const Row = styled(Container)<{ $compact: boolean }>`
   line-height: 1.4;
   time { font-variant-numeric: tabular-nums; }
   ${media.desktop} { padding-inline: ${({ theme }) => theme.layout.gutter}; font-size: 0.8125rem; }
+`;
+const DesktopStatus = styled.span`
+  display: none;
+  ${media.desktop} { display: contents; }
+`;
+const MobileStatus = styled(Link)`
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  inline-size: 100%;
+  min-inline-size: 0;
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  &::after { content: ""; position: absolute; inset: 0; }
+  &:active::after { background: ${({ theme }) => `color-mix(in srgb, ${theme.header.text} 8%, transparent)`}; }
+  &:focus-visible { outline: none; }
+  &:focus-visible::after { outline: 2px solid ${({ theme }) => theme.header.accent}; outline-offset: -2px; }
+  ${media.desktop} { display: none; }
+`;
+type BannerState = "locked" | "pending" | "active" | "expired";
+const StatusIcon = styled.span<{ $state: BannerState }>`
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  min-block-size: 2rem;
+  color: ${({ theme, $state }) => $state === "active" ? theme.header.tone.emerald
+    : $state === "pending" || $state === "expired" ? theme.header.tone.amber : theme.header.accent};
+  > svg { inline-size: 2rem; block-size: 2rem; }
+`;
+const MobileCopy = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-inline-size: 0;
+  > strong { color: ${({ theme }) => theme.header.mutedText}; font-size: 0.75rem; }
+`;
+const MobileDetail = styled.span`
+  color: ${({ theme }) => theme.header.text};
+  font-size: 0.875rem;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+`;
+const MobileMeta = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: ${({ theme }) => theme.header.mutedText};
+  font-size: 0.75rem;
 `;
 const Status = styled.span`
   display: inline-flex;
@@ -88,33 +141,53 @@ const currentMinute = () => Math.floor(Date.now() / minute) * minute;
 const serverMinute = () => 0;
 
 /**
- * One private access line, shared by the desktop shell and the app's separate phone headers: the expiry with Extend while
- * access lasts, otherwise the cheapest plan with Subscribe.
+ * The shared private access summary: a linked phone status banner and the desktop subscription controls.
  */
 export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = false, compact = false, wide = false }: {
   locale?: string; className?: string; desktopOnly?: boolean; compact?: boolean; wide?: boolean;
 }) {
   const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
+  const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
   const pathname = usePathname(), messages = createMessages(locale), now = useSyncExternalStore(subscribeMinute, currentMinute, serverMinute);
   const purpose = useSyncExternalStore(subscribePaymentPurpose, getPaymentPurpose, getServerPaymentPurpose);
   // The account page opens with the same access summary and its own button, so the bar would only repeat it there.
   if (!subscription || pathname === `/${resolveLocale(locale)}/account`) return null;
   const subscribePath = `/${resolveLocale(locale)}/subscribe`, subscribing = pathname === subscribePath;
-  const bar = (row: ReactNode) => <Bar className={className} $desktopOnly={desktopOnly} aria-label={messages.text("account.accessSettings")} data-subscription-status-bar>
-    <Row $wide={wide} $compact={compact}>{row}</Row>
+  const accountPath = `/${resolveLocale(locale)}/account`, returnTo = memberReturnPath(pathname);
+  const loginQuery = new URLSearchParams({ view: "login", ...(returnTo ? { return: returnTo } : {}) });
+  const mobileHref = !phone ? `${accountPath}?${loginQuery}` : subscription.paymentPending
+    ? `${memberNextPath("subscribe", returnTo)}#report` : subscription.activeUntil ? accountPath : `${memberNextPath("subscribe", returnTo)}#plans`;
+  const mobileAction = messages.text(!phone ? "account.login" : subscription.paymentPending ? "account.viewPayment"
+    : subscription.activeUntil ? "account.accessSettings" : "account.subscribe");
+  const bar = (row: ReactNode, mobile: { state: BannerState; icon: ReactNode; title: string; detail: ReactNode; note?: ReactNode }) =>
+    <Bar className={className} $desktopOnly={desktopOnly} aria-label={messages.text("account.accessSettings")}
+      data-subscription-status-bar data-subscription-state={mobile.state}>
+    <Row $wide={wide} $compact={compact}>
+      <MobileStatus href={mobileHref} prefetch={false} data-mobile-subscription-status>
+        <StatusIcon $state={mobile.state}>{mobile.icon}</StatusIcon>
+        <MobileCopy role="status" aria-atomic="true"><strong>{mobile.title}</strong><MobileDetail>{mobile.detail}</MobileDetail>
+          {mobile.note && <MobileMeta>{mobile.note}</MobileMeta>}
+        </MobileCopy>
+        <VisuallyHidden>{mobileAction}</VisuallyHidden>
+      </MobileStatus>
+      <DesktopStatus>{row}</DesktopStatus>
+    </Row>
   </Bar>;
   const action = (label: string) => <Action href={subscribePath} prefetch={false}>{label}<ChevronRightIcon /></Action>;
   if (!subscription.activeUntil) {
     // Without access the bar offers the cheapest plan, except on the subscribe page itself.
     if (!subscription.canSubscribe || subscribing) return null;
     const { offer } = subscription;
-    return bar(subscription.paymentPending ? <>
+    const unlock = offer ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(offer.priceUgx) })
+      : messages.text("paywall.unlockPrediction");
+    return subscription.paymentPending ? bar(<>
       <Status><ClockIcon /><span>{messages.text("account.pending")}</span></Status>{action(messages.text("account.viewPayment"))}
-    </> : <>
+    </>, { state: "pending", icon: <ClockIcon />, title: messages.text("account.paymentPending"), detail: messages.text("account.pending") }) : bar(<>
       <Status data-subscription-offer><LockIcon /><strong>{messages.text("account.unlockTitle")}</strong>
         {offer && <Price>{messages.text("account.unlockPrice", { price: messages.number(offer.priceUgx) })}</Price>}</Status>
       {action(messages.text("account.subscribe"))}
-    </>);
+    </>, { state: subscription.expired ? "expired" : "locked", icon: <LockIcon />,
+      title: messages.text(subscription.expired ? "account.subscriptionExpired" : "paywall.locked"), detail: unlock });
   }
   const until = new Date(subscription.activeUntil), left = subscriptionTimeLeft(until, now);
   return bar(<>
@@ -125,5 +198,12 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
       // A top-up adds credit and never extends access, so the subscribe page says nothing about extending while adding credit.
       : subscription.canSubscribe && (subscribing ? !subscription.paymentPending && purpose !== "topup" && <Note data-renewal-note>{messages.text("account.renewalExtends")}</Note>
         : action(messages.text(subscription.paymentPending ? "account.viewPayment" : "account.extend")))}
-  </>);
+  </>, { state: "active", icon: <CheckIcon />, title: messages.text("account.subscriptionActive"),
+    detail: <>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time></>,
+    note: <>
+      {left && <span>{left.unit === "day" ? messages.plural("account.leftDays", left.count)
+        : left.count ? messages.plural("account.leftHours", left.count) : messages.text("account.underAnHourLeft")}</span>}
+      {subscription.paymentPending ? <span>{messages.text("account.paymentPending")} · {messages.text("account.pending")}</span>
+        : subscription.renewsFromCredit && <span>{messages.text("account.renewsFromCredit")}</span>}
+    </> });
 }

@@ -251,7 +251,7 @@ test("the phone pick panel shows the market icon, market over pick, and the odds
   const messages = createMessages();
   assert.deepEqual(["match.likely", "match.chance", "details.odds", "paywall.locked", "paywall.unlockPrediction"].map((key) => messages.text(key)),
     ["likely", "chance", "Odds", "Locked", "Unlock prediction"]);
-  assert.equal(messages.text("paywall.unlockPredictionPrice", { price: "1,000" }), "Unlock prediction for UGX 1,000");
+  assert.equal(messages.text("paywall.unlockPredictionPrice", { price: "1,000" }), "Unlock for UGX 1,000");
 });
 
 test("phone tiles keep design 09's light palette and strong frame in both themes", async () => {

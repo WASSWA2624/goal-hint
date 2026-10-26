@@ -138,12 +138,21 @@ test("subscription changes update all headers, poll approval and expire without 
   assert.deepEqual(getSubscriptionSnapshot(), summary, "temporary errors preserve confirmed subscription details");
   t.mock.timers.tick(40_000);
   assert.equal(getSubscriptionSnapshot().activeUntil, null, "expiry clears at the exact instant even when the network is unavailable");
+  assert.equal(getSubscriptionSnapshot().expired, true, "a confirmed active period becomes expired without a working network");
   await refreshMemberSession();
   assert.equal(updates, 3);
 
   failure = false;
   summary = { activeUntil: null, paymentPending: true, canSubscribe: true, ...credit };
   await refreshMemberSession();
+  const changed = updates;
+  summary = { ...summary, expired: true };
+  await refreshMemberSession();
+  assert.equal(updates, changed + 1, "an authoritative expiry change updates every header");
+  assert.equal(getSubscriptionSnapshot().expired, true);
+  summary = { ...summary, activeUntil: new Date(now + 120_000).toISOString(), paymentPending: false };
+  await refreshMemberSession();
+  assert.equal(getSubscriptionSnapshot().expired, undefined, "renewed access clears a stale expiry flag");
   unsubscribe();
   const beforeUnmount = calls;
   t.mock.timers.tick(60_000);

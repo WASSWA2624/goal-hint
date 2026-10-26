@@ -24,8 +24,11 @@ function readSubscription(value: unknown): SubscriptionSummary | null {
   const creditUgx = "creditUgx" in value && Number.isSafeInteger(value.creditUgx) ? value.creditUgx as number : 0;
   const autoRenew = "autoRenew" in value && value.autoRenew === true, renewsFromCredit = autoRenew && "renewsFromCredit" in value && value.renewsFromCredit === true;
   const offer = "offer" in value ? readOffer(value.offer) : null;
-  return { activeUntil: value.activeUntil && Date.parse(value.activeUntil) > Date.now() ? value.activeUntil : null,
-    paymentPending: value.paymentPending, canSubscribe: value.canSubscribe, creditUgx, autoRenew, renewsFromCredit, ...(offer ? { offer } : {}) };
+  const now = Date.now(), activeUntil = value.activeUntil && Date.parse(value.activeUntil) > now ? value.activeUntil : null;
+  const expired = !activeUntil && (("expired" in value && value.expired === true)
+    || (value.activeUntil !== null && Date.parse(value.activeUntil) <= now));
+  return { activeUntil, paymentPending: value.paymentPending, canSubscribe: value.canSubscribe, creditUgx, autoRenew, renewsFromCredit,
+    ...(offer ? { offer } : {}), ...(expired ? { expired: true } : {}) };
 }
 
 function readOffer(value: unknown): SubscriptionOffer | null {
@@ -47,7 +50,7 @@ function scheduleRefresh() {
   if (!Number.isFinite(delay)) return;
   refreshTimer = setTimeout(() => {
     if (subscription?.activeUntil && Date.parse(subscription.activeUntil) <= Date.now()) {
-      subscription = { ...subscription, activeUntil: null };
+      subscription = { ...subscription, activeUntil: null, expired: true };
       publish();
     }
     if (typeof document === "undefined" || document.visibilityState === "visible") void refreshMemberSession();
@@ -72,6 +75,7 @@ export function refreshMemberSession(): Promise<void> {
       if (phone === session.phone && administrator === nextAdministrator
         && subscription?.activeUntil === nextSubscription?.activeUntil
         && subscription?.paymentPending === nextSubscription?.paymentPending
+        && subscription?.expired === nextSubscription?.expired
         && subscription?.canSubscribe === nextSubscription?.canSubscribe
         && subscription?.creditUgx === nextSubscription?.creditUgx && subscription?.autoRenew === nextSubscription?.autoRenew
         && subscription?.renewsFromCredit === nextSubscription?.renewsFromCredit

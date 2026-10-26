@@ -553,6 +553,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
             autoRenewPlan: { select: { priceUgx: true, active: true } },
             codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: { startsAt: "asc" },
               select: { startsAt: true, endsAt: true, revokedAt: true } },
+            _count: { select: { codes: { where: { revokedAt: null, startsAt: { lte: at }, endsAt: { lte: at } } } } },
             submissions: { orderBy: [{ submittedAt: "desc" }, { id: "desc" }], take: 1, select: { status: true } },
           } },
         } });
@@ -568,7 +569,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         // The newest report decides, unless an older report of the other purpose still waits (a plan and a top-up may both).
         const paymentPending = ["pending", "superseded"].includes(session.account.submissions[0]?.status ?? "")
           || !!session.account.submissions[0] && await tx.paymentSubmission.count({ where: { accountId: session.accountId, status: "pending" } }) > 0;
-        return { activeUntil: activeSubscriptionUntil(session.account.codes, at), paymentPending, creditUgx, autoRenew, renewsFromCredit };
+        const activeUntil = activeSubscriptionUntil(session.account.codes, at);
+        return { activeUntil, paymentPending, creditUgx, autoRenew, renewsFromCredit,
+          ...(!activeUntil && session.account._count.codes > 0 ? { expired: true } : {}) };
       });
     },
 

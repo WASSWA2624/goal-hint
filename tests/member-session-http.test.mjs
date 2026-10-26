@@ -27,6 +27,7 @@ const period = (from, to, revoked = false) => ({ startsAt: new Date(instant + fr
 function subscriptionFixture({ periods = [], status = null, mode = "on", blocked = false, sessionChange = {}, accountChange = {} } = {}) {
   const member = { phone: "256700000101", accountId: "account", tokenHash: "session", blocked, codeEnteredAt: null };
   const account = { blockedAt: null, erasedAt: null, creditUgx: 0, autoRenew: false, autoRenewPlan: null, codes: periods,
+    _count: { codes: periods.filter(period => !period.revokedAt && period.startsAt <= new Date(instant) && period.endsAt <= new Date(instant)).length },
     submissions: status ? [{ status, endsAt: new Date(instant + 999 * hour) }] : [], ...accountChange };
   const stored = sessionChange === null ? null : { accountId: member.accountId, authenticatedAt: new Date(instant - hour), passwordResetAt: null,
     expiresAt: new Date(instant + 500 * hour), account, ...sessionChange };
@@ -51,14 +52,20 @@ test("private subscription summary uses active periods and uninterrupted renewal
     assert.equal(f.queries.length, 1, "Navigation loads a compact account projection without devices or payment proof.");
     assert.equal(f.queries[0].where.tokenHash, f.member.tokenHash);
     assert.equal(f.queries[0].select.account.select.codes.where.revokedAt, null);
+    assert.deepEqual(f.queries[0].select.account.select._count.select.codes.where,
+      { revokedAt: null, startsAt: { lte: new Date(instant) }, endsAt: { lte: new Date(instant) } });
   }
 });
 
-test("expired, revoked and future-only periods never become active from an approved payment or a long-lived session", async () => {
-  for (const periods of [[], [period(-2, 0)], [period(1, 2)], [period(-2, 5, true)]]) {
+test("only a confirmed ended non-revoked period marks inactive access as expired", async () => {
+  for (const [periods, expired] of [[[], false], [[period(-2, 0)], true], [[period(1, 2)], false],
+    [[period(-2, 5, true)], false], [[period(-2, -1, true)], false]]) {
     const response = await subscriptionFixture({ periods, status: "approved" }).request();
-    assert.deepEqual((await response.json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: true, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
+    assert.deepEqual((await response.json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: true,
+      creditUgx: 0, autoRenew: false, renewsFromCredit: false, ...(expired ? { expired: true } : {}) });
   }
+  const renewed = await subscriptionFixture({ periods: [period(-3, -2), period(-1, 1)] }).request();
+  assert.equal("expired" in (await renewed.json()).subscription, false, "active access takes precedence over past periods");
 });
 
 test("subscription purchase availability respects sales mode and blocked accounts while retaining active expiry", async () => {

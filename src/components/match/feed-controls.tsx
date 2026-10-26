@@ -17,10 +17,14 @@ export const FeedNote = styled(MutedText)`
   line-height: 1.4;
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
+const DesktopSubscriberNote = styled(FeedNote)`
+  display: none;
+  ${media.desktop} { display: block; }
+`;
 
 export function SubscriberFeedBanner({ locale, signedIn = false }: { locale: string; signedIn?: boolean }) {
   const messages = createMessages(locale);
-  return <FeedNote data-subscriber-banner>{messages.text("paywall.banner")} · <Link href={subscriberHref(signedIn, "/en/matches")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</Link></FeedNote>;
+  return <DesktopSubscriberNote data-subscriber-banner>{messages.text("paywall.banner")} · <Link href={subscriberHref(signedIn, "/en/matches")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</Link></DesktopSubscriberNote>;
 }
 
 const PicksLabel = styled.label`
