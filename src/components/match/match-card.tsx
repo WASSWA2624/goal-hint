@@ -48,10 +48,13 @@ export type MatchCardProps = {
 };
 
 type TeamResult = "win" | "loss" | null;
-type StateTone = "live" | "final" | "halted";
+/** Which side is ahead on a live score; null for a level or unknown score. */
+type TeamStanding = "ahead" | "behind" | null;
+type StateTone = "final" | "halted";
 const countryFlagUrl = (fixture: FixtureSnapshot) => fixture.competition.countryFlagUrl ?? null;
 const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
-const pulse = keyframes`0%, 100% { opacity: 1; } 50% { opacity: 0.35; }`;
+/** The live dot's halo swells and fades in its own red (`--gh-live-glow`). */
+const glow = keyframes`0%, 100% { box-shadow: 0 0 1px 0 var(--gh-live-glow); } 50% { box-shadow: 0 0 6px 2px var(--gh-live-glow); }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
 const tileRadius = phoneCardFrame.radius;
@@ -323,8 +326,14 @@ const TeamName = styled.span`
     line-height: 1.2;
     white-space: nowrap;
     [data-result="loss"] > & { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+    /* Live: only the side ahead keeps the bold name. */
+    [data-standing="behind"] > & { font-weight: ${({ theme }) => theme.typography.weight.body}; }
   }
-  ${table} { white-space: nowrap; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  ${table} {
+    white-space: nowrap;
+    font-weight: ${({ theme }) => theme.typography.weight.body};
+    [data-standing="ahead"] > & { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  }
 `;
 const Center = styled.div`
   display: flex;
@@ -363,6 +372,8 @@ const Score = styled.span`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  /* A live score is red throughout, dash included. */
+  [data-status="live"] &, [data-status="live"] & > span:nth-child(2) { color: ${({ theme }) => theme.color.live.solid}; }
   ${table} { grid-column: 5; grid-row: 2; justify-self: center; }
   /* Tile: one large line between the teams, the live minute beneath it in red; the losing side's goals are muted. */
   ${tile} {
@@ -372,6 +383,7 @@ const Score = styled.span`
     color: ${light.text};
     > span:nth-child(2) { color: ${light.mutedText}; font-size: 1rem; }
     > [data-loss] { color: ${light.mutedText}; }
+    [data-status="live"] &, [data-status="live"] & > span:nth-child(2) { color: ${light.live.solid}; }
   }
 `;
 const StateChip = styled.span<{ $tone: StateTone }>`
@@ -383,12 +395,11 @@ const StateChip = styled.span<{ $tone: StateTone }>`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1.6;
   white-space: nowrap;
-  ${({ $tone, theme }) => $tone === "live"
-    ? css`color: ${theme.color.live.text}; background: ${theme.color.live.soft};`
-    : $tone === "final" ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
+  ${({ $tone, theme }) => $tone === "final"
+    ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
     : css`color: ${theme.color.accent.amber.text}; background: ${theme.color.accent.amber.soft};`}
   ${table} { grid-column: 5; grid-row: 1; justify-self: center; }
-  /* Tile: plain text under the score; live minute in red, a final whistle muted, a halted match grey. */
+  /* Tile: plain text under the score; a final whistle muted, a halted match grey. The live minute is in the result tag. */
   ${tile} {
     padding: 0;
     background: none;
@@ -396,18 +407,20 @@ const StateChip = styled.span<{ $tone: StateTone }>`
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     letter-spacing: 0.02em;
     line-height: 0.875rem;
-    color: ${({ $tone }) => $tone === "live" ? light.live.text : $tone === "final" ? light.mutedText : light.outcome.void.text};
+    color: ${({ $tone }) => $tone === "final" ? light.mutedText : light.outcome.void.text};
   }
 `;
 const LiveDot = styled.span`
+  --gh-live-glow: color-mix(in srgb, ${({ theme }) => theme.color.live.solid} 65%, transparent);
+  flex: none;
   inline-size: 6px;
   block-size: 6px;
   border-radius: 50%;
   background: ${({ theme }) => theme.color.live.solid};
-  animation: ${pulse} 1.6s ease-in-out infinite;
-  @media (prefers-reduced-motion: reduce) { animation: none; }
-  /* Keep the compact mobile clock still. */
-  ${tile} { background: ${light.live.solid}; animation: none; }
+  animation: ${glow} 1.6s ease-in-out infinite;
+  /* Reduced motion keeps a still halo. */
+  @media (prefers-reduced-motion: reduce) { animation: none; box-shadow: 0 0 3px 1px var(--gh-live-glow); }
+  ${tile} { --gh-live-glow: color-mix(in srgb, ${light.live.solid} 65%, transparent); background: ${light.live.solid}; }
 `;
 
 /** Tile: the pick panel under the teams, tinted in the market's colour: the market icon, the market over the pick, then
@@ -628,7 +641,8 @@ const SubscribeHint = styled.span`
   }
 `;
 /** Tile: the verdict sits beside the meta line as a solid tag (an outlined one while the match is upcoming); every
- * state shares one width, so the tags line up down the feed. The table keeps it in the Result column. */
+ * state shares one width, so the tags line up down the feed. The table keeps it in the Result column. While the match
+ * is live the tag shows the glowing dot and minute instead. */
 const Result = styled(OutcomeBadge)`
   /* Bright result tags on both layouts; an unavailable result uses the neutral Void colours. */
   color: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].text};
@@ -638,6 +652,12 @@ const Result = styled(OutcomeBadge)`
     color: ${({ theme }) => theme.color.verdict.upcoming.text};
     background: ${({ theme }) => theme.color.verdict.upcoming.fill};
     border-color: ${({ theme }) => theme.color.verdict.upcoming.border};
+  }
+  &[data-result-badge="live"] {
+    color: ${({ theme }) => theme.color.live.text};
+    background: ${({ theme }) => theme.color.live.soft};
+    border-color: color-mix(in srgb, ${({ theme }) => theme.color.live.solid} 35%, ${({ theme }) => theme.color.live.soft});
+    font-variant-numeric: tabular-nums;
   }
   ${tile} {
     grid-area: result;
@@ -654,6 +674,12 @@ const Result = styled(OutcomeBadge)`
     white-space: nowrap;
     > svg { font-size: 0.75rem; }
     &[data-result-badge="unavailable"] { display: none; }
+    &[data-result-badge="live"] {
+      gap: 5px;
+      color: ${light.live.text};
+      background: ${light.live.soft};
+      border-color: color-mix(in srgb, ${light.live.solid} 35%, ${light.live.soft});
+    }
   }
   /* Table: every result badge fills the Result column, so Upcoming, Win, Loss, Pending and Void share one width. */
   ${table} {
@@ -714,10 +740,12 @@ function liveClockLabel(fixture: FixtureSnapshot, messages: Messages) {
     stoppage ? messages.text("match.clock.stoppageLabel", { minute: messages.number(stoppage) }) : null].filter(Boolean).join(", ");
   return { minute, visible, spoken };
 }
+type LiveClock = ReturnType<typeof liveClockLabel>;
 
-/** `lead` names the winner of a decided final score (1 home, -1 away), so the losing side's goals can be muted. */
-function MatchState({ fixture, home, away, lead, messages }: {
-  fixture: FixtureSnapshot; home: string; away: string; lead: number; messages: Messages;
+/** `lead` names the winner of a decided final score (1 home, -1 away), so the losing side's goals can be muted. A live
+ * clock is shown in the result tag; here it is only spoken, right after the score. */
+function MatchState({ fixture, home, away, lead, clock, messages }: {
+  fixture: FixtureSnapshot; home: string; away: string; lead: number; clock: LiveClock | null; messages: Messages;
 }) {
   const { status, score } = fixture;
   const final = hasFinalScoreStatus(status);
@@ -730,13 +758,7 @@ function MatchState({ fixture, home, away, lead, messages }: {
     <Versus aria-hidden="true">{status === "live" || final ? "–" : messages.text("match.versus")}</Versus>
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
-  if (status === "live") {
-    const { minute, visible, spoken } = liveClockLabel(fixture, messages);
-    return <Center data-match-state="live">{scoreline}
-      <StateChip $tone="live" data-live-minute={minute ?? ""}><LiveDot aria-hidden="true" /><span aria-hidden="true">{visible}</span>
-        <VisuallyHidden>{spoken}</VisuallyHidden></StateChip>
-    </Center>;
-  }
+  if (clock) return <Center data-match-state="live">{scoreline}<VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
     const regulationOnly = fixture.scorePeriod === "regulation" && status !== "finished-regulation";
     return <Center data-match-state="final">{scoreline}
@@ -753,11 +775,11 @@ function MatchState({ fixture, home, away, lead, messages }: {
   </Center>;
 }
 
-function CardTeam({ team, side, name, eager, result }: {
-  team: FixtureSnapshot["homeTeam"]; side: "home" | "away"; name: string; eager: boolean; result: TeamResult;
+function CardTeam({ team, side, name, eager, result, standing }: {
+  team: FixtureSnapshot["homeTeam"]; side: "home" | "away"; name: string; eager: boolean; result: TeamResult; standing: TeamStanding;
 }) {
   const url = isSafeRemoteImageUrl(team.logoUrl) ? team.logoUrl : undefined;
-  return <Team data-team-side={side} data-result={result ?? undefined}>
+  return <Team data-team-side={side} data-result={result ?? undefined} data-standing={standing ?? undefined}>
     <TeamLogo key={`${team.id}:${url ?? "missing"}`} name={team.name} url={url} eager={eager} />
     <TeamName data-team-name="" title={name}>{name}</TeamName>
   </Team>;
@@ -848,6 +870,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
   // Only a decided final score names a winner; a 90-minute score shown for an extra-time or penalties finish does not.
   const decided = showScore && final && !(fixture.scorePeriod === "regulation" && fixture.status !== "finished-regulation");
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
+  // A live score bolds the side currently ahead.
+  const liveLead = showScore && fixture.status === "live" ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
+  const clock = fixture.status === "live" ? liveClockLabel(fixture, messages) : null;
   const missing = gated || prediction ? null : noPickReason(fixture);
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
@@ -867,9 +892,11 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
       <CardKickoff kickoff={fixture.kickoffAt} locale={locale} />
     </Meta>
     <Teams>
-      <CardTeam team={fixture.homeTeam} side="home" name={home} eager={eagerLogos} result={lead > 0 ? "win" : lead < 0 ? "loss" : null} />
-      <MatchState fixture={fixture} home={home} away={away} lead={lead} messages={messages} />
-      <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null} />
+      <CardTeam team={fixture.homeTeam} side="home" name={home} eager={eagerLogos} result={lead > 0 ? "win" : lead < 0 ? "loss" : null}
+        standing={liveLead > 0 ? "ahead" : liveLead < 0 ? "behind" : null} />
+      <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} />
+      <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null}
+        standing={liveLead < 0 ? "ahead" : liveLead > 0 ? "behind" : null} />
     </Teams>
     <Pick $family={shownFamily} data-pick-state={pickState} data-result={result}>
       <CardGlyph kind={gated ? "locked" : prediction ? shownFamily : "none"} />
@@ -911,9 +938,12 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
       </PredictionCell>}
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
-    <Result aria-hidden="true" $outcome={result === "upcoming" ? "pending" : result} data-result-badge={result}>
-      {result !== "upcoming" && settledOutcome(result) && resultIcon[result as keyof typeof resultIcon]}
-      <span data-pick-value="">{resultLabel}</span>
+    <Result aria-hidden="true" $outcome={result === "upcoming" ? "pending" : result} data-result-badge={clock ? "live" : result}
+      data-live-minute={clock ? clock.minute ?? "" : undefined}>
+      {clock ? <><LiveDot /><span data-pick-value="">{clock.visible}</span></> : <>
+        {result !== "upcoming" && settledOutcome(result) && resultIcon[result as keyof typeof resultIcon]}
+        <span data-pick-value="">{resultLabel}</span>
+      </>}
     </Result>
     <Open href={gated ? subscriberHref(signedIn, matchHref(fixture.fixtureId, analysisSlug, locale)) : matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />

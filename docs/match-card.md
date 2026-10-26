@@ -29,11 +29,12 @@ come from that one shown published pick; an unrelated family cannot fill a
 missing field.
 
 1. Upper track: the row number (`#`) aligns with the country flag and full
-   country name. The Date & Time column shows the kickoff date here. In the
-   score column, the provider's elapsed minute (`67′`, `90+4′`) or live phase
-   (`HT`, `Break`, `Penalties`…) occupies the status slot above the score.
-   When the match ends, `FT`, `AET*` or `Pens*` replaces the live status in
-   that same slot. The asterisk identifies a regulation-only score and has
+   country name. The Date & Time column shows the kickoff date here. While the
+   match is live, the provider's elapsed minute (`67′`, `90+4′`) or live phase
+   (`HT`, `Break`, `Penalties`…) with a glowing red dot fills the Result column
+   in place of the Pending tag. When the match ends, `FT`, `AET*` or `Pens*`
+   occupies the status slot above the score and the Result column returns to
+   the verdict. The asterisk identifies a regulation-only score and has
    explanatory tooltip and accessible text. Postponed, canceled, abandoned
    and awarded fixtures retain their actual status; scheduled fixtures have
    no elapsed-minute or final-status chip.
@@ -84,9 +85,10 @@ The mobile card ("Verdict Corner", design 09) has three rows on one grid
    badge fills the column so all results share one width.
 2. **Teams.** Home name and crest, the centre column, away crest and name, with
    each crest beside the centre. The centre shows `vs` (scheduled or halted) or
-   the bold score (live red text while live, the losing side muted), with the state
-   beneath it: the live minute with a dot (`67′`, `90+4′`, or the phase), `FT`,
-   `AET*`/`Pens*`, or a halted status such as Postponed in grey.
+   the bold score (all red while live, the losing side muted once final), with the state
+   beneath it: `FT`, `AET*`/`Pens*`, or a halted status such as Postponed in grey.
+   While live, the side ahead has the bold name and the corner tag shows the live
+   minute with a glowing red dot (`67′`, `90+4′`, or the phase) instead of Pending.
 3. **Pick line.** Right-aligned under the teams: market caption in its family colour, the full-word pick
    (`Home win`, `Over 2.5`, `Not both teams to score`), the exact available
    price as `@ 1.85`, and the probability as `54% likely`. At narrow widths the
