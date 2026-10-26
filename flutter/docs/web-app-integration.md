@@ -42,6 +42,49 @@ external links use the operating system's handler; malformed/credential-bearing
 addresses and other schemes are rejected by the shell's navigation policy.
 The native website has no Dart JavaScript channel or broadly privileged bridge.
 
+### Web-controlled native appearance
+
+The existing website theme toggle, browser preference and system fallback remain
+authoritative. The shell has no theme setting or stored copy of that preference.
+Its adapters read only the resolved public
+`meta[name="goal-hint-appearance"]` contract: exactly `version`, `scheme`,
+`background`, `surface`, `foreground`, `accent` and `chrome`. Version must be `1`,
+scheme must be `light`/`dark`, and colors must be opaque six-digit hex values.
+Malformed, expanded or unsupported values are discarded. The
+[shared styling guide](../../next-js/docs/brand-styling.md#public-native-appearance-metadata)
+records each field's theme source and the standard `color-scheme`/`theme-color`
+metadata. Server rendering publishes no native metadata until the actual client
+preference resolves, so reload does not advertise an initial light override.
+
+A fixed native-initiated query checks both the actual top frame and exact
+configured origin before reading that one meta element. One serialized sampler
+runs while a trusted document is visible and loaded, scheduling the next read
+one second after completion and reading immediately on load/resume. Loading,
+hidden and disposed states stop its timer and invalidate pending results. An
+already submitted browser evaluation cannot be canceled; it is never overlapped
+by timeout retries, and a stale completion cannot update appearance. This adds
+no networking, content cache, persisted native preference or JavaScript bridge.
+
+Only native presentation consumes these colors: loading/error feedback, browser
+background and operating-system chrome. Unavailable metadata retains the last
+valid appearance for the current host; before any valid sample the shell follows
+the operating system. The owner-required branded startup remains white, with
+the app name and reduced-motion-aware loading feedback, in either OS appearance.
+Changing, reloading or reopening the shared website does not reset its choice.
+
+Windows applies surface/foreground caption colors through a native-only DWM
+channel. The macOS runner selects Cocoa `NSAppearance` through the same bounded
+native presentation contract. Its embedded view separately follows the app's
+system appearance so caption styling cannot become WebKit's system fallback;
+this source configuration still needs Apple compilation/runtime qualification.
+Mobile bar icon contrast uses the actual painted bar color. Android's
+edge-to-edge navigation area is painted without adding layout padding; the web
+still owns its bottom safe-area inset exactly once. Device/API-specific physical
+bar behavior remains an acceptance check, not a conclusion from widget tests.
+Android runtime checks are deferred at the owner's request; Apple execution and
+Linux embedding remain unqualified. See [the tracker](../dev-tracker.md) for the
+actual Windows theme, reload/restart and launch-surface evidence.
+
 The official system adapter's owned-document click listener converts anchor
 `target="_blank"` to the current frame before the native policy runs. This also
 covers links added during Next.js navigation without duplicating routing or

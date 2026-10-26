@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
@@ -52,6 +53,11 @@ class Win32Window {
   // If true, closing this window will quit the application.
   void SetQuitOnClose(bool quit_on_close);
 
+  // Ephemeral, native-only presentation supplied by the trusted web document.
+  void SetPreferredAppearance(std::optional<bool> dark,
+                              std::optional<COLORREF> caption,
+                              std::optional<COLORREF> foreground);
+
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
 
@@ -59,8 +65,7 @@ class Win32Window {
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
   // inheriting classes can handle.
-  virtual LRESULT MessageHandler(HWND window,
-                                 UINT const message,
+  virtual LRESULT MessageHandler(HWND window, UINT const message,
                                  WPARAM const wparam,
                                  LPARAM const lparam) noexcept;
 
@@ -79,16 +84,19 @@ class Win32Window {
   // non-client DPI scaling so that the non-client area automatically
   // responds to changes in DPI. All other messages are handled by
   // MessageHandler.
-  static LRESULT CALLBACK WndProc(HWND const window,
-                                  UINT const message,
+  static LRESULT CALLBACK WndProc(HWND const window, UINT const message,
                                   WPARAM const wparam,
                                   LPARAM const lparam) noexcept;
 
   // Retrieves a class instance pointer for |window|
   static Win32Window* GetThisFromHandle(HWND const window) noexcept;
 
-  // Update the window frame's theme to match the system theme.
-  static void UpdateTheme(HWND const window);
+  // Use the document's appearance when known; otherwise follow the OS.
+  void UpdateTheme(HWND const window);
+
+  std::optional<bool> preferred_dark_;
+  std::optional<COLORREF> preferred_caption_;
+  std::optional<COLORREF> preferred_foreground_;
 
   bool quit_on_close_ = false;
 

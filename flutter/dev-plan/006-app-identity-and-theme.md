@@ -1,6 +1,6 @@
 # 006 - Installed identity and native appearance
 
-**State: Partial — Goal Hint names, shared-primary-mark launcher assets, and white launch/loading surfaces implemented at the owner's request. Android's OS splash, Flutter logo/name/spinner transition and compact bottom inset are verified; full platform appearance acceptance remains open.** Prerequisite: [003](003-web-app-integration.md). Follow [the specification](../../app-write-up.md), [the shell requirements](../../prompts/flutter-app-shell.md), and [the existing brand guide](../../next-js/assets/brand/README.md).
+**State: Partial — shared identity and web-driven native appearance implemented; Windows window identity, white loading, real OS fallback changes, and web-theme reload/restart checks passed. Further Android checks are deferred; Apple/Linux execution and installed launcher/packaging qualification remain open.** Prerequisite: [003](003-web-app-integration.md). Follow [the specification](../../app-write-up.md), [the shell requirements](../../prompts/flutter-app-shell.md), and [the existing brand guide](../../next-js/assets/brand/README.md).
 
 ## Outcome
 
@@ -32,7 +32,40 @@ colors and clear space are retained; Android/iOS use white and macOS/Windows/Lin
 use transparency. Android's dark-OS white startup has been visually checked,
 and the duplicate bottom inset was corrected in the native Android host while
 preserving shared web/iOS safe-area behavior. The subsequent Flutter logo/name/
-spinner transition was visually captured on the installed Android build. Complete
-system-bar/theme/restart behavior, installed masking, other native launch
-transitions, and Apple/Linux execution remain unqualified. Existing IDs are preserved for updates;
-store identity/signing finalization is still open.
+spinner transition was visually captured on the installed Android build. These
+are prior Android results; the owner explicitly deferred further Android checks
+for this step. Existing IDs are preserved for updates; store identity/signing
+finalization remains open.
+
+## Current implementation and acceptance — 26 October 2026
+
+The website remains the owner of its saved theme preference and system fallback.
+It publishes only versioned public appearance metadata. Native adapters read
+that bounded metadata for trusted documents and apply its colors to native
+feedback, system-bar integration and desktop decorations. No web-callable native
+channel, native theme preference, page reload or duplicate product UI was added.
+The branded launch surface stays white in both OS appearances. The
+[identity guide](../docs/app-identity.md) records the contract, generation command,
+public identifiers and signing boundary.
+
+Windows 11 x64/WebView2 (actual document UA Chrome/Edge 155) passed two separate
+processes with the same origin and retained profile. Actual Windows Settings
+changes from dark to light produced matching web CSS, public metadata and all
+native colors while no explicit web preference was stored. The existing website
+theme button then selected light/dark; dark survived a real document reload and
+a complete process restart while Windows remained light. White startup was
+visually checked in both OS appearances. Window name/icon and the dark native
+caption beside the dark web page were inspected; this is not an installed or
+pinned taskbar/shortcut/dock qualification.
+
+The normal Windows Debug entry point was restored. The harness cleaned only its
+fixture-origin theme key, and the operator restored the original OS appearance.
+Startup duration was deliberately gated for inspection, so it is not a launch
+performance measurement. See [the tracker](../dev-tracker.md) for measured
+commands, checks and artifact scope, and
+[the two-process reproduction flow](../integration_test/README.md#installed-identity-and-appearance).
+
+006 remains Partial for Android's deferred current-source system-bar/appearance
+checks, Apple compilation/runtime, Linux embedding, and installed identity
+qualification handed to [007](007-platform-builds-and-release.md). Source artwork
+audits do not replace platform masking or installed-runtime evidence.

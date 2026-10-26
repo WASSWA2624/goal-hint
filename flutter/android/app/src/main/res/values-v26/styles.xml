@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base resolves to the OS day/night theme; API 26 adds dark nav icons. -->
+    <style name="NormalTheme" parent="@style/NormalThemeBase">
+        <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

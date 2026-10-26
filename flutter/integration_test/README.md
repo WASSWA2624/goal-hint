@@ -202,3 +202,66 @@ fixture processes after all acceptance clients finish. Restore the normal
 `lib/main.dart` Windows Debug binary/development origin; logs, proxy controls,
 profiles and binaries stay ignored. See [the tracker](../dev-tracker.md) for
 actual execution, setup failures, source checks and unqualified targets.
+
+## Installed identity and appearance
+
+`identity_test.dart` checks the real Windows host, shared website theme controls
+and persistent browser profile. Android execution is deferred by the owner;
+other native engines are not inferred qualified from this Windows check.
+The fixture imports the actual root layout/providers, `BrandLogo` and
+`ThemeToggle`, without accounts, private services or a database. From `flutter/`:
+
+```sh
+python tool/serve_identity_fixture.py --port 3193
+```
+
+The helper reports an owned ignored `next-js/.tmp/identity-*` directory and a
+loopback server. It supports `--build-only`, `--reuse <directory>` and
+`--reuse <directory> --rebuild`. Create an owned UTF-8 JSON file beneath that
+directory, for example `identity-control.json`:
+
+```json
+{"phase":"first","advance":""}
+```
+
+Run the native check with its absolute control-file path:
+
+```sh
+flutter test integration_test/identity_test.dart -d windows --no-pub --no-uninstall --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://127.0.0.1:3193 --dart-define=IDENTITY_CONTROL_FILE=<absolute-control-file>
+```
+
+The phase and operator acknowledgements are read at runtime, so both processes
+use the identical Dart defines. A sibling `*-checkpoint.json` reports the current
+stage, owned PID and public theme snapshot. Set `advance` to that stage after
+inspection; `all` skips operator holds. Each hold is bounded to five minutes and
+the whole interactive check to 25 minutes. These are test-controlled durations,
+not cold-start performance measurements.
+
+1. `startup` holds the real shell's white logo/name/spinner before native browser
+   initialization. Capture it under the current OS appearance, then acknowledge.
+2. `system` has no explicit fixture theme preference. Record the original OS
+   appearance, change it through actual Windows Settings, return the app to the
+   foreground, and wait for web/native colors before capture. Acknowledge this
+   stage; the harness rechecks current CSS, metadata, every native color and the
+   absent storage key before any explicit toggle. `*-system.json` retains both
+   public snapshots.
+3. `light` and `dark` follow the website's actual theme button. Inspect native
+   decorations and web content, then acknowledge each stage. The harness verifies
+   the stored preference and a true document reload using `performance.timeOrigin`.
+
+Wait for the first command and all its owned host/browser processes to exit;
+the `complete` checkpoint alone is written just before widget disposal and is
+not process-termination evidence. Keep the server, exact origin and profile.
+Change the control to `{"phase":"reopen","advance":""}` and rerun the same
+command with `--no-uninstall`. The second process has another white `startup`
+checkpoint, then a `reopen` checkpoint requiring the saved dark preference and
+matching web/native appearance. It subsequently removes only this fixture
+origin's theme key and verifies the system fallback after reload.
+
+Use actual OS Settings for OS-appearance evidence; engine media emulation cannot
+qualify native window chrome. Restore the operator's original OS appearance,
+stop only owned fixture/test processes, and rebuild the normal `lib/main.dart`
+Debug entry point/development origin. Keep screenshots, JSON controls, profiles
+and binaries ignored. The check inspects a running window; it makes no installed
+or pinned shortcut/taskbar/dock/signing claim. Actual results and remaining
+platform gaps are recorded in [the tracker](../dev-tracker.md).

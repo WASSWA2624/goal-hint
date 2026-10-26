@@ -23,6 +23,8 @@ export function RefreshProbe({ initialScenario = "success" }: { initialScenario?
       if (!response.ok) throw new Error("Could not reset the synthetic session.");
       document.cookie = "member-fixture-scenario=automatic-trial; Path=/; SameSite=Lax";
       document.cookie = "member-fixture-subscription=free; Path=/; SameSite=Lax";
+      // A new document intentionally resets this synthetic fixture after sign-out.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       location.assign("/en/account?view=register&scenario=automatic-trial");
     } catch (failure) { setProbe(failure instanceof Error ? failure.message : "Could not start the synthetic trial."); setStartingTrial(false); }
   }

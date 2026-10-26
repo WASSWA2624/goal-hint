@@ -45,7 +45,9 @@ configuration, origin validation, native transport policy, and browser adapters
 for Android, iOS, macOS, and Windows. It preserves web navigation and sessions
 without duplicating product logic. Linux has a native runner but no qualified
 embedded browser yet. Goal Hint names, shared launcher artwork, and white launch
-surfaces are implemented, with appearance qualification still partial in 006.
+surfaces are implemented. Native feedback and desktop chrome follow the shared
+web theme; Windows light/dark, reload and restart checks passed. Remaining
+appearance qualification is tracked in 006.
 The shared web code now saves a bounded anonymous offline view with compatible
 assets; [offline setup and limits](flutter/docs/offline-startup.md) distinguish
 production-like secure origins from normal development/HMR. Shared web

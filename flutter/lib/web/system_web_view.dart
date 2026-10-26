@@ -10,6 +10,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import '../config/app_config.dart';
 import 'android_file_selector.dart';
 import 'navigation_policy.dart';
+import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 
 /// Hosts the existing website in the platform's normal, persistent WebView.
@@ -36,8 +37,19 @@ class SystemWebViewAdapter extends WebViewAdapter {
   bool _loading = false;
   bool _canGoBack = false;
   bool _disposed = false;
+  bool _hidden = false;
   String? _error;
   int _historyRequest = 0;
+  WebAppearance? _appearance;
+  late final _appearanceQuery = webAppearanceQuery(configuration.origin);
+  late final _appearanceSampler = WebAppearanceSampler(
+    read: () => _controller!.runJavaScriptReturningResult(_appearanceQuery),
+    onChanged: (value) {
+      _appearance = value;
+      unawaited(_setBackground(value));
+      _notify();
+    },
+  );
 
   /// Exposes the engine controller for native integration tests, not web code.
   @visibleForTesting
@@ -57,6 +69,9 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   @override
   String? get error => _error;
+
+  @override
+  WebAppearance? get appearance => _appearance;
 
   @override
   Future<void> initialize() {
@@ -88,7 +103,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
             if (navigationPolicy.evaluate(url) == NavigationAction.allow) {
               await _normalizeLinkTargets();
               try {
-                await suspend();
+                await _flushBrowserStore();
               } on Exception {
                 // A storage failure must not hide a usable document. Explicit
                 // suspension still reports failures to its caller.
@@ -208,10 +223,22 @@ class SystemWebViewAdapter extends WebViewAdapter {
   }
 
   @override
-  Future<void> resume() => _refreshHistory();
+  Future<void> resume() async {
+    if (_disposed) return;
+    _hidden = false;
+    _syncAppearance();
+    await _refreshHistory();
+  }
 
   @override
   Future<void> suspend() async {
+    if (_disposed) return;
+    _hidden = true;
+    _syncAppearance();
+    await _flushBrowserStore();
+  }
+
+  Future<void> _flushBrowserStore() async {
     if (_disposed ||
         !_ready ||
         _controller?.platform is! AndroidWebViewController) {
@@ -317,12 +344,37 @@ class SystemWebViewAdapter extends WebViewAdapter {
       first.replace(fragment: '') == second.replace(fragment: '');
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    _syncAppearance();
+    notifyListeners();
+  }
+
+  void _syncAppearance() {
+    _appearanceSampler.setActive(
+      !_disposed &&
+          !_hidden &&
+          !_loading &&
+          _error == null &&
+          _hasDocument &&
+          _controller != null &&
+          navigationPolicy.evaluate(_currentUri.toString()) ==
+              NavigationAction.allow,
+    );
+  }
+
+  Future<void> _setBackground(WebAppearance value) async {
+    if (_disposed || _controller == null) return;
+    try {
+      await _controller!.setBackgroundColor(value.background);
+    } catch (_) {
+      // A disposed view must not replace the last usable native appearance.
+    }
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _appearanceSampler.dispose();
     ++_historyRequest;
     // Platform-view teardown owns native disposal; its normal browser store is
     // intentionally retained for server-managed cookies and web preferences.

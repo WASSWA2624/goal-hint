@@ -1,5 +1,7 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -25,11 +27,51 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  // Public presentation only. Web-to-native JavaScript messaging remains off.
+  appearance_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "com.goalhint.goal_hint/appearance",
+          &flutter::StandardMethodCodec::GetInstance());
+  appearance_channel_->SetMethodCallHandler([this](const auto& call,
+                                                   auto result) {
+    if (call.method_name() != "setTitleBarTheme") {
+      result->NotImplemented();
+      return;
+    }
+    const auto* values =
+        call.arguments() ? std::get_if<flutter::EncodableMap>(call.arguments())
+                         : nullptr;
+    const auto item =
+        [values](const char* key) -> const flutter::EncodableValue* {
+      if (!values) return nullptr;
+      const auto found = values->find(flutter::EncodableValue(key));
+      return found == values->end() ? nullptr : &found->second;
+    };
+    const auto* dark_value = item("dark");
+    const auto* background_value = item("background");
+    const auto* foreground_value = item("foreground");
+    const auto* dark = dark_value ? std::get_if<bool>(dark_value) : nullptr;
+    const auto* background =
+        background_value ? std::get_if<int32_t>(background_value) : nullptr;
+    const auto* foreground =
+        foreground_value ? std::get_if<int32_t>(foreground_value) : nullptr;
+    if (!values || values->size() != 3 || !dark || !background || !foreground ||
+        *background < 0 || *background > 0xFFFFFF || *foreground < 0 ||
+        *foreground > 0xFFFFFF) {
+      result->Error("invalid_appearance", "Expected a public title-bar style.");
+      return;
+    }
+    const auto color = [](int32_t value) {
+      return RGB((value >> 16) & 255, (value >> 8) & 255, value & 255);
+    };
+    SetPreferredAppearance(*dark, color(*background), color(*foreground));
+    result->Success();
+  });
+  SetPreferredAppearance(false, RGB(255, 255, 255), RGB(6, 23, 71));
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
+  flutter_controller_->engine()->SetNextFrameCallback([&]() { this->Show(); });
 
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the
@@ -40,6 +82,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  appearance_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

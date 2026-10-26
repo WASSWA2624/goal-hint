@@ -1,5 +1,10 @@
-# Launch Screen Assets
+# Goal Hint launch artwork
 
-You can customize the launch screen with your own desired assets by replacing the image files in this directory.
+These 1x/2x/3x images are generated from the shared primary brand mark by
+[`tool/generate-icons.mjs`](../../../../tool/generate-icons.mjs). Their logical
+size is 96 points, matching the native launch storyboard and Flutter loading mark.
 
-You can also do it by opening your Flutter project's Xcode project with `open ios/Runner.xcworkspace`, selecting `Runner/Assets.xcassets` in the Project Navigator and dropping in the desired images.
+From the repository root, run `node flutter/tool/generate-icons.mjs` to regenerate
+or append `--check` to verify the committed outputs. Do not hand-edit these PNGs.
+The native storyboard supplies the white background and Goal Hint name; Flutter
+adds the loading indicator after its first frame.

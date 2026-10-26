@@ -5,14 +5,24 @@ import { ThemeContext, ThemeProvider } from "styled-components";
 import { GlobalStyle } from "./global-style";
 import { StyledComponentsRegistry } from "./registry";
 import { darkTheme, lightTheme } from "./theme";
-import { getServerThemeSnapshot, getThemeSnapshot, subscribeThemePreference } from "./theme-preference";
+import { getServerThemeSnapshot, getThemeSnapshot, subscribeThemePreference, type ThemeMode } from "./theme-preference";
+import { webAppearance } from "./web-appearance";
 
 /** Root-only provider; route Server Components remain server-rendered children. */
 export function StyleProvider({ children }: { children: ReactNode }) {
-  const mode = useSyncExternalStore(subscribeThemePreference, getThemeSnapshot, getServerThemeSnapshot);
+  // Server HTML cannot know this profile's preference. Publish metadata only
+  // with the resolved client snapshot, so native chrome never adopts SSR light.
+  const resolved = useSyncExternalStore<ThemeMode | null>(subscribeThemePreference, getThemeSnapshot, () => null);
+  const mode = resolved ?? getServerThemeSnapshot();
+  const theme = mode === "dark" ? darkTheme : lightTheme;
   return (
     <StyledComponentsRegistry>
-      <ThemeProvider theme={mode === "dark" ? darkTheme : lightTheme}>
+      <ThemeProvider theme={theme}>
+        {resolved !== null && <>
+          <meta name="goal-hint-appearance" content={JSON.stringify(webAppearance(theme))} />
+          <meta name="color-scheme" content={mode} />
+          <meta name="theme-color" content={theme.header.background} />
+        </>}
         <GlobalStyle />
         {children}
       </ThemeProvider>

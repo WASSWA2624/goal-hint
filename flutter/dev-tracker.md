@@ -4,7 +4,8 @@
 The project includes five native runners, validated origin selection, native
 network policy, shared loading/retry/history handling, and browser adapters for
 Android, iOS, macOS, and Windows. Goal Hint names, shared launcher artwork, and
-white launch/loading surfaces are implemented; appearance qualification remains
+white launch/loading surfaces are implemented. Shared-web native appearance and
+Windows theme/restart checks passed; overall appearance qualification remains
 partial. Linux embedding remains unqualified. The shared web cache is implemented;
 platform qualification and release acceptance remain tracked below. Reconnection
 and safe updates now have shared-web and Windows acceptance evidence. Use
@@ -18,7 +19,7 @@ below for actual native execution evidence.
 | [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Partial — available Windows/Android lifecycle and cold reopen passed; manual, Apple and Linux qualification remains |
 | [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Partial — shared cache and Windows cold/recovery checks passed; owner stopped further Android checks, Apple/Linux remain unqualified |
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Partial — shared retry/update safety and Windows/browser acceptance passed; Android/Apple/Linux reconnection remain unqualified |
-| [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity and white launch/loading implemented; appearance/runtime qualification remains |
+| [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity/native appearance and Windows real OS/theme/restart checks passed; Android deferred, Apple/Linux and installed launcher qualification remain open |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Not started |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
@@ -450,3 +451,55 @@ owner's request; no further device check or setting change was made. Final
 Android offline/reconnection qualification, Apple native execution, Linux
 embedding and release acceptance remain open. Keep normal online development
 on its existing origin and use a secure production-like build for cache checks.
+
+## 006 Installed identity and native appearance — 26 October 2026
+
+### Shared implementation
+
+Goal Hint display names, canonical brand artwork and stable public application
+identifiers remain shared with the website. The generator/audit covers 45 native
+asset outputs and 56 static checks. This verifies file formats, artwork and
+resource/identity wiring; it does not qualify a platform's installed masking.
+See [the identity guide](docs/app-identity.md) for generation and identifier details.
+
+Versioned public web metadata now drives native feedback colors and desktop
+decorations through trusted, read-only native sampling. The existing web theme
+preference and system fallback remain authoritative; no native preference or
+web-callable command bridge was added. The white logo/name/loading launch surface
+is retained in both OS appearances. Android edge-to-edge navigation protection
+paints the reported inset without adding a second layout inset; current-source
+device rendering is explicitly unverified after the owner's deferral.
+
+### Available-host evidence
+
+The isolated fixture uses the real root providers, brand and website theme
+button, with no accounts, database or private services. Two Windows processes
+retain their origin/profile with `--no-uninstall`. Operator-controlled startup
+and appearance checkpoints extend observation time; their durations are not
+startup-performance measurements.
+
+| Check | Actual result |
+| --- | --- |
+| Runtime | Windows 11 x64; actual WebView2 document UA reported Chrome/Edge 155 |
+| Shared brand and native identity | Generator outputs/static checks passed; Goal Hint window title and window icon were visually inspected. Installed/pinned shortcuts, taskbar identity, dock and packaging are not claimed |
+| White launch with OS dark | Passed visual logo/name/spinner inspection in the actual native window; startup was held by the test-only initialization gate |
+| Actual OS fallback switch | Passed actual Windows Settings dark → light change: before dark/after light web CSS, public metadata and every native color matched, with the fixture's theme key remaining absent |
+| Explicit website preference | The actual shared theme button selected and stored light/dark. Dark web content and dark native caption were visually captured while Windows remained light |
+| Document reload | Dark persisted after a real reload, guarded by a changed `performance.timeOrigin` before assertions |
+| First process | Passed: 75.6s build, 6m07s operator-gated test; host PID 33952 and its owned browser children exited before the second process |
+| Separate-process restart | Passed: 103.5s build, 2m44s operator-gated test, host PID 33484. White startup was captured under OS light; stored dark and matching native appearance survived in the same profile despite the light OS |
+| Cleanup | Only the fixture origin's theme key was removed, followed by a verified light OS fallback reload. The operator restored original Windows Apps/System dark values and ColorPrevalence 0 through Settings, then verified them. Normal `lib/main.dart` Windows Debug loopback-port3000 rebuild passed (51.3s) |
+| Source checks | All 42 Flutter unit/widget tests passed; full Dart analysis was clean and formatting checked 29 files without changes. Six shared-web contract tests, full web lint/typecheck and the production build passed (22 pinned offline assets), along with the isolated fixture build. The synthetic member fixture's intentional full-document reset has a documented lint exception; its behavior was unchanged |
+
+Ignored visual evidence is in `next-js/output/identity-006/`:
+`windows-startup-os-dark.jpg`, `windows-system-light.jpg`,
+`windows-explicit-dark-os-light.jpg`, `windows-startup-os-light.jpg`, and
+`windows-reopen-dark-os-light.jpg`. Control files, public snapshots, logs,
+profiles and binaries remain ignored. See
+[the reproduction flow](integration_test/README.md#installed-identity-and-appearance).
+
+**006 remains Partial.** The owner explicitly deferred further Android checks
+again for this task. Apple compilation/runtime and Linux embedding remain
+unqualified. Installed/pinned launcher/taskbar/dock identity, platform masking,
+release packaging and signing remain with [007](dev-plan/007-platform-builds-and-release.md);
+window inspection and static assets are not substitutes for those checks.

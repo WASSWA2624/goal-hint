@@ -18,11 +18,21 @@
                         <subviews>
                             <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="YRO-k0-Ey4">
                             </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Goal Hint" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="goal-hint-name">
+                                <fontDescription key="fontDescription" type="system" weight="bold" pointSize="28"/>
+                                <color key="textColor" red="0.02352941176" green="0.09019607843" blue="0.27843137255" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                            </label>
                         </subviews>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
                             <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="1a2-6s-vTC"/>
-                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="4X2-HB-R7a"/>
+                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" constant="-72" id="4X2-HB-R7a"/>
+                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="width" constant="96" id="goal-hint-mark-width"/>
+                            <constraint firstItem="YRO-k0-Ey4" firstAttribute="height" constant="96" id="goal-hint-mark-height"/>
+                            <constraint firstItem="goal-hint-name" firstAttribute="top" secondItem="YRO-k0-Ey4" secondAttribute="bottom" constant="20" id="goal-hint-name-top"/>
+                            <constraint firstItem="goal-hint-name" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="goal-hint-name-center"/>
+                            <constraint firstItem="goal-hint-name" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="Ze5-6b-2t3" secondAttribute="leading" constant="24" id="goal-hint-name-leading"/>
+                            <constraint firstItem="goal-hint-name" firstAttribute="trailing" relation="lessThanOrEqual" secondItem="Ze5-6b-2t3" secondAttribute="trailing" constant="-24" id="goal-hint-name-trailing"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -32,6 +42,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="LaunchImage" width="168" height="185"/>
+        <image name="LaunchImage" width="96" height="96"/>
     </resources>
 </document>

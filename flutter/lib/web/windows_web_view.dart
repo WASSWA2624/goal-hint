@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../config/app_config.dart';
 import 'navigation_policy.dart';
+import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 
 /// WebView2 host; web sessions live only in its persistent browser profile.
@@ -36,6 +37,15 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   String? _error;
   bool _disposed = false;
   bool _hidden = false;
+  WebAppearance? _appearance;
+  late final _appearanceQuery = webAppearanceQuery(configuration.origin);
+  late final _appearanceSampler = WebAppearanceSampler(
+    read: () => _controller!.evaluateJavascript(source: _appearanceQuery),
+    onChanged: (value) {
+      _appearance = value;
+      _notify();
+    },
+  );
 
   /// Native-controller access for integration checks, never exposed to the page.
   PlatformInAppWebViewController? get controller => _controller;
@@ -51,6 +61,8 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   bool get canGoBack => _canGoBack;
   @override
   String? get error => _error;
+  @override
+  WebAppearance? get appearance => _appearance;
 
   @override
   Future<void> initialize() async {
@@ -254,6 +266,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   Future<void> suspend() async {
     if (_disposed) return;
     _hidden = true;
+    _syncAppearance();
     await _controller?.pause();
   }
 
@@ -263,6 +276,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
     _hidden = false;
     await _controller?.resume();
     await _updateHistory();
+    _syncAppearance();
   }
 
   void _remember(WebUri? address) {
@@ -294,12 +308,29 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   }
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    _syncAppearance();
+    notifyListeners();
+  }
+
+  void _syncAppearance() {
+    _appearanceSampler.setActive(
+      !_disposed &&
+          !_hidden &&
+          !_loading &&
+          _error == null &&
+          _hasDocument &&
+          _controller != null &&
+          _currentUri != null &&
+          navigationPolicy.evaluate(_currentUri.toString()) ==
+              NavigationAction.allow,
+    );
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _appearanceSampler.dispose();
     _view?.dispose();
     final environment = _environment;
     if (environment != null) unawaited(environment.dispose());
@@ -312,6 +343,7 @@ class _ShellWebViewSettings extends InAppWebViewSettings {
   _ShellWebViewSettings(this.origin)
     : super(
         javaScriptEnabled: true,
+        transparentBackground: true,
         useShouldOverrideUrlLoading: true,
         isInspectable: kDebugMode,
         incognito: false,

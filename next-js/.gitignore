@@ -5,6 +5,7 @@ dist/
 deploy/*.zip
 coverage/
 output/playwright/
+output/identity-006/
 .playwright-cli/
 .playwright-mcp/
 .tmp/

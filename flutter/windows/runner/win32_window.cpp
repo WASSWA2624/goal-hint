@@ -11,10 +11,17 @@ namespace {
 ///
 /// Redefined in case the developer's machine has a Windows SDK older than
 /// version 10.0.22000.0.
-/// See: https://docs.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
+/// See:
+/// https://docs.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
+
+// Optional Windows 11 decoration attributes; older runtimes ignore them.
+// Keep builds compatible with the SDK baseline used by the Flutter runner.
+constexpr DWORD kCaptionColorAttribute = 35;
+constexpr DWORD kTextColorAttribute = 36;
+constexpr COLORREF kDefaultDecorationColor = 0xFFFFFFFF;
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
@@ -23,8 +30,9 @@ constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
 /// value indicates apps should use light mode.
 constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
-  L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
-constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
+constexpr const wchar_t kGetPreferredBrightnessRegValue[] =
+    L"AppsUseLightTheme";
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -111,17 +119,14 @@ void WindowClassRegistrar::UnregisterWindowClass() {
   class_registered_ = false;
 }
 
-Win32Window::Win32Window() {
-  ++g_active_window_count;
-}
+Win32Window::Win32Window() { ++g_active_window_count; }
 
 Win32Window::~Win32Window() {
   --g_active_window_count;
   Destroy();
 }
 
-bool Win32Window::Create(const std::wstring& title,
-                         const Point& origin,
+bool Win32Window::Create(const std::wstring& title, const Point& origin,
                          const Size& size) {
   Destroy();
 
@@ -149,13 +154,10 @@ bool Win32Window::Create(const std::wstring& title,
   return OnCreate();
 }
 
-bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
-}
+bool Win32Window::Show() { return ShowWindow(window_handle_, SW_SHOWNORMAL); }
 
 // static
-LRESULT CALLBACK Win32Window::WndProc(HWND const window,
-                                      UINT const message,
+LRESULT CALLBACK Win32Window::WndProc(HWND const window, UINT const message,
                                       WPARAM const wparam,
                                       LPARAM const lparam) noexcept {
   if (message == WM_NCCREATE) {
@@ -174,9 +176,7 @@ LRESULT CALLBACK Win32Window::WndProc(HWND const window,
 }
 
 LRESULT
-Win32Window::MessageHandler(HWND hwnd,
-                            UINT const message,
-                            WPARAM const wparam,
+Win32Window::MessageHandler(HWND hwnd, UINT const message, WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_DESTROY:
@@ -216,6 +216,9 @@ Win32Window::MessageHandler(HWND hwnd,
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
+    case WM_SETTINGCHANGE:
+      UpdateTheme(hwnd);
+      break;
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
@@ -255,12 +258,19 @@ RECT Win32Window::GetClientArea() {
   return frame;
 }
 
-HWND Win32Window::GetHandle() {
-  return window_handle_;
-}
+HWND Win32Window::GetHandle() { return window_handle_; }
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
+}
+
+void Win32Window::SetPreferredAppearance(std::optional<bool> dark,
+                                         std::optional<COLORREF> caption,
+                                         std::optional<COLORREF> foreground) {
+  preferred_dark_ = dark;
+  preferred_caption_ = caption;
+  preferred_foreground_ = foreground;
+  if (window_handle_) UpdateTheme(window_handle_);
 }
 
 bool Win32Window::OnCreate() {
@@ -273,16 +283,23 @@ void Win32Window::OnDestroy() {
 }
 
 void Win32Window::UpdateTheme(HWND const window) {
-  DWORD light_mode;
+  DWORD light_mode = 1;
   DWORD light_mode_size = sizeof(light_mode);
-  LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
-                               kGetPreferredBrightnessRegValue,
-                               RRF_RT_REG_DWORD, nullptr, &light_mode,
-                               &light_mode_size);
+  LSTATUS result =
+      RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
+                  kGetPreferredBrightnessRegValue, RRF_RT_REG_DWORD, nullptr,
+                  &light_mode, &light_mode_size);
 
-  if (result == ERROR_SUCCESS) {
-    BOOL enable_dark_mode = light_mode == 0;
+  if (preferred_dark_.has_value() || result == ERROR_SUCCESS) {
+    BOOL enable_dark_mode = preferred_dark_.value_or(light_mode == 0);
     DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable_dark_mode, sizeof(enable_dark_mode));
   }
+  const COLORREF caption = preferred_caption_.value_or(kDefaultDecorationColor);
+  const COLORREF foreground =
+      preferred_foreground_.value_or(kDefaultDecorationColor);
+  DwmSetWindowAttribute(window, kCaptionColorAttribute, &caption,
+                        sizeof(caption));
+  DwmSetWindowAttribute(window, kTextColorAttribute, &foreground,
+                        sizeof(foreground));
 }

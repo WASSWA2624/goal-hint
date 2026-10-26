@@ -28,6 +28,37 @@ in-memory choice. Changes synchronize between tabs and system preference changes
 apply when no explicit choice is saved. Nested route layouts must reuse this arrangement rather than mount
 another provider or registry. Do not seal the sheet while a response streams.
 
+### Public native appearance metadata
+
+The website remains the only owner of theme selection and the
+`goal-hint-theme` preference. `StyleProvider` publishes
+`meta[name="goal-hint-appearance"]` only after its client snapshot resolves;
+the server snapshot is `null` for metadata while server-rendered styling stays
+light. This prevents an initial server-light value from replacing a restored
+dark preference in the native shell. The same resolved render updates the
+standard `color-scheme` and `theme-color` metadata.
+
+The version-1 JSON contains exactly seven public fields:
+
+| Field | Shared theme source |
+| --- | --- |
+| `version` | Integer `1` |
+| `scheme` | `theme.mode`: `light` or `dark` |
+| `background` | `theme.color.page` |
+| `surface` | `theme.color.surface` |
+| `foreground` | `theme.color.text` |
+| `accent` | `theme.color.brand` |
+| `chrome` | Solid `theme.header.background`; also used by `theme-color` |
+
+Colors are opaque six-digit hex values. No account state, credentials, route
+data or native preference is included. The Flutter host reads this bounded
+metadata through a fixed trusted-top-document query, with one serialized
+foreground sample after each one-second interval and an immediate read after
+load/resume. It does not make a network request or expose a page-callable native
+bridge. See [the native integration contract](../../flutter/docs/web-app-integration.md#web-controlled-native-appearance)
+for lifecycle, startup and platform limits. Normal web-theme changes continue
+to ship from this shared provider.
+
 `compiler.styledComponents` provides stable component identities. Styled
 definitions remain at module scope in Client Component files; pages and layouts
 retain their Server Component boundary. Use transient props for styling, such
