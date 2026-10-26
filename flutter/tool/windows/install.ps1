@@ -98,6 +98,7 @@ try {
         $shortcut.IconLocation = "$executable,0"
         $shortcut.Description = 'Goal Hint'
         $shortcut.Save()
+        Set-ShortcutAppId $shortcutFile
     }
 } finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null }
 

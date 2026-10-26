@@ -64,6 +64,109 @@ function Get-FileDigest([string]$Path) {
     (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Initialize-ShortcutProperties {
+    if ('GoalHint.ShortcutProperties' -as [type]) { return }
+    # Shell shortcuts expose persistent properties through IPropertyStore.
+    # WScript.Shell sets target/icon fields, but cannot set AppUserModelID.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace GoalHint {
+    public static class ShortcutProperties {
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        private struct PropertyKey {
+            public Guid Format;
+            public uint Id;
+        }
+        [StructLayout(LayoutKind.Explicit, Size = 24)]
+        private struct PropVariant {
+            [FieldOffset(0)] public ushort Type;
+            [FieldOffset(8)] public IntPtr Pointer;
+        }
+        [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"),
+         InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IPropertyStore {
+            [PreserveSig] int GetCount(out uint count);
+            [PreserveSig] int GetAt(uint index, out PropertyKey key);
+            [PreserveSig] int GetValue(ref PropertyKey key, out PropVariant value);
+            [PreserveSig] int SetValue(ref PropertyKey key, ref PropVariant value);
+            [PreserveSig] int Commit();
+        }
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        private static extern int SHGetPropertyStoreFromParsingName(
+            string path, IntPtr context, uint flags, ref Guid iid,
+            [MarshalAs(UnmanagedType.Interface)] out IPropertyStore store);
+        [DllImport("ole32.dll")]
+        private static extern int PropVariantClear(ref PropVariant value);
+
+        private static PropertyKey AppIdKey() {
+            return new PropertyKey {
+                Format = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), Id = 5
+            };
+        }
+        private static IPropertyStore Open(string path, uint flags) {
+            Guid iid = typeof(IPropertyStore).GUID;
+            IPropertyStore store;
+            Marshal.ThrowExceptionForHR(SHGetPropertyStoreFromParsingName(
+                path, IntPtr.Zero, flags, ref iid, out store));
+            return store;
+        }
+        public static string GetAppId(string path) {
+            IPropertyStore store = Open(path, 0);
+            PropVariant value = new PropVariant();
+            try {
+                PropertyKey key = AppIdKey();
+                Marshal.ThrowExceptionForHR(store.GetValue(ref key, out value));
+                if (value.Type == 0) return null;
+                if (value.Type != 31) throw new InvalidOperationException("Shortcut AppID is not a string.");
+                return Marshal.PtrToStringUni(value.Pointer);
+            } finally {
+                PropVariantClear(ref value);
+                Marshal.FinalReleaseComObject(store);
+            }
+        }
+        public static void SetAppId(string path, string appId) {
+            IPropertyStore store = Open(path, 2); // GPS_READWRITE
+            PropVariant value = new PropVariant { Type = 31 };
+            try {
+                value.Pointer = Marshal.StringToCoTaskMemUni(appId);
+                PropertyKey key = AppIdKey();
+                Marshal.ThrowExceptionForHR(store.SetValue(ref key, ref value));
+                Marshal.ThrowExceptionForHR(store.Commit());
+            } finally {
+                PropVariantClear(ref value);
+                Marshal.FinalReleaseComObject(store);
+            }
+        }
+    }
+}
+'@
+}
+
+function Get-ShortcutAppId([string]$Path) {
+    $file = Get-FullPath $Path
+    Assert-NoReparsePoint $file
+    if ([IO.Path]::GetExtension($file) -ne '.lnk' -or -not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw 'Shortcut properties require an existing regular .lnk file.'
+    }
+    Initialize-ShortcutProperties
+    [GoalHint.ShortcutProperties]::GetAppId($file)
+}
+
+function Set-ShortcutAppId([string]$Path) {
+    $file = Get-FullPath $Path
+    Assert-NoReparsePoint $file
+    if ([IO.Path]::GetExtension($file) -ne '.lnk' -or -not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw 'Shortcut properties require an existing regular .lnk file.'
+    }
+    Initialize-ShortcutProperties
+    [GoalHint.ShortcutProperties]::SetAppId($file, $script:GoalHintAppId)
+    if ((Get-ShortcutAppId $file) -ne $script:GoalHintAppId) {
+        throw 'Shortcut AppUserModelID did not persist.'
+    }
+}
+
 function Assert-ProductionBuildConfiguration([string]$Configuration, [object]$Pin) {
     $target = [regex]::Matches($Configuration, '"FLUTTER_TARGET=([^"\r\n]+)"')
     $encoded = [regex]::Matches($Configuration, '"DART_DEFINES=([^"\r\n]+)"')

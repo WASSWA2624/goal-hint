@@ -30,6 +30,14 @@ The configured production hosting currently returns an Account Suspended page;
 production launch and publication remain blocked. No release is claimed merely
 because an artifact compiles.
 
+Windows follow-up acceptance is reproducible through the
+[offline account-isolation guide](docs/offline-identity-acceptance.md) and
+[native UI guide](docs/windows-ui-acceptance.md). They separate real WebView
+cookie/cache and operator input/window/handler evidence from synthetic account
+storage and unavailable production services. The tracker records actual passes,
+interrupted attempts and remaining checks; a harness or successful build alone
+does not qualify a Windows release. Android device checks remain deferred.
+
 ## Toolchain and setup
 
 The verified foundation baseline is **Flutter 3.44.6 stable / Dart 3.12.2**.

@@ -98,7 +98,13 @@ for (const platform of ['ios', 'macos']) {
 }
 
 const sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
-const images = await Promise.all(sizes.map(size => sharp(size <= 40 ? microForeground : foreground)
+// Explorer and taskbar surfaces can be light or dark at every icon size. Reuse
+// the canonical opaque-football mark throughout, with a transparent outer tile.
+// Its painted bounds are 6..154 in the 160px source. A Windows-only 164px
+// viewport fits that unchanged geometry to about 90%, rather than the shared
+// mobile clear-space layout's 67%; the extra 2px on each side prevents clipping.
+const windowsForeground = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-2 -2 164 164">${mark(microSource)}</svg>`);
+const images = await Promise.all(sizes.map(size => sharp(windowsForeground)
   .resize(size).ensureAlpha().png().toBuffer()));
 const header = Buffer.alloc(6 + 16 * sizes.length);
 header.writeUInt16LE(1, 2);

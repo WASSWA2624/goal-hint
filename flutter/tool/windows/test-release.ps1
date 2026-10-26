@@ -89,6 +89,25 @@ Assert-True (-not (Test-Path -LiteralPath $sameLength))
 Assert-True (Test-Path -LiteralPath $unknown)
 Assert-Throws { Remove-EmptyPackageDirectories @($outside) $bundle }
 
+# A real .lnk in the ignored fixture validates persistent Shell properties,
+# without installing or launching its synthetic target.
+$testShortcut = Get-PackagePath $testRoot 'Goal Hint.lnk'
+$shortcutShell = New-Object -ComObject WScript.Shell
+try {
+    $shortcut = $shortcutShell.CreateShortcut($testShortcut)
+    $shortcut.TargetPath = Join-Path $bundle 'goal_hint.exe'
+    $shortcut.IconLocation = $shortcut.TargetPath + ',0'
+    $shortcut.Save()
+    Assert-True ([string]::IsNullOrEmpty((Get-ShortcutAppId $testShortcut)))
+    Set-ShortcutAppId $testShortcut
+    Assert-True ((Get-ShortcutAppId $testShortcut) -eq $script:GoalHintAppId)
+    $shortcut = $shortcutShell.CreateShortcut($testShortcut)
+    Assert-True ($shortcut.TargetPath -eq (Join-Path $bundle 'goal_hint.exe'))
+    Assert-True ($shortcut.IconLocation -eq ((Join-Path $bundle 'goal_hint.exe') + ',0'))
+} finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcutShell) | Out-Null }
+Assert-Throws { Set-ShortcutAppId (Join-Path $bundle 'goal_hint.exe') }
+Assert-Throws { Get-ShortcutAppId (Join-Path $testRoot 'missing.lnk') }
+
 $receiptRoot = Get-PackagePath $testRoot 'receipt'
 New-Item -ItemType Directory -Path $receiptRoot | Out-Null
 $receipt = [ordered]@{ schema = 1; appId = $script:GoalHintAppId; version = '0.1.0+1' }

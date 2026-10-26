@@ -589,8 +589,8 @@ and both pre-existing Git stashes were preserved.
 retained HTTPS origin before repeating production launch, native production
 offline/cache lifecycle and a representative real deployment update. Current
 Windows package/installation success does not remove that production failure.
-Actual keyboard, resizing, assistive technology, external handler/account-backend,
-native private-account offline isolation and pinned launcher checks remain open
+Actual keyboard, resizing, assistive technology, external handler/account-backend
+and pinned launcher checks remain open
 where the [acceptance matrix](dev-plan/007-platform-builds-and-release.md) says
 Not tested.
 
@@ -604,3 +604,169 @@ and browser-only evidence do not qualify those releases. See
 [release commands and host requirements](docs/releases.md),
 [Windows packaging](docs/windows-release.md) and
 [independent website-update reproduction](docs/website-update-acceptance.md).
+
+## 007 Windows native account/offline isolation — 27 October 2026 (EAT)
+
+All seven native privacy phases passed in separate Windows Debug processes,
+retaining the ordinary development WebView profile. The dedicated secure
+loopback origin `http://offline-identity.localhost:3196` keeps the real member
+cookie name apart from normal `127.0.0.1`/`localhost` development hosts; changing
+only a port would not isolate cookies. No hosts-file, DNS, certificate or browser
+security override was used. The owned production-like website build was
+`oiqyvIYhG58C1OcAUiIjZ` in ignored
+`next-js/.tmp/offline-identity-eaee654d`.
+
+The fixture reuses the actual shared offline worker/view/manifest, HttpOnly
+cookie helpers, session verifier and login/sign-out HTTP handlers. Authentication
+and persistence are isolated synthetic adapters with two accounts and a public
+boolean/counter JSON state file; no real database, account, payment or message
+service is changed. This is native engine/cookie/cache evidence, not deployed
+production account-backend acceptance.
+
+| Phase | Native PID | Build / test | Actual result |
+| --- | --- | --- | --- |
+| `seed-a` | 11760 | 66.5s / 11s | Anonymous cache ready; A's normal HttpOnly cookie and private HTML/RSC/JSON boundaries passed; every owned cache excluded private bytes |
+| `cold-a` | 38472 | 57.8s / 4s | Server stopped; separate process and direct `/en` revisit loaded only public saved matches; private API and POST failed |
+| `switch-b` | 14876 | 61.2s / 13s | After server restart A's persisted cookie verified; switched to B, A disappeared from the document, cache remained public and write-attempt counter was zero |
+| `cold-b` | 8260 | 86.3s / 5s | Server stopped; separate process with retained B session exposed only public saved matches, with no private read/write success |
+| `logout` | 7824 | 65.0s / 11s | B cookie persistence verified; actual sign-out cleared it, private API returned 401/no-store, original Clear-Site-Data header verified, anonymous cache prepared again |
+| `cold-logout` | 36364 | 67.6s / 4s | Server stopped; another full native restart and `/en` revisit showed no prior identity, phone, prediction or token bytes |
+| `cleanup` | 24820 | 86.0s / 8s | Cookie was already absent and write counter still zero before removing only the dedicated fixture worker and app caches |
+
+All seven primary `.dart_tool/windows007-identity-<phase>.log` files end with All
+tests passed. Native hosts and their owned browser children exited between
+phases; the final development WebView process count was zero. Only verified
+fixture server PIDs were stopped; port 3196 had no remaining listener. Other
+hosts' profiles, cookies and caches were not cleared. The final synthetic state
+had A/B inactive and writeAttempts zero. Public evidence is retained in ignored
+`.dart_tool/windows007-identity-evidence.json`; its UTC timestamp
+`2026-10-26T21:24:34Z` is 27 October in Africa/Kampala. Timings are functional-test
+and build observations, not startup-performance measurements.
+
+Initial harness attempts remain recorded: the original shared-host run was
+stopped during compilation before a native app/login started. A React Flight
+split-text assertion was corrected to check actual component type, private
+prefix and identity value; unexpected browser JavaScript header visibility was
+handled by verifying the original logout header through stateless raw HTTP with
+no browser cookie copied. The recovery's actual sign-out completed, and the next
+strict seed verified anonymous cookie state before login. Every privacy/cache
+assertion remained; no production cache/auth implementation was weakened.
+
+The [007 matrix](dev-plan/007-platform-builds-and-release.md) now marks Windows
+logout/account isolation then offline reopen **Pass**, with the fixture scope
+explicit. See [the complete reproduction and measured evidence](docs/offline-identity-acceptance.md).
+The Windows appearance/input/accessibility row is left for the separate UI
+qualification. Production `https://goalhint.com` still returns HTTP 403 /
+Account Suspended, so a successful deployed-production account/cache lifecycle
+is not claimed. Android device checks remain deferred; no Android action was
+performed. Apple/Linux and signing/release limitations remain as recorded above.
+
+## 007 Windows installer and taskbar identity — 27 October 2026 (EAT)
+
+The installer now persists and reads back `System.AppUserModel.ID` on its managed
+Desktop and Start Menu shortcuts through Shell `IPropertyStore`. Both links and
+the native process use `com.goalhint.goal_hint`. The release guard suite now has
+43 passing checks on both PowerShell 7 and Windows PowerShell 5.1, including
+shortcut ID persistence and target/icon preservation. The installer leaves
+Windows' own copied user pins and the system icon cache alone; see
+[Windows install/update instructions](docs/windows-release.md).
+
+All nine Windows ICO sizes now reuse the canonical small-size web artwork with
+an opaque white football, navy panels and transparent outer tile. The Windows-only
+viewport fits the unchanged mark to about 90% of its canvas instead of the old
+67% mobile clear-space layout. Actual painted spans increased from 10 to 14 pixels
+at 16px and from 170 to 232 at 256px; all four corners remain transparent, with
+no clipped mark. `node tool/generate-icons.mjs --check` verifies all 45 outputs;
+the other 44 platform raster files are byte-identical to their previous versions.
+No Android device, ADB or Android build action was performed in this follow-up.
+
+The normal production Release build for `0.1.0+4` passed in 56.6s. Package,
+extraction verification and actual per-user installation passed. The local
+unsigned archive is `build/releases/goal-hint-0.1.0+4-windows-x64.zip`,
+13,445,863 bytes, SHA256
+`007f2c2c4877c87e7a899581334e6f1ec373b77d4af9acce601a335616a83f6f`.
+Its manifest accurately records source
+`bfd3926c9b530cdc6eefa15775b7302b5305fe0e` with `dirty: true`; it is a local
+validation candidate, not a published/signed release or an archive built from
+the later documentation commit. The preceding +2/+3 validation installations
+were removed through the bounded uninstaller, retaining the production profile.
+
+The +4 Desktop icon and actual pinned taskbar icon were visually inspected at
+the current Windows DPI. The task-created earlier pin was replaced using
+Windows' own menu with the +4 shortcut. Its target, icon and AppUserModelID were
+verified. Other user pins and global taskbar/icon settings were untouched.
+The +4 installation and corrected pin remain available for the owner's requested
+taskbar-size fix. Ignored evidence includes
+`.dart_tool/windows007-taskbar-sized.jpg` and the sized release/package/install
+logs. The original +1 archive/evidence above remain historical.
+
+The production origin remains unchanged. The installed candidate still reaches
+the provider's HTTP 403 / Account Suspended page; install/icon success does not
+qualify online production launch. Android checks remain deferred, and the other
+platform/signing gates are unchanged.
+
+## 007 Windows manual UI follow-up — 27 October 2026 (EAT)
+
+The [native UI guide](docs/windows-ui-acceptance.md) and Windows-only harness use
+the actual shared brand/theme/form controls and real WebView2 adapter on the
+dedicated `http://windows-ui.localhost:3195` origin. Planned operator stages cover
+physical keyboard/Tab/Back, actual window resize and browser zoom, system-browser
+handoff, a local file chooser with no upload, lifecycle and native accessibility.
+File-only controls and the normal browser profile remain separate from the web
+document; no native JavaScript bridge or production input/focus workaround was
+added. Android device checks were not resumed.
+
+| Attempt/check | Actual result and evidence boundary |
+| --- | --- |
+| Initial device-pointer attempt | Debug build 96.1s; native test failed at `theme-light` after 1m35s. Flutter's default test binding intercepted the actual mouse input for finder diagnostics. The harness was corrected to propagate hardware pointer events only inside the test, restoring the previous value in `finally` with a teardown fallback. This was a harness configuration failure, not a product theme defect |
+| Corrected-pointer interruption | Debug build 65.8s; native PID 17752 reached `theme-light` but remained minimized from the retained 00:35:29 EAT checkpoint through the 00:48:27 observation. Native control repeatedly returned user-input-detected/minimized recovery errors. The owned test was stopped before any UI gate completed; normal development was restored before the later user-assisted run |
+| Later shared-theme interaction | PID 38292, Debug build 72.7s. Real shared-toggle light and dark checks passed: CSS scheme, saved web preference, strict public metadata and all five native colors agreed. Both native caption appearances were visually inspected beside the web content |
+| Preference restoration | Passed: final public evidence records initial `dark` and `themePreferenceRestored: true` under the dedicated fixture guard, without a document reload or OS appearance change |
+| Human keyboard report and incidental Back | The owner reported text appears and Tab moves focus. The retained sequence had already reached `/native-details` before the keyboard acknowledgement; native Alt+Left returned home retaining `Goal Hint keyboard 007` and the same document time origin. The home remount resets event counters, so this is not a completed ordered keyboard/Back gate |
+| Ordered keyboard gate | **Not tested to completion.** Tool typing/refocus observations were unreliable. The operator advanced only to trigger cleanup; the retained assertion expected `internal-link` but saw `acceptance-draft` at source line 104. The command ended exit 1 after 8m04s. This does not establish a product keyboard defect, and no production focus patch or synthetic JavaScript input was used |
+| Later manual stages | **Not tested**: ordered route/Back, narrow/wide resize, browser zoom, actual external handler, file chooser, current-run lifecycle, native accessibility and screen-reader stages were not completed. No accessibility or screen-reader failure is inferred from unexecuted stages or static plugin inspection |
+
+The test gate checks its ten-minute deadline only between live frame pumps;
+a minimized native host can withhold a frame and delay deadline evaluation.
+An optional browser observation can also wait while the engine is suspended.
+This harness limitation explains why the interrupted stage remained pending;
+a future frame-independent bound needs native validation without weakening its
+assertions. Build/test/operator durations above are not launch-performance
+measurements.
+
+Ignored logs are `.dart_tool/windows007-ui-native.log` (finder interception),
+`windows007-ui-native-final.log` (minimized interruption) and
+`windows007-ui-native-resumed.log` (partial later run). Public records are
+`.dart_tool/windows007-ui-blocked.json`,
+`.dart_tool/windows007-ui-human-evidence.json` and
+`next-js/.tmp/windows-ui-7135a484/windows-ui-control-evidence.json`; the retained
+dark-caption screenshot is `.dart_tool/windows007-ui-dark.jpg`. These records
+preserve distinct attempts instead of claiming one complete UI pass. The
+[007 matrix](dev-plan/007-platform-builds-and-release.md) remains authoritative
+for the grouped Windows rows and subsequent cleanup.
+
+The Windows appearance/input/accessibility and navigation/external/account
+scenarios remain incomplete despite the measured theme subset, separate
+seven-phase account/offline passes and installed taskbar identity evidence above.
+The retained production origin still returns HTTP 403 / Account Suspended;
+actual deployed-production account/cache lifecycle and successful Release launch
+remain unqualified. Android device checks remain deferred, and Apple/Linux and
+signing gates are unchanged. Overall 007 stays **Partial**.
+
+### Final Windows cleanup and source checks
+
+The normal `lib/main.dart` Windows Debug build for development origin
+`http://127.0.0.1:3000` passed again in 33.4s after the final UI attempt.
+The UI host and its development WebView children exited, and owned fixture
+ports 3195/3196 had no listener. The normal website server and the owner's
+opened installed +4 application were preserved. Explorer was returned to its
+original This PC location. No Narrator or Windows appearance setting was changed.
+
+Final Dart analysis of `lib`, `test` and `integration_test` was clean; all 42
+unit/widget tests passed. Formatting checked 34 Dart files with no changes.
+Both Python fixture helpers parsed, generated asset verification passed for all
+45 outputs, and Git whitespace checks passed. These static/unit results do not
+override the explicitly failed/incomplete native UI attempt above. The seven
+native privacy phases remain separately qualified. Generated profiles, builds,
+archives, controls, screenshots and logs remain ignored; no private configuration
+or credentials are included in the source change.

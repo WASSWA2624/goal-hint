@@ -11,7 +11,7 @@ See [the release plan](../dev-plan/007-platform-builds-and-release.md) and
 ## Build modes and public configuration
 
 The Android application ID remains `com.goalhint.goal_hint`, its display name is
-Goal Hint, and `pubspec.yaml` supplies version `0.1.0+1`. Increment the build number
+Goal Hint, and `pubspec.yaml` supplies version `0.1.0+4`. Increment the build number
 for a subsequent distributed build, preserving the registered application ID and
 signing identity. Product screens, data and theme preference belong to Next.js.
 

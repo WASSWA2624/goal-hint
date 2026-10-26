@@ -276,3 +276,24 @@ unchanged Windows native process. The harness records different web build IDs
 and document identities plus identical executable/DLL/Flutter-data SHA256 hashes.
 It does not override Release's fixed production origin or qualify the suspended
 production deployment, offline safety or another native platform.
+
+## Windows account isolation and native UI follow-up
+
+- [Offline account-isolation acceptance](../docs/offline-identity-acceptance.md)
+  uses the real worker, cookie helpers, HTTP handlers and member-session verifier
+  with an isolated synthetic account store. Separate retained-profile native
+  processes verify A/B switching, logout, offline public-only reopening and no
+  queued writes on a dedicated `.localhost` origin. Its guide records the actual
+  seven-phase Windows results and the production/backend boundary.
+- [Native UI acceptance](../docs/windows-ui-acceptance.md) uses actual shared
+  branding/theme/form controls and file-only operator checkpoints for physical
+  keyboard, Back, resizing, zoom, external browser, file chooser, lifecycle and
+  native accessibility checks. Device-pointer propagation is enabled only inside
+  that test. Real native accessibility observations remain distinct from DOM
+  names, and interrupted attempts do not qualify unexecuted stages.
+
+These Windows-only follow-ups do not resume Android device checks, override
+Release's fixed production origin or infer another platform's support. Record
+their actual command outcomes, cleanup and remaining gates in
+[the tracker](../dev-tracker.md) and
+[007's matrix](../dev-plan/007-platform-builds-and-release.md).

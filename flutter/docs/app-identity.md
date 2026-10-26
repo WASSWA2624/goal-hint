@@ -28,8 +28,10 @@ and Android's circular 66dp safe zone are validated during generation. It suppli
   sizes. macOS 16/32px images use the shared small-size mark, whose opaque white
   football remains legible on either appearance. macOS product/scheme/test-host
   paths use `Goal Hint.app`.
-- A Windows ICO with 16, 20, 24, 32, 40, 48, 64, 128 and 256px images. Frames up
-  to 40px use that small-size variant; the exterior stays transparent. Window
+- A Windows ICO with 16, 20, 24, 32, 40, 48, 64, 128 and 256px images. All frames
+  use that existing opaque-football variant for contrast on both desktop
+  appearances, fitted uniformly to about 90% of the frame instead of the
+  mobile launcher's padded canvas. The exterior stays transparent. Window
   title and public product/file descriptions use Goal Hint.
 - A Linux icon installed with the relocatable bundle, a matching desktop entry,
   and Goal Hint GTK application/window names. Its initial rendering surface is
@@ -110,13 +112,16 @@ checks covering dimensions, alpha, ICO frames and monochrome layers. Native
 XML/plist parsing and Android resource-resolution checks passed. Source checks
 do not establish installed Apple/Linux masking or launch behavior.
 
-Windows 11/WebView2 (UA 155) acceptance passed white branded startup under both
+Step 006's Windows 11/WebView2 (UA 155) acceptance passed white branded startup under both
 real OS dark and light appearances. Automatic dark-to-light fallback matched the
 shared CSS/metadata and all five native colors without storing a web preference.
 The actual website Light/Dark controls persisted their selections through reload;
 a separate process using the same profile retained Dark while the OS was Light,
 including the dark native caption. The window name and icon were visually
-correct. This does not qualify taskbar pins, installer shortcuts or dock identity.
+correct. That run did not qualify taskbar pins, installer shortcuts or dock identity.
+The subsequent [007 follow-up](../dev-tracker.md) separately verifies the installed
+Windows shortcuts and pinned taskbar icon, including its larger Windows-only fit
+and opaque football for contrast across desktop backgrounds.
 
 All 42 Flutter tests and the analyzer passed. The normal `main.dart` Debug build
 was restored successfully. Test cleanup removed only the fixture-origin theme
@@ -126,7 +131,7 @@ individual checks and remaining acceptance work.
 
 Further Android device checks are explicitly deferred by the owner. Apple native
 compilation/runtime, macOS decoration execution and Linux embedding/appearance
-remain unqualified on this Windows host. These gaps and uninspected taskbar/
-shortcut identity keep [006](../dev-plan/006-app-identity-and-theme.md) Partial.
+remain unqualified on this Windows host. These platform gaps keep
+[006](../dev-plan/006-app-identity-and-theme.md) Partial.
 The tracker retains prior
 Android observations separately; they do not qualify the new theme changes.

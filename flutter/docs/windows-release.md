@@ -46,9 +46,9 @@ as a candidate. A build restored from an unknown machine/cache must be rebuilt.
 The output is:
 
 ```text
-build/releases/goal-hint-0.1.0+1-windows-x64/
-build/releases/goal-hint-0.1.0+1-windows-x64.zip
-build/releases/goal-hint-0.1.0+1-windows-x64.zip.sha256
+build/releases/goal-hint-0.1.0+4-windows-x64/
+build/releases/goal-hint-0.1.0+4-windows-x64.zip
+build/releases/goal-hint-0.1.0+4-windows-x64.zip.sha256
 ```
 
 The directory contains `goal_hint.exe`, native DLLs, `data/`, install/uninstall
@@ -80,7 +80,7 @@ Verify the received ZIP against its separately supplied SHA256, extract it,
 inspect the scripts/manifest, then run in the extracted directory:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\goal-hint-0.1.0+1-windows-x64.zip
+Get-FileHash -Algorithm SHA256 .\goal-hint-0.1.0+4-windows-x64.zip
 # After extraction, from the directory containing manifest.json:
 powershell -File .\install.ps1 -DesktopShortcut
 ```
@@ -98,21 +98,32 @@ The installation is per-user:
 
 ```text
 %LOCALAPPDATA%/Programs/Goal Hint/installation.json
-%LOCALAPPDATA%/Programs/Goal Hint/versions/0.1.0+1/goal_hint.exe
+%LOCALAPPDATA%/Programs/Goal Hint/versions/0.1.0+4/goal_hint.exe
 %APPDATA%/Microsoft/Windows/Start Menu/Programs/Goal Hint.lnk
 ```
 
 The optional desktop shortcut uses the user's actual Desktop known folder.
 Shortcuts use the bundled executable's Goal Hint icon; the native runner keeps
-the stable `com.goalhint.goal_hint` AppUserModelID. Start via either shortcut or
+the stable `com.goalhint.goal_hint` AppUserModelID. The installer writes and reads
+back that same persistent `System.AppUserModel.ID` property on each created
+shortcut through the standard Shell `IPropertyStore`, so Windows can associate
+the shortcut with the running application when grouping or pinning. This follows
+[Microsoft's AppUserModelID contract](https://learn.microsoft.com/en-us/windows/win32/shell/appids)
+and does not alter user pins or the icon cache. Start via either shortcut or
 the installed executable. The full folder must stay together. Older managed
 native versions remain available after an update; the website's normal updates
 continue inside the persistent WebView profile without installing a new bundle.
 
+Windows keeps its own copy of a pinned shortcut. The installer updates its
+managed Start Menu/desktop links; it does not rewrite user pins or flush the
+icon cache. After installing another native version, verify that an existing
+pin launches the intended version and re-pin Goal Hint through Windows if it
+still targets an older version. The same explicit app ID keeps grouping stable.
+
 To remove the managed installation, close its windows and run:
 
 ```powershell
-powershell -File "$env:LOCALAPPDATA\Programs\Goal Hint\versions\0.1.0+1\uninstall.ps1"
+powershell -File "$env:LOCALAPPDATA\Programs\Goal Hint\versions\0.1.0+4\uninstall.ps1"
 ```
 
 The uninstaller validates the fixed per-user root and each managed version's
