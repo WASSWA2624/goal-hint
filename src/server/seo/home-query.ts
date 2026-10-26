@@ -19,6 +19,6 @@ export function redirectLegacyFeedQuery(locale: string, query: Readonly<Record<s
 export function homeBrowseLinks(result: Readonly<{ day: ReportingDate; slips: readonly unknown[] }>, locale: string): ReadonlyArray<readonly [string, TextKey]> {
   if (result.slips.length > 0) return [];
   const day = (offset: number) => feedHref({ date: addReportingDays(result.day, offset), status: feedDefaults.today.status }, locale);
-  return [[day(0), "feed.date.today"], [day(1), "feed.date.tomorrow"], [day(-1), "feed.date.yesterday"],
+  return [[day(-1), "feed.date.yesterday"], [day(0), "feed.date.today"], [day(1), "feed.date.tomorrow"],
     [informationHref("help", locale), "navigation.help"], [performanceHref(locale), "performance.title"]];
 }
