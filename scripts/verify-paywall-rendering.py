@@ -62,7 +62,8 @@ def main():
                     f"/api/matches/{fixture_id}/insights?section=news"]
                 for url in paths:
                     # Without a current forecast every viewer gets the same no-prediction card and verdict; only real forecasts lock.
-                    shown = scenario["prior"] if "cycle=" in url or "revision=" in url else detail
+                    # Pages always show the current verdict (a cycle or revision query only selects history); the API returns the selection.
+                    shown = scenario["prior"] if url.startswith("/api/") and ("cycle=" in url or "revision=" in url) else detail
                     forecastless = shown["snapshot"] is None and shown["fixture"]["forecast"] is None
                     leak = r'data-(?:prediction|outcome|featured-pick|verdict|market)="' + (r'(?!none"|unavailable"|match-result")' if forecastless else "")
                     variants = [headers, {**headers, "RSC": "1"}] if not url.startswith("/api/") else [headers]

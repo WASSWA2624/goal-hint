@@ -14,8 +14,9 @@ from guarantees. Topics use semantic headings and definition lists; panels grow
 with text size and form two columns on desktop.
 
 The former performance report UI, native report form, page adapter, methodology
-rendering command and its isolated page fixture have been removed. There is no
-Stats or measured-performance link in the app. The stored performance API,
+rendering command and its isolated page fixture have been removed. Measured
+results now live on `/en/performance` (Results & performance, linked from the
+header); see [the public dashboard](public-performance-dashboard.md). The stored performance API,
 service, cache, query rules and integration tests remain; see
 [the API contract](performance-api.md). The canonical evidence-link contract is
 covered by `tests/performance.test.mjs`.

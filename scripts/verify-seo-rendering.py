@@ -114,11 +114,11 @@ def verify(origin, cases, *, staging):
     match(r'<h1\b[^>]*>Best Slips</h1>', visible_html(home, comments=False))
     match(r'href="/en/matches"', home)
     browse = re.search(r'<nav\b[^>]*aria-labelledby="browse-predictions"[^>]*>([\s\S]*?)</nav>', home)
-    if browse:  # only while Best Slips are unavailable: today's, tomorrow's and yesterday's archives, help and results
+    if browse:  # only while Best Slips are unavailable: yesterday's, today's and tomorrow's archives, help and results
         links = re.findall(r'<a\b[^>]*href="([^"]+)"', browse.group(1))
         assert all(link.startswith("/en/predictions/") for link in links[:3]) and links[3:] == ["/en/help", "/en/performance"], links
         days = [date.fromisoformat(link.rsplit("/", 1)[1]) for link in links[:3]]
-        assert [day - days[0] for day in days] == [timedelta(0), timedelta(days=1), timedelta(days=-1)], links
+        assert [day - days[0] for day in days] == [timedelta(0), timedelta(days=1), timedelta(days=2)], links
     else:
         no_match(r'id="browse-predictions"', home)
     structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', home).group(1))
