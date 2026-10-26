@@ -1,7 +1,40 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Keep credentials local or inject them through secured build environment values.
+val releaseProperties = Properties()
+rootProject.file("key.properties").takeIf { it.isFile }?.inputStream()?.use {
+    releaseProperties.load(it)
+}
+fun signingValue(property: String, environment: String): String? =
+    providers.environmentVariable(environment).orNull ?: releaseProperties.getProperty(property)
+
+val releaseStorePath = signingValue("storeFile", "GOAL_HINT_ANDROID_STORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "GOAL_HINT_ANDROID_STORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "GOAL_HINT_ANDROID_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "GOAL_HINT_ANDROID_KEY_PASSWORD")
+val releaseStoreFile = releaseStorePath?.takeIf { it.isNotBlank() }?.let { rootProject.file(it) }
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    group = "verification"
+    description = "Requires explicit signing credentials for Android release artifacts."
+    doLast {
+        if (listOf(releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+                .any { it.isNullOrBlank() }) {
+            throw GradleException(
+                "Android release signing is not configured. Supply android/key.properties or " +
+                    "the GOAL_HINT_ANDROID_* signing values; see flutter/docs/android-release.md. " +
+                    "Release never falls back to debug signing.",
+            )
+        }
+        if (releaseStoreFile?.isFile != true) {
+            throw GradleException("The configured Android release keystore is not a regular file.")
+        }
+    }
 }
 
 android {
@@ -15,7 +48,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Preserve this installed identity when shipping updates.
         applicationId = "com.goalhint.goal_hint"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -25,13 +58,26 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+    signingConfigs {
+        create("release") {
+            storeFile = releaseStoreFile
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+}
+
+// Apply the gate even when a parent task requests every variant. Debug builds
+// remain available without credentials; APK and app-bundle release paths fail.
+tasks.matching { it.name == "preReleaseBuild" || it.name == "validateSigningRelease" }.configureEach {
+    dependsOn(verifyReleaseSigning)
 }
 
 kotlin {

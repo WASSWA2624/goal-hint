@@ -20,7 +20,7 @@ below for actual native execution evidence.
 | [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Partial — shared cache and Windows cold/recovery checks passed; owner stopped further Android checks, Apple/Linux remain unqualified |
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Partial — shared retry/update safety and Windows/browser acceptance passed; Android/Apple/Linux reconnection remain unqualified |
 | [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity/native appearance and Windows real OS/theme/restart checks passed; Android deferred, Apple/Linux and installed launcher qualification remain open |
-| [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Not started |
+| [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Partial — pinned release tooling and signing gates implemented; production hosting, credentials and remaining platform acceptance prevent release |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
 its implementation and required acceptance checks pass. Keep its plan state in
@@ -503,3 +503,104 @@ again for this task. Apple compilation/runtime and Linux embedding remain
 unqualified. Installed/pinned launcher/taskbar/dock identity, platform masking,
 release packaging and signing remain with [007](dev-plan/007-platform-builds-and-release.md);
 window inspection and static assets are not substitutes for those checks.
+
+## 007 Platform builds and release acceptance — 26 October 2026
+
+### Build and installation implementation
+
+[The release guide](docs/releases.md) documents the pinned Flutter 3.44.6 /
+Dart 3.12.2 toolchain, actual host tools, project target settings, normal
+development/production commands, artifacts and native signing boundaries.
+`release-toolchain.json` records the exact SDK revision; the lockfile is retained.
+The website remains at `https://goalhint.com` in production, as the owner confirmed
+after the hosting probe returned HTTP 403 / Account Suspended.
+
+Windows tooling under `tool/windows/` builds or packages only the normal
+`lib/main.dart` production Release configuration with the pinned SDK. It adds
+Microsoft-signed application-local CRT libraries from Visual Studio's Redist
+directory, verifies executable identity/version, excludes debug/test/private
+output, records SHA256/provenance and produces an unsigned ZIP candidate.
+The installer verifies extracted files and the Evergreen WebView2 prerequisite,
+stages versioned per-user files, and creates Goal Hint shortcuts. The bounded
+uninstaller removes manifest-owned app files and managed shortcuts while leaving
+the browser profile outside its scope. No certificate, trust setting, global
+environment or store registration is created or changed.
+
+Android Release now requires explicit local/secured signing values and fails
+before release work when they are missing or the keystore is absent. It never
+falls back to the Android Debug key. Development builds remain independent.
+[Android release notes](docs/android-release.md) record exact property/environment
+precedence and verification commands. No signing material is committed.
+
+### Actual available-host evidence
+
+Commands ran from `flutter/`. The host is Windows 11 25H2 x64, OS
+10.0.26200.9711, Visual Studio Community 2026 18.6.0, MSVC/CRT 14.51, Windows SDK
+10.0.26100.0, and the existing NuGet setup. Android tools remain API/build-tools
+36/36.0.0, NDK 28.2.13676358 and Microsoft JDK 17.0.20.8 with the documented
+process-local JDK/temp/Kotlin workarounds. Doctor still reports spaces in the
+SDK path; no SDK relocation was performed.
+
+| Check | Actual result |
+| --- | --- |
+| Source verification | Full `flutter analyze` clean; all 42 Flutter unit/widget tests passed. Dart formatting checked 30 files; the new test was formatted before its native run. No shared production Next.js source or lockfile changed |
+| Windows release guards | 37 dependency-free safety/configuration checks passed on both PowerShell 7 and actual Windows PowerShell 5.1; scripts parse. They cover paths/links, hashes, unknown-file preservation, production target/define rules and missing Runtime failure |
+| Windows normal production build | `flutter build windows --release --target=lib/main.dart --dart-define=APP_ENV=production` passed in 762.3s. Existing third-party WebView2/plugin C4458/C4244 warnings remained non-fatal; no compiler-check weakening was introduced |
+| Windows package and extraction | Pinned-SDK `tool/windows/package.ps1 -SkipBuild` passed against that fresh build and the installed Microsoft.VC145.CRT x64 directory. ZIP extraction and verification passed for all 30 manifest files |
+| Actual per-user installation | Extracted package installed with Windows PowerShell 5.1 into `%LOCALAPPDATA%/Programs/Goal Hint/versions/0.1.0+1`. Start Menu/desktop shortcut target and bundled-executable icon references matched. Registered Evergreen Runtime was 155.0.4283.62 |
+| Installed production launch | **Fail**: owned Release process PID 31388 displayed the provider's Account Suspended page at the retained production origin. Window name/icon were inspected, but no successful Goal Hint online launch, production cache preparation or release is claimed |
+| Actual uninstall | Closed the owned app and ran its hash-matched packaged uninstaller. Managed application root and both created shortcuts were removed; the existing production browser-profile directory and its creation identity were retained. Unknown-file preservation is separately qualified by the synthetic guard suite |
+| Android current-source debug APK | Passed `assembleDebug` in 174.2s; manifest/signature inspection confirmed Goal Hint, ID `com.goalhint.goal_hint`, version 0.1.0+1, min SDK 24/target 36, arm32/arm64/x64 libraries and expected debug/cleartext flags. No phone was contacted or changed |
+| Android secured-signing gates | Missing signing rejected at actual `:app:preReleaseBuild` (exit 1, 14s); synthetic absent-keystore environment rejected (exit 1, 12s). APK/AAB dry-run graphs included the gate (27s). These are successful negative checks, not release artifact creation |
+| Independent website update | Passed one actual Debug native process, PID 26704, through independently built Next.js A and B at `http://127.0.0.1:3194`. Build IDs differed, document time origins changed, and all 16 executable/DLL/data SHA256 values matched; a 17th entry explicitly records absent Debug `data/app.so`. Generic web bridge remained undefined. Both UI generations were visually inspected |
+| Website update timing/scope | Native build 61.8s; operator-gated test passed in 1m25s. A build ID `LF2vpNkAN-NIonE0v640h`, B `JrmJPDgVuJhrr6g5p55iT`. Both were real isolated Next.js production builds using shared providers/branding, with no account/database services; this is Debug development delivery evidence, not deployed-production or Release-cache acceptance |
+| Normal development restoration | `flutter build windows --debug --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://127.0.0.1:3000` passed in 33.9s. No native test host/browser children or owned fixture port 3194 listener remained |
+
+### Artifacts and provenance
+
+The local unsigned Windows candidate is
+`build/releases/goal-hint-0.1.0+1-windows-x64.zip` (13,438,085 bytes), with adjacent
+`.sha256` and extracted bundle/manifest. ZIP SHA256:
+`8395c761296d8d0694d4f7e80327d92f6846d7be09615cc5a249955fe8eb67da`.
+Its manifest truthfully records source `faf295104ba31981fb2c5df06de931c8aad25241`
+with `dirty: true` for this working implementation and the pinned toolchain.
+Checksums establish byte consistency, not publisher authentication. No usable
+local Windows code-signing certificate/selector was found; nothing was signed,
+uploaded or published. Future candidates must be rebuilt from their intended
+revision and version rather than relabeling this validation archive.
+
+The Android debug APK is `build/app/outputs/flutter-apk/app-debug.apk`
+(184,924,557 bytes), SHA256
+`7b302ba5393009b94e6371a866b127805e10ceba35557fb384ba18b7cf6b208b`.
+Older Release APK copies dated 17:00:58/59 were left untouched and are stale,
+prior debug-signed validation output. No current signed APK/AAB was produced.
+
+Ignored `.dart_tool/release007-*.log` files hold build/install/test output.
+Unmodified native screenshots are `release007-production-blocked.jpg`,
+`release007-website-a.jpg` and `release007-website-b.jpg` in `.dart_tool/`.
+The two owned fixture directories, public controls/build IDs and before/after
+hash evidence remain ignored under `next-js/.tmp/release-*`. Only those fixture
+servers were stopped. The validation installation was removed; its browser profile
+and both pre-existing Git stashes were preserved.
+
+### Remaining release gates
+
+**007 remains Partial.** Restore the deployed Goal Hint application at the
+retained HTTPS origin before repeating production launch, native production
+offline/cache lifecycle and a representative real deployment update. Current
+Windows package/installation success does not remove that production failure.
+Actual keyboard, resizing, assistive technology, external handler/account-backend,
+native private-account offline isolation and pinned launcher checks remain open
+where the [acceptance matrix](dev-plan/007-platform-builds-and-release.md) says
+Not tested.
+
+The owner continues to defer Android device checks; none were resumed. Secured
+Android signing and an actual signed install/run are still required. iOS/macOS
+need an Apple host, Xcode, owner signing/provisioning and native acceptance;
+macOS currently has ad-hoc signing without a qualified hardened-runtime/notarized
+distribution setup. Linux is **Unsupported by the current app integration**
+because no embedded browser adapter exists. Source targets, generated runners
+and browser-only evidence do not qualify those releases. See
+[release commands and host requirements](docs/releases.md),
+[Windows packaging](docs/windows-release.md) and
+[independent website-update reproduction](docs/website-update-acceptance.md).

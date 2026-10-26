@@ -49,16 +49,21 @@ and Android's circular 66dp safe zone are validated during generation. It suppli
 | Linux | GTK/desktop ID `com.goalhint.goal_hint`; technical executable `goal_hint`. |
 
 Existing package/bundle IDs and executable/profile locations are preserved.
-Windows sets its explicit taskbar ID before presenting UI. No user pin, shortcut
-or icon cache is modified. A future Windows installer must use the same ID and a
-Goal Hint shortcut label; installer/store registration remains in
-[007](../dev-plan/007-platform-builds-and-release.md).
+Windows sets its explicit taskbar ID before presenting UI. The runner itself
+does not modify user pins, shortcuts or the icon cache. The
+[007 per-user installer](windows-release.md) creates Goal Hint shortcuts pointing
+at the bundled executable and its icon, preserves unrelated shortcuts and removes
+only its managed shortcuts during uninstall. Store registration, signed packaging
+and actual pinned-taskbar qualification remain open.
 
 These names/IDs are public metadata, not signing credentials or proof of store
-registration. Android's existing development release configuration still uses
-debug signing. Store keystores/passwords, Apple certificates/provisioning/team
-access and Windows signing keys remain separate release work and must stay out
-of Git. This task adds no signing material or publication action.
+registration. Android Release builds now require explicit
+[secured release signing](android-release.md); they never fall back to debug
+keys. Earlier locally debug-signed validation artifacts do not qualify a current
+release. Store keystores/passwords, Apple certificates/provisioning/team access
+and Windows signing keys must stay out of Git. See the
+[build and release guide](releases.md) for available artifacts and the remaining
+signing/publication gates.
 
 ## Launch and shared appearance
 

@@ -54,6 +54,10 @@ production-like secure origins from normal development/HMR. Shared web
 code checks reachability and refreshes verified cache bundles with bounded retries,
 preserving the last working version and active input after a failed update.
 Platform qualification and release acceptance remain in 004–005 and 007.
+[Native release instructions](flutter/docs/releases.md) cover the pinned SDK,
+Windows installable bundles, Android signing and unavailable-host limitations.
+Production launch is currently blocked by the hosting suspension at the retained
+`https://goalhint.com` origin; no published release is claimed.
 See the [Flutter tracker](flutter/dev-tracker.md) for actual execution status and
 verification evidence, and the [implementation prompt](prompts/flutter-app-shell.md)
 for the full requirements. Normal product changes continue to belong in `next-js/`.

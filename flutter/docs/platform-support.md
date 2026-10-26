@@ -13,23 +13,34 @@ The current online Flutter platform reference describes **Flutter 3.47**, which 
 - **Unsupported by package:** the released package does not advertise that target.
 - **Host unavailable/untested:** a required build host or device is absent; this does not mean the platform or plugin is unsupported.
 
-## Current app qualification — 26 October 2026
+## Historical 003 online integration baseline — 26 October 2026
 
-These installed-app results supersede the foundation's prototype-only status
-where stated. They record the online integration baseline; the tracker separately
-records plan 004's worker, cache and cold-process evidence.
+These earlier installed-app results establish the online integration baseline
+and supersede the foundation's prototype-only status where stated. They retain
+the validation artifacts and remaining gaps recorded at that stage, not current
+release acceptance. The tracker separately records plan 004's worker, cache and
+cold-process evidence and subsequent appearance work.
 
 | Target | Observed app evidence | Remaining qualification |
 | --- | --- | --- |
-| Windows x64 | WebView2 **155.0.4283.62**. Full synthetic navigation/forms/account HTTP lifecycle, role/expiry/logout checks, separate cold-process session reopen, invalid-TLS Retry, and the complete live-app/native-focus/back/200% text phase passed with clean exits. Shared app/Goal Hint title visually confirmed in dark theme; current normal Release build and icon verified. | Actual keyboard/window/handler checks, distribution/signing and complete appearance lifecycle remain open. |
-| Physical Android | TECNO CL8, API 35, System WebView **155.0.8059.43**. Full synthetic first/reopen passed over TLS wireless ADB after ordinary-store suspend flush, without changing server cookies. Live Next.js rendered over LAN port 3000; Chrome handoff/Back preserved the document. White OS/Flutter loading transition and native 40px bottom-inset correction verified. Current Release build/compiled policy and identity audit passed. | Manual picker/keyboard and complete appearance checks remain open. Fixture port 3187's owned mapping was removed; normal LAN content needs no USB cable. Release is a locally signed validation artifact, uninstalled and not store-qualified. |
+| Windows x64 | WebView2 **155.0.4283.62**. Full synthetic navigation/forms/account HTTP lifecycle, role/expiry/logout checks, separate cold-process session reopen, invalid-TLS Retry, and the complete live-app/native-focus/back/200% text phase passed with clean exits. Shared app/Goal Hint title visually confirmed in dark theme; the then-built normal Release validation artifact and icon were verified. | Actual keyboard/window/handler checks, distribution/signing and complete appearance lifecycle remained open at this stage. |
+| Physical Android | TECNO CL8, API 35, System WebView **155.0.8059.43**. Full synthetic first/reopen passed over TLS wireless ADB after ordinary-store suspend flush, without changing server cookies. Live Next.js rendered over LAN port 3000; Chrome handoff/Back preserved the document. White OS/Flutter loading transition and native 40px bottom-inset correction verified. The prior Release validation build, compiled policy and identity audit passed. | Manual picker/keyboard and complete appearance checks remained open. Fixture port 3187's owned mapping was removed; normal LAN content needs no USB cable. The prior debug-signed Release validation build was uninstalled and was not a secured distribution release or store-qualified artifact. |
 | iOS/macOS | Official WK adapter, persistent-store defaults, network policy and shared-brand asset/metadata implementation present. | No macOS/Xcode host or Apple device execution; installed sessions, file input, local-network privacy, appearance and system bars remain untested. |
 | Linux | Flutter runner, icon and desktop metadata present. | No qualified embedded adapter; Linux/WSL host unavailable. CEF/WebKitGTK prototype still required. The explicit unavailable-browser screen does not satisfy embedding. |
+
+Current [007 build/release evidence](releases.md) supersedes these historical
+artifact descriptions. Android debug compilation and the release signing gate
+were verified, but no current secured Android release was produced and device
+checks remain deferred. The configured production origin returned **HTTP 403,
+Account Suspended**; the owner retained that origin. Online production launch
+and a real production website update remain blocked until hosting serves the
+app again. Earlier validation builds and fixture results do not establish a
+current production release.
 
 The account-change services are scripted fixture boundaries, not a real
 account backend. No native auth/payment logic, credential preferences or broad
 JavaScript bridge is added. See [the tracker](../dev-tracker.md) for exact checks,
-known failed attempts and current pending results.
+known failed attempts and the current release acceptance record.
 
 ## 004 offline startup qualification
 

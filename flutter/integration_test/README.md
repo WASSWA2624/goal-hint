@@ -265,3 +265,14 @@ Debug entry point/development origin. Keep screenshots, JSON controls, profiles
 and binaries ignored. The check inspects a running window; it makes no installed
 or pinned shortcut/taskbar/dock/signing claim. Actual results and remaining
 platform gaps are recorded in [the tracker](../dev-tracker.md).
+
+## Platform release and independent website deployment
+
+[The 007 release guide](../docs/releases.md) records native build, install,
+signing and production-host acceptance separately from these Debug fixtures.
+Use [the independent website-update guide](../docs/website-update-acceptance.md)
+to build real Next.js generations A and B and verify their delivery through one
+unchanged Windows native process. The harness records different web build IDs
+and document identities plus identical executable/DLL/Flutter-data SHA256 hashes.
+It does not override Release's fixed production origin or qualify the suspended
+production deployment, offline safety or another native platform.

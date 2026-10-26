@@ -1,0 +1,6 @@
+# Copy to key.properties locally and replace every value. Never commit real keys or passwords.
+# Absolute paths are recommended. Forward slashes avoid Java-properties escaping on Windows.
+storeFile=C:/private/goal-hint/upload-keystore.jks
+storePassword=REPLACE_WITH_LOCAL_SECRET
+keyAlias=upload
+keyPassword=REPLACE_WITH_LOCAL_SECRET

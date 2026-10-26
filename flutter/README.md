@@ -22,7 +22,13 @@ and white branded startup. Windows real OS light/dark, web preference,
 reload and separate-process restart checks passed. See
 [native identity](docs/app-identity.md) and the tracker for exact evidence.
 Android checks remain deferred; Apple/Linux execution and installed launcher
-qualification remain open, keeping 006 Partial. Release packaging is 007.
+qualification remain open, keeping 006 Partial. Step 007 adds a pinned release
+toolchain, Windows bundle/install tooling and explicit Android release-signing
+gates. See [builds and release acceptance](docs/releases.md),
+[Windows packaging](docs/windows-release.md) and [Android signing](docs/android-release.md).
+The configured production hosting currently returns an Account Suspended page;
+production launch and publication remain blocked. No release is claimed merely
+because an artifact compiles.
 
 ## Toolchain and setup
 
@@ -32,7 +38,8 @@ baseline, not a claim to be the newest Flutter release. See
 [Flutter installation](https://docs.flutter.dev/install) for SDK setup.
 
 `pubspec.yaml` declares the SDK minimums; `.metadata` records the generator
-revision and `pubspec.lock` records package resolution. Keep the lockfile in Git.
+revision, `release-toolchain.json` pins the release SDK, and `pubspec.lock`
+records package resolution. Keep the lockfile in Git.
 System-WebView, WebView2, external URL launching, and profile-path dependencies
 are pinned with the lockfile. The Windows plugin includes a small native policy
 patch in `packages/`; see [integration details](docs/web-app-integration.md).
