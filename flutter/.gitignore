@@ -6,6 +6,20 @@
 build/
 coverage/
 **/ephemeral/
+.pub-cache/
+.pub/
+.fvm/
+.toolchains/
+
+# Local IDE configuration.
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Crash dumps and symbol maps.
+*.symbols
+*.map.json
 
 # Local SDK paths, signing credentials, and build secrets.
 android/local.properties

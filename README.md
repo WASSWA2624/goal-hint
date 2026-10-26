@@ -1,14 +1,15 @@
 # Goal Hint
 
 Goal Hint provides football fixtures, predictions, analysis, and recorded results.
-The Next.js application owns the interface, server, and business logic. The planned
-Flutter shell will make that shared web experience installable on mobile and desktop.
+The Next.js application owns the interface, server, and business logic. The Flutter
+foundation provides native project scaffolding for the planned mobile and desktop
+shell around that shared web experience.
 
 ```text
 goal-hint/
 ├── next-js/          # Web client, server, workers, database, tests, and runbooks
 │   └── dev-plan/     # Numbered Next.js implementation plans
-├── flutter/          # Destination for the Flutter shell and platform projects
+├── flutter/          # Flutter startup scaffold and native platform projects
 │   └── dev-plan/     # Numbered Flutter shell implementation plans
 ├── prompts/          # Shared feature requests and specifications
 └── app-write-up.md   # Product specification and shared application architecture
@@ -40,12 +41,13 @@ The complete web validation command is `npm --prefix next-js run check`.
 
 ## Flutter shell
 
-The Flutter project has not yet been implemented. Its approved requirements
-include configurable development and production URLs, matching app branding,
-Android/iOS/Windows/macOS/Linux packaging, persistent offline startup after a
-successful online load, and safe updates when connectivity returns. See the
-[implementation prompt](prompts/flutter-app-shell.md) before creating it inside
-`flutter/`. Normal product changes will continue to be made in `next-js/`.
+A minimal Flutter startup scaffold and Android, iOS, Windows, macOS, and Linux
+platform projects have been generated inside `flutter/`. Configurable URLs,
+embedded web integration, installed branding, persistent offline startup, safe
+reconnection updates, and release acceptance remain planned in steps 002–007.
+See the [Flutter tracker](flutter/dev-tracker.md) for actual execution status and
+verification evidence, and the [implementation prompt](prompts/flutter-app-shell.md)
+for the full requirements. Normal product changes continue to belong in `next-js/`.
 
 Git metadata and shared development-tool configuration remain at the repository
 root; app-specific configuration stays with its app. Local dependencies, private

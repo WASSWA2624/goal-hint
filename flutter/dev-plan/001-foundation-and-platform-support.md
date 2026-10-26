@@ -1,6 +1,6 @@
 # 001 - Foundation and platform support
 
-**State: Not started.** Prerequisites: [the plan index](000-index.md), [the specification](../../app-write-up.md), and [the shell requirements](../../prompts/flutter-app-shell.md).
+**State: Completed — foundation and platform audit; available Windows runtime verified, with other platform verification limits recorded in [the tracker](../dev-tracker.md).** Prerequisites: [the plan index](000-index.md), [the specification](../../app-write-up.md), and [the shell requirements](../../prompts/flutter-app-shell.md).
 
 ## Outcome
 
