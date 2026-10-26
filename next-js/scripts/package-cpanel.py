@@ -82,6 +82,7 @@ def main():
         npm = [node, npm_path] if npm_path.endswith(".js") else [shutil.which("npm.cmd" if os.name == "nt" else "npm") or "npm"]
         run([*npm, "ci", "--no-audit", "--no-fund"])
         run([node, str(source / "node_modules/next/dist/bin/next"), "build"], env={**environment, "BUILD_OUTPUT": "standalone", "NEXT_TELEMETRY_DISABLED": "1"})
+        run([node, "scripts/build-offline-manifest.mjs"])
         built = source / ".next/standalone"
         if not (built / "server.js").exists():
             raise CommandError("The standalone build has no top-level server.js; check outputFileTracingRoot/turbopack.root.")

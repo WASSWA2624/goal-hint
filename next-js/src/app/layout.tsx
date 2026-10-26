@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-import { Suspense, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import localFont from "next/font/local";
 import { publicPolicy } from "@/domain/public-policy";
 import { AppProviders } from "@/app/_components/app-providers";
 import { ConsentBootstrapScript } from "@/app/_components/consent-bootstrap-script";
 import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
-import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
 import { TruncationTooltips } from "@/components/ui/truncation-tooltips";
-import { AnalyticsProvider } from "@/server/analytics/analytics-provider";
+import { OfflineBootstrap } from "@/components/offline/offline-bootstrap";
 import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
 import { socialLocale } from "@/server/seo/metadata";
 
@@ -48,11 +47,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ConsentBootstrapScript id="analytics-consent-bootstrap" code={consentBootstrapScript()} />
       </head>
       <body>
-        <Suspense fallback={null}><MetadataRecovery /></Suspense>
         <TruncationTooltips />
         <AppProviders>
           {children}
-          <Suspense fallback={null}><AnalyticsProvider /></Suspense>
+          <OfflineBootstrap />
         </AppProviders>
       </body>
     </html>

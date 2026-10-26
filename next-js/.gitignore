@@ -24,3 +24,4 @@ Thumbs.db
 deploy/deploy-credentials.md
 chrome-filters/
 public/ocr/
+public/offline-manifest.json

@@ -95,6 +95,12 @@ tunnel or USB cable. This setup retains normal TLS/certificate validation and
 firewall policy. An isolated fixture may need its own temporary ADB mapping;
 remove only that owned mapping after testing, preserving the wireless pairing.
 
+Offline preparation additionally requires a **production-like web build** and a
+secure context (production HTTPS or recognized localhost/loopback). Normal
+`next dev`/LAN HTTP is online/HMR development and does not prepare this cache.
+Use the [offline guide](offline-startup.md) for the build, origin and retained
+profile requirements; pairing alone does not make a LAN HTTP origin secure.
+
 ## Inspect the selected origin
 
 To inspect the same configuration without a WebView, use the development helper

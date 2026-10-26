@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { isSupportedLocale } from "@/i18n/locales";
 import { connection } from "next/server";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
+import { OnlineRuntime } from "@/app/_components/online-runtime";
 
 /** Resolve deployment controls per request, independently of the build environment. */
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,5 +18,5 @@ export default async function LocaleLayout({ children, params }: {
 }) {
   const { locale } = await params;
   if (!isSupportedLocale(locale)) notFound();
-  return children;
+  return <>{children}<OnlineRuntime /></>;
 }

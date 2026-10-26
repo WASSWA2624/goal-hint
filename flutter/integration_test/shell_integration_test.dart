@@ -10,10 +10,11 @@ import 'package:goal_hint/config/app_config.dart';
 import 'package:goal_hint/web/navigation_policy.dart';
 import 'package:goal_hint/web/system_web_view.dart';
 import 'package:goal_hint/web/web_app_shell.dart';
-import 'package:goal_hint/web/web_view_adapter.dart';
 import 'package:goal_hint/web/web_view_factory.dart';
 import 'package:goal_hint/web/windows_web_view.dart';
 import 'package:integration_test/integration_test.dart';
+
+import 'support/native_page.dart';
 
 /// Run only against tool/serve_web_fixture.py, never a real account environment.
 /// The first phase leaves a synthetic session; `reopen` checks it in a new process.
@@ -338,81 +339,8 @@ void main() {
   );
 }
 
-class _Page {
-  _Page(this.tester, this.adapter);
-
-  final WidgetTester tester;
-  final WebViewAdapter adapter;
-
-  Future<Object?> execute(String source) => switch (adapter) {
-    SystemWebViewAdapter system =>
-      system.controller!.runJavaScriptReturningResult(source),
-    WindowsWebViewAdapter windows => windows.controller!.evaluateJavascript(
-      source: source,
-    ),
-    _ => throw UnsupportedError(
-      'Run native acceptance on an implemented platform.',
-    ),
-  };
-
-  Future<dynamic> read(String expression) async {
-    dynamic value = await execute('JSON.stringify({ value: ($expression) })');
-    for (var i = 0; i < 2 && value is String; i++) {
-      try {
-        value = jsonDecode(value);
-      } on FormatException {
-        break;
-      }
-    }
-    return (value as Map)['value'];
-  }
-
-  Future<void> until(String expression) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 40));
-    while (DateTime.now().isBefore(deadline)) {
-      try {
-        if (await read(expression) == true) return;
-      } catch (_) {
-        // A full-document navigation briefly replaces its JavaScript context.
-      }
-      await tester.pump(const Duration(milliseconds: 200));
-    }
-    fail(
-      'Embedded page did not satisfy: $expression; '
-      'adapter error: ${adapter.error}; ${await publicLocation()}',
-    );
-  }
-
-  Future<String> publicLocation() async {
-    try {
-      final location = await read(
-        '({ href: location.href, historyLength: history.length, historyKeys: Object.keys(history.state ?? {}) })',
-      ).timeout(const Duration(seconds: 3));
-      return '$location; ready: ${adapter.ready}; loading: ${adapter.loading}; canGoBack: ${adapter.canGoBack}';
-    } catch (_) {
-      return 'Document location unavailable; ready: ${adapter.ready}; loading: ${adapter.loading}; canGoBack: ${adapter.canGoBack}';
-    }
-  }
-
-  Future<void> untilAdapter(bool Function() ready) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 15));
-    while (!ready() && DateTime.now().isBefore(deadline)) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    if (!ready()) {
-      fail('Native adapter did not become ready: ${await publicLocation()}');
-    }
-  }
-
-  Future<void> nativeBack() async {
-    if (Platform.isAndroid) {
-      // Commit the latest canGoBack notification into PopScope before Back.
-      await tester.pump();
-      await tester.binding.handlePopRoute();
-    } else {
-      await adapter.goBack();
-    }
-  }
+class _Page extends NativePage {
+  _Page(super.tester, super.adapter);
 
   Future<void> tap(String selector) async {
     await _interactive();
@@ -480,7 +408,7 @@ class _Page {
   }
 
   Future<void> _interactive() async {
-    await _documentReady();
+    await documentReady();
     const phase = String.fromEnvironment(
       'SHELL_CHECK_PHASE',
       defaultValue: 'first',
@@ -492,13 +420,8 @@ class _Page {
     }
   }
 
-  Future<void> _documentReady() async {
-    await until('document.readyState === "complete"');
-    await untilAdapter(() => !adapter.loading);
-  }
-
   Future<Map> request(String path, {Map<String, String>? body}) async {
-    await _documentReady();
+    await documentReady();
     await execute('''
       window.__shellAcceptanceResponse = null;
       fetch(${jsonEncode(path)}, {

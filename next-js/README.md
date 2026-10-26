@@ -84,7 +84,7 @@ debounces saves; generated output and dependency directories are excluded.
 | `npm run typecheck` | Generate route types, then check strict TypeScript. |
 | `npm test` | Check module boundaries, runtime validation and operation gates. |
 | `npm run policy:check` | Validate server configuration from the process and optional `.env.local`. |
-| `npm run build` | Compile and prerender the production application. |
+| `npm run build` | Compile/prerender production and generate the pinned anonymous offline bundle manifest. |
 | `npm start` | Serve the completed production build. |
 | `npm run check` | Generate and validate Prisma, then run lint, type-check, Node/Python tests and production build. |
 | `npm run db:generate` / `npm run db:validate` | Generate the guarded Prisma client and validate the MySQL schema without a database. |

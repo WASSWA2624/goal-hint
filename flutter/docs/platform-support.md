@@ -1,6 +1,6 @@
 # Flutter shell platform support
 
-Evidence checked **26 October 2026 (Africa/Kampala)** for [foundation plan 001](../dev-plan/001-foundation-and-platform-support.md). The candidate tables below preserve that foundation decision record. A generated runner, a documented engine feature, and a tested WebView are different levels of evidence. Plan 003 now implements browser adapters; see [the current integration guide](web-app-integration.md) and [execution tracker](../dev-tracker.md) for their actual checks. No offline cache is implemented by browser embedding.
+Evidence checked **26 October 2026 (Africa/Kampala)** for [foundation plan 001](../dev-plan/001-foundation-and-platform-support.md). The candidate tables below preserve that foundation decision record. A generated runner, a documented engine feature, and a tested WebView are different levels of evidence. Plan 003 implements browser adapters; plan 004 adds the [shared web-owned offline cache](offline-startup.md). See [the integration guide](web-app-integration.md) and [execution tracker](../dev-tracker.md) for actual installed checks. Persistent browser storage alone does not establish offline support.
 
 ## Toolchain baseline and evidence labels
 
@@ -16,12 +16,13 @@ The current online Flutter platform reference describes **Flutter 3.47**, which 
 ## Current app qualification — 26 October 2026
 
 These installed-app results supersede the foundation's prototype-only status
-where stated. They do not qualify the later offline/cache requirements.
+where stated. They record the online integration baseline; the tracker separately
+records plan 004's worker, cache and cold-process evidence.
 
 | Target | Observed app evidence | Remaining qualification |
 | --- | --- | --- |
 | Windows x64 | WebView2 **155.0.4283.62**. Full synthetic navigation/forms/account HTTP lifecycle, role/expiry/logout checks, separate cold-process session reopen, invalid-TLS Retry, and the complete live-app/native-focus/back/200% text phase passed with clean exits. Shared app/Goal Hint title visually confirmed in dark theme; current normal Release build and icon verified. | Actual keyboard/window/handler checks, distribution/signing and complete appearance lifecycle remain open. |
-| Physical Android | TECNO CL8, API 35, System WebView **155.0.8059.43**. Full synthetic first/reopen passed over TLS wireless ADB after ordinary-store suspend flush, without changing server cookies. Live Next.js rendered over LAN port 3000; Chrome handoff/Back preserved the document. White OS/Flutter loading transition and native 40px bottom-inset correction verified. | Manual picker/keyboard and complete appearance checks remain open. Fixture port 3187 used an owned temporary reverse mapping; normal LAN content needs no USB cable. Final Android Release refresh remains pending. |
+| Physical Android | TECNO CL8, API 35, System WebView **155.0.8059.43**. Full synthetic first/reopen passed over TLS wireless ADB after ordinary-store suspend flush, without changing server cookies. Live Next.js rendered over LAN port 3000; Chrome handoff/Back preserved the document. White OS/Flutter loading transition and native 40px bottom-inset correction verified. Current Release build/compiled policy and identity audit passed. | Manual picker/keyboard and complete appearance checks remain open. Fixture port 3187's owned mapping was removed; normal LAN content needs no USB cable. Release is a locally signed validation artifact, uninstalled and not store-qualified. |
 | iOS/macOS | Official WK adapter, persistent-store defaults, network policy and shared-brand asset/metadata implementation present. | No macOS/Xcode host or Apple device execution; installed sessions, file input, local-network privacy, appearance and system bars remain untested. |
 | Linux | Flutter runner, icon and desktop metadata present. | No qualified embedded adapter; Linux/WSL host unavailable. CEF/WebKitGTK prototype still required. The explicit unavailable-browser screen does not satisfy embedding. |
 
@@ -29,6 +30,36 @@ The account-change services are scripted fixture boundaries, not a real
 account backend. No native auth/payment logic, credential preferences or broad
 JavaScript bridge is added. See [the tracker](../dev-tracker.md) for exact checks,
 known failed attempts and current pending results.
+
+## 004 offline startup qualification
+
+The [web-owned cache](offline-startup.md) uses normal persistent browser
+CacheStorage. No native content cache, local asset server or production adapter
+change was required. The following evidence is distinct from online rendering
+and cookie persistence:
+
+| Target | Actual offline result | Remaining boundary |
+| --- | --- | --- |
+| Windows x64 / WebView2 155.0.4283.62 | Passed real connected preparation, full host/browser termination, separate-process saved rendering with the app server stopped, uncached navigation, deliberately corrupt integrity records, recovery and scoped eviction. Final current clock-tolerant web source also passed warm/cold/evicted phases. | Wi-Fi stayed enabled; this is an app-origin outage rather than airplane-mode testing. Foreground/reconnection and release acceptance continue in 005/007. |
+| Android API35 / WebView 155.0.8059.43 | First-ever offline native Retry passed. Secure-context/API and activated worker registration were observed over paired wireless ADB loopback. Preparation exposed a small server/device clock skew and rejected the snapshot. | The shared worker/view now have bounded five-minute comparison tolerance, but the owner stopped further Android checks before final prepared-cache/cold-restart verification. No success is inferred from browser/Windows results. |
+| iOS/macOS WKWebView | Existing persistent-store adapter and web contract are present. | No native execution; iOS owned-domain service-worker configuration and coupled minimum-version/navigation effects remain an unqualified prototype. Do not assume Safari behavior. |
+| Linux | No qualified embedded browser. | No offline startup capability claimed. |
+
+Chrome 156 separately passed full browser-process restart, private identity
+A/B/logout exclusions, missing/corrupt assets, eviction, quota failure, and a
+real compatible-version upgrade. Those results qualify shared web behavior,
+not another native engine. Exact logs and the owner's Android limitation are
+recorded in [the tracker](../dev-tracker.md).
+
+Service workers require a [secure context](https://www.w3.org/TR/secure-contexts/#is-origin-trustworthy).
+Production HTTPS and recognized loopback are suitable candidates; normal LAN
+HTTP and Android's emulator host alias do not become secure merely because they
+reach the development computer. `next dev` also skips preparation to preserve
+its changing HMR assets. Native acceptance used a production-like fixture and
+an owned Android reverse mapping, retaining the original origin/profile. No
+certificate or insecure-origin flag was introduced. Only anonymous permitted
+content is saved; native credentials, account grants and private responses do
+not enter this store.
 
 ## Native build and runtime matrix
 
@@ -63,19 +94,19 @@ Context7 was used to locate official Flutter/plugin material, then published pac
 
 This table records **candidate engine capabilities**, not blanket app acceptance.
 Windows and Android navigation/session/profile behavior now has installed
-evidence above. Worker registration, local delivery and
-offline cold starts remain unverified on every target. “Documented” is not a
-guarantee of cache retention after the OS clears storage.
+evidence above. Plan 004's actual worker/cold-start checks are recorded in
+[the tracker](../dev-tracker.md), separately from this foundation candidate table.
+“Documented” is not a guarantee of cache retention after the OS clears storage.
 
 | Target/engine | Navigation and cookies | Persistent profile | Local asset delivery | Service workers |
 | --- | --- | --- | --- | --- |
 | Android WebView | Official plugin documents navigation delegates and [`WebViewCookieManager`](https://pub.dev/documentation/webview_flutter/latest/webview_flutter/WebViewCookieManager-class.html). Native [`CookieManager.flush`](https://developer.android.com/reference/android/webkit/CookieManager#flush()) writes cookies to disk. Verify web sign-in/sign-out and redirects without copying credentials into Dart. | Native cookie persistence is documented; DOM storage/CacheStorage and complete cold-start behavior require the chosen provider/profile tests. | Official [`loadFlutterAsset`](https://pub.dev/documentation/webview_flutter/latest/webview_flutter/WebViewController/loadFlutterAsset.html) loads declared assets. Android's [`WebViewAssetLoader`](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content) serves content under an HTTPS-style origin; whether its necessary hooks are exposed by the chosen Flutter adapter is a separate check. | Native [`ServiceWorkerController`](https://developer.android.com/reference/android/webkit/ServiceWorkerController) exists from API 24; InAppWebView documents [runtime feature checks](https://inappwebview.dev/docs/service-worker/). Test registration, secure origin, worker interception and persistence on actual WebView versions. |
-| iOS WKWebView | Official plugin delegates/cookie APIs; app-bound-domain configuration can constrain navigation and native cookie/script APIs. | Apple's [`WKWebsiteDataStore.default`](https://developer.apple.com/documentation/webkit/wkwebsitedatastore/default()) is persistent; nonpersistent stores are not. Confirm the plugin's actual store and cleanup behavior. | Native [file loading](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebView.h) grants bounded directory access; plugin asset loading is documented. File or custom-scheme loading is not proof of the web app's HTTPS origin or service-worker eligibility. | **Conditional**, not assumed. WebKit's [current WKWebView implementation](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm) gates iOS service workers on browser/worker entitlement or app-bound navigation. App-bound domains are the relevant candidate for this owned-site shell, not a claim that it qualifies as a browser. |
+| iOS WKWebView | Official plugin delegates/cookie APIs; app-bound-domain configuration can constrain navigation and native cookie/script APIs. | Apple's [`WKWebsiteDataStore.default`](https://developer.apple.com/documentation/webkit/wkwebsitedatastore/default()) is persistent; nonpersistent stores are not. Confirm the plugin's actual store and cleanup behavior. | Native [file loading](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKWebView.h) grants bounded directory access; plugin asset loading is documented. File or custom-scheme loading is not proof of the web app's HTTPS origin or service-worker eligibility. | **Conditional**, not assumed. WebKit records [service-worker enablement for app-bound domains](https://bugs.webkit.org/show_bug.cgi?id=210451). The owned-domain configuration and actual selected OS/plugin must be prototyped; ordinary WKWebView or Safari support alone does not qualify this shell. No browser entitlement is requested. |
 | macOS WKWebView | Same preferred Flutter plugin surface; confirm redirects, external links and session behavior on macOS separately. | Persistent WKWebsiteDataStore is documented; a matching normal store must survive a process restart. | Same native file/asset primitives; macOS app sandbox/network permissions also apply. | Not validated here. The cited WebKit restriction is explicitly iOS-family code; do not turn it into a blanket macOS prohibition or infer app support from Safari. Verify the selected macOS engine, origin, worker and storage behavior. |
 | Windows WebView2 | InAppWebView documents [navigation](https://inappwebview.dev/docs/webview/in-app-webview/) and [cookie management](https://inappwebview.dev/docs/cookie-manager/). Confirm that each required callback is implemented on the selected Windows version. | [`userDataFolder`](https://pub.dev/documentation/flutter_inappwebview/latest/flutter_inappwebview/WebViewEnvironmentSettings/userDataFolder.html) is exposed. Microsoft documents cookies, DOM storage, CacheStorage and resources in the [user-data folder](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder); use an app-owned writable profile, not an assumed writable executable directory. | Microsoft documents [virtual-host folder mapping and resource interception](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/working-with-local-content). Confirm the selected Flutter adapter exposes what the cache contract needs. | Native [virtual-host mapping documentation](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2_3) explicitly covers worker/service-worker resource resolution and consistent mappings. The app's selected runtime/profile/origin still needs an offline restart prototype. |
 | Linux candidate | CEF's candidate controller documents [navigation](https://pub.dev/documentation/webview_cef/latest/webview_cef/WebViewController-class.html); its package advertises cookie management. WebKitGTK has native [cookie](https://webkitgtk.org/reference/webkit2gtk/stable/class.CookieManager.html) APIs. Neither proves the required Flutter adapter behavior. | WebKitGTK documents persistent directory configuration versus an [ephemeral data manager](https://webkitgtk.org/reference/webkit2gtk/stable/class.WebsiteDataManager.html). CEF candidate profile selection, cookie flushing and durable browser-store reuse must be inspected/prototyped. | Native WebKitGTK/CEF primitives need a verified adapter and stable origin. No local-delivery solution is selected or implemented. | **Unverified integration gap.** A Chromium/WebKit engine name does not prove that the candidate exposes a persistent, correctly scoped service-worker environment. Test on the chosen distro, engine and display server before relying on it. |
 
-For iOS, WebKit documents [app-bound domains](https://webkit.org/blog/10882/app-bound-domains/) and the [service-worker change](https://bugs.webkit.org/show_bug.cgi?id=210451). The official WKWebView adapter exposes [`limitsNavigationsToAppBoundDomains`](https://pub.dev/documentation/webview_flutter_wkwebview/latest/webview_flutter_wkwebview/WebKitWebViewControllerCreationParams-class.html), but the matching domain declaration and all external-navigation effects must be tested in later plans. This audit configures none of them.
+For iOS, WebKit documents [app-bound domains](https://webkit.org/blog/10882/app-bound-domains/) and the [service-worker change](https://bugs.webkit.org/show_bug.cgi?id=210451). The pinned WKWebView 3.26.2 source exposes [`limitsNavigationsToAppBoundDomains`](https://pub.dev/documentation/webview_flutter_wkwebview/latest/webview_flutter_wkwebview/WebKitWebViewControllerCreationParams-class.html), whose native setter requires iOS 14/macOS 11. The current runner settings still declare iOS 13/macOS 10.15. Matching domain declarations, minimum versions, injection/cookie restrictions and external navigation need a native prototype together; enabling one flag speculatively can break the existing host. These settings remain unchanged and Apple offline startup remains unqualified.
 
 ## Integration strategy for plan 003
 
@@ -91,4 +122,4 @@ Plan 001 added no candidate dependency. Plan 003 pins the official system plugin
 
 For each chosen engine, record its exact version, OS/architecture, selected plugin/lockfile and origin. Then demonstrate navigation and web sign-in/logout; cookie/profile persistence across full process termination; service-worker registration or the documented minimal adapter alternative; permitted local asset delivery; and eventual online → terminate → offline cold start → reachable-server update. Include first-use offline, eviction/corruption, failed update, expired/revoked access and untrusted external navigation. Separate local file origins, development LAN origins and the hosted HTTPS origin instead of assuming shared cookies/storage.
 
-Persistent browser storage alone does not implement offline startup. Do not cache private/no-store pages, subscriber responses, credentials or payment evidence, relax the web authorization rules, or queue account/financial writes to make a prototype pass. Retain the last validated public cache if an update fails, and preserve active input when applying a new version. These are later acceptance requirements; none is claimed complete by the foundation scaffold.
+Persistent browser storage alone does not implement offline startup. Do not cache private/no-store pages, subscriber responses, credentials or payment evidence, relax the web authorization rules, or queue account/financial writes to make a prototype pass. The shared web contract now stages an approved anonymous bundle, retains the previous valid version on failure and preserves active documents. Plan 004's installed evidence and plan 005's remaining platform update checks stay explicit; the original foundation scaffold did not qualify them.

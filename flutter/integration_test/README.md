@@ -78,3 +78,69 @@ changes only the document's root font size; it is not a system accessibility
 setting test. Actual keyboard interaction, native window resizing, system
 external-app launch, and unavailable platform execution need separate recorded
 checks. These tests make no offline-startup claim.
+
+## Durable offline startup
+
+`offline_startup_test.dart` uses the actual shared web worker, offline UI and
+assets from an isolated production-like Next.js build. Its anonymous snapshot
+and root marker are synthetic. It performs no account/payment writes or private
+database reads. From the repository root, build the owned fixture first:
+
+```sh
+python next-js/scripts/serve-offline-fixture.py --build-only
+```
+
+The helper reports an ignored `next-js/.tmp/offline-*` directory. Keep its
+server stopped for the first-ever offline phase, before that origin has acquired
+a cache. From `flutter/`:
+
+```sh
+flutter test integration_test/offline_startup_test.dart -d windows --no-uninstall --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://127.0.0.1:3189 --dart-define=OFFLINE_CHECK_PHASE=first
+```
+
+From the repository root, start the fixture in a separate terminal, substituting
+its reported directory:
+
+```sh
+python next-js/scripts/serve-offline-fixture.py --reuse <fixture-directory> --port 3189
+```
+
+Run the same Flutter command with `OFFLINE_CHECK_PHASE=online`. It requires a
+secure context, an active controlling worker, the committed web-cache marker,
+and an actual dated anonymous offline document. Then stop the owned server with
+Ctrl+C and run `OFFLINE_CHECK_PHASE=offline` as a separate app process at the
+same origin. This verifies durable rendering while no app-server request can
+succeed; Wi-Fi itself stays available for wireless device control.
+
+With that server still stopped, run `OFFLINE_CHECK_PHASE=uncached` to verify an
+unknown route shows recovery feedback. `OFFLINE_CHECK_PHASE=corrupt` invalidates
+only the worker-created integrity record in retained app bundles and requires
+recovery instead of a saved view. To test eviction afterward, restart the server
+and run `online` again, then stop the server and run
+`OFFLINE_CHECK_PHASE=evicted`. That phase deletes only this origin's
+`goal-hint-offline-*` caches and verifies a missing copy produces honest recovery
+feedback. It retains cookies, other storage, unrelated caches and the browser
+profile. A first-ever repeat needs a previously unused fixture origin; retaining
+a registered worker is not the same condition.
+
+For physical Android, pair wireless ADB as described in
+[development URLs](../docs/development-urls.md#android-wireless-development),
+create an owned `adb -s <wireless-device-id> reverse tcp:3189 tcp:3189` mapping,
+and replace `windows` with the exact wireless device ID. Keep the phone unlocked
+and awake while the native test runs. Keep the loopback
+`DEV_APP_ORIGIN`: ordinary LAN HTTP and the Android emulator host alias are not
+service-worker secure origins. Trusted development HTTPS is an alternative.
+No certificate bypass or insecure-origin flag belongs in this acceptance path.
+Remove only the owned mapping when finished and restore the normal app entry
+point/development origin after test installation.
+
+The harness inspects real CacheStorage response policies/URLs and verifies no
+offline POST/password form. Shared web tests separately qualify schema,
+corruption, staging/update recovery and private-data exclusions. Runtime
+results and unavailable platforms remain recorded in
+[the tracker](../dev-tracker.md); this harness does not infer Apple/Linux support.
+
+With the owned fixture online, `OFFLINE_CHECK_PHASE=diagnostic` reports only
+worker registration state and the public preparation version/error reply. It
+does not print cached content, cookies or credentials. This distinguishes an
+engine/origin registration failure from a rejected cache contract on a device.

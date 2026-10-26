@@ -143,9 +143,11 @@ cookie behavior; they do not qualify real message delivery or production account
 changes. Additional manual keyboard/accessibility and Apple/Linux checks remain
 platform acceptance work where those hosts/devices are unavailable.
 
-Persistent browser storage is useful groundwork for [004](../dev-plan/004-persistent-offline-startup.md).
-It does not implement offline startup, an eligible public cache, or safe updates.
-Those still require [the shared Next.js cache contract](../../next-js/dev-plan/069-offline-shell-support.md).
+Persistent browser storage alone is groundwork for [004](../dev-plan/004-persistent-offline-startup.md).
+The [shared Next.js implementation](../../next-js/docs/offline-startup.md) now
+adds the explicitly permitted anonymous entry/assets/data cache. See
+[offline setup and qualification](offline-startup.md); ordinary cookies and
+private pages are separate from that store.
 
 Primary references: [official WebView package](https://pub.dev/packages/webview_flutter/versions/4.14.1),
 [WKWebView adapter](https://pub.dev/packages/webview_flutter_wkwebview/versions/3.26.2),

@@ -30,6 +30,13 @@ const nextConfig: NextConfig = {
       ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"]] as const;
     // The global rule stays first and the private rules last: when a key repeats, the last matching rule wins.
     return [{ source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] },
+      { source: "/offline", headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        { key: "X-GoalHint-Offline-Entry", value: "1" }, { key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+      { source: "/offline-manifest.json", headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        { key: "X-GoalHint-Offline-Manifest", value: "1" }] },
+      { source: "/offline-worker.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'; connect-src 'self'" }] },
       ...publicCache.map(([source, value]) => ({ source, headers: [{ key: "Cache-Control", value }] })),
       ...privateSources.map((source) => ({ source, headers: privateHeaders }))];
   },

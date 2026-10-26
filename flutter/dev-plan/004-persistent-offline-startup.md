@@ -1,6 +1,6 @@
 # 004 - Persistent offline startup
 
-**State: Not started.** Prerequisites: [003](003-web-app-integration.md), verified platform persistence support from [001](001-foundation-and-platform-support.md), and the agreed shared cache contract in [web 069](../../next-js/dev-plan/069-offline-shell-support.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
+**State: Partial — shared cache and Windows cold-start/recovery verified; final Android cold-start verification was stopped at the owner's request. Apple/Linux qualification remains open.** Prerequisites: [003](003-web-app-integration.md), verified platform persistence support from [001](001-foundation-and-platform-support.md), and the agreed shared cache contract in [web 069](../../next-js/dev-plan/069-offline-shell-support.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
 
 ## Outcome
 
@@ -20,3 +20,34 @@ After a successful online visit, an installed app can cold-start without interne
 - Successfully load online, terminate the process, disable networking, and reopen the installed app. Verify real cached rendering and content on each supported target, including a cached route and an uncached route.
 - Check first-launch offline, missing/corrupt cache, logout then offline restart, and switching accounts where applicable. Verify private response policies remain intact.
 - Record shared-web files, cache contents, retention/cleanup behavior, tests, and unsupported capabilities in [the tracker](../dev-tracker.md). Link actual shared-web results from [web 069](../../next-js/dev-plan/069-offline-shell-support.md), then hand off the cache contract to [005](005-reconnection-and-cache-updates.md).
+
+## Implementation handoff
+
+The [shared cache contract](../../next-js/docs/offline-startup.md) defines a
+viewer-independent `/offline` entry, pinned compatible assets, and an explicit
+anonymous public match projection. Normal HTML/RSC, private APIs, predictions,
+credentials and remote imagery never enter this store. The existing native
+profiles supply durable CacheStorage; no native content database or JavaScript
+bridge was added. See [native setup and limits](../docs/offline-startup.md) and
+[the tracker](../dev-tracker.md) for actual browser/device checks.
+
+Production HTTPS or a production-like localhost build is required. Normal
+`next dev`/LAN HTTP remains online development; it does not prepare an offline
+bundle. Apple service-worker qualification and Linux embedding remain open.
+
+The native [acceptance harness](../integration_test/README.md#durable-offline-startup)
+uses the existing persistent browser profiles and separate application processes.
+Windows demonstrated saved rendering with its fixture server stopped, plus
+uncached-route, corrupted-cache and eviction recovery. Wi-Fi remained available;
+this was an app-origin outage, not an airplane-mode test. Android demonstrated
+first-use offline Retry and service-worker registration, then rejected a snapshot
+because strict server/device timestamp comparison exposed a small clock skew.
+The shared web validator/view now allow a bounded five-minute comparison
+tolerance without changing device clocks, server expiry or authorization rules.
+The owner declined further Android checks, so the final fix and Android offline
+cold restart remain unverified. Browser/Windows results do not close that gap.
+
+No Flutter production adapter, native content database or new permission was
+needed. Remaining native reconnect/update, foreground and release qualification
+continues in [005](005-reconnection-and-cache-updates.md) and
+[007](007-platform-builds-and-release.md).

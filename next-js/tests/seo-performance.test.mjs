@@ -12,15 +12,27 @@ const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin
 
 test("flags and brand files are browser-cached while the private rules stay last and unchanged", async () => {
   const rules = await nextConfig.headers();
-  assert.deepEqual(rules.slice(0, 3), [
+  assert.deepEqual(rules.filter(({ source }) => ["/:path*", "/flags/:file*", "/brand/:file*"].includes(source)), [
     { source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] },
     { source: "/flags/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=2592000, stale-while-revalidate=86400" }] },
     { source: "/brand/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
   ]);
-  assert.deepEqual(rules.slice(3).map((rule) => rule.source), privateSources, "The private rules come last, so a repeated key still resolves to theirs.");
+  const privateRules = rules.slice(-privateSources.length);
+  assert.deepEqual(privateRules.map((rule) => rule.source), privateSources, "The private rules come last, so a repeated key still resolves to theirs.");
   const expected = Object.fromEntries(Object.entries(privateHeaders).filter(([key]) => key !== "X-Content-Type-Options"));
-  for (const rule of rules.slice(3)) assert.deepEqual(Object.fromEntries(rule.headers.map(({ key, value }) => [key, value])), expected, rule.source);
+  for (const rule of privateRules) assert.deepEqual(Object.fromEntries(rule.headers.map(({ key, value }) => [key, value])), expected, rule.source);
   for (const dir of ["flags", "brand"]) assert.ok(readdirSync(join(root, "public", dir)).length > 0, `public/${dir} exists`);
+});
+
+test("only the reviewed offline entry and manifest opt into public caching; the worker always revalidates", async () => {
+  const rules = await nextConfig.headers();
+  for (const [source, marker] of [["/offline", "X-GoalHint-Offline-Entry"], ["/offline-manifest.json", "X-GoalHint-Offline-Manifest"]]) {
+    const headers = Object.fromEntries(rules.find((rule) => rule.source === source).headers.map(({ key, value }) => [key, value]));
+    assert.equal(headers[marker], "1");
+    assert.equal(headers["Cache-Control"], "public, max-age=0, must-revalidate");
+  }
+  const worker = rules.find(({ source }) => source === "/offline-worker.js");
+  assert.equal(worker.headers.find(({ key }) => key === "Cache-Control").value, "no-cache, no-store, must-revalidate");
 });
 
 // Static import graph: relative and `@/` imports are followed; type-only imports are erased by the compiler and skipped.

@@ -6,13 +6,13 @@
 
 **Source:** [App specification](../../app-write-up.md), [Flutter shell requirements](../../prompts/flutter-app-shell.md), and the coordinated [Flutter offline-startup plan](../../flutter/dev-plan/004-persistent-offline-startup.md).
 
-**Status:** Not started. This file plans implementation; it does not enable offline support.
+**Status:** Partial. The anonymous entry, bounded projection, pinned bundle and staged worker cache are implemented. Production-like browser cold startup, privacy boundaries and storage recovery have passed. Installed-target and remaining lifecycle/update acceptance are coordinated with Flutter 004–005; Apple/Linux qualification remains open. See [the contract](../docs/offline-startup.md) and [recorded progress](../docs/development-progress.md#069--anonymous-offline-startup-26-october-2026).
 
 **Coordination:** Deliver and verify the shared web cache contract before Flutter plan 004 consumes it. Use the platform audit and integration baseline from [Flutter 001](../../flutter/dev-plan/001-foundation-and-platform-support.md) and [003](../../flutter/dev-plan/003-web-app-integration.md) where available. Completion of Flutter 004 is not a dependency of this web task. Installed-app persistence, reconnect, and release verification remain with Flutter [004](../../flutter/dev-plan/004-persistent-offline-startup.md), [005](../../flutter/dev-plan/005-reconnection-and-cache-updates.md), and [007](../../flutter/dev-plan/007-platform-builds-and-release.md).
 
 ## Inspect before implementation
 
-Read the current code and applicable repository instructions. At planning time, `src/` and `public/` contain no service-worker registration, CacheStorage implementation, or Workbox setup. `src/components/match/use-live-refresh.ts` listens for online/offline events, while Redux keeps transient projections. These do not provide durable offline cold startup.
+Read the current code and applicable repository instructions. Before this implementation, `src/` and `public/` contained no service-worker registration or CacheStorage implementation. The new dedicated worker and anonymous contract are documented below; the existing live-refresh loop and Redux projection remain separate transient mechanisms.
 
 Inspect `src/app/layout.tsx`, `src/state/`, `src/domain/private-paths.ts`, `src/server/http/private-http.ts`, `src/server/matches/public-http.ts`, `src/server/members/gated-reads.ts`, and `next.config.ts`. Existing match APIs use `private, no-store` and vary by cookie; private account, payment, owner, and analytics paths also prohibit caching. Server-side response caching is separate from a permitted durable client cache.
 
@@ -45,3 +45,25 @@ Implement the shared web portion of offline startup in `next-js/`, coordinating 
 ## Handoff
 
 Update [dev-tracker.md](../dev-tracker.md) and `docs/development-progress.md` with the implemented contract, actual checks, platform evidence, and remaining limitations. Keep this row Not started until code work begins, Partial while required work/checks remain, and Completed only when its acceptance checks pass. Coordinate shared-contract changes with Flutter plan 004; do not mark its native verification complete from this web task.
+
+## Implementation handoff — 26 October 2026
+
+The [shared contract](../docs/offline-startup.md) defines the dedicated static
+entry, strict anonymous projection, secure-origin requirement, complete hashed
+bundle, staged activation, lifetime/bounds and excluded data/actions. Browser
+close/reopen offline, synthetic identity/private-response exclusion, uncached
+routes, rejected writes, missing/corrupt assets, eviction and quota-denial
+recovery passed against a production-like fixture. A real old-to-new manifest
+upgrade preserved the active document/input. Detailed evidence is recorded in
+[development progress](../docs/development-progress.md#069--anonymous-offline-startup-26-october-2026).
+
+The permitted saved route is `/en/matches` without query; root and `/en` fall back
+to clearly labelled Saved matches, not subscriber Best Slips. At most 30 basic
+fixtures are displayable for 24 hours. Normal HTML/RSC, protected predictions,
+remote media, identity, credentials and private/no-store responses are excluded.
+No offline writes are queued. Flutter uses its existing persistent browser
+profile; there is no second native content implementation.
+
+Overall status remains Partial. Installed-target evidence belongs in Flutter
+004; Apple/Linux and remaining native reachability/lifecycle/update checks stay
+explicit in 005/007. Browser success does not qualify an unavailable WebView.

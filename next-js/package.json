@@ -10,7 +10,7 @@
   "packageManager": "npm@11.16.0",
   "scripts": {
     "dev": "nodemon",
-    "build": "next build",
+    "build": "next build && node scripts/build-offline-manifest.mjs",
     "start": "next start",
     "package:cpanel": "python scripts/package-cpanel.py",
     "lint": "eslint . --max-warnings=0",

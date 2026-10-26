@@ -13,8 +13,9 @@ Follow [the local development plan](dev-plan/000-index.md) and
 [execution tracker](dev-tracker.md). Central URL configuration from step 002 is
 implemented. Step 003 adds native WebView integration; consult the tracker for
 the targets and account behaviors actually verified.
-Persistent offline startup and safe updates are 004–005,
-native appearance is 006, and release packaging is 007. Goal Hint display names,
+Step 004 adds a bounded anonymous offline view through the shared web cache;
+see [offline setup and limits](docs/offline-startup.md). Safe reconnection
+acceptance is 005, native appearance is 006, and release packaging is 007. Goal Hint display names,
 shared-primary-mark launcher artwork, and white launch/loading surfaces are
 implemented; see [native identity](docs/app-identity.md). Appearance qualification
 remains partial in 006: Android's white OS/Flutter loading transition is visually
@@ -149,7 +150,9 @@ adapter uses WebView2 with an app-owned persistent profile. Windows build hosts
 need NuGet on PATH; installed machines need WebView2 Runtime. Apple execution
 still requires its native host. Linux needs a real engine prototype before its
 runner can qualify as an embedded shell. Browser storage does not by itself
-supply cross-platform offline startup.
+supply cross-platform offline startup. The implemented
+[shared offline cache](docs/offline-startup.md) has separate secure-origin and
+platform acceptance requirements.
 
 Shared cache eligibility and updates belong in
 [Next.js plan 069](../next-js/dev-plan/069-offline-shell-support.md), with minimal

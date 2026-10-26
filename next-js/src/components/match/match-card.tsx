@@ -46,6 +46,8 @@ export type MatchCardProps = {
   position?: number;
   /** Appended to the card's accessible title, such as "similar result" for an approximate search match. */
   titleNote?: string | undefined;
+  /** Anonymous saved fixtures: no live claim, predictions, media requests, or detail action. */
+  offline?: boolean;
 };
 
 type TeamResult = "win" | "loss" | null;
@@ -841,7 +843,7 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
 }
 
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
-  headingLevel = 2, eagerLogos = false, position, titleNote, startingPriceUgx }: MatchCardProps) {
+  headingLevel = 2, eagerLogos = false, position, titleNote, startingPriceUgx, offline = false }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -880,7 +882,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
   // A live score bolds the side currently ahead.
   const liveLead = showScore && fixture.status === "live" ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
-  const clock = fixture.status === "live" ? liveClockLabel(fixture, messages) : null;
+  const clock = !offline && fixture.status === "live" ? liveClockLabel(fixture, messages) : null;
   const missing = gated || prediction ? null : noPickReason(fixture);
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
@@ -891,7 +893,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       {position !== undefined && <Index $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
       <League title={country ?? undefined}>
         <CountryDetails data-country aria-hidden="true">
-          <CountryFlag key={`${country}:${flagUrl}`} url={flagUrl} country={country} />
+          {offline ? <FlagFallback><FlagIcon /></FlagFallback> : <CountryFlag key={`${country}:${flagUrl}`} url={flagUrl} country={country} />}
           <CountryName data-country-name title={countryName || undefined}>{countryShortName(country) || "–"}</CountryName>
         </CountryDetails>
         <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}>{competition}</LeagueName>
@@ -912,7 +914,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : family}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
       </MarketName>
-      {gated ? <><GatedPick><SubscriberIcon />
+      {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
+        <PickShort $family={shownFamily} $available={false}><span data-pick-value="">Unavailable offline</span></PickShort>
+        <Odds aria-hidden="true">—</Odds><Probability aria-hidden="true"><Percent>—</Percent></Probability>
+      </PredictionCell> : gated ? <><GatedPick><SubscriberIcon />
         <span data-subscriber-notice data-mobile-only="">{startingPriceUgx
           ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(startingPriceUgx) })
           : messages.text("paywall.unlockPrediction")}</span>
@@ -950,16 +955,16 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </PredictionCell>}
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
-    <Result aria-hidden="true" $outcome={result === "upcoming" ? "pending" : result} data-result-badge={clock ? "live" : result}
+    <Result aria-hidden="true" $outcome={offline ? "unavailable" : result === "upcoming" ? "pending" : result} data-result-badge={offline ? "saved" : clock ? "live" : result}
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
-      {clock ? <><LiveDot /><span data-pick-value="">{clock.visible}</span></> : <>
+      {offline ? <span>Saved</span> : clock ? <><LiveDot /><span data-pick-value="">{clock.visible}</span></> : <>
         {result !== "upcoming" && settledOutcome(result) && resultIcon[result as keyof typeof resultIcon]}
         <span data-pick-value="">{resultLabel}</span>
       </>}
     </Result>
-    <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
+    {!offline && <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
-    </Open>
+    </Open>}
   </Card>;
 }
 

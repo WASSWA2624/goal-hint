@@ -86,6 +86,22 @@ retains its distinct display and cannot establish an authoritative empty result.
 First-load failures and pagination errors keep their separate error/retry behavior.
 Run counts and ordinary successful polls have no live-region announcements.
 
+## Separate offline-cache preparation
+
+[Anonymous offline startup](offline-startup.md) adds a separate service-worker
+bundle, not persistence for RTK Query or the live feed. It stores no forecasts,
+private/no-store responses, account state or queued writes. Preparation runs on
+visible startup and online/visibility hints, at most once per 60 seconds, and
+requires successful bounded same-origin manifest/projection reads. There is no
+additional timer poller or provider request loop.
+
+Complete candidates are validated before activation; failed downloads or storage
+retain a valid previous bundle. Preparation does not replace the current React
+tree or reload forms, navigation, focus or scroll. Later offline startup renders
+the dedicated dated Saved matches view, limited to a 24-hour anonymous snapshot;
+normal online refresh keeps the ordering, authorization and reconciliation rules
+above. The saved view's explicit Try online again action controls a reload.
+
 ## Verification
 
 `npm run test:live-client` covers reversed publications/locks/results/corrections,

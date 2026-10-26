@@ -1,12 +1,12 @@
 # Flutter development tracker
 
-**Current implementation: native web host and central URL configuration.**
+**Current implementation: native web host, central URLs, and shared anonymous offline cache.**
 The project includes five native runners, validated origin selection, native
 network policy, shared loading/retry/history handling, and browser adapters for
 Android, iOS, macOS, and Windows. Goal Hint names, shared launcher artwork, and
 white launch/loading surfaces are implemented; appearance qualification remains
-partial. Linux embedding remains unqualified. Offline behavior and release
-acceptance remain in steps 004–007. Use
+partial. Linux embedding remains unqualified. The shared web cache is implemented;
+platform qualification, reconnection and release acceptance remain tracked below. Use
 [the plan index](dev-plan/000-index.md) for dependencies and the handoff records
 below for actual native execution evidence.
 
@@ -15,7 +15,7 @@ below for actual native execution evidence.
 | [001](dev-plan/001-foundation-and-platform-support.md) | Foundation and platform support | Completed — foundation and available Windows runtime verified |
 | [002](dev-plan/002-environment-urls.md) | Development and production URLs | Completed — centrally configured installed loading verified on Windows and physical Android |
 | [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Partial — available Windows/Android lifecycle and cold reopen passed; manual, Apple and Linux qualification remains |
-| [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Not started |
+| [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Partial — shared cache and Windows cold/recovery checks passed; owner stopped further Android checks, Apple/Linux remain unqualified |
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Not started |
 | [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity and white launch/loading implemented; appearance/runtime qualification remains |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Not started |
@@ -307,3 +307,86 @@ surface while 003 qualification was in progress. **006 remains Partial.**
 Keep remaining splash/loading evidence, platform appearance checks and stable
 store identifiers explicit for [007](dev-plan/007-platform-builds-and-release.md).
 Generated assets alone do not qualify every installed platform.
+
+## 004 Persistent offline startup — 26 October 2026
+
+### Shared contract and native boundary
+
+[Web 069](../next-js/dev-plan/069-offline-shell-support.md) and its
+[cache contract](../next-js/docs/offline-startup.md) own the implementation.
+Flutter continues opening its configured origin in the existing persistent
+system/WebView2 profile. No production Dart adapter, native content database,
+asset server, JavaScript bridge or extra native permission was added. The
+reusable `integration_test/support/native_page.dart` supplies test-only
+controller/DOM access for both native harnesses.
+
+The complete viewer-independent `/offline` entry, compatible hash-pinned assets
+and explicit anonymous snapshot are staged before activation. The snapshot
+holds at most 30 basic fixtures/128 KiB with a maximum 24-hour display lifetime
+and visible saved timestamp; at most two 10 MiB bundles plus small metadata and
+browser overhead remain. Root and `/en` fall back to **Saved matches**, not
+subscriber Best Slips. `/en/matches` without a query is the supported saved feed;
+uncached routes explain the connection requirement. The shared web components
+render real permitted data, rather than a screenshot or native replica.
+
+Predictions, prices, remote media, identity/entitlements, account/payment data,
+passwords, verification codes and credentials are excluded. Existing normal
+HTML/RSC and private/no-store API policies remain intact. No writes are queued
+or replayed. Normal browser cookies stay separate and server authorization
+remains authoritative. This viewer-independent store has no account-specific
+content to disclose after logout or switching users.
+
+Native cache inspection checks same-origin approved entry/asset/snapshot URLs
+and rejects private/no-store network responses. Exact worker-created
+`/offline-cache/active` and `/offline-cache/record` records are internal
+integrity/pointer metadata, not fetched application responses. Corruption tests
+modify only those records; eviction deletes only owned `goal-hint-offline-*`
+caches. Cookies, unrelated stores and the profile are retained.
+
+### Observed qualification
+
+Native runs retained the installed app/profile with `--no-uninstall` and used
+separate application processes. Before Windows cold runs, no owned Goal Hint or
+WebView2 process remained. Its fixture server was stopped so no app-origin
+request could succeed; Wi-Fi stayed available. This is an app-origin outage,
+not an airplane-mode/radio-disable claim. The fixture serves actual built
+Next.js UI, worker and assets with a synthetic anonymous snapshot and no real
+account/payment mutations or private database reads. See
+[reproduction commands](integration_test/README.md#durable-offline-startup).
+
+| Check | Actual result and evidence |
+| --- | --- |
+| Browser | Chrome 156 production-like fixture passed full browser-process cold restart, dated saved rendering, uncached routes, rejected writes, private identity A/B plus logout exclusions, missing required JS, corrupt entry, eviction, one-byte quota failure and recovery. A real old-to-new manifest upgrade preserved the active document/input. Exact browser/source results are linked from [web 069](../next-js/dev-plan/069-offline-shell-support.md) |
+| Current installed engines | WebView2 **155.0.4283.62** re-read through the built loader API; TECNO CL8/API35 Android System WebView **155.0.8059.43** re-read from its provider. `runtime-versions.json` |
+| Windows first-ever offline visit | Passed: real browser initialized without a usable document/server and native Retry appeared. `windows-first-offline.log` |
+| Windows online preparation and separate cold reopen | Passed: active controlling worker, committed bundle, dated saved UI, actual approved CacheStorage content and no offline POST/password form. A new process rendered with its server stopped and native adapter error absent. `windows-online.log`, `windows-offline.log` |
+| Windows uncached/corrupt recovery | Passed with server stopped. Unknown navigation recovered; deliberately corrupting every retained owned bundle integrity record replaced saved rendering with recovery. `windows-uncached.log`, `windows-corrupt.log` |
+| Windows final current clock-tolerant source | Passed connected preparation (108.1s build/8s test), then a separate process first rendered the saved app with its server stopped and scoped cache eviction produced recovery (69.6s build/5s test). `windows-final-online.log`, `windows-final-evicted.log` |
+| Android first-ever offline visit | Passed over paired TLS wireless ADB: real browser initialized with no usable cache/server and native Retry appeared (106.4s build, 10.5s install, 3s test). `android-first-offline.log` |
+| Android preparation diagnostic | Secure-context/API checks passed and registration was activated/controlled the loopback origin. Preparation returned safe `invalid-snapshot` while a server/device comparison showed roughly a one-second difference including second rounding. The shared worker/view now tolerate up to five minutes of comparison skew; no device clock was changed. `android-online-retry.log`, `android-diagnostic.log`, `android-clock-comparison.json` |
+| Android final fixed online/cold/recovery | **Not verified.** The owner requested finishing without further Android checks after the shared clock fix. Registration and first-use Retry are not proof of a prepared bundle or offline cold restart. Earlier secure-lock/VM-service startup failures were test setup issues, separate from the later preparation diagnostic |
+| Android cleanup | Normal `lib/main.dart` Debug APK restored with LAN port3000 and replace-install succeeded. This was cleanup only, without new runtime/device validation. Owned fixture reverse3189/debug forwards removed; wireless pairing retained. No display-timeout, secure-lock or clock setting changed. `android-normal-restore.log`, `android-cleanup.json` |
+| Final Flutter source checks | Passed: `dart analyze lib test integration_test` reported no issues, all 30 unit/widget tests passed, and formatting checked 22 files with zero changes. `flutter-source-checks.log` |
+| Normal Windows cleanup | Normal `lib/main.dart` Debug executable restored at development loopback port3000 after native tests (37.2s build). `windows-normal-restore.log` |
+| Apple and Linux | No Apple host/device execution or qualified Linux embedded engine. WK app-bound-domain/minimum-version behavior still needs a native prototype; runners, package support and browser tests do not prove offline startup |
+
+Native logs and sanitized metadata above remain in ignored
+`.dart_tool/offline-checks/`; pairing codes, device identifiers, profiles,
+executables/APKs and runtime/cache output are not committed. Owned fixture
+servers are stopped for offline phases and cleaned up afterward, preserving
+normal development services.
+
+### Status and handoff
+
+**004 remains Partial.** Windows has installed cold-start/recovery evidence;
+Android's final fixed preparation/cold startup remains unverified because the
+owner stopped further checks. Apple qualification and Linux embedding remain
+open. Shared browser/source checks do not replace those native results.
+
+Normal `next dev` and LAN HTTP remain online/HMR development; use production
+HTTPS or a secure production-like build for offline startup. Keep the same
+origin/profile across preparation and cold runs; do not copy cookies or cache
+files between origins. See [native setup](docs/offline-startup.md) and continue
+remaining lifecycle/reconnection/release checks in
+[005](dev-plan/005-reconnection-and-cache-updates.md) and
+[007](dev-plan/007-platform-builds-and-release.md).

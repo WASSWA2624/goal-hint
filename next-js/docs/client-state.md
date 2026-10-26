@@ -180,6 +180,17 @@ position. Prompt 037 supplies the EAT clock trigger and coordinates URL changes
 through [live client refresh](live-client-refresh.md), with RTK Query limited to
 implemented stored-data feed/detail endpoints and a request-owned API cache.
 
+## Separate durable offline content
+
+[Offline startup](offline-startup.md) uses a separate, strictly anonymous
+CacheStorage contract. It does not serialize Redux, filter drafts, personalized
+bootstrap, forecasts or normal private/no-store responses. Its fixed first page
+contains at most 30 basic fixtures, with no predictions, prices, remote media or
+identities, for at most 24 hours of display. The dedicated saved view validates
+that schema and reuses existing match-card presentation. It is not restored live
+state or evidence of current server authorization. Feed reconciliation, history
+metadata and preference storage retain their existing boundaries.
+
 ## Anonymous preferences and verification
 
 Only `{ version: 1, density: "comfortable" | "compact" }` uses local storage,

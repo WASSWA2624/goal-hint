@@ -4988,3 +4988,115 @@ stage body refused by the receipt reader. Unit suites for fallback resolution/se
 evaluation input/service/report/promotion/archive, runtime policy, live AI/binding, match details, detail records and admin
 routes pass; `npm run test:scripts` 53/53; typecheck and changed-file ESLint pass. Not run here: the full `npm test`, the
 build and rendering verifiers, and the overlay on MariaDB 11.4. Nothing was deployed or applied to a configured database.
+
+## 069 — Anonymous offline startup (26 October 2026)
+
+Implemented the shared contract consumed by Flutter 004. `/offline` is a dedicated
+static Saved matches entry using existing styling, branding, layout and match-card
+presentation. Request-time analytics/member notices/metadata recovery now live
+under normal locale/owner layouts, keeping the offline entry and its parent
+output anonymous. Mobile saved cards explicitly omit online-only navigation and
+actions; the shared header remains visible on phones and desktop.
+
+`src/domain/offline.ts` defines a strict version-1 anonymous projection and safe
+match-card conversion. `/api/offline/snapshot` uses existing gated reads with a
+fixed free, signed-out resolver and fixed first-page query, ignoring cookies and
+request parameters. It deliberately copies only basic fixture/team/competition,
+status, score and source-time fields: at most 30 records, 128 KiB and a 24-hour
+display lifetime. Forecasts, prices, probabilities, remote media, account/access
+state, credentials, run/revision metadata and personal searches are excluded.
+Normal private/no-store response policies remain unchanged.
+
+The post-build manifest pins the static entry, matching reachable JS/CSS/fonts
+and two first-party brand SVGs by bytes and SHA-256. The web service worker stages
+and validates a complete bundle before updating its active pointer, retaining a
+valid old bundle on failure. It caps content at 10 MiB per bundle and two bundles,
+with scoped cleanup and no native content cache. Bounded real server reads on
+startup/online/visible hints prepare updates without a timer poller, writes,
+queues or automatic reload. The active document, input and navigation remain in
+place. [Exact contract, routes, lifecycle and development limits](offline-startup.md).
+
+Production-like browser acceptance used installed Chrome **156.0.8078.48**, the actual Next offline entry/components,
+manifest builder and worker in a separate built fixture on loopback port 3190.
+Its public match and private identity/account responses are explicitly synthetic;
+no database, real account, payment, message or production setting was used.
+
+| Browser check | Observed result |
+| --- | --- |
+| Fresh profile, first-ever offline | Passed: zero registered workers, networking disabled before first navigation, connection failure and no false saved view. `first-offline-result.log` |
+| Durable cold startup | Passed after completely closing/reopening Chrome with the same owned persistent profile; networking was disabled before the first `/en/matches` navigation. Real saved fixture names and dated content rendered without overflow at 390/1440 px. Repeated after the real build update, with mobile branding visible. `cold-result-final.log` |
+| Uncached route and writes | Account deep link showed an honest unavailable state with no account form. Offline POST rejected, background-sync tags were empty and reconnection issued no replay. `cold-result-final.log` |
+| Synthetic identities and private policy | Member A/B personalized HTML, RSC and no-store API were fetched, then the fixture identity cookie was removed to model logout. CacheStorage contained no private/protected sentinels or normal/private/RSC/API response keys. `online-result.log` |
+| Active input | Explicit preparation retained the current draft input and document. `online-result.log` |
+| Corrupt/missing required resources | Deleted required JS and changed entry bytes each invalidated status and produced an honest offline failure; connected preparation recovered both. `recovery-result.log` |
+| Eviction | Removed only worker-owned caches; offline failure was honest and connected preparation recovered. `recovery-result.log` |
+| Denied storage | A temporary, origin-scoped Chrome quota of one byte caused preparation/status failure while the online page stayed usable. Resetting that owned override and preparing again recovered. `recovery-result.log` |
+| Real build upgrade | Updated fixture entry/manifest from `8b6ac3105ec0…` to `1cdea652718a…`; the new bundle activated with current input/document preserved and two bundles retained. Served worker bytes matched current source. `upgrade-result.log` |
+
+The actual full application production build was also checked separately on
+loopback port 3001, beyond the synthetic fixture. A fresh owned Chrome profile
+visited only `/offline`; its real anonymous endpoint supplied 30 public records
+under manifest `bfff78bdd1c7…` with 22 pinned assets. Warm rendering and a complete
+browser close/reopen with networking disabled before `/en/matches` both passed:
+30 dated saved cards, visible mobile branding, no 390/1440 px overflow, no
+JavaScript fatal errors and no writes. CacheStorage keys were restricted to the
+approved manifest/entry/snapshot/metadata set. No real account, cookie operation,
+POST or analytics page was exercised. Initial preparation did not reach ready;
+an explicit preparation retry and subsequent normal bootstrap succeeded. Its
+precise initial cause was not established. Ignored proof is in
+`output/playwright/offline004-production/` (`warm-result-final.log`,
+`cold-result.log`, diagnostics and mobile/desktop captures). The owned browser
+was closed; this check did not stop or change the production-like server.
+
+The optimized worker was subsequently confirmed active and controlling the
+actual production profile. Its served source hash matched current source
+(`29771c70c52d…`), and the running `downloadEntry` function's hash matched the
+source implementation. Explicit preparation fetched only the manifest and
+anonymous snapshot: **zero entry/asset network requests** while updating the
+snapshot. Existing verified assets were reused. Evidence:
+`latest-worker-diagnostic.log` and `optimized-prepare-result.log` in the same
+production-proof directory.
+The final complete close/reopen with this current worker again rendered all 30
+dated records with networking disabled before navigation, visible mobile
+branding, no horizontal overflow, no fatal JavaScript errors and no writes.
+`cold-result-latest-worker.log` records that final pass; the owned browser was
+closed afterwards.
+
+Final clock-tolerance handoff: a real Android read exposed a roughly one-second
+device lag behind the server clock. Worker and saved-view readers now allow a
+bounded five-minute capture-time difference; server source freshness, expiry
+and the 24-hour envelope limit remain unchanged. The final full production build
+generated manifest `c98b465f557b…` with 22 assets. All 23 served entry/asset byte
+hashes matched it. Explicit preparation established that version with 30 public
+records and a running worker tolerance of 300,000 ms. A complete subsequent
+Chrome close/reopen with networking disabled before navigation passed on that
+exact version: 30 dated cards, visible branding, no 390/1440 px overflow, no fatal
+JavaScript errors and no writes. Final proof is
+`output/playwright/offline004-production/cold-result-clock-final.log`, alongside
+`clock-recovery-result.log` and updated captures. Preliminary warm/reload probes
+timed out before the successful retry; their diagnostics remain available, and
+no precise cause is claimed. The owned browser was closed. Final Android native
+cold startup is **not qualified**; browser results do not close that platform
+acceptance. Windows and remaining native results belong in the Flutter tracker.
+
+Artifacts are ignored under `output/playwright/offline004/`, including mobile and
+desktop captures. The initial mobile capture exposed the shared app header's
+phone-hidden variant; the offline entry now uses the shared visible variant,
+verified in the final cold run and both final captures. Both owned browser
+sessions were closed; the origin-scoped quota override was reset.
+Focused projection/privacy tests pass 5/5 and worker policy/recovery tests pass
+18/18, including verified asset reuse across snapshot-only updates and bounded
+device clock tolerance; the three manifest checks also pass (26 focused checks
+including the five projection cases). Integrated source/build regression results and final installed-platform
+execution are recorded with the final task verification, rather than inferred
+from the browser.
+
+**Status: Partial.** The shared implementation and browser privacy/cold/recovery
+contract are present. Installed Android/Windows results belong in
+[Flutter 004's tracker](../../flutter/dev-tracker.md); Apple execution and Linux
+embedding remain unqualified. Remaining native reachability/lifecycle and
+interrupted-update qualification continues in
+[Flutter 005](../../flutter/dev-plan/005-reconnection-and-cache-updates.md).
+LAN HTTP online development does not provide this secure-context cache, and
+`next dev` skips preparation. Nothing was deployed; paid access and external
+operating approvals are unchanged.

@@ -4,6 +4,7 @@ import { adminDisplayName } from "@/domain/admin-identity";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { readPasswordRequestCount } from "@/app/_components/admin-frame";
+import { OnlineRuntime } from "@/app/_components/online-runtime";
 
 /** Both /admin and /analytics retain the same workspace; each page also enforces its own access gate. */
 export default async function OwnerLayout({ children }: { children: ReactNode }) {
@@ -11,5 +12,6 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   if (!page.owner) redirectToAccountLogin();
   return <AdminShell username={adminDisplayName(page.owner)} passwordRequests={await readPasswordRequestCount(page.services.database)}>
     {children}
+    <OnlineRuntime />
   </AdminShell>;
 }
