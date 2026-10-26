@@ -119,8 +119,9 @@ function PredictionRecord() {
 export const Verdict = memo(function Verdict() {
   const { data, messages, home, away, update, locale, offer } = useStableDetails();
   const fixture = data.fixture, snapshot = data.snapshot;
-  if ("gated" in data.history) {
-    const chances = snapshot && "gated" in snapshot ? snapshot.probabilities : [];
+  // Locked only over a published forecast; without one, every viewer reads the same no-prediction reason.
+  if ("gated" in data.history && snapshot) {
+    const chances = "gated" in snapshot ? snapshot.probabilities : [];
     const chance = chances.length ? Math.max(...chances.map((entry) => entry.probability)) : null;
     return <Box><Eyebrow><h2>{messages.text("details.probability")}</h2><strong data-public-probability>{percent(messages, chance)}</strong></Eyebrow>
       <SubscriberPanel locale={locale} signedIn={data.access.signedIn} offer={offer ?? null} returnTo={data.route.path} /></Box>;

@@ -12,7 +12,6 @@ import { countryFlagAsset } from "@/domain/country-flag";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
-import { subscriberHref } from "@/domain/subscriber-navigation";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
@@ -32,9 +31,9 @@ import { OutcomeBadge, PredictionOdds, ProbabilityBar } from "./prediction-prese
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
-  /** Also gates unpublished fixtures, whose forecast has no wire variant to carry this state. */
+  /** The viewer lacks subscriber access: an unfinished fixture's published forecast in an eligible family renders locked even
+   * when delivered whole. A fixture without one shows the no-prediction reason every viewer gets. */
   gated?: boolean;
-  signedIn?: boolean;
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
   markets?: readonly MarketFamily[];
@@ -623,7 +622,7 @@ const PickNumbers = styled.span<{ $family: MarketFamily; $locked: boolean }>`
     }
   }
 `;
-/** Tile only: the whole locked card already opens subscribing, so this line names where the tap goes. */
+/** Tile only: names what unlocks the prediction; the card itself opens the match page, whose locked panels offer it. */
 const SubscribeHint = styled.span`
   display: none;
   ${tile} {
@@ -835,15 +834,18 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
     data-outcome={prediction?.status ?? "unavailable"} title={details ?? reason ?? undefined}>{children}</Prediction>;
 }
 
-function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
+function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position, titleNote }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
-  const gated = !hasFinalScoreStatus(fixture.status) && (requiresAccess || gatedForecast !== null);
-  const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
+  // Only a published eligible family is locked: forecast null means none was published, and the gated families already
+  // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
+  const best = bestCardFamily(fixture, eligible);
+  const gated = !hasFinalScoreStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null);
+  const shownFamily = best ?? eligible[0]!;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const publicChanceLabel = publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 });
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
@@ -945,7 +947,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
         <span data-pick-value="">{resultLabel}</span>
       </>}
     </Result>
-    <Open href={gated ? subscriberHref(signedIn, matchHref(fixture.fixtureId, analysisSlug, locale)) : matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
+    <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>
   </Card>;
