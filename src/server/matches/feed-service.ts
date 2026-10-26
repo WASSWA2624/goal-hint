@@ -16,6 +16,7 @@ import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
 import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
+import { readFeedPerformance } from "./feed-performance.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 
@@ -70,12 +71,14 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           GROUP BY l.id, l.name, l.country, l.logoUrl ORDER BY l.name, l.country, l.id LIMIT 1001`);
         const leagues = leagueRows.map((row) => ({ id: row.id, name: row.name, country: row.country,
           logoUrl: isSafeRemoteImageUrl(row.logoUrl) ? row.logoUrl : null, fixtures: Number(row.fixtures) }));
-        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; exact: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
+        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; exact: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
+            SUM(CASE WHEN m.available=TRUE AND c.state='void' THEN 1 ELSE 0 END) AS void,
             ${sql.exact ? Prisma.sql`SUM(CASE WHEN ${sql.exact} THEN 1 ELSE 0 END)` : Prisma.sql`NULL`} AS exact
           ${sql.joins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!known || !matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total), knownFixtures = Number(known.total), matchingWithMarket = Number(matching.available ?? 0);
+        const performance = await readFeedPerformance(tx, sql, { total, available: matchingWithMarket, void: Number(matching.void ?? 0) });
         // Exact matches precede similar results, so a record's position on its page tells which kind it is.
         const exactMatches = sql.exact ? Number(matching.exact ?? 0) : null;
         const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${sql.searchJoin} WHERE ${sql.where}
@@ -97,7 +100,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           : total === 0 ? "no-filter-matches" : records.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
         const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
-        const response = storedMatchFeedResponseSchema.parse({ paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+        const response = storedMatchFeedResponseSchema.parse({ performance, paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
           coverage: { partial, knownFixtures, matchingWithMarket, dates }, run,
@@ -107,7 +110,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 13, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 14, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

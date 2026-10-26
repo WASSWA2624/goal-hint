@@ -177,6 +177,12 @@ test("saved slips persist privately, settle only completed fixtures and erase un
     assert.deepEqual(completed.map(item => item.slip.id).sort(), [won.id, lost.id].sort());
     assert.equal(completed.find(item => item.slip.id === won.id).outcome, "won");
     assert.equal(completed.find(item => item.slip.id === lost.id).outcome, "lost");
+    const query = { dateFrom: '2026-10-21', dateTo: '2026-10-21', timeFrom: '13:00', timeTo: '13:00' };
+    const selected = await service.history(query);
+    assert.deepEqual(selected.statistics, { total: 4, won: 1, lost: 2, pending: 1, void: 0 });
+    assert.equal(selected.records.length, 2);
+    assert.equal((await service.history({ ...query, timeFrom: '14:00', timeTo: '14:00' })).statistics.total, 0);
+    assert.equal((await service.history({ ...query, dateFrom: '2026-10-20', dateTo: '2026-10-20' })).statistics.total, 0);
     assert.deepEqual(completed.find(item => item.slip.id === won.id).slip, boundSnapshot(won));
     assert.ok(!JSON.stringify(completed).includes(phone));
     assert.ok(completed.every(item => !("accountId" in item)));

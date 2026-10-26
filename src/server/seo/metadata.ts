@@ -37,7 +37,7 @@ export function feedMetadata(query: FeedQuery, today: ReportingDate, result: Fee
 }
 
 export function createInformationMetadata(page: InformationPage, policy = getDiscoveryPolicy) {
-  return async ({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}): Promise<Metadata> => {
+  return async ({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }): Promise<Metadata> => {
     const messages = createMessages();
     return pageMetadata({ title: messages.text(`${page}.metadataTitle`), description: messages.text(`${page}.description`),
       path: `/en/${page}`, index: policy().index && informationPublicationReady(page) && Object.keys(await searchParams ?? {}).length === 0 });

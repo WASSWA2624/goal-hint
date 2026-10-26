@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
+import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
 import { matchesHref, slipsHref } from "@/domain/navigation";
@@ -27,6 +28,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
     <Note>{m.text("bestSlips.description")}</Note>
     <Inline><TextLink href={matchesHref(locale)} prefetch={false}>{m.text("navigation.matches")}</TextLink>
       <TextLink href={slipsHref(locale)} prefetch={false}>{m.text("navigation.slips")}</TextLink></Inline>
+    {result.statistics && <PerformanceSummary counts={result.statistics} locale={locale} kind="slips" period={`${m.reportingDateMedium(result.day)} · EAT`} />}
     {result.slips.length === 0 ? <CriteriaPanel role="status"><Stack $gap="sm">
       <h2>{m.text("bestSlips.emptyTitle")}</h2>
       <p>{m.text(result.state === "odds-unavailable" ? "bestSlips.oddsUnavailable" : result.state === "model-unavailable"

@@ -101,6 +101,8 @@ test('off mode gates active predictions while preserving premium availability an
   assert.equal(publicResult.slips.length, 10); assert.ok(!publicResult.slips[0].slip);
   assert.equal(paidResult.slips[0].slip.selections.length, 2);
   assert.equal(publicResult.day, today);
+  assert.deepEqual(publicResult.statistics, { total: 10, won: 0, lost: 0, pending: 10, void: 0 });
+  assert.deepEqual(publicResult.statistics, paidResult.statistics);
 });
 
 test('missing approved odds or joint model performs no cohort read and returns an honest empty state', async () => {

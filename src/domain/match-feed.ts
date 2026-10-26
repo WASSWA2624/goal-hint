@@ -17,6 +17,9 @@ const recordFields = { cycle: fixtureCycleSchema.nullable(),
   availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable(),
   /** Prices for the published picks (052); empty while odds display rights are not recorded. */
   prices: z.array(fixturePriceSchema).max(4).default([]) };
+export const feedPerformanceSchema = z.strictObject({ total: count, won: count, lost: count, pending: count, void: count, unavailable: count })
+  .refine((value) => value.total === value.won + value.lost + value.pending + value.void + value.unavailable,
+    "Performance counts must account for every matching fixture.");
 export const storedMatchFeedRecordSchema = storedFixtureSnapshotSchema.safeExtend(recordFields);
 export const matchFeedRecordSchema = fixtureSnapshotSchema.safeExtend(recordFields);
 export const dailyRunProgressSchema = z.strictObject({ id: z.uuid().nullable(), sequence: z.string().regex(/^[1-9]\d*$/u).nullable(), date,
@@ -25,6 +28,8 @@ export const dailyRunProgressSchema = z.strictObject({ id: z.uuid().nullable(), 
   .refine((run) => run.completed + run.failed === run.terminal && (run.total === null || run.terminal <= run.total && run.published <= run.total),
     { message: "Incoherent daily-run counts." }).nullable();
 const storedFeedBaseSchema = z.strictObject({
+  /** One shown pick per matching fixture, across the complete filtered cohort before pagination. */
+  performance: feedPerformanceSchema.nullable().default(null),
   paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
   leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
     name: z.string().max(256).nullable(), country: z.string().max(128).nullable(),
@@ -55,7 +60,8 @@ function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records">
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||
     value.coverage.dates.some((entry) => entry.authoritative !== (entry.status === "complete")) ||
     value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures ||
-    value.search !== null && value.search.exact + value.search.similar !== value.total) {
+    value.search !== null && value.search.exact + value.search.similar !== value.total ||
+    value.performance !== null && value.performance.total !== value.total) {
     ctx.addIssue({ code: "custom", message: "Incoherent match feed page." });
   }
 }

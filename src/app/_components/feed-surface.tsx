@@ -19,8 +19,11 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import type { ReportingDate } from "@/domain/calendar";
+import { PerformanceSummary } from "@/components/performance/performance-summary";
+import { parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { isAnyKickoffTime } from "@/domain/kickoff-time";
+import { publicPolicy } from "@/domain/public-policy";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
@@ -47,7 +50,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
   onStatus: (href: string, message: string) => void;
 }) {
-  const messages = createMessages(query.locale);
+  const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const router = useRouter();
   const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
   const { data, records } = view;
@@ -61,8 +64,13 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
   // Row number of the first similar search result, when this search has any.
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
+  const period = [messages.reportingDateSpan(parseReportingDate(data.range.from), parseReportingDate(data.range.to)),
+    ...(query.time && !isAnyKickoffTime(query.time) ? [`${query.time.from}–${query.time.to}`] : []),
+    messages.timeZone(utcInstantFromEpochMilliseconds(data.asOf))].join(" · ");
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
+    {data.performance && <PerformanceSummary counts={data.performance} locale={query.locale} kind="matches"
+      period={period} description={messages.text("performance.summary.matchBasis")} />}
     <ResultsToolbar query={query} today={today} total={data.total} first={first}
       last={first + records.length - 1} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}

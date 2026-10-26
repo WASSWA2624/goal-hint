@@ -89,10 +89,11 @@ def verify(origin, directory):
     match(r'data-pick-selection=""[^>]*>Home win</span>', by_id["card-correct"])
     match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
-    match(r'data-selected-odds[^>]*>\(1\.85\)</span>', by_id["card-correct"])
+    match(r'data-card-odds[^>]*>1\.85</span>', by_id["card-correct"])
     match(r'data-pick-price=""[^>]*>@ 1\.85</span>', by_id["card-correct"])
     assert by_id["card-correct"].count('data-pick-price=""') == 1, "The tile shows the shown pick's price once"
-    no_match(r"data-pick-price=", by_id["card-incorrect"])
+    match(r'data-card-odds[^>]*>—</span>', by_id["card-incorrect"])
+    match(r'data-pick-price=""[^>]*>—</span>', by_id["card-incorrect"])
     match(r'data-mobile-only=""[^>]*>likely</span>', by_id["card-correct"])
     no_match(r">likely</span>", by_id["card-unavailable"])
     match("Odds: 1.85", by_id["card-correct"])
@@ -104,7 +105,7 @@ def verify(origin, directory):
     match(r'data-pick-selection=""[^>]*>Not both teams to score</span>', by_id["card-limited"])
     match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*>Bosnia &amp; Herz\.</span>',
           by_id["card-long"])
-    match(r'data-selected-odds[^>]*>\(9999\.99\)</span>', by_id["card-long"])
+    match(r'data-card-odds[^>]*>9999\.99</span>', by_id["card-long"])
     match(r'<article[^>]*data-fixture-id="card-any"[^>]*data-market="double-chance"', visible)
     match("Double chance prediction: Home or draw, estimated probability 82%", by_id["card-any"])
     no_match(r"data-selected-odds=|Odds: 1\.85|Odds: 2\.10", by_id["card-any"])

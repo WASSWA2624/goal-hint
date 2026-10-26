@@ -225,9 +225,9 @@ test("the phone tile puts one fixed-width result tag beside the meta line, outsi
   assert.match(result.all, /theme\.color\.verdict\[/u);
   assert.match(result.all, /&\[data-result-badge="upcoming"\] \{\s*color: \$\{\(\{ theme \}\) => theme\.color\.verdict\.upcoming\.text\}/u);
   assert.match(result.tile, /&\[data-result-badge="unavailable"\] \{ display: none; \}/u);
-  // The table keeps the result in its own column, right after the three pick columns.
-  assert.match(result.tile, /\$\{table\} \{\s*grid-column: 10;\s*grid-row: 2;/u);
-  assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 3;/u);
+  // The table keeps the result in its own column, after market, pick, odds and probability.
+  assert.match(result.tile, /\$\{table\} \{\s*grid-column: 11;\s*grid-row: 2;/u);
+  assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 4;/u);
   assert.match(await cardSource, /<\/Pick>\s*<Result aria-hidden="true"/u);
 });
 

@@ -91,6 +91,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
     await t.test('default pagination uses exact EAT boundaries, stable ties and ordinary links', async () => {
       const first = await query(), repeat = await query();
       assert.equal(first.total, 72); assert.equal(first.records.length, 50); assert.equal(first.pageSize, 50);
+      assert.deepEqual(first.performance, { total: 72, won: 0, lost: 0, pending: 0, void: 0, unavailable: 72 });
       assert.deepEqual(first.records.map((item) => item.fixtureId), repeat.records.map((item) => item.fixtureId));
       assert.equal(first.range.startInclusive, Date.parse('2026-10-08T21:00:00Z'));
       assert.equal(first.range.endExclusive, Date.parse('2026-10-09T21:00:00Z'));
@@ -99,6 +100,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(first.nextPage, 2); assert.equal(first.previousPage, null);
       assert.match(first.links.next, /date=2026-10-09&page=2$/u);
       const second = await service.query(new URL(first.links.next, 'http://localhost').searchParams);
+      assert.deepEqual(second.performance, first.performance, 'performance covers the full cohort on every page');
       assert.equal(second.records.length, 22); assert.equal(second.nextPage, null);
       assert.equal(new Set([...first.records, ...second.records].map((item) => item.fixtureId)).size, 72);
       assert.equal(second.records.at(-1).fixtureId, (await fixture(3070)).id);
@@ -211,6 +213,8 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(record.forecast.runId, cohort.selected.runId); assert.equal(record.cycleId, published.get(3000).cycle.id);
       assert.equal(record.forecast.publishedAt, PUBLICATION_NOW);
       assert.ok(record.forecast.markets.every((item) => item.market.source === 'ai' && item.outcome.status === 'pending'));
+      assert.equal(body.performance.pending, body.coverage.matchingWithMarket);
+      assert.equal(body.performance.unavailable, body.total - body.coverage.matchingWithMarket);
       assert.equal(record.syncedAt, (await fixture(3000)).retrievedAt);
       assert.notEqual(record.syncedAt, body.asOf);
       assert.ok(Buffer.byteLength(JSON.stringify(body)) < matchFeedRules.maximumResponseBytes);
@@ -417,13 +421,18 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(record.status, 'finished-regulation'); assert.deepEqual(record.score, { home: 2, away: 1 });
       assert.equal(record.scorePeriod, 'regulation'); assert.equal(record.syncedAt, p.now());
       assert.ok(record.forecast.markets.every((item) => item.outcome.status === 'pending'));
+      const performance = async () => (await query({ status: 'finished', market: 'match-result', picks: 'only' })).performance;
+      assert.deepEqual(await performance(), { total: 1, won: 0, lost: 0, pending: 1, void: 0, unavailable: 0 });
       await settlement.settleFixture(state.fixture.id); record = await card(3000);
       assert.equal(record.forecast.markets.find((item) => item.market.family === 'match-result').outcome.status, 'correct');
+      assert.deepEqual(await performance(), { total: 1, won: 1, lost: 0, pending: 0, void: 0, unavailable: 0 });
       const original = record.forecast.revisionId, before = record.dataVersion;
       await result(0, 1, 2); record = await card(3000);
       assert.ok(record.forecast.markets.every((item) => item.outcome.status === 'pending'));
+      assert.deepEqual(await performance(), { total: 1, won: 0, lost: 0, pending: 1, void: 0, unavailable: 0 });
       await settlement.settleFixture(state.fixture.id); record = await card(3000);
       assert.equal(record.forecast.markets.find((item) => item.market.family === 'match-result').outcome.status, 'incorrect');
+      assert.deepEqual(await performance(), { total: 1, won: 0, lost: 1, pending: 0, void: 0, unavailable: 0 });
       assert.ok(record.forecast.markets.find((item) => item.market.family === 'match-result').outcome.correctedAt);
       assert.equal(record.forecast.revisionId, original); assert.ok(BigInt(record.dataVersion) > BigInt(before));
     });

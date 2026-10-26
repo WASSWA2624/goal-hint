@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
+import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { ButtonLink, TextInput, type TextInputProps } from "@/components/ui/controls";
 import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
@@ -15,7 +16,7 @@ import { slipsHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
 import { predictionLabel } from "@/domain/prediction-label";
 import { publicPolicy } from "@/domain/public-policy";
-import { fullDayKickoffTime } from "@/domain/kickoff-time";
+import { fullDayKickoffTime, isAnyKickoffTime } from "@/domain/kickoff-time";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
   type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
 import { createMessages } from "@/i18n/messages";
@@ -333,6 +334,10 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
           requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       </HeadingRow>
       {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} /> : generated ? <>
+        <PerformanceSummary counts={{ total: data.slips.length, won: 0, lost: 0, pending: data.slips.length }} locale={locale} kind="slips"
+          title={messages.text("performance.summary.generatedTitle")} headingLevel={3}
+          period={`${messages.reportingDateSpan(parseReportingDate(criteria.dateFrom), parseReportingDate(criteria.dateTo))}${criteria.timeFrom && !isAnyKickoffTime({ from: criteria.timeFrom, to: criteria.timeTo }) ? ` · ${criteria.timeFrom}–${criteria.timeTo}` : ""} · EAT`}
+          description={messages.text("performance.summary.generatedHint")} />
         <Note>{messages.text(data.jointProbabilities ? "slips.jointRanking" : "slips.ranking")}</Note>
         {data.slips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];

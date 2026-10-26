@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
 import { bestSlipCriteria, bestSlipViews, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
-import { savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
+import { savedSlipOutcome, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { serializeSlipCriteria, type BuiltSlip } from "../../domain/slip-builder.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
@@ -147,9 +147,14 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           FROM PublishedSlip WHERE publicationId=${rows[0]!.id} ORDER BY \`rank\``;
         const snapshots = await readSnapshots(tx, rowsOfSlips);
         if (snapshots.length !== value.count || rowsOfSlips.some((row, index) => row.rank !== index + 1)) fail("unavailable");
+        const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), await databaseTime(tx));
+        const statistics = { total: snapshots.length, won: 0, lost: 0, pending: 0, void: 0 };
+        snapshots.forEach((snapshot) => {
+          statistics[savedSlipOutcome(snapshot.slip, results)]++;
+        });
         return { day: parseReportingDate(day), state: "generated", slips: bestSlipViews(snapshots.map((snapshot) =>
           ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true),
-          searchLimited: value.searchLimited, partialCoverage: value.partialCoverage };
+          searchLimited: value.searchLimited, partialCoverage: value.partialCoverage, statistics };
       });
     },
     async history(input: PublishedSlipHistoryQuery): Promise<PublishedSlipHistory> {
@@ -175,7 +180,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           const parent = parents.get(row.publicationId)!, snapshot = snapshots[index]!;
           const publishedAt = new Date(parent.publishedAt).toISOString();
           const view = savedSlipView(row.id, publishedAt, snapshot.slip, results);
-          samples.push({ id: row.id, publishedAt: parent.publishedAt, rank: row.rank, totalOdds: snapshot.slip.totalOdds, outcome: view?.outcome ?? "pending" as const });
+          samples.push({ id: row.id, publishedAt: parent.publishedAt, rank: row.rank,
+            totalOdds: view ? snapshot.slip.totalOdds : "", outcome: view?.outcome ?? savedSlipOutcome(snapshot.slip, results) });
           // Until every original cycle has ended, no selections, quote or probabilities leave this boundary.
           if (view) records.push({ ...view, publicationDay: parent.day, publishedAt, modelId: parent.model.id,
             rank: row.rank, estimatedProbability: snapshot.estimatedProbability });

@@ -33,7 +33,8 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
     const slips = (result.data?.slips ?? []) as readonly BestSlip[];
     if (slips.some((slip) => !Number.isFinite(slip.estimatedProbability))) return { ...base, state: "model-unavailable" };
     return { day, state: result.state, slips: bestSlipViews(slips, access.tier === "full"),
-      searchLimited: result.searchLimited, partialCoverage: result.partialCoverage };
+      searchLimited: result.searchLimited, partialCoverage: result.partialCoverage,
+      statistics: { total: slips.length, won: 0, lost: 0, pending: slips.length, void: 0 } };
   };
 }
 

@@ -34,7 +34,7 @@ def main():
                 assert "Illustrative ROI" in html and "17.5%" in html
                 assert "Illustration only" in html and "no refund or adjusted payout is assumed" in html
                 assert "Historical slip win rate" in html and "50%" in html
-                assert "Published slips" in html and "Pending" in html
+                assert 'data-performance-summary="slips"' in html and "Pending" in html
             if state == "unapproved":
                 assert "Quality metrics awaiting review" in html and "Reviewed sample metrics" not in html
                 assert "Calibration by probability band" not in html

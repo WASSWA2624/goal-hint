@@ -3,6 +3,7 @@ import { jointSlipBuilder, type JointSlipModel } from "./joint-slip-model.ts";
 export { jointSlipProbability, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
 import type { ReportingDate } from "./calendar.ts";
 import type { SlipBuildState } from "./slip-page.ts";
+import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 10 });
 
@@ -12,6 +13,8 @@ export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
   searchLimited: boolean; partialCoverage: boolean;
+  /** All slips in this daily publication, including those with active original cycles. */
+  statistics?: PerformanceSummaryCounts | null;
 }>;
 
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {

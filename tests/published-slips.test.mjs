@@ -101,6 +101,25 @@ test('pagination uses the whole publication-period denominator and retains void 
   assert.equal((await f.store.history({ ...query, page: 4 })).records.length, 0);
 });
 
+test('daily slip performance includes every published slip and updates from original-cycle results', async () => {
+  const f = fixture(); await f.publish({ slips: [slip(1), slip(2), slip(3), slip(4)] });
+  assert.deepEqual((await f.store.day(today)).statistics, { total: 4, won: 0, lost: 0, pending: 4, void: 0 });
+  f.outcomes.set(fixtureId(1), 'won'); f.outcomes.set(fixtureId(2), 'lost'); f.outcomes.set(fixtureId(3), 'void');
+  assert.deepEqual((await f.store.day(today)).statistics, { total: 4, won: 1, lost: 1, pending: 1, void: 1 });
+});
+
+test('a lost leg settles aggregate loss immediately while active selections and quotes stay private', async () => {
+  const first = slip(1), second = slip(2);
+  const mixed = { ...first, selections: [{ ...first.selections[0], odds: '2.00' }, { ...second.selections[0], odds: '2.50' }] };
+  const f = fixture(); await f.publish({ slips: [mixed] });
+  f.outcomes.set(fixtureId(1), 'lost');
+  assert.deepEqual((await f.store.day(today)).statistics, { total: 1, won: 0, lost: 1, pending: 0, void: 0 });
+  const history = await f.store.history(query);
+  assert.deepEqual(history.records, []); assert.equal(history.statistics.lost, 1); assert.equal(history.statistics.pending, 0);
+  assert.equal(history.statistics.returnsSampleCount, 0); assert.equal(history.statistics.meanQuotedOdds, null);
+  assert.doesNotMatch(JSON.stringify(history), /home-win|5\.00|estimatedProbability/);
+});
+
 test('publication refuses overlaps, invalid probability, revoked authority, late kickoff and unsealed reads', async () => {
   for (const changes of [{ slips: [slip(), slip()] }, { slips: [{ ...slip(), estimatedProbability: 0.9 }] },
     { slips: [{ ...slip(), totalOdds: '4.80' }] }, { slips: [{ ...slip(), averageProbability: 0.8 }] },

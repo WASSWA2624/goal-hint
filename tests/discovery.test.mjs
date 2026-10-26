@@ -152,11 +152,11 @@ test('page metadata has independent social fields, real canonical pagination and
   const history = matchDetailMetadata(fixture, 'en', true, approved);
   assert.equal(history.robots.index, false); assert.equal(history.alternates.canonical, known.alternates.canonical);
   assert.equal(matchDetailMetadata({ data: null, error: 'unavailable' }, 'en', false, approved).robots.index, false);
-  assert.equal((await createInformationMetadata('help', () => approved)()).robots.index, true);
+  assert.equal((await createInformationMetadata('help', () => approved)({})).robots.index, true);
   assert.equal((await createInformationMetadata('help', () => approved)({ searchParams: Promise.resolve({ market: 'total-goals' }) })).robots.index, false);
-  for (const name of ['privacy', 'terms']) assert.equal((await createInformationMetadata(name, () => approved)()).robots.index, false);
-  assert.equal((await createInformationMetadata('contact', () => approved)()).robots.index, true);
-  assert.equal((await createInformationMetadata('contact', () => ({ deployment: 'staging', index: false }))()).robots.index, false);
+  for (const name of ['privacy', 'terms']) assert.equal((await createInformationMetadata(name, () => approved)({})).robots.index, false);
+  assert.equal((await createInformationMetadata('contact', () => approved)({})).robots.index, true);
+  assert.equal((await createInformationMetadata('contact', () => ({ deployment: 'staging', index: false }))({})).robots.index, false);
   assert.equal((await createInformationMetadata('contact', () => approved)({ searchParams: Promise.resolve({ email: 'untrusted' }) })).robots.index, false);
 });
 

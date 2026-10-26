@@ -3,8 +3,9 @@ import { storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { isMarketSelection, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { marketFamilySchema } from "./fixture-snapshot.ts";
 import { isPlayedFinalStatus, settleMarketSelection, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
-import { slipBuilderRules, type BuiltSlip, type SlipForecastReference } from "./slip-builder.ts";
+import { slipBuilderRules, type BuiltSlip, type SlipCriteria, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
+import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 
 const record = storedMatchFeedRecordSchema.shape;
@@ -40,6 +41,12 @@ export type SavedSlipView = Readonly<{
   id: string; savedAt: string; slip: BuiltSlip; outcome: "won" | "lost" | "pending" | "void";
   results: readonly Readonly<{ fixtureId: string; home: number | null; away: number | null; outcome: "correct" | "incorrect" | "pending" | "void" }>[];
 }>;
+export type SavedSlipHistoryQuery = Pick<SlipCriteria, "dateFrom" | "dateTo" | "timeFrom" | "timeTo">;
+export type SavedSlipHistory = Readonly<{
+  records: readonly SavedSlipView[]; asOf: number;
+  /** The entire selected original-kickoff cohort; only completed visible records are limited. */
+  statistics: PerformanceSummaryCounts;
+}>;
 
 /** Bound forecasts follow their original cycle. Legacy snapshots still require a terminal current fixture;
  * no original identity is guessed for an old member save. */
@@ -47,7 +54,25 @@ export function savedSlipView(id: string, savedAt: string, snapshot: unknown, re
   const parsed = savedSlipSnapshotSchema.safeParse(snapshot);
   if (!parsed.success) return null;
   const slip = parsed.data as BuiltSlip;
-  const legs = slip.selections.map((item) => {
+  const legs = savedSlipLegResults(slip, results);
+  if (legs.some((leg) => leg === null)) return null;
+  const finished = legs.filter((leg) => leg !== null);
+  return { id, savedAt, slip, results: finished, outcome: slipOutcome(legs) };
+}
+
+/** Aggregate outcomes can establish a loss before every leg completes, without releasing active selections. */
+export function savedSlipOutcome(slip: BuiltSlip, results: readonly SavedSlipResult[]): SavedSlipView["outcome"] {
+  return slipOutcome(savedSlipLegResults(slip, results));
+}
+
+function slipOutcome(legs: readonly (SavedSlipView["results"][number] | null)[]): SavedSlipView["outcome"] {
+  return legs.some((leg) => leg?.outcome === "incorrect") ? "lost"
+    : legs.some((leg) => leg === null || leg.outcome === "pending") ? "pending"
+      : legs.some((leg) => leg?.outcome === "void") ? "void" : "won";
+}
+
+function savedSlipLegResults(slip: BuiltSlip, results: readonly SavedSlipResult[]) {
+  return slip.selections.map((item) => {
     const result = results.find((candidate) => candidate.fixtureId === item.fixtureId && (item.forecast
       ? candidate.forecast?.cycleId === item.forecast.cycleId && candidate.forecast.revisionId === item.forecast.revisionId
         && candidate.forecast.publishedAt === item.forecast.publishedAt && candidate.family === item.family && candidate.selection === item.selection
@@ -60,9 +85,4 @@ export function savedSlipView(id: string, savedAt: string, snapshot: unknown, re
     return { fixtureId: item.fixtureId, home: score?.home ?? null, away: score?.away ?? null,
       outcome: settled.status === "correct" || settled.status === "incorrect" || settled.status === "void" ? settled.status : "pending" as const };
   });
-  if (legs.some((leg) => leg === null)) return null;
-  const finished = legs.filter((leg) => leg !== null);
-  return { id, savedAt, slip, results: finished,
-    outcome: finished.some((leg) => leg.outcome === "incorrect") ? "lost" : finished.some((leg) => leg.outcome === "pending") ? "pending"
-      : finished.some((leg) => leg.outcome === "void") ? "void" : "won" };
 }

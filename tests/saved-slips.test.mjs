@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { savedSlipView, savedSlipSnapshotSchema } from '../src/domain/saved-slips.ts';
+import { savedSlipOutcome, savedSlipView, savedSlipSnapshotSchema } from '../src/domain/saved-slips.ts';
 import { defaultSlipCriteria, modelIndependentSlip, serializeSlipCriteria } from '../src/domain/slip-builder.ts';
 import { createSavedSlips } from '../src/server/slips/saved-slips.ts';
 import { createSaveSlipHandler } from '../src/server/slips/saved-slips-http.ts';
@@ -30,6 +30,17 @@ test('missing or active legs never expose a public slip, even if another leg alr
   const two = { ...slip, selections: [...slip.selections, { ...slip.selections[0], fixtureId: '10000000-0000-4000-8000-000000000098' }] };
   assert.equal(savedSlipView('saved-id', '', two, [{ ...result, regulationHome: 0 }]), null);
   assert.equal(savedSlipView('saved-id', '', { ...slip, selections: [...slip.selections, ...slip.selections] }, [result]), null);
+});
+
+test('slip aggregate establishes a known loss while unfinished selections remain private', () => {
+  const active = { ...slip.selections[0], fixtureId: '10000000-0000-4000-8000-000000000098' };
+  const mixed = { ...slip, selections: [...slip.selections, active] };
+  const loss = { ...result, regulationHome: 0 };
+  assert.equal(savedSlipOutcome(mixed, [loss]), 'lost');
+  assert.equal(savedSlipView('saved-id', '', mixed, [loss]), null);
+  assert.equal(savedSlipOutcome(mixed, [result]), 'pending');
+  assert.equal(savedSlipOutcome(mixed, [{ ...result, status: 'canceled' }]), 'pending');
+  assert.equal(savedSlipOutcome(mixed, [{ ...loss, regulationVerified: false }]), 'pending');
 });
 
 test('canceled, abandoned and awarded forecasts are void without claiming a winning slip', () => {
@@ -109,6 +120,34 @@ test('public saved slip history grades only sealed results coherent with the cur
   fixture.lifecycleState = null;
   row.validIntegrity = 0;
   await assert.rejects(service.completed(), error => error.reason === 'invalid-state' || error.code === 'invalid-state');
+});
+
+test('selected saved-slip performance covers the complete cohort while only recent completed records are exposed', async () => {
+  const rows = Array.from({ length: 125 }, (_, index) => ({ id: `saved-${String(index).padStart(3, '0')}`,
+    createdAt: new Date(now - index), snapshotJson: { ...slip, selections: [{ ...slip.selections[0],
+      fixtureId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}` }] } }));
+  const queries = [], projections = [];
+  let reads = 0;
+  const tx = { async $queryRaw(query) { queries.push(query); return reads++ === 0 ? rows.slice(0, 100) : rows.slice(100); } };
+  const service = createSavedSlips({ transaction: async read => read(tx) }, { key: () => 'key' }, () => now, {
+    async resolveResults(_tx, selections, asOf) {
+      projections.push(selections.length); assert.equal(asOf, now);
+      return selections.map(selection => {
+        const index = Number(selection.fixtureId.slice(-12));
+        return { fixtureId: selection.fixtureId, status: index < 60 ? 'finished-regulation' : index < 90 ? 'canceled' : 'scheduled',
+          regulationVerified: true, regulationHome: index < 30 ? 2 : 0, regulationAway: 1 };
+      });
+    },
+  });
+  const history = await service.history({ dateFrom: today, dateTo: today, timeFrom: '13:00', timeTo: '14:00' });
+  assert.deepEqual(history.statistics, { total: 125, won: 30, lost: 30, pending: 35, void: 30 });
+  assert.equal(history.records.length, 20); assert.equal(history.records[0].id, rows[0].id);
+  assert.deepEqual(projections, [100, 25]);
+  assert.match(queries[0].sql, /NOT EXISTS.*JSON_TABLE/s);
+  assert.ok(queries[0].values.includes(Date.parse(`${today}T10:00:00Z`)), 'kickoff range uses reporting-zone wall time');
+  assert.ok(queries[0].values.includes(Date.parse(`${today}T11:01:00Z`)), 'end minute is inclusive');
+  assert.ok(queries[1].values.includes(rows[99].id), 'subsequent batch uses the prior keyset cursor');
+  assert.doesNotMatch(JSON.stringify(history), /accountId|tokenHash/);
 });
 
 test('save endpoint requires same-origin authenticated subscription and accepts only server-rebuilt selections', async () => {

@@ -28,7 +28,7 @@ import { MarketGlyph } from "./market-glyph";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 import { providerImageSource } from "@/components/ui/provider-image";
-import { OutcomeBadge, PredictionOdds, ProbabilityBar } from "./prediction-presentation";
+import { OutcomeBadge, ProbabilityBar } from "./prediction-presentation";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -457,7 +457,7 @@ const Pick = styled.div<{ $family: MarketFamily }>`
       &[data-pick-state="subscriber"] { grid-template-areas: "glyph market" "glyph pick" "numbers numbers" "hint hint"; }
     }
   }
-  ${table} { display: grid; grid-column: 7 / span 3; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
+  ${table} { display: grid; grid-column: 7 / span 4; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
 const CardGlyph = styled(MarketGlyph)`
   display: none;
@@ -545,7 +545,6 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
       letter-spacing: -0.01em;
       line-height: 1.25rem;
     }
-    [data-pick-odds] { display: none; }
     /* No prediction: "No prediction · Too early" on one line, centred beside the clock. */
     [data-pick-state="none"] & {
       grid-row: 1 / -1;
@@ -571,8 +570,16 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
     }
   }
 `;
-const Probability = styled(PickCell)`
+/** Desktop prices have their own track; the phone panel pairs the same price with its chance. */
+const Odds = styled(PickCell)`
   grid-column: 3;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  ${tile} { display: none; }
+`;
+const Probability = styled(PickCell)`
+  grid-column: 4;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -683,7 +690,7 @@ const Result = styled(OutcomeBadge)`
   }
   /* Table: every result badge fills the Result column, so Upcoming, Win, Loss, Pending and Void share one width. */
   ${table} {
-    grid-column: 10;
+    grid-column: 11;
     grid-row: 2;
     justify-self: stretch;
     box-sizing: border-box;
@@ -714,7 +721,7 @@ const Open = styled(Link)`
   ${table} {
     position: static;
     display: grid;
-    grid-column: 11;
+    grid-column: 12;
     grid-row: 2;
     place-items: center;
     > svg { display: block; font-size: 1rem; }
@@ -905,6 +912,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
         <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
       </MarketName>
       {gated ? <><GatedPick><SubscriberIcon /><SubscriberNotice locale={locale} kind="card" /></GatedPick>
+        <Odds aria-hidden="true">—</Odds>
         <Probability aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability>
         {/* On phones this box is the only copy of the public chance, so it stays readable; the desktop hides it. */}
         {publicChance !== undefined && <PickNumbers $family={shownFamily} $locked>
@@ -914,16 +922,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
         <SubscribeHint aria-hidden="true">{messages.text("match.subscribeToSee")}<ChevronIcon /></SubscribeHint>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
-          {selection ? <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span>
-            <PredictionOdds odds={price?.price} />
-          </span> : <>
+          {selection ? <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span></span> : <>
             <b data-mobile-only="">{messages.text("match.noPick")}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{messages.text("match.noPick")}</span>
           </>}
         </PickShort>
+        <Odds aria-hidden="true" data-card-odds>{price?.price ?? "—"}</Odds>
         {prediction && <PickNumbers $family={shownFamily} $locked={false} aria-hidden="true">
-          {price && <span><span data-number="" data-pick-price="">@&#8239;{price.price}</span><span data-caption="">{messages.text("details.odds")}</span></span>}
+          <span><span data-number="" data-pick-price="">{price ? `@\u202f${price.price}` : "—"}</span><span data-caption="">{messages.text("details.odds")}</span></span>
           <span><span data-number="">{percent}</span><span data-caption="" data-mobile-only="">{messages.text("match.likely")}</span></span>
         </PickNumbers>}
         <Probability aria-hidden="true">

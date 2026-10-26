@@ -1,6 +1,6 @@
 import "server-only";
 
-import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../domain/markets.ts";
+import { MARKET_RULE_VERSION, marketSelections, type AcceptedMarket, type MarketFamily } from "../../domain/markets.ts";
 import { settleMarketSelection, type CycleEligibility, type SettlementContext } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { FootballFixture, Prisma } from "../generated/prisma/client.ts";
@@ -57,12 +57,27 @@ export function cycleEligibilityFor(cycle: Pick<StoredCycle, "state" | "voidReas
 
 /** The one settlement context every market of a cycle is graded against: an open lifecycle issue leaves a live cycle
  * unknown, and only a verified regulation score that matches the canonical fixture can settle. */
-export function settlementContextFor(fixture: FootballFixture, result: StoredFixtureResult | null, issue: string | null,
+export type SettlementFixture = Pick<FootballFixture, "status" | "regulationHome" | "regulationAway" | "regulationVerifiedAt" | "regulationEvidenceRef">;
+export function settlementContextFor(fixture: SettlementFixture, result: StoredFixtureResult | null, issue: string | null,
   cycle: Pick<StoredCycle, "state" | "voidReason">): SettlementContext {
   const status = resultStatus.parse(fixture.status), resultUsable = fixtureResultMatchesCanonical(fixture, result, issue);
   return { status: issue && cycle.state !== "void" ? "unknown" : status, cycleEligibility: cycleEligibilityFor(cycle),
     regulationScore: resultUsable && result?.regulation.verified ? { verified: true,
       period: "regulation-including-stoppage-time", home: result.regulation.home!, away: result.regulation.away! } : null };
+}
+
+/** The audited input identity shared by complete cycle reads and the feed's compact cohort summary. */
+export function settlementInputFor(fixtureId: string, cycle: Pick<StoredCycle, "id" | "lockedSetId" | "state" | "voidReason">,
+  family: MarketFamily, market: Pick<AcceptedMarket, "selection" | "source" | "selectedProbability"> | null,
+  result: StoredFixtureResult | null, resultUsable: boolean, context: SettlementContext,
+  previous: SettlementRevision | null, missingReason: string | null = null) {
+  const outcome = settleMarketSelection(family, market?.selection ?? null, context);
+  const historicalVoid = previous?.cycleState === "void" && cycle.state === "void";
+  return { fixtureId, cycleId: cycle.id, family, ruleVersion: MARKET_RULE_VERSION, lockedSetId: cycle.lockedSetId,
+    selection: market?.selection ?? null, source: market?.source ?? null, selectedProbability: market?.selectedProbability ?? null,
+    resultId: historicalVoid ? previous.resultId : market ? result?.id ?? null : null,
+    resultUsable: historicalVoid ? previous.resultUsable : market ? resultUsable : false,
+    status: outcome.status, reason: missingReason ?? outcome.reason, cycleState: cycle.state, voidReason: cycle.voidReason } as const;
 }
 
 /** Shared audit projection for individual reads and bounded reporting batches. */
@@ -76,16 +91,10 @@ export function projectSettlementCycle(fixture: FootballFixture, result: StoredF
   for (const family of families) {
     const item = lock?.candidate.markets[family];
     const market = item?.available ? item.market : null;
-    const outcome = settleMarketSelection(family, market?.selection ?? null, context);
     const previous = recorded.get(family) ?? null;
-    const historicalVoid = previous?.cycleState === "void" && cycle.state === "void";
-    const base = { fixtureId, cycleId: cycle.id, family, ruleVersion: MARKET_RULE_VERSION, lockedSetId: cycle.lockedSetId,
-      selection: market?.selection ?? null, source: market?.source ?? null, selectedProbability: market?.selectedProbability ?? null,
-      resultId: historicalVoid ? previous.resultId : market ? result?.id ?? null : null,
-      resultUsable: historicalVoid ? previous.resultUsable : market ? resultUsable : false,
-      status: outcome.status, reason: !lock ? cycle.state === "open" ? "awaiting-locked-selection" : "no-locked-selection"
-        : item && !item.available ? item.reason : outcome.reason,
-      cycleState: cycle.state, voidReason: cycle.voidReason } as const;
+    const missingReason = !lock ? cycle.state === "open" ? "awaiting-locked-selection" : "no-locked-selection"
+      : item && !item.available ? item.reason : null;
+    const base = settlementInputFor(fixtureId, cycle, family, market, result, resultUsable, context, previous, missingReason);
     if (previous && (previous.fixtureId !== fixtureId || previous.cycleId !== cycle.id || previous.family !== family ||
       previous.lockedSetId !== null && previous.lockedSetId !== cycle.lockedSetId)) return historyFail("invalid-state");
     markets.push({ base, inputHash: evidenceFingerprint(base), previous });

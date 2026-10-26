@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SlipTable } from "@/components/slips/slip-table";
+import { PerformanceSummary } from "./performance-summary";
 import { EvidenceList, MarketGrid, MetricList, PerformanceFilters, PerformanceTable, PublicationHeader, TableFrame } from "./performance-styles";
 
 export type PerformanceDashboardProps = Readonly<{
@@ -68,16 +69,9 @@ function Calibration({ cell, m }: { cell: PerformanceCell; m: Messages }) {
 function PredictionCard({ cell, locale }: { cell: PerformanceCell; locale: string }) {
   const m = createMessages(locale), values = cell.metrics;
   return <Surface data-prediction-performance={cell.family}><Stack $gap="sm">
-    <h3>{marketName(m, cell.family)}</h3>
-    <Metrics values={[
-      { label: m.text("performance.available"), value: m.number(cell.coverage.available) },
-      { label: m.text("performance.won"), value: m.number(values.correct) },
-      { label: m.text("performance.lost"), value: m.number(values.incorrect) },
-      { label: m.text("performance.pending"), value: m.number(cell.coverage.pending) },
-      { label: m.text("performance.void"), value: m.number(cell.coverage.void) },
-      { label: m.text("performance.unavailable"), value: m.number(cell.coverage.unavailable) },
-      { label: m.text("performance.filteredOut"), value: m.number(cell.coverage.filteredOut) },
-    ]} />
+    <PerformanceSummary counts={{ total: cell.coverage.total, won: values.correct, lost: values.incorrect,
+      pending: cell.coverage.pending, void: cell.coverage.void, unavailable: cell.coverage.unavailable, filteredOut: cell.coverage.filteredOut }}
+      locale={locale} kind="matches" title={marketName(m, cell.family)} headingLevel={3} />
     <strong>{m.text(values.state === "available" ? "performance.qualityAvailable" : "performance.qualityPending")}</strong>
     <Metrics values={[
       { label: m.text("performance.settled"), value: m.number(values.denominator) },
@@ -115,15 +109,11 @@ function LeagueCard({ league, locale }: { league: PerformanceLeague; locale: str
     </Stack>
   </details></Surface>;
 }
-function SlipMetrics({ summary, locale }: { summary: SlipPerformanceSummary; locale: string }) {
+function SlipMetrics({ summary, locale, period }: { summary: SlipPerformanceSummary; locale: string; period: string }) {
   const m = createMessages(locale);
   return <Surface><Stack $gap="sm">
+    <PerformanceSummary counts={summary} locale={locale} kind="slips" period={period} headingLevel={3} />
     <Metrics values={[
-      { label: m.text("performance.slipTotal"), value: m.number(summary.total) },
-      { label: m.text("performance.won"), value: m.number(summary.won) },
-      { label: m.text("performance.lost"), value: m.number(summary.lost) },
-      { label: m.text("performance.void"), value: m.number(summary.void) },
-      { label: m.text("performance.pending"), value: m.number(summary.pending) },
       { label: m.text("performance.slipSettled"), value: m.number(summary.settled) },
       { label: m.text("performance.slipWinRate"), value: percent(summary.winRate, m) },
     ]} />
@@ -177,7 +167,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
     <section aria-labelledby="published-performance"><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
-      {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
+      {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {history?.records.length ? history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <PublicationHeader><strong>{m.text(`slips.outcome.${item.outcome}`)}</strong><time dateTime={item.publishedAt}>
           {m.text("performance.publication", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(Date.parse(item.publishedAt))) })}</time></PublicationHeader>
