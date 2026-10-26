@@ -1,0 +1,3 @@
+# Only the plugin runtime and native policy test are part of this application.
+/example/
+/test/

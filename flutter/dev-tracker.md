@@ -1,19 +1,23 @@
 # Flutter development tracker
 
-**Current implementation: native foundation and central URL configuration.**
-The project includes Android, iOS, Windows, macOS, and Linux runners, validated
-development/production origin selection, native network policy, and a safe
-startup error. Website loading, offline behavior, and release branding remain
-in steps 003–007. Use [the plan index](dev-plan/000-index.md) for dependencies.
+**Current implementation: native web host and central URL configuration.**
+The project includes five native runners, validated origin selection, native
+network policy, shared loading/retry/history handling, and browser adapters for
+Android, iOS, macOS, and Windows. Goal Hint names, shared launcher artwork, and
+white launch/loading surfaces are implemented; appearance qualification remains
+partial. Linux embedding remains unqualified. Offline behavior and release
+acceptance remain in steps 004–007. Use
+[the plan index](dev-plan/000-index.md) for dependencies and the handoff records
+below for actual native execution evidence.
 
 | Step | Feature | Status |
 | --- | --- | --- |
 | [001](dev-plan/001-foundation-and-platform-support.md) | Foundation and platform support | Completed — foundation and available Windows runtime verified |
-| [002](dev-plan/002-environment-urls.md) | Development and production URLs | Partial — configuration/build/reachability verified; installed WebView loading awaits 003 |
-| [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Not started |
+| [002](dev-plan/002-environment-urls.md) | Development and production URLs | Completed — centrally configured installed loading verified on Windows and physical Android |
+| [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Partial — available Windows/Android lifecycle and cold reopen passed; manual, Apple and Linux qualification remains |
 | [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Not started |
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Not started |
-| [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Not started |
+| [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity and white launch/loading implemented; appearance/runtime qualification remains |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Not started |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
@@ -155,18 +159,21 @@ The Next.js server listened on port 3000 on the development computer, whose
 observed LAN address was `192.168.1.148`. The phone used the same Wi-Fi network;
 the address is an observation, not a permanent project setting. Device probes
 used anonymous HTTP requests through `adb`/Toybox and sent no account cookies.
-No phone app installation, USB reverse mapping, or firewall changes were needed.
+Those address probes needed no phone app installation, USB reverse mapping, or
+firewall changes; installed-app checks followed in 003 below.
 Logs, probe output, APKs, executables, and other generated evidence remain in
 ignored `.dart_tool/`, `build/`, and web output directories.
 
-### Acceptance still requiring 003
+### Installed-loading acceptance completed during 003
 
-Configuration implementation, available Release builds, and desktop/physical
-Android HTTP reachability are verified. **002 remains Partial** because the
-installed Flutter shell has not loaded the website: that acceptance depends on
-the native WebView adapter implemented in 003. HTTP/socket checks do not verify
-WebView cleartext policy, cookies, navigation, native local-network prompts, or
-installed-app lifecycle behavior. Reuse this resolver directly in the adapter.
+Configuration implementation, the recorded Release builds, and desktop/physical
+Android HTTP reachability were verified in 002. Its remaining installed-loading
+acceptance is now satisfied: the adapters from 003 load the existing Next.js app
+in the Windows shell and physical Android shell using this same resolver.
+Windows used desktop loopback; Android used the development computer's LAN
+origin on port 3000. **002 is Completed for those available targets.** HTTP
+probes alone were not used to qualify embedded loading. Detailed account,
+navigation, and platform acceptance remains tracked under 003.
 
 Apple native builds, signed-plist inspection, and physical Apple network/privacy
 checks require macOS/Xcode and Apple hardware. Linux native execution remains
@@ -174,3 +181,129 @@ untested on this Windows host. Verify those targets during their adapter/build
 work; the source-policy tests do not qualify their native runtime behavior.
 Offline startup and reconnection remain 004–005; identity and distribution
 remain 006–007. No WebView or offline package was introduced by this step.
+
+## 003 Embedded-web handoff — 26 October 2026
+
+### Integration boundaries
+
+- `WebAppShell` owns initial loading, retryable errors, native back/history,
+  lifecycle reconciliation, safe areas, and external URL handoff. It uses the
+  configured origin directly. Next.js still owns every product screen, route,
+  query, form, account rule, payment, authorization decision, and content theme.
+- Android/iOS/macOS use official `webview_flutter` 4.14.1, Android 4.14.1 and
+  WKWebView 3.26.2. Windows directly uses the locally patched Windows 0.6.0
+  WebView2 adapter; its source/license/provenance and native guard tests live in
+  `packages/flutter_inappwebview_windows/`. See
+  [the integration guide](docs/web-app-integration.md).
+- Only the exact configured origin may own embedded documents. Safe external
+  destinations go to the operating-system handler. Unsafe schemes and
+  credential-bearing navigation are blocked. The Windows native guard also
+  covers non-network navigation and popups; its unused JavaScript bridge is
+  disabled. The system adapter adds no Dart JavaScript channel.
+- Native browser stores are retained across disposal/reopen. Windows uses an
+  app-owned support-directory profile separated by environment; other targets
+  use their normal persistent stores. Resume updates history capability without
+  reloading unfinished forms. Server cookies, expiry, roles, and revocation
+  remain authoritative. No native credential store was added.
+- Android additionally commits its ordinary WebView cookie store at page and
+  background/suspend checkpoints using native `CookieManager.flush()` on a
+  background executor. The no-argument Flutter method channel accepts no token
+  or cookie data and exposes no JavaScript bridge. Native `onStop` is a fallback.
+  The test awaits the same suspend checkpoint before the host stops the process,
+  modeling normal background/close behavior rather than an unfinished abrupt
+  kill. Persistent server cookie flags and authorization are unchanged.
+- Android HTML file inputs use the official system document picker through
+  `file_selector` 1.1.0, with accept filters, multiple selection, and cancellation.
+  Capture hints fall back to that picker; no broad storage/camera permission or
+  native proof-validation logic is introduced. Manual picker use remains open.
+
+### Observed execution
+
+All fixture accounts and codes below are synthetic. The copied Next.js member
+fixture uses the existing web HTTP adapters and scripted services, without a
+database, message delivery, payment, or real account change. The native test
+guards its fixture before writes. [Reproduction commands and limits](integration_test/README.md)
+describe first/reopen/live phases and the required `--no-uninstall` flag.
+
+| Check | Actual result and evidence |
+| --- | --- |
+| Windows native fixture first phase | Passed: route/query preservation, trusted native pointer navigation and back, unfinished input across resume, external-link handoff, unsafe native navigation rejection, login/register/code forms, reload cookies, account-change HTTP transport, role/expiry/logout checks. `windows-first-stable.log` |
+| Windows separate cold-process reopen | Passed with the same profile and no uninstall/data clearing; the server recognized the retained synthetic member cookie, then logout cleared access. `windows-reopen.log` |
+| Windows untrusted local HTTPS certificate | Passed: certificate refusal, native Retry, and a clean test teardown against an isolated self-signed local server. No OS trust changes. `windows-tls-error-clean.log` |
+| Windows browser engine | WebView2 Runtime **155.0.4283.62**, read through the built loader API used by the adapter |
+| Windows complete live Next.js app | Passed with a clean exit: real app rendering, normal/doubled document-text overflow checks, native pointer focus, controlled web input and native back. `windows-live-pass.log` (73.8s build, 20s test). Normal native dark-theme rendering and Goal Hint title also visually confirmed |
+| Windows actual keyboard and window resizing | Not yet qualified by manual native input/resizing evidence; synthetic DOM input is not an actual keyboard check |
+| Physical Android complete live app | Passed installed rendering from `http://192.168.1.148:3000` on TECNO CL8, Android API 35 / System WebView **155.0.8059.43** |
+| Android external destination | Passed: `https://flutter.dev` opened Chrome through the host, and native Back returned with the document preserved. `android-external-summary.json` |
+| Android synthetic first phase | Passed wirelessly: query/history, native PopScope back, resume/input, external/unsafe links, login/register/code forms, account-change HTTP transport, admin gates, expiry and logout. `android-store-first.log` (58.7s build, 11.1s install, 14s test) |
+| Android separate cold-process reopen | Passed after the ordinary browser-store suspend checkpoint: retained membership was recognized by the server, then the existing web logout cleared access. `android-store-reopen.log` (59.2s build, 9.8s install, 2s test). Both phases used `--no-uninstall`; no preferences/token copy or authorization bypass |
+| Android persistent cookie attributes | Actual fixture response confirmed `Path=/`, `HttpOnly`, `SameSite=Lax`, `Max-Age=34560000`; cookie values were redacted. The flush correction changes durability, not server lifetime/flags. `fixture-cookie-attributes.json` |
+| Android wireless debugging | Modern Android TLS pairing/connection completed with the owner-provided one-time code. Explicit Wi-Fi transport selected and TECNO CL8/API35 verified with `getprop`; mDNS connection also worked. Pairing codes/real device identifiers are not committed |
+| Android fixture routing | LAN port 3187 was unreachable on this network. An owned temporary `adb reverse` mapping over wireless ADB made `http://127.0.0.1:3187` reachable for both fixture phases. Normal app port 3000 works over LAN/Wi-Fi without USB or this mapping; no firewall policy was changed |
+| Android bottom safe area | Measured and corrected: native viewport already excluded 40px while CSS added the same 40px again. Android-only `SafeArea(bottom: false)` increased viewport height from 810 to 850 CSS px; the web's 56px tab targets stay above the OS bar without extra visible blue padding. Shared web/iOS safe-area CSS is preserved. `android-nav-metrics.json`, `android-compact-sequence-9.png` |
+| Final source checks | Passed after the browser-store addition: `dart analyze lib test integration_test` reported no issues, all 30 Flutter tests passed, and formatting checked 20 files with zero changes. `.dart_tool/final-source-checks.log` |
+| Fresh current Windows Release | Passed `flutter build windows --release --no-pub -t lib/main.dart` without Dart defines; current executable and Goal Hint identity built. The default selects fixed production HTTPS. `windows-release-current.log` |
+| Final normal Windows Debug restore | Passed with the normal app entry point and development origin after native tests. `windows-normal-debug-final.log` (49.7s) |
+| Final normal Android Debug restore | Normal app with the browser-store fix rebuilt and installed wirelessly after the fixture pair; it uses LAN port 3000. `android-store-normal-build.log` (35.4s build) |
+| Fresh current Android Release | Passed `flutter build apk --release -t lib/main.dart` without environment defines (275.1s, 44.7MB). Compiled label, adaptive/monochrome icons, INTERNET permission and HTTPS-only Release policy verified; no debuggable or development transport override. It uses the fixed production origin. `android-current-release-regenerated.log`, `android-release-audit.json`. Existing template Debug signing is local build qualification only; Release was not installed over the working development app |
+| Apple execution and Linux embedding | iOS/macOS runtime tests require macOS/Xcode; Linux has no qualified adapter or Linux/WSL host here. Explicit unavailable-browser feedback remains on unimplemented targets |
+
+Logs, captures, local TLS material, executables/APKs, fixtures, and browser profiles
+remain in ignored local output directories. Evidence names above refer to
+`.dart_tool/integration-checks/`; they are not distributable fixtures or committed
+account data. Remove only the owned temporary device mapping when testing ends.
+
+The owned fixture server on port 3187 and the local TLS helper have been stopped;
+the normal Next.js development server on port 3000 remains available. Final
+wireless readback confirmed API35, with both ADB forward/reverse lists empty.
+The authorized wireless pairing/connection is preserved.
+
+### Open acceptance and offline handoff
+
+**003 remains Partial.** Available Windows and Android functional lifecycle and
+cold-process reopen checks have passed, including the corrected live Windows
+phase. Complete real keyboard/window and picker checks, Apple qualification,
+and a Linux engine prototype before claiming the full platform requirement.
+Fixture account changes exercise transport against scripted services; they do
+not qualify production phone/password changes or real message delivery.
+
+Persistent profiles, trusted-origin policy, lifecycle preservation and load/error
+signals are ready for 004. No service worker/cache contract, offline cold start,
+eviction recovery, or update mechanism is implemented by this step. Coordinate
+that work with [web 069](../next-js/dev-plan/069-offline-shell-support.md).
+
+## 006 Identity and launch handoff — 26 October 2026
+
+The owner requested correcting installed names/icons and a white launch/loading
+surface while 003 qualification was in progress. **006 remains Partial.**
+
+- `node flutter/tool/generate-icons.mjs` reuses the shared **primary** Goal Hint
+  SVG and the web project's pinned Sharp dependency. It preserves the original
+  cyan/navy colors, proportions and clear space. It generates legacy/adaptive/
+  monochrome Android artwork, Apple asset catalogs, a multi-size Windows ICO,
+  and Linux icon/desktop assets. No separate Flutter artwork or navy icon tile
+  remains. [Generation and platform details](docs/app-identity.md).
+- Android/iOS launcher formats use white; macOS/Windows/Linux use transparency.
+  Android's adaptive foreground respects its native safe zone. Display names
+  and public window/product metadata use **Goal Hint**. Existing application,
+  package and bundle IDs remain unchanged to preserve installed update/profile
+  continuity; final store identity/signing acceptance remains open.
+- Android 12+ day/night splash resources and the shared Flutter loading surface
+  use white, including under dark OS appearance. The OS splash uses the mark
+  and wordmark; the Flutter view implements branding, loading text and animation
+  with reduced-motion handling. Product content still follows the website's
+  theme rather than a competing native preference.
+
+| Identity check | Actual result |
+| --- | --- |
+| Android installed cold OS startup, dark OS | White mark/wordmark splash visually confirmed in `android-white-startup-0.png` |
+| Android compiled identity | `aapt` verified Goal Hint label and adaptive/white launcher resources in the built APK |
+| Android visible normal app | Full Next.js UI and compact bottom inset visually confirmed in `android-compact-sequence-9.png` |
+| Android Flutter loading animation | Passed on the installed final debug build: white logo, Goal Hint name, cyan spinner and Loading text captured at 3.92s in `android-raster-sequence-5.png`; full Next.js app/compact bottom navigation visible by frame 11. `android-raster-normal-build.log` |
+| Windows normal app identity | Goal Hint window title and shared web theme visually checked. Fresh Release build passed; its associated icon was visually checked as the Goal Hint mark and product/file metadata uses Goal Hint |
+| Installed launcher masks, dock/taskbar and complete appearance lifecycle | Full manual masking, light/dark system-bar, native keyboard, theme-change/reload/restart checks remain incomplete |
+| iOS/macOS/Linux identity | Artwork/metadata updated in source; native installed appearance untested on this Windows host |
+
+Keep remaining splash/loading evidence, platform appearance checks and stable
+store identifiers explicit for [007](dev-plan/007-platform-builds-and-release.md).
+Generated assets alone do not qualify every installed platform.

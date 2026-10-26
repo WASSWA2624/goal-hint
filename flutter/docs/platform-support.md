@@ -1,6 +1,6 @@
 # Flutter shell platform support
 
-Evidence checked **26 October 2026 (Africa/Kampala)** for [foundation plan 001](../dev-plan/001-foundation-and-platform-support.md). This is a documentation and integration decision record. A generated Flutter runner, a documented engine feature, and a tested WebView are different levels of evidence. No WebView package, URL loading, or offline cache is implemented by this audit.
+Evidence checked **26 October 2026 (Africa/Kampala)** for [foundation plan 001](../dev-plan/001-foundation-and-platform-support.md). The candidate tables below preserve that foundation decision record. A generated runner, a documented engine feature, and a tested WebView are different levels of evidence. Plan 003 now implements browser adapters; see [the current integration guide](web-app-integration.md) and [execution tracker](../dev-tracker.md) for their actual checks. No offline cache is implemented by browser embedding.
 
 ## Toolchain baseline and evidence labels
 
@@ -12,6 +12,23 @@ The current online Flutter platform reference describes **Flutter 3.47**, which 
 - **Prototype required:** the actual selected plugin, OS, origin, and persistent profile have not demonstrated it in this app.
 - **Unsupported by package:** the released package does not advertise that target.
 - **Host unavailable/untested:** a required build host or device is absent; this does not mean the platform or plugin is unsupported.
+
+## Current app qualification — 26 October 2026
+
+These installed-app results supersede the foundation's prototype-only status
+where stated. They do not qualify the later offline/cache requirements.
+
+| Target | Observed app evidence | Remaining qualification |
+| --- | --- | --- |
+| Windows x64 | WebView2 **155.0.4283.62**. Full synthetic navigation/forms/account HTTP lifecycle, role/expiry/logout checks, separate cold-process session reopen, invalid-TLS Retry, and the complete live-app/native-focus/back/200% text phase passed with clean exits. Shared app/Goal Hint title visually confirmed in dark theme; current normal Release build and icon verified. | Actual keyboard/window/handler checks, distribution/signing and complete appearance lifecycle remain open. |
+| Physical Android | TECNO CL8, API 35, System WebView **155.0.8059.43**. Full synthetic first/reopen passed over TLS wireless ADB after ordinary-store suspend flush, without changing server cookies. Live Next.js rendered over LAN port 3000; Chrome handoff/Back preserved the document. White OS/Flutter loading transition and native 40px bottom-inset correction verified. | Manual picker/keyboard and complete appearance checks remain open. Fixture port 3187 used an owned temporary reverse mapping; normal LAN content needs no USB cable. Final Android Release refresh remains pending. |
+| iOS/macOS | Official WK adapter, persistent-store defaults, network policy and shared-brand asset/metadata implementation present. | No macOS/Xcode host or Apple device execution; installed sessions, file input, local-network privacy, appearance and system bars remain untested. |
+| Linux | Flutter runner, icon and desktop metadata present. | No qualified embedded adapter; Linux/WSL host unavailable. CEF/WebKitGTK prototype still required. The explicit unavailable-browser screen does not satisfy embedding. |
+
+The account-change services are scripted fixture boundaries, not a real
+account backend. No native auth/payment logic, credential preferences or broad
+JavaScript bridge is added. See [the tracker](../dev-tracker.md) for exact checks,
+known failed attempts and current pending results.
 
 ## Native build and runtime matrix
 
@@ -44,7 +61,11 @@ Context7 was used to locate official Flutter/plugin material, then published pac
 
 ## Browser capability matrix
 
-All rows remain **prototype required in this app**. “Documented” below refers to source-level availability, not completed integration or guaranteed retention after the OS clears storage.
+This table records **candidate engine capabilities**, not blanket app acceptance.
+Windows and Android navigation/session/profile behavior now has installed
+evidence above. Worker registration, local delivery and
+offline cold starts remain unverified on every target. “Documented” is not a
+guarantee of cache retention after the OS clears storage.
 
 | Target/engine | Navigation and cookies | Persistent profile | Local asset delivery | Service workers |
 | --- | --- | --- | --- | --- |
@@ -62,7 +83,7 @@ Use one small shell-facing contract for loading, navigation/lifecycle/error sign
 
 Keep Linux as an explicit integration gap, with `webview_cef` as the first prototype and WebKitGTK as the alternative if the CEF footprint or native integration is unsuitable. A candidate that fails prototype acceptance must leave Linux marked unsupported **by the selected app integration**, while retaining the distinction that Flutter itself supports a Linux runner. Opening a separate system browser does not satisfy the embedded-shell requirement.
 
-Plan 001 adds no candidate dependency. [Plan 003](../dev-plan/003-web-app-integration.md) must verify/pin the actual plugins, render the existing site, preserve web navigation/cookies, test disposal and choose per-platform integration. Platform support remains a requirement, not an accomplished five-platform release.
+Plan 001 added no candidate dependency. Plan 003 pins the official system plugin for Android/iOS/macOS and a locally patched, directly imported Windows 0.6.0 adapter. The Windows patch is necessary because the stable plugin's network interception callback alone does not guard every navigation scheme. Its source, license, archive hash, and native guard tests are retained in [the upstream record](../packages/flutter_inappwebview_windows/UPSTREAM.md). See [integration behavior and evidence limits](web-app-integration.md). Platform support remains a requirement, not an accomplished five-platform release.
 
 ## Gates before offline claims
 

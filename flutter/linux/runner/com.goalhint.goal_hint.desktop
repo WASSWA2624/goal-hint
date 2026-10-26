@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Goal Hint
+Comment=Goal Hint football fixtures and predictions
+Exec=goal_hint
+Icon=com.goalhint.goal_hint
+Terminal=false
+Categories=Network;

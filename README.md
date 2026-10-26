@@ -2,14 +2,13 @@
 
 Goal Hint provides football fixtures, predictions, analysis, and recorded results.
 The Next.js application owns the interface, server, and business logic. The Flutter
-foundation provides native project scaffolding for the planned mobile and desktop
-shell around that shared web experience.
+shell embeds that shared web experience using native browser adapters.
 
 ```text
 goal-hint/
 ├── next-js/          # Web client, server, workers, database, tests, and runbooks
 │   └── dev-plan/     # Numbered Next.js implementation plans
-├── flutter/          # Flutter startup scaffold and native platform projects
+├── flutter/          # Native web host, platform adapters, and native projects
 │   └── dev-plan/     # Numbered Flutter shell implementation plans
 ├── prompts/          # Shared feature requests and specifications
 └── app-write-up.md   # Product specification and shared application architecture
@@ -41,14 +40,20 @@ The complete web validation command is `npm --prefix next-js run check`.
 
 ## Flutter shell
 
-A minimal Flutter startup scaffold and Android, iOS, Windows, macOS, and Linux
-platform projects have been generated inside `flutter/`. Central development and
-production URL selection, validation, and native transport policy are implemented.
-Embedded web integration, installed branding, persistent offline startup, safe
-reconnection updates, and release acceptance remain planned in steps 003–007.
+The Flutter host inside `flutter/` uses central development/production URL
+configuration, origin validation, native transport policy, and browser adapters
+for Android, iOS, macOS, and Windows. It preserves web navigation and sessions
+without duplicating product logic. Linux has a native runner but no qualified
+embedded browser yet. Goal Hint names, shared launcher artwork, and white launch
+surfaces are implemented, with appearance qualification still partial in 006.
+Persistent offline startup, safe reconnection updates, and release acceptance
+remain in steps 004–005 and 007.
 See the [Flutter tracker](flutter/dev-tracker.md) for actual execution status and
 verification evidence, and the [implementation prompt](prompts/flutter-app-shell.md)
 for the full requirements. Normal product changes continue to belong in `next-js/`.
+
+For cable-free Android development, see
+[wireless pairing, connection, and Flutter target selection](flutter/docs/development-urls.md#android-wireless-development).
 
 Git metadata and shared development-tool configuration remain at the repository
 root; app-specific configuration stays with its app. Local dependencies, private

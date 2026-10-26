@@ -1,0 +1,37 @@
+// Modified for Goal Hint on 2026-10-26; see package UPSTREAM.md.
+// The original Apache-2.0 license is preserved in package LICENSE.
+
+#ifndef FLUTTER_INAPPWEBVIEW_PLUGIN_SIZE_2D_H_
+#define FLUTTER_INAPPWEBVIEW_PLUGIN_SIZE_2D_H_
+
+#include <flutter/standard_method_codec.h>
+#include <optional>
+
+#include "../utils/flutter.h"
+
+namespace flutter_inappwebview_plugin
+{
+  class Size2D
+  {
+  public:
+    const double width;
+    const double height;
+
+    Size2D(const double& width, const double& height);
+    Size2D(const flutter::EncodableMap& map);
+    ~Size2D() = default;
+
+    bool operator==(const Size2D& other) const
+    {
+      return width == other.width && height == other.height;
+    }
+    bool operator!=(const Size2D& other) const
+    {
+      return !(*this == other);
+    }
+
+    flutter::EncodableMap toEncodableMap() const;
+  };
+}
+
+#endif //FLUTTER_INAPPWEBVIEW_PLUGIN_SIZE_2D_H_

@@ -15,7 +15,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>goal_hint</string>
+	<string>Goal Hint</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Use the camera when you choose to take a photo for an upload.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

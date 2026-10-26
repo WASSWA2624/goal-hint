@@ -1,15 +1,25 @@
-# Goal Hint Flutter foundation
+# Goal Hint Flutter shell
 
 The native project lives entirely in this directory. It has Android, iOS,
-Windows, macOS, and Linux runners and a minimal `GoalHintApp` startup screen.
+Windows, macOS, and Linux runners. `GoalHintApp` embeds the shared website through
+platform browser adapters on Android, iOS, macOS, and Windows; Linux embedding
+remains an explicit integration gap.
 The Next.js app owns the product screens, authentication, data, and business logic.
+
+Android development can install and debug over Wi-Fi without a USB cable; follow
+[wireless setup and target selection](docs/development-urls.md#android-wireless-development).
 
 Follow [the local development plan](dev-plan/000-index.md) and
 [execution tracker](dev-tracker.md). Central URL configuration from step 002 is
-implemented; installed-app loading awaits WebView integration in 003.
+implemented. Step 003 adds native WebView integration; consult the tracker for
+the targets and account behaviors actually verified.
 Persistent offline startup and safe updates are 004–005,
-native branding is 006, and release packaging is 007. Generated launcher artwork
-and bundle identifiers remain provisional until the identity step.
+native appearance is 006, and release packaging is 007. Goal Hint display names,
+shared-primary-mark launcher artwork, and white launch/loading surfaces are
+implemented; see [native identity](docs/app-identity.md). Appearance qualification
+remains partial in 006: Android's white OS/Flutter loading transition is visually
+verified, while complete system-bar/theme/restart behavior, other native launch
+transitions, and unavailable Apple/Linux execution remain open.
 
 ## Toolchain and setup
 
@@ -20,8 +30,9 @@ baseline, not a claim to be the newest Flutter release. See
 
 `pubspec.yaml` declares the SDK minimums; `.metadata` records the generator
 revision and `pubspec.lock` records package resolution. Keep the lockfile in Git.
-The only runtime dependency is the Flutter SDK. WebView dependencies will be
-selected and pinned in step 003 after the platform prototypes.
+System-WebView, WebView2, external URL launching, and profile-path dependencies
+are pinned with the lockfile. The Windows plugin includes a small native policy
+patch in `packages/`; see [integration details](docs/web-app-integration.md).
 
 From the repository root, enter `flutter/`, then run:
 
@@ -29,7 +40,7 @@ From the repository root, enter `flutter/`, then run:
 flutter --version
 flutter doctor -v
 flutter pub get
-dart format --output=none --set-exit-if-changed lib test tool
+dart format --output=none --set-exit-if-changed lib test tool integration_test
 flutter analyze
 flutter test
 ```
@@ -57,7 +68,8 @@ No credentials or Next.js environment files belong in these public defines.
 
 See [development URLs](docs/development-urls.md) for emulator/device routing,
 server binding, native transport policy, and configuration inspection commands.
-The shell still displays its startup screen; website rendering is step 003.
+The selected origin is loaded by the native browser. Product routes, forms,
+authentication, and appearance continue to come from the website.
 
 ## Native development
 
@@ -107,18 +119,37 @@ flutter build apk --debug
 These settings last for that shell session. Keep the temporary directory under
 the ignored `.dart_tool/` directory and consult the tracker for the build outcome.
 
+If Kotlin reports `this and base files have different roots` while closing
+incremental caches, the Pub cache and project are on different Windows drives.
+Disable that optimization for this build process, without changing global
+settings or deleting either cache:
+
+```powershell
+$env:JAVA_TOOL_OPTIONS = ("$env:JAVA_TOOL_OPTIONS -Dorg.gradle.project.kotlin.incremental=false").Trim()
+flutter build apk --debug
+```
+
+Normal builds should regenerate their tooling after integration tests rather
+than reuse a stale test registrant with `--no-pub`.
+
+The Windows browser plugin uses C++20 with current MSVC. Its locally documented
+compatibility fixes retain standard compiler checks; NuGet must be available on
+the build process's PATH. Initial native plugin compilation can take longer than
+later builds that reuse its objects.
+
 ## Platform integration and offline boundary
 
 The [support matrix](docs/platform-support.md) links primary evidence for build
 hosts, released WebView candidates, cookies/profiles, asset loading, and
-service-worker limitations. It distinguishes the selected local SDK from the
-newer online documentation and explicitly leaves Linux embedding unproven.
+service-worker limitations. It distinguishes source documentation from the
+current integration's actual checks and leaves Linux embedding unproven.
 
-Prefer the official system-WebView plugin for Android/iOS/macOS, a verified
-WebView2 adapter for Windows, and a Linux engine prototype before relying on that
-platform. The matrix is a decision record, not an implemented WebView or offline
-feature. Do not assume that one package or a persistent browser profile supplies
-cross-platform offline startup.
+The official system-WebView adapter serves Android/iOS/macOS, and the Windows
+adapter uses WebView2 with an app-owned persistent profile. Windows build hosts
+need NuGet on PATH; installed machines need WebView2 Runtime. Apple execution
+still requires its native host. Linux needs a real engine prototype before its
+runner can qualify as an embedded shell. Browser storage does not by itself
+supply cross-platform offline startup.
 
 Shared cache eligibility and updates belong in
 [Next.js plan 069](../next-js/dev-plan/069-offline-shell-support.md), with minimal

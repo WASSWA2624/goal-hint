@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:goal_hint/app.dart';
 import 'package:goal_hint/config/app_config.dart';
 
+import 'support/fake_web_view.dart';
+
 void main() {
   testWidgets('invalid configuration renders a safe and scrollable error', (
     tester,
@@ -45,17 +47,20 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
+        final browser = FakeWebViewAdapter();
         await tester.pumpWidget(
           GoalHintApp(
             configuration: AppConfig.resolve(
               isDebugBuild: true,
               isAndroid: false,
             ),
+            webViewAdapter: browser,
           ),
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Goal Hint'), findsOneWidget);
+        expect(find.text('Embedded web application'), findsOneWidget);
+        expect(browser.loadedUri, Uri.parse('http://localhost:3000'));
         expect(tester.takeException(), isNull);
       });
     }

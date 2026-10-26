@@ -1,6 +1,6 @@
 # Development and production URLs
 
-Evidence checked **26 October 2026 (Africa/Kampala)** for [plan 002](../dev-plan/002-environment-urls.md). The shell selects one web origin; Next.js owns its routes, interface and server behavior. This step configures addresses and platform transport policy. Embedded page loading belongs to [plan 003](../dev-plan/003-web-app-integration.md), so a successful address probe is not evidence that a WebView has been implemented.
+Evidence checked **26 October 2026 (Africa/Kampala)** for [plan 002](../dev-plan/002-environment-urls.md). The shell selects one web origin; Next.js owns its routes, interface and server behavior. This step configures addresses and platform transport policy. [Plan 003](../dev-plan/003-web-app-integration.md) now provides browser adapters; installed loading is verified on available Windows and Android targets. A successful HTTP probe alone is still not evidence of native browser/session behavior.
 
 ## Public build configuration
 
@@ -64,6 +64,39 @@ flutter build apk --release --dart-define=APP_ENV=production
 
 The production URL is fixed by the shared configuration; neither command uploads, deploys or publishes the website or app.
 
+## Android wireless development
+
+Android 11+ supports TLS wireless ADB. Use current Android SDK Platform Tools,
+connect the phone and computer to the same Wi-Fi, and enable Developer options
+→ Wireless debugging. Open **Pair device with pairing code** to read the pairing
+endpoint. Enter the code interactively when prompted. The pairing port and
+connection port differ; read the connection endpoint from the main Wireless
+debugging screen. [Official ADB guide](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi).
+
+Replace the placeholders with the phone's current values:
+
+```sh
+adb pair <phone-ip>:<pairing-port>
+adb connect <phone-ip>:<connection-port>
+adb devices -l
+flutter devices
+adb -s <wireless-device-id> shell getprop ro.build.version.sdk
+flutter run -d <wireless-device-id> --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://<computer-lan-ip>:3000
+```
+
+mDNS may connect an already paired device automatically. Select the exact
+wireless ID shown by `flutter devices`; USB, mDNS and explicit IP transports
+may coexist. IPs/ports can change. Keep pairing codes and host authorization
+keys out of scripts, logs and Git.
+
+Wireless ADB installs/debugs Flutter. Web traffic separately uses
+`DEV_APP_ORIGIN`: the normal app reaches Next.js over LAN/Wi-Fi without an ADB
+tunnel or USB cable. This setup retains normal TLS/certificate validation and
+firewall policy. An isolated fixture may need its own temporary ADB mapping;
+remove only that owned mapping after testing, preserving the wireless pairing.
+
+## Inspect the selected origin
+
 To inspect the same configuration without a WebView, use the development helper
 from `flutter/`:
 
@@ -121,4 +154,6 @@ Record actual configuration tests, selected target URLs, native build modes and 
 3. Inspect effective Android Debug/Profile/Release transport configuration and Apple configuration-specific plists/entitlements. Verify development HTTP exceptions are absent from both Profile and Release.
 4. Complete installed-app loading/navigation and native WebView transport checks in plan 003. Plan 002's original acceptance item requiring the installed app to load the website stays dependent on that integration; do not mark it passed from the configuration screen, a browser or an HTTP probe.
 
-WebView embedding, offline persistence, reconnection updates, and app branding remain in their respective later plans. No Next.js private environment file is copied into Flutter.
+Browser integration and identity implementation now have their own recorded
+qualification in 003/006. Offline persistence and reconnection remain 004–005.
+No Next.js private environment file is copied into Flutter.

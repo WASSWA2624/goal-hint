@@ -1,0 +1,2 @@
+# Keep the pinned third-party source's original formatting intact.
+flutter/packages/flutter_inappwebview_windows/** whitespace=-blank-at-eol

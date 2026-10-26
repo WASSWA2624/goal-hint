@@ -1,1 +1,6 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # Preserve upstream formatting/lints in the locally patched native plugin.
+    - packages/**

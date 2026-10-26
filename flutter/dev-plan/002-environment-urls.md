@@ -1,6 +1,6 @@
 # 002 - Development and production URLs
 
-**State: Partial — configuration, transport policy, and desktop/device HTTP reachability verified; installed-app loading acceptance awaits [003](003-web-app-integration.md).** Prerequisite: [001](001-foundation-and-platform-support.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
+**State: Completed — central configuration and installed Next.js loading verified on available Windows and physical Android targets during [003](003-web-app-integration.md).** Prerequisite: [001](001-foundation-and-platform-support.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
 
 ## Outcome
 
@@ -30,8 +30,12 @@ retrieved the same Next.js app, including a phone development JavaScript asset.
 Windows and Android Release builds passed. Apple configuration was checked
 statically; Apple native execution requires a macOS host.
 
-The shell does not yet embed a WebView. These HTTP checks establish URL
-reachability, while the installed-shell loading acceptance item remains open
-for 003. See [the guide](../docs/development-urls.md) and
+Installed loading is now verified through 003's browser adapters: the Windows
+shell loads the app through loopback, and the physical Android shell loads the
+same Next.js app through the development computer's LAN origin on port 3000.
+Both use the central resolver. This completes the originally deferred loading
+item for those available targets; Apple runtime and Linux adapter qualification
+remain explicit in 003 rather than inferred from host HTTP probes.
+See [the guide](../docs/development-urls.md) and
 [the tracker](../dev-tracker.md#002-environment-handoff--26-october-2026) for
 commands, results, and the integration handoff.

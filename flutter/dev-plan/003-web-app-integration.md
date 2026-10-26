@@ -1,6 +1,6 @@
 # 003 - Embedded web app integration
 
-**State: Not started.** Prerequisites: [001](001-foundation-and-platform-support.md) and [002](002-environment-urls.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
+**State: Partial — available Windows and Android fixture lifecycle/cold reopen passed; Windows TLS/live checks and full-app rendering on both targets are verified. Remaining manual input, Apple, and Linux qualification is recorded in [the tracker](../dev-tracker.md).** Prerequisites: [001](001-foundation-and-platform-support.md) and [002](002-environment-urls.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
 
 ## Outcome
 
@@ -19,3 +19,28 @@ Display the existing Next.js application with its normal navigation, account ses
 - Demonstrate representative navigation, native back behavior, an external link, web form input, and the normal account lifecycle on each available target.
 - Reopen an installed shell and verify the intended session behavior without bypassing server-side authorization. Record platform differences or failures in the support matrix.
 - Confirm app screens and domain behavior remain in Next.js. Update [the tracker](../dev-tracker.md) with integration boundaries, checks, and the offline capabilities ready for [004](004-persistent-offline-startup.md).
+
+## Integration handoff
+
+The [integration guide](../docs/web-app-integration.md) describes the reusable
+host boundary, selected/pinned browser adapters, persistent profiles, native
+navigation policy, loading/retry behavior, and platform differences. The
+[native acceptance harness](../integration_test/README.md) uses existing
+synthetic Next.js HTTP/account fixtures and a separate read-only live-app phase.
+It includes a cold-process reopen check without clearing browser storage.
+
+The web application remains the only implementation of product screens and
+account/domain rules. Persistent browser storage is groundwork for 004, not an
+offline cache or update mechanism. Linux still needs a real embedded-engine
+prototype; Apple runtime qualification requires its native host. Keep remaining
+checks explicit rather than inferring five-platform support from generated
+runners or package platform lists.
+
+Both available targets passed the synthetic first/reopen pair with the app and
+profile retained. Android commits its ordinary WebView cookie store at suspend;
+the test awaits that normal-close checkpoint without copying tokens or changing
+server cookie lifetime/flags. Android runs passed over paired TLS wireless ADB.
+Windows also passed the complete live-app/native-focus/back/text-scale phase
+and an invalid-certificate Retry check without changing OS trust. Android's
+normal app renders the LAN-hosted site and can open Chrome and return. Manual
+keyboard/picker/window checks, Apple execution and Linux embedding remain open.
