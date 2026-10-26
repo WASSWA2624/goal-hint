@@ -220,6 +220,15 @@ native feature implementation.
 | --- | --- |
 | [072 Automatic registration trial](072-automatic-registration-trial.md) | Grants the configured trial at registration and removes the manual trial-request and approval workflow. |
 
+### 073 Probability-qualified prediction engine
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [073 Probability-qualified prediction engine](073-probability-qualified-prediction-engine.md) | Shared evidence qualification, exact highest-odds selection, optional AI precedence, bounded attributable research and immutable recommendation reads. |
+
+This owner-approved engine behavior supersedes earlier shadow-only source-order
+restrictions. Public odds display and production activation remain separately controlled.
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |

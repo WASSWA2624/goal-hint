@@ -9,6 +9,7 @@ import type { SelectionEntry, SelectionManifest } from "../selection/selection-c
 import type { StoredCycle } from "../predictions/history-contract.ts";
 import type { GoalMarketDefinition } from "../../domain/score-distribution-markets.ts";
 import type { ImpliedMarketExtensionInput } from "../predictions/implied-market-contract.ts";
+import type { RecommendationPolicy } from "../../domain/recommendation.ts";
 
 export class PredictionRefreshError extends Error {
   readonly reason: "invalid-request" | "policy-required" | "unauthorized" | "ineligible" | "lost-lease" | "unavailable";
@@ -41,6 +42,8 @@ export type RefreshPlan = Readonly<{
    * without contemporaneous capture. With it, the provider is always requested and both source receipts are sealed
    * in the fallback stage. */
   sourceOrder?: ForecastSourceOrder;
+  /** Absent on historical plans. New jobs freeze probability/evidence/price selection independently of family argmax. */
+  recommendationPolicy?: RecommendationPolicy;
 }>;
 export type { ForecastSourceOrder };
 export type RefreshIntent = Readonly<{ member: RefreshMember; plan: RefreshPlan; pin: ModelPin | null }>;

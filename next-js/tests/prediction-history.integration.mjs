@@ -19,6 +19,7 @@ import { evidenceContext, evidenceHash, evidenceAuthority, evidencePolicy, evide
 import { CATALOG_NOW, catalogFixture, catalogRequest, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
 import { historyCandidate, cycleCreation, cycleChange, revisionInput } from './helpers/prediction-history-fixtures.mjs';
 import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql-instance.mjs';
+import { candidateRecommendation } from './helpers/recommendation-fixtures.mjs';
 
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
 const script = fileURLToPath(new URL('../scripts/database.py', import.meta.url));
@@ -160,6 +161,20 @@ test('immutable prediction history on isolated genuine MySQL', { timeout: 300000
       assert.equal(archived.candidate.context.context.fixtureVersion, exactVersion);
       assert.equal(archived.candidate.markets['match-result'].market.probabilities['home-win'], 0.3333333333333333);
       assert.equal(archived.modelVersionId, model.id); assert.equal(archived.candidate.markets['match-result'].provenance.evidenceHash, input.candidate.context.evidenceHash);
+    });
+    await t.test('recommendation and private exact quote are immutable revision audit, separate from the family argmax', async () => {
+      const target = await seed(106), targetCycle = await first.createCycle(cycleCreation(target));
+      const input = await prepare(target, targetCycle, run);
+      const recommendation = candidateRecommendation(input.candidate, input.evidenceSnapshotId);
+      const candidate = { ...input.candidate, audit: { ...input.candidate.audit, recommendation } };
+      const revision = await publish(first, { ...input, candidate });
+      assert.deepEqual((await second.findRevision(revision.id)).candidate.audit.recommendation, recommendation);
+      assert.equal(revision.candidate.markets['double-chance'].market.selection, 'home-or-draw');
+      assert.equal(revision.candidate.audit.recommendation.selected.selection, 'home-or-away');
+      assert.equal(revision.candidate.audit.recommendation.selected.quote.decimal, '1.9001');
+      await assert.rejects(a.query((tx) => tx.$executeRaw`UPDATE PredictionSet SET candidateJson=JSON_SET(candidateJson,
+        '$.audit.recommendation.selected.quote.decimal','9.9999') WHERE id=${revision.id}`));
+      assert.deepEqual((await first.findRevision(revision.id)).candidate.audit.recommendation, recommendation);
     });
     await t.test('invalid probabilities, mismatched evidence/fixture/cycle identities and older runs cannot append', async () => {
       const early = await first.createRun('2026-10-07', CATALOG_NOW), input = await prepare(fixture, cycle, early);

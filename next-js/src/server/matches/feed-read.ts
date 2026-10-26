@@ -7,7 +7,6 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
-import { oddsPriceJoin } from "../odds/odds-read.ts";
 import { selectionRunWindow, storedSelectionManifest } from "../selection/selection-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import type { FeedSearch } from "./feed-search.ts";
@@ -33,22 +32,36 @@ export const displayedSet = Prisma.sql`CASE
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
   providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null) {
   const markets = Prisma.join(query.markets);
+  const hasDecision = Prisma.sql`JSON_CONTAINS_PATH(rp.candidateJson,'one','$.audit.recommendation')=1`;
+  const recommendedFamily = Prisma.sql`JSON_UNQUOTE(JSON_EXTRACT(rp.candidateJson,'$.audit.recommendation.selected.family'))`;
+  const useRecommendation = Prisma.sql`(${hasDecision} AND (${recommendedFamily} IN (${markets})
+    ${query.markets.length === publicPolicy.markets.length ? Prisma.sql`OR TRUE` : Prisma.empty}))`;
+  const chosen = Prisma.sql`(${hasDecision} AND m.family=${recommendedFamily})`;
+  const pickProbability = Prisma.sql`CASE WHEN ${chosen} THEN (JSON_UNQUOTE(JSON_EXTRACT(rp.candidateJson,
+    '$.audit.recommendation.selected.probability'))+0e0) ELSE m.selectedProbability END`;
+  const pickSelection = Prisma.sql`CASE WHEN ${chosen} THEN JSON_UNQUOTE(JSON_EXTRACT(rp.candidateJson,
+    '$.audit.recommendation.selected.selection')) ELSE m.selection END`;
+  const pickPrice = providerOdds ? Prisma.sql`CASE WHEN ${chosen} THEN FLOOR(CAST(JSON_UNQUOTE(JSON_EXTRACT(rp.candidateJson,
+    '$.audit.recommendation.selected.quote.decimal')) AS DECIMAL(10,4))*100+0.5) ELSE op.displayHundredths END` : Prisma.sql`NULL`;
   // One shown pick per fixture: highest unrounded probability, then the exact fresh public price,
   // then policy order. Candidate odds remain unread while their public feature is disabled.
   const candidatePriceJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id
       AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE` : Prisma.empty;
-  const candidatePriceOrder = providerOdds ? Prisma.sql`bp.displayHundredths DESC,` : Prisma.empty;
+  const candidatePriceOrder = providerOdds ? Prisma.sql`CASE WHEN ${hasDecision} THEN NULL ELSE bp.displayHundredths END DESC,` : Prisma.empty;
   // The cohort joins alone serve the known count and league options: each shown-pick join below matches a full primary
   // key, (setId, family) and (fixtureId, marketKey, selection), so it never adds or removes a cohort row.
   const cohortJoins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
     LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id`;
   const joins = Prisma.sql`${cohortJoins}
-    LEFT JOIN MarketPrediction m ON m.setId=${displayedSet} AND m.family=(SELECT b.family FROM MarketPrediction b
+    LEFT JOIN PredictionSet rp ON rp.id=${displayedSet}
+    LEFT JOIN MarketPrediction m ON m.setId=rp.id AND m.family=CASE WHEN ${useRecommendation} THEN ${recommendedFamily}
+      ELSE (SELECT b.family FROM MarketPrediction b
       ${candidatePriceJoin}
-      WHERE b.setId=${displayedSet} AND b.family IN (${markets}) AND b.available=TRUE
-      ORDER BY b.selectedProbability DESC, ${candidatePriceOrder} FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)
-    ${providerOdds ? oddsPriceJoin : Prisma.empty}`;
+      WHERE b.setId=rp.id AND b.family IN (${markets}) AND b.available=TRUE
+      ORDER BY b.selectedProbability DESC, ${candidatePriceOrder} FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1) END
+    ${providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice op ON op.fixtureId=f.id AND op.marketKey=m.family
+      AND op.selection=${pickSelection} AND op.stale=FALSE` : Prisma.empty}`;
   const timeWindows = query.time ? kickoffTimeWindows(range, query.time) : null;
   const days = query.time ? kickoffTimeWindows(range, { ...query.time, from: "00:00", to: "23:59" }) : null;
   const inWindows = (windows: { start: number; end: number }[]) => windows.length
@@ -64,14 +77,14 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   if (query.picks === "only") filters.push(Prisma.sql`m.available=TRUE`);
   if (!isAnyProbability(query.probability)) {
     // Inclusive unrounded bounds. Decimal-text scaling avoids introducing an arithmetic rounding error at equality.
-    filters.push(Prisma.sql`m.available=TRUE AND m.selectedProbability>=${probabilityFraction(query.probability.min)}
-      AND m.selectedProbability<=${probabilityFraction(query.probability.max)}`);
+    filters.push(Prisma.sql`m.available=TRUE AND ${pickProbability}>=${probabilityFraction(query.probability.min)}
+      AND ${pickProbability}<=${probabilityFraction(query.probability.max)}`);
   }
   // Inclusive bounds on the shown pick's own stored two-place price. A fixture without a fresh price for exactly
   // that family and selection drops out through NULL semantics; another family's price never qualifies it.
   // Odds stay unread while provider odds are not public, so the feed never depends on the odds tables then
   // (parseFeedQuery already rejects `odds` in that case; this guard keeps a hand-built query from joining).
-  if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND op.displayHundredths BETWEEN ${query.odds.min} AND ${query.odds.max}`);
+  if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND ${pickPrice} BETWEEN ${query.odds.min} AND ${query.odds.max}`);
   let searchJoin = Prisma.empty, exact: Prisma.Sql | null = null, ranking: Prisma.Sql | null = null;
   if (query.search) {
     if (!search || search.query !== query.search) throw new MatchFeedError("unavailable");
@@ -88,10 +101,11 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   }
   const descending = query.sort.direction === "desc";
   const order = query.sort.by === "probability"
-    ? Prisma.sql`m.selectedProbability IS NULL ASC, m.selectedProbability ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
+    ? Prisma.sql`${pickProbability} IS NULL ASC, ${pickProbability} ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
     : descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC`;
   // `searchJoin` belongs to the filtered reads only: known counts and league options keep the whole date cohort.
-  return { joins, cohortJoins, searchJoin, scope, where: Prisma.join(filters, " AND "), order: ranking ? Prisma.sql`${ranking}, ${order}` : order, exact };
+  return { joins, cohortJoins, searchJoin, scope, where: Prisma.join(filters, " AND "), order: ranking ? Prisma.sql`${ranking}, ${order}` : order,
+    exact, pickProbability, pickSelection };
 }
 
 const feedSearchWords = 16;

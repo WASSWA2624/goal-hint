@@ -12,6 +12,7 @@ import { storedSettlementProjection } from "../settlement/settlement-read.ts";
 import { publicVoidReason } from "./fixture-read.ts";
 import { storedDetailSnapshotSchema } from "../../domain/match-detail.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+import { publicRecommendation } from "../../domain/recommendation-view.ts";
 
 const revisionPayloadSchema = z.strictObject({ markets: storedDetailSnapshotSchema.shape.markets,
   unavailableMarkets: storedDetailSnapshotSchema.shape.unavailableMarkets, analysis: storedDetailSnapshotSchema.shape.analysis });
@@ -87,5 +88,7 @@ export async function publicDetailSnapshot(tx: Prisma.TransactionClient, revisio
         : correctedAt !== null ? "The verified regulation-time result was corrected; the original selected pick is preserved." : "Settled against the verified regulation-time result.",
       settledAt: current && status !== "pending" ? recorded.at : null, correctedAt, voidedAt: status === "void" ? cycle.voidedAt : null };
   });
-  return { ...publicDetailRevision(revision), historical, applicability, cycle: publicDetailCycle(cycle), markets, unavailableMarkets, analysis, outcomes };
+  const recommendation = publicRecommendation(revision.candidate.audit.recommendation);
+  return { ...publicDetailRevision(revision), historical, applicability, cycle: publicDetailCycle(cycle), markets, unavailableMarkets, analysis, outcomes,
+    ...(recommendation === undefined ? {} : { recommendation }) };
 }

@@ -32,7 +32,7 @@ test("the provider benchmark wins over a valid AI candidate and leaves unsupport
   assert.equal(parsed.audit.aiStatus, "candidate");
   assert.equal(parsed.audit.aiReason, null);
   assert.equal(evidenceFingerprint(fixture.ai), originalAi, "shadow output keeps its original context, evidence and source clocks");
-  assert.match(parsed.reasons[0].text, /provider benchmark/u);
+  assert.match(parsed.reasons[0].text, /independently retained baseline/u);
 });
 
 test("a missing, denied, unowned or revoked provider cannot promote shadow AI", () => {
@@ -51,7 +51,7 @@ test("a missing, denied, unowned or revoked provider cannot promote shadow AI", 
 });
 
 test("baseline collection runs with complete AI inside the original football allowance", async () => {
-  const h = baselineSetup({ service: { selectionPolicy: undefined } });
+  const h = baselineSetup({ service: { selectionPolicy: "provider-baseline" } });
   const before = evidenceFingerprint(h.ai), result = await h.service.resolve(h.request());
   assert.equal(result.status, "candidate");
   assert.equal(result.candidate.markets["match-result"].market.source, "api-football");
@@ -62,6 +62,28 @@ test("baseline collection runs with complete AI inside the original football all
   assert.equal(h.provider.network.length, 1);
   assert.equal(result.requestsDispatched, 1);
   assert.equal(evidenceFingerprint(h.ai), before);
+});
+
+test("optional AI precedence retains an independent provider-only baseline even beside complete valid AI", async () => {
+  const h = baselineSetup({ service: { selectionPolicy: undefined } });
+  const result = await h.service.resolve(h.request({ order: "ai-first" }));
+  assert.equal(result.status, "candidate");
+  assert.equal(result.candidate.markets["match-result"].market.source, "ai");
+  assert.equal(result.baseline.markets["match-result"].market.source, "api-football");
+  assert.equal(result.baseline.markets["total-goals"].available, false);
+  assert.notDeepEqual(result.candidate.markets["match-result"].market.probabilities, result.baseline.markets["match-result"].market.probabilities);
+  assert.deepEqual(h.collected[0].requestedGroups, ["match-result", "total-goals", "both-teams-to-score"]);
+  assert.equal(result.sources.order, "ai-first");
+  assert.equal(result.requestsDispatched, 1);
+});
+
+test("optional source policy preserves a previously frozen provider-first resolution order", async () => {
+  const h = baselineSetup({ service: { selectionPolicy: undefined } });
+  const result = await h.service.resolve(h.request({ order: "provider-first" }));
+  assert.equal(result.candidate.markets["match-result"].market.source, "api-football");
+  assert.equal(result.candidate.audit.sourceOrder, "provider-first");
+  assert.equal(result.baseline.markets["match-result"].market.source, "api-football");
+  assert.equal(result.sources.order, "provider-first");
 });
 
 test("baseline interruptions, missing configuration and quota failure preserve unavailable rather than promoting AI", async () => {

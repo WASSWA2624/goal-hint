@@ -1,4 +1,5 @@
 import "server-only";
+import { parseRecommendationDecision } from "../predictions/recommendation-input.ts";
 
 import { z } from "zod";
 import { marketRules, presentMarketProbabilities, validateMarketGroup, validateMarketSnapshot, type MarketSnapshot, type MarketSource } from "../../domain/markets.ts";
@@ -167,7 +168,7 @@ const resolvedCandidate = z.object({ context: z.unknown(), markets: z.object({
   reasons: z.array(publicExplanation).min(2).max(4), uncertainty: publicExplanation,
   audit: z.object({ aiStatus: z.enum(["candidate", "denied"]), aiReason: text.nullable(),
     providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable(),
-    sourceOrder: z.enum(forecastSourceOrders).optional() }).strict(),
+    sourceOrder: z.enum(forecastSourceOrders).optional(), recommendation: z.unknown().optional() }).strict(),
 }).strict();
 
 /** Archive validation, not provider/ownership authorization or publication eligibility. */
@@ -209,6 +210,9 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
       for (const key of ["provenance", "timestamps", "flags", "fallback"] as const)
         if (evidenceFingerprint(result[key]) !== evidenceFingerprint(chance[key])) throw new Error();
     } else if (!result.available && !chance.available && result.reason !== chance.reason) throw new Error();
-    return freezeEvidence({ ...parsed, context }) as ResolvedForecastCandidate;
+    const recommendation = parsed.audit.recommendation === undefined ? undefined
+      : parseRecommendationDecision(parsed.audit.recommendation, context, parsed.markets as ResolvedForecastCandidate["markets"]);
+    return freezeEvidence({ ...parsed, context, audit: { ...parsed.audit,
+      ...(recommendation === undefined ? {} : { recommendation }) } }) as ResolvedForecastCandidate;
   } catch { throw new FallbackInputError(); }
 }

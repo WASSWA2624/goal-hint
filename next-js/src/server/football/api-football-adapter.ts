@@ -18,7 +18,7 @@ export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; sea
   teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number }>;
 export type TeamQuery = Readonly<{ teamId: number }> | Readonly<{ competitionId: number; season: number }>;
 export type CompetitionQuery = Readonly<{ competitionId?: number; season?: number }>;
-export type PlayerStatisticsQuery = Readonly<{ competitionId: number; season: number }>;
+export type PlayerStatisticsQuery = Readonly<{ competitionId: number; season: number; teamId?: number }>;
 /** One documented bookmaker, by Kampala reporting date or by fixture. */
 export type OddsQuery = Readonly<{ date: string; bookmakerId: number }> | Readonly<{ fixtureId: number; bookmakerId: number }>;
 export type ApiFootballAdapterOptions = Readonly<{
@@ -121,7 +121,8 @@ function matchesScope(endpoint: ApiFootballEndpoint, params: Params, row: unknow
     && !row.seasons.some((season) => record(season) && season.year === Number(params.season))) return false;
   if (endpoint === "playerStatistics" && Array.isArray(row.statistics)
     && !row.statistics.some((statistic) => record(statistic) && record(statistic.competition)
-      && statistic.competition.id === Number(params.league) && statistic.competition.season === Number(params.season))) return false;
+      && statistic.competition.id === Number(params.league) && statistic.competition.season === Number(params.season)
+      && (params.team === undefined || record(statistic.team) && statistic.team.id === Number(params.team)))) return false;
   if (endpoint === "injuries" && row.fixtureId !== null && row.fixtureId !== Number(params.fixture)) return false;
   if (endpoint === "odds") {
     const odds = row as unknown as NormalizedFixtureOdds;
@@ -526,7 +527,12 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       events: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("events", positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeEvent, undefined, workflow),
       availability: (fixtureId: number, kind: "lineups" | "injuries", bounds: ApiFootballBounds) => run(kind === "injuries" ? "injuries" : "lineups",
         positive(fixtureId) && ["lineups", "injuries"].includes(kind) ? [{ fixture: String(fixtureId) }] : null, bounds, (raw, context) => normalizeAvailability(raw, kind, context)),
-      playerStatistics: (query: PlayerStatisticsQuery, bounds: ApiFootballBounds) => { const params = paired(query); return run("playerStatistics", params ? [params] : null, bounds, normalizePlayerStatistics); },
+      playerStatistics: (query: PlayerStatisticsQuery, bounds: ApiFootballBounds) => {
+        const pairedParams = paired(query, ["teamId"]), team = query.teamId;
+        const params = pairedParams && (team === undefined || positive(team))
+          ? { ...pairedParams, ...(team === undefined ? {} : { team: String(team) }) } : null;
+        return run("playerStatistics", params ? [params] : null, bounds, normalizePlayerStatistics);
+      },
     }),
     fallback: Object.freeze({ predictions: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("predictions",
       positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeFallbackPrediction, undefined, workflow) }),

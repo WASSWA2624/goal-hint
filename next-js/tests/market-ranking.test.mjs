@@ -13,7 +13,7 @@ const price = (family, selection, value) => ({ family, selection, price: value }
 const tied = [pick("match-result", "home-win", 0.7), pick("total-goals", "over-2.5", 0.7)];
 const prices = [price("match-result", "home-win", "1.90"), price("total-goals", "over-2.5", "2.10")];
 
-test("a higher unrounded forecast probability always beats better odds, even when displayed percentages tie", () => {
+test("legacy revisions retain their probability ranking when displayed percentages tie", () => {
   const items = [pick("match-result", "home-win", 0.7000001), tied[1]];
   assert.equal(bestPublishedFamily(items, [price("match-result", "home-win", "1.20"), price("total-goals", "over-2.5", "9.99")], families), "match-result");
   assert.equal(bestPublishedFamily(items, [price("total-goals", "over-2.5", "9.99")], families), "match-result", "a missing price never discards a more probable forecast");
@@ -28,8 +28,8 @@ test("the Any default selects the highest-probability available family and keeps
   assert.equal(prices.find((entry) => entry.family === family)?.price, "1.30");
   assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
   const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
-  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC, bp.displayHundredths DESC/u);
-  assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=m.selection/u);
+  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC, CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC/su);
+  assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.doesNotMatch(sql.where.sql, /op.displayHundredths BETWEEN/u);
 });
 
@@ -65,12 +65,16 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const query = parseFeedQuery(new URLSearchParams("market=match-result,total-goals&prob=60-100&odds=1.50-3.00&sort=probability"), { today, providerOdds: true });
   const enabled = feedSql(query, range, [39], true);
   assert.match(enabled.joins.sql, /LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id\s+AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE/u);
-  assert.match(enabled.joins.sql, /ORDER BY b.selectedProbability DESC, bp.displayHundredths DESC, FIELD\(b.family,/u);
-  assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=m.selection AND op.stale=FALSE/u);
-  assert.match(enabled.where.sql, /m.selectedProbability>=\?/u);
-  assert.match(enabled.where.sql, /m.selectedProbability<=\?/u);
-  assert.match(enabled.where.sql, /op.displayHundredths BETWEEN \? AND \?/u);
-  assert.match(enabled.order.sql, /m.selectedProbability IS NULL ASC, m.selectedProbability DESC/u);
+  assert.match(enabled.joins.sql, /ORDER BY b.selectedProbability DESC, CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC, FIELD\(b.family,/su);
+  assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
+  assert.match(enabled.where.sql, /ELSE m.selectedProbability END>=\?/u);
+  assert.match(enabled.where.sql, /ELSE m.selectedProbability END<=\?/u);
+  assert.match(enabled.where.sql, /ELSE op.displayHundredths END BETWEEN \? AND \?/u);
+  assert.match(enabled.where.sql, /\$\.audit.recommendation.selected.quote.decimal/u);
+  assert.match(enabled.order.sql, /ELSE m.selectedProbability END IS NULL ASC,/u);
+  assert.match(enabled.order.sql, /ELSE m.selectedProbability END DESC/u);
+  assert.match(enabled.joins.sql, /LEFT JOIN PredictionSet rp ON rp.id=/u);
+  assert.match(enabled.where.sql, /\$\.audit.recommendation.selected.probability/u);
   const disabled = feedSql(query, range, [39], false);
   assert.doesNotMatch(disabled.joins.sql, /FixtureOdds|\bbp\.|\bop\./u);
   assert.doesNotMatch(disabled.where.sql, /\bop\./u);

@@ -5,6 +5,7 @@ import { isPlayedFinalStatus, settlementStatuses, type SettlementOutcomeStatus }
 import { publicPolicy } from "./public-policy.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
+import { publicRecommendationSchema } from "./recommendation-view.ts";
 
 import { parseFixtureVersion } from "./fixture-version.ts";
 export { maximumFixtureVersion, parseFixtureVersion, compareFixtureVersions } from "./fixture-version.ts";
@@ -94,6 +95,7 @@ export const publicForecastSchema = z.strictObject({
   runId: identity, revisionId: identity, publishedAt: instant,
   runSequence: z.string().regex(/^[1-9]\d*$/u).max(20).optional(),
   updateDelayed: z.boolean().optional(), provisional: z.boolean().optional(),
+  recommendation: publicRecommendationSchema.optional(),
   markets: z.array(z.strictObject({
     market: z.custom<AcceptedMarket>(acceptedMarket).transform((market) =>
       ({ ...market, probabilities: { ...market.probabilities } }) as AcceptedMarket),
@@ -108,6 +110,13 @@ export const publicForecastSchema = z.strictObject({
   }
   const inputs: Record<string, unknown> = {};
   const supplied = new Map(value.markets.map((item) => [item.market.family, item.market]));
+  const recommendation = value.recommendation?.selected;
+  if (recommendation) {
+    const item = supplied.get(recommendation.family);
+    if (!item || item.source !== recommendation.source ||
+      (item.probabilities as Readonly<Record<string, number>>)[recommendation.selection] !== recommendation.probability)
+      context.addIssue({ code: "custom", message: "Recommendation must belong to its complete published forecast group." });
+  }
   if (supplied.size !== value.markets.length) { context.addIssue({ code: "custom", message: "Duplicate market." }); return; }
   for (const { market } of value.markets) if (market.family !== "double-chance") {
     inputs[market.family] = { source: market.source, period: market.period, probabilities: market.probabilities,
@@ -166,6 +175,8 @@ function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.
   const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
   if (value.prices) {
     const picks = new Map(forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);
+    if (forecast?.recommendation?.selected) picks.set(forecast.recommendation.selected.family,
+      forecast.recommendation.selected.selection as AcceptedMarket["selection"]);
     if (new Set(value.prices.map((item) => item.family)).size !== value.prices.length ||
       value.prices.some((item) => picks.get(item.family) !== item.selection)) {
       context.addIssue({ code: "custom", message: "A price must belong to exactly one published pick of its own family." });

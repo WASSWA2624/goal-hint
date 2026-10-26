@@ -32,14 +32,10 @@ export function liveAiModel(policy: RuntimePolicy): ModelVersion {
   });
 }
 
-const PROMOTION_REFERENCE = /^forecast-evaluation:[a-f0-9]{64}:([a-f0-9]{64})$/u;
-/** Parses the configured source order and model-bound reference; this does not authorize promotion.
- * Live readiness additionally requires the actual independently verified frozen evidence binding, which is not mounted. */
-export function liveSourceOrder(policy: RuntimePolicy, model: ModelVersion): ForecastSourceOrder {
-  const { sourceOrder, aiPromotionRef } = policy.choices.forecasts;
-  if (sourceOrder !== "ai-first") return "provider-first";
-  if (aiPromotionRef?.match(PROMOTION_REFERENCE)?.[1] !== model.id) throw new Error("AI-first publication needs a promotion reference for the current model.");
-  return "ai-first";
+/** The owner-approved optional AI precedence is a product policy, not measured accuracy promotion.
+ * Provider-first is retained as an explicit rollback setting; no fabricated evaluation reference is needed. */
+export function liveSourceOrder(policy: RuntimePolicy): ForecastSourceOrder {
+  return policy.choices.forecasts.sourceOrder;
 }
 
 /** UTC months are ledger partitions; they impose no monthly spending cap in usage-based mode. */

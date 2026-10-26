@@ -421,6 +421,18 @@ test("player pagination dispatches each documented page through its own reservat
   assert.deepEqual(result.provenance.map(({ currentPage }) => currentPage), [1, 2]);
 });
 
+test("player statistics optionally scopes the existing endpoint to a verified team without accepting another team's row", async () => {
+  const state = setup({ respond: (url) => jsonResponse(url, [player(1)]) });
+  const result = await state.adapter.evidence.playerStatistics({ competitionId: 39, season: 2026, teamId: 10 }, bounds());
+  assert.equal(result.status, "complete"); assert.equal(result.data.length, 1);
+  assert.equal(state.network[0].url.searchParams.get("team"), "10");
+  const wrong = await state.adapter.evidence.playerStatistics({ competitionId: 39, season: 2026, teamId: 20 }, bounds());
+  assert.equal(wrong.data.length, 0); assert.equal(wrong.status, "partial");
+  const invalid = setup();
+  await invalid.adapter.evidence.playerStatistics({ competitionId: 39, season: 2026, teamId: -1 }, bounds());
+  assert.equal(invalid.network.length, 0);
+});
+
 test("pagination drift and duplicate player identities stop retrieval with explicit incompleteness", async () => {
   for (const problem of ["total-drift", "duplicate-player"]) {
     const state = setup({ respond: (url) => {

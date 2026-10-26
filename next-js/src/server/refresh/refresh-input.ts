@@ -10,6 +10,7 @@ import { parseProviderFallbackRequest } from "../fallback/fallback-adapter.ts";
 import { refreshFail, type RefreshMember, type RefreshPlan } from "./refresh-contract.ts";
 import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
 import { parseImpliedMarketExtensionInput } from "../predictions/implied-market-contract.ts";
+import { recommendationPolicy } from "../../domain/recommendation.ts";
 
 export const refreshPayload = z.strictObject({ input: z.unknown(), runId: z.uuid(), fixtureId: z.uuid(), cycleId: z.uuid(),
   runDate: z.iso.date(), rank: z.number().int().nonnegative() });
@@ -27,8 +28,9 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
       observation: z.strictObject({ bounds: z.unknown(), maxAgeMs: z.number() }), publicationReserveMs: z.number(),
       footballRequestLimit: z.number().int().positive().max(4_294_967_295),
       goalDefinitions: z.array(goalMarketDefinitionSchema).max(256).optional(), impliedExtension: z.unknown().optional(),
-      sourceOrder: z.enum(["provider-first", "ai-first"]).optional() });
+      sourceOrder: z.enum(["provider-first", "ai-first"]).optional(), recommendationPolicy: z.unknown().optional() });
     shape.parse(input);
+    if (input.recommendationPolicy !== undefined && evidenceFingerprint(input.recommendationPolicy) !== evidenceFingerprint(recommendationPolicy)) throw new Error();
     // Provider-fallback-only plans omit both the model and its AI allocation, and keep their reviewed shape without an order.
     if ((input.ai === null) !== (input.modelVersionId === null) || input.sourceOrder !== undefined && input.ai === null) throw new Error();
     // AI joint-distribution extension markets are never published beside a provider match result.

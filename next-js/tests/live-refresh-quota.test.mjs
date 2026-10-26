@@ -17,10 +17,10 @@ function fixture({ publication = null, outcome = null, intent = null, started = 
 }
 const saved = { plan: { fallback: { bounds: { maxRequests: 1 } }, observation: { bounds: { maxRequests: 1 } } } };
 
-test('new jobs retain four primary-enabled or two fallback-only requests and the quota floor', async () => {
+test('new jobs reserve structured evidence, fallback and status with AI enabled or disabled', async () => {
   for (const primaryEnabled of [true, false]) {
-    const h = fixture(), expected = primaryEnabled ? 4 : 2;
-    assert.equal(await remainingLiveRefreshRequests(h.store, jobId, primaryEnabled), expected);
+    const h = fixture(), expected = 8;
+    assert.equal(await remainingLiveRefreshRequests(h.store, jobId), expected);
     for (const remaining of [100 + expected - 1, 100 + expected]) {
       assert.equal(await canRunLiveRefresh({ store: h.store, jobId, primaryEnabled, floor: 100,
         remaining: async () => remaining }), remaining === 100 + expected);

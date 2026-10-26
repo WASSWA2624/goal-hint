@@ -10,6 +10,16 @@ is in [api-football-adapter.md](api-football-adapter.md), the counted odds trial
 in [football-provider-trial.md](football-provider-trial.md), and quota pacing in
 [live-operations.md](live-operations.md).
 
+The [probability-qualified engine](prediction-engine.md) also reads permitted
+private bookmaker snapshots independently of the public-display flag. It uses
+prices only after independently estimated probabilities and football evidence
+qualify. New sealed per-fixture quote manifests record bet hashes and original
+kickoff; the immutable recommendation keeps the exact quote and observation
+receipt. Older receipts remain readable but cannot establish a newly priced
+recommendation until a permitted observation supplies a manifest. Public odds
+display remains disabled. Acquisition, internal retention/use and public display
+retain separate permission checks.
+
 ## Current status
 
 - **Imports are off.** `GOAL_HINT_ODDS_IMPORT_ENABLED` defaults to `false`, and

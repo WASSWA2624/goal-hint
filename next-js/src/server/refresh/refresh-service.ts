@@ -22,6 +22,10 @@ import { PredictionRefreshError, refreshFail, type RefreshAuthority, type Refres
 import { parseRefreshPlan, refreshPayload, refreshPin, refreshReference } from "./refresh-input.ts";
 import type { RefreshStore } from "./refresh-mysql-store.ts";
 import type { createRefreshObservationCollector } from "./refresh-observation.ts";
+import type { EvidenceContext } from "../evidence/evidence-contract.ts";
+import { assessBaselineEvidence } from "../evidence/baseline-evidence.ts";
+import type { RecommendationQuote } from "../../domain/recommendation.ts";
+import { selectRecommendation } from "./recommendation-selection.ts";
 
 class PhaseTimeout extends Error {}
 type CostReader = Pick<ReturnType<typeof createCostService>, "jobSummary">;
@@ -35,13 +39,14 @@ export function createPredictionRefreshService(options: Readonly<{
   type: string; handlerVersion: number; store: RefreshStore; selection: Pick<DailySelectionStore, "progress" | "inspect">;
   authority: RefreshAuthority; configure(member: RefreshMember): RefreshPlan | Promise<RefreshPlan>;
   /** Optional bounded input imports before the immutable analysis cutoff is captured. */
-  prepare?(member: RefreshMember, context: JobHandlerContext): Promise<void>;
+  prepare?(member: RefreshMember, context: JobHandlerContext): Promise<void | Readonly<{ sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]; research?: Readonly<{ status: "completed" | "denied"; reason: string | null }> }>>;
   models: Pick<ModelRegistry, "resolve">; evidence: Pick<ReturnType<typeof createEvidenceService>, "collect">;
   predictor: Pick<ReturnType<typeof createPredictorService>, "predict">;
   fallback: Pick<ReturnType<typeof createFallbackService>, "resolve" | "resolveWithoutProvider">;
   observation: Pick<ReturnType<typeof createRefreshObservationCollector>, "collect">;
   lifecycle: Pick<ReturnType<typeof createScheduleLifecycleService>, "observe" | "refreshEligibility">;
   publisher: Pick<ReturnType<typeof createRevisionPublicationService>, "publish">;
+  recommendations?: Readonly<{ quotes(context: EvidenceContext): Promise<readonly RecommendationQuote[]> }>;
   costs: Readonly<{ ai: CostReader | null; research: CostReader | null }>; clock?: Clock;
 }>) {
   const now = () => utcInstantFromEpochMilliseconds(options.clock?.now() ?? Date.now());
@@ -93,14 +98,15 @@ export function createPredictionRefreshService(options: Readonly<{
         if (prepared) phases.preparation = "reused";
         else if (await options.store.start(lease, "preparation")) {
           await context.checkpoint();
-          let result = "prepared";
-          try { await options.prepare(member, context); }
+          let result = "prepared", sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[] = [];
+          let research: Readonly<{ status: "completed" | "denied"; reason: string | null }> | undefined;
+          try { const prepared = await options.prepare(member, context); sources = prepared?.sources ?? []; research = prepared?.research; }
           catch (error) {
             if (context.signal.aborted || error instanceof PredictionRefreshError && error.reason === "unauthorized") throw error;
             result = "unavailable";
           }
           await context.checkpoint();
-          await options.store.complete(lease, "preparation", { status: result }); phases.preparation = result;
+          await options.store.complete(lease, "preparation", { status: result, sources, ...(research === undefined ? {} : { research }) }); phases.preparation = result;
         } else phases.preparation = "interrupted";
         // Imports keep their original retrieval clocks. Analysis begins only after them.
         member = await options.store.loadMember(lease);
@@ -227,12 +233,31 @@ export function createPredictionRefreshService(options: Readonly<{
         ai, bounds: plan.fallback.bounds, maxElapsedMs: plan.fallback.maxElapsedMs,
         // A frozen order always requests the provider; the sealed fallback stage then holds both source receipts.
         ...(plan.sourceOrder === undefined ? {} : { order: plan.sourceOrder }) };
+      const snapshot = evidence.snapshot;
+      function qualified(result: FallbackRefreshResult, quotes: readonly RecommendationQuote[]): FallbackRefreshResult {
+        if (result.status === "denied" || plan.recommendationPolicy === undefined) return result;
+        const selected = selectRecommendation({ candidate: result.candidate, ...(result.baseline === undefined ? {} : { baseline: result.baseline }),
+          snapshot, quotes, decisionAt: now(), policy: plan.recommendationPolicy, evidenceSnapshotId }, assessBaselineEvidence);
+        return freezeEvidence({ ...result, candidate: selected.candidate });
+      }
       let fallback = await phase<FallbackRefreshResult>("fallback", plan.fallback.maxElapsedMs,
         plan.publicationReserveMs + plan.observation.bounds.timeoutMs * plan.observation.bounds.maxRequests,
-        (workflow) => options.fallback.resolve(request, workflow), () => options.fallback.resolveWithoutProvider(request));
+        async (workflow) => {
+          let result = await options.fallback.resolve(request, workflow);
+          if (result.status === "denied" && plan.recommendationPolicy !== undefined) {
+            // Seal recovery before publication. A later reconstruction would not match the owning immutable stage.
+            const recovery = options.fallback.resolveWithoutProvider(request);
+            if (recovery.status !== "denied") result = { ...recovery, requestsDispatched: result.requestsDispatched,
+              requestCountUnknown: result.requestCountUnknown || recovery.requestCountUnknown };
+          }
+          workflow.check();
+          const quotes = plan.recommendationPolicy === undefined ? [] : await options.recommendations?.quotes(snapshot.context).catch(() => []) ?? [];
+          workflow.check();
+          return qualified(result, quotes);
+        }, () => qualified(options.fallback.resolveWithoutProvider(request), []));
       if (fallback.status === "denied") {
         phases.fallback = fallback.reason;
-        fallback = options.fallback.resolveWithoutProvider(request);
+        fallback = qualified(options.fallback.resolveWithoutProvider(request), []);
       }
       if (fallback.status === "denied") return finish("failed", `fallback:${fallback.reason}`);
       if (fallback.candidate.audit.providerReason !== null) phases.fallback = fallback.candidate.audit.providerReason;

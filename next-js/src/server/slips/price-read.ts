@@ -21,6 +21,9 @@ export async function storedSlipPricePools(tx: Prisma.TransactionClient, records
       .flatMap((group) => group.selections.map((selection) => ({ family: group.family, selection: selection.selection,
         price: selection.price, basis: group.basis, retrievedAt: group.retrievedAt, providerUpdatedAt: group.providerUpdatedAt })));
     for (const price of prices) pool.set(`${price.family}\u0000${price.selection}`, price);
+    const recommendation = record.forecast?.recommendation?.selected;
+    const original = recommendation && record.prices.find((price) => price.family === recommendation.family && price.selection === recommendation.selection);
+    if (enabled && original) pool.set(`${original.family}\u0000${original.selection}`, original);
     return [record.fixtureId, [...pool.values()]] as const;
   })));
 }

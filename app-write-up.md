@@ -53,7 +53,7 @@ Use “Goal Hint” consistently in the interface, metadata and public copy. Dom
 
 Goal Hint is a mobile-first football prediction website. Visitors find fixtures for today and the next six days, read estimated probabilities and supporting analysis, and later verify prediction outcomes. Fixtures, scores, factual insights and finished-match results are always free; picks, probabilities, prediction analysis and odds for every fixture require a current subscription (see Paid access below). Launch with one match feed, reusable match detail pages and a methodology page.
 
-AI is the primary predictor; validated API-Football predictions provide fallback for supported markets. A daily midnight East Africa run refreshes eligible fixtures in the seven-day window. New valid revisions replace displayed predictions until the publication cutoff; immutable history supports settlement and performance reporting.
+Optional AI analysis takes precedence when its recommendation passes the common probability, football-evidence and exact-quote rules. The independently retained API-Football baseline supplies fallback. New selections first qualify at the provisional inclusive 0.65 probability threshold, then choose the highest available permitted decimal odds; no qualifying selection produces explicit abstention. Family distributions remain independently validated, with their original argmax forecasts retained. See [the prediction-engine contract](next-js/docs/prediction-engine.md). A daily midnight East Africa run refreshes eligible fixtures in the seven-day window. New valid revisions replace displayed predictions until the publication cutoff; immutable history supports settlement and performance reporting.
 
 ### Scope and technology
 
@@ -96,7 +96,7 @@ Best Slips is the default homepage (`/en`). Daily slips target combined odds aro
 
 The feed screens follow the layout templates in `next-js/dev-plan/templates/` on phones and desktops; the templates fix layout, while theme tokens and stored data supply branding and content. Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range. Offer a single date or a range of up to 31 days with Today, Next 3 days, Next 7 days and Next 30 days presets; multi-select league, country and market filters; a probability range; and an odds range once provider odds are stored. Use clear active states, Reset and an Apply action that shows the matching count. Live and Results are navigation sections over the same feed. When paid access is on, the probability range, probability sort, picks-only and odds filters are for entitled viewers: other viewers see them disabled with "Subscribers only", pages drop them with a redirect and the API refuses them with 403 `subscription-required`.
 
-Each card shows one pick: the most likely available pick among the selected markets, ties broken in policy order. Probability sorting and the probability range use that shown pick, so different markets may be ranked together; the card always names the market. Default to kickoff order with fixture ID as a stable tie-breaker; either order can be reversed, and missing probabilities sort last. When paid access is on and the viewer is not entitled, a card for an unfinished fixture shows "Pick for subscribers" for the first market family with a published pick, in policy order, instead of the pick and probability.
+Each card defaults to the immutable published recommendation, selected after probability and evidence qualification by highest exact odds. Explicit family choices retain the original family forecast contract. Legacy revisions without a recommendation retain their previous probability ordering. Probability sorting and the probability range use the shown pick; the card always names its market. Default to kickoff order with fixture ID as a stable tie-breaker; either order can be reversed, and missing probabilities sort last. Existing subscription gates remain in force.
 
 Show available forecasts throughout today plus six days. Beyond that window, display “Predictions become available within seven days of the match.” Preserve applied filters in URLs and restore position and scroll on Back. Paginate with numbered page links (`‹ 1 2 3 4 … N ›`); row numbering continues across pages.
 
@@ -138,7 +138,7 @@ All four launch families use regulation time, including stoppage time and exclud
 | Total goals | Over 2.5, Under 2.5 | Over: at least 3 goals. Under: at most 2. |
 | Both teams to score | Yes, No | Yes: both score. No: at least one scores zero. |
 
-Select the highest unrounded probability per available family, breaking exact ties in the table’s order. Cards default to match result; with several markets selected, a card shows the most likely of their picks (section 2). Show alternatives on the detail page. Match-result probabilities sum to one, as does each binary pair. Derive double chance from the same match-result distribution; its overlapping selections do not sum to one.
+Select the highest unrounded probability per available family, breaking exact ties in the table’s order. Preserve that forecast independently of the new priced recommendation described in section 2; recommendation selection never mutates the family distribution or its settlement selection. Show alternatives on the detail page. Match-result probabilities sum to one, as does each binary pair. Derive double chance from the same match-result distribution; its overlapping selections do not sum to one.
 
 Each publication is a complete revision. At cutoff, lock one eligible revision for all settlement. Headline hit rates count only its selected pick once per family per played fixture. Evaluate full probability distributions separately; neither alternative selections nor superseded revisions add headline predictions.
 
@@ -209,7 +209,7 @@ No hourly or last-minute AI refresh is included. Evidence arriving after analysi
 | Cross-midnight or missing-live matches | Every 60 seconds during their active/result window; batch unresolved IDs not already refreshed. |
 | Corrections and long-unresolved results | Bounded, progressively slower checks; preserve visible unresolved records. |
 | Team data/history | Initial import and refresh as needed; reuse shared records and structured caches. |
-| Provider predictions | Only when an eligible refresh needs fallback; cache within that job. |
+| Provider predictions | Retain the independent baseline for every eligible refresh within its existing bounded allowance; cache within that job. |
 
 API-Football supports the all-live query, approximately 15-second live fixture updates and batches of up to 20 fixture IDs. Follow actual pagination contracts. Disappearance from a live response is never proof of full time. [6]
 

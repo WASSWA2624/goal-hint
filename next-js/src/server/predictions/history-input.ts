@@ -56,6 +56,7 @@ export function parseAppendRevision(value: unknown): AppendRevisionInput {
     const candidate = parseResolvedForecastCandidate(input.candidate), context = candidate.context.context;
     const available = Object.values(candidate.markets).filter((item) => item.available);
     if (context.cycleId === null || context.runId === null || available.length === 0 ||
+      candidate.audit.recommendation !== undefined && candidate.audit.recommendation.evidenceSnapshotId !== input.evidenceSnapshotId ||
       input.generationCompletedAt < context.analysisAt || input.publishedAt < input.generationCompletedAt ||
       available.some((item) => item.timestamps.retrievedAt > input.generationCompletedAt)) return historyFail("invalid-request");
     return freezeEvidence({ ...input, candidate });

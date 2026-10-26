@@ -3,7 +3,7 @@ import "server-only";
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { assertOperationAllowed, type RuntimePolicy, type EvidenceVerifier } from "../config/runtime-policy.ts";
 import type { CostAuthority, CostPeriodPolicy } from "../cost-control/cost-contract.ts";
-import { costUsdPicosFromCents } from "../cost-control/cost-input.ts";
+import { costUsdPicosFromCents, parseCostRate } from "../cost-control/cost-input.ts";
 import { createPolicyCostService } from "../cost-control/cost-policy.ts";
 import { createCostGateway } from "../cost-control/cost-gateway.ts";
 import { createMysqlCostStore } from "../cost-control/cost-mysql-store.ts";
@@ -11,7 +11,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { EvidenceAuthority, EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import type { FallbackContext, ForecastSourceOrder } from "../fallback/fallback-contract.ts";
+import type { FallbackContext, ForecastSourceOrder, ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import { parseFallbackAiResult } from "../fallback/fallback-input.ts";
 import { createOpenAiBinding } from "../predictor/openai-transport.ts";
 import { createPrimaryAiAdapter } from "../predictor/predictor-adapter.ts";
@@ -79,6 +79,7 @@ export async function createLiveAiRuntime(options: {
   const { id: _id, hash: _hash, ...configuration } = model; void _id; void _hash;
   await createModelRegistry({ store: modelStore, authority: modelAuthority, maxPins: 1 }).register(configuration);
   const work = new Map<string, AiIntent>();
+  const accepted = new Map<string, Extract<PredictorResult, { status: "candidate" }>>();
   const transport = createOpenAiBinding({ model, clock, ...(options.fetcher ? { fetcher: options.fetcher } : {}) });
   const allocation = liveAiAllocation(policy, model, clock.now(), options.fallbackReserveMs), accountId = liveAiAccountId(policy);
   const billingMode = policy.choices.budgets.aiBillingMode;
@@ -93,7 +94,7 @@ export async function createLiveAiRuntime(options: {
   const costAuthority: CostAuthority = {
     authorize() { authorize(); }, verifyPeriod: (value) => same(value, period(value.startsAt)),
     verifyJob: (job) => same(work.get(job.jobId)?.plan.ai?.job, job),
-    verifyRate: (rate) => same(rate, liveAiRate(model, rate.startsAt)),
+    verifyRate: (rate) => same(rate, parseCostRate(liveAiRate(model, rate.startsAt))),
     verifyRequest: (request, job) => same(work.get(job.jobId)?.plan.ai?.request, request),
     verifyUsage: transport.verifyUsage,
   };
@@ -112,6 +113,12 @@ export async function createLiveAiRuntime(options: {
     if (!intent?.pin || !intent.plan.ai || !same(intent.pin, pin) || intent.plan.modelVersionId !== model.id)
       throw new ModelRegistryError("not-authorized");
     work.set(pin.jobId, intent as AiIntent);
+    const prior = await options.store.stage(pin.jobId, "ai", "completed");
+    if (prior) {
+      const original = buildEvidenceSnapshot({ context: intent.member.context, policy: intent.plan.evidence.policy,
+        sources: intent.plan.evidence.cachedSources }, options.evidenceAuthority);
+      verifyAi(prior.value as PredictorResult, { context: intent.member.context, jobId: pin.jobId, pin, evidenceHash: original.hash });
+    }
     // Durable owning intent proves the original pin on every resolve, including restart.
     return createModelRegistry({ store: modelStore, authority: modelAuthority, maxPins: 1,
       verifyPriorPin: (previous) => same(previous, intent.pin) }).resolve(pin);
@@ -130,8 +137,10 @@ export async function createLiveAiRuntime(options: {
       const intent = work.get(pin.jobId); return !!intent && same(intent.pin, pin) && same(intent.member.context, context) &&
         same(intent.plan.ai.job, job) && same(intent.plan.ai.request, request);
     },
-    verifyTransmission: (source) => source.kind === "football" && verify(`${refs.evidence}#openai-transmission`, "evidence-policy") &&
-      verify(refs.retention, "football-private-use"),
+    verifyTransmission: (source) => verify(`${refs.evidence}#openai-transmission`, "evidence-policy") &&
+      (source.kind === "football" ? verify(refs.retention, "football-private-use") :
+        source.reuse.evidenceRef === policy.choices.research.licenseRef &&
+        policy.choices.research.licenseRef !== null && verify(policy.choices.research.licenseRef, "research-license")),
     verifyTransport: transport.verifyTransport,
     verifyExplanation: (item, snapshot, _model, kind) => item.text === groundedText(item, snapshot, kind === "uncertainty"),
   });
@@ -139,28 +148,39 @@ export async function createLiveAiRuntime(options: {
     return buildEvidenceSnapshot({ context: intent.member.context, policy: intent.plan.evidence.policy,
       sources: intent.plan.evidence.cachedSources }, options.evidenceAuthority);
   }
-  return Object.freeze({ model, models, costs,
-    configure(member: RefreshMember, sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]) {
-      return liveAiRefreshPlan(member, refs, policy, model, sources, options.pacing, options.sourceOrder ?? "provider-first");
-    },
-    predictor: { async predict(...args: Parameters<typeof predictor.predict>) { await initialize(); return predictor.predict(...args); } },
-    verifyAi(result: PredictorResult, expected: FallbackContext) {
+  function verifyAi(result: PredictorResult, expected: FallbackContext) {
       try {
         parseFallbackAiResult(result);
         const intent = work.get(expected.jobId);
         if (!intent || !same(expected.pin, intent.pin) || !same(expected.context, intent.member.context)) return false;
         if (result.status === "denied") return true;
         const original = snapshot(intent);
-        return same(result.pin, intent.pin) && result.output.modelVersionId === model.id && result.output.evidenceHash === original.hash &&
+        const valid = same(result.pin, intent.pin) && result.output.modelVersionId === model.id && result.output.evidenceHash === original.hash &&
           expected.evidenceHash === original.hash && same(result.output.context, original.context) &&
           same(result.output.outputTiming, model.outputTiming) && same(result.output.calibration, {
             kind: "none", version: model.calibration.version, method: null, appliedFamilies: [], evidenceRef: model.calibration.evidenceRef, evaluationRef: null }) &&
           same(result.output.evaluation, model.evaluation) && result.output.provisional &&
           result.output.reasons.every((item) => item.text === groundedText(item, original)) &&
           result.output.uncertainty.text === groundedText(result.output.uncertainty, original, true);
+        if (valid) accepted.set(expected.jobId, result);
+        return valid;
       } catch { return false; }
+    }
+  return Object.freeze({ model, models, costs,
+    configure(member: RefreshMember, sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]) {
+      return liveAiRefreshPlan(member, refs, policy, model, sources, options.pacing, options.sourceOrder ?? "ai-first");
     },
-    release(jobId: string) { work.delete(jobId); },
+    predictor: { async predict(...args: Parameters<typeof predictor.predict>) { await initialize(); return predictor.predict(...args); } },
+    verifyAi,
+    verifyPublishedCandidate(candidate: ResolvedForecastCandidate) {
+      const result = accepted.get(candidate.context.jobId);
+      return result !== undefined && same(candidate.context.pin, result.pin) &&
+        candidate.context.evidenceHash === result.output.evidenceHash &&
+        Object.entries(candidate.markets).every(([family, item]) => !item.available || item.market.source !== "ai" ||
+          same(item.market, result.output.markets.markets[family as keyof typeof result.output.markets.markets].available
+            ? (result.output.markets.markets[family as keyof typeof result.output.markets.markets] as { market: unknown }).market : null));
+    },
+    release(jobId: string) { work.delete(jobId); accepted.delete(jobId); },
   });
 }
 export type LiveAiRuntime = Awaited<ReturnType<typeof createLiveAiRuntime>>;

@@ -305,7 +305,10 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     for (const { market, outcome } of forecast.markets) {
       if (!criteria.markets.includes(market.family) || outcome && outcome.status !== "pending") continue;
       hasRequestedForecast = true;
-      const requested = criteria.outcomes?.[market.family] ?? marketSelections[market.family];
+      const recommendation = forecast.recommendation;
+      const requested = criteria.outcomes?.[market.family] ?? (recommendation
+        ? recommendation.selected?.family === market.family ? [recommendation.selected.selection] : []
+        : marketSelections[market.family]);
       for (const selection of requested) {
         const probability = (market.probabilities as Readonly<Record<string, number>>)[selection];
         if (!isMarketSelection(market.family, selection) || probability === undefined || !Number.isFinite(probability)

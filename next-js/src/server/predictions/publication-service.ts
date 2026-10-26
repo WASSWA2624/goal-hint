@@ -29,6 +29,7 @@ import { appendPredictionQuotes } from "./prediction-quote-store.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
+import { validatePublishedRecommendation } from "./recommendation-publication.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction) {
@@ -43,6 +44,7 @@ function authorized(authority: PublicationAuthority, policy: PublicationPolicy, 
   try {
     checked(authority.authorize(input), undefined); checked(authority.verifyPolicy(policy), true);
     checked(authority.verifyObservation(input.observation), true); checked(authority.verifyCandidate(input, now), true);
+    if (input.candidate.audit.recommendation !== undefined) checked(authority.verifyRecommendation?.(input, now), true);
     if (input.goalExtension !== undefined) checked(authority.verifyGoalExtension?.(input, now), true);
     if (input.impliedExtension !== undefined) checked(authority.verifyImpliedExtension?.(input, now), true);
   } catch { return publicationFail("unauthorized"); }
@@ -163,7 +165,8 @@ export function createRevisionPublicationService(options: Readonly<{
             const selected = Object.values(candidate.markets).filter((item) => item.available);
             if (input.generationCompletedAt > now) return publicationFail("invalid-request");
             if (now >= cycle.cutoffAt || now - input.observation.retrievedAt > policy.maxObservationAgeMs) return publicationFail("eligibility-expired");
-            if (selected.some((item) => !publicationSourceIsFresh(item.timestamps, policy.sources[item.market.source], now) ||
+            const recommendationFresh = await validatePublishedRecommendation(tx, input, now);
+            if (!recommendationFresh || selected.some((item) => !publicationSourceIsFresh(item.timestamps, policy.sources[item.market.source], now) ||
               item.provenance.kind === "ai" && !publicationSourceIsFresh(item.timestamps, item.provenance.outputTiming, now))) reason = "stale-source";
             else if (selected.length === 0) {
               reason = "no-valid-family";

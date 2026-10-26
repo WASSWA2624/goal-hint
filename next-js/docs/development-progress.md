@@ -1,5 +1,62 @@
 # Development progress
 
+## 073 — Probability-qualified prediction engine (27 October 2026)
+
+Implemented [the approved engine request](../../prompts/prediction-engine-improvement.md)
+and [plan 073](../dev-plan/073-probability-qualified-prediction-engine.md). New live
+refresh intents freeze the provisional inclusive 0.65 probability threshold,
+historical/player eligibility rules and exact-quote policy. Among qualified
+selections, highest exact decimal odds wins, then unrounded probability and stable
+policy order. Original complete distributions and family argmax forecasts stay
+intact. Usable optional AI takes precedence; otherwise the independently retained
+enriched baseline is used. Neither qualifying estimates nor precedence establishes
+accuracy or guaranteed outcomes.
+
+Structured preparation works with AI off, includes coverage-gated player inputs,
+and preserves its source clocks across replay. Optional Brave research uses the
+existing accounting and public-address network boundary, an explicit host policy,
+one search and at most two article fetches. Missing credentials/authorization,
+unsupported optional configuration, exhausted budgets and invalid evidence leave
+the baseline available. Rich optional evidence is fitted to the actual snapshot
+bounds. See [engine rules](prediction-engine.md), [baseline evidence](baseline-evidence.md)
+and [research configuration](prediction-research.md).
+
+The existing immutable stage and revision audit retain the exact source decision,
+eligibility evidence and private quote provenance. Publication checks the owning
+sealed stage/intent and original bookmaker snapshot/receipts atomically. Cards,
+details, feed filters and automatic slips use that decision; explicit market
+forecasts and historical settlement remain compatible. The final timeout regression
+also proves recovery is sealed before publication without another provider attempt.
+No schema migration, UI/component/JSX/CSS/navigation or Flutter change was needed.
+
+Verification from `next-js/`:
+
+- `node --conditions=react-server --test --test-concurrency=2 tests/*.test.mjs`:
+  **2,134 passed, 0 failed, 1 skipped**. The skip is the existing POSIX-mode test
+  on Windows, where inherited filesystem ACLs apply.
+- The focused 23-file prediction/evidence/provider/odds/publication/read regression
+  command passed **350/350**; the final worker/fallback timeout batch passed **8/8**.
+- `npm run test:scripts`: **75/75 passed**.
+- `npm run lint`, `npm run typecheck`, `npm run build`: **passed** after the final
+  implementation changes. The build included offline-manifest generation.
+- Owned disposable-database checks were invoked for prediction refresh,
+  recommendation refresh, revision publication, odds, prediction history and
+  prediction quotes. **10 database acceptance cases skipped**: no genuine MySQL
+  server binary was found. No installed service or production database was used;
+  database acceptance remains unverified here.
+- `git diff --check` passed. Only intended implementation/documentation/tests and
+  the nonsecret environment example changed. Existing detached worktrees and both
+  Git stashes were inspected and preserved; `main` is the only local/remote branch.
+
+All transports, licenses, source payloads and football results in automated checks
+were synthetic. Official provider/search documentation was reviewed, but no paid
+calls, actual-account coverage qualification, production configuration/worker/odds
+flag change or deployment was performed. Public odds display remains disabled.
+No adequate chronological point-in-time evaluation dataset was available, so no
+backtest, calibrated accuracy improvement or profitability claim is reported.
+The tracker remains Partial for genuine database/live-source qualification and
+historical evaluation, rather than claiming those external checks completed.
+
 ## Gateway choice, administrator code login and compact headers
 
 The full Goal Hint wordmark now remains visible on mobile, including match details. Shared square header controls are

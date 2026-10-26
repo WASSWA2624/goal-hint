@@ -1,9 +1,10 @@
 import "server-only";
+import { createRecommendationQuoteLoader } from "../odds/recommendation-quotes.ts";
 
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
-import { assertOperationAllowed, type RuntimePolicy } from "../config/runtime-policy.ts";
+import { assertOperationAllowed, type RuntimePolicy, type EvidenceVerifier } from "../config/runtime-policy.ts";
 import { createMysqlPublicCacheStore } from "../cache/mysql-public-cache.ts";
 import { createDatabase } from "../database/client.ts";
 import { createEvidenceService } from "../evidence/evidence-service.ts";
@@ -39,7 +40,8 @@ import { createAccountStatusReader, createQuotaRouter, type QuotaDay } from "./l
 import { createLiveAuthorities, LIVE_ACTOR } from "./live-authorities.ts";
 import { createLiveAiRuntime, type LiveAiRuntime } from "./live-ai.ts";
 import { liveAiModel, liveSourceOrder } from "./live-ai-model.ts";
-import { createLiveFootballPreparation, readLiveFootballSources } from "./live-ai-evidence.ts";
+import { createLiveFootballPreparation, fitLiveFootballSources, readLiveFootballSources } from "./live-ai-evidence.ts";
+import { createLiveResearchRuntime } from "./live-research.ts";
 import { liveAiEvidencePolicy } from "./live-ai-plan.ts";
 import { canRunLiveRefresh } from "./live-refresh-quota.ts";
 import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveReferences, liveWorkload,
@@ -72,29 +74,41 @@ export class LiveConfigurationError extends Error {
 export function liveReadiness(policy: RuntimePolicy, approvals?: OwnerApprovals) {
   const issues: string[] = [];
   if (policy.scope !== "production") issues.push("GOAL_HINT_OPERATION_SCOPE must be production for public provisional publication.");
-  if (policy.capabilities.ai) {
-    try {
-      if (liveSourceOrder(policy, liveAiModel(policy)) === "ai-first")
-        issues.push("AI-first publication needs an independently verified frozen promotion binding; a configured reference alone is insufficient.");
-    } catch (error) { issues.push((error as Error).message); }
-  }
-  if (policy.capabilities.research) issues.push("GOAL_HINT_RESEARCH_ENABLED must stay false until a licensed research adapter exists (prompt 011).");
   if (policy.choices.competitionIds === null) issues.push("GOAL_HINT_COMPETITION_IDS is required.");
   let verify;
   try { verify = ownerEvidenceVerifier(approvals ?? loadOwnerApprovals()); } catch (error) { issues.push((error as Error).message); }
-  if (verify) for (const missing of missingOwnerApprovals(policy, verify)) issues.push(`Owner approval missing for ${missing}.`);
+  const baseline = { ...policy, capabilities: { ...policy.capabilities, ai: false, research: false } };
+  if (verify) for (const missing of missingOwnerApprovals(baseline, verify)) issues.push(`Owner approval missing for ${missing}.`);
   if (issues.length > 0 || !verify) throw new LiveConfigurationError(issues);
-  assertOperationAllowed(policy, "publication", verify);
+  assertOperationAllowed(baseline, "publication", verify);
   return verify;
+}
+
+/** Resolve optional capabilities without dispatch. Failed optional authorization disables only that layer.
+ * The resulting policy is shared by every runtime boundary, so a disabled layer cannot authorize paid work. */
+export function liveOptionalPolicy(input: RuntimePolicy, verify: EvidenceVerifier): RuntimePolicy {
+  let ai = false, research = false;
+  const aiOnly = { ...input, capabilities: { ...input.capabilities, research: false } };
+  if (input.capabilities.ai) try {
+    liveAiModel(aiOnly);
+    assertOperationAllowed(aiOnly, "ai", verify);
+    if (input.choices.evidencePolicyRef !== null && verify(`${input.choices.evidencePolicyRef}#openai-transmission`, "evidence-policy")) ai = true;
+  } catch { /* Missing or unsupported optional AI leaves the baseline active. */ }
+  const candidate = { ...input, capabilities: { ...input.capabilities, ai } };
+  if (ai && input.capabilities.research && input.choices.research.provider === "brave-search" && input.choices.research.hosts?.length) try {
+    assertOperationAllowed(candidate, "research", verify);
+    research = true;
+  } catch { /* Research needs its own real license, credentials and budget approvals. */ }
+  return Object.freeze({ ...input, capabilities: Object.freeze({ ...input.capabilities, ai, research }) });
 }
 
 export type LiveRuntimeOverrides = Readonly<{
   /** Isolated tests only: a synthetic provider transport and owner register. */
-  fetcher?: typeof fetch; aiFetcher?: typeof fetch; approvals?: OwnerApprovals;
+  fetcher?: typeof fetch; aiFetcher?: typeof fetch; researchFetcher?: typeof fetch; approvals?: OwnerApprovals;
 }>;
 /** Composes the pinned primary and provider fallback pipeline on shared durable stores. */
-export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
-  const verify = liveReadiness(policy, overrides.approvals), refs = liveReferences(policy);
+export async function createLiveRuntime(inputPolicy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
+  const verify = liveReadiness(inputPolicy, overrides.approvals), policy = liveOptionalPolicy(inputPolicy, verify), refs = liveReferences(policy);
   const fetcher = overrides.fetcher === undefined ? {} : { fetcher: overrides.fetcher };
   const database = createDatabase(policy, verify);
   try {
@@ -113,13 +127,14 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
     const odds = oddsPolicy(policy, refs, workload);
-    const aiModel = policy.capabilities.ai ? liveAiModel(policy) : null;
-    // Computed once, with the model: a promotion reference names the model it was evaluated for.
-    const sourceOrder = aiModel === null ? null : liveSourceOrder(policy, aiModel);
+    let aiModel: ReturnType<typeof liveAiModel> | null = null;
+    if (policy.capabilities.ai) try { aiModel = liveAiModel(policy); } catch { /* An unsupported optional model leaves the baseline active. */ }
+    // Freeze the reviewed source order beside the optional model for every new intent.
+    const sourceOrder = aiModel === null ? null : liveSourceOrder(policy);
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
       refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
-      ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true }) });
+      ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true, verifyPrimaryCandidate: (candidate) => ai?.verifyPublishedCandidate(candidate) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -144,24 +159,44 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
-      selectionPolicy: "provider-baseline", verifyRequest: authorities.verifyFallbackRequest });
+      selectionPolicy: sourceOrder === "provider-first" ? "provider-baseline" : "optional-ai-primary", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
-    if (aiModel !== null) ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
+    if (aiModel !== null) try { ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
       evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
       ...(sourceOrder === null ? {} : { sourceOrder }),
-      ...(overrides.aiFetcher === undefined ? {} : { fetcher: overrides.aiFetcher }) });
+      ...(overrides.aiFetcher === undefined ? {} : { fetcher: overrides.aiFetcher }) }); } catch { /* Optional AI startup/accounting failure preserves baseline publication. */ }
+    let research: Awaited<ReturnType<typeof createLiveResearchRuntime>> | null = null;
+    if (ai !== null && aiModel !== null && policy.capabilities.research) try { research = await createLiveResearchRuntime({ policy, verify, refs, model: aiModel,
+      database, evidenceAuthority: authorities.evidence, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
+      ...(overrides.researchFetcher ? { fetcher: overrides.researchFetcher } : {}) }); } catch { /* Optional research startup failure preserves the baseline and AI structured evidence. */ }
+    const footballPreparation = createLiveFootballPreparation({ importer, refs, pacing: workload.pacing, adapter: adapter.evidence, database });
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,
-      ...(ai === null ? {} : { prepare: createLiveFootballPreparation({ importer, refs, pacing: workload.pacing }) }),
+      prepare: async (member, context) => {
+        const football = await footballPreparation(member, context);
+        let news: readonly import("../evidence/evidence-contract.ts").EvidenceSource[] = [];
+        let reason: string | null = policy.capabilities.research ? "unavailable" : "unconfigured";
+        if (research) try { const result = await research.prepare(member, context); news = result.sources; reason = result.reason; }
+        catch { reason = "unavailable"; }
+        return { sources: [...(football?.sources ?? []), ...news], research: { status: reason === null ? "completed" as const : "denied" as const, reason } };
+      },
       configure: async (member) => {
-        if (ai === null) return fallbackRefreshPlan(member, refs, workload.pacing);
-        // A history read outage gives explicit missingness and sends no primary request.
-        const sources = await readLiveFootballSources(database, member.context, liveAiEvidencePolicy(refs), refs).catch(() => []);
-        return ai.configure(member, sources);
+        const history = await readLiveFootballSources(database, member.context, liveAiEvidencePolicy(refs), refs).catch(() => []);
+        const stage = await refreshStore.stage(member.jobId, "preparation", "completed");
+        const extra = (stage?.value as { sources?: import("../evidence/evidence-contract.ts").EvidenceSource[] } | undefined)?.sources ?? [];
+        const sources = fitLiveFootballSources(member.context, liveAiEvidencePolicy(refs), authorities.evidence, history, extra);
+        if (ai !== null) return ai.configure(member, sources);
+        const base = fallbackRefreshPlan(member, refs, workload.pacing);
+        return { ...base, evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources } };
       },
       models: ai?.models ?? { async resolve() { throw new ModelRegistryError("unavailable"); } },
       predictor: ai?.predictor ?? { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
-      evidence, fallback, lifecycle, publisher, costs: { ai: ai?.costs ?? null, research: null },
+      evidence, fallback, lifecycle, publisher, costs: { ai: ai?.costs ?? null, research: research?.costs ?? null },
+      recommendations: { quotes: odds === null ? async () => [] : createRecommendationQuoteLoader(database, {
+        bookmakerId: odds.bookmakerId, freshnessMs: odds.freshnessMs, expectedPolicyHash: evidenceFingerprint(odds),
+        verifyInternalUse: () => policy.capabilities.football && verify(refs.retention, "football-private-use") &&
+          authorities.odds.verifyPolicy(odds) === true && authorities.odds.verifyRetention({ evidenceRef: refs.retention,
+            purpose: "structured-odds-history", rawPayloadsStored: false }) === true }) },
       observation: createRefreshObservationCollector({ adapter: adapter.evidence, evidenceRef: statusEvidenceRef, verifyResponse: authorities.verifyStatusResponse }) });
     const settlement = createMarketSettlementService({ database, queue });
     const cache = createMysqlPublicCacheStore(database);

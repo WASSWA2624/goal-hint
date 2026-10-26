@@ -24,6 +24,8 @@ const batchSchema = z.strictObject({
   reasons: z.array(z.string().regex(/^[a-z-]{1,64}$/u)).max(64), missingCoverage: z.array(z.string().max(128)).max(5_000),
   pages: z.array(provenanceSchema).max(1_000),
   fixtures: z.array(z.strictObject({ externalId: z.number().int().positive(), observationHash: hash,
+    quoteManifest: z.strictObject({ bookmakerId: z.number().int().positive(), kickoffAt: instant.nullable(), bets: z.array(z.strictObject({
+      betId: z.number().int().positive(), betName: z.string().max(256).nullable(), valuesHash: hash })).max(1_000) }).optional(),
     outcome: z.enum(["apply", "unknown-fixture", "after-kickoff", "kickoff-mismatch", "not-scheduled"]) })).max(10_000),
   catalog: z.array(z.strictObject({ id: z.number().int().positive(), name: z.string().min(1).max(256) })).max(5_000),
 });
@@ -249,6 +251,9 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
         const entry = receipt?.fixtures.get(row.fixtureId);
         if (!receipt || receipt.batch.kind !== "prices" || receipt.batch.policyHash !== input.policyHash || entry?.outcome !== "apply" ||
           entry.observationHash !== observationHash || !receipt.pages.has(retrievedAt)) return oddsFail("invalid-request");
+        if (entry.quoteManifest && evidenceFingerprint(entry.quoteManifest) !== evidenceFingerprint({ bookmakerId: policy.bookmakerId, kickoffAt: row.kickoff,
+          bets: (bookmaker?.bets ?? []).map((bet) => ({ betId: bet.id, betName: bet.name, valuesHash: oddsValuesHash(bet.values) })) }))
+          return oddsFail("invalid-request");
         const at = await now(tx);
         const fixture = (await tx.$queryRaw<{ kickoff: Date | null; status: string }[]>`SELECT kickoff, status FROM FootballFixture
           WHERE id = ${input.fixtureId} AND provider = 'api-football' AND externalId = ${BigInt(row.fixtureId)}`)[0];

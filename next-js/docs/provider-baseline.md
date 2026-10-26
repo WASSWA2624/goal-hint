@@ -1,94 +1,55 @@
-# Provider benchmark and AI shadow evidence
+# Baseline retention and optional AI precedence
 
-The live runner now configures the shared fallback service with
-`selectionPolicy: "provider-baseline"`. It collects the provider's supported
-forecast groups within the existing football allowance and publishes validated
-provider distributions. Match result and its derived double chance stay together.
-Unsupported total-goals and BTTS probabilities remain unavailable. Provider
-failure, missing configuration, lost permission or exhausted capacity cannot
-promote an AI candidate. Retention of an eligible previous publication continues
-through the existing publication rules with its original clocks.
+The approved prediction-engine policy supersedes the 25 October shadow-only
+rule. New live plans freeze `ai-first`. The shared fallback service uses
+`optional-ai-primary`, always collects the provider within its bounded allowance,
+and retains its independent provider-only `baseline` alongside the original AI
+receipt. A usable AI recommendation wins even when the baseline disagrees.
+Probability eligibility and exact quote selection are documented in
+[the engine runbook](prediction-engine.md).
 
-New `createFallbackService` instances also default to this policy. The pure
-resolver retains its legacy default for existing historical contracts; legacy
-service fixtures opt into `legacy-ai-primary` explicitly. The production live
-binding has no AI promotion path.
+AI parsing alone does not establish a usable recommendation. Shared market,
+identity, freshness, probability, historical evidence and exact quote validation
+apply before selection. If AI has no qualified priced recommendation, the worker
+uses the independently retained baseline. Partial AI groups can be supplemented
+only through existing complete-group and cross-market consistency validation;
+the final valid AI recommendation keeps precedence.
 
-AI remains an optional private shadow attempt under the existing runtime,
-transmission, evidence and cost gates. No extra attempt, token allowance, request
-allowance or provider subscription is introduced. The existing reserve already
-budgets one prediction collection plus the final status observation; benchmark
-collection now uses that reserved path even when AI supplied complete markets.
-This may increase actual requests relative to the old complete-AI shortcut,
-within the same per-job and day ceilings. No runtime setting or worker is enabled
-by this code change.
+AI is optional. Disabled capability, an absent key, unsupported model, startup or
+accounting outage, timeout, exhausted allocation, invalid output, ungrounded
+citations, stale evidence or unavailable optional research leave the baseline
+path available within the publication deadline. Canonical identity, cutoff,
+transmission rights, secret handling, budget and atomic publication gates remain.
 
-`createLiveAuthorities` rejects all AI market publication independently of
-transport ownership. A genuine model response, valid model pin or provisional
-calibration reference supplies no demonstrated-improvement authority. The refresh
-service also omits AI goal-market extensions when no AI market was selected.
-There is no automatic promotion switch in the live binding.
+This is a product source-order decision. It supplies no measured accuracy,
+calibration, profitability or guaranteed-win claim and needs no fabricated
+promotion report. Provisional labels and genuine future evaluation remain.
+`GOAL_HINT_AI_PROMOTION_REF` is historical configuration only. Explicit
+`GOAL_HINT_FORECAST_SOURCE_ORDER=provider-first` rolls new jobs back to provider-only
+publication. Saved historical orders and immutable revisions retain their original
+behavior and clocks; changing configuration does not rewrite them.
 
-## Original matching evidence
+## Original source receipts and restart
 
-The existing append-only `PredictionRefreshIntent` and `PredictionRefreshStage`
-records retain the two contemporaneous candidates without a new table:
+`PredictionRefreshIntent` freezes canonical fixture/version, analysis cutoff,
+model pin, policy and resource limits. Append-only preparation, evidence, AI and
+fallback stages retain original sources, both contemporaneous distributions,
+missingness and costs. The fallback result includes the independent baseline,
+never probabilities copied from AI. The persisted recommendation identifies its
+source, policy/evidence versions and exact internal quote snapshot. Reads do not
+rerank it after price updates. Replays reuse original stages and perform no new
+paid attempt or clock renewal.
 
-- The intent freezes canonical fixture/version, cycle/run, original analysis and
-  evidence cutoff, model pin and exact resource limits.
-- The completed `ai` stage retains the accepted AI output or original denial,
-  evidence hash, model identity, probability distributions and original source
-  timestamps.
-- The completed `fallback` stage retains the benchmark candidate or original
-  missingness, provider source/contract, observation reference, original clocks
-  and `provider-baseline` reason. It never copies probabilities from shadow AI.
+Private `/admin/forecasts` comparisons remain descriptive diagnostics on matched
+settled observations. Their existence is neither a qualified prospective cohort
+nor demonstrated improvement. Provider and AI measurements remain separate.
 
-The fixture/cycle/run, family, evidence cutoff and forecast horizon must match
-before later comparative analysis. Original source generation/update times stay
-unknown when the provider did not supply them; assigning the same cutoff does
-not establish equal source recency. Only families valid in both retained
-candidates can enter a matched cohort. Unsupported or failed observations remain
-part of the coverage accounting rather than being manufactured or silently
-removed. Restart/replay reads do not renew clocks or generate a second attempt.
+## Verification and activation limits
 
-The retained stages establish prospective capture capability, not an evaluated
-cohort. A frozen protocol, authenticated real outcomes, adequate comparable
-samples, conflict review, held-out evaluation, comparative UI and independently
-reviewed promotion evidence remain required work. The public performance API
-continues to report matched comparisons unavailable. Existing publications and
-historic AI-primary candidates remain readable without rewriting history.
-
-## Verification
-
-`tests/provider-baseline.test.mjs` covers provider selection despite complete AI,
-unsupported groups, missing/revoked/unowned provider candidates, interruption,
-quota exhaustion and same-job reuse with original clocks. The live-authority
-regression proves that even a successful primary ownership callback cannot
-authorize AI publication. The genuine MySQL refresh acceptance retains matched
-AI and provider stages, checks their original identities/cutoffs and independently
-preserved probabilities, rejects stage mutation, and verifies that provider
-failure publishes no shadow AI. All transports and source approvals in these
-tests are synthetic; no live provider or accuracy claim follows.
-
-## Integrated source diagnostics
-
-AI refresh plans now freeze `sourceOrder: "provider-first"` and retain normalized
-`value.sources` receipts in the sealed fallback stage. Both receipts preserve
-their own distributions, clocks, versions and explicit unavailable reasons. The
-owner-only `/admin/forecasts` page reads those receipts for matched descriptive
-Brier/log-loss/calibration diagnostics and recent original prediction outcomes.
-It publishes no public claim, approves no model and makes no provider request.
-Missing legacy receipts stay `not-captured`. Equal context does not establish
-equal source recency or qualify a prospective cohort.
-
-The reusable legacy resolver understands prior `provider-first` and `ai-first`
-contracts, and the evaluation command can print a model/report-bound reference
-from a genuinely frozen prospective final test. The independent live selection
-policy still publishes provider groups only. AI-first live startup is rejected
-until actual independently verified promotion evidence is bound; configuring a
-matching reference or approval string cannot bypass it.
-
-Apply `20261025200000_refresh_stage_phases` (or its reviewed MariaDB overlay)
-before AI preparation runs. It adds preparation/evidence-empty to the existing
-stage CHECK while preserving identity and attempt constraints. No source-receipt
-table, new provider allowance or public comparison endpoint is introduced.
+Deterministic tests exercise source precedence, exact ownership, invalid/cutoff
+paths, full baseline collection, restart, original clocks and bounded requests.
+Research tests use injected search and article transports. They make no live
+provider calls. Current credentials, competition coverage, source licenses and
+an attributable prospective evaluation still require actual operator evidence.
+Production configuration, running workers, public odds flags and deployments are
+unchanged by this implementation.

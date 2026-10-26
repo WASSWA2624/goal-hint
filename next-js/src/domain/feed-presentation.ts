@@ -2,6 +2,7 @@ import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 import type { MarketFamily } from "./markets.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
+import { recommendationFamily } from "./recommendation-view.ts";
 import { countryFlagAsset } from "./country-flag.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { resolveFeedDates, type FeedQuery } from "./feed-query.ts";
@@ -14,7 +15,9 @@ import type { createMessages } from "../i18n/messages.ts";
 export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast" | "prices">, markets: readonly MarketFamily[]): MarketFamily | null {
   if (fixture.forecast && "gated" in fixture.forecast) return fixture.forecast.probabilities
     .filter((entry) => markets.includes(entry.family)).sort((left, right) => right.probability - left.probability)[0]?.family ?? null;
-  return bestPublishedFamily(fixture.forecast?.markets, fixture.prices ?? [], markets);
+  const authoritative = recommendationFamily(fixture.forecast?.recommendation, markets);
+  if (authoritative !== undefined) return authoritative;
+  return bestPublishedFamily(fixture.forecast?.markets, fixture.forecast?.recommendation ? [] : fixture.prices ?? [], markets);
 }
 
 export type NoPickReason = "market" | "outside" | "updating" | "unselected" | "closed" | "failed" | "awaiting";

@@ -1,4 +1,5 @@
 import "server-only";
+import { recommendationPolicy } from "../../domain/recommendation.ts";
 
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
@@ -23,13 +24,16 @@ import type { SelectionPolicy } from "../selection/selection-contract.ts";
 
 const SECOND = 1000, MINUTE = 60 * SECOND, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
 export const LIVE_REFRESH_TYPE = "prediction.daily-refresh";
-/** Each fallback-only refresh dispatches one prediction and one fresh status request. */
-export const REFRESH_REQUESTS_PER_JOB = 2;
+/** Two history, up to four coverage-gated player/availability calls, prediction and final status. */
+export const FOOTBALL_PREPARATION_REQUESTS = 6;
+export const REFRESH_REQUESTS_PER_JOB = FOOTBALL_PREPARATION_REQUESTS + 2;
 /** The edge day makes seven visitor-local dates available across time zones. */
 export const LIVE_FORECAST_WINDOW_DAYS = 8;
 const SELECTION_REQUESTS = LIVE_FORECAST_WINDOW_DAYS * 2;
 /** Odds stay off below this many spare ordinary requests per provider day. */
 export const ODDS_MINIMUM_SPARE = 200;
+/** Keep bounded enrichment usable after budgeting shared structured-evidence collection. */
+export const ENRICHMENT_QUOTA_SHARE = 0.10;
 /** Pages per odds date sweep (10 fixtures per page, per the documented contract). */
 export const ODDS_MAX_PAGES = 150;
 /** OP-07 default for odds: a price must be reconfirmed within 12 hours before kickoff. */
@@ -69,8 +73,10 @@ export function liveWorkload(dailyLimit: number, secondLimit: number, plan = "",
   // retain their existing workload; eligible plans reserve this share before enrichment.
   const detailsEligible = liveDetailsEnabled && usable >= 7500 && pacing === "standard" && plan.trim().toLowerCase() !== "free";
   const detailRequests = detailsEligible ? Math.floor(usable * 0.2) : 0;
-  const refreshRequestsPerJob = REFRESH_REQUESTS_PER_JOB + (primaryEnabled ? 2 : 0);
-  const refreshCapacity = clamp(Math.floor((usable - SELECTION_REQUESTS - resultsShare - reserve - detailRequests) / refreshRequestsPerJob), 0, 2000);
+  const enrichmentRequests = usable >= 7500 && pacing === "standard" && plan.trim().toLowerCase() !== "free"
+    ? Math.max(ODDS_MINIMUM_SPARE, Math.floor(usable * ENRICHMENT_QUOTA_SHARE)) : 0;
+  const refreshRequestsPerJob = REFRESH_REQUESTS_PER_JOB;
+  const refreshCapacity = clamp(Math.floor((usable - SELECTION_REQUESTS - resultsShare - reserve - detailRequests - enrichmentRequests) / refreshRequestsPerJob), 0, 2000);
   const workers = clamp(Math.floor(secondLimit / 2), 1, 6);
   // Selected fixtures must still be refreshable once the queue reaches them: skip cutoffs closer than the queue's drain time.
   const refreshLeadMs = clamp(Math.ceil(refreshCapacity / workers) * refreshEnvelopeFor(pacing, primaryEnabled).timeoutMs, 10 * MINUTE, 2 * HOUR);
@@ -157,10 +163,11 @@ export const refreshEnvelope = Object.freeze({ type: LIVE_REFRESH_TYPE, handlerV
   leaseMs: 30_000, fallbackReserveMs: 60_000, backoff: Object.freeze({ baseMs: MINUTE, maxMs: HOUR }) });
 /** Slow plans give both provider calls time to wait out a full rolling minute, plus publication. */
 export function refreshEnvelopeFor(pacing: RefreshPacing, primaryEnabled = false) {
-  if (primaryEnabled) return Object.freeze({ ...refreshEnvelope,
+  // Structured evidence preparation is shared by baseline and optional AI jobs.
+  if (primaryEnabled || pacing === "standard") return Object.freeze({ ...refreshEnvelope,
     timeoutMs: pacing === "slow" ? 8 * MINUTE : 5 * MINUTE,
     fallbackReserveMs: pacing === "slow" ? 200_000 : refreshEnvelope.fallbackReserveMs });
-  return pacing === "slow" ? Object.freeze({ ...refreshEnvelope, timeoutMs: 5 * MINUTE, fallbackReserveMs: 200_000 }) : refreshEnvelope;
+  return Object.freeze({ ...refreshEnvelope, timeoutMs: 8 * MINUTE, fallbackReserveMs: 200_000 });
 }
 export function selectionPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload): SelectionPolicy {
   const competitionIds = policy.choices.competitionIds;
@@ -253,7 +260,7 @@ export function fallbackRefreshPlan(member: RefreshMember, refs: LiveReferences,
   if (envelope.fallbackReserveMs < providerAndPublicationMs || hardDeadline - member.now < EVIDENCE_MAX_MS + envelope.fallbackReserveMs) {
     refreshFail("ineligible", "insufficient-time");
   }
-  return Object.freeze({ version: 1, evidenceRef: refs.refresh, modelVersionId: null,
+  return Object.freeze({ version: 1, evidenceRef: refs.refresh, modelVersionId: null, recommendationPolicy,
     evidence: { requestId: refreshReference(member.jobId, "evidence"), context: member.context, policy: evidencePolicy(refs),
       footballPlan: null, researchPlan: null, cachedSources: [], maxElapsedMs: EVIDENCE_MAX_MS },
     ai: null,

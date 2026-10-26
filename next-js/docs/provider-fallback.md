@@ -15,21 +15,14 @@ freshness, unknown-time handling, permitted retention/reuse and job allowances.
 The owner selected OpenAI (`gpt-6.1-sol`) with usage-based billing and
 API-Football; the concrete [live AI binding](ai-predictor.md#live-openai-binding)
 is implemented. Its private key and counted activation check remain required.
-The original "OpenAI primary, API-Football fallback" order is reversed by
-default since 25 October 2026: with AI enabled, API-Football publishes the match
-result as the reviewed baseline and the AI forecast is captured beside it
-(`provider-first`, see [source order](#source-order-and-receipts)). AI-first publication remains unavailable in the live runner until independently
-verified frozen promotion evidence is bound; an approved reference alone is insufficient.
-Calibration stays explicitly unevaluated/provisional. Synthetic scenarios
-cannot qualify an account, source mapping or permission.
-
-The 25 October checklist follow-up changes the live publication binding to
-`selectionPolicy: "provider-baseline"`. The existing AI transport may run within
-its approved bounds, but its output remains private shadow evidence. Live
-publication rejects AI markets until a separate matched evaluation and reviewed
-promotion mechanism exist. See [provider benchmark and shadow retention](provider-baseline.md).
-The legacy AI-first resolver remains available for historical compatibility and
-isolated existing contracts; the production live runner does not select it.
+The approved engine restores optional AI precedence for new jobs. The default
+service policy is `optional-ai-primary`, and live plans default to `ai-first`.
+Every provider collection still runs within the existing bounded quota and is
+retained as an independent baseline. The shared probability/evidence/quote
+selector uses AI only when its recommendation qualifies; otherwise it publishes
+the qualified baseline. See [engine selection](prediction-engine.md) and
+[baseline retention](provider-baseline.md). Provisional labels and genuine source,
+cutoff, publication and transmission authority remain mandatory.
 
 ## Market support and source evidence
 
@@ -143,12 +136,10 @@ reuse rights. No default age or unknown-time acceptance is supplied.
 
 ## Candidate resolution
 
-The live service uses `selectionPolicy: "provider-baseline"`: it requests all
-provider groups within the existing allowance, publishes only validated provider
-groups and keeps unsupported groups unavailable. Provider failure cannot promote
-shadow AI. The private frozen `sourceOrder` additionally controls receipt capture.
-The following composition describes legacy library contracts, which remain readable
-without changing historical publications.
+The live service uses `optional-ai-primary`, retaining a complete provider-only
+baseline alongside AI and any compatible partial-family supplementation.
+`provider-baseline` remains the explicit rollback and historical policy. The
+final priced recommendation is selected only after shared eligibility checks.
 
 Retain every valid AI source group. Attempt fallback for missing or invalid
 families, or AI failure, timeout, insufficient evidence or exhausted budget,
@@ -218,21 +209,15 @@ never sees the provider forecast. The request stays inside the job's existing
 fallback allowance (one provider request, already reserved by the live plan), so
 real API-Football usage rises to the planned figure when AI is enabled.
 
-- `provider-first` freezes the benchmark/receipt intent. In the live binding,
-  the independent `provider-baseline` selection policy permits only provider
-  groups; every AI family remains shadow, including goal markets and provider
-  outages. The low-level legacy composition can still read the earlier mixed
-  provider/AI contract without rewriting it.
-- `ai-first` remains a parseable legacy/evaluation configuration. The live runner
-  rejects it until independently verified frozen promotion evidence is mounted;
-  a model-bound reference or owner approval string alone cannot enable it.
+- `provider-first` is the explicit provider-only live rollback. Historical
+  mixed provider-first contracts remain readable without rewriting revisions.
+- `ai-first` is the approved new default. Valid AI groups take precedence; missing
+  or rejected groups may use compatible complete provider groups. An unusable
+  final AI recommendation yields the separately retained qualified baseline.
 
-The market `fallback` field keeps its database-enforced meaning: why API-Football
-supplied a market. AI markets retain `fallback: null`. New strict selections use
-`provider-baseline`; existing `provider-first` reasons and optional
-`audit.sourceOrder` remain valid history. Provider-first audit rows accept either
-baseline reason while rejecting unrelated failure reasons. AI goal-market
-extensions are never published by the live baseline binding.
+Provider markets keep an auditable fallback reason; AI markets retain
+`fallback: null`. `audit.sourceOrder` remains versioned and immutable. The
+product decision is independent of later measured accuracy evaluation.
 
 The successful fallback result then carries `sources`: one receipt per source
 ([`source-receipts.ts`](../src/server/fallback/source-receipts.ts)). A receipt
@@ -247,7 +232,7 @@ the existing fallback stage row; recovery without the provider records a
 
 ## Verification and live qualification
 
-Local scenario tests exercise legacy AI priority and strict live baseline selection, every fallback trigger,
+Local scenario tests exercise optional AI precedence, legacy source orders and strict rollback baseline selection, every fallback trigger,
 partial/absent groups, incorrect fixture context, incomplete distributions,
 mixed-source conflicts, quota/time bounds, stale/future/unknown source times,
 revoked permissions and repeated same-job reuse with original timestamps.

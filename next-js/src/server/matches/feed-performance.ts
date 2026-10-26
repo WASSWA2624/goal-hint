@@ -10,6 +10,7 @@ import { fixtureResultFromRow, fixtureResultMatchesCanonical } from "../results/
 import { settlementContextFor, settlementInputFor, settlementRevisionFromRow, type SettlementFixture } from "../settlement/settlement-read.ts";
 import type { feedSql } from "./feed-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
+import { selectionOccurred } from "../../domain/market-settlement.ts";
 
 type Summary = z.infer<typeof feedPerformanceSchema>;
 type Sample = HistoryRow & Readonly<{
@@ -17,6 +18,7 @@ type Sample = HistoryRow & Readonly<{
   fixtureRegulationVerifiedAt: Date | null; fixtureRegulationEvidenceRef: string | null;
   currentLockedSetId: string; currentVoidReason: string | null; currentResultId: string | null; issue: string | null;
   currentFamily: MarketFamily; currentSelection: MarketSelection; currentSource: "ai" | "api-football"; currentProbability: number;
+  storedSelection: MarketSelection; storedProbability: number;
   marketPayload: unknown; marketValidIntegrity: unknown;
 }>;
 
@@ -35,7 +37,8 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
       f.status AS fixtureStatus, f.regulationHome AS fixtureRegulationHome, f.regulationAway AS fixtureRegulationAway,
       f.regulationVerifiedAt AS fixtureRegulationVerifiedAt, f.regulationEvidenceRef AS fixtureRegulationEvidenceRef,
       c.lockedSetId AS currentLockedSetId, c.voidReason AS currentVoidReason, rs.resultId AS currentResultId, ls.issue,
-      m.family AS currentFamily, m.selection AS currentSelection, m.source AS currentSource, m.selectedProbability AS currentProbability,
+      m.family AS currentFamily, ${sql.pickSelection} AS currentSelection, m.source AS currentSource, ${sql.pickProbability} AS currentProbability,
+      m.selection AS storedSelection,m.selectedProbability AS storedProbability,
       m.payloadJson AS marketPayload, m.integrity=SHA2(CAST(m.payloadJson AS CHAR),256) AS marketValidIntegrity,
       r.integrity=SHA2(CAST(r.body AS CHAR),256) AS validIntegrity
       ${sql.joins} ${sql.searchJoin}
@@ -55,21 +58,25 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
       assertHistorySeal(row.marketValidIntegrity);
       const payload = historyJson(row.marketPayload) as { available?: boolean; market?: Record<string, unknown> } | null;
       if (!isMarketFamily(row.currentFamily) || !isMarketSelection(row.currentFamily, row.currentSelection) ||
-        !payload?.available || payload.market?.selection !== row.currentSelection || payload.market?.source !== row.currentSource ||
-        payload.market?.selectedProbability !== row.currentProbability || payload.market?.family !== row.currentFamily ||
+        !payload?.available || payload.market?.selection !== row.storedSelection || payload.market?.source !== row.currentSource ||
+        payload.market?.selectedProbability !== row.storedProbability || payload.market?.family !== row.currentFamily ||
+        (payload.market?.probabilities as Record<string, unknown> | undefined)?.[row.currentSelection] !== row.currentProbability ||
         previous.family !== row.currentFamily || previous.lockedSetId !== null && previous.lockedSetId !== row.currentLockedSetId) throw new MatchFeedError("unavailable");
       const fixture = { status: row.fixtureStatus, regulationHome: row.fixtureRegulationHome, regulationAway: row.fixtureRegulationAway,
         regulationVerifiedAt: row.fixtureRegulationVerifiedAt, regulationEvidenceRef: row.fixtureRegulationEvidenceRef };
       const cycle = { id: previous.cycleId, lockedSetId: row.currentLockedSetId, state: "closed" as const, voidReason: row.currentVoidReason };
       const result = row.currentResultId ? results.get(row.currentResultId)! : null;
       if (result && result.fixtureId !== previous.fixtureId) throw new MatchFeedError("unavailable");
-      const market = { selection: row.currentSelection, source: row.currentSource, selectedProbability: row.currentProbability };
+      const market = { selection: row.storedSelection, source: row.currentSource, selectedProbability: row.storedProbability };
       const context = settlementContextFor(fixture, result, row.issue, cycle);
       const input = settlementInputFor(previous.fixtureId, cycle, row.currentFamily, market, result,
         fixtureResultMatchesCanonical(fixture, result, row.issue), context, previous);
       // A result/cycle correction makes the previous settlement pending until the worker records it.
       if (previous.inputHash !== evidenceFingerprint(input)) continue;
-      const status = previous.status === "correct" ? "won" : previous.status === "incorrect" ? "lost" : previous.status;
+      const selectedStatus = row.currentSelection !== row.storedSelection && ["correct", "incorrect"].includes(previous.status)
+        && result?.regulation.verified && result.regulation.home !== null && result.regulation.away !== null
+        ? selectionOccurred(row.currentSelection, result.regulation.home, result.regulation.away) ? "correct" : "incorrect" : previous.status;
+      const status = selectedStatus === "correct" ? "won" : selectedStatus === "incorrect" ? "lost" : selectedStatus;
       if (status === "won" || status === "lost" || status === "void") { summary.pending--; summary[status]++; }
     }
     after = String(rows.at(-1)!.fixtureId);

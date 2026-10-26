@@ -21,8 +21,9 @@ in `evidence/`. Bind canonical team/provider identities and explicit observation
 times; supply trusted coverage, source and reuse verifiers. Research uses the
 existing cost gateway and an approved provider binding. Text cannot authorize
 actions; optional source fetching uses the shared HTTPS/public-address boundary.
-See the [evidence contract](../../docs/fixture-evidence.md). No licensed research
-provider or live evidence policy has been selected yet.
+See the [evidence contract](../../docs/fixture-evidence.md). The optional Brave search/article adapter and its exact source allowlist are
+described in [research setup](../../docs/prediction-research.md); live source rights
+and account support require operator verification.
 
 Primary predictor callers use `predictor/` with an immutable model pin, approved
 evidence snapshot and exact cost job/attempt. Supply trusted model, source,
@@ -30,8 +31,8 @@ transmission, receipt and semantic explanation verifiers; names or hashes alone
 do not authorize paid use. The existing gateway accounts for one attempt before
 output validation. Candidates retain valid families, missingness, original
 clocks and explicit provisional/calibration state. Read the
-[predictor contract](../../docs/ai-predictor.md); actual provider selection and
-its concrete transport remain pending.
+[predictor contract](../../docs/ai-predictor.md); the live OpenAI transport and optional research binding are implemented;
+credentials, source rights and counted activation checks remain separate.
 
 Refresh callers use `createFallbackService` in `fallback/fallback-service.ts`
 with an authenticated original AI result, exact
@@ -42,9 +43,9 @@ and derived double chance together; unsupported fields remain unavailable.
 Current output expiry and permissions are rechecked after callbacks. The
 [fallback runbook](../../docs/provider-fallback.md) describes candidate/retention
 results and the actual source evidence still needed for live operation.
-The live runner and new fallback services use the provider benchmark while AI
-remains shadow evidence in immutable refresh stages; live publication rejects
-unqualified AI. See the [benchmark runbook](../../docs/provider-baseline.md).
+The live runner and new fallback services retain an independent provider baseline
+and give a usable AI recommendation precedence through shared qualification.
+See the [baseline runbook](../../docs/provider-baseline.md).
 
 `evaluation/` scores independently verified immutable as-of datasets through
 the existing market and settlement rules. Use `createEvaluationHarness` with

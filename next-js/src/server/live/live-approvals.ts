@@ -53,8 +53,6 @@ export function missingOwnerApprovals(policy: RuntimePolicy, verify: EvidenceVer
     check("GOAL_HINT_EVIDENCE_POLICY_REF", choices.evidencePolicyRef, "evidence-policy");
     check("GOAL_HINT_FRESHNESS_POLICY_REF", choices.freshnessPolicyRef, "freshness-policy");
     check("GOAL_HINT_PIPELINE_INTEGRITY_REF", choices.pipelineIntegrityRef, "pipeline-integrity");
-    // AI-first publication is a promotion the owner approves for one evaluation report and model.
-    if (choices.forecasts.sourceOrder === "ai-first") check("GOAL_HINT_AI_PROMOTION_REF", choices.forecasts.aiPromotionRef, "ai-promotion");
   }
   if (policy.mode === "production" || choices.database.accessRef !== null)
     check("GOAL_HINT_DATABASE_ACCESS_REF", choices.database.accessRef, "database-access");

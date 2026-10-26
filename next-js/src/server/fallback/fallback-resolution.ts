@@ -32,7 +32,7 @@ function aiGroups(ai: PredictorResult, now?: UtcInstant) {
 /** Use only after authenticating the owning AI result. No provider support is inferred. */
 export function fallbackRequestedGroups(ai: PredictorResult, now?: UtcInstant, policy: ForecastSelectionPolicy = "legacy-ai-primary"): readonly SourceGroup[] {
   const snapshot = aiGroups(parseFallbackAiResult(ai), now);
-  if (policy === "provider-baseline") return groups;
+  if (policy === "provider-baseline" || policy === "optional-ai-primary") return groups;
   return Object.freeze(groups.filter((family) => !snapshot.markets[family].available));
 }
 function fallbackReason(ai: PredictorResult, family: SourceGroup, now: UtcInstant): FallbackReason {
@@ -79,7 +79,7 @@ function explanations(markets: ResolvedForecastCandidate["markets"], ai: Predict
   }
   if (providerUsed) {
     const baseline = available.some((value) => value.fallback?.reason === "provider-baseline");
-    const basis = explanation(baseline ? "API-Football supplies the provider benchmark; AI forecasts require comparative evaluation before publication."
+    const basis = explanation(baseline ? "API-Football supplies the independently retained baseline forecast; recommendation eligibility is evaluated separately."
       : order === "provider-first" ? "API-Football supplies the validated statistical forecast for the match result."
       : "API-Football fallback supplies a validated statistical forecast for the available provider group.", providerUrls);
     if (reasons.length === 4) reasons[3] = basis; else reasons.push(basis);
@@ -109,7 +109,7 @@ export function resolveFallbackCandidate(value: Readonly<{
   order?: ForecastSourceOrder;
 }>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy = "legacy-ai-primary"): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
-  if (policy !== "legacy-ai-primary" && policy !== "provider-baseline" || policy === "provider-baseline" && value?.order === "ai-first") return denied("invalid-request");
+  if (policy !== "legacy-ai-primary" && policy !== "provider-baseline" && policy !== "optional-ai-primary" || policy === "provider-baseline" && value?.order === "ai-first") return denied("invalid-request");
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
   const order = value?.order;
   try {
@@ -180,7 +180,7 @@ export function resolveFallbackCandidate(value: Readonly<{
         provenance: primaryProvenance, flags: ai.output.flags });
       } else if (market.source === "api-football" && supplied !== null && fallbackProvenance !== null) {
         markets[family] = freezeEvidence({ available: true, market, fallback: policy === "provider-baseline"
-          ? { reason: "provider-baseline", detail: "ai-shadow-pending-matched-evaluation" }
+          ? { reason: "provider-baseline", detail: "independent-provider-baseline" }
           : providerFirst ? providerFirstReason(ai, now) : fallbackReason(ai, group, now),
           timestamps: supplied.timestamps, provenance: fallbackProvenance, flags: supplied.flags });
       } else throw new Error("A selected forecast group has no authenticated source.");

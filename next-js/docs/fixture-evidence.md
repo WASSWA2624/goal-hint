@@ -2,7 +2,12 @@
 
 The evidence layer collects attributable facts for one canonical fixture and preserves the exact input used by an analysis. It does not generate forecasts, create analysis cycles or runs, or publish explanations.
 
-The licensed research provider and its concrete adapter remain unselected. OP13 and OP14 in [the decision register](implementation-decisions.md) still require approved sources, reuse and archive retention rights, minimum coverage, freshness, and conflict/unknown-timestamp rules. `evidence-research.ts` provides an integration contract for that future adapter; it is not an implementation of a selected research service. The 011 checkbox in [the development tracker](../dev-tracker.md) remains empty while the actual binding and policy choices are pending. All acceptance evidence described here uses synthetic data and permissions.
+The optional `brave-search` binding now fetches approved original articles through
+the existing cost and public-network boundaries before analysis. It preserves
+original clocks and attribution in the preparation stage and permits limited
+news coverage. Live credentials, supported account data and exact publisher reuse
+rights remain operator activation requirements. See [research setup](prediction-research.md).
+All local acceptance evidence uses synthetic data and permissions.
 
 ## Server modules and boundaries
 

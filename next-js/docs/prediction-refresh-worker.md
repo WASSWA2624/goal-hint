@@ -68,12 +68,28 @@ source timestamps, missingness, rights and limited-news labels. The primary AI
 receives only that snapshot through the existing untrusted-evidence prompt.
 Ready-made provider forecasts become reachable only in the fallback phase.
 
-The existing predictor validates/calibrates AI output. The existing fallback
-service requests only missing/invalid source groups and applies shared
-consistency/provenance rules. If the provider attempt times out or was interrupted,
+The existing predictor validates/calibrates AI output. New live plans use
+`optional-ai-primary`, retain the independent provider baseline even beside
+complete AI, and apply shared consistency/provenance rules. Legacy frozen plans
+retain their recorded source order. If the provider attempt times out or was interrupted,
 its `resolveWithoutProvider` path applies those same rules to preserve valid AI
 families. Match result and derived double chance remain one group. No previous
 market is copied into a partial new revision.
+
+New plans freeze the [recommendation policy](prediction-engine.md). Before sealing
+the fallback stage, the shared selector qualifies every supported selection by
+probability, historical/player evidence and exact permitted price, then chooses
+the highest decimal odds in the applicable source pool. Usable AI wins; otherwise
+the separately retained baseline is used. Explicit abstention preserves valid
+probability-only family forecasts. The sealed stage and revision audit retain
+the exact recommendation and private quote; later mutable odds never rerank it.
+Publication rechecks owning stage/intent and immutable quote provenance.
+
+Structured preparation runs with AI disabled, budgets up to six football calls,
+and persists optional player/research sources before capturing analysis cutoff.
+Capacity-aware merging preserves required football evidence before optional
+sources within the actual snapshot byte/count bounds. The preparation receipt
+records research availability/failure; unconfigured research sends no request.
 
 The worker collects an original, bounded fixture status response immediately
 before publication and sends it through lifecycle handling. Stale safety evidence

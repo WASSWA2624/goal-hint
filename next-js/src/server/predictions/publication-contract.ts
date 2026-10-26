@@ -45,6 +45,8 @@ export type PublicationAuthority = Readonly<{
   verifyObservation(observation: PublicationObservation): boolean;
   /** Proves owning job/model pin, evidence, source receipts, rights and grounding. No I/O here. */
   verifyCandidate(input: PublishRevisionInput, now: UtcInstant): boolean;
+  /** New recommendation decisions require current internal odds/source permission; public display is independent. */
+  verifyRecommendation?: (input: PublishRevisionInput, now: UtcInstant) => boolean;
   /** Required for extensions: authenticates the complete original v2 output and reviewed definitions, not just its v1 marginals. */
   verifyGoalExtension?: (input: PublishRevisionInput, now: UtcInstant) => boolean;
   /** Required for the exact reviewed bookmaker/catalog mappings and frozen odds references. */

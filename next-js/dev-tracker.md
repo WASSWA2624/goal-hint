@@ -7,7 +7,7 @@
 | ☐ Not started | No implementation yet. |
 | — Unassessed | No completion status was recorded; inspect implementation and acceptance evidence before assigning one. |
 
-**Totals:** 51 completed · 9 partial · 8 not started · 1 unassessed (69 prompts).
+**Tracked totals:** 51 completed · 10 partial · 8 not started · 1 unassessed (70 tracked plans).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -81,10 +81,12 @@
 | — Unassessed | [068-payment-approval-verification.md](dev-plan/068-payment-approval-verification.md) | No completion status was recorded; review implementation and acceptance evidence before assigning one. |
 | ◐ Partial | [069-offline-shell-support.md](dev-plan/069-offline-shell-support.md) | Anonymous cache and safe-update coordinator implemented; browser/Windows cold A/B, measured retries, retention and available lifecycle checks passed. Android testing is deferred; Apple/Linux remain unqualified. |
 
+| ◐ Partial | [073-probability-qualified-prediction-engine.md](dev-plan/073-probability-qualified-prediction-engine.md) | Implementation and deterministic checks delivered; genuine MySQL acceptance, live account/source qualification and chronological evaluation remain unavailable. |
+
 ## Partial rows
 
-- **011 Fixture evidence:** local collection, immutable snapshots and persistence are built. Missing: the licensed research/news provider and the OP-13/14 operating choices, so there is no real news adapter.
-- **012 AI predictor:** the local registry, prompt, validation and cost-controlled flow are built. Missing: the chosen AI provider, model and calibration (OP-15), the provider transport and live integration.
+- **011 Fixture evidence:** collection, immutable snapshots, structured/player enrichment and the optional bounded Brave Search/article binding are implemented. Real source/account licensing, permissions and counted coverage qualification remain activation requirements; see [research setup](docs/prediction-research.md).
+- **012 AI predictor:** the registry, prompt, validation, accounting, concrete OpenAI transport and optional AI precedence are implemented. Forecasts remain provisional; private credentials, counted account qualification and measured calibration/evaluation remain unavailable.
 - **014 Forecast evaluation:** the offline harness, metrics, baselines and report command are built. Missing: the evaluation periods, sample sizes and quality thresholds (OP-16/17) and real forecast observations.
 - **051 Feed screen layout:** the screens are built. Missing: the browser acceptance checks. The prior stale rendering assertions were repaired within 061 and all required rendering commands now pass (19 October 2026).
 - **052 Provider odds import:** implementation is complete for the rights-off state. Missing: the counted odds trial (it needs the planned API plan upgrade; owner decision 10 October 2026) and odds display rights (OP-36), so `publicPolicy.features.providerOdds` stays off. See [development progress](docs/development-progress.md) and [provider odds](docs/provider-odds.md).
@@ -93,6 +95,7 @@
 - **066 Policy copy:** all local checks pass; notices remain drafts pending legal, privacy and refund facts; local test mode is open.
 - **067 Launch readiness:** verifiers and checklist are implemented; all required local regression checks and both local production verifiers pass. Real-message, owner/host/phone and activation evidence remains pending.
 - **069 Shared offline support:** the anonymous saved view has one bounded reachability/retry coordinator, owned cancellation, public status metadata and serialized staged updates. Browser cold/privacy/recovery, measured 5/15/30/60/300-second retries, failed derived-B retention and healthy-B/full-process cold A/B passed. Windows additionally preserved its draft through actual OS visibility changes and valid B recovery, then passed separate-process cold B. See [the contract](docs/offline-startup.md) and [development progress](docs/development-progress.md#069--anonymous-offline-startup-26-october-2026). Android testing is deferred; Apple/Linux remain unqualified, keeping the overall status Partial.
+- **073 Prediction engine:** new refreshes freeze the shared evidence/0.65-probability/quote policy, select highest exact odds after qualification, prefer usable optional AI and retain the enriched baseline. Immutable recommendation/quote provenance drives existing reads without UI edits. The environment has no genuine `mysqld`; database acceptance checks skip explicitly. No paid calls, actual account coverage qualification or held-out accuracy study was performed. See [the engine runbook](docs/prediction-engine.md) and [development progress](docs/development-progress.md).
 
 ## Unassessed rows
 

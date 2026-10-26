@@ -43,10 +43,10 @@ export const operatingRules = freeze({
   calendar: calendarRules,
   forecasts: {
     ruleVersion: marketRules.ruleVersion,
-    // The provider baseline publishes while AI remains shadow evidence. Promotion references alone grant no publication authority.
-    defaultSourceOrder: "provider-first",
-    primary: "api-football",
-    shadow: "ai",
+    // Optional usable AI recommendations take precedence; provider-only remains a rollback setting.
+    defaultSourceOrder: "ai-first",
+    primary: "ai",
+    fallback: "api-football",
     publishShadowForecasts: false,
     completeRevisionSnapshots: true,
     retainEligiblePreviousWhenAllMarketsUnavailable: true,
@@ -178,11 +178,14 @@ const environmentSchema = z.object({
   GOAL_HINT_AI_PROVIDER: text.describe("Select the primary predictor provider without inventing one (010/012)."),
   GOAL_HINT_AI_MODEL: text.describe("Record the selected model/version (012)."),
   GOAL_HINT_CALIBRATION_REF: text.describe("Record the selected calibration configuration; this does not claim calibration quality (012/014)."),
-  GOAL_HINT_FORECAST_SOURCE_ORDER: optional(z.enum(["provider-first", "ai-first"])).transform((value) => value ?? "provider-first")
-    .describe("Frozen source/receipt order, provider-first by default. AI-first remains unavailable in the live runner until independently verified promotion evidence is bound."),
-  GOAL_HINT_AI_PROMOTION_REF: text.describe("Owner-approved promotion reference printed by evaluation:report (forecast-evaluation:<report hash>:<model id>)."),
+  GOAL_HINT_FORECAST_SOURCE_ORDER: optional(z.enum(["provider-first", "ai-first"])).transform((value) => value ?? "ai-first")
+    .describe("Frozen source/receipt order; optional usable AI first by default, provider-first is an explicit rollback."),
+  GOAL_HINT_AI_PROMOTION_REF: text.describe("Historical evaluation reference retained for compatibility; optional AI precedence makes no measured-improvement claim."),
   GOAL_HINT_RESEARCH_PROVIDER: text.describe("Select a licensed research provider (010/011)."),
   GOAL_HINT_RESEARCH_LICENSE_REF: text.describe("Record permitted research retrieval and reuse (011)."),
+  GOAL_HINT_RESEARCH_HOSTS: optional(z.string().transform((value) => value.split(",").map((host) => host.trim().toLowerCase()))
+    .pipe(z.array(z.string().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/u)).min(1).max(16)))
+    .describe("Exact approved authoritative club, competition or trusted publisher hosts; source fetching never broadens this list."),
   GOAL_HINT_EVIDENCE_POLICY_REF: text.describe("Record minimum evidence, conflicts and missing-data rules (011)."),
   GOAL_HINT_FRESHNESS_POLICY_REF: text.describe("Record source/status freshness and unknown-update-time handling (008/011/022)."),
   GOAL_HINT_PROBABILITY_SUM_TOLERANCE: tolerance.describe("Use the probability sum tolerance approved for the active market rule version; leave unset for its default (005)."),
@@ -238,8 +241,8 @@ function assemble(settings: z.output<typeof environmentSchema>) {
     capabilities: {
       database: settings.GOAL_HINT_DATABASE_ENABLED,
       football: settings.GOAL_HINT_FOOTBALL_ENABLED,
-      ai: settings.GOAL_HINT_AI_ENABLED,
-      research: settings.GOAL_HINT_RESEARCH_ENABLED,
+      ai: settings.GOAL_HINT_AI_ENABLED && settings.AI_API_KEY !== null,
+      research: settings.GOAL_HINT_RESEARCH_ENABLED && settings.RESEARCH_API_KEY !== null,
     },
     secrets: {
       databaseUrl: secret(settings.DATABASE_URL),
@@ -296,7 +299,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       },
       ai: { provider: settings.GOAL_HINT_AI_PROVIDER, model: settings.GOAL_HINT_AI_MODEL, calibrationRef: settings.GOAL_HINT_CALIBRATION_REF },
       forecasts: { sourceOrder: settings.GOAL_HINT_FORECAST_SOURCE_ORDER, aiPromotionRef: settings.GOAL_HINT_AI_PROMOTION_REF },
-      research: { provider: settings.GOAL_HINT_RESEARCH_PROVIDER, licenseRef: settings.GOAL_HINT_RESEARCH_LICENSE_REF },
+      research: { provider: settings.GOAL_HINT_RESEARCH_PROVIDER, licenseRef: settings.GOAL_HINT_RESEARCH_LICENSE_REF, hosts: settings.GOAL_HINT_RESEARCH_HOSTS },
       evidencePolicyRef: settings.GOAL_HINT_EVIDENCE_POLICY_REF,
       freshnessPolicyRef: settings.GOAL_HINT_FRESHNESS_POLICY_REF,
       probabilitySumTolerance: settings.GOAL_HINT_PROBABILITY_SUM_TOLERANCE ?? marketRules.probabilitySumTolerance,
@@ -449,10 +452,6 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
         need("GOAL_HINT_QUALITY_QUALIFICATION_REF", policy.choices.qualityQualificationRef);
         need("GOAL_HINT_RELEASE_APPROVAL_REF", policy.choices.releaseApprovalRef);
         need("GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF", policy.choices.football.publicRightsRef);
-        if (policy.choices.forecasts.sourceOrder === "ai-first") {
-          need("GOAL_HINT_AI_ENABLED", policy.capabilities.ai);
-          need("GOAL_HINT_AI_PROMOTION_REF", policy.choices.forecasts.aiPromotionRef);
-        }
       }
     }
   }
@@ -551,8 +550,6 @@ export function assertOperationAllowed(policy: RuntimePolicy, operation: Operati
       ["GOAL_HINT_QUALITY_QUALIFICATION_REF", choices.qualityQualificationRef, "quality-qualification"],
       ["GOAL_HINT_RELEASE_APPROVAL_REF", choices.releaseApprovalRef, "release-approval"],
     );
-    if (operation === "publication" && choices.forecasts.sourceOrder === "ai-first")
-      requirements.push(["GOAL_HINT_AI_PROMOTION_REF", choices.forecasts.aiPromotionRef, "ai-promotion"]);
   }
   const issues: PolicyIssue[] = [];
   for (const [field, reference, requirement] of requirements) {

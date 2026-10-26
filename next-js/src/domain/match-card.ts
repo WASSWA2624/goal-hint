@@ -1,6 +1,7 @@
 import { presentMarketProbabilities, type AcceptedMarket, type MarketFamily, type MarketSelection } from "./markets.ts";
 import type { FixtureSnapshot, liveClockPhases } from "./fixture-snapshot.ts";
-import { isPlayedFinalStatus, type SettlementOutcomeStatus } from "./market-settlement.ts";
+import { isPlayedFinalStatus, selectionOccurred, type SettlementOutcomeStatus } from "./market-settlement.ts";
+import { recommendationMarket, type DisplayedMarketPick } from "./recommendation-view.ts";
 
 export function teamInitials(name: string | null): string {
   const words = name?.normalize("NFC").match(/[\p{L}\p{N}]+/gu) ?? [];
@@ -11,8 +12,18 @@ export function teamInitials(name: string | null): string {
   return [...initials.toUpperCase()].slice(0, 2).join("");
 }
 
-export function probabilityEntry(market: AcceptedMarket, selection: MarketSelection = market.selection) {
-  const entry = presentMarketProbabilities(market).entries.find((item) => item.selection === selection);
+export function probabilityEntry(market: AcceptedMarket | DisplayedMarketPick, selection: MarketSelection = market.selection) {
+  const original = "presentationOf" in market ? market.presentationOf : market;
+  if (original !== market && (market.family !== original.family || market.ruleVersion !== original.ruleVersion ||
+    market.source !== original.source || market.period !== original.period ||
+    market.selectedProbability !== (original.probabilities as Readonly<Record<string, number>>)[market.selection] ||
+    Object.keys(market.probabilities).length !== Object.keys(original.probabilities).length ||
+    Object.entries(original.probabilities).some(([key, value]) => (market.probabilities as Readonly<Record<string, number>>)[key] !== value) ||
+    (market.family === "total-goals" && original.family === "total-goals" && market.line !== original.line) ||
+    (market.family === "double-chance" && original.family === "double-chance" && market.derivedFrom !== original.derivedFrom))) {
+    throw new RangeError("Recommendation presentation must preserve its original forecast.");
+  }
+  const entry = presentMarketProbabilities(original).entries.find((item) => item.selection === selection);
   if (!entry) throw new RangeError("Probability selection does not belong to this market.");
   return entry;
 }
@@ -21,15 +32,22 @@ export function probabilityEntry(market: AcceptedMarket, selection: MarketSelect
 export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketFamily = "match-result") {
   const forecast = fixture.forecast;
   if (forecast && "gated" in forecast) return null;
+  if (forecast?.recommendation?.status === "no-qualified-recommendation") return null;
   const item = forecast?.markets.find((entry) => entry.market.family === family);
   if (!forecast || !item) return null;
-  const probability = probabilityEntry(item.market);
+  const selected = recommendationMarket(item.market, forecast.recommendation);
+  const probability = probabilityEntry(item.market, selected.selection);
   const supplied = item.outcome;
   const matched = supplied && supplied.cycleId === fixture.cycleId && supplied.revisionId === forecast.revisionId &&
-    supplied.selection === item.market.selection &&
+    supplied.selection === selected.selection &&
     (!["correct", "incorrect"].includes(supplied.status) || isPlayedFinalStatus(fixture.status));
-  const status: SettlementOutcomeStatus = matched ? supplied.status : "pending";
-  return { item, probability, publishedAt: forecast.publishedAt, status,
+  const recommendationSettled = selected.selection !== item.market.selection && supplied &&
+    supplied.cycleId === fixture.cycleId && supplied.revisionId === forecast.revisionId &&
+    ["correct", "incorrect"].includes(supplied.status) && fixture.cycle?.mode === "locked" &&
+    isPlayedFinalStatus(fixture.status) && fixture.scorePeriod === "regulation" && fixture.score !== null;
+  const status: SettlementOutcomeStatus = matched ? supplied.status : recommendationSettled
+    ? selectionOccurred(selected.selection, fixture.score!.home, fixture.score!.away) ? "correct" : "incorrect" : "pending";
+  return { item: selected === item.market ? item : { ...item, market: selected }, probability, publishedAt: forecast.publishedAt, status,
     explanation: matched ? supplied.explanation : null, provisional: forecast.provisional ?? true,
     updateDelayed: forecast.updateDelayed === true };
 }
@@ -67,7 +85,8 @@ export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily
   if (fixture.forecast && "gated" in fixture.forecast) return null;
   const pick = fixture.forecast?.markets.find((entry) => entry.market.family === family);
   const price = fixture.prices?.find((entry) => entry.family === family);
-  return pick && price && price.selection === pick.market.selection ? price : null;
+  const selected = pick && recommendationMarket(pick.market, fixture.forecast?.recommendation);
+  return selected && price && price.selection === selected.selection ? price : null;
 }
 
 export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null; stoppageMinutes?: number | null };

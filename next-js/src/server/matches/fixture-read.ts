@@ -3,7 +3,7 @@ import "server-only";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import type { InstantWindow } from "../../domain/calendar.ts";
+import { utcInstantFromEpochMilliseconds, type InstantWindow } from "../../domain/calendar.ts";
 import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
@@ -14,6 +14,9 @@ import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { storedSettlementProjection } from "../settlement/settlement-read.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
 import { storedFixturePrices } from "../odds/odds-read.ts";
+import { publicRecommendation, recommendationMarket } from "../../domain/recommendation-view.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
+import { formatOddsHundredths, oddsDisplayHundredths, parseDecimalOdds } from "../../domain/odds.ts";
 
 const families = Object.keys(marketSelections) as MarketFamily[];
 const text = (value: string | null) => value?.normalize("NFC").replace(/\p{Cc}/gu, " ").trim() || null;
@@ -61,7 +64,23 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
       : item && !item.available && ["unsupported-family", "unsupported-markets"].includes(item.reason) ? "unsupported" : "insufficient-data";
     return { family, reason } as StoredMatchFeedRecord["unavailableMarkets"][number];
   });
-  const prices = await storedFixturePrices(tx, id, markets.map((item) => ({ family: item.market.family, selection: item.market.selection })), options.prices);
+  const recommendation = publicRecommendation(revision?.candidate.audit.recommendation);
+  const prices = await storedFixturePrices(tx, id, markets.map((item) => {
+    const selected = recommendationMarket(item.market, recommendation);
+    return { family: selected.family, selection: selected.selection };
+  }), options.prices);
+  const chosen = revision?.candidate.audit.recommendation?.selected;
+  if ((options.prices ?? publicPolicy.features.providerOdds) && chosen) {
+    const quote = chosen.quote, decimal = parseDecimalOdds(quote.decimal);
+    // The recommended pick keeps its original publication quote; later odds updates do not replace it.
+    if (decimal) {
+      const index = prices.findIndex((price) => price.family === chosen.family);
+      if (index >= 0) prices.splice(index, 1);
+      prices.push({ family: chosen.family, selection: chosen.selection, price: formatOddsHundredths(oddsDisplayHundredths(decimal)),
+        basis: "bookmaker", retrievedAt: utcInstantFromEpochMilliseconds(quote.observedAt),
+        providerUpdatedAt: quote.providerUpdatedAt === null ? null : utcInstantFromEpochMilliseconds(quote.providerUpdatedAt) });
+    }
+  }
   const status = resultStatus.parse(fixture.status);
   const issue = fixture.lifecycleState?.issue ?? null;
   const coherentResult = fixtureResultMatchesCanonical(fixture, result, issue);
@@ -91,6 +110,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     partialCoverage, cycleId: cycle?.id ?? null, cycle: cycle ? { state: cycle.state, mode: display!.mode, ordinal: cycle.ordinal,
       lockedAt: cycle.lockedAt, voidReason } : null,
     forecast: revision ? { runId: revision.runId, runSequence: String(revision.runSequence), revisionId: revision.id, publishedAt: revision.publishedAt, markets,
+      ...(recommendation === undefined ? {} : { recommendation }),
       updateDelayed: delayed === true, provisional: available.some((item) => item.provenance.kind !== "ai" || item.provenance.provisional) } : null,
     unavailableMarkets, update: { prediction, result: fixture.resultState?.delayReason ? "delayed" : fixture.resultState ? "current" : "untracked" },
     availabilityMessage: outside && !revision ? messages.text("feed.sevenDayAvailability") : null, prices };

@@ -13,12 +13,12 @@ the exact owner approval references and a counted smoke check; synthetic tests
 make no paid provider calls. Forecasts remain provisional, with no evaluated
 calibration or accuracy claim.
 
-Following the 25 October checklist, the live runner uses the validated provider
-benchmark for publication and retains AI output in shadow. Enabling the AI
-transport authorizes its existing bounded attempt; it does not promote AI into
-published markets or publish AI goal-market extensions. Original revisions stay
-unchanged. See [the benchmark and shadow runbook](provider-baseline.md) for the
-retained matching evidence and remaining prospective evaluation work.
+The approved engine now gives a usable, probability-qualified AI recommendation
+precedence over the independently retained baseline. The original provider-only
+shadow restriction is superseded; source authority checks exact authentic model,
+pin, evidence and family probabilities, without requiring invented accuracy
+promotion evidence. Unusable AI falls back automatically through the shared
+[selection contract](prediction-engine.md). Both original sources remain retained.
 
 Prepared private runner choices keep AI disabled until the key is installed.
 They name OpenAI, `gpt-6.1-sol`, usage-based billing, 100,000 total job tokens and
@@ -31,7 +31,8 @@ Read [the decision register](implementation-decisions.md) for OP-09–11 and
 OP-13–15: provider/account/model selection, actual pricing, separate budgets,
 request/token/time allocations, source and AI transmission rights, evidence
 freshness/coverage, and evaluated predictor/calibration configuration. The
-licensed news adapter and approved evidence rules from 011 also remain pending.
+optional `brave-search` article binding is implemented; actual source licenses,
+account credentials and live coverage remain operator activation requirements.
 
 ## Private modules
 
@@ -59,7 +60,10 @@ do not authorize work. Source text and model output cannot supply those verifier
 `src/server/live/live-ai-model.ts`, `live-ai-plan.ts`, `live-ai-evidence.ts` and
 `live-ai.ts` compose the transport with the existing immutable model registry,
 cost ledger, evidence store and refresh workflow. `GOAL_HINT_AI_ENABLED=false`
-keeps the original fallback path and requires no AI key. When enabled, the
+keeps the original fallback path and requires no AI key. Missing optional AI
+calibration/transmission approvals or an unsupported optional model similarly
+disable the AI layer while mandatory baseline publication approval remains in
+force. Before paid AI is enabled, the
 runner checks `GOAL_HINT_AI_PROVIDER=openai`, `GOAL_HINT_AI_MODEL=gpt-6.1-sol`,
 `AI_API_KEY`, a calibration configuration reference, explicit request/token/time
 limits and owner approval for `${GOAL_HINT_EVIDENCE_POLICY_REF}#openai-transmission`.
@@ -106,19 +110,21 @@ Preparation and the empty-evidence request write the `preparation` and
 AI-enabled live refresh failed at preparation on MySQL; apply that migration
 (and its MariaDB overlay in production) before enabling AI anywhere.
 
-### AI shadow under provider-first
+### Optional research and source precedence
 
-Every AI plan freezes a source order (`liveSourceOrder`, default
-`provider-first`). The AI attempt runs exactly as above and before the provider
-request, but under provider-first API-Football publishes the match result and
-double chance; the accepted AI forecast is sealed beside it as a receipt in the
-refresh's fallback stage. The independent live baseline policy keeps every AI
-family private, including goal markets and provider outages. The owner's comparison page `/admin/forecasts` and the
-[evaluation harness](forecast-evaluation.md#provider-baseline-and-promotion)
-compare the two on matched settled fixtures as private diagnostics. Promotion
-references remain available for independent review, but the live runner rejects
-`ai-first` until actual verified frozen promotion evidence is bound. References
-and approval strings alone do not qualify a model or activate publication.
+New AI plans freeze `ai-first`; `provider-first` is an explicit provider-only
+rollback. Genuine historical plans keep their frozen order. The baseline is
+computed even beside complete AI output. Both distributions retain independent
+provenance, source clocks and provisional labels; the shared selector decides
+whether the AI result is usable. An enabled model alone does not search.
+
+`live-research.ts` implements an optional separately accounted Brave web search
+binding. It performs one search and at most two source fetches before analysis,
+then saves original fetched article excerpts, URLs, publisher, publication/update
+and retrieval clocks into the immutable preparation stage. Search descriptions,
+model memory and fabricated citations never become verified evidence. The
+predictor still receives neither provider prediction votes nor bookmaker odds.
+See [research setup](prediction-research.md) for permissions, bounds and gaps.
 
 ## Immutable model identity and pins
 

@@ -89,7 +89,9 @@ function factsFrom(sources: readonly EvidenceSource[]): EvidenceFact[] {
   const groups = new Map<string, MutableFact>();
   for (const source of sources) for (const claim of source.claims) {
     const key = claim.kind === "history" ? `fixture-${claim.value.fixtureId}` : claim.kind === "statistic" ?
-      `statistic-${evidenceFingerprint({ fixtureId: claim.value.fixtureId ?? null, metric: claim.value.metric })}` :
+      `statistic-${evidenceFingerprint({ fixtureId: claim.value.fixtureId ?? null, metric: claim.value.metric,
+        ...(claim.value.playerExternalId === undefined ? {} : { playerExternalId: claim.value.playerExternalId,
+          competitionExternalId: claim.value.competitionExternalId, season: claim.value.season }) })}` :
       claim.kind === "rest" ? "schedule-rest" : claim.kind === "venue" ? "venue-role" : claim.kind === "form" ?
         `form-${evidenceFingerprint({ startsAt: claim.value.windowStartsAt, endsAt: claim.value.windowEndsAt })}` : claim.key;
     const group = { kind: claim.kind, subjectTeamId: claim.subjectTeamId, key }, id = evidenceFingerprint(group);

@@ -26,6 +26,7 @@ import { fallbackAuthority } from './fallback-fixtures.mjs';
 import { fallbackAdapterSetup, fallbackCanonical } from './fallback-adapter-fixtures.mjs';
 import { catalogBounds, catalogFixture, catalogResponse, createSyntheticCatalogAdapter } from './catalog-fixtures.mjs';
 import { lifecyclePolicy, lifecycleAuthority } from './lifecycle-fixtures.mjs';
+import { recommendationPolicy } from '../../src/domain/recommendation.ts';
 
 // Every transport, credential, policy and rate is synthetic; durable queue,
 // evidence, model, cost, lifecycle and publication services run against MySQL.
@@ -63,7 +64,7 @@ export async function refreshHarness(db, scenarios, changes = {}) {
         if (scenario.ai === 'outage') throw new Error('private synthetic AI failure');
         if (scenario.generate) return scenario.generate(input);
         if (scenario.ai === 'timeout') await new Promise((resolve) => setTimeout(resolve, 350));
-        const output = predictorRawOutput(input.snapshot, input.model);
+        const output = predictorRawOutput(input.snapshot, input.model, scenario.groups ? { groups: scenario.groups } : {});
         if (scenario.ai === 'partial') delete output.groups['match-result'];
         return { value: { output: scenario.ai === 'invalid' ? 'not JSON' : output, metadata: {
           generatedAt: db.now(), retrievedAt: db.now(), providerUpdatedAt: null, evidenceRef: 'synthetic-ai-response' } },
@@ -114,12 +115,13 @@ export async function refreshHarness(db, scenarios, changes = {}) {
     const fallbackOnly = scenario.aiPlan === 'none';
     return { version: 1, evidenceRef: 'synthetic-refresh-policy', modelVersionId: fallbackOnly ? null : model.id,
       evidence: { requestId: refreshReference(member.jobId, 'evidence'), context: member.context, policy, footballPlan: null,
-        researchPlan, cachedSources: [evidenceSource(member.context)], maxElapsedMs: 3000 },
+        researchPlan, cachedSources: scenario.evidenceSources ? scenario.evidenceSources(member.context) : [evidenceSource(member.context)], maxElapsedMs: 3000 },
       ai: fallbackOnly ? null : { job: aiJob, request: aiRequest, maxElapsedMs: scenario.ai === 'timeout' ? 2000 : 5000 },
       fallback: { bounds: catalogBounds(member.now, { priority: 'near-kickoff-fallback', cacheScope: member.jobId, deadlineAt, maxRequests: 1, timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1 } }),
         maxElapsedMs: scenario.fallback === 'timeout' ? 20 : 5000 },
       observation: { bounds: catalogBounds(member.now, { deadlineAt, maxRequests: 1, timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1 } }), maxAgeMs: 10000 },
-      publicationReserveMs: 2000, footballRequestLimit: 2, ...(scenario.sourceOrder === undefined ? {} : { sourceOrder: scenario.sourceOrder }) };
+      publicationReserveMs: 2000, footballRequestLimit: 2, ...(scenario.sourceOrder === undefined ? {} : { sourceOrder: scenario.sourceOrder }),
+      ...(scenario.recommendations ? { recommendationPolicy } : {}) };
   }
   const serviceOptions = { type: 'prediction.daily-refresh', handlerVersion: 1, store, selection, clock, configure,
     authority: { authorize() {}, verifyPlan: () => true }, models: registry, evidence, predictor, fallback, observation, lifecycle,

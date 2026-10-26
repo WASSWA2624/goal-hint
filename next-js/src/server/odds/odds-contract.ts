@@ -99,7 +99,11 @@ export type OddsBatchBody = Readonly<{
   missingCoverage: readonly string[];
   pages: readonly OddsProvenance[];
   /** Outcomes and a content hash per provider fixture; prices are never retained here. */
-  fixtures: readonly Readonly<{ externalId: number; outcome: OddsFixtureOutcome; observationHash: string }>[];
+  fixtures: readonly Readonly<{ externalId: number; outcome: OddsFixtureOutcome; observationHash: string;
+    /** Availability/content manifest only; exact prices remain in the private immutable snapshots. */
+    quoteManifest?: Readonly<{ bookmakerId: number; kickoffAt: UtcInstant | null;
+      bets: readonly Readonly<{ betId: number; betName: string | null; valuesHash: string }>[] }>
+  }>[];
   /** /odds/bets or /odds/bookmakers catalog names (not prices). */
   catalog: readonly Readonly<{ id: number; name: string }>[];
 }>;

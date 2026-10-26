@@ -12,6 +12,7 @@ import type { ModelVersion } from "../predictor/predictor-contract.ts";
 import type { RefreshMember, RefreshPlan } from "../refresh/refresh-contract.ts";
 import { refreshReference } from "../refresh/refresh-input.ts";
 import { fallbackRefreshPlan, type LiveReferences, type RefreshPacing } from "./live-plan.ts";
+import { liveResearchRules } from "./live-research-policy.ts";
 import { liveAiAccountId, liveAiRate } from "./live-ai-model.ts";
 
 export function liveAiEvidencePolicy(refs: LiveReferences): EvidencePolicy {
@@ -31,18 +32,21 @@ export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at:
   if (evidenceRef === null) throw new Error("AI accounting approval is required.");
   // UTF-8 bytes provide a conservative transport bound; ordinary ten-match inputs exceed 24k bytes.
   const inputTokenLimit = Math.min(70_000, Math.floor(tokenLimit * 0.85)), outputTokenLimit = Math.min(8192, tokenLimit - inputTokenLimit);
-  const primaryTimeLimitMs = Math.min(120_000, timeoutSeconds * 1000 - fallbackReserveMs);
+  const research = policy.capabilities.research ? { costCapUsdPicos: liveResearchRules.requestUsdPicos,
+    requestLimit: 1, inputTokenLimit: 0, outputTokenLimit: 0, billedUnitLimit: 0, primaryTimeLimitMs: liveResearchRules.timeoutMs } : null;
+  if (research !== null && requestLimit < 2) throw new Error("AI and research require two bounded requests.");
+  const primaryTimeLimitMs = Math.min(120_000, timeoutSeconds * 1000 - fallbackReserveMs - (research?.primaryTimeLimitMs ?? 0));
   if (outputTokenLimit < 1024 || primaryTimeLimitMs < 20_000) throw new Error("The job does not leave usable AI and fallback time.");
   const maximum = { requests: 1, inputTokens: inputTokenLimit, outputTokens: outputTokenLimit, billedUnits: inputTokenLimit };
   return freezeEvidence({ ai: { costCapUsdPicos: priceCost(liveAiRate(model, utcInstantFromEpochMilliseconds(at)), maximum),
     requestLimit: 1, inputTokenLimit, outputTokenLimit, billedUnitLimit: inputTokenLimit, primaryTimeLimitMs },
-    research: null, fallbackReserveMs, evidenceRef });
+    research, fallbackReserveMs, evidenceRef });
 }
 
 /** Frozen plan uses stored sources already available by the member's captured analysis cutoff. The source order is
  * frozen with the AI allocation; a plan without usable AI time stays the fallback-only plan, without an order. */
 export function liveAiRefreshPlan(member: RefreshMember, refs: LiveReferences, policy: RuntimePolicy, model: ModelVersion,
-  sources: readonly EvidenceSource[], pacing: RefreshPacing = "standard", sourceOrder: ForecastSourceOrder = "provider-first"): RefreshPlan {
+  sources: readonly EvidenceSource[], pacing: RefreshPacing = "standard", sourceOrder: ForecastSourceOrder = "ai-first"): RefreshPlan {
   const base = fallbackRefreshPlan(member, refs, pacing), reserve = member.entry.envelope.fallbackReserveMs;
   const allocation = liveAiAllocation(policy, model, member.now, reserve).ai!;
   const timeLimitMs = Math.min(member.entry.envelope.timeoutMs, allocation.primaryTimeLimitMs + reserve);

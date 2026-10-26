@@ -9,6 +9,7 @@ import { provenTrue as verified } from "../shared/authority-proof.ts";
 import { oddsFail, type OddsAuthority, type OddsBatchBody, type OddsFixtureOutcome, type OddsImportRequest,
   type OddsImportSummary, type ValidatedOddsObservation } from "./odds-contract.ts";
 import { assertValidatedOdds, authorizeOddsRequest, validateOddsObservation } from "./odds-input.ts";
+import { oddsValuesHash } from "./odds-mysql-store.ts";
 import type { MysqlOddsStore, OddsFixtureTarget } from "./odds-mysql-store.ts";
 
 /** The odds namespace of the API-Football adapter; it is separate from evidence and fallback. */
@@ -64,7 +65,9 @@ export function createOddsImportService(options: Readonly<{
       const targets = await options.store.resolveFixtures(observation.rows.map((row) => row.fixtureId));
       const classified = observation.rows.map((row) => ({ row, target: targets.get(row.fixtureId), outcome: classifyOddsRow(row, targets.get(row.fixtureId)) }));
       const batch = await receipt(observation, classified.map(({ row, outcome }) => ({ externalId: row.fixtureId, outcome,
-        observationHash: evidenceFingerprint(row) })));
+        observationHash: evidenceFingerprint(row), quoteManifest: { bookmakerId: request.policy.bookmakerId, kickoffAt: row.kickoff,
+          bets: (row.bookmakers.find((bookmaker) => bookmaker.id === request.policy.bookmakerId)?.bets ?? [])
+            .map((bet) => ({ betId: bet.id, betName: bet.name, valuesHash: oddsValuesHash(bet.values) })) } })));
       const outcomes = emptyOutcomes();
       for (const { outcome } of classified) outcomes[outcome]++;
       const publicDisplay = verified(() => options.authority.verifyPublicDisplay());

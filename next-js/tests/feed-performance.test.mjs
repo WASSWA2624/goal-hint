@@ -13,9 +13,12 @@ const today = parseReportingDate('2026-10-09'), at = Date.parse('2026-10-09T15:0
 const query = parseFeedQuery({ date: today, page: '2', pageSize: '1' }, { today });
 const sql = feedSql(query, resolveFeedDates(query, today), [39]);
 
-function sample({ score = [2, 1], selection = 'home-win', family = 'match-result', issue = null, canonicalScore = score } = {}) {
+function sample({ score = [2, 1], selection = 'home-win', family = 'match-result', issue = null, canonicalScore = score,
+  probabilities = family === 'match-result' ? { 'home-win': .7, draw: .2, 'away-win': .1 }
+    : family === 'double-chance' ? { 'home-or-draw': .82, 'away-or-draw': .46, 'home-or-away': .72 }
+      : { 'under-2.5': .7, 'over-2.5': .3 } } = {}) {
   const fixtureId = randomUUID(), cycle = { id: randomUUID(), lockedSetId: randomUUID(), state: 'closed', voidReason: null };
-  const market = { family, selection, source: 'ai', selectedProbability: .7 };
+  const market = { family, selection, source: 'ai', selectedProbability: probabilities[selection], probabilities };
   const content = { status: 'finished-regulation', providerStatus: 'FT', elapsedMinutes: null,
     reportedGoals: { home: score[0], away: score[1] }, extraTimeScore: { home: null, away: null }, penaltyScore: { home: null, away: null },
     regulation: { verified: true, home: score[0], away: score[1], evidenceRef: 'synthetic-verified-regulation' } };
@@ -31,6 +34,7 @@ function sample({ score = [2, 1], selection = 'home-win', family = 'match-result
     fixtureRegulationVerifiedAt: fixture.regulationVerifiedAt, fixtureRegulationEvidenceRef: fixture.regulationEvidenceRef,
     currentLockedSetId: cycle.lockedSetId, currentVoidReason: null, currentResultId: result.id, issue,
     currentFamily: family, currentSelection: selection, currentSource: market.source, currentProbability: market.selectedProbability,
+    storedSelection: selection, storedProbability: market.selectedProbability,
     marketPayload: JSON.stringify({ available: true, market }), marketValidIntegrity: 1n };
   const resultRow = { ...result, observedAt: new Date(at), regulationVerified: true, regulationHome: score[0], regulationAway: score[1],
     contentHash: evidenceFingerprint(content), body: evidenceSerialize(result), validIntegrity: 1n };
@@ -102,6 +106,15 @@ test('corrupt evidence and mismatched shown selections cannot produce fabricated
   await assert.rejects(readFeedPerformance(transaction([invalidResult]), sql, { total: 1, available: 1, void: 0 }));
   const invalidSelection = sample(); invalidSelection.row.currentSelection = 'away-win';
   await assert.rejects(readFeedPerformance(transaction([invalidSelection]), sql, { total: 1, available: 1, void: 0 }));
+});
+
+test('recommendation performance uses its exact selection while preserving the recorded family settlement', async () => {
+  const value = sample({ family: 'double-chance', selection: 'home-or-draw', score: [0, 0] });
+  value.row.currentSelection = 'home-or-away'; value.row.currentProbability = .72;
+  const recorded = value.row.body;
+  assert.deepEqual(await readFeedPerformance(transaction([value]), sql, { total: 1, available: 1, void: 0 }),
+    { total: 1, won: 0, lost: 1, pending: 0, void: 0, unavailable: 0 });
+  assert.equal(value.row.body, recorded); assert.equal(JSON.parse(recorded).status, 'correct');
 });
 
 test('performance count schema requires a complete nonnegative accounting', () => {

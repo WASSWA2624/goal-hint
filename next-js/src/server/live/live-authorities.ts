@@ -18,6 +18,8 @@ import type { PublicationAuthority, PublicationPolicy } from "../predictions/pub
 import type { RefreshAuthority, RefreshMember } from "../refresh/refresh-contract.ts";
 import { parseRefreshPlan } from "../refresh/refresh-input.ts";
 import type { ModelVersion } from "../predictor/predictor-contract.ts";
+import type { ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
+import { verifyLiveResearchSource } from "./live-research.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { liveAiEvidencePolicy, liveAiRefreshPlan } from "./live-ai-plan.ts";
 import { verifyLiveFootballSource } from "./live-ai-evidence.ts";
@@ -56,6 +58,7 @@ export function createLiveAuthorities(options: Readonly<{
   /** The order frozen into AI plans by the same runtime; provider-first when omitted. */
   sourceOrder?: ForecastSourceOrder;
   verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
+  verifyPrimaryCandidate?(candidate: ResolvedForecastCandidate): boolean;
 }>) {
   const { policy, verify, refs } = options;
   const now = () => options.clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
@@ -113,24 +116,35 @@ export function createLiveAuthorities(options: Readonly<{
     verifyPolicy: (value) => same(value, expected.publication),
     verifyObservation: (observation) => observation.provider === "api-football" && observation.evidenceRef === options.statusEvidenceRef &&
       observation.retrievedAt <= now() + SKEW_MS,
+    verifyRecommendation: (input) => {
+      const selected = input.candidate.audit.recommendation?.selected;
+      if (!selected) return true;
+      const configured = options.oddsPolicy;
+      return policy.capabilities.football && verify(refs.retention, "football-private-use") && configured !== null &&
+        configured !== undefined && selected.quote.bookmakerId === configured.bookmakerId &&
+        configured.retentionEvidenceRef === refs.retention && selected.quote.permitted && !selected.quote.suspended;
+    },
     verifyCandidate: (input) => {
       if (!verify(refs.publicRights, "football-public-rights")) return false;
       return Object.values(input.candidate.markets).every((market) => {
         if (!market.available) return true;
         if (market.provenance.kind === "api-football") return market.provenance.policyVersion === expected.fallback.version &&
           market.provenance.policyEvidenceRef === expected.fallback.evidenceRef;
-        // Authentic AI output is retained for matched shadow evaluation; it has
-        // no demonstrated improvement/promotion authority in this live binding.
-        return false;
+        return policy.capabilities.ai && options.aiModel !== undefined &&
+          market.provenance.modelVersionId === options.aiModel.id &&
+          same(market.provenance.pin, input.candidate.context.pin) &&
+          market.provenance.evidenceHash === input.candidate.context.evidenceHash &&
+          verify(`${refs.evidence}#openai-transmission`, "evidence-policy") &&
+          options.verifyPrimaryCandidate?.(input.candidate) === true;
       });
     },
   });
   const evidence: EvidenceAuthority = Object.freeze({
     authorize() { football(); },
     verifyContext: (context) => context.provider === "api-football" && context.cycleId !== null && context.runId !== null,
-    verifyPolicy: (value) => same(value, expected.evidence) || policy.capabilities.ai && same(value, liveAiEvidencePolicy(refs)),
-    verifySource: (source, context) => policy.capabilities.ai && verifyLiveFootballSource(source, context, refs),
-    verifyReuse: (source, context) => policy.capabilities.ai && source.reuse.allowSummary && source.reuse.evidenceRef === refs.retention &&
+    verifyPolicy: (value) => same(value, expected.evidence) || same(value, liveAiEvidencePolicy(refs)),
+    verifySource: (source, context) => verifyLiveFootballSource(source, context, refs) || verifyLiveResearchSource(source, context, policy),
+    verifyReuse: (source, context) => source.reuse.allowSummary && (source.kind === "news" ? source.reuse.evidenceRef === policy.choices.research.licenseRef : source.reuse.evidenceRef === refs.retention) &&
       source.reuse.retainUntil >= context.analysisAt && verify(refs.retention, "football-private-use"),
   });
   const providerFallback: ProviderFallbackAuthority = Object.freeze({
@@ -159,12 +173,26 @@ export function createLiveAuthorities(options: Readonly<{
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
       try {
-        const reviewed = plan.modelVersionId === null ? fallbackRefreshPlan(member, refs, options.refreshPacing) :
+        const baseline = fallbackRefreshPlan(member, refs, options.refreshPacing);
+        const reviewed = plan.modelVersionId === null ? { ...baseline, evidence: { ...baseline.evidence,
+          policy: liveAiEvidencePolicy(refs), cachedSources: plan.evidence.cachedSources } } :
           options.aiModel === undefined ? null : liveAiRefreshPlan(member, refs, policy, options.aiModel,
             plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
-            options.sourceOrder ?? "provider-first");
+            (plan.recommendationPolicy === undefined ? plan.sourceOrder : options.sourceOrder) ?? "ai-first");
         if (reviewed === null) return false;
         if (same(plan, parseRefreshPlan(reviewed, member))) return true;
+        if (plan.modelVersionId === null && same(plan, parseRefreshPlan(baseline, member))) return true;
+        // Old sealed intents predate recommendation selection and reserved only the two publication calls.
+        // Reconstruct that exact reviewed shape; never add new behavior to a recovered intent.
+        if (plan.recommendationPolicy === undefined) {
+          const { recommendationPolicy: _recommendation, ...previous } = reviewed; void _recommendation;
+          const legacy = { ...previous, footballRequestLimit: 2 };
+          if (same(plan, parseRefreshPlan(legacy, member))) return true;
+          if (plan.modelVersionId === null) {
+            const { recommendationPolicy: _baselineRecommendation, ...oldBaseline } = baseline; void _baselineRecommendation;
+            if (same(plan, parseRefreshPlan({ ...oldBaseline, footballRequestLimit: 2 }, member))) return true;
+          }
+        }
         // AI intents saved before source orders existed stay valid as legacy AI-first, without contemporaneous capture.
         if (plan.sourceOrder !== undefined || plan.ai === null || reviewed.sourceOrder === undefined) return false;
         const { sourceOrder: _order, ...legacy } = reviewed; void _order;

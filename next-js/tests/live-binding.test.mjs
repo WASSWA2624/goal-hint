@@ -131,14 +131,14 @@ test('primary workloads reserve football history, fallback and status within the
   for (const [limit, secondLimit, plan, minuteLimit] of [[100, 1, 'Free', 10], [7500, 5, 'Pro', 300], [150_000, 12, 'Mega', 900]]) {
     const primary = liveWorkload(limit, secondLimit, plan, minuteLimit, true);
     const fallback = liveWorkload(limit, secondLimit, plan, minuteLimit);
-    assert.equal(primary.refreshRequestsPerJob, 4);
-    assert.equal(fallback.refreshRequestsPerJob, 2);
+    assert.equal(primary.refreshRequestsPerJob, 8);
+    assert.equal(fallback.refreshRequestsPerJob, 8);
     assert.ok(primary.refreshCapacity <= fallback.refreshCapacity);
     const usable = Math.min(limit, 120_000), results = Math.max(4, Math.floor(usable * 0.25));
     const reserve = Math.max(16, Math.floor(usable * 0.1));
     assert.ok(16 + results + reserve + primary.refreshCapacity * primary.refreshRequestsPerJob <= usable);
     assert.equal(primary.odds.floor + primary.odds.spare, usable);
-    assert.ok(primary.odds.floor >= 16 + results + reserve + primary.refreshCapacity * 4);
+    assert.ok(primary.odds.floor >= 16 + results + reserve + primary.refreshCapacity * REFRESH_REQUESTS_PER_JOB);
     assert.equal(primary.importDays, plan === 'Free' ? 2 : 8);
   }
   assert.equal(refreshEnvelopeFor('standard', true).timeoutMs, 300_000);
@@ -149,8 +149,8 @@ test('primary workloads reserve football history, fallback and status within the
 
 test('odds spend only quota above every ordinary need of the day and stay off on free and slow plans', () => {
   // [daily limit, plan, minute limit] -> [floor, spare, eligible]; Mega keeps the internal 120,000 ceiling.
-  const plans = [[100, 'Free', 10, 99, 1, false], [100, 'Free', Number.POSITIVE_INFINITY, 99, 1, false], [7500, 'Pro', 300, 6641, 859, true],
-    [75_000, 'Ultra', 450, 30_266, 44_734, true], [150_000, 'Mega', 900, 46_016, 73_984, true]];
+  const plans = [[100, 'Free', 10, 97, 3, false], [100, 'Free', Number.POSITIVE_INFINITY, 97, 3, false], [7500, 'Pro', 300, 6745, 755, true],
+    [75_000, 'Ultra', 450, 42_266, 32_734, true], [150_000, 'Mega', 900, 58_016, 61_984, true]];
   for (const [limit, plan, minuteLimit, floor, spare, eligible] of plans) {
     const workload = liveWorkload(limit, 12, plan, minuteLimit), usable = Math.min(limit, 120_000);
     const resultsShare = Math.max(4, Math.floor(usable * 0.25)), reserve = Math.max(16, Math.floor(usable * 0.1));
@@ -185,7 +185,7 @@ test('odds spend only quota above every ordinary need of the day and stay off on
 
 test('partly spent ordinary quota leaves the odds spare intact: on Pro the gate counts ordinary use once', async () => {
   const pro = liveWorkload(7500, 5, 'Pro', 300), allowance = { floor: pro.odds.floor, spare: pro.odds.spare, reserve: pro.odds.reserve };
-  assert.deepEqual(allowance, { floor: 6641, spare: 859, reserve: 750 });
+  assert.deepEqual(allowance, { floor: 6745, spare: 755, reserve: 750 });
   const need = oddsMaxRequests('prices', pro.odds.maxPages), pollsPerHour = 3_600_000 / pro.cadence.dateMs;
   assert.equal(pollsPerHour, 60, 'Pro polls the date feed every minute');
   // One request per date poll; every 3-hour slot sweeps all seven dates at ten pages each.
@@ -205,8 +205,9 @@ test('partly spent ordinary quota leaves the odds spare intact: on Pro the gate 
   assert.deepEqual(slots, Array(8).fill(7), 'the 18:00 and 21:00 UTC slots still reconfirm prices for late kickoffs');
   assert.ok(oddsUsed <= allowance.spare);
   // Odds stop once their own spend leaves less than one ceiling of the spare, whatever ordinary work has used.
-  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 705, used: 1500 + 705, oddsUsed: 705 }, allowance, need), true);
-  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 706, used: 1500 + 706, oddsUsed: 706 }, allowance, need), false);
+  const lastAllowed = allowance.spare - need;
+  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - lastAllowed, used: 1500 + lastAllowed, oddsUsed: lastAllowed }, allowance, need), true);
+  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - lastAllowed - 1, used: 1500 + lastAllowed + 1, oddsUsed: lastAllowed + 1 }, allowance, need), false);
 
   // The router reads the gate's counters from the open provider day's durable limiter.
   const clock = { now: Date.parse('2026-10-10T12:00:00.000Z') }, store = memoryQuotaStore(clock);
@@ -263,13 +264,13 @@ test('slow per-minute plans wait out the rolling minute and skip cutoffs the que
   const free = liveWorkload(100, 1, 'Free', 10), mega = liveWorkload(150_000, 12, 'Mega', 900);
   assert.equal(free.pacing, 'slow'); assert.equal(mega.pacing, 'standard');
   assert.equal(liveWorkload(100, 1, 'Free').pacing, 'standard', 'an unknown minute limit keeps the original timings');
-  assert.equal(free.refreshLeadMs, free.refreshCapacity * 5 * 60_000, 'one worker drains the whole budget before the last cutoff');
+  assert.equal(free.refreshLeadMs, free.refreshCapacity * 8 * 60_000, 'one worker drains the whole budget before the last cutoff');
   assert.equal(mega.refreshLeadMs, 2 * 60 * 60_000, 'large plans cap the lead at two hours');
   const policy = parseRuntimePolicy(refsEnv), refs = liveReferences(policy);
   const selection = parseSelectionPolicy(selectionPolicy(policy, refs, free));
   assert.equal(selection.refreshLeadMs, free.refreshLeadMs);
-  assert.equal(selection.refresh.timeoutMs, 300_000); assert.equal(selection.refresh.fallbackReserveMs, 200_000);
-  assert.equal(parseSelectionPolicy(selectionPolicy(policy, refs, mega)).refresh.timeoutMs, 120_000);
+  assert.equal(selection.refresh.timeoutMs, 480_000); assert.equal(selection.refresh.fallbackReserveMs, 200_000);
+  assert.equal(parseSelectionPolicy(selectionPolicy(policy, refs, mega)).refresh.timeoutMs, 300_000);
 
   const now = Date.parse('2026-10-10T08:00:00Z'), jobId = 'a'.repeat(64);
   const member = (pacing, cutoffInMs) => ({ jobId, now, cycle: { cutoffAt: now + cutoffInMs },

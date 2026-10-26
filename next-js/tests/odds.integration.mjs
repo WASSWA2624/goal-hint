@@ -15,6 +15,8 @@ import { catalogSelectionAuthority } from './helpers/selection-fixtures.mjs';
 import { createSyntheticOddsAdapter, launchBetCatalog, launchBets, ODDS_BOOKMAKER, oddsAuthority, oddsBounds, oddsHash, oddsPolicy,
   oddsRequest, oddsResponse, offsetTime, rawOddsRow } from './helpers/odds-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
+import { createRecommendationQuoteLoader } from '../src/server/odds/recommendation-quotes.ts';
+import { evidenceContext } from './helpers/evidence-fixtures.mjs';
 
 // Prompt 052 persistence on an owned MySQL 8.4 with the application role's exact odds grants. Provider
 // envelopes, bookmakers, prices, approvals and clocks are synthetic; no request leaves the process.
@@ -190,6 +192,23 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.deepEqual([chain[0].bookmakerName, chain[0].betName], ['Synthetic bookmaker', 'Match Winner']);
         assert.equal((await store.snapshotChain(F.A.id, ODDS_BOOKMAKER, 99)).length, 1, 'unmapped bets are retained for later mappings');
         assert.ok(odds.network.slice(-1).every((url) => url.pathname === '/odds' && url.searchParams.get('bookmaker') === '8'));
+      });
+
+      await t.test('permitted internal recommendations read sealed private quotes while public prices stay disabled', async () => {
+        const context = evidenceContext(F.A, { analysisAt: p.now(), cutoffAt: p.now() });
+        const readsBefore = odds.network.length;
+        const load = createRecommendationQuoteLoader(a, { bookmakerId: policy.bookmakerId, freshnessMs: policy.freshnessMs,
+          expectedPolicyHash: oddsPolicyHash(policy), verifyInternalUse: () => true });
+        const original = await load(context), replay = await load(context);
+        assert.equal(original.length, 10); assert.deepEqual(replay, original);
+        assert.equal(original.find((quote) => quote.family === 'match-result' && quote.selection === 'home-win').decimal, '1.85');
+        assert.ok(original.every((quote) => quote.observedAt === firstRetrieval && quote.permitted && !quote.suspended));
+        assert.equal(await count('FixtureOddsPrice'), 0);
+        assert.equal(odds.network.length, readsBefore, 'internal selection makes no provider call');
+        const deniedLoader = createRecommendationQuoteLoader(a, { bookmakerId: policy.bookmakerId, freshnessMs: policy.freshnessMs,
+          expectedPolicyHash: oddsPolicyHash(policy), verifyInternalUse: () => false });
+        assert.deepEqual(await deniedLoader(context), []);
+        assert.deepEqual(await load({ ...context, cutoffAt: context.cutoffAt - 1 }), [], 'post-cutoff odds cannot enter an earlier analysis');
       });
 
       await t.test('identical re-imports add nothing; one price change appends one chained snapshot; concurrent applies write once', async () => {

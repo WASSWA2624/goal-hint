@@ -46,10 +46,11 @@ test('detail and enrichment use separate exact caps while ordinary work remains 
   assert.equal(await admit(noHistory, period(), request('live-details')), true);
   assert.equal(await admit(noHistory, period({ used: 1500, priorityUsed: { 'live-details': 1500 }, dayRemaining: 6000 }), request('live-details')), false);
   assert.equal(await admit(noHistory, period({ used: 1500, priorityUsed: { 'live-details': 1500 }, dayRemaining: 6000 }), request('results-cutoff')), true);
-  // On Pro almost the whole remaining day is reserved for ordinary work plus details.
-  assert.equal(plan.odds.spare, 1);
+  // Evidence-aware capacity leaves the explicit enrichment share above all ordinary work and details.
+  assert.ok(plan.odds.spare >= 750);
   assert.equal(await admit(noHistory, period(), request('enrichment')), true);
-  assert.equal(await admit(noHistory, period({ used: 1, dayRemaining: 7499, priorityUsed: { enrichment: 1 } }), request('enrichment')), false);
+  assert.equal(await admit(noHistory, period({ used: plan.odds.spare, dayRemaining: 7500 - plan.odds.spare,
+    priorityUsed: { enrichment: plan.odds.spare } }), request('enrichment')), false);
   assert.equal(await admit(noHistory, period({ used: 1, dayRemaining: 7499, priorityUsed: { enrichment: 1 } }), request('live-details')), true);
 });
 

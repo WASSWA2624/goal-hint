@@ -6,6 +6,7 @@ import type { EvidenceContext } from "../evidence/evidence-contract.ts";
 import type { ModelPin } from "../predictor/predictor-contract.ts";
 import type { PredictorCalibrationStatus, PredictorCalibratedOutput } from "../predictor/predictor-calibration.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
+import type { RecommendationDecision } from "../../domain/recommendation.ts";
 
 /** Identity for one eligible refresh; it never supplies an old published snapshot. */
 export type FallbackContext = Readonly<{ context: EvidenceContext; jobId: string; pin: ModelPin | null; evidenceHash: string }>;
@@ -35,8 +36,8 @@ export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evi
   "ai-missing-group" | "ai-invalid-group" | "provider-first" | "provider-baseline";
 /** Frozen per AI refresh intent. Absent means the original AI-first resolution without contemporaneous capture. */
 export type ForecastSourceOrder = "provider-first" | "ai-first";
-/** Live services retain all AI output in shadow until independently qualified promotion is bound. */
-export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline";
+/** Versioned runtime source policy; legacy baseline remains readable for historical jobs. */
+export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline" | "optional-ai-primary";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
 export type ForecastProvenance = Readonly<{
   kind: "ai"; pin: ModelPin; modelVersionId: string; evidenceHash: string; transportEvidenceRef: string;
@@ -57,7 +58,9 @@ export type ResolvedForecastCandidate = Readonly<{
   audit: Readonly<{ aiStatus: PredictorResult["status"]; aiReason: string | null;
     providerStatus: ProviderFallbackResult["status"] | "not-requested"; providerReason: ProviderFallbackReason | null;
     /** Present only when the refresh plan froze a source order. */
-    sourceOrder?: ForecastSourceOrder }>;
+    sourceOrder?: ForecastSourceOrder;
+    /** Immutable decision and private quote provenance, sealed in candidateJson with the revision. */
+    recommendation?: RecommendationDecision }>;
 }>;
 export type FallbackResolutionReason = "invalid-request" | "not-authorized" | "ineligible-refresh";
 export type FallbackResolutionResult = Readonly<{ status: "candidate"; candidate: ResolvedForecastCandidate }> |
