@@ -11,6 +11,7 @@ import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { openItem } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
+import { plainClick } from "@/components/match/filter-parts";
 import { ContextIcon, ExternalIcon, HistoryIcon, NewsIcon, RefereeIcon } from "./details-icons";
 import {
   ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, focusRing, size, useDetails, useStableDetails,
@@ -30,6 +31,8 @@ const NewsRow = styled(RowButton)`
   > span[data-text] > b { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > span[data-text] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
 `;
+/** A team's last result: plain clicks open it in place, while the row stays a real link to its own match page. */
+const LastResultRow = styled(RowButton)`grid-template-columns: auto minmax(0, 1fr) auto; text-decoration: none;`;
 const SmallLogo = styled.img`flex: none; inline-size: 18px; block-size: 18px; object-fit: contain;`;
 const ExternalLink = styled.a`
   display: inline-flex;
@@ -152,11 +155,12 @@ export const ContextSection = memo(function ContextSection() {
           const last = value?.lastResults[side] ?? null, next = value?.nextFixtures[side] ?? null, name = side === "home" ? home : away;
           return <li key={side} style={{ display: "grid", gap: 4, padding: "6px 4px", fontSize: "0.75rem" }}>
             <Strong>{name}</Strong>
-            {last ? <RowButton type="button" data-item-key={last.fixtureId} onClick={() => update((current) => ({ ...current, item: last.fixtureId }))} style={{ gridTemplateColumns: "auto minmax(0,1fr) auto" }}>
+            {last ? <LastResultRow as={Link} href={matchHref(last.fixtureId, last.slug, locale)} prefetch={false} data-item-key={last.fixtureId}
+              onClick={(event) => plainClick(event, () => update((current) => ({ ...current, item: last.fixtureId })))}>
               <Pill $accent="teal">{messages.text("details.lastResult")}</Pill>
               <span>{last.home.name} {messages.number(last.homeGoals)}–{messages.number(last.awayGoals)} {last.away.name}</span>
               <time dateTime={toUtcIsoString(at(last.kickoffAt))}>{messages.reportingDay(at(last.kickoffAt))}</time>
-            </RowButton> : <Note>{messages.text("details.noLastResult")}</Note>}
+            </LastResultRow> : <Note>{messages.text("details.noLastResult")}</Note>}
             {next ? <Link href={matchHref(next.fixtureId, next.slug, locale)} prefetch={false} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Pill $accent="violet">{messages.text("details.nextFixture")}</Pill>
               <Crest name={next.home.name} url={next.home.logoUrl} size={16} />{next.home.name} – {next.away.name}

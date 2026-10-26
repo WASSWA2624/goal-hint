@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import type { MatchDetailResponse } from "../../domain/match-detail.ts";
 import { breadcrumbStructuredData, matchPageIndexable, type DiscoveryPolicy } from "../../domain/discovery.ts";
-import { feedDefaults, feedHref, homeHref } from "../../domain/navigation.ts";
+import { homeHref, matchArchiveHref } from "../../domain/navigation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { resolveViewerAccess } from "../members/viewer-access.ts";
@@ -49,23 +49,26 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
   const title = messages.text("match.title", { home: data.fixture.homeTeam.name || messages.text("match.homeUnknown"),
     away: data.fixture.awayTeam.name || messages.text("match.awayUnknown") });
   const date = data.fixture.kickoffAt == null ? null : getReportingDate(utcInstantFromEpochMilliseconds(data.fixture.kickoffAt));
-  const pageTitle = date ? messages.text("detail.datedMetadataTitle", { match: title.slice(0, 180), date: messages.reportingDateMedium(date) })
+  const indexable = matchPageIndexable(data.fixture), competition = data.fixture.competition?.name?.slice(0, 120) ?? "";
+  // Only a page with a published forecast is titled a prediction, so noindex shells never claim one; neither quotes a selection.
+  const pageTitle = date ? messages.text(indexable ? "detail.predictionMetadataTitle" : "detail.datedMetadataTitle", { match: title.slice(0, 180), date: messages.reportingDateMedium(date) })
     : messages.text("detail.metadataTitle", { match: title.slice(0, 180) });
-  const description = date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
+  const description = date ? messages.text(competition ? "detail.competitionMetadataDescription" : "detail.datedMetadataDescription",
+    { match: title.slice(0, 240), date: messages.reportingDate(date), competition })
     : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
   const preview = mode === "on" ? `${description} ${messages.text("detail.subscriberMetadataDescription")}` : description;
   return pageMetadata({ title: pageTitle, description: preview, path: data.route.path,
-    index: policy.index && !variant && matchPageIndexable(data.fixture) });
+    index: policy.index && !variant && indexable });
 }
 
-/** Home → the kickoff's EAT-day collection → this match, mirroring the page's "Back to Predictions" path. */
+/** Home → the kickoff's EAT-day collection → this match; the banner's kickoff date links to that same collection. */
 export function matchStructuredData(data: MatchDetailResponse, locale = "en") {
   const messages = createMessages(locale), fixture = data.fixture;
   const match = messages.text("match.title", { home: fixture.homeTeam.name || messages.text("match.homeUnknown"),
     away: fixture.awayTeam.name || messages.text("match.awayUnknown") });
   const date = fixture.kickoffAt == null ? null : getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt));
+  const archive = matchArchiveHref(fixture.kickoffAt, locale);
   return breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(locale) },
-    ...(date ? [{ name: messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(date) }),
-      path: feedHref({ date, status: feedDefaults.today.status }, locale) }] : []),
+    ...(date && archive ? [{ name: messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(date) }), path: archive }] : []),
     { name: match }]);
 }
