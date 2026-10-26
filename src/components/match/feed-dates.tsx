@@ -7,7 +7,7 @@ import styled, { css } from "styled-components";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { RangeFields, RangeFieldset, RangeHelp, RangeLegend } from "./feed-range-fields";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { feedDateNavigation } from "@/domain/feed-date-navigation";
+import { adjacentDays, dayLinkRel, feedDateNavigation } from "@/domain/feed-date-navigation";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type DateSelection, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -180,11 +180,6 @@ const CalendarButton = styled.button`
 
 /** Days added at a time when the strip nears either end. */
 const block = 30;
-function dayBlock(first: ReportingDate, count: number): ReportingDate[] {
-  const days = [first];
-  while (days.length < count) days.push(addReportingDays(days.at(-1)!, 1));
-  return days;
-}
 const smooth = (): ScrollBehavior => window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 
 export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
@@ -193,9 +188,9 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
   // A tapped day is highlighted at once, before its matches arrive.
   const [chosen, setChosen] = useState<ReportingDate | null>(null), selected = chosen ?? (range.dayCount === 1 ? range.startDate : null);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  // The strip has no first or last day: blocks of days are added as either end comes near. The server
-  // list starts one day before the selection, so three visible days are already centred before scripts load.
-  const [days, setDays] = useState(() => dayBlock(addReportingDays(anchor, -1), block + 2));
+  // Blocks of days are added as either end comes near, up to the calendar's own ends. The server list starts
+  // one day before the selection, so three visible days are already centred before scripts load.
+  const [days, setDays] = useState(() => [...adjacentDays(anchor, -1), anchor, ...adjacentDays(anchor, block)]);
   const prepended = useRef(0), growing = useRef(false), activated = useRef(false), scrollAfter = useRef(0), handled = useRef(days);
   const selection = (date: ReportingDate): DateSelection => date === today ? { kind: "today" }
     : query.status !== "finished" && date === addReportingDays(today, 1) ? { kind: "tomorrow" } : { kind: "date", date };
@@ -207,12 +202,16 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     const strip = list.current;
     if (!strip || growing.current || strip.clientWidth === 0) return false;
     if (strip.scrollLeft < strip.clientWidth) {
-      growing.current = true; prepended.current = block;
-      setDays((current) => [...dayBlock(addReportingDays(current[0]!, -block), block), ...current]);
+      growing.current = true;
+      setDays((current) => {
+        const earlier = adjacentDays(current[0]!, -block);
+        prepended.current = earlier.length;
+        return [...earlier, ...current];
+      });
       return true;
     } else if (strip.scrollLeft + strip.clientWidth * 2 > strip.scrollWidth) {
       growing.current = true;
-      setDays((current) => [...current, ...dayBlock(addReportingDays(current.at(-1)!, 1), block)]);
+      setDays((current) => [...current, ...adjacentDays(current.at(-1)!, block)]);
       return true;
     }
     return false;
@@ -270,7 +269,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
       {days.map((date) => {
         const parts = messages.reportingDayParts(date);
         return <li key={date} data-date={date}>
-          <Day href={feedQueryHref({ ...query, dates: selection(date), page: 1 }, today)} prefetch={false} scroll={false}
+          <Day href={feedQueryHref({ ...query, dates: selection(date), page: 1 }, today)} prefetch={false} scroll={false} rel={dayLinkRel(date, today)}
             aria-current={range.dayCount === 1 && date === range.startDate ? "date" : undefined} data-selected={date === selected || undefined}
             aria-label={date === today ? `${messages.text("feed.date.today")}, ${messages.reportingDate(date)}` : messages.reportingDate(date)}
             onClick={(event) => plainClick(event, () => {

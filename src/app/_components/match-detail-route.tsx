@@ -15,6 +15,7 @@ import { splitMatchViewParameters } from "@/domain/match-view";
 import { MatchFeedError } from "@/server/matches/feed-error";
 import { getShellInstant } from "./public-shell";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
+import { isDocumentRequest, PublicReadUnavailableError } from "@/server/seo/read-status";
 import { MatchDetailPage } from "./match-detail-page";
 
 type Props = { params: Promise<{ locale: string; fixtureId: string; slug: string }>;
@@ -22,7 +23,8 @@ type Props = { params: Promise<{ locale: string; fixtureId: string; slug: string
 
 /** The production route and isolated stored-data acceptance use this same path. */
 export function createMatchDetailRoute(read: typeof readPublicMatchDetail = readPublicMatchDetail, policy = getDiscoveryPolicy,
-  readInsights: typeof readPublicMatchInsights = readPublicMatchInsights, resolveAccess = resolveViewerAccess, readOffer = readSubscriptionOffer) {
+  readInsights: typeof readPublicMatchInsights = readPublicMatchInsights, resolveAccess = resolveViewerAccess, readOffer = readSubscriptionOffer,
+  document = isDocumentRequest) {
   const loadCurrent = cache(async (id: string) => {
     const instant = await getShellInstant();
     const result = await loadMatchDetailPage(id, { now: () => instant }, read, new URLSearchParams(), resolveAccess);
@@ -54,6 +56,8 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
     catch (error) { if (error instanceof MatchFeedError) notFound(); throw error; }
     const [loaded, preview] = await Promise.all([load(id, query), withPreview ? loadPreview(id) : null]);
     if (loaded.result.error === "not-found" || loaded.historyResult.error === "not-found") notFound();
+    // Only the canonical page's own read: revision-history variants keep their inline retry.
+    if (loaded.result.error === "unavailable" && !query && policy().index && await document()) throw new PublicReadUnavailableError();
     return { ...loaded, preview, route, viewQuery };
   }
   return {
