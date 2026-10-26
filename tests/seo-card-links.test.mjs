@@ -15,6 +15,9 @@ const open = { cycle: { state: "open", mode: "current", ordinal: 1, lockedAt: nu
 const upcoming = (fixtureId, overrides = {}) => cardFixture({ fixtureId, status: "scheduled", score: null, ...open, ...overrides }, "ai", null);
 const forecastless = (fixtureId) => upcoming(fixtureId, { forecast: null, update: { prediction: "outside-window", result: "current" } });
 const prediction = /data-pick-selection=|data-probability-meter=|data-prediction=|data-pick-price=|data-card-odds=/u;
+// The pick markup scripts/verify-production-paywall.py (CARD_PICK) inspects on anonymous feed pages.
+const cardPick = (html) => [...html.matchAll(/\b(data-(?:market|prediction|outcome|pick-selection|probability-meter|pick-price|pick-odds))="([^"]*)"/gu)]
+  .map(([, name, value]) => `${name}=${value}`);
 
 /**
  * Server-renders the real card and match-page sections the way a crawler receives them. The child runs without the
@@ -86,6 +89,7 @@ test("every card links its canonical match page, so crawlers and free viewers re
   for (const html of [guest, signedIn]) {
     assert.equal(pickState(html), "subscriber");
     assert.doesNotMatch(html, prediction);
+    assert.deepEqual(cardPick(html), []);
     assert.match(html, />Locked prediction</u);
     assert.match(html, /Subscribe to see the prediction/u);
     assert.match(html, /data-public-probability/u);
@@ -104,10 +108,26 @@ test("an unfinished card without a published forecast shows why, not a lock", ()
   assert.doesNotMatch(guest, /Locked prediction|Locked market|Subscribe to see the prediction|data-public-probability/u);
   assert.match(guest, /<b data-mobile-only="">No prediction<\/b>/u);
   assert.match(guest, /Too early/u);
-  assert.match(guest, /data-prediction="none"/u);
+  assert.deepEqual(cardPick(guest), ["data-market=match-result", "data-prediction=none", "data-outcome=unavailable"]);
   assert.deepEqual(anchors(guest), [`/en/matches/card-none/${slug}`]);
   // Free and subscriber viewers get the same card: nothing beyond the subscriber's own no-prediction view.
   assert.equal(guest, subscriber);
+});
+
+test("a market filter outside the published families shows the subscriber's no-prediction card, not a lock", () => {
+  const stored = upcoming("card-filtered");
+  stored.forecast.markets = stored.forecast.markets.filter((item) => item.market.family !== "both-teams-to-score");
+  const gated = gateFixture(stored, anonymous), markets = ["both-teams-to-score"];
+  // The gated families already tell a free viewer the filtered market was never published.
+  assert.equal(gated.forecast.families.includes("both-teams-to-score"), false);
+  const { cards: [guest, subscriber, unfiltered] } = render({ cards: [{ fixture: gated, gated: true, analysisSlug: slug, markets },
+    { fixture: stored, analysisSlug: slug, markets }, { fixture: gated, gated: true, analysisSlug: slug }] });
+  assert.equal(pickState(guest), "none");
+  assert.doesNotMatch(guest, /Locked prediction|Subscribe to see the prediction|data-public-probability/u);
+  assert.match(guest, /data-no-pick="market"/u);
+  assert.equal(guest, subscriber);
+  assert.equal(pickState(unfiltered), "subscriber");
+  assert.doesNotMatch(unfiltered, prediction);
 });
 
 test("a delivered forecast stays locked for free viewers, and finished matches stay open", () => {

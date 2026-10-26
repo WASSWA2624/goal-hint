@@ -31,8 +31,8 @@ import { OutcomeBadge, PredictionOdds, ProbabilityBar } from "./prediction-prese
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
-  /** The viewer lacks subscriber access: an unfinished fixture's published forecast renders locked even when delivered whole.
-   * A fixture without one shows the no-prediction reason every viewer gets. */
+  /** The viewer lacks subscriber access: an unfinished fixture's published forecast in an eligible family renders locked even
+   * when delivered whole. A fixture without one shows the no-prediction reason every viewer gets. */
   gated?: boolean;
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
@@ -841,9 +841,11 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const titleId = `gh-match-${useId()}`;
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
-  // Only a published forecast is locked: forecast null means none was published, which the free payload already says.
-  const gated = !hasFinalScoreStatus(fixture.status) && fixture.forecast !== null && (requiresAccess || gatedForecast !== null);
-  const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
+  // Only a published eligible family is locked: forecast null means none was published, and the gated families already
+  // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
+  const best = bestCardFamily(fixture, eligible);
+  const gated = !hasFinalScoreStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null);
+  const shownFamily = best ?? eligible[0]!;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const publicChanceLabel = publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 });
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");

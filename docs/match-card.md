@@ -159,11 +159,13 @@ Every viewer gets that same canonical link, locked cards included, so crawlers
 and free viewers reach each match page; its locked panels carry the sign-up and
 subscribe links, and the feed banner keeps its own. A card locks (Locked
 prediction, public chance, subscribe line) only over a published forecast the
-viewer cannot see. An unfinished fixture without one shows the same
-no-prediction reason subscribers read (`forecast: null` already says so in the
-free payload), and the match page's verdict, markets and analysis follow the
-same rule; revision history stays locked. `tests/seo-card-links.test.mjs`
-server-renders these cards and sections.
+viewer cannot see, in a family the market filter allows. An unfinished fixture
+without one shows the same no-prediction reason subscribers read (`forecast:
+null` and the gated `families` already say so in the free payload), and the
+match page's verdict, markets and analysis follow the same rule; revision
+history stays locked. `tests/seo-card-links.test.mjs` server-renders these
+cards and sections, and `scripts/verify-production-paywall.py` checks each
+anonymous feed card on the same rule.
 
 The article's accessible heading names both teams and can match the page's
 heading hierarchy. Reading order is competition/kickoff, Home, match state,
