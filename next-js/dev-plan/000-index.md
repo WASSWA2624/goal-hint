@@ -235,6 +235,12 @@ restrictions. Public odds display and production activation remain separately co
 | --- | --- |
 | [074 Theme homogeneity](074-theme-homogeneity.md) | Consistent light/dark surfaces, adaptive branding, phone cards, overlays, member/admin details and offline assets, with rendered theme checks. |
 
+### 075 Inline subscription expiry
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [075 Inline subscription expiry](075-inline-subscription-expiry.md) | Active subscription bars use one expiry sentence with days/hours or hours/minutes remaining. |
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |

@@ -6,7 +6,7 @@ const expiryFormat = new Intl.DateTimeFormat("en-GB", {
 const dayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const shortDayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short" });
-const hour = 3_600_000, day = 24 * hour;
+const minute = 60_000, hour = 60 * minute, day = 24 * hour;
 
 /** Subscription times use the service's timezone, including the year at renewal boundaries. */
 export function formatSubscriptionExpiry(instant: Date): string {
@@ -23,9 +23,15 @@ export function formatShortDay(instant: Date): string {
   return shortDayFormat.format(instant);
 }
 
-/** Time left, rounded down: whole days, then whole hours on the last day, then "under an hour"; null once it has passed. */
-export function subscriptionTimeLeft(instant: Date, now: number): Readonly<{ unit: "day" | "hour"; count: number }> | null {
+/** Whole remaining units, rounded down; null for expired or invalid instants. */
+export function subscriptionTimeRemaining(instant: Date, now: number): Readonly<{ days: number; hours: number; minutes: number }> | null {
   const left = instant.getTime() - now;
-  if (!(left > 0)) return null;
-  return left >= day ? { unit: "day", count: Math.floor(left / day) } : { unit: "hour", count: Math.floor(left / hour) };
+  if (!Number.isFinite(left) || left <= 0) return null;
+  return { days: Math.floor(left / day), hours: Math.floor(left % day / hour), minutes: Math.floor(left % hour / minute) };
+}
+
+/** Coarse account summary: whole days, then whole hours on the last day. */
+export function subscriptionTimeLeft(instant: Date, now: number): Readonly<{ unit: "day" | "hour"; count: number }> | null {
+  const remaining = subscriptionTimeRemaining(instant, now);
+  return remaining && (remaining.days ? { unit: "day", count: remaining.days } : { unit: "hour", count: remaining.hours });
 }

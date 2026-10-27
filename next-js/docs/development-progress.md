@@ -1,5 +1,26 @@
 # Development progress
 
+## 075 — Inline subscription expiry (27 October 2026)
+
+Implemented [plan 075](../dev-plan/075-inline-subscription-expiry.md). Active
+subscribers' phone, tablet and desktop bars share one sentence:
+`Expires on [date] at [time] (x days y hours left)`, switching to
+`(x hrs y min left)` below 24 hours. Removed the separate active heading and
+countdown badge/meta row. EAT timestamps, pending-payment/renewal notices and
+the account page's existing coarse summary remain supported. The shared duration
+calculation handles residual units and a truthful under-one-minute label.
+
+TypeScript, changed-file ESLint and all 13 focused subscription, member-session
+and timezone checks passed. The synthetic production member fixture built,
+typechecked and passed its HTML/API verification. Its first build exceeded the
+240-second timeout under host load; the retry passed without source changes.
+Nine browser cases covered public/compact headers and short-expiry pending
+renewals at 320, 768 and 1440 px. Both duration formats appeared inline with the
+semantic expiry time, with no active heading or horizontal overflow; pending
+payment guidance remained available. Screenshots remain ignored under
+`output/playwright/subscription-expiry/`. No live subscription, payment,
+configuration or deployment was changed.
+
 ## 074 — Theme homogeneity (27 October 2026)
 
 Implemented [plan 074](../dev-plan/074-theme-homogeneity.md). Light mode now uses

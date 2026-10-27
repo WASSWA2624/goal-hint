@@ -8,7 +8,7 @@ import { CheckIcon, ChevronRightIcon, ClockIcon, LockIcon } from "@/components/u
 import { Container } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
-import { subscriptionExpiryParts, subscriptionTimeLeft } from "@/domain/subscription-expiry";
+import { subscriptionExpiryParts, subscriptionTimeRemaining } from "@/domain/subscription-expiry";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
@@ -113,16 +113,6 @@ const Price = styled.span`
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   white-space: nowrap;
 `;
-/** Days left as a pill, amber in the last two days so the end of access is hard to miss. */
-const Left = styled.span<{ $urgent: boolean }>`
-  padding: 1px 8px;
-  color: ${({ theme, $urgent }) => $urgent ? theme.header.tone.amber : theme.header.accent};
-  background: ${({ theme }) => theme.header.controlFill};
-  border-radius: ${({ theme }) => theme.border.pillRadius};
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-`;
 const Note = styled.span`
   color: ${({ theme }) => theme.header.mutedText};
 `;
@@ -169,13 +159,13 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
     ? `${memberNextPath("subscribe", returnTo)}#report` : subscription.activeUntil ? accountPath : `${memberNextPath("subscribe", returnTo)}#plans`;
   const mobileAction = messages.text(!phone ? "account.login" : subscription.paymentPending ? "account.viewPayment"
     : subscription.activeUntil ? "account.accessSettings" : "account.subscribe");
-  const bar = (row: ReactNode, mobile: { state: BannerState; icon: ReactNode; title: string; detail: ReactNode; phoneDetail?: ReactNode; note?: ReactNode }) =>
+  const bar = (row: ReactNode, mobile: { state: BannerState; icon: ReactNode; title?: string; detail: ReactNode; phoneDetail?: ReactNode; note?: ReactNode }) =>
     <Bar className={className} $desktopOnly={desktopOnly} aria-label={messages.text("account.accessSettings")}
       data-subscription-status-bar data-subscription-state={mobile.state}>
     <Row $wide={wide} $compact={compact}>
       <MobileStatus href={mobileHref} prefetch={false} $singleLine={mobile.phoneDetail !== undefined} data-mobile-subscription-status>
         <StatusIcon $state={mobile.state}>{mobile.icon}</StatusIcon>
-        <MobileCopy $singleLine={mobile.phoneDetail !== undefined} role="status" aria-atomic="true"><strong>{mobile.title}</strong>
+        <MobileCopy $singleLine={mobile.phoneDetail !== undefined} role="status" aria-atomic="true">{mobile.title && <strong>{mobile.title}</strong>}
           <MobileDetail>{mobile.phoneDetail === undefined ? mobile.detail : <><PhoneOffer>{mobile.phoneDetail}</PhoneOffer><TabletOffer>{mobile.detail}</TabletOffer></>}</MobileDetail>
           {mobile.note && <MobileMeta>{mobile.note}</MobileMeta>}
         </MobileCopy>
@@ -203,21 +193,20 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
       ...(!subscription.expired && { phoneDetail: price !== null ? messages.text("account.unlockFullAccessPrice", { price })
         : messages.text("account.unlockFullAccess") }) });
   }
-  const until = new Date(subscription.activeUntil), left = subscriptionTimeLeft(until, now);
+  const until = new Date(subscription.activeUntil), remaining = subscriptionTimeRemaining(until, now);
+  const left = remaining && (remaining.days ? messages.text("account.leftDaysHours", {
+    days: messages.plural("account.remainingDays", remaining.days), hours: messages.plural("account.remainingHours", remaining.hours),
+  }) : remaining.hours || remaining.minutes ? messages.text("account.leftHoursMinutes", {
+    hours: messages.plural("account.remainingShortHours", remaining.hours), minutes: messages.number(remaining.minutes),
+  }) : messages.text("account.underAMinuteLeft"));
+  const expiry = <>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time>{left && <> ({left})</>}</>;
   return bar(<>
-    <Status><ClockIcon /><span>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time></span>
-      {left && <Left $urgent={left.unit === "hour" || left.count < 2}>{left.unit === "day" ? messages.plural("account.leftDays", left.count)
-        : left.count ? messages.plural("account.leftHours", left.count) : messages.text("account.underAnHourLeft")}</Left>}</Status>
+    <Status><ClockIcon /><span>{expiry}</span></Status>
     {subscription.renewsFromCredit ? <Note data-renewal-note>{messages.text("account.renewsFromCredit")}</Note>
       // A top-up adds credit and never extends access, so the subscribe page says nothing about extending while adding credit.
       : subscription.canSubscribe && (subscribing ? !subscription.paymentPending && purpose !== "topup" && <Note data-renewal-note>{messages.text("account.renewalExtends")}</Note>
         : action(messages.text(subscription.paymentPending ? "account.viewPayment" : "account.extend")))}
-  </>, { state: "active", icon: <CheckIcon />, title: messages.text("account.subscriptionActive"),
-    detail: <>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time></>,
-    note: <>
-      {left && <span>{left.unit === "day" ? messages.plural("account.leftDays", left.count)
-        : left.count ? messages.plural("account.leftHours", left.count) : messages.text("account.underAnHourLeft")}</span>}
-      {subscription.paymentPending ? <span>{messages.text("account.paymentPending")} · {messages.text("account.pending")}</span>
-        : subscription.renewsFromCredit && <span>{messages.text("account.renewsFromCredit")}</span>}
-    </> });
+  </>, { state: "active", icon: <CheckIcon />, detail: expiry,
+    note: subscription.paymentPending ? <span>{messages.text("account.paymentPending")} · {messages.text("account.pending")}</span>
+      : subscription.renewsFromCredit && <span>{messages.text("account.renewsFromCredit")}</span> });
 }

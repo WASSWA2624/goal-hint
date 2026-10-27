@@ -10,6 +10,12 @@ Once a match reaches a played final status (regulation, extra time, or penalties
 
 Admin sessions and members with a current approved subscription get the full view. Raw premium caches stay on the server; final responses are private/no-store and vary on Cookie. Subscription sales mode `off` closes purchases and requests without granting public premium access. Existing approved periods still expire normally. New registrations receive one automatic free-trial access period using Admin Settings → Free trial on registration (days). A value of 0 disables new trials. The period starts at registration; ordinary phone verification is still required before the session can use premium access. No trial request or administrator approval is involved.
 
+Active subscribers' header status bar shows `Expires on [date] at [time]`
+followed by the remaining duration in parentheses. At least 24 hours remaining
+uses days and hours; the final day uses hours and minutes. Under one minute is
+labelled explicitly. The date/time uses EAT. Phone, tablet and desktop share the
+same sentence, without a separate active heading or countdown badge.
+
 ## Packages and payment
 
 The standard package migration adds missing duration offers: Daily (1 day, UGX 1,000), Weekly (7 days, UGX 5,000), and Monthly (30 days, UGX 20,000). Existing offers/prices are preserved; admins can edit prices and availability. Every package unlocks the same features. Days are 24-hour periods from approval, and renewals extend the account's existing unexpired period.
