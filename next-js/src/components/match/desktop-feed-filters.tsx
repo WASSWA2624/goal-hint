@@ -23,7 +23,7 @@ import { PicksOnlyFilter } from "./feed-controls";
 import { FeedSearchInput } from "./feed-search-input";
 import { feedSortOptions } from "./feed-header";
 import { OptionLogo } from "./filter-parts";
-import { ActionButton, ActionRow, Count, DialogContent, Error as FilterError, Heading, HeadingRow, Muted, OptionsRow, Panel, PeriodField, SectionButton, SortField } from "./desktop-feed-filter-styles";
+import { ActionButton, ActionRow, Count, DialogContent, Error as FilterError, Muted, OptionsRow, Panel, PeriodField, SearchRow, SectionButton, SortField } from "./desktop-feed-filter-styles";
 
 type Messages = ReturnType<typeof createMessages>;
 type Draft = {
@@ -127,7 +127,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
   const changeLeagues = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, leagues: values } })), []);
   const changeCountries = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, countries: values } })), []);
-  const reset = resetFeedFilters(draft.query), resetRange = resolveFeedDates(reset, today), currentRange = resolveFeedDates(draft.query, today);
+  const reset = resetFeedFilters(draft.query, subscriberOnly), resetRange = resolveFeedDates(reset, today), currentRange = resolveFeedDates(draft.query, today);
   const probability = parseProbabilityInputs(draft.probability);
   const probabilityLimits = probability === null
     ? Number(draft.probability.min.trim() !== "") + Number(draft.probability.max.trim() !== "")
@@ -160,7 +160,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
     setIssue(null); setDialogVersion((current) => current + 1);
   }
   function save(section: FeedFilterSection) {
-    const candidate = copySection(fromQuery(resetFeedFilters(draft.query), today), draft, section);
+    const candidate = copySection(fromQuery(resetFeedFilters(draft.query, subscriberOnly), today), draft, section);
     const checked = compile(candidate, today, zone);
     if (!checked) {
       const message = section === "dates" ? messages.text(validKickoffTime({ ...draft.times, zone }) ? "feed.date.tooLong" : "feed.time.invalid")
@@ -171,7 +171,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
     setIssue(null); snapshot.current = null; setActive(null);
   }
   function resetAll() {
-    const next = resetFeedFilters(draft.query);
+    const next = resetFeedFilters(draft.query, subscriberOnly);
     setDraft(fromQuery(next, today)); setIssue(null); snapshot.current = null; setActive(null); onApply(next);
   }
   function changePeriod(value: string) {
@@ -197,17 +197,18 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       if (complete) { setIssue(null); onApply(complete); }
       else setIssue({ section: null, message: messages.text("feed.invalidQuery") });
     }}>
-    <HeadingRow><Heading>{feedHeading(query, today, messages)}</Heading>
-      <PeriodField><span>{messages.text("feed.filters.period")}</span><select name="when" aria-label={messages.text("feed.filters.period")}
+    <VisuallyHidden as="h1">{feedHeading(query, today, messages)}</VisuallyHidden>
+    <SearchRow>
+      <FeedSearchInput name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
+        placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
+        submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
+        onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
+      <PeriodField><select name="when" aria-label={messages.text("feed.filters.period")}
         value={period} onChange={(event) => changePeriod(event.target.value)}>
         {periods.map((kind) => <option key={kind} value={kind}>{messages.text(`feed.date.${kind}`)}</option>)}
         <option value="custom">{messages.text("feed.filters.customDates")}</option>
       </select></PeriodField>
-    </HeadingRow>
-    <FeedSearchInput name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
-      placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
-      submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
-      onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
+    </SearchRow>
     <OptionsRow>{sections.map((section) => {
       const Icon = sectionIcons[section];
       return <SectionButton key={section} type="button" data-filter-section={section} data-active={modified[section]}

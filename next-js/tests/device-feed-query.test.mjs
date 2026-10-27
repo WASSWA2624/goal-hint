@@ -62,7 +62,7 @@ test('explicit dates remain named local dates across timezone application and da
   assert.equal(range.startDate, '2026-10-01'); assert.equal(range.endDate, '2026-10-07');
   assert.equal(text(range.window.startInclusive), '2026-10-01T04:00:00.000Z');
   assert.deepEqual(resolveFeedDates(selected, parseReportingDate('2026-11-01')), range);
-  assert.equal(feedQueryHref(selected, reportingToday), '/en/predictions/2026-10-01?to=2026-10-07&tz=America%2FNew_York');
+  assert.equal(feedQueryHref(selected, reportingToday), '/en/predictions/2026-10-01?to=2026-10-07&tz=America%2FNew_York&picks=all');
 });
 
 test('DST weeks preserve actual calendar bounds and timezone-sensitive cohort identities', () => {
@@ -107,7 +107,7 @@ test('local midnight bounds explicit-date caches independently of the later EAT 
 
 test('pagination pins local dates and retains timezone across midnight', () => {
   const q = query('when=next-7-days&tz=Asia%2FTehran&q=Example'), day = getFeedToday(q, asOf);
-  assert.equal(feedPageHref(q, day, 2), '/en/predictions/2026-10-14?to=2026-10-20&tz=Asia%2FTehran&q=Example&page=2');
+  assert.equal(feedPageHref(q, day, 2), '/en/predictions/2026-10-14?to=2026-10-20&tz=Asia%2FTehran&q=Example&page=2&picks=all');
   const params = new URL(feedPageApiHref(q, day, 2), 'https://example.test').searchParams;
   const after = parseMatchFeedQuery(params, parseReportingDate('2026-10-15'), { asOf: parseUtcInstant('2026-10-14T22:00:00Z') });
   assert.equal(after.dates.from, day); assert.equal(after.dates.to, '2026-10-20'); assert.equal(after.zone, 'Asia/Tehran');

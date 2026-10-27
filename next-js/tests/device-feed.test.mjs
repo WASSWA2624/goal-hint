@@ -37,5 +37,6 @@ test("Clear filters returns to the last 30 days in the device zone and removes o
   const cleared = resetFeedFilters(original);
   assert.equal(cleared.zone, zone); assert.equal(cleared.time, undefined);
   assert.deepEqual(cleared.dates, { kind: "last-30-days" });
-  assert.equal(feedQueryHref(cleared, today), "/en/matches?tz=America%2FLos_Angeles");
+  assert.equal(cleared.picks, "only");
+  assert.equal(feedQueryHref(cleared, today), "/en/matches?tz=America%2FLos_Angeles&picks=only");
 });

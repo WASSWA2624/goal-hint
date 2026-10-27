@@ -594,7 +594,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     filterToggle.current?.focus();
   };
   const phone = draft;
-  const reset = resetFeedFilters(query);
+  const reset = resetFeedFilters(query, subscriberOnly);
   const draftValid = completeDraft !== null;
   const changed = completeDraft === null || draft.search !== query.search
     || serializeFeedQuery({ ...completeDraft, search: "", page: 1 }, today).toString()

@@ -160,7 +160,7 @@ test('EAT midnight rolls relative dates and seven-day URLs without changing expl
   const stop = startLiveRefresh({ today, interval: () => 20000, refresh: async () => { reads++; }, rollover: day => rolled.push(day) }, c.env);
   assert.equal([...c.timers.values()][0].delay, 5000); await c.fire();
   assert.deepEqual(rolled, ['2026-10-10']); assert.equal(reads, 0);
-  assert.equal(feedQueryHref(query('when=next-7-days&q=Club&market=total-goals'), rolled[0]), '/en/matches?when=next-7-days&q=Club&market=total-goals');
+  assert.equal(feedQueryHref(query('when=next-7-days&q=Club&market=total-goals'), rolled[0]), '/en/matches?when=next-7-days&q=Club&market=total-goals&picks=all');
   const historical = query('date=2026-10-01&page=3&q=Club');
   assert.equal(feedQueryHref(historical, today), feedQueryHref(historical, rolled[0]));
   await c.fire(); assert.equal(reads, 1); stop();

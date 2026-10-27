@@ -12,5 +12,10 @@ export function deviceFeedQuery(query: FeedQuery, zone: string): FeedQuery | nul
 export function deviceFeedEntryHref(entry: Exclude<AppSection, "slips">, today: ReportingDate, zone: string, locale?: string): string {
   const query = parseFeedQuery({ tz: zone, ...(entry === "results" ? { date: addReportingDays(today, -1), status: "finished" }
     : entry === "live" ? { status: "live" } : {}) }, { today, ...(locale ? { locale } : {}) });
-  return feedQueryHref(query, today);
+  const [path, search] = feedQueryHref(query, today).split("?");
+  const parameters = new URLSearchParams(search);
+  // A fresh navigation entry adopts the viewer's eligible default, rather than opting out.
+  parameters.delete("picks");
+  const suffix = parameters.toString();
+  return suffix ? `${path}?${suffix}` : path!;
 }

@@ -102,14 +102,16 @@ function feed({ dated = false, read = unavailable, policy = indexing, document =
 test('an indexable feed whose stored read fails answers 5xx to full document requests', async () => {
   for (const [dated, route, query] of [[false, {}, {}], [false, {}, { page: '2' }], [true, { date: '2026-10-20' }, {}], [false, {}, { when: 'today' }]]) {
     const page = feed({ dated });
-    await assert.rejects(page.Page(props(route, query)), failed, JSON.stringify({ route, query }));
-    await assert.rejects(page.generateMetadata(props(route, query)), failed);
+    // Full-access pages default to a predictions filter; request the indexable all-fixture collection explicitly.
+    const indexable = { ...query, picks: 'all' };
+    await assert.rejects(page.Page(props(route, indexable)), failed, JSON.stringify({ route, indexable }));
+    await assert.rejects(page.generateMetadata(props(route, indexable)), failed);
   }
 });
 
 test('client navigations, non-indexing deployments, variants and busy searches keep the 200 in-page retry', async () => {
-  for (const [options, query] of [[{ document: rscRequest }, {}], [{ document: async () => false }, {}], [{ policy: closed }, {}],
-    [{}, { status: 'finished' }], [{}, { from: '2026-10-20', to: '2026-10-22' }]]) {
+  for (const [options, query] of [[{ document: rscRequest }, { picks: 'all' }], [{ document: async () => false }, { picks: 'all' }], [{ policy: closed }, { picks: 'all' }],
+    [{}, {}], [{}, { status: 'finished' }], [{}, { from: '2026-10-20', to: '2026-10-22' }]]) {
     const page = feed(options), element = await page.Page(props({}, query));
     assert.equal(view(element, 'MatchFeedPage').result.error, 'unavailable', JSON.stringify(query));
     assert.equal((await page.generateMetadata(props({}, query))).robots.index, false);

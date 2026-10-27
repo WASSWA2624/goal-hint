@@ -27,20 +27,6 @@ const BrandContainer = styled.div`
   z-index: 30;
   ${desktop} { display: contents; }
 `;
-/** One semantic title remains accessible on mobile and visible on desktop. */
-const PageHeading = styled(VisuallyHidden)`
-  ${desktop} {
-    position: static;
-    inline-size: auto;
-    block-size: auto;
-    margin: 0;
-    overflow: visible;
-    clip-path: none;
-    white-space: normal;
-    font-size: ${({ theme }) => theme.typography.size.h1};
-  }
-`;
-
 /** Phones show the brand bar; desktops align quick date presets beneath the shell header. */
 const Row = styled.div`
   display: flex;
@@ -65,7 +51,7 @@ export function FeedHeader({ query, today, onApply, showAccount = false }: {
   return <HeaderContent>
     <Row>
       <BrandContainer><AppBrandBar locale={query.locale} showAccount={showAccount} /></BrandContainer>
-      <PageHeading as="h1">{heading}</PageHeading>
+      <VisuallyHidden as="h1">{heading}</VisuallyHidden>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />
       </DesktopActions>

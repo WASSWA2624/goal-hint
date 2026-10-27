@@ -2,9 +2,10 @@
 
 The feed uses labeled native fields and editable drafts; URLs and stored server
 projections remain authoritative. At desktop widths (64rem and above), the
-Crisp Outline controls show the page title and Period dropdown, a full-width
-search field, five optional-filter buttons on one horizontal row, and one action
-row ordered Picks only, Sort by, Reset, Apply filters. Compact fields, neutral
+Crisp Outline controls put the search field and period selector on the first
+row, with no visible page title or Period prefix. Five optional-filter buttons
+occupy the next horizontal row, followed by one action row ordered Predictions
+only, Sort by, Reset, Apply filters. Compact fields, neutral
 borders, compact icons and a single blue Apply action follow the existing themed controls.
 The optional sections are Match Date & Time, Leagues, Countries, Markets, and
 Limits, in that order. Each opens its own modal dialog; detailed fields and
@@ -151,8 +152,13 @@ is descending by default (`dir=asc` reverses it), with missing picks last and
 kickoff/ID ties. The probability range (`prob`) accepts integer or decimal
 percentages in 0–100 and keeps only fixtures whose shown pick's unrounded
 percentage lies between both inclusive endpoints. Equal endpoints select an
-exact probability; no display-rounding allowance is used. Picks only retains
-its existing access policy, including subscriber restrictions where applicable.
+exact probability; no display-rounding allowance is used. Predictions only is
+selected by default where the filter is available: full-access feeds and finished
+results. Reset restores that default. An explicit `picks=all` page URL keeps the
+checkbox off across reloads, searches, date changes and pagination. Free unfinished
+feeds retain their existing subscriber restriction and unrestricted default.
+The API query default stays `all`; this page preference does not change anonymous
+API reads or offline snapshots. Picks only retains its existing access policy.
 See the [stored match feed](match-feed-api.md) for that contract.
 
 Desktop dialogs retain complete league, country and market selections. Both
@@ -195,7 +201,8 @@ requests. Apply filters submits the complete
 search, date, time and filter draft. Reset filters resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
 the last 30 days through today, all supported markets and kickoff descending order (Latest first),
-and resets page to one. The time fields show 00:00–23:59 without restricting kickoff times.
+and resets page to one. Predictions only returns to the available page default,
+rather than always being cleared. The time fields show 00:00–23:59 without restricting kickoff times.
 It retains the browsing zone, status entry and page size. The button labels are
 Reset filters and Apply filters, each in two rows on mobile; desktop uses Reset
 and Apply filters on its single action row.
@@ -223,15 +230,15 @@ retains its existing refresh behavior. No browser provider/AI calls or polling
 are added by the controls.
 
 On phones and tablets the feed's brand bar contains the home logo and theme
-control. Desktop shows the page title and Period dropdown, with the theme
-control at the far right of the shell header; feed pages
+control. Desktop puts search beside the period selector without a visible page
+title or selector prefix, with the theme control at the far right of the shell
+header; feed pages
 omit the shell search so there is one body search bar on every device. The
 mobile Advanced filters button has a visible label, `aria-haspopup="dialog"`,
 `aria-expanded`/`aria-controls` for the sheet, and an accessible name that
-includes the active filter count. The feed uses one semantic h1: it stays visually
-hidden on phones and tablets to conserve space and visible on desktop. Only the
-brand bar stays sticky. The subtitle
-remains absent.
+includes the active filter count. The feed uses one semantic h1 that remains
+visually hidden at every screen width. The selector retains its accessible name.
+Only the brand bar stays sticky. The subtitle remains absent.
 
 Acceptance uses owned MySQL storage with synthetic inputs, an isolated production
 Next app built from captured SQL projections, and Chrome through the Playwright

@@ -92,17 +92,18 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   for (const path of ['//evil.example/en', 'https://evil.example/en', '/\\evil.example', '/en#revision', '/en\r\nheader']) {
     assert.throws(() => canonicalUrl(path), RangeError);
   }
-  assert.equal(feedDiscovery(query({}), today).path, '/en/matches');
-  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2');
-  assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09');
-  assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
-  assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
+  // An explicit all-fixture page cannot canonicalize to a page that defaults to predictions only.
+  assert.equal(feedDiscovery(query({}), today).path, '/en/matches?picks=all');
+  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2&picks=all');
+  assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09?picks=all');
+  assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3&picks=all');
+  assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08?picks=all');
   for (const values of [{ q: '<script>' }, { league: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, { status: 'live' },
     { market: 'total-goals' }, { market: 'match-result', sort: 'probability' }, { dir: 'asc' }, { pageSize: '10' }, { when: 'next-7-days' }]) {
     assert.equal(feedDiscovery(query(values), today).eligible, false);
     assert.equal(feedMetadata(query(values), today, populated, approved).robots.index, false);
   }
-  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en/matches');
+  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en/matches?picks=all');
   assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, true);
 });
 
@@ -126,7 +127,7 @@ test('rolling default pagination has distinct indexable canonical destinations',
   assert.equal(feedDiscovery(query({ from: '2026-09-10', to: today, page: '2' }), today).eligible, false,
     'Explicit multiday archives retain their noindex policy.');
   const dated = feedMetadata(query({ when: 'today', page: '2' }), today, populated, approved);
-  assert.equal(dated.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2');
+  assert.equal(dated.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2&picks=all');
   assert.equal(dated.robots.index, true);
 });
 
@@ -137,7 +138,7 @@ test('page metadata has independent social fields, real canonical pagination and
   const page = feedMetadata(query({ page: '2' }), today, populated, approved);
   assert.equal(page.title, 'Daily Football Predictions · Page 2 | Goal Hint');
   assert.equal(page.description, home.description, 'A rolling collection is not described as only its first day.');
-  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?page=2');
+  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?page=2&picks=all');
   assert.equal(page.openGraph.url, page.alternates.canonical);
   assert.equal(page.openGraph.title, page.title); assert.equal(page.twitter.title, page.title);
   assert.equal(page.openGraph.images[0].url, 'https://goalhint.com/brand/goal-hint-open-graph.png');

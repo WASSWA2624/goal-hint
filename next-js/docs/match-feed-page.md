@@ -43,8 +43,13 @@ their existing date-navigation behavior. The body search bar is shared across
 every screen size. Phones and tablets use an Advanced filters button to reveal the fields;
 desktop always shows all fields and omits that toggle. Search edits the same Redux draft as the
 filter fields; Enter in search and Apply both submit the complete validated
-draft and reset page position to one. Four native From date, To date, From time
-and To time inputs share the filter section, which starts collapsed below
+draft and reset page position to one. On desktop, search and the period selector
+share the first filter row without a visible title or selector prefix. Predictions
+only defaults on for full-access pages and finished results; free unfinished feeds
+keep their existing subscriber restriction. Explicit `picks=all` preserves an
+unchecked page choice, while Reset restores the available page default. API reads
+and offline snapshots retain their unrestricted default. Four native From date,
+To date, From time and To time inputs share the filter section, which starts collapsed below
 64rem and remains expanded on desktop. Equal date endpoints select a day and equal
 time endpoints select a kickoff minute. Different date
 endpoints select an inclusive range of up to 366 days; time ranges retain inclusive
@@ -54,9 +59,9 @@ absent. Historical queries retain the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
 The page uses the shared light or dark shell, controls, feedback and match cards.
-Light mode keeps the page, cards and header/navigation chrome white with dark
-text; dark mode uses navy surfaces with light text. Phone match/slip frames and
-connected table/row edges remain square. Other controls use the shared
+Light mode uses the Porcelain Blue page background with white cards and
+header/navigation chrome; dark mode uses navy surfaces with light text. Phone
+match/slip frames and connected table/row edges remain square. Other controls use the shared
 `theme.border.radius` token.
 Cards form one column below 64rem and an aligned table above it. Every feed logo
 is lazy with reserved dimensions and initials fallbacks; an eager logo would be
@@ -99,8 +104,8 @@ feed's gutters and top padding to the screen edge. The adaptive logo links
 home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
 The theme button sits at the end of the row and switches between the approved
 R03 Light and R04 Dark palettes. Feed sections use 6px gaps. There is no
-visible feed page heading or subtitle on phones or tablets. One responsive h1
-preserves the semantic page heading and becomes visible on desktop. The search
+visible feed page heading or subtitle. One visually hidden h1
+preserves the semantic page heading on every screen size. The search
 bar and labelled Advanced filters button sit below the header in the page body and remain
 visible whether filters are open or collapsed.
 
@@ -149,12 +154,14 @@ the displayed projection and is omitted when no successful projection is availab
 does not request an advisory count or change that label. Empty-result messages
 appear below the action row. The sort menu
 contains both kickoff directions and
-both probability directions. Picks only/With predictions and a separate
-reverse-order button are absent on every device. Clear retains the applied
-date/range, status and page size while clearing the other filters and ordering.
+both probability directions. Predictions only is a checkbox in the filter actions;
+there is no separate reverse-order button. Reset returns to the last 30 days,
+the available Predictions only default and default ordering while retaining the
+browsing zone, status and page size.
 
-Desktop retains the visible page title, shell logo, quick date presets and table
-layout, with its theme control at the far right of the shell header. Feed pages
+Desktop retains the shell logo and table layout, with its theme control at the
+far right of the shell header. Its top filter row contains search and an unlabeled
+period selector. Feed pages
 omit the shell search and use the same body search bar,
 persistent actions and applied summary as compact screens. All filter fields
 remain visible on desktop, without a Filters toggle. Inline date/time controls

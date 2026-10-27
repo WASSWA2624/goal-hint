@@ -41,33 +41,19 @@ export const Panel = styled.form`
   [data-criteria-dialog] { background: var(--filter-panel-background); }
 `;
 
-export const HeadingRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+export const SearchRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
   min-inline-size: 0;
-`;
-
-export const Heading = styled.h1`
-  flex: 1;
-  min-inline-size: 0;
-  margin: 0;
-  font-size: 1.375rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.3;
-  letter-spacing: -0.02em;
 `;
 
 export const PeriodField = styled.label`
   display: flex;
-  flex: none;
-  align-items: center;
-  gap: 9px;
   inline-size: 214px;
   min-inline-size: 0;
-  > span { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-  > select { ${fieldControl} cursor: pointer; }
+  > select { ${fieldControl} block-size: 100%; cursor: pointer; }
 `;
 
 

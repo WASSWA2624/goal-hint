@@ -260,6 +260,17 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
+/** Pages default to predictions where that filter is available; API defaults remain unrestricted. */
+export function defaultPagePicks(status: FeedStatus, subscriberOnly = false): PicksFilter {
+  return subscriberOnly && status !== "finished" ? "all" : "only";
+}
+
+/** Explicit choices, including an unchecked filter, take precedence over the page default. */
+export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, subscriberOnly = false): FeedQuery {
+  const explicit = input instanceof URLSearchParams ? input.has("picks") : input.picks !== undefined;
+  return explicit ? query : { ...query, picks: defaultPagePicks(query.status, subscriberOnly) };
+}
+
 export function isAnyMarkets(markets: readonly MarketFamily[]): boolean {
   return sameList(canonicalMarkets(markets), defaultMarkets);
 }
@@ -317,6 +328,8 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
 
 export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   const parameters = serializeFeedQuery(query, today);
+  // Page defaults differ from the public API: retain an intentional opt-out on navigation.
+  if (query.picks === "all") parameters.set("picks", "all");
   const dates = query.dates;
   let path = `/${resolveLocale(query.locale)}`;
   if (dates.kind === "date" || dates.kind === "range") {

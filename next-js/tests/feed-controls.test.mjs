@@ -39,7 +39,7 @@ test('Clear filters resets every date selection to the last 30 days and Any, ret
     assert.equal(reset.time, undefined); assert.equal(reset.zone, query.zone);
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'live', 'Live and Results are navigation sections, not filters');
-    assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'all');
+    assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'only');
     assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'desc' });
     assert.equal(reset.odds, null);
     assert.equal(panelFilterCount(reset), 0);
@@ -53,7 +53,7 @@ test('Apply drops full-day time bounds while retaining the browsing zone and exp
   assert.equal(applied.time, undefined); assert.equal(applied.zone, query.zone);
   assert.deepEqual(applied.dates, query.dates); assert.equal(applied.page, 1);
   assert.equal(panelFilterCount(applied), 0);
-  assert.equal(feedQueryHref(applied, today), '/en/predictions/2026-10-07?tz=America%2FNew_York');
+  assert.equal(feedQueryHref(applied, today), '/en/predictions/2026-10-07?tz=America%2FNew_York&picks=all');
 });
 
 test('each dialog reset changes only its own filters and preserves the original draft', () => {
@@ -131,7 +131,7 @@ test('Reset clears odds bounds (052); Apply never carries them while provider od
   const query = parseFeedQuery({ odds: '1.50-3.00', prob: '60-100' }, { today, providerOdds: true });
   assert.deepEqual(query.odds, { min: 150, max: 300 });
   const reset = resetFeedFilters(query);
-  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches');
+  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches?picks=only');
   // The odds controls stay disabled while publicPolicy.features.providerOdds is false; a forged draft fails closed.
   assert.throws(() => applyFeedDraft(query, today));
   assert.equal(applyFeedDraft(reset, today).odds, null);

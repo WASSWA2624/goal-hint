@@ -7,7 +7,7 @@ import { breadcrumbStructuredData, feedDiscovery, serializeStructuredData } from
 import { homeHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
-import { getFeedToday, serializeFeedQuery } from "@/domain/feed-query";
+import { applyFeedPageDefaults, getFeedToday, serializeFeedQuery } from "@/domain/feed-query";
 import { feedQueryHref } from "@/domain/feed-query";
 import { withoutSubscriberFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
@@ -37,13 +37,15 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
     return loadMatchFeedPage(query, today, { now: () => at }, read, resolveAccess);
   });
   async function resolve({ params, searchParams }: Props) {
-    const route = await params, at = await instant();
+    const route = await params, at = await instant(), access = await contentAccess(resolveAccess);
     let query, today, result;
     // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
     try {
-      query = parseMatchFeedQuery(await searchParams, getReportingDate(at), { locale: route.locale, asOf: at,
-        ...((await contentAccess(resolveAccess)).tier === "free" ? { providerOdds: true } : {}),
+      const parameters = await searchParams;
+      query = parseMatchFeedQuery(parameters, getReportingDate(at), { locale: route.locale, asOf: at,
+        ...(access.tier === "free" ? { providerOdds: true } : {}),
         ...(dated ? { routeDate: route.date } : {}) });
+      query = applyFeedPageDefaults(query, parameters, access.tier === "free");
       today = getFeedToday(query, at);
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
@@ -53,7 +55,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
     // calendar and adjacent-day taps keep the in-feed empty state, so only document requests answer 404.
     if (result.data && emptyArchiveIsMissing(discovery.range, today, result.data.coverage.knownFixtures) && await document()) notFound();
     if (result.error === "unavailable" && policy().index && discovery.eligible && await document()) throw new PublicReadUnavailableError();
-    return { query, today, result, discovery, access: await contentAccess(resolveAccess) };
+    return { query, today, result, discovery, access };
   }
   return {
     async generateMetadata(props: Props) {

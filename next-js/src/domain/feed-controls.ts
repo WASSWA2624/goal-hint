@@ -1,5 +1,5 @@
 import type { ReportingDate } from "./calendar.ts";
-import { anyProbability, defaultFeedDatePreset, defaultMarkets, defaultSortDirection, parseFeedQuery, parseProbabilityValue, serializeFeedQuery, validProbabilityRange,
+import { anyProbability, defaultFeedDatePreset, defaultMarkets, defaultPagePicks, defaultSortDirection, parseFeedQuery, parseProbabilityValue, serializeFeedQuery, validProbabilityRange,
   type FeedQuery, type ProbabilityRange } from "./feed-query.ts";
 
 /** Draft text stays editable; normalization happens once, at submission. */
@@ -33,10 +33,11 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
   }
 }
 
-/** Reset to the last 30 days and unrestricted filters, retaining the browsing zone, navigation section and page size. */
-export function resetFeedFilters(query: FeedQuery): FeedQuery {
+/** Restore page defaults, retaining the browsing zone, navigation section and page size. */
+export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): FeedQuery {
   const reset = { ...query };
   delete reset.time;
-  return { ...reset, dates: { kind: defaultFeedDatePreset }, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null, picks: "all",
+  return { ...reset, dates: { kind: defaultFeedDatePreset }, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
+    picks: defaultPagePicks(query.status, subscriberOnly),
     sort: { by: "kickoff", direction: defaultSortDirection.kickoff }, page: 1 };
 }
