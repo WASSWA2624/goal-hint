@@ -74,6 +74,13 @@ try {
             $null = Assert-ChildPath $staging $temporaryRoot
             if (@(Get-ChildItem -LiteralPath $staging -Force).Count -eq 0) { Remove-Item -LiteralPath $staging }
         }
+        if (-not (Test-Path -LiteralPath $destination)) {
+            Remove-EmptyPackageDirectories @((Join-Path $root 'versions')) $root
+            if ((Test-Path -LiteralPath $root) -and @(Get-ChildItem -LiteralPath $root -Force).Count -eq 0) {
+                Assert-NoReparsePoint $root
+                Remove-Item -LiteralPath $root
+            }
+        }
     }
     Write-InstallReceipt $root @{ schema = 1; appId = $script:GoalHintAppId; environment = 'development'; version = $manifest.version }
     foreach ($path in $shortcuts) {

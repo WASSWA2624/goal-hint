@@ -27,4 +27,9 @@ foreach ($relative in @($manifest.files.path) + 'development-manifest.json') {
 Remove-EmptyPackageDirectories $directories $PSScriptRoot
 if (@(Get-ChildItem -LiteralPath $PSScriptRoot -Force).Count -eq 0) { Remove-Item -LiteralPath $PSScriptRoot }
 if ($receipt.version -eq $manifest.version) { Remove-Item -LiteralPath $receiptPath }
+Remove-EmptyPackageDirectories @((Join-Path $root 'versions')) $root
+if ((Test-Path -LiteralPath $root) -and @(Get-ChildItem -LiteralPath $root -Force).Count -eq 0) {
+    Assert-NoReparsePoint $root
+    Remove-Item -LiteralPath $root
+}
 Write-Output 'Removed the development application files and shortcuts. Browser profile data is preserved.'
