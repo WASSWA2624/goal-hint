@@ -1,11 +1,14 @@
 node_modules/
 .next/
+build/
 out/
 dist/
 deploy/*.zip
 coverage/
-output/playwright/
-output/identity-006/
+.nyc_output/
+test-results/
+playwright-report/
+output/
 .playwright-cli/
 .playwright-mcp/
 .tmp/

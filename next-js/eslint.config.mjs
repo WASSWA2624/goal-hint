@@ -16,7 +16,8 @@ export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
   globalIgnores([
-    ".next/**", "out/**", "build/**", ".tmp/**", "output/playwright/**",
+    ".next/**", "out/**", "build/**", ".tmp/**", "output/**",
+    "coverage/**", ".nyc_output/**", "test-results/**", "playwright-report/**",
     ".playwright-cli/**", ".playwright-mcp/**", ".claude/worktrees/**", "chrome-filters/**",
     "src/server/generated/**", "next-env.d.ts", "public/ocr/**",
   ]),
