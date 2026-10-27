@@ -10,7 +10,7 @@ goal-hint/
 │   └── dev-plan/     # Numbered Next.js implementation plans
 ├── flutter/          # Native web host, platform adapters, and native projects
 │   └── dev-plan/     # Numbered Flutter shell implementation plans
-├── deploy/           # Versioned production ZIPs (ignored) and deployment guide
+├── deploy/           # Versioned deployment ZIPs (ignored) and usage guide
 ├── prompts/          # Shared feature requests and specifications
 └── app-write-up.md   # Product specification and shared application architecture
 ```
@@ -18,7 +18,7 @@ goal-hint/
 - [App write-up](app-write-up.md)
 - [Next.js setup and commands](next-js/README.md)
 - [Flutter status and requirements](flutter/README.md)
-- [Production packages and deployment](deploy/README.md)
+- [Development packages and deployment](deploy/README.md)
 - [Flutter implementation prompt](prompts/flutter-app-shell.md)
 - [Next.js development plans](next-js/dev-plan/000-index.md)
 - [Flutter development plans](flutter/dev-plan/000-index.md)

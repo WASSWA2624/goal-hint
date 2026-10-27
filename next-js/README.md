@@ -21,7 +21,7 @@ production requires its own hashed credentials).
 
 - [App specification](../app-write-up.md): scope, user experience, prediction rules, architecture and launch requirements.
 - [Development prompts](dev-plan/000-index.md): run numbered feature prompts in order to implement the application.
-- [Release packages](../deploy/README.md): versioned production ZIPs for the web and native hosts.
+- [Deployment packages](../deploy/README.md): versioned development and production ZIPs for the web and native hosts.
 - [cPanel deployment](docs/deployment/README.md): upload layout and runtime configuration.
 - [Development package](docs/deployment/development.md): clean source ZIP and LAN startup instructions.
 - [Brand guide](assets/brand/README.md): logo variants, palette, file inventory, usage and regeneration.

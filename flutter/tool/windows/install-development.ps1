@@ -3,7 +3,7 @@ param([switch]$DesktopShortcut)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 $null = Assert-WindowsRuntime
-foreach ($runtime in @('msvcp140d.dll', 'vcruntime140d.dll', 'ucrtbased.dll')) {
+foreach ($runtime in @('msvcp140d.dll', 'vcruntime140d.dll', 'vcruntime140_1d.dll', 'ucrtbased.dll')) {
     if (-not (Test-Path -LiteralPath (Join-Path $env:SystemRoot "System32/$runtime"))) {
         throw 'This Debug build requires a developer machine with the Visual Studio C++ Debug runtime installed.'
     }
@@ -12,10 +12,15 @@ $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'development-manif
 if ($manifest.schema -ne 1 -or $manifest.environment -ne 'development' -or $manifest.mode -ne 'debug' -or
     $manifest.appId -ne $script:GoalHintAppId -or $manifest.version -notmatch '^\d+\.\d+\.\d+\+\d+$') { throw 'Invalid development package manifest.' }
 $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+if (@($manifest.files).Count -lt 8 -or @($manifest.files).Count -gt 5000) { throw 'Invalid development payload file count.' }
 foreach ($entry in $manifest.files) {
     if (-not $seen.Add([string]$entry.path) -or $entry.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid development manifest file.' }
     $file = Get-PackagePath $PSScriptRoot $entry.path
     if ((Get-FileDigest $file) -ne $entry.sha256 -or (Get-Item -LiteralPath $file).Length -ne $entry.length) { throw 'Development payload integrity check failed.' }
+}
+foreach ($required in @('goal_hint.exe', 'flutter_windows.dll', 'WebView2Loader.dll', 'data/icudtl.dat',
+    'data/flutter_assets/kernel_blob.bin', 'install.ps1', 'uninstall.ps1', 'release-common.ps1')) {
+    if (-not $seen.Contains($required)) { throw "Missing development package file: $required" }
 }
 foreach ($file in Get-PackageFiles $PSScriptRoot) {
     $relative = $file.FullName.Substring($PSScriptRoot.Length + 1).Replace('\', '/')
