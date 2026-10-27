@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
-import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SearchIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
+import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
@@ -22,6 +22,7 @@ import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { FeedDraftStatus, PicksOnlyFilter } from "./feed-controls";
+import { FeedSearchInput } from "./feed-search-input";
 import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker, DayStrip } from "./feed-dates";
@@ -59,61 +60,6 @@ const Panel = styled.form`
   gap: 4px;
   min-inline-size: 0;
   ${media.belowDesktop} { gap: 6px; padding-inline: 6px; }
-`;
-const SearchRow = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: stretch;
-  gap: 6px;
-  min-inline-size: 0;
-`;
-const SearchField = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-inline-size: 0;
-  min-block-size: 2.75rem;
-  padding-inline: 10px;
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
-  /* Editable field boundaries stay distinct from quiet section frames. */
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
-  ${controlFeedback}
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
-  > input {
-    inline-size: 100%; min-inline-size: 0; min-block-size: 2.5rem; padding: 0;
-    border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; font-size: 1rem;
-    &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
-    ${focusRing}
-  }
-  ${media.belowDesktop} {
-    min-block-size: 2.75rem;
-    padding-inline: 10px;
-    > input { min-block-size: 2.625rem; font-size: 16px; }
-  }
-`;
-/** Runs the typed search; Enter in the field does the same. */
-const SearchButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-block-size: 2.75rem;
-  padding-inline: 14px;
-  /* No blue fill: brand text on the surface with the same faint border as the search field. */
-  color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  white-space: nowrap;
-  cursor: pointer;
-  > svg { flex: none; font-size: 1rem; }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; border-color: ${({ theme }) => theme.color.brand}; } }
-  ${focusRing}
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
 const PhoneToolbar = styled.div`
@@ -732,15 +678,10 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     apply(applyFeedDraft(completeDraft, today));
   }}>
     {[...new URLSearchParams(parameters)].map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-    <SearchRow data-feed-search>
-      <SearchField>
-        <SearchIcon aria-hidden="true" />
-        <input type="search" name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
-          placeholder={messages.text("feed.search.placeholder")} aria-label={messages.text("feed.filters.search")}
-          onChange={(event) => edit({ ...draft, search: event.target.value })} />
-      </SearchField>
-      <SearchButton type="submit"><SearchIcon aria-hidden="true" />{messages.text("feed.search.submit")}</SearchButton>
-    </SearchRow>
+    <FeedSearchInput name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
+      placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
+      submitLabel={messages.text("feed.search.submit")}
+      onChange={(event) => edit({ ...draft, search: event.target.value })} />
     {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
     <PhoneToolbar data-phone-filter-toolbar>
       <SortField>

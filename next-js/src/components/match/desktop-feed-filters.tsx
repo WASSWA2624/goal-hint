@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { CalendarIcon, ChevronDownIcon, FilterIcon, GlobeIcon, GridIcon, ResetIcon, SearchIcon, SlidersIcon, TrophyIcon, type IconProps } from "@/components/ui/icons";
+import { CalendarIcon, ChevronDownIcon, FilterIcon, GlobeIcon, GridIcon, ResetIcon, SlidersIcon, TrophyIcon, type IconProps } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -20,9 +20,10 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { PicksOnlyFilter } from "./feed-controls";
+import { FeedSearchInput } from "./feed-search-input";
 import { feedSortOptions } from "./feed-header";
 import { OptionLogo } from "./filter-parts";
-import { ActionButton, ActionRow, Count, DialogContent, Error as FilterError, Heading, HeadingRow, Muted, OptionsRow, Panel, PeriodField, SearchField, SectionButton, SortField } from "./desktop-feed-filter-styles";
+import { ActionButton, ActionRow, Count, DialogContent, Error as FilterError, Heading, HeadingRow, Muted, OptionsRow, Panel, PeriodField, SectionButton, SortField } from "./desktop-feed-filter-styles";
 
 type Messages = ReturnType<typeof createMessages>;
 type Draft = {
@@ -203,11 +204,10 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
         <option value="custom">{messages.text("feed.filters.customDates")}</option>
       </select></PeriodField>
     </HeadingRow>
-    <SearchField><SearchIcon /><VisuallyHidden>{messages.text("feed.filters.search")}</VisuallyHidden>
-      <input type="search" name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search}
-        placeholder={messages.text("feed.search.placeholder")} aria-label={messages.text("feed.filters.search")}
-        onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
-    </SearchField>
+    <FeedSearchInput name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
+      placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
+      submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
+      onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
     <OptionsRow>{sections.map((section) => {
       const Icon = sectionIcons[section];
       return <SectionButton key={section} type="button" data-filter-section={section} data-active={modified[section]}

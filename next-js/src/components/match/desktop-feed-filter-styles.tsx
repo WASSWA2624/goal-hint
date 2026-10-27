@@ -70,36 +70,6 @@ export const PeriodField = styled.label`
   > select { ${fieldControl} cursor: pointer; }
 `;
 
-export const SearchField = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-inline-size: 0;
-  min-block-size: 40px;
-  padding-inline: 12px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
-  color: ${({ theme }) => theme.color.text};
-  ${filterControlColors}
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 17px; }
-  > input {
-    flex: 1;
-    inline-size: 100%;
-    min-inline-size: 0;
-    min-block-size: 40px;
-    padding: 8px 0;
-    border: 0;
-    border-radius: 0;
-    outline: 0;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    font-size: 0.875rem;
-    &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
-  }
-  ${controlFeedback}
-  &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-`;
 
 export const OptionsRow = styled.div`
   display: grid;
