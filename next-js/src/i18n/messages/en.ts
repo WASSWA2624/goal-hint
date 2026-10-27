@@ -366,6 +366,8 @@ export const en = {
   "account.underAMinuteLeftCompact": "<1m left",
   "account.activeSubscription": "Active subscription",
   "account.subscriptionExpired": "Subscription expired",
+  "account.renewExpired": "Subscription expired. Renew",
+  "account.renewExpiredPrice": "Subscription expired. Renew for UGX {price}",
   "account.noActiveSubscription": "No active subscription",
   "account.subscriptionUnavailable": "Subscription details are unavailable. Try again shortly.",
   "account.paymentPending": "Payment pending",

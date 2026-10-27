@@ -195,18 +195,23 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
     if (!subscription.canSubscribe || subscribing) return null;
     const { offer } = subscription;
     const price = offer ? messages.number(offer.priceUgx) : null;
+    if (subscription.paymentPending) return bar(<>
+      <Status><ClockIcon /><span>{messages.text("account.pending")}</span></Status>{action(messages.text("account.viewPayment"))}
+    </>, { state: "pending", icon: <ClockIcon />, title: messages.text("account.paymentPending"), detail: messages.text("account.pending") });
+    if (subscription.expired) {
+      const renewal = price !== null ? messages.text("account.renewExpiredPrice", { price }) : messages.text("account.renewExpired");
+      return bar(<>
+        <Status data-subscription-offer><LockIcon /><strong>{renewal}</strong></Status>{action(messages.text("account.subscribe"))}
+      </>, { state: "expired", icon: <LockIcon />, detail: renewal, phoneDetail: renewal });
+    }
     const unlock = price !== null ? messages.text("paywall.unlockPredictionPrice", { price })
       : messages.text("paywall.unlockPrediction");
-    return subscription.paymentPending ? bar(<>
-      <Status><ClockIcon /><span>{messages.text("account.pending")}</span></Status>{action(messages.text("account.viewPayment"))}
-    </>, { state: "pending", icon: <ClockIcon />, title: messages.text("account.paymentPending"), detail: messages.text("account.pending") }) : bar(<>
+    return bar(<>
       <Status data-subscription-offer><LockIcon /><strong>{messages.text("account.unlockTitle")}</strong>
         {price !== null && <Price>{messages.text("account.unlockPrice", { price })}</Price>}</Status>
       {action(messages.text("account.subscribe"))}
-    </>, { state: subscription.expired ? "expired" : "locked", icon: <LockIcon />,
-      title: messages.text(subscription.expired ? "account.subscriptionExpired" : "paywall.locked"), detail: unlock,
-      ...(!subscription.expired && { phoneDetail: price !== null ? messages.text("account.unlockFullAccessPrice", { price })
-        : messages.text("account.unlockFullAccess") }) });
+    </>, { state: "locked", icon: <LockIcon />, title: messages.text("paywall.locked"), detail: unlock,
+      phoneDetail: price !== null ? messages.text("account.unlockFullAccessPrice", { price }) : messages.text("account.unlockFullAccess") });
   }
   const until = new Date(subscription.activeUntil), remaining = subscriptionTimeRemaining(until, now);
   const left = remaining && (remaining.days ? messages.text("account.leftDaysHours", {
