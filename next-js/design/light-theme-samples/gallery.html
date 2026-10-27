@@ -2,15 +2,19 @@
   #goal-hint-light-theme-review { width: 100%; }
   #goal-hint-light-theme-review [data-variant] { min-width: 0; }
   #goal-hint-light-theme-review .gh-review-stage { min-height: 880px; min-width: 0; }
+  #goal-hint-light-theme-review .viz-carousel:has(> .viz-carousel-controls) { padding-bottom: 0; }
+  #goal-hint-light-theme-review .viz-carousel-controls { position: relative; bottom: auto; left: auto; max-width: 100%; margin: 8px auto 16px; transform: none; }
+  #goal-hint-light-theme-review .viz-carousel-options { top: calc(100% + 4px); bottom: auto; }
   #goal-hint-light-theme-review[data-device="desktop"] [data-device-view="mobile"],
   #goal-hint-light-theme-review[data-device="mobile"] [data-device-view="desktop"] { display: none; }
   #goal-hint-light-theme-review figure { margin: 0; min-width: 0; }
   #goal-hint-light-theme-review figcaption { margin-bottom: 8px; }
   #goal-hint-light-theme-review .gh-review-viewport { position: relative; width: 100%; overflow: hidden; }
-  #goal-hint-light-theme-review .gh-review-viewport[data-screen="mobile"] { max-width: 390px; margin-inline: auto; }
+  #goal-hint-light-theme-review .gh-review-viewport[data-screen="desktop"] { max-width: 1440px; aspect-ratio: 1440 / 1100; margin-inline: auto; }
+  #goal-hint-light-theme-review .gh-review-viewport[data-screen="mobile"] { max-width: 390px; aspect-ratio: 390 / 844; margin-inline: auto; }
   #goal-hint-light-theme-review .gh-review-product { display: block; position: absolute; inset: 0 auto auto 0; transform-origin: top left; }
-  #goal-hint-light-theme-review [data-screen="desktop"] .gh-review-product { width: 1440px; height: 1100px; }
-  #goal-hint-light-theme-review [data-screen="mobile"] .gh-review-product { width: 390px; height: 844px; }
+  #goal-hint-light-theme-review [data-screen="desktop"] .gh-review-product { width: 1440px; height: 1100px; transform: scale(var(--gh-review-desktop-scale, 1)); }
+  #goal-hint-light-theme-review [data-screen="mobile"] .gh-review-product { width: 390px; height: 844px; transform: scale(var(--gh-review-mobile-scale, 1)); }
   #goal-hint-light-theme-review .gh-review-error { color: var(--destructive); }
 </style>
 <div id="goal-hint-light-theme-review" data-device="desktop">
@@ -31,7 +35,22 @@
   const error = root.querySelector(".gh-review-error");
   const frameSizes = { desktop: { width: 1440, height: 1100 }, mobile: { width: 390, height: 844 } };
   const mounted = new Set();
-  const resizeObservers = [];
+  let pendingFrame = 0, previousWidth = 0;
+
+  // CSS owns viewport heights; transforms never resize the measured layout.
+  function updateScale() {
+    pendingFrame = 0;
+    const width = root.clientWidth;
+    if (!width || width === previousWidth) return;
+    previousWidth = width;
+    for (const [screen, size] of Object.entries(frameSizes)) {
+      root.style.setProperty(`--gh-review-${screen}-scale`, String(Math.min(1, width / size.width)));
+    }
+  }
+  window.addEventListener("resize", () => {
+    if (!pendingFrame) pendingFrame = requestAnimationFrame(updateScale);
+  });
+  updateScale();
   function selectDevice(device) {
     root.dataset.device = device;
     for (const button of root.querySelectorAll("[data-review-device]")) button.setAttribute("aria-pressed", String(button.dataset.reviewDevice === device));
@@ -70,17 +89,6 @@
       if (event.composedPath().some(node => node instanceof HTMLAnchorElement)) event.preventDefault();
     });
     shadow.addEventListener("submit", event => event.preventDefault());
-    const resize = () => {
-      const available = container.getBoundingClientRect().width;
-      if (!available) return;
-      const scale = Math.min(1, available / size.width);
-      product.style.transform = `scale(${scale})`;
-      container.style.height = `${size.height * scale}px`;
-    };
-    const observer = new ResizeObserver(resize);
-    observer.observe(container);
-    resizeObservers.push(observer);
-    resize();
     const renderColors = () => {
       product.style.setProperty("--gh-review-accent", state.accent);
       product.style.setProperty("--gh-review-page", state.page);
@@ -124,9 +132,16 @@
         mounted.add(section);
       }
     }
-    renderVisible();
-    const observer = new MutationObserver(renderVisible);
-    observer.observe(root.querySelector(".viz-carousel"), { attributes: true, subtree: true, attributeFilter: ["hidden"] });
+    const carousel = root.querySelector(".viz-carousel");
+    function updateCarousel() {
+      // Reuse the host navigator and keep its keyboard order above the samples.
+      const controls = carousel.querySelector(":scope > .viz-carousel-controls");
+      if (controls && carousel.firstElementChild !== controls) carousel.prepend(controls);
+      renderVisible();
+    }
+    const observer = new MutationObserver(updateCarousel);
+    observer.observe(carousel, { childList: true, attributes: true, subtree: true, attributeFilter: ["hidden"] });
+    updateCarousel();
   }
 
   start().catch(reason => { error.textContent = `The theme preview could not load: ${reason.message}`; });

@@ -37,3 +37,21 @@ Create ten light-theme proposals for review before implementing a selected theme
   states, and the stable carousel controls.
 - Application actions in the gallery are visual samples. The chosen palette
   still requires approval before any production theme implementation.
+
+## Resize and browser review follow-up
+
+- Removed the preview's per-screen `ResizeObserver` callbacks, which wrote a
+  new height to the observed container. CSS aspect ratios now control viewport
+  heights; a single animation-frame update on window resize changes only visual
+  scale when the available width changes.
+- Moved the existing theme navigator above the samples, including its keyboard
+  order, and made the theme picker open downward.
+- Exported the updated fragment with the visualization renderer. A dedicated
+  local server exposes the exported document at
+  `http://127.0.0.1:3108/goal-hint-light-themes.html` for external browsers.
+- All twenty theme/device views passed, along with three resize cycles spanning
+  320, 390, 736, 1024, 1440 and 1600 px. No browser errors or horizontal overflow
+  occurred. The top navigator and downward picker were verified in the browser;
+  desktop and phone screenshots were visually inspected.
+- Targeted JavaScript lint and Python compilation passed. The gallery server
+  returned HTML with HTTP 200 and no caching; unrelated paths returned 404.

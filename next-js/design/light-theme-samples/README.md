@@ -59,6 +59,26 @@ desktop composition is scaled to fit the conversation, while the phone
 composition retains its 390 px proportions. Captured application actions are
 visual samples; they do not perform requests or account operations.
 
+## View the gallery in an external browser
+
+Export the existing conversation fragment with the visualization skill's
+`scripts/render.py`, using
+`output/playwright/light-themes/goal-hint-light-themes.html` as the destination.
+The exported document includes the standalone styling and interaction runtime;
+the fragment itself remains the editable source.
+
+Then run this command from `next-js/`:
+
+```powershell
+python scripts/serve-light-theme-gallery.py
+```
+
+Open <http://127.0.0.1:3108/goal-hint-light-themes.html> in a browser on this
+computer. Use `--port` to choose another local port. The server binds only to
+`127.0.0.1` and exposes only the exported gallery; generated files are ignored by
+Git. Keep the process running while reviewing the samples. Regenerated exports
+are available on reload without restarting the server.
+
 ## Color checks
 
 Each palette separates quiet decorative borders from stronger editable-field
