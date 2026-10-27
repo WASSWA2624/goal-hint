@@ -3,7 +3,6 @@ node_modules/
 build/
 out/
 dist/
-deploy/*.zip
 coverage/
 .nyc_output/
 test-results/
@@ -25,7 +24,6 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .goal-hint/
-deploy/deploy-credentials.md
 chrome-filters/
 public/ocr/
 public/offline-manifest.json

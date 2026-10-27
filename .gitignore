@@ -8,4 +8,10 @@ Thumbs.db
 .env*
 !.env.example
 
+# Deployment deliverables and private operator configuration are local only.
+/deploy/*.zip
+/deploy/*.zip.sha256
+/deploy/.staging/
+/deploy/.private/
+
 # Each application owns its dependency, build, and runtime ignore rules.

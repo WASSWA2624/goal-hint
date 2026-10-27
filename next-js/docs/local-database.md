@@ -80,7 +80,7 @@ Plans and settings are retained; plans are deactivated instead of deleted.
 Personal-data erasure retains accounting history. The separate permanent account
 deletion action removes the account and all its related records, including
 payments, codes and account-linked audits. Apply the additional DELETE grants in
-`deploy/manual-account-grants.sql` before deploying this action. As with the odds tables, apply the
+`docs/deployment/manual-account-grants.sql` before deploying this action. As with the odds tables, apply the
 grants after `npm run db:deploy`. They were applied locally on 19 October 2026
 and are recorded as section (H) of `application-grants.sql`. Paid access stays
 off (`paywallMode = off`, the default when `SubscriptionSettings` has no row).
@@ -104,7 +104,7 @@ credential changes or migration-history rewrite was needed.
 
 The application role has SELECT, INSERT and DELETE on `SavedSlip`, and SELECT
 and INSERT on `SavedSlipFixture`, as documented in
-[manual-account-grants.sql](../deploy/manual-account-grants.sql). Snapshots and
+[manual-account-grants.sql](deployment/manual-account-grants.sql). Snapshots and
 links are never updated; erasing an account deletes its snapshots and cascades
 to their links. Existing table-scoped account/session grants cover the new
 recovery columns. The application still has no database-level DDL privileges.
@@ -113,7 +113,7 @@ The actual private `application-grants.sql` records the new grants.
 The account-update SMS outbox (`20261025230000_payment_notification_outbox`) adds
 `PaymentNotificationOutbox`. After `npm run db:deploy`, grant the application role SELECT,
 INSERT, UPDATE and DELETE on it, as in
-[manual-account-grants.sql](../deploy/manual-account-grants.sql), before starting
+[manual-account-grants.sql](deployment/manual-account-grants.sql), before starting
 the release: payment approvals, rejections, credit approvals and auto-renewals
 insert a row in their own transaction, so without the grant every such decision
 fails. DELETE serves the members purge, erasure and the owner's Dismiss; permanent
@@ -247,7 +247,7 @@ The retention worker deletes from `MemberAccount`, `MemberSession`,
 `MemberVerification`, `PaymentScreenshot` and `RateLimitBucket`. Saved-slip erasure
 also needs DELETE on `SavedSlip`; fixture links cascade. The admin's separate
 permanent deletion flow additionally needs DELETE on `PaymentSubmission`,
-`AccessCode` and `OwnerAuditEvent`, provided by `deploy/manual-account-grants.sql`.
+`AccessCode` and `OwnerAuditEvent`, provided by `docs/deployment/manual-account-grants.sql`.
 The live maintenance loop and cPanel cron invoke the same hourly, conditional
 `lastMembersPurgeAt` claim; authenticated admin page loads and
 `npm run members:purge` are fallback triggers. The command performs deletion;

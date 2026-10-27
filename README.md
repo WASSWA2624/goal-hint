@@ -10,6 +10,7 @@ goal-hint/
 │   └── dev-plan/     # Numbered Next.js implementation plans
 ├── flutter/          # Native web host, platform adapters, and native projects
 │   └── dev-plan/     # Numbered Flutter shell implementation plans
+├── deploy/           # Versioned production ZIPs (ignored) and deployment guide
 ├── prompts/          # Shared feature requests and specifications
 └── app-write-up.md   # Product specification and shared application architecture
 ```
@@ -17,6 +18,7 @@ goal-hint/
 - [App write-up](app-write-up.md)
 - [Next.js setup and commands](next-js/README.md)
 - [Flutter status and requirements](flutter/README.md)
+- [Production packages and deployment](deploy/README.md)
 - [Flutter implementation prompt](prompts/flutter-app-shell.md)
 - [Next.js development plans](next-js/dev-plan/000-index.md)
 - [Flutter development plans](flutter/dev-plan/000-index.md)
@@ -33,8 +35,10 @@ npm run dev
 ```
 
 Open [localhost:3000](http://localhost:3000). Run the web application's other npm
-and Python commands from `next-js/` as well. Its environment files, local runtime
-state, database schema, deployment tooling, and generated output belong there.
+and Python commands from `next-js/` as well. Its development environment files,
+local runtime state, database schema, tooling, and build intermediates belong
+there. Final deployment packages for every platform belong in root `deploy/`;
+private deployment configuration lives under its ignored `.private/` directory.
 To invoke npm from the repository root, use `npm --prefix next-js run <script>`.
 The complete web validation command is `npm --prefix next-js run check`.
 

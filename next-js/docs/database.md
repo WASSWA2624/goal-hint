@@ -232,7 +232,7 @@ database access, and this integration creates no approval records.
 
 The register is relative to the process working directory; the standalone web
 bundle uses `standalone/.goal-hint/owner-approvals.json`, as described in the
-[cPanel deployment guide](../deploy/README.md). Keep it private and out of Git and
+[cPanel deployment guide](deployment/README.md). Keep it private and out of Git and
 release archives. Each web access rechecks the register, including before reusing
 a cached pool. Local development/tests and targetless generation do not load it.
 Production TLS, connection sizing, separate migration roles and all existing
@@ -266,7 +266,7 @@ the session's own account (composite foreign key).
 `20261013093000` migration uses MySQL-only `DROP CHECK`). Apply the reviewed
 overlay `prisma/mariadb/20261019142209_subscriptions.sql` instead:
 
-1. Take and verify a private backup ([deployment guide](../deploy/how-to-deploy.md),
+1. Take and verify a private backup ([deployment guide](deployment/how-to-deploy.md),
    step 2).
 2. Run the guard query by hand. On a first import it returns no rows. On a
    rerun, every row it returns must say `InnoDB`; convert any other table first.
@@ -464,7 +464,7 @@ prompt 052:
 
 ## Paid access (066)
 
-Nine paid-access tables store private phone/payment/image data. Verify the MariaDB overlay and restricted grants above; reapply erasure suppression after any restore. Admin-confirmed permanent account deletion removes submissions, codes and related audits as well as the account, sessions, verifications, screenshots and saved slips. Apply the additional DELETE grants in `deploy/manual-account-grants.sql` before deploying this action. See [subscriptions.md](subscriptions.md).
+Nine paid-access tables store private phone/payment/image data. Verify the MariaDB overlay and restricted grants above; reapply erasure suppression after any restore. Admin-confirmed permanent account deletion removes submissions, codes and related audits as well as the account, sessions, verifications, screenshots and saved slips. Apply the additional DELETE grants in `docs/deployment/manual-account-grants.sql` before deploying this action. See [subscriptions.md](subscriptions.md).
 
 ### Account credit (24 October 2026)
 

@@ -6,8 +6,8 @@ Usage:
   python scripts/deploy-cpanel.py --logs [N]                last N lines of the app log
   python scripts/deploy-cpanel.py --rollback                reactivate the previously active release
   python scripts/deploy-cpanel.py --restart                 reapply private files, then restart
-  python scripts/deploy-cpanel.py --config-pull             server settings -> deploy/.env.production.local
-                                                            and deploy/.goal-hint/owner-approvals.json
+  python scripts/deploy-cpanel.py --config-pull             server settings -> ../deploy/.private/nextjs/.env.production.local
+                                                            and ../deploy/.private/nextjs/.goal-hint/owner-approvals.json
   python scripts/deploy-cpanel.py --config-push             check those files, upload them, restart
   python scripts/deploy-cpanel.py --repair                  restore the domain's .htaccess routing, restart
 
@@ -39,6 +39,7 @@ import tempfile
 import zipfile
 
 from lib.runtime import CommandError, ROOT, main_guard
+from lib.deployment import PRIVATE_ROOT, web_archive
 
 HOST = os.environ.get("CPANEL_SSH_HOST", "66.29.132.57")
 PORT = os.environ.get("CPANEL_SSH_PORT", "21098")
@@ -46,10 +47,10 @@ USER = os.environ.get("CPANEL_SSH_USER", "hossuney")
 KEY = Path(os.environ.get("CPANEL_SSH_KEY", Path.home() / ".ssh" / "goalhint_deploy"))
 APP_ROOT = os.environ.get("CPANEL_APP_ROOT", "goal-hint")
 DOMAIN = os.environ.get("CPANEL_DOMAIN", "goalhint.com")
-ZIP = ROOT / "deploy/goal-hint-cpanel.zip"
+ZIP = web_archive()
 # Git-ignored local copies of ~/<app>-private (.gitignore: .env*, .goal-hint/).
-LOCAL_CONFIG = {".env.production.local": ROOT / "deploy/.env.production.local",
-                ".goal-hint/owner-approvals.json": ROOT / "deploy/.goal-hint/owner-approvals.json"}
+LOCAL_CONFIG = {".env.production.local": PRIVATE_ROOT / ".env.production.local",
+                ".goal-hint/owner-approvals.json": PRIVATE_ROOT / ".goal-hint/owner-approvals.json"}
 KEEP_RELEASES = 3
 # Created once with the app; later deploys never touch cPanel environment variables.
 # Database settings belong in ~/goal-hint-private/.env.production.local: cPanel writes
@@ -293,7 +294,7 @@ def check_config(env_text: str | None, approvals_text: str | None) -> list[str]:
 def config_push() -> None:
     texts = {name: local.read_bytes().decode("utf-8-sig").replace("\r\n", "\n") for name, local in LOCAL_CONFIG.items() if local.exists()}
     if not texts:
-        raise CommandError("Nothing to push. Run --config-pull first, or create deploy/.env.production.local.")
+        raise CommandError("Nothing to push. Run --config-pull first, or create ../deploy/.private/nextjs/.env.production.local.")
     problems = check_config(texts.get(".env.production.local"), texts.get(".goal-hint/owner-approvals.json"))
     if problems:
         raise CommandError("Configuration not pushed:\n- " + "\n- ".join(problems))
@@ -366,11 +367,11 @@ def main():
     action.add_argument("--logs", nargs="?", type=int, const=100, metavar="N", help="show the last N log lines")
     action.add_argument("--rollback", action="store_true", help="reactivate the previously active release")
     action.add_argument("--restart", action="store_true", help="reapply ~/goal-hint-private files and restart")
-    action.add_argument("--config-pull", action="store_true", help="download the server settings into deploy/ (git-ignored)")
-    action.add_argument("--config-push", action="store_true", help="check deploy/ settings, upload them and restart")
+    action.add_argument("--config-pull", action="store_true", help="download settings into ../deploy/.private/nextjs/ (git-ignored)")
+    action.add_argument("--config-push", action="store_true", help="check private deployment settings, upload them and restart")
     action.add_argument("--repair", action="store_true", help="restore the domain's .htaccess routing and restart")
     parser.add_argument("--build", action="store_true", help="rebuild the zip with the pinned Node.js first")
-    parser.add_argument("--zip", type=Path, default=ZIP, help="bundle to deploy (default: deploy/goal-hint-cpanel.zip)")
+    parser.add_argument("--zip", type=Path, default=ZIP, help=f"bundle to deploy (default: {ZIP})")
     options = parser.parse_args()
     for stream in (sys.stdout, sys.stderr):  # Next's log symbols are not cp1252.
         stream.reconfigure(encoding="utf-8", errors="replace")

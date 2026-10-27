@@ -12,7 +12,7 @@ Read `next-js/dev-plan/000-index.md`, the source sections and existing code befo
 
 - **Runbook and checklist** in `docs/subscriptions.md`, following plan section 10:
   1. Build and verify everything locally with the mode `off`.
-  2. When the owner asks for a deploy: take a private MariaDB backup, record its checksum and verify a restore to a separate target (`deploy/how-to-deploy.md`, step 2).
+  2. When the owner asks for a deploy: take a private MariaDB backup, record its checksum and verify a restore to a separate target (`docs/deployment/how-to-deploy.md`, step 2).
   3. Run the overlay's engine pre-check by hand; apply the reviewed overlay **before** the release that reads the new tables; confirm InnoDB and the FKs. A missing settings table fails closed and hides picks for everyone.
   4. Host checks, read-only first: `curl -I` on `/en` and a match page (expect `private, no-store` and no `x-litespeed-cache` or CDN cache headers); `SHOW VARIABLES LIKE 'max_allowed_packet'` (≥ 8 MB) and `'innodb_log_file_size'` (> 10× 3 MB); after deploy, the Settings diagnostics show which header carries the client address and whether a forged `X-Forwarded-For` passes (record the trusted entry); a 3 MB upload passes the LiteSpeed/Passenger body limit (if not, lower the cap) and a slow upload survives 90 s; owner login from the owner's phone.
   5. Deploy the app and the worker (`scripts/deploy-worker-cpanel.py`; the worker's database account needs DELETE on the purged tables) with the mode `off`.

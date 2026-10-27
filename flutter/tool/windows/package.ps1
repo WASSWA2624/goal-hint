@@ -3,7 +3,8 @@
 param(
     [string]$Flutter = 'flutter',
     [Parameter(Mandatory = $true)][string]$RedistDirectory,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$Force
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'release-common.ps1')
@@ -17,6 +18,7 @@ if ($sdk.frameworkVersion -ne $pin.flutter.version -or $sdk.frameworkRevision -n
     throw 'Flutter/Dart SDK differs from release-toolchain.json.'
 }
 
+$staging = $null
 Push-Location $project
 try {
     if (-not $SkipBuild) {
@@ -49,12 +51,15 @@ try {
     foreach ($required in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
         if (-not (Test-Path -LiteralPath (Join-Path $redist $required) -PathType Leaf)) { throw "Missing redistributable: $required" }
     }
-    $releaseName = "goal-hint-$version-windows-x64"
-    $output = Join-Path $project 'build/releases'
-    $package = Get-PackagePath $output $releaseName
+    $releaseVersion = ($version -split '\+')[0]
+    $releaseName = "goal-hint-windows-$releaseVersion"
+    $output = Get-FullPath (Join-Path $project '../deploy')
+    $stagingRoot = Get-PackagePath $output '.staging'
+    $staging = Get-PackagePath $stagingRoot ('windows-' + [Guid]::NewGuid().ToString('N'))
+    $package = Get-PackagePath $staging 'payload'
     $zip = Get-PackagePath $output ($releaseName + '.zip')
-    if ((Test-Path -LiteralPath $package) -or (Test-Path -LiteralPath $zip)) {
-        throw 'Release output already exists. Preserve it or choose a new pubspec build number before packaging again.'
+    if ((Test-Path -LiteralPath $zip) -and -not $Force) {
+        throw 'Release archive already exists. Use -Force to replace the unpublished package explicitly.'
     }
     # Traverse before copying to reject linked assets and unexpected files.
     $null = @(Get-PackageFiles $bundle)
@@ -113,10 +118,76 @@ the browser profile. This ZIP is not an MSIX, signed installer or store release.
     }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $package 'manifest.json') -Encoding UTF8
     $null = Read-ReleaseManifest $package -VerifyFiles
-    Compress-Archive -LiteralPath $package -DestinationPath $zip -CompressionLevel Optimal
-    (Get-FileDigest $zip) + '  ' + [IO.Path]::GetFileName($zip) | Set-Content -LiteralPath ($zip + '.sha256') -Encoding ASCII
-    Write-Output "Bundle: $package"
+    # IExpress wraps the same verified per-user installer in a real setup EXE.
+    # Build work stays in deploy/.staging; the only deliverable is the outer ZIP.
+    $installer = Get-PackagePath $staging 'installer'
+    New-Item -ItemType Directory -Path $installer | Out-Null
+    Compress-Archive -LiteralPath $package -DestinationPath (Join-Path $installer 'payload.zip') -CompressionLevel Optimal
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup.ps1') -Destination $installer
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup.cmd') -Destination $installer
+    $delivery = Get-PackagePath $staging 'delivery'
+    New-Item -ItemType Directory -Path $delivery | Out-Null
+    $setup = Join-Path $delivery ('Goal-Hint-Setup-' + $releaseVersion + '.exe')
+    $sed = Join-Path $staging 'installer.sed'
+    $sourceDirectory = $installer.TrimEnd('\') + '\'
+    @"
+[Version]
+Class=IEXPRESS
+SEDVersion=3
+[Options]
+PackagePurpose=InstallApp
+ShowInstallProgramWindow=1
+HideExtractAnimation=1
+UseLongFileName=1
+InsideCompressed=0
+CAB_FixedSize=0
+CAB_ResvCodeSigning=0
+RebootMode=N
+InstallPrompt=Install Goal Hint $releaseVersion for the current user?
+DisplayLicense=
+FinishMessage=
+TargetName=$setup
+FriendlyName=Goal Hint $releaseVersion Setup
+AppLaunched=cmd.exe /d /c setup.cmd
+PostInstallCmd=<None>
+AdminQuietInstCmd=
+UserQuietInstCmd=
+SourceFiles=SourceFiles
+[SourceFiles]
+SourceFiles0=$sourceDirectory
+[SourceFiles0]
+%FILE0%=
+%FILE1%=
+%FILE2%=
+[Strings]
+FILE0="payload.zip"
+FILE1="setup.ps1"
+FILE2="setup.cmd"
+"@ | Set-Content -LiteralPath $sed -Encoding ASCII
+    $iexpress = Join-Path $env:SystemRoot 'System32/iexpress.exe'
+    if (-not (Test-Path -LiteralPath $iexpress -PathType Leaf)) { throw 'Windows IExpress is required to create the setup executable.' }
+    $builder = Start-Process -FilePath $iexpress -ArgumentList @('/N', '/Q', ('"' + $sed + '"')) -WindowStyle Hidden -PassThru -Wait
+    if ($builder.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'IExpress setup executable creation failed.' }
+    @"
+Goal Hint $releaseVersion for Windows x64
+Extract this ZIP, then run Goal-Hint-Setup-$releaseVersion.exe.
+The unsigned setup installs for the current user using the bundled verified installer.
+Microsoft Edge WebView2 Evergreen Runtime is required.
+Source version: $version; production origin: https://goalhint.com.
+"@ | Set-Content -LiteralPath (Join-Path $delivery 'README.txt') -Encoding UTF8
+    $temporaryZip = Join-Path $staging ($releaseName + '.zip')
+    Compress-Archive -Path (Join-Path $delivery '*') -DestinationPath $temporaryZip -CompressionLevel Optimal
+    $checksum = Join-Path $staging ($releaseName + '.zip.sha256')
+    (Get-FileDigest $temporaryZip) + '  ' + [IO.Path]::GetFileName($zip) | Set-Content -LiteralPath $checksum -Encoding ASCII
+    Move-Item -LiteralPath $temporaryZip -Destination $zip -Force:$Force
+    Move-Item -LiteralPath $checksum -Destination ($zip + '.sha256') -Force:$Force
     Write-Output "Archive: $zip"
     Write-Output "SHA256: $(Get-FileDigest $zip)"
     Write-Output "Source: $revision (dirty=$dirty); unsigned candidate, not a published release."
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    if ($staging -and (Test-Path -LiteralPath $staging)) {
+        $safeStaging = Assert-ChildPath $staging $stagingRoot
+        Remove-Item -LiteralPath $safeStaging -Recurse -Force
+    }
+}

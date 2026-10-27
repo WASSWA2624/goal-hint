@@ -3,7 +3,7 @@
 Run commands from `flutter/` on the Windows build host. The scripts use Windows
 PowerShell 5.1 or PowerShell 7, and the SDK pinned in
 [`release-toolchain.json`](../release-toolchain.json). A candidate is a ZIP with
-a per-user installer, not an MSIX/store submission or a published release.
+an installable setup EXE, not an MSIX/store submission or a published release.
 Native changes require a newly built bundle and an incremented `pubspec.yaml`
 build number. Product screens and business logic continue to come from Next.js.
 
@@ -46,17 +46,22 @@ as a candidate. A build restored from an unknown machine/cache must be rebuilt.
 The output is:
 
 ```text
-build/releases/goal-hint-0.1.0+4-windows-x64/
-build/releases/goal-hint-0.1.0+4-windows-x64.zip
-build/releases/goal-hint-0.1.0+4-windows-x64.zip.sha256
+../deploy/goal-hint-windows-1.0.0.zip
+../deploy/goal-hint-windows-1.0.0.zip.sha256
 ```
 
-The directory contains `goal_hint.exe`, native DLLs, `data/`, install/uninstall
-scripts, a README and `manifest.json`. The manifest records version, public
+The ZIP contains `Goal-Hint-Setup-1.0.0.exe` and a brief README. Windows' built-in
+IExpress creates this self-extracting setup. Its payload contains `goal_hint.exe`,
+native DLLs, `data/`, install/uninstall scripts, a README and `manifest.json`.
+Build staging exists only under root `deploy/.staging/` and is removed after
+packaging; no deliverables are written under `flutter/build/releases/`.
+The manifest records version, public
 origin, toolchain, source commit/dirty status, build-configuration hash, and each
 file's length/SHA256. It contains no signing credentials or private build paths.
 PDB/debug/test/private files are rejected or excluded. Existing candidate output
-is preserved; the packager will not overwrite it. Keep all output ignored.
+is preserved unless `-Force` explicitly replaces an unpublished package of the
+same public version. Keep all output ignored. The public archive version remains
+`1.0.0` until the first production release; Flutter's internal version is `1.0.0+1`.
 
 The ZIP checksum detects corruption when obtained from a trusted separate
 channel. The embedded manifest checks extracted file consistency; neither is
@@ -77,16 +82,16 @@ and retry. See the [official detection/distribution contract](https://learn.micr
 It performs no network download or administrator installation itself.
 
 Verify the received ZIP against its separately supplied SHA256, extract it,
-inspect the scripts/manifest, then run in the extracted directory:
+then run the setup executable in the extracted directory:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\goal-hint-0.1.0+4-windows-x64.zip
-# After extraction, from the directory containing manifest.json:
-powershell -File .\install.ps1 -DesktopShortcut
+Get-FileHash -Algorithm SHA256 .\goal-hint-windows-1.0.0.zip
+.\Goal-Hint-Setup-1.0.0.exe
 ```
 
-Run only reviewed scripts consistent with the machine's execution policy;
-these instructions do not disable or change that policy. The installer verifies
+The setup runs its embedded PowerShell installer with a process-scoped execution
+policy; it does not persist a policy change or override organizational policy.
+The installer verifies
 all listed bytes and rejects unlisted files, path traversal, alternate streams,
 links/junctions and invalid identity/origin before copying. It stages the copy
 before activating a version and refuses an already installed version with
@@ -98,7 +103,7 @@ The installation is per-user:
 
 ```text
 %LOCALAPPDATA%/Programs/Goal Hint/installation.json
-%LOCALAPPDATA%/Programs/Goal Hint/versions/0.1.0+4/goal_hint.exe
+%LOCALAPPDATA%/Programs/Goal Hint/versions/1.0.0+1/goal_hint.exe
 %APPDATA%/Microsoft/Windows/Start Menu/Programs/Goal Hint.lnk
 ```
 
@@ -123,7 +128,7 @@ still targets an older version. The same explicit app ID keeps grouping stable.
 To remove the managed installation, close its windows and run:
 
 ```powershell
-powershell -File "$env:LOCALAPPDATA\Programs\Goal Hint\versions\0.1.0+4\uninstall.ps1"
+powershell -File "$env:LOCALAPPDATA\Programs\Goal Hint\versions\1.0.0+1\uninstall.ps1"
 ```
 
 The uninstaller validates the fixed per-user root and each managed version's

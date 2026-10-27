@@ -9,12 +9,13 @@ import tempfile
 import zipfile
 
 from lib.runtime import CommandError, ROOT, main_guard
+from lib.deployment import PRIVATE_ROOT
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--env-file', type=Path, default=ROOT / 'deploy/.env.worker.production.local')
-    parser.add_argument('--approvals', type=Path, default=ROOT / 'deploy/.goal-hint/worker-owner-approvals.json')
+    parser.add_argument('--env-file', type=Path, default=PRIVATE_ROOT / '.env.worker.production.local')
+    parser.add_argument('--approvals', type=Path, default=PRIVATE_ROOT / '.goal-hint/worker-owner-approvals.json')
     options = parser.parse_args()
     for file in [options.env_file, options.approvals]:
         if not file.is_file():

@@ -4810,7 +4810,7 @@ one batch: 9 bodies ended in `;`, and the dump failed to import at the first.
 - **Docs:** [database](database.md) ("Append-only trigger repair on MariaDB",
   with the production check query), [backup and restore](backup-restore.md)
   (90-table evidence and the block-body rule), the
-  [deployment guide](../deploy/how-to-deploy.md) overlay list, and
+  [deployment guide](deployment/how-to-deploy.md) overlay list, and
   [implementation decisions](implementation-decisions.md) (OP-31 and the new
   section).
 

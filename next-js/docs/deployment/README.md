@@ -1,6 +1,6 @@
 # Deploying Goal Hint to cPanel
 
-`goal-hint-cpanel.zip` contains a self-contained production build of the website for
+`goal-hint-nextjs-1.0.0.zip` contains a self-contained production build of the website for
 cPanel's **Setup Node.js App** (Phusion Passenger). Everything the server needs,
 including its `node_modules`, is already inside. You don't need to run `npm install`
 or a build on the server.
@@ -14,7 +14,12 @@ npm run package:cpanel
 The script copies the working tree to a temporary directory without git-ignored
 files, so `.env.local`, `.env.operations` and `.goal-hint/` are never included.
 It then runs `npm ci` and a `standalone` Next.js build, and writes
-`deploy/goal-hint-cpanel.zip`. The zip itself is git-ignored.
+`../deploy/goal-hint-nextjs-1.0.0.zip`. The zip itself is git-ignored.
+Its adjacent `.zip.sha256` file records the archive checksum. Temporary publication
+files live under `../deploy/.staging/` and are removed after success or failure.
+All release archives live in the repository's root `deploy/` directory. Keep this
+version at 1.0.0 until the first production release; later version changes are
+explicit edits to `package.json` and the lockfile.
 
 ## Package layout
 
@@ -35,13 +40,27 @@ own virtual-environment link.
 ## Requirements
 
 - cPanel with **Setup Node.js App** and **Node.js 24** (the build uses 24.18.1).
+- Linux hosting with `/usr/bin/convert` (ImageMagick) and WebP support for badge
+  conversion. The package excludes platform-specific Sharp binaries.
 - A **MySQL 8.4** database for features that read stored data. Many cPanel hosts
   provide MariaDB instead. Confirm the server version with your host, because the
-  application baseline is MySQL 8.4 ([database runbook](../docs/database.md)).
+  application baseline is MySQL 8.4 ([database runbook](../database.md)).
 - With no environment variables, the site runs in its safe default state: database
   and providers off, and indexing off.
 
 ## Deploying
+
+For a manual upload, extract the ZIP and upload the contents of its `goal-hint/`
+folder to the cPanel application root, outside the public document root. In
+**Setup Node.js App**, select Node.js 24, production mode and startup file
+`app.js`, configure the domain, then restart. Supply private runtime settings and
+the approval register through the configuration procedure below; they are
+deliberately excluded from the ZIP. Apply reviewed database migrations and run
+workers separately when those features are enabled.
+For a manual installation, place `.env.production.local` and
+`.goal-hint/owner-approvals.json` inside the application's `standalone/` directory,
+which is the server's working directory. Keep a separate private backup and
+restore these settings when replacing the application files.
 
 Use `python scripts/deploy-cpanel.py` from `next-js/` in a full checkout. Its first run creates the
 **Setup Node.js App** entry (Node.js 24, application root `goal-hint`, startup file
@@ -65,7 +84,7 @@ see it. Common production values:
 | `GOAL_HINT_DATABASE_TLS_MODE`, `GOAL_HINT_DATABASE_ACCESS_REF` | Verified TLS and an access reference; production rejects `disabled` TLS. |
 | `GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_BUDGET_APPROVAL_REF` | Approved infrastructure cap and its approval reference, required once the database is enabled in production. |
 
-The [database runbook](../docs/database.md) explains each database setting. Your
+The [database runbook](../database.md) explains each database setting. Your
 local `.env.local` values won't work as they are, because production mode applies
 stricter checks than development.
 
@@ -109,7 +128,7 @@ deployed `BUILD_INFO.json`. See [how-to-deploy.md](how-to-deploy.md).
 ## Not included
 
 - **Database migrations.** Apply schema changes from a full checkout with the
-  `db:*` commands described in the [database runbook](../docs/database.md). Those
+  `db:*` commands described in the [database runbook](../database.md). Those
   commands require the verified private operator register for remote/production
   targets, a compatible server and separate migration credentials. The web ZIP
   does not include migration tooling or grant approval to a database target.
@@ -117,7 +136,7 @@ deployed `BUILD_INFO.json`. See [how-to-deploy.md](how-to-deploy.md).
   The website only reads stored data. Shared cPanel hosting usually stops
   long-running background processes, so run the live runner on a host that can keep
   it running and reach the same database
-  ([live operations runbook](../docs/live-operations.md)).
+  ([live operations runbook](../live-operations.md)).
 - **Image optimization.** The app doesn't use `next/image`, so `sharp` is left out.
 
 ## Troubleshooting

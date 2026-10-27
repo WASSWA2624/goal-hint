@@ -145,7 +145,7 @@ All tables are new. Every `CREATE TABLE` states `ENGINE=InnoDB`. Instants are `D
 | `AccessCode` | `id`, `accountId` FK, `codeSalt Binary(16)`, `codeHash Char(64)`, `reference Char(4)` (`C-XXXX`), `source` (`payment`/`manual`/`reissue`/`number-change`/`trial`), `paymentSubmissionId?`, `replacedById?`, `planId?`, snapshot `planName`, `durationDays`, `priceUgx` (0 allowed), `amountReceivedUgx?` (manual only), `extensionDays` (default 0), `createdAt`, `createdBy`, `activatedAt`, `startsAt`, `endsAt` (all set at creation), `termsVersion?`, `revokedAt?`, `revokedReason?`, `note VarChar(200)?` | `paymentSubmissionId` unique, set only on the code created at approval. `replacedById` points from a reissued or number-changed code to its successor. Index `accountId`, (`accountId`,`endsAt`), `replacedById`. |
 | `SubscriptionSettings` | Single row `id = 1`; columns in 5.7; `paymentNumbersChangedAt?`, `lastMembersPurgeAt?`, `updatedAt`, `updatedBy` | A missing row means defaults (`paywallMode = off`). |
 | `RateLimitBucket` | `key Char(64)` PK (HMAC of purpose + value), `count`, `bytes`, `windowStartedAt`, `lockedUntil?` | Atomic `INSERT … ON DUPLICATE KEY UPDATE`. Do not copy the read-then-create of `AnalyticsLoginThrottle`, which races under ReadCommitted. |
-| `OwnerAuditEvent` | `id BigInt` autoincrement, `at`, `actor`, `action VarChar(48)`, `accountId?` (no FK), `targetType`, `targetId`, `details Json` | Index (`accountId`,`action`,`at`) for unlock counts. Never holds a subscriber phone, a full code or an image. Operational, not tamper-proof: the app account has `ALL PRIVILEGES` (`next-js/deploy/how-to-deploy.md:87`). |
+| `OwnerAuditEvent` | `id BigInt` autoincrement, `at`, `actor`, `action VarChar(48)`, `accountId?` (no FK), `targetType`, `targetId`, `details Json` | Index (`accountId`,`action`,`at`) for unlock counts. Never holds a subscriber phone, a full code or an image. Operational, not tamper-proof: the app account has `ALL PRIVILEGES` (`next-js/docs/deployment/how-to-deploy.md:87`). |
 
 Code status, in order: `revoked`; `queued` (now < `startsAt`); `active` (now < `endsAt`); else `expired`. There is no unused state: every code gets its period when it is created.
 
@@ -631,7 +631,7 @@ One collapsed `Disclosure` (`next-js/src/components/ui/disclosure.tsx`), "Safety
 - `next-js/src/domain/public-operator.ts`: keep `audience`; add a `paidAccess` fact ("paying in UGX to our Ugandan MTN or Airtel numbers").
 - **Docs:**
   - `next-js/docs/subscriptions.md` (new): model, flows, settings, purge, host checks, breach procedure, and the glossary "gated = subscriber-only; locked = cutoff-locked". Its owner checklist covers the wallet and sender check, the stolen-ID and number-change steps, sending codes only from the listed numbers, and the wa.me history residual.
-  - `next-js/docs/database.md`; `next-js/docs/local-database.md` (grants); `next-js/deploy/how-to-deploy.md` (overlay list).
+  - `next-js/docs/database.md`; `next-js/docs/local-database.md` (grants); `next-js/docs/deployment/how-to-deploy.md` (overlay list).
   - `next-js/docs/privacy-page.md`; `next-js/docs/terms-page.md` (41, 48).
   - `next-js/docs/seo-discovery.md` (49–54, 128); `next-js/docs/match-feed-api.md:13`; `next-js/docs/match-detail-api.md` (8–9, 140); `next-js/docs/slip-builder.md:193`.
   - `next-js/docs/analytics.md`, `next-js/docs/help-page.md`, `next-js/docs/contact-page.md`.
@@ -902,7 +902,7 @@ The running app has no test clock; exact timing is covered by injected-clock tes
 
 1. Build and verify everything locally. The mode stays `off`.
 2. **No production deploy unless the owner explicitly asks.** When asked, continue with the steps below.
-3. Take a private MariaDB backup, record its checksum, and verify a restore to a separate target (`next-js/deploy/how-to-deploy.md`, step 2).
+3. Take a private MariaDB backup, record its checksum, and verify a restore to a separate target (`next-js/docs/deployment/how-to-deploy.md`, step 2).
 4. Run the overlay's engine pre-check by hand. Apply the reviewed overlay **before** the release that reads the new tables, then confirm InnoDB and the FKs. A missing settings table fails closed and hides picks for everyone.
 5. Host checks, read-only first:
    - `curl -I` on `/en` and a match page: expect `private, no-store` and no `x-litespeed-cache` or CDN cache headers;

@@ -90,7 +90,7 @@ subsequent erasure.
 
 Deployment requires the additive
 [`20261025230000_payment_notification_outbox` migration](../../prisma/migrations/20261025230000_payment_notification_outbox/migration.sql),
-reviewed [application grants](../../deploy/manual-account-grants.sql), worker
+reviewed [application grants](../deployment/manual-account-grants.sql), worker
 supervision and actual gateway acceptance. The status command is read-only;
 running the dispatch command with credentials and queued intents can send real
 SMS. See [Yoola notification operations](../yoola-messaging.md#payment-decision-notifications)

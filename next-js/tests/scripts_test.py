@@ -1,5 +1,6 @@
 """Regression tests for native Python script behavior and backup interoperability."""
 import importlib.util
+import hashlib
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -131,8 +133,43 @@ await sealBackup(input.node,backupText('Synthetic Node backup.'),{...options,met
                 self.assertEqual(archive.getinfo("goal-hint/app.js").external_attr >> 16, 0o100644)
                 self.assertTrue(all("\\" not in name for name in archive.namelist()))
             (root / ".env.local").write_text("SYNTHETIC=private")
+            original = target.read_bytes()
             with self.assertRaises(packager.CommandError):
                 packager.write_zip(root, target)
+            self.assertEqual(target.read_bytes(), original)
+            (root / ".env.local").unlink()
+            private = root / ".private"
+            private.mkdir()
+            (private / "operator.json").write_text("Synthetic private operator state.")
+            with self.assertRaises(packager.CommandError):
+                packager.write_zip(root, target)
+            self.assertEqual(target.read_bytes(), original)
+
+    def test_deployment_defaults_use_repository_release_and_private_directories(self):
+        deployer = load_script("deploy-cpanel")
+        self.assertEqual(deployer.ZIP, ROOT.parent / "deploy/goal-hint-nextjs-1.0.0.zip")
+        for name, path in deployer.LOCAL_CONFIG.items():
+            self.assertEqual(path, ROOT.parent / "deploy/.private/nextjs" / name)
+
+    def test_web_publication_checksums_and_cleans_staging_after_failed_copy(self):
+        packager = load_script("package-cpanel")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "built.zip"
+            source.write_bytes(b"Synthetic completed archive.")
+            target = root / "deploy/goal-hint-nextjs-1.0.0.zip"
+            packager.publish_zip(source, target)
+            self.assertEqual(target.read_bytes(), source.read_bytes())
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            checksum = target.with_suffix(".zip.sha256")
+            self.assertEqual(checksum.read_text(encoding="ascii"), f"{digest}  {target.name}\n")
+            self.assertEqual(list((target.parent / ".staging").iterdir()), [])
+            with mock.patch.object(packager.shutil, "copyfile", side_effect=OSError("Synthetic failed copy")):
+                with self.assertRaises(OSError):
+                    packager.publish_zip(source, target)
+            self.assertEqual(target.read_bytes(), source.read_bytes())
+            self.assertEqual(checksum.read_text(encoding="ascii"), f"{digest}  {target.name}\n")
+            self.assertEqual(list((target.parent / ".staging").iterdir()), [])
 
     def test_brand_geometry_matches_committed_symbol_paths(self):
         import xml.etree.ElementTree as ET

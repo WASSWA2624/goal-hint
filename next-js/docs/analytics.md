@@ -126,7 +126,7 @@ neutralised; percentages as 0–100, durations in seconds).
    `20261014161000_transactional_storage` and verify every `Analytics*` table uses
    **InnoDB**: this host's MyISAM default does not support the collector and login
    transactions. Preserve already applied migration SQL and checksums. See the
-   [MariaDB deployment procedure](../deploy/how-to-deploy.md#database-updates-on-mariadb)
+   [MariaDB deployment procedure](deployment/how-to-deploy.md#database-updates-on-mariadb)
    for backup, incremental validation and recovery. The application role needs
    `SELECT, INSERT, UPDATE, DELETE` on the seven `Analytics*` tables (the local
    `application-grants.sql` has section F; a cPanel database-level grant covers them).
@@ -146,7 +146,7 @@ neutralised; percentages as 0–100, durations in seconds).
    nothing without the secret. Create the administrator hash with
    `npm run analytics:hash-password` (input
    is hidden; at least 12 characters) and paste the printed line into
-   `deploy/.env.production.local`, then `python scripts/deploy-cpanel.py --config-push`.
+   `../deploy/.private/nextjs/.env.production.local`, then `python scripts/deploy-cpanel.py --config-push`.
    Generate the secret with e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
    Changing the secret starts new visitor keys (existing visitors count as new).
 3. **Retention.** Raw rows older than the retention period (default 395 days, choices

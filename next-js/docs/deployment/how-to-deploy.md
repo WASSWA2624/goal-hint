@@ -40,7 +40,7 @@ Commit first, then from the Next.js application root (`next-js/`):
 python scripts/deploy-cpanel.py --build
 ```
 
-This rebuilds `deploy/goal-hint-cpanel.zip`, uploads it with a checksum check,
+This rebuilds `../deploy/goal-hint-nextjs-1.0.0.zip`, uploads it with a checksum check,
 activates the new release, restarts the app and checks that the site returns HTTP 200.
 
 The package removes Windows codecs and records the hosted badge codec.
@@ -61,7 +61,7 @@ eligible for rollback.
 ## Settings (over SSH)
 
 ```powershell
-python scripts/deploy-cpanel.py --config-pull   # server → deploy/.env.production.local, deploy/.goal-hint/owner-approvals.json
+python scripts/deploy-cpanel.py --config-pull   # server → ../deploy/.private/nextjs/.env.production.local, ../deploy/.private/nextjs/.goal-hint/owner-approvals.json
 # edit those git-ignored files locally
 python scripts/deploy-cpanel.py --config-push   # checks them, uploads them, restarts
 ```
@@ -136,9 +136,9 @@ accounts for newer writes; never drop all production tables as routine recovery.
 
 Retain enabled database access, direct connection mode, bounded pool size, verified
 TLS and matching access/budget approvals. Use `.env.example` and the
-[database runbook](../docs/database.md) for setting names. Preserve the configured
+[database runbook](../database.md) for setting names. Preserve the configured
 analytics secret, username and password hash; changing the secret changes visitor
-keys. See [analytics setup](../docs/analytics.md).
+keys. See [analytics setup](../analytics.md).
 
 **Content:** the separate worker deployment now runs on the hosting account. Its
 five-minute cron holds a file lock and runs the live worker for at most 270
@@ -150,7 +150,7 @@ After worker code changes, prepare the git-ignored worker environment and existi
 owner register, then run:
 
 ```powershell
-python scripts/deploy-worker-cpanel.py --env-file deploy/.env.worker.production.local --approvals deploy/.goal-hint/worker-owner-approvals.json
+python scripts/deploy-worker-cpanel.py --env-file ../deploy/.private/nextjs/.env.worker.production.local --approvals ../deploy/.private/nextjs/.goal-hint/worker-owner-approvals.json
 ```
 
 Worker credentials live in `~/goal-hint-worker/private/`, outside the web bundle.
@@ -176,4 +176,4 @@ rollback; do not reset job, forecast or quota data.
 
 ## Paid access (066)
 
-No deployment or activation is authorized by prompts 057–067. Overlay inventory includes `prisma/mariadb/20261019142209_subscriptions.sql` alongside analytics and existing goal-market/manifest overlays. Stop app and worker writes for verified DDL; check all nine InnoDB tables, checks/FKs and narrow grants before restarting. Preserve paid mode off and complete host checks plus OP-40 approval. See [subscriber operations](../docs/subscriptions.md).
+No deployment or activation is authorized by prompts 057–067. Overlay inventory includes `prisma/mariadb/20261019142209_subscriptions.sql` alongside analytics and existing goal-market/manifest overlays. Stop app and worker writes for verified DDL; check all nine InnoDB tables, checks/FKs and narrow grants before restarting. Preserve paid mode off and complete host checks plus OP-40 approval. See [subscriber operations](../subscriptions.md).

@@ -11,7 +11,9 @@ See [the release plan](../dev-plan/007-platform-builds-and-release.md) and
 ## Build modes and public configuration
 
 The Android application ID remains `com.goalhint.goal_hint`, its display name is
-Goal Hint, and `pubspec.yaml` supplies version `0.1.0+4`. Increment the build number
+Goal Hint, and `pubspec.yaml` supplies version `1.0.0+1`. The initial release
+archives remain at public version `1.0.0` until the first production release.
+Increment the build number
 for a subsequent distributed build, preserving the registered application ID and
 signing identity. Product screens, data and theme preference belong to Next.js.
 
@@ -19,9 +21,8 @@ signing identity. Product screens, data and theme preference belong to Next.js.
 # Standard Android emulator; physical devices need a reachable development origin.
 flutter build apk --debug --dart-define=APP_ENV=development
 
-# Distribution commands require the signing configuration described below.
-flutter build appbundle --release --dart-define=APP_ENV=production
-flutter build apk --release --split-per-abi --dart-define=APP_ENV=production
+# Delivery builds require the signing configuration described below.
+python tool/package_release.py android
 ```
 
 Debug permits a public `DEV_APP_ORIGIN` define and uses Android's development
@@ -32,7 +33,16 @@ prove that its web origin is available. Check the origin and installed app befor
 distribution. [Development routing and host workarounds](development-urls.md)
 describe LAN/emulator addresses and Wi-Fi debugging.
 
-Artifacts are generated under ignored `build/`:
+The delivery command completes a fresh universal Release APK build, then uses
+the configured Android SDK's `apksigner` and `aapt` to verify signatures,
+application ID, version/build number and absence of the debuggable flag. It
+rejects Android Debug certificates. Only successful verification produces
+root `deploy/goal-hint-android-1.0.0.zip`, containing the APK and a brief
+installation note, plus a SHA256 sidecar. Use `--force` only to replace the
+unpublished package explicitly. Credentials never enter the archive. All
+delivery staging stays under root `deploy/.staging/`.
+
+Compiler intermediates are generated under ignored `build/`:
 
 | Command | Artifact |
 | --- | --- |
@@ -122,8 +132,9 @@ Ignored logs are under
 `.dart_tool/release007-android-*.log`. No release key was generated, no debug key
 was used for a new release, and no Android device state was changed.
 
-Older `build/app/outputs/apk/release/app-release.apk` and
-`build/app/outputs/flutter-apk/app-release.apk` copies remain untouched. Their
+At the time of that historical check, older
+`build/app/outputs/apk/release/app-release.apk` and
+`build/app/outputs/flutter-apk/app-release.apk` copies remained untouched. Their
 17:00:58/59 timestamps predate this step's signing configuration; they are stale
 validation output and must not be distributed as current signed releases. A
 failed command does not make a pre-existing artifact current.

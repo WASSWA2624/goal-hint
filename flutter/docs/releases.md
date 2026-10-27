@@ -6,6 +6,76 @@ acceptance record is [plan 007](../dev-plan/007-platform-builds-and-release.md)
 and the [tracker](../dev-tracker.md). No store submission is performed by these
 commands.
 
+## Central delivery packages
+
+The root [`deploy/`](../../deploy/README.md) folder is the only delivery
+location. Initial packages keep public version **1.0.0**; `pubspec.yaml` is
+`1.0.0+1`. The internal build number stays distinct from the public ZIP filename.
+Do not increment the public version until the first production release.
+Compiler caches/intermediates remain ignored under `flutter/build/`; they are
+not additional release locations. Linux is excluded from these initial packages.
+
+| Target | Command from `flutter/` | Root deployment ZIP |
+| --- | --- | --- |
+| Android | `python tool/package_release.py android` | `deploy/goal-hint-android-1.0.0.zip` containing the signed universal APK |
+| Windows | `./tool/windows/package.ps1 -RedistDirectory <installed-x64-CRT-directory>` | `deploy/goal-hint-windows-1.0.0.zip` containing the installable setup EXE |
+| iOS | `python tool/package_release.py ios --export-options /private/ExportOptions.plist` | `deploy/goal-hint-ios-1.0.0.zip` containing the distribution-signed IPA |
+| macOS | `python tool/package_release.py macos --dmg ../deploy/.staging/macos/goal-hint.dmg` | `deploy/goal-hint-macos-1.0.0.zip` containing the signed/notarized DMG |
+
+The Android and iOS commands run a fresh production build before verification.
+The macOS command validates and wraps an owner-prepared production DMG; it does
+not build or sign that DMG. Each command refuses missing prerequisites instead
+of publishing placeholders, and writes a ZIP SHA256 sidecar. Repeat an unpublished
+version only with explicit `--force` (Python) or `-Force` (PowerShell). Temporary
+delivery work uses root `deploy/.staging/`, not an application release directory.
+
+For iOS, configure the existing Apple team, bundle identifier
+`com.goalhint.goalHint`, distribution certificate and provisioning in Xcode on
+macOS. Export the real `ExportOptions.plist` for the intended App Store/TestFlight,
+ad-hoc or enterprise channel and keep it outside Git. The packager rejects
+development exports and unsigned/ad-hoc-signed app binaries, and checks the
+application ID and `1.0.0` / `1` version. An IPA installs only through the Apple
+channel authorized by its provisioning; it is not a universal sideload installer.
+
+For macOS, first build the normal production entry point on the pinned macOS
+toolchain:
+
+```sh
+flutter build macos --release --target=lib/main.dart --dart-define=APP_ENV=production
+```
+
+Use the owner's existing Developer ID Application identity and Xcode distribution
+workflow to sign the resulting `Goal Hint.app`, including embedded frameworks,
+with hardened runtime, timestamping and the app's release entitlements. Preserve
+the configured bundle identifier and its outbound-network entitlement. Signing
+and Apple credentials must be supplied by the release owner; a local ad-hoc
+signature is insufficient. Do not change the pinned SDK or deployment targets
+implicitly. After signing the production app, prepare its install image:
+
+```sh
+mkdir -p ../deploy/.staging/macos/image
+ditto "build/macos/Build/Products/Release/Goal Hint.app" "../deploy/.staging/macos/image/Goal Hint.app"
+ln -s /Applications ../deploy/.staging/macos/image/Applications
+hdiutil create -volname "Goal Hint" -srcfolder ../deploy/.staging/macos/image -format UDZO ../deploy/.staging/macos/goal-hint.dmg
+# Replace the public signing identity/profile names with the owner's configured ones.
+codesign --sign "Developer ID Application: YOUR REGISTERED IDENTITY" --timestamp ../deploy/.staging/macos/goal-hint.dmg
+xcrun notarytool submit ../deploy/.staging/macos/goal-hint.dmg --keychain-profile goal-hint-notary --wait
+xcrun stapler staple ../deploy/.staging/macos/goal-hint.dmg
+python tool/package_release.py macos --dmg ../deploy/.staging/macos/goal-hint.dmg
+```
+
+The packaging command verifies the DMG, stapled notarization ticket, Gatekeeper
+acceptance, contained app's distribution signature/identity/version and absence
+of debug snapshots. The owner must attest that this DMG contains the just-built
+production app; signature and version checks alone cannot prove its source
+revision or Dart defines. Complete actual installed acceptance before distribution.
+Apple packaging was not executed on this Windows host.
+
+Primary workflow references checked 27 October 2026:
+[Flutter iOS deployment](https://docs.flutter.dev/deployment/ios),
+[Flutter macOS deployment](https://docs.flutter.dev/deployment/macos), and
+[Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+
 ## Reproducible configuration
 
 [release-toolchain.json](../release-toolchain.json) pins Flutter **3.44.6**,

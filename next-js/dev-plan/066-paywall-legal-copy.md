@@ -20,7 +20,7 @@ Read `next-js/dev-plan/000-index.md`, the source sections and existing code befo
 - **Rendering scripts** that assert the old copy: `scripts/verify-terms-rendering.py`, `verify-privacy-rendering.py`, `verify-contact-rendering.py`, `verify-navigation-rendering.py` (lines 67–68) and `scripts/lib/policy_rendering.py`.
 - **Docs:**
   - `docs/subscriptions.md` (new): model, flows, settings, purge, host checks, breach procedure, and the glossary "gated = subscriber-only; locked = cutoff-locked". Its owner checklist covers the wallet and sender check, the stolen-ID and number-change steps, sending codes only from the listed numbers, and the wa.me history residual (send from the phone with the WhatsApp app).
-  - `docs/database.md`; `docs/local-database.md` (grants); `deploy/how-to-deploy.md` (overlay list).
+  - `docs/database.md`; `docs/local-database.md` (grants); `docs/deployment/how-to-deploy.md` (overlay list).
   - `docs/privacy-page.md`; `docs/terms-page.md` (lines 41 and 48).
   - `docs/seo-discovery.md` (49–54, 128); `docs/match-feed-api.md:13`; `docs/match-detail-api.md` (8–9, 140); `docs/slip-builder.md:193`.
   - `docs/analytics.md` (goals and event names, noting that no-JS code entries are not counted), `docs/help-page.md`, `docs/contact-page.md`.
