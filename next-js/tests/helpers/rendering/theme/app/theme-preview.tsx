@@ -6,6 +6,7 @@ import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
 import { RailNumber, RailStep, StepRail } from "@/components/members/subscribe-styles";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
+import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { SlipTable } from "@/components/slips/slip-table";
 import { Button, SelectInput, TextInput } from "@/components/ui/controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
@@ -48,6 +49,9 @@ export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; 
       <SelectInput id="theme-control-select" label="Example selection" defaultValue="one"><option value="one">First example</option><option value="two">Second example</option></SelectInput>
       <StepRail><RailStep><RailNumber id="theme-member-step">1</RailNumber><h3>Payment step</h3><div><p>Synthetic member payment guidance.</p></div></RailStep></StepRail>
     </Stack></Surface>
+    <section id="theme-performance"><PerformanceSummary locale="en" kind="matches"
+      title="Synthetic overall performance" period="Synthetic cohort"
+      counts={{ total: 120, won: 72, lost: 24, pending: 18, void: 2, unavailable: 3, filteredOut: 1 }} /></section>
     <section id="theme-matches"><Stack $gap="sm"><SectionHeading>Match cards</SectionHeading>
       <MatchCardList>{fixtures.map((fixture, index) => <li key={fixture.fixtureId}><MatchCard fixture={fixture} position={index + 1}
         selectedFamily={(["match-result", "total-goals", "both-teams-to-score"] as const)[index]!} analysisSlug="synthetic-preview" /></li>)}</MatchCardList>

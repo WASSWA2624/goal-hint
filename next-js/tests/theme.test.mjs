@@ -24,9 +24,12 @@ const luminance = (hex) => {
   });
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
 };
-const readable = (foreground, background, label, minimum = 4.5) => {
+const contrast = (foreground, background) => {
   const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
-  const ratio = (light + 0.05) / (dark + 0.05);
+  return (light + 0.05) / (dark + 0.05);
+};
+const readable = (foreground, background, label, minimum = 4.5) => {
+  const ratio = contrast(foreground, background);
   assert.ok(ratio >= minimum, `${label}: ${foreground} on ${background} is ${ratio.toFixed(2)}:1`);
 };
 
@@ -82,12 +85,37 @@ test("page, cards, navigation and table chrome share the selected theme", () => 
     }
     assert.equal(theme.phoneCardFrame.radius, "0");
     assert.equal(theme.phoneCardFrame.shadow, "none");
-    readable(theme.phoneCardFrame.border, theme.color.surface, `${theme.mode} phone card frame`, 3);
+    if (theme.mode === "light") readable(theme.phoneCardFrame.border, theme.color.surface, "light phone card frame", 3);
   }
   assert.equal(lightTheme.color.page, "#FFFFFF");
   assert.equal(lightTheme.color.surface, "#FFFFFF");
   for (const colors of Object.values(darkTheme.color.verdict)) {
     assert.ok(luminance(colors.fill) <= 0.08, "Dark result badges must not inherit light fills");
+  }
+});
+
+test("dark decorative frames stay quiet while form controls retain visible boundaries", () => {
+  for (const background of [darkTheme.color.page, darkTheme.color.surface]) {
+    for (const border of [darkTheme.color.border, darkTheme.phoneCardFrame.border]) {
+      assert.ok(contrast(border, background) <= 1.6, `Dark decorative frame ${border} is too prominent on ${background}`);
+    }
+  }
+  assert.ok(contrast(darkTheme.color.buttonBorder, darkTheme.color.surface) <
+    contrast(darkTheme.color.controlBorder, darkTheme.color.surface), "Labeled buttons should have quieter outlines than editable controls");
+});
+
+test("performance outcomes use prominent text on strong dark fills and preserve light pairings", () => {
+  for (const theme of [lightTheme, darkTheme]) {
+    for (const outcome of ["correct", "incorrect", "pending"]) {
+      const colors = theme.color.performanceOutcome[outcome];
+      readable(colors.text, colors.background, `${theme.mode} ${outcome} performance`, theme.mode === "dark" ? 7 : 4.5);
+      if (theme.mode === "light") {
+        assert.equal(colors.background, theme.color.verdict[outcome].fill);
+        assert.equal(colors.text, theme.color.verdict[outcome].text);
+      } else {
+        assert.ok(contrast(colors.background, theme.color.surface) >= 4.5, `Dark ${outcome} performance fill should stand out from the surrounding surface`);
+      }
+    }
   }
 });
 

@@ -7,7 +7,7 @@ import { ChevronDownIcon } from "./icons";
 
 const Disclosure = styled.details`
   min-inline-size: 0;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > summary {

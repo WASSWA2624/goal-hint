@@ -47,8 +47,10 @@ export interface GoalHintTheme {
     readonly scrim: string;
     /** Quiet outlines and dividers for non-interactive surfaces. */
     readonly border: string;
-    /** Neutral, contrasting boundaries for editable and clickable controls. */
+    /** Contrasting boundaries for editable fields and native form controls. */
     readonly controlBorder: string;
+    /** Quiet button outlines; labeled actions do not need an input-strength frame. */
+    readonly buttonBorder: string;
     readonly brand: string;
     /** Text links also remain readable on the darker page background. */
     readonly link: string;
@@ -64,6 +66,8 @@ export interface GoalHintTheme {
     readonly outcome: Readonly<Record<OutcomeTone, OutcomeColors>>;
     /** Result tags retain their meaning with readable, theme-specific fills and text. */
     readonly verdict: Readonly<Record<VerdictTone, Readonly<{ fill: string; text: string; border: string }>>>;
+    /** Prominent summary cards, separate from the quieter inline result badges. */
+    readonly performanceOutcome: Readonly<Record<"correct" | "incorrect" | "pending", Readonly<{ background: string; text: string }>>>;
     readonly market: Readonly<Record<MarketFamily, MarketColors>>;
     readonly live: AccentColors;
     /** Decorative and selection hues; every soft/text pair passes 4.5:1. */
@@ -195,6 +199,7 @@ export const lightTheme: GoalHintTheme = {
     // Neutral section dividers stay quiet; controls retain a contrasting boundary.
     border: "#D7DFE7",
     controlBorder: "#7D8997",
+    buttonBorder: "#7D8997",
     brand: "#0066F5",
     link: "#005BD6",
     brandHover: "#0054CC",
@@ -219,6 +224,11 @@ export const lightTheme: GoalHintTheme = {
       correct: { fill: "#22C55E", text: "#052E16", border: "#22C55E" },
       incorrect: { fill: "#F87171", text: "#450A0A", border: "#F87171" },
       void: { fill: "#CBD5E1", text: "#0F172A", border: "#CBD5E1" },
+    },
+    performanceOutcome: {
+      correct: { background: "#22C55E", text: "#052E16" },
+      incorrect: { background: "#F87171", text: "#450A0A" },
+      pending: { background: "#FBBF24", text: "#451A03" },
     },
     // Each market family keeps one hue on every card, row and filter state: match result emerald, double chance
     // violet, total goals blue, both teams to score orange. Clean tints sit at one lightness (OKLCH L ≈ 0.95). See
@@ -321,10 +331,11 @@ export const darkTheme: GoalHintTheme = {
     text: "#F4F7FF",
     mutedText: "#A8CBEF",
     page: "#03111F",
-    surface: "#041525",
-    surfaceMuted: "#06203B",
-    border: "#203448",
-    controlBorder: "#597895",
+    surface: "#081B2C",
+    surfaceMuted: "#0D253B",
+    border: "#142A3D",
+    controlBorder: "#58728C",
+    buttonBorder: "#263D50",
     brand: "#00B9F2",
     link: "#00B9F2",
     brandHover: "#79DCFF",
@@ -332,7 +343,7 @@ export const darkTheme: GoalHintTheme = {
     onBrand: "#03111F",
     focus: "#00B9F2",
     disabledText: "#A8CBEF",
-    disabledSurface: "#06203B",
+    disabledSurface: "#0D253B",
     outcome: {
       correct: { text: "#70DEA4", background: "#1C342B", border: "#70DEA4" },
       incorrect: { text: "#FF9C9C", background: "#3B252C", border: "#FF9C9C" },
@@ -341,11 +352,16 @@ export const darkTheme: GoalHintTheme = {
       unavailable: { text: "#B1BEC8", background: "#28343D", border: "#B1BEC8" },
     },
     verdict: {
-      upcoming: { fill: "#322A1E", text: "#F6C453", border: "#F6C453" },
-      pending: { fill: "#322A1E", text: "#F6C453", border: "#F6C453" },
-      correct: { fill: "#1C342B", text: "#70DEA4", border: "#70DEA4" },
-      incorrect: { fill: "#3B252C", text: "#FF9C9C", border: "#FF9C9C" },
-      void: { fill: "#28343D", text: "#B1BEC8", border: "#B1BEC8" },
+      upcoming: { fill: "#322A1E", text: "#F6C453", border: "#5B492A" },
+      pending: { fill: "#322A1E", text: "#F6C453", border: "#5B492A" },
+      correct: { fill: "#1C342B", text: "#70DEA4", border: "#2B5340" },
+      incorrect: { fill: "#3B252C", text: "#FF9C9C", border: "#643843" },
+      void: { fill: "#28343D", text: "#B1BEC8", border: "#3D4E5C" },
+    },
+    performanceOutcome: {
+      correct: { background: "#22C55E", text: "#031A0C" },
+      incorrect: { background: "#FF6B7A", text: "#180408" },
+      pending: { background: "#FBBF24", text: "#2A1900" },
     },
     market: {
       "match-result": { solid: "#70DEA4", soft: "#1C342B", text: "#70DEA4", gradient: "#70DEA4" },
@@ -364,20 +380,20 @@ export const darkTheme: GoalHintTheme = {
       emerald: { solid: "#70DEA4", soft: "#1C342B", text: "#70DEA4", gradient: "#70DEA4" },
       red: { solid: "#FF9C9C", soft: "#3B252C", text: "#FF9C9C", gradient: "#FF9C9C" },
     },
-    cardHeader: "#04203C",
-    rowHover: "#082B48",
+    cardHeader: "#0B2238",
+    rowHover: "#10304A",
   },
   gradient: {
     action: "#0066F5",
     actionHover: "#0054CC",
-    tableHeader: "#04203C",
+    tableHeader: "#0B2238",
     page: "#03111F",
   },
   header: {
     ...lightTheme.header,
-    background: "#041525",
-    gradient: "#041525",
-    navigationBackground: "#041525",
+    background: "#081B2C",
+    gradient: "#081B2C",
+    navigationBackground: "#081B2C",
     text: "#F4F7FF",
     mutedText: "#D8E9FF",
     placeholder: "#A8CBEF",
@@ -387,15 +403,15 @@ export const darkTheme: GoalHintTheme = {
     controlHover: "#10385D",
     fieldFill: "#06264A",
     fieldFillActive: "#10385D",
-    border: "#17334F",
-    controlBorder: "#6785A1",
+    border: "#142A3D",
+    controlBorder: "#294159",
     tone: {
       teal: "#7DDFFF", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
       pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
     },
   },
   shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
-  phoneCardFrame: { border: "#597895", radius: "0", shadow: "none" },
+  phoneCardFrame: { border: "#172D40", radius: "0", shadow: "none" },
 };
 
 /**

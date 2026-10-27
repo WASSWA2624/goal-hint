@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
-import { controlFeedback, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
   box-sizing: border-box;
@@ -115,10 +115,10 @@ export const SectionButton = styled.button`
   min-inline-size: 0;
   min-block-size: 42px;
   padding: 9px 12px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
-  ${filterControlColors}
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  ${filterButtonColors}
   font: inherit;
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};

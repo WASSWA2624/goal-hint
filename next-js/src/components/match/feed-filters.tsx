@@ -31,7 +31,7 @@ import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, useP
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
 const buttonBorder = css`
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
 `;
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
@@ -412,7 +412,7 @@ const QuietButton = styled.button`
   padding-inline: 10px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};

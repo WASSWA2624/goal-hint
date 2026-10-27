@@ -19,7 +19,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     return normalized;
   };
   const assert = (condition: boolean, message: string) => { if (!condition) errors.push(message); };
-  const check = (selector: string, expected: string, property: "backgroundColor" | "color" = "backgroundColor") => {
+  const check = (selector: string, expected: string, property: "backgroundColor" | "color" | "borderTopColor" = "backgroundColor") => {
     const elements = [...document.querySelectorAll(selector)].filter(visible);
     assert(elements.length > 0, `Missing visible ${selector}`);
     for (const element of elements) assert(getComputedStyle(element)[property] === normalize(expected), `${selector}: unexpected ${property}`);
@@ -28,10 +28,17 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   const phone = window.innerWidth < 1024;
   check("body", theme.color.page);
   check("#theme-controls", theme.color.surface);
+  check("#theme-controls, #theme-checks, #theme-performance [data-performance-summary]", theme.color.border, "borderTopColor");
   check("#theme-controls [data-surface-control], #theme-control-input, #theme-control-select", theme.color.surface);
   check("#theme-slips [data-slip-id]", theme.color.surface);
   check("#theme-member-step", theme.color.brandSoft);
   check("#theme-member-step", theme.color.link, "color");
+  check("#theme-performance [data-performance-summary]", theme.color.surface);
+  for (const outcome of ["correct", "incorrect", "pending"] as const) {
+    const selector = `#theme-performance [data-summary-outcome="${outcome}"]`;
+    check(selector, theme.color.performanceOutcome[outcome].background);
+    check(`${selector}, ${selector} dt, ${selector} dd, ${selector} svg`, theme.color.performanceOutcome[outcome].text, "color");
+  }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
   check(headerSelector, theme.header.background);
   const header = document.querySelector(headerSelector);
@@ -52,6 +59,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   assert(!!mark?.src.includes(`mark-${dark ? "inverse" : "primary"}.svg`), "Footer brand mark follows the active theme");
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
+    check("#theme-matches [data-fixture-id], #theme-slips [data-slip-id]", theme.phoneCardFrame.border, "borderTopColor");
     check("#theme-slips [data-slip-summary], #theme-slips [data-mobile=\"numbers\"]", theme.color.surface);
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {

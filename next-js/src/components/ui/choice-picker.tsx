@@ -13,7 +13,7 @@ const Root = styled.details`
     display: flex; align-items: center; justify-content: space-between; gap: 5px;
     min-block-size: 2rem; padding: 4px 6px; list-style: none;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
     border-radius: ${({ theme }) => theme.border.radius};
     font-size: 0.75rem; cursor: pointer;
     &::-webkit-details-marker { display: none; }
@@ -29,7 +29,7 @@ const Root = styled.details`
     border-radius: ${({ theme }) => theme.border.radius};
     background: ${({ theme }) => theme.color.surface}; box-shadow: ${({ theme }) => theme.shadow.popover};
     > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: 2rem; padding: 4px; font-size: 0.75rem; cursor: pointer; }
-    > button { inline-size: 100%; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text}; }
+    > button { inline-size: 100%; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder}; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text}; }
     > button[aria-pressed="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
     > p { font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; padding: 4px; }
     > label:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; }

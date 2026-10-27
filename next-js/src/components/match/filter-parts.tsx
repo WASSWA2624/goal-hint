@@ -35,6 +35,13 @@ export const filterControlColors = css`
   border-color: var(--filter-field-border, ${({ theme }) => theme.color.controlBorder});
 `;
 
+/** Labeled filter actions keep the light palette and use quieter dark outlines. */
+export const filterButtonColors = css`
+  background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
+  border-color: ${({ theme }) => theme.mode === "dark" ? theme.color.buttonBorder
+    : `var(--filter-field-border, ${theme.color.buttonBorder})`};
+`;
+
 /** Shared feedback for compact themed controls, without changing their dimensions. */
 export const controlFeedback = css`
   transition: border-color 120ms ease, background-color 120ms ease;
@@ -188,8 +195,8 @@ const PickerSummary = styled.button`
   min-block-size: 2rem;
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  ${filterControlColors}
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  ${filterButtonColors}
   border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.75rem;

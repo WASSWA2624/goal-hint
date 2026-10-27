@@ -25,7 +25,7 @@ const Option = styled.button`
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
   border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.8125rem;

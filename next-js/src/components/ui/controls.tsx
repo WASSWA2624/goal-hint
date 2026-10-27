@@ -81,7 +81,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
         return css`
           color: ${theme.color.text};
           background: ${theme.color.surface};
-          border-color: ${theme.color.controlBorder};
+          border-color: ${theme.color.buttonBorder};
 
           ${media.hover} {
             &:hover { background: ${theme.color.surfaceMuted}; }

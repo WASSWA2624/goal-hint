@@ -58,8 +58,8 @@ const OutcomeCount = styled(OutcomeBadge)<{ $outcome: "correct" | "incorrect" | 
   flex: 1 0 0; min-inline-size: max-content; max-inline-size: 8.625rem;
   min-block-size: 33px; padding: 4px 6px;
   border: 0; border-radius: 0; white-space: nowrap;
-  color: ${({ theme, $outcome }) => theme.color.verdict[$outcome].text};
-  background: ${({ theme, $outcome }) => theme.color.verdict[$outcome].fill};
+  color: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].text};
+  background: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].background};
   font-size: 0.875rem; line-height: 1.3; font-variant-numeric: tabular-nums;
   dt, dd { margin: 0; color: inherit; font: inherit; }
   dt { order: 2; }
