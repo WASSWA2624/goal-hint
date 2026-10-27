@@ -770,3 +770,38 @@ override the explicitly failed/incomplete native UI attempt above. The seven
 native privacy phases remain separately qualified. Generated profiles, builds,
 archives, controls, screenshots and logs remain ignored; no private configuration
 or credentials are included in the source change.
+
+## 008 - Explicit local Windows development — 27 October 2026
+
+**Completed.**
+
+The reported Account Suspended window belonged to the installed production
+`0.1.0+4` application. The existing source resolver already selected development
+at `http://localhost:3000` for Debug and retained `https://goalhint.com` for
+Profile/Release. No URL-selection, production installation or hosting
+configuration change was needed.
+
+Added `tool/windows/run-dev.ps1` and the repository's VS Code **Goal Hint Windows
+(local development)** launch configuration. Both explicitly run the normal
+`lib/main.dart` entry point in Debug with `APP_ENV=development` and
+`DEV_APP_ORIGIN=http://localhost:3000`. The PowerShell launcher accepts `-Port`
+for another local server and runs from the Flutter project regardless of the
+calling directory. Development instructions distinguish this run from the
+installed production shortcut. [Plan 008](dev-plan/008-local-windows-development.md)
+records the scope.
+
+| Check | Actual result |
+| --- | --- |
+| Shared origin helper | Resolved development, `http://localhost:3000` |
+| `flutter analyze` | Passed, no issues; 257.1s |
+| Configuration and startup widget tests | All 14 passed, including the normal compiled Debug entry point, unchanged production defaults and release/profile development rejection |
+| Launcher PowerShell parse, VS Code launch JSON and Dart formatting | Passed; formatting changed no files |
+| Local Next.js server | Existing `http://localhost:3000/en` returned HTTP 200 and Goal Hint content; no duplicate server started |
+| Native development run | New launcher built the Windows Debug app in 203.0s and started workspace PID 37340 |
+| Actual native screen | Computer Use selected Debug window 52101868/PID 37340, verified the workspace executable path and visibly rendered the local Best Slips application with dark header/navigation/content and a development Rendering indicator; the hosting suspension page was absent |
+
+The development app remains running. Its consent prompt was left untouched;
+no authentication or privacy action was performed. The development run preserves
+the installed release. Its hosting suspension and
+the prior platform/release qualification limits remain unchanged. Generated
+builds, logs and browser profiles remain ignored.

@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Goal Hint Windows (local development)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/flutter",
+      "program": "${workspaceFolder}/flutter/lib/main.dart",
+      "deviceId": "windows",
+      "flutterMode": "debug",
+      "toolArgs": [
+        "--dart-define=APP_ENV=development",
+        "--dart-define=DEV_APP_ORIGIN=http://localhost:3000"
+      ]
+    }
+  ]
+}

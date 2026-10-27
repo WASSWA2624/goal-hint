@@ -6,6 +6,11 @@ platform browser adapters on Android, iOS, macOS, and Windows; Linux embedding
 remains an explicit integration gap.
 The Next.js app owns the product screens, authentication, data, and business logic.
 
+For local Windows development, start `npm run dev` in `next-js/`, then run
+`& .\tool\windows\run-dev.ps1` from `flutter/`. The development launcher opens
+`http://localhost:3000` in a Debug host; the installed Goal Hint shortcut continues
+to use the production website. See [development URLs](docs/development-urls.md).
+
 Android development can install and debug over Wi-Fi without a USB cable; follow
 [wireless setup and target selection](docs/development-urls.md#android-wireless-development).
 

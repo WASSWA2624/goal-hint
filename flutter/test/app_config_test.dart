@@ -8,6 +8,12 @@ void main() {
     developmentOrigin: origin,
   );
 
+  test('the normal debug entry point selects the local development origin', () {
+    final config = AppConfig.fromBuildEnvironment(isAndroid: false);
+    expect(config.environment, AppEnvironment.development);
+    expect(config.origin.toString(), 'http://localhost:3000');
+  });
+
   test('debug defaults use the host loopback or Android emulator alias', () {
     expect(
       AppConfig.resolve(isDebugBuild: true, isAndroid: false).origin.toString(),

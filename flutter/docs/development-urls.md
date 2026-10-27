@@ -45,9 +45,26 @@ Allow the development port through the computer's firewall for the intended priv
 
 Run Flutter commands from `flutter/`. For Windows development:
 
-```sh
-flutter run -d windows --dart-define=APP_ENV=development
+```powershell
+& .\tool\windows\run-dev.ps1
 ```
+
+This launcher explicitly selects Debug, `APP_ENV=development`, and
+`DEV_APP_ORIGIN=http://localhost:3000`. Keep the Next.js server running in a
+separate terminal. For a different local server port, pass `-Port 3001`.
+The repository's VS Code **Goal Hint Windows (local development)** launch
+configuration selects the same origin and mode. The equivalent direct command is:
+
+```sh
+flutter run -d windows --debug --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://localhost:3000
+```
+
+The installed **Goal Hint** Start menu/taskbar shortcut opens the production
+release, which still uses `https://goalhint.com`. Launch the development build
+with the command or debugger above to see localhost. It builds in the workspace;
+it does not replace the installed release. Changing defines requires stopping
+and starting Flutter again. Refreshing a production build cannot switch its
+compiled origin to localhost.
 
 For a connected physical device, replace the example IP with the server computer's LAN address and select the intended target if Flutter finds several:
 
