@@ -241,6 +241,12 @@ restrictions. Public odds display and production activation remain separately co
 | --- | --- |
 | [075 Inline subscription expiry](075-inline-subscription-expiry.md) | Active subscription bars use one expiry sentence with days/hours or hours/minutes remaining. |
 
+### 076 Compact mobile subscription status
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [076 Compact mobile subscription status](076-compact-mobile-subscription.md) | Compact phone expiry/date/countdown on one line, retaining full accessible and wider-screen wording. |
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |

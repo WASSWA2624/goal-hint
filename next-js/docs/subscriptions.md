@@ -13,8 +13,11 @@ Admin sessions and members with a current approved subscription get the full vie
 Active subscribers' header status bar shows `Expires on [date] at [time]`
 followed by the remaining duration in parentheses. At least 24 hours remaining
 uses days and hours; the final day uses hours and minutes. Under one minute is
-labelled explicitly. The date/time uses EAT. Phone, tablet and desktop share the
-same sentence, without a separate active heading or countdown badge.
+labelled explicitly. The date/time uses EAT. Below 768px, the bar uses compact
+wording such as `Expires 31 Dec 2026, 23:59 EAT (30d 23h left)` or `(2h 17m left)`
+with a smaller icon and tighter spacing. The full sentence remains available to
+screen readers and wider screens. Enlarged text can wrap naturally. There is no
+separate active heading or countdown badge.
 
 ## Packages and payment
 

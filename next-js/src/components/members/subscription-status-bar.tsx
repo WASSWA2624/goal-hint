@@ -15,6 +15,8 @@ import { media } from "@/styles/theme";
 import { getMemberSessionSnapshot, getServerMemberSessionSnapshot, getServerSubscriptionSnapshot, getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
 import { getPaymentPurpose, getServerPaymentPurpose, subscribePaymentPurpose } from "./payment-purpose";
 
+const phone = "@media (max-width: 47.99rem)";
+
 const Bar = styled.aside<{ $desktopOnly: boolean }>`
   position: relative;
   display: ${({ $desktopOnly }) => $desktopOnly ? "none" : "block"};
@@ -36,6 +38,9 @@ const Row = styled(Container)<{ $compact: boolean }>`
   font-size: 0.75rem;
   line-height: 1.4;
   time { font-variant-numeric: tabular-nums; }
+  ${phone} {
+    [data-subscription-state="active"] & { min-block-size: 2rem; padding: 4px 8px; }
+  }
   ${media.desktop} { padding-inline: ${({ theme }) => theme.layout.gutter}; font-size: 0.8125rem; }
 `;
 const DesktopStatus = styled.span`
@@ -57,6 +62,9 @@ const MobileStatus = styled(Link)<{ $singleLine: boolean }>`
   &:active::after { background: ${({ theme }) => `color-mix(in srgb, ${theme.header.text} 8%, transparent)`}; }
   &:focus-visible { outline: none; }
   &:focus-visible::after { outline: 2px solid ${({ theme }) => theme.header.accent}; outline-offset: -2px; }
+  ${phone} {
+    [data-subscription-state="active"] & { --status-icon-size: 1rem; min-block-size: 1.5rem; align-items: center; gap: 6px; }
+  }
   ${media.tablet} { --status-icon-size: 2rem; align-items: stretch; gap: 10px; }
   ${media.desktop} { display: none; }
 `;
@@ -83,6 +91,13 @@ const MobileDetail = styled.span`
   color: ${({ theme }) => theme.header.text};
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
+  ${phone} {
+    [data-subscription-state="active"] & {
+      font-size: clamp(0.6875rem, 3.1vw, 0.75rem);
+      font-weight: ${({ theme }) => theme.typography.weight.medium};
+      font-variant-numeric: tabular-nums;
+    }
+  }
 `;
 const PhoneOffer = styled.span`
   ${media.tablet} { display: none; }
@@ -199,14 +214,21 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
   }) : remaining.hours || remaining.minutes ? messages.text("account.leftHoursMinutes", {
     hours: messages.plural("account.remainingShortHours", remaining.hours), minutes: messages.number(remaining.minutes),
   }) : messages.text("account.underAMinuteLeft"));
-  const expiry = <>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time>{left && <> ({left})</>}</>;
+  const expiryParts = subscriptionExpiryParts(until);
+  const expiry = <>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", expiryParts)}</time>{left && <> ({left})</>}</>;
+  const compactLeft = remaining && (remaining.days ? messages.text("account.leftDaysHoursCompact", {
+    days: messages.number(remaining.days), hours: messages.number(remaining.hours),
+  }) : remaining.hours || remaining.minutes ? messages.text("account.leftHoursMinutesCompact", {
+    hours: messages.number(remaining.hours), minutes: messages.number(remaining.minutes),
+  }) : messages.text("account.underAMinuteLeftCompact"));
+  const phoneExpiry = <><span aria-hidden="true" data-mobile-subscription-expiry>{messages.text("account.subscriptionExpires")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAtCompact", expiryParts)}</time>{compactLeft && <> ({compactLeft})</>}</span><VisuallyHidden>{expiry}</VisuallyHidden></>;
   return bar(<>
     <Status><ClockIcon /><span>{expiry}</span></Status>
     {subscription.renewsFromCredit ? <Note data-renewal-note>{messages.text("account.renewsFromCredit")}</Note>
       // A top-up adds credit and never extends access, so the subscribe page says nothing about extending while adding credit.
       : subscription.canSubscribe && (subscribing ? !subscription.paymentPending && purpose !== "topup" && <Note data-renewal-note>{messages.text("account.renewalExtends")}</Note>
         : action(messages.text(subscription.paymentPending ? "account.viewPayment" : "account.extend")))}
-  </>, { state: "active", icon: <CheckIcon />, detail: expiry,
+  </>, { state: "active", icon: <CheckIcon />, detail: expiry, phoneDetail: phoneExpiry,
     note: subscription.paymentPending ? <span>{messages.text("account.paymentPending")} · {messages.text("account.pending")}</span>
       : subscription.renewsFromCredit && <span>{messages.text("account.renewsFromCredit")}</span> });
 }

@@ -7,7 +7,7 @@
 | ☐ Not started | No implementation yet. |
 | — Unassessed | No completion status was recorded; inspect implementation and acceptance evidence before assigning one. |
 
-**Tracked totals:** 53 completed · 10 partial · 8 not started · 1 unassessed (72 tracked plans).
+**Tracked totals:** 54 completed · 10 partial · 8 not started · 1 unassessed (73 tracked plans).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -84,6 +84,7 @@
 | ◐ Partial | [073-probability-qualified-prediction-engine.md](dev-plan/073-probability-qualified-prediction-engine.md) | Implementation, deterministic checks and all ten genuine MySQL acceptance cases passed; live account/source qualification and chronological evaluation remain unverified. |
 | ☑ Completed | [074-theme-homogeneity.md](dev-plan/074-theme-homogeneity.md) | Light/dark cards, headers, navigation, overlays and branding verified at 320/375/1440 px, including reload and open mobile menus. |
 | ☑ Completed | [075-inline-subscription-expiry.md](dev-plan/075-inline-subscription-expiry.md) | Active bars show one expiry/countdown sentence; duration boundaries and responsive member rendering passed. |
+| ☑ Completed | [076-compact-mobile-subscription.md](dev-plan/076-compact-mobile-subscription.md) | One-line phone expiry verified at 320/360/375/414 px in both themes; full accessible wording and enlarged-text wrapping retained. |
 
 ## Partial rows
 

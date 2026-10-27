@@ -1,5 +1,27 @@
 # Development progress
 
+## 076 — Compact mobile subscription status (27 October 2026)
+
+Implemented [plan 076](../dev-plan/076-compact-mobile-subscription.md). Active
+phone bars use a 16px icon, 6px gap, 4px vertical padding and responsive 11–12px
+medium-weight text. Compact dates retain the year and EAT; duration units use
+`d`, `h` and `m`. Full expiry wording remains available to assistive technology,
+tablet and desktop. Text enlargement wraps naturally without clipping. The
+ordinary active bar measures 33px high including its border; pending-payment
+guidance retains a separate line.
+
+Changed-file ESLint and TypeScript passed. Browser checks against current local
+development sources used an intercepted synthetic session response without real
+authentication or subscription changes. All 32 phone combinations passed at
+320/360/375/414 px across public/compact headers, both themes and both duration
+formats. Each expiry occupied one line with no normal-size page overflow. The
+long-date case included a year, EAT and 338 days remaining. Four tablet/desktop
+checks retained full wording, and two 200% text checks kept the expiry readable
+inside its bar. The feed calendar control independently causes 40px page
+overflow at 200%; that existing issue is outside this bar change. Screenshots
+and results remain ignored under `output/playwright/compact-subscription/`.
+The owned test browser was closed; the development app/server remain running.
+
 ## 075 — Inline subscription expiry (27 October 2026)
 
 Implemented [plan 075](../dev-plan/075-inline-subscription-expiry.md). Active
