@@ -12,7 +12,7 @@ registerHooks({
     return nextLoad(url, context);
   },
 });
-const { lightTheme } = await import("../src/styles/theme.ts");
+const { lightTheme, darkTheme } = await import("../src/styles/theme.ts");
 
 const channel = (value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
 const luminance = (hex) => {
@@ -29,31 +29,32 @@ const SMALL_TEXT = 4.5;
 
 /** Every stop must be a plain hex colour, so no stop can slip past the parser. */
 const gradientStops = (gradient) => {
+  if (/^#[0-9a-f]{6}$/i.test(gradient)) return [gradient];
   assert.match(gradient, /^linear-gradient\(\d+deg(, #[0-9a-f]{6} \d+%){2,}\)$/i, `${gradient} uses hex stops only`);
   return gradient.match(/#[0-9a-f]{6}/gi);
 };
 
 test("every market family has colours", () => {
-  assert.deepEqual(Object.keys(lightTheme.color.market).sort(), Object.keys(marketSelections).sort());
+  for (const theme of [lightTheme, darkTheme]) {
+    assert.deepEqual(Object.keys(theme.color.market).sort(), Object.keys(marketSelections).sort());
+  }
 });
 
 test("market colours keep small text at 4.5:1 or better", () => {
-  const white = lightTheme.color.onBrand;
-  const surface = lightTheme.color.surface;
-  assert.equal(luminance(white), 1);
-  assert.equal(luminance(surface), 1);
-  for (const [family, colours] of Object.entries(lightTheme.color.market)) {
-    const pairs = [
-      ["white on solid", white, colours.solid],
-      // Luminance is convex in sRGB values, so a blend between stops is never lighter than its lighter end: the
-      // stops bound white text across the whole gradient.
-      ...gradientStops(colours.gradient).map((stop, index) => [`white on gradient stop ${index + 1}`, white, stop]),
-      ["text on soft", colours.text, colours.soft],
-      ["text on white", colours.text, surface],
-    ];
-    for (const [label, foreground, background] of pairs) {
-      const ratio = contrast(foreground, background);
-      assert.ok(ratio >= SMALL_TEXT, `${family}: ${label} (${foreground} on ${background}) is ${ratio.toFixed(2)}:1`);
+  for (const theme of [lightTheme, darkTheme]) {
+    const ink = theme.color.onBrand;
+    const surface = theme.color.surface;
+    for (const [family, colours] of Object.entries(theme.color.market)) {
+      const pairs = [
+        ["icon on solid", ink, colours.solid],
+        ...gradientStops(colours.gradient).map((stop, index) => [`icon on gradient stop ${index + 1}`, ink, stop]),
+        ["text on soft", colours.text, colours.soft],
+        ["text on surface", colours.text, surface],
+      ];
+      for (const [label, foreground, background] of pairs) {
+        const ratio = contrast(foreground, background);
+        assert.ok(ratio >= SMALL_TEXT, `${theme.mode} ${family}: ${label} (${foreground} on ${background}) is ${ratio.toFixed(2)}:1`);
+      }
     }
   }
 });

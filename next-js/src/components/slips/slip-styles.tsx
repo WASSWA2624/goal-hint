@@ -4,14 +4,11 @@ import styled from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { PageHeading, Stack, Surface } from "@/components/ui/layout";
 import type { MarketFamily } from "@/domain/markets";
-import { lightTheme, media, phoneCardFrame } from "@/styles/theme";
+import { media, type GoalHintTheme } from "@/styles/theme";
 
 const compactControlHeight = "2.125rem";
-/** Phone slip cards keep design 09's light palette in both themes, like the match cards; the desktop table follows
- * the theme. Phone rules take their colours from here. */
-const light = lightTheme.color;
 /** The rule between a leg's odds and chance: its market colour softened towards the card surface. */
-const legRule = ({ $family }: { $family: MarketFamily }) => `color-mix(in srgb, ${light.market[$family].solid} 30%, ${light.surface})`;
+const legRule = ({ theme, $family }: { theme: GoalHintTheme; $family: MarketFamily }) => `color-mix(in srgb, ${theme.color.market[$family].solid} 30%, ${theme.color.surface})`;
 
 export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; }`;
 export const SlipHeading = styled(PageHeading)`font-size: 1.25rem; ${media.desktop} { font-size: 1.5rem; }`;
@@ -141,19 +138,17 @@ export const Results = styled.section`
   display: grid; gap: 9px; min-inline-size: 0;
   &[aria-busy="true"] { opacity: 0.65; }
 `;
-/** Phones: a rounded slip card with a tinted header, a four-fact summary strip and one pick panel per leg, matching
+/** Phones: a slip card with a tinted header, a four-fact summary strip and one pick panel per leg, matching
  * the match cards. The desktop keeps its classic table. */
 export const SlipCard = styled.article`
+  color: ${({ theme }) => theme.color.text};
   min-inline-size: 0; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0; background: ${({ theme }) => theme.color.surface};
   ${media.belowDesktop} {
-    color: ${light.text}; background: ${light.surface}; border-color: ${phoneCardFrame.border};
-    border-radius: ${phoneCardFrame.radius}; box-shadow: ${phoneCardFrame.shadow};
-    /* The legs' square backgrounds stay inside the rounded corners; rows pad their links' focus rings inwards. */
+    border-color: ${({ theme }) => theme.phoneCardFrame.border};
+    border-radius: ${({ theme }) => theme.phoneCardFrame.radius}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow};
+    /* Rows pad their links' focus rings inwards, keeping them inside the frame. */
     overflow: clip;
-    /* A locked Best Slip's subscribe panel sits inside the light card too. */
-    ${CriteriaPanel} { color: ${light.text}; background: ${light.surface}; border-color: ${light.border}; }
-    && a:focus-visible { outline-color: ${light.focus}; }
   }
 `;
 export const SlipTitle = styled.header`
@@ -163,11 +158,11 @@ export const SlipTitle = styled.header`
   > h3 { font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span { color: ${({ theme }) => theme.color.link}; font-size: 0.6875rem; }
   ${media.belowDesktop} {
-    gap: 8px; padding: 10px 12px; background: ${light.cardHeader}; border-block-end-color: ${light.border}; border-radius: calc(${phoneCardFrame.radius} - 1px) calc(${phoneCardFrame.radius} - 1px) 0 0;
+    gap: 8px; padding: 10px 12px; background: ${({ theme }) => theme.color.cardHeader}; border-block-end-color: ${({ theme }) => theme.color.border};
     > h3 { font-size: 1rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
     > span {
       display: inline-flex; align-items: center; block-size: 1.25rem; padding: 0 7px;
-      color: ${light.onBrand}; background: ${light.brand};
+      color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand};
       border-radius: ${({ theme }) => theme.border.radius};
       font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: 0.02em;
     }
@@ -179,20 +174,20 @@ export const SlipSummary = styled.dl`
   > div { display: flex; align-items: baseline; gap: 4px; }
   dt { color: ${({ theme }) => theme.color.mutedText}; }
   dd { margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; font-variant-numeric: tabular-nums; }
-  /* Phones: the facts sit side by side in a white strip, each value over its label. */
+  /* Phones: the facts sit side by side in a surface strip, each value over its label. */
   ${media.belowDesktop} {
     flex: 1 1 100%; flex-wrap: nowrap; align-items: stretch; gap: 0; margin: 0;
-    background: ${light.surface};
-    border: ${({ theme }) => theme.border.width} solid ${light.border};
+    background: ${({ theme }) => theme.color.surface};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: ${({ theme }) => theme.border.radius};
     /* Each fact takes the width its value needs, so "3 selections" never breaks inside a word. */
     > div { flex: 1 1 auto; flex-direction: column-reverse; justify-content: flex-end; gap: 1px; min-inline-size: 0; padding: 6px 8px; }
-    > div + div { border-inline-start: ${({ theme }) => theme.border.width} solid ${light.border}; }
-    dt { color: ${light.mutedText}; line-height: 0.875rem; }
+    > div + div { border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+    dt { color: ${({ theme }) => theme.color.mutedText}; line-height: 0.875rem; }
     dd { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.125rem; overflow-wrap: break-word; }
     /* Doubled to outrank the link's own theme colours. */
-    && dd a { color: ${light.link}; font-size: 0.75rem; }
-    && dd a:hover { color: ${light.brandHover}; }
+    && dd a { color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; }
+    && dd a:hover { color: ${({ theme }) => theme.color.brandHover}; }
   }
   ${media.desktop} { font-size: 0.75rem; }
 `;
@@ -200,28 +195,28 @@ export const SlipProbabilityNote = styled.p`
   margin: 0; padding: 5px 9px;
   color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.4;
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${media.belowDesktop} { padding-inline: 12px; color: ${light.mutedText}; border-block-end-color: ${light.border}; }
+  ${media.belowDesktop} { padding-inline: 12px; color: ${({ theme }) => theme.color.mutedText}; border-block-end-color: ${({ theme }) => theme.color.border}; }
 `;
 /** Phones: one leg's pick panel, tinted in its market's colour: icon, market over pick, then odds and chance in a
- * white box. The desktop table lays its parts out as before. */
+ * surface box. The desktop table lays its parts out as before. */
 export const SlipPanel = styled.div<{ $family: MarketFamily }>`
   display: contents;
   ${media.belowDesktop} {
     --gh-glyph-size: 1.5rem;
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
     margin-block-start: 6px; padding: 5px 6px 5px 8px;
-    background: ${({ $family }) => light.market[$family].soft};
+    background: ${({ theme, $family }) => theme.color.market[$family].soft};
     border-radius: ${({ theme }) => theme.border.radius};
     [data-pick-text] { display: flex; flex-direction: column; min-inline-size: 0; }
     [data-mobile="numbers"] {
-      display: flex; color: ${light.text}; background: ${light.surface}; border-radius: ${({ theme }) => theme.border.radius};
+      display: flex; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.border.radius};
       > span { display: flex; flex-direction: column; align-items: center; justify-content: center; min-inline-size: 3.5rem; padding: 2px 5px; }
       > span + span {
         background: linear-gradient(${legRule}, ${legRule}) left center / 1px calc(100% - 10px) no-repeat;
       }
       strong { font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.0625rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
       small {
-        color: ${({ $family }) => light.market[$family].text};
+        color: ${({ theme, $family }) => theme.color.market[$family].text};
         font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.heavy};
         letter-spacing: 0.06em; line-height: 0.8125rem; text-transform: uppercase;
       }
@@ -234,7 +229,7 @@ export const SlipMarket = styled.span<{ $family: MarketFamily }>`
   color: ${({ theme, $family }) => theme.color.market[$family].text};
   ${media.belowDesktop} {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: ${({ $family }) => light.market[$family].text};
+    color: ${({ theme, $family }) => theme.color.market[$family].text};
     font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 0.875rem;
   }
   ${media.desktop} { margin-block-end: 3px; font-size: 0.625rem; line-height: 1.2; }
@@ -243,7 +238,7 @@ export const SlipPick = styled.span<{ $family: MarketFamily }>`
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   ${media.belowDesktop} {
     display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: ${({ $family }) => light.market[$family].text};
+    color: ${({ theme, $family }) => theme.color.market[$family].text};
     font-size: 0.9375rem; line-height: 1.125rem;
     /* The numbers box shows the odds; this copy stays for screen readers, after its hidden "Odds:" label. */
     [data-pick-odds] { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -272,26 +267,25 @@ export const Table = styled.table`
   a { color: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-decoration: none; }
   a:hover { color: ${({ theme }) => theme.color.link}; text-decoration: underline; }
   a:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  /* Phones: each leg stacks its league and kickoff, the teams, then its pick panel. These rules come after the shared
-   * ones, so the light palette wins on the phone card. */
+  /* Phones: each leg stacks its league and kickoff, the teams, then its pick panel. */
   ${media.belowDesktop} {
     display: block;
     tbody { display: block; }
-    tbody tr { display: grid; gap: 4px; padding: 8px 12px 10px; background: ${light.surface}; }
-    tbody tr + tr { border-block-start: ${({ theme }) => theme.border.width} solid ${light.border}; }
+    tbody tr { display: grid; gap: 4px; padding: 8px 12px 10px; background: ${({ theme }) => theme.color.surface}; }
+    tbody tr + tr { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
     td { display: block; min-inline-size: 0; padding: 0; border: 0; }
-    [data-team-logo] { --gh-logo-fill: ${light.surfaceMuted}; --gh-logo-ink: ${light.mutedText}; }
-    a:hover { color: ${light.link}; }
-    a:focus-visible { outline-color: ${light.focus}; }
+    [data-team-logo] { --gh-logo-fill: ${({ theme }) => theme.color.surfaceMuted}; --gh-logo-ink: ${({ theme }) => theme.color.mutedText}; }
+    a:hover { color: ${({ theme }) => theme.color.link}; }
+    a:focus-visible { outline-color: ${({ theme }) => theme.color.focus}; }
     [data-mobile="metadata"] {
       display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-inline-size: 0;
-      color: ${light.mutedText}; font-size: 0.75rem; line-height: 1rem;
+      color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1rem;
       > [data-competition] { flex: 0 1 auto; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
       > time { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; &::before { content: "· "; } }
     }
     [data-team-list] { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-block-start: 4px; font-size: 0.875rem; }
-    [data-versus] { display: inline; color: ${light.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-    [data-slip-result] { display: block; margin-block-start: 2px; color: ${light.mutedText}; }
+    [data-versus] { display: inline; color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+    [data-slip-result] { display: block; margin-block-start: 2px; color: ${({ theme }) => theme.color.mutedText}; }
   }
   ${media.desktop} {
     border-collapse: collapse; border-spacing: 0; padding: 0; background: ${({ theme }) => theme.color.surface};

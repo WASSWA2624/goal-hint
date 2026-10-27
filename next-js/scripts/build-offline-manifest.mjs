@@ -20,14 +20,15 @@ export async function buildOfflineManifest(directory = process.cwd()) {
   const pending = new Set([
     ...assetsIn(entryBody.toString("utf8")),
     ...assetsIn(JSON.stringify(routes[0])),
-    "/brand/goal-hint-logo-inverse.svg", "/brand/goal-hint-mark-primary.svg",
+    "/brand/goal-hint-logo-primary.svg", "/brand/goal-hint-logo-inverse.svg",
+    "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg",
   ]);
   const assets = new Map();
   while (pending.size) {
     const url = pending.values().next().value;
     pending.delete(url);
     if (assets.has(url)) continue;
-    if (!/^\/(?:_next\/static\/(?:chunks|css|media)\/[a-zA-Z0-9_./-]+\.(?:js|css|woff2?|ttf|otf|svg)|brand\/goal-hint-(?:logo-inverse|mark-primary)\.svg)$/u.test(url)
+    if (!/^\/(?:_next\/static\/(?:chunks|css|media)\/[a-zA-Z0-9_./-]+\.(?:js|css|woff2?|ttf|otf|svg)|brand\/goal-hint-(?:logo|mark)-(?:primary|inverse)\.svg)$/u.test(url)
       || url.includes("..")) throw new Error("Unapproved offline asset.");
     const file = path.resolve(root, url.startsWith("/_next/") ? `.next/${url.slice(7)}` : `public${url}`);
     if (!file.startsWith(root + path.sep)) throw new Error("Offline asset escapes build directory.");

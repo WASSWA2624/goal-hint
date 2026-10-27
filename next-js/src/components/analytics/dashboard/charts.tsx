@@ -10,13 +10,9 @@ import type { GoalHintTheme } from "@/styles/theme";
  * between touching fills, and a hover/focus tooltip on every chart (values also live in the tables).
  */
 
-/** Validated categorical slots (light / dark) from the data-viz palette; slot order is fixed. */
-const lightSeries = ["#2a78d6", "#eb6834", "#1baf7a"] as const;
-const darkSeries = ["#3987e5", "#d95926", "#199e70"] as const;
-
 export function chartColors(theme: GoalHintTheme) {
   return {
-    series: theme.mode === "dark" ? darkSeries : lightSeries,
+    series: [theme.color.accent.blue.solid, theme.color.accent.orange.solid, theme.color.accent.emerald.solid],
     comparison: theme.color.controlBorder,
     grid: theme.color.border,
     axis: theme.color.mutedText,
@@ -313,7 +309,7 @@ const Tooltip = styled.div`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
-  box-shadow: 0 6px 18px rgb(16 42 58 / 0.10);
+  box-shadow: ${({ theme }) => theme.shadow.popover};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 const TooltipLabel = styled.span`

@@ -52,7 +52,7 @@ export function OfflineView() {
   }, [snapshot]);
   const saved = snapshot && supported;
   return <div data-offline-view data-offline-state={loading ? "loading" : saved ? "saved" : "unavailable"}>
-    <Header><Heading $wide><BrandLogo variant="inverse" /><span>Saved view</span></Heading></Header>
+    <Header><Heading $wide><BrandLogo /><span>Saved view</span></Heading></Header>
     <PageMain id="main-content" $app $compact><Container $wide><Stack>
       <PageHeading>{supported ? "Saved matches" : "This page needs a connection"}</PageHeading>
       <Notice aria-live="polite"><Stack $gap="sm">

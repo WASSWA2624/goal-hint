@@ -21,8 +21,9 @@ async function fixture(t) {
   await save(".next/static/chunks/split.js", "export const answer=42;");
   await save(".next/static/chunks/offline.css", '@font-face{src:url(../media/local.woff2)}');
   await save(".next/static/media/local.woff2", "synthetic-font");
-  await save("public/brand/goal-hint-logo-inverse.svg", "<svg/>");
-  await save("public/brand/goal-hint-mark-primary.svg", "<svg/>");
+  for (const kind of ["logo", "mark"]) for (const variant of ["primary", "inverse"]) {
+    await save(`public/brand/goal-hint-${kind}-${variant}.svg`, "<svg/>");
+  }
   return { root, save };
 }
 
@@ -30,9 +31,13 @@ test("offline build pins HTML, client/split chunks, CSS and local fonts coherent
   const { root } = await fixture(t);
   const manifest = await buildOfflineManifest(root);
   assert.equal(manifest.entry.url, "/offline");
-  assert.equal(manifest.assets.length, 7);
+  assert.equal(manifest.assets.length, 9);
   assert.ok(manifest.assets.some(({ url }) => url.endsWith("/split.js")));
   assert.ok(manifest.assets.some(({ url }) => url.endsWith("/local.woff2")));
+  assert.deepEqual(manifest.assets.filter(({ url }) => url.startsWith("/brand/")).map(({ url }) => url), [
+    "/brand/goal-hint-logo-inverse.svg", "/brand/goal-hint-logo-primary.svg",
+    "/brand/goal-hint-mark-inverse.svg", "/brand/goal-hint-mark-primary.svg",
+  ]);
   assert.deepEqual(manifest.assets.map(({ url }) => url), manifest.assets.map(({ url }) => url).sort());
   assert.equal((await buildOfflineManifest(root)).version, manifest.version);
 });

@@ -6,7 +6,7 @@ import { teamInitials } from "@/domain/match-card";
 import { deferImage } from "@/components/ui/deferred-image";
 import { providerImageSource } from "@/components/ui/provider-image";
 /** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only, and
- * --gh-logo-fill and --gh-logo-ink colour their disc (the phone tiles keep it light in both themes).
+ * --gh-logo-fill and --gh-logo-ink pair the disc's surface and text for the active theme.
  * `data-team-logo` lets a container's grid place the box. */
 const LogoBox = styled.span<{ $loaded: boolean }>`
   display: grid;

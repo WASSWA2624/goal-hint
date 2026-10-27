@@ -10,10 +10,17 @@ honest development state until their later implementation prompts.
 `src/styles/theme.ts` exports `lightTheme`, `darkTheme`, `GoalHintTheme` and `OutcomeTone`.
 Semantic colors, typography, spacing, breakpoints, borders, focus and control
 dimensions share one contract, including a light/dark mode for native controls.
-The approved R03 Light and R04 Dark palettes use a darker page canvas, neutral
-card surfaces and flat mobile dividers. Brand teal remains separate from outcome
+Light mode uses a white page, white content surfaces and white header/navigation
+chrome with dark text. Dark mode uses navy page, content and header surfaces
+with light text. Muted surfaces, fields, menus, dialogs, tables, match cards and
+slip cards all resolve colors from the active theme. `theme.phoneCardFrame`
+provides the shared square, shadow-free match/slip frame with a themed border;
+phone cards do not force the light palette when dark mode is selected.
+Brand teal remains separate from outcome
 colors: Win is green, Loss is red, Pending is amber, and Void/Unavailable are
-neutral. Explicit result labels preserve their meaning without depending on color.
+neutral. Light-mode verdict tags retain vivid fills and dark text; dark-mode
+tags use dark tinted fills with readable light semantic text. Explicit result
+labels preserve their meaning without depending on color.
 
 The server root layout wraps its children in one `StyleProvider`. Its Client
 Component registry creates a `ServerStyleSheet` per instance, inserts collected
@@ -87,7 +94,7 @@ to fields, buttons, menus, dialogs and standalone panels on every screen size.
 Keep joined control edges, tables and dense row structures square where they
 meet. Preserve functional circular or pill shapes and the logo's artwork geometry.
 
-Keep passive frames quiet with `theme.color.border`: neutral `#DFE6EE` in light
+Keep passive frames quiet with `theme.color.border`: neutral `#D7DFE7` in light
 mode and `#203448` in dark mode. Use it for section and card outlines, dialog
 frames, menu containers and dividers. Editable fields and outlined controls use
 `theme.color.controlBorder` (`#7D8997` light, `#597895` dark) so they remain easy
@@ -103,7 +110,7 @@ Import directly from the owning module to keep dependencies clear:
 | `@/styles/provider` | `StyleProvider`, used once by the root layout. |
 | `@/styles/theme` | `lightTheme`, `darkTheme`, `GoalHintTheme`, `OutcomeTone`, and static `media` query strings. |
 | `@/components/ui/theme-toggle` | `ThemeToggle`: shared accessible title-bar button with a visible icon, action label, pressed state and focus ring. |
-| `@/components/ui/brand` | `BrandLogo`, `BrandMark`, `BrandImageProps`. Named primary, inverse and monochrome variants with reserved dimensions and clear space. |
+| `@/components/ui/brand` | `BrandLogo`, `BrandMark`, `BrandImageProps`. Adaptive by default: primary artwork in light mode and inverse artwork in dark mode. Explicit primary, inverse and monochrome variants remain available, with reserved dimensions and clear space. |
 | `@/components/ui/layout` | `Container`, `Stack`, `Inline`, `Surface`, `PageMain`, `PageHeading`, `SectionHeading`, `BodyText`, `MutedText`. Logical spacing, wrapping and bounded content width. |
 | `@/components/ui/controls` | `Button`, `ButtonLink`, `TextLink`, `TextInput`, `SelectInput` and their prop types. Native button, Next.js link and labeled native form semantics. |
 | `@/components/ui/feedback` | `StatusText`, `EmptyState` and their prop types. Explicit text and decorative outcome icons; empty states accept a heading, explanation and optional action. |
@@ -156,11 +163,11 @@ from the same artwork by `scripts/generate-brand.py`, eliminating a separate
 image request for the measured LCP element without changing its appearance.
 Use `alt=""` when
 nearby text already names the brand, and an accessible “Goal Hint home” name
-for a logo-only home link. Inverse assets require a compatible dark surface:
-navy, or the navy-to-teal `theme.header.background` that every header bar uses.
-Its worst case is the #0C4F5E teal stop, where the white wordmark keeps 9.15:1
-and the inverse teal G 5.03:1; `gradient.tableHeader` is for table headers,
-not the logo.
+for a logo-only home link. Shell, feed, match-detail and footer branding use the
+adaptive default so the primary artwork appears on light chrome and inverse
+artwork appears on dark chrome. An explicit inverse variant requires a
+compatible dark surface. `gradient.tableHeader` follows the active theme and
+is reserved for table headings.
 The primitives load first-party branding only. Approved API-Sports football
 badges use the shared bounded badge cache; other approved image hosts
 remain direct browser requests.
@@ -173,8 +180,8 @@ intended surfaces. Input and secondary-button boundaries use the stronger
 surface and muted-surface colors in both themes. The quieter `border` token is
 reserved for passive frames and divisions. On light surfaces focus uses the
 3px blue `theme.color.focus` outline with a 3px offset; dark surfaces use the
-same token's cyan value. On the dark header bars it is a 3px
-cyan (`theme.header.accent`, `#00B9F2`) ring instead: drawn 4px inside
+same token's cyan value. Header bars use the active theme's 3px
+`theme.header.accent` ring: drawn 4px inside
 the desktop nav links and 6px inside the desktop logo link so the sticky bar
 never clips it, and 2px outside the phone bars' logo, back and round buttons.
 The skip link uses the theme's focus ring inside its surface and adds a 3px
@@ -185,11 +192,14 @@ needed to understand the interface.
 
 `theme.header` holds the tokens shared by the desktop shell header and every
 phone top bar (content pages, the feed's brand bar and match details). They
-include the navy-to-blue branded background, inverse `text`, `mutedText` for
-resting links, search `placeholder`, cyan `accent` with navy `onAccent`, control
-and field fills, light section-icon `tone` tints and a 3.25rem `phoneHeight`.
+include a white background and dark text in light mode, navy background and
+light text in dark mode, `mutedText` for resting links, search `placeholder`,
+`accent` and its contrasting `onAccent`, control and field fills, section-icon
+`tone` colors and a 3.25rem `phoneHeight`. Bottom navigation and table headings
+follow the same selected mode. Menus and sheets use semantic surfaces,
+`theme.color.scrim` for the backdrop and `theme.shadow.popover` for elevation.
 Use `theme.header.border` for passive separators and
-`theme.header.controlBorder` for actual control boundaries (`#798EA8` light,
+`theme.header.controlBorder` for actual control boundaries (`#7D8997` light,
 `#6785A1` dark). Keep focus and active-navigation accents distinct from these
 quiet frames. New small text on the bar must keep 4.5:1 contrast on every
 background stop and relevant control fill.
@@ -236,4 +246,8 @@ and the installed Next.js 16.4 documentation. The components use
 and [transient props](https://styled-components.com/docs/api#transient-props).
 Font delivery uses [Next.js local fonts](https://nextjs.org/docs/app/api-reference/components/font#local-fonts).
 
-Feed surfaces use a cool blue-gray canvas, white cards with quiet neutral borders and the shared subtle radius, and clear control and selection states. Connected table and row edges remain square. Semantic prediction and result colors retain their existing meaning.
+Feed and slip surfaces follow the selected mode throughout: white in light
+mode and dark navy in dark mode, with muted themed regions and clear control
+and selection states. Phone match/slip cards and connected table/row edges
+remain square. Market panels, glyphs and result tags retain semantic colors
+with foregrounds and fills paired for the active theme.

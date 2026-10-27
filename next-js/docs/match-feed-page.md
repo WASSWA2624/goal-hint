@@ -53,8 +53,11 @@ editable and disable Apply. Date steppers, date popovers and time mode menus are
 absent. Historical queries retain the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
-The page uses the shared light or dark shell, controls, feedback and match cards
-with the subtle 2px `theme.border.radius` token. Connected table and row edges remain square.
+The page uses the shared light or dark shell, controls, feedback and match cards.
+Light mode keeps the page, cards and header/navigation chrome white with dark
+text; dark mode uses navy surfaces with light text. Phone match/slip frames and
+connected table/row edges remain square. Other controls use the shared
+`theme.border.radius` token.
 Cards form one column below 64rem and an aligned table above it. Every feed logo
 is lazy with reserved dimensions and initials fallbacks; an eager logo would be
 hoisted as a third-party image preload competing with the page's own font, CSS
@@ -89,9 +92,10 @@ a current preview for an empty lock.
 ### Compact header and filters
 
 Below 64rem, feed pages hide the shell header, so `FeedHeader` opens with the
-branded bar. It uses the same navy-to-teal `theme.header.background` and brand
-edge as the desktop header, has a 3rem (48px) minimum height, and runs past the
-feed's 8px gutters and top padding to the screen edge. The inverse logo links
+branded bar. It uses the same adaptive `theme.header.background` and themed
+separator as the desktop header: white in light mode and navy in dark mode.
+The bar uses `theme.header.phoneHeight` and runs past the
+feed's gutters and top padding to the screen edge. The adaptive logo links
 home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
 The theme button sits at the end of the row and switches between the approved
 R03 Light and R04 Dark palettes. Feed sections use 6px gaps. There is no
@@ -162,16 +166,20 @@ applies ordering immediately from the applied query. Sort, Clear and Apply
 align to the right below the fields, with the applied summary chips at the far
 left of that same row.
 
-Mobile cards use the approved flat-dividers presentation: tiny Market, Pick,
-Prob. and Result captions above compact values, with exact available
-odds beneath the prediction. White or dark surfaces, fine borders and subtly rounded
-edges separate cards from the darker page canvas. Textual Win, Loss and Pending
-labels carry green, red and amber semantic tones. Desktop retains its table
-composition and adds the aligned Result column. Missing predictions use dashes
-on mobile and Unavailable on desktop, with the complete reason kept accessible.
+Mobile cards use the shared pick-panel presentation: metadata and a fixed-width
+result tag, mirrored teams around the score, then a market-tinted panel with
+the market icon, full-word pick, exact available odds and estimated chance.
+The card, numbers box, logo fallbacks and locked/missing-pick regions all follow
+the selected theme. White light-mode surfaces and navy dark-mode surfaces use
+square edges, themed borders and no card shadow. Win, Loss and Pending keep
+green, red and amber semantic tones; dark-mode tags use dark tinted fills and
+light text. Desktop retains its aligned table and Result column with themed
+headings. Missing predictions retain an explicit no-prediction reason, also
+available in the card's accessible description.
 
 The distinct bottom navigation bar is 42px tall before the device safe-area
-inset. It uses the dark title-bar surface in both themes and a single teal
+inset. It follows the selected title-bar mode, white in light mode and navy in
+dark mode, and uses a single theme-accent
 current-page indicator. Theme preference is stored locally; absent a saved
 choice, the browser's preferred colour scheme is used after hydration. No
 account, analytics or external service is needed to switch themes.

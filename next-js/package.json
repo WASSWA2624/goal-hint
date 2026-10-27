@@ -37,6 +37,7 @@
     "trial:football": "python scripts/football-provider-trial.py",
     "evaluation:report": "python scripts/forecast-evaluation.py",
     "test:styling": "python scripts/verify-brand-rendering.py",
+    "test:theme:rendering": "python scripts/verify-theme-rendering.py",
     "test:navigation": "node --conditions=react-server --test tests/navigation.test.mjs",
     "test:navigation:html": "python scripts/verify-navigation-rendering.py",
     "test:state": "node --conditions=react-server --test tests/feed-query.test.mjs tests/feed-controls.test.mjs tests/feed-pagination.test.mjs tests/client-state.test.mjs",

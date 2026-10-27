@@ -143,6 +143,28 @@ test("complete anonymous bundle survives a cold worker restart and renders with 
   assert.deepEqual(await cold.message("STATUS"), state);
 });
 
+test("both theme branding variants remain available after an offline restart", async () => {
+  const initial = await bundle();
+  const branding = ["/brand/goal-hint-logo-primary.svg", "/brand/goal-hint-logo-inverse.svg",
+    "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg"];
+  for (const url of branding) {
+    const body = `<svg data-brand="${url}"/>`, bytes = encode(body);
+    initial.manifest.assets.push({ url, sha256: await hash(bytes), bytes: bytes.byteLength });
+    initial.responses.set(url, new Response(body, { headers: { "cache-control": "public", "content-type": "image/svg+xml" } }));
+  }
+  initial.manifest.assets.sort((left, right) => left.url < right.url ? -1 : left.url > right.url ? 1 : 0);
+  const { schemaVersion, entry, assets } = initial.manifest;
+  initial.manifest.version = await hash(encode({ schemaVersion, entry, assets }));
+  initial.responses.set("/offline-manifest.json", new Response(JSON.stringify(initial.manifest), {
+    headers: { "cache-control": "public", "content-type": "application/json", "x-goalhint-offline-manifest": "1" },
+  }));
+  const online = worker({ current: initial });
+  assert.equal((await online.message()).ok, true);
+  const cold = worker({ storage: online.storage });
+  cold.network.offline = true;
+  for (const url of branding) assert.equal(await (await cold.request(url)).text(), `<svg data-brand="${url}"/>`);
+});
+
 test("private/no-store responses, cookies, missing markers and unapproved assets cannot bootstrap", async () => {
   for (const mutate of [
     (candidate) => candidate.responses.get("/api/offline/snapshot").headers.set("cache-control", "private, no-store"),

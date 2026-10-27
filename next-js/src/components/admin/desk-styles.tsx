@@ -6,7 +6,7 @@ import { ChevronDownIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
 
 /**
- * The admin "review desk": white panels on the page colour, a main column with an optional side panel on desktop, and
+ * The admin "review desk": themed panels on the page colour, a main column with an optional side panel on desktop, and
  * quiet drawers for everything that is not the next decision. Every owner screen builds from these parts; screen-specific
  * pieces stay in that screen's own styles file. Owner copy is English only.
  */

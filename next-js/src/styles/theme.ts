@@ -43,6 +43,8 @@ export interface GoalHintTheme {
     readonly page: string;
     readonly surface: string;
     readonly surfaceMuted: string;
+    /** Neutral overlay behind dialogs and sheets in either theme. */
+    readonly scrim: string;
     /** Quiet outlines and dividers for non-interactive surfaces. */
     readonly border: string;
     /** Neutral, contrasting boundaries for editable and clickable controls. */
@@ -60,8 +62,7 @@ export interface GoalHintTheme {
     readonly disabledText: string;
     readonly disabledSurface: string;
     readonly outcome: Readonly<Record<OutcomeTone, OutcomeColors>>;
-    /** Bright result tags on match cards (Upcoming, Pending, Win, Loss, Void): vivid fills with dark text at 4.5:1 or
-     * better in both themes. */
+    /** Result tags retain their meaning with readable, theme-specific fills and text. */
     readonly verdict: Readonly<Record<VerdictTone, Readonly<{ fill: string; text: string; border: string }>>>;
     readonly market: Readonly<Record<MarketFamily, MarketColors>>;
     readonly live: AccentColors;
@@ -77,10 +78,7 @@ export interface GoalHintTheme {
     readonly tableHeader: string;
     readonly page: string;
   };
-  /**
-   * The branded top bar: the desktop shell header and every phone top bar (shell, feed, match details)
-   * share blue artwork behind the inverse logo. Solid fills remain available for controls.
-   */
+  /** Shared, theme-adaptive colors for desktop and phone headers and navigation. */
   readonly header: {
     readonly background: string;
     readonly gradient: string;
@@ -95,7 +93,7 @@ export interface GoalHintTheme {
     readonly accent: string;
     /** Text and icons on an `accent` fill. */
     readonly onAccent: string;
-    /** Square icon buttons; `controlHover` keeps light icons at 4.5:1. */
+    /** Square icon buttons; both fills keep header text readable. */
     readonly controlFill: string;
     readonly controlHover: string;
     /** The search pill; `fieldFillActive` on hover and focus. */
@@ -104,7 +102,7 @@ export interface GoalHintTheme {
     /** Quiet separators on the branded bar, separate from control and focus outlines. */
     readonly border: string;
     readonly controlBorder: string;
-    /** Light section-icon tints on the bar: 3:1 or better on every stop. */
+    /** Section-icon colors on the bar: 3:1 or better on every stop. */
     readonly tone: Readonly<Record<AccentName, string>>;
     /** Phone top bars: feed brand bar, content-page header and match-details bar. */
     readonly phoneHeight: string;
@@ -180,7 +178,9 @@ export interface GoalHintTheme {
   };
   readonly shadow: {
     readonly cardHover: string;
+    readonly popover: string;
   };
+  readonly phoneCardFrame: Readonly<{ border: string; radius: string; shadow: string }>;
 }
 
 export const lightTheme: GoalHintTheme = {
@@ -188,11 +188,12 @@ export const lightTheme: GoalHintTheme = {
   color: {
     text: "#071747",
     mutedText: "#486B9F",
-    page: "#EFF8FF",
+    page: "#FFFFFF",
     surface: brandTokens.colors.white,
-    surfaceMuted: "#E6F3FF",
+    surfaceMuted: "#F2F5F8",
+    scrim: "rgb(0 8 20 / 65%)",
     // Neutral section dividers stay quiet; controls retain a contrasting boundary.
-    border: brandTokens.colors.border,
+    border: "#D7DFE7",
     controlBorder: "#7D8997",
     brand: "#0066F5",
     link: "#005BD6",
@@ -202,7 +203,7 @@ export const lightTheme: GoalHintTheme = {
     onAction: brandTokens.colors.white,
     focus: "#0066F5",
     disabledText: "#486B9F",
-    disabledSurface: "#E6F3FF",
+    disabledSurface: "#F2F5F8",
     // Outcome meanings stay separate from the blue brand accent.
     outcome: {
       correct: { text: "#007754", background: "#E5F4EC", border: "#007754" },
@@ -211,7 +212,7 @@ export const lightTheme: GoalHintTheme = {
       void: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
       unavailable: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
     },
-    // Shared by both themes (the dark theme inherits it): text on fill is 5.8:1 (Loss) to 12:1 (Void).
+    // Status accents remain distinct from the neutral page surfaces.
     verdict: {
       upcoming: { fill: "#FEF3C7", text: "#78350F", border: "#F59E0B" },
       pending: { fill: "#FBBF24", text: "#451A03", border: "#FBBF24" },
@@ -242,8 +243,8 @@ export const lightTheme: GoalHintTheme = {
       emerald: { solid: "#047857", soft: "#D1FAE5", text: "#065F46", gradient: "linear-gradient(135deg, #059669 0%, #0D9488 100%)" },
       red: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     },
-    cardHeader: "#E6F3FF",
-    rowHover: "#EAF5FF",
+    cardHeader: "#F2F5F8",
+    rowHover: "#F2F5F8",
   },
   typography: {
     family: "var(--font-manrope), Arial, sans-serif",
@@ -279,35 +280,36 @@ export const lightTheme: GoalHintTheme = {
   gradient: {
     action: "#0066F5",
     actionHover: "#0054CC",
-    tableHeader: "linear-gradient(90deg, #06235B 0%, #003B91 100%)",
-    page: "#EFF8FF",
+    tableHeader: "#F2F5F8",
+    page: "#FFFFFF",
   },
-  // Shared blue branding at every viewport; translucent diagonal bands stay decorative.
   header: {
-    background: "#003B91",
-    gradient: "linear-gradient(140deg, transparent 60%, #FFFFFF08 60%, #FFFFFF08 68%, transparent 68%, transparent 76%, #FFFFFF05 76%, #FFFFFF05 82%, transparent 82%), linear-gradient(110deg, #06235B 0%, #00358A 100%)",
-    navigationBackground: "linear-gradient(110deg, #003B91 0%, #00337C 100%)",
-    text: brandTokens.colors.white,
-    mutedText: "#D8E9FF",
-    placeholder: "#BDD8FA",
-    accent: brandTokens.colors.cyanOnDark,
-    onAccent: "#061747",
-    controlFill: "#082C6B",
-    controlHover: "#103778",
-    fieldFill: "#082C6B",
-    fieldFillActive: "#103778",
-    border: "#244873",
-    controlBorder: "#798EA8",
+    background: "#FFFFFF",
+    gradient: "#FFFFFF",
+    navigationBackground: "#FFFFFF",
+    text: "#071747",
+    mutedText: "#486B9F",
+    placeholder: "#486B9F",
+    accent: "#005BD6",
+    onAccent: "#FFFFFF",
+    controlFill: "#F2F5F8",
+    controlHover: "#E1F0FF",
+    fieldFill: "#F2F5F8",
+    fieldFillActive: "#E1F0FF",
+    border: "#D7DFE7",
+    controlBorder: "#7D8997",
     tone: {
-      teal: "#7DDFFF", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
-      pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
+      teal: "#0054CC", blue: "#1E40AF", violet: "#5B21B6", orange: "#9A3412",
+      pink: "#9D174D", amber: "#92400E", emerald: "#065F46", red: "#991B1B",
     },
     phoneHeight: "3.25rem",
     shadow: "none",
   },
   shadow: {
     cardHover: "none",
+    popover: "0 8px 24px rgb(7 23 71 / 16%)",
   },
+  phoneCardFrame: { border: "#7D8997", radius: "0", shadow: "none" },
 };
 
 /** The same semantic contract keeps every native control and detail panel readable in dark mode. */
@@ -338,6 +340,13 @@ export const darkTheme: GoalHintTheme = {
       void: { text: "#B1BEC8", background: "#28343D", border: "#B1BEC8" },
       unavailable: { text: "#B1BEC8", background: "#28343D", border: "#B1BEC8" },
     },
+    verdict: {
+      upcoming: { fill: "#322A1E", text: "#F6C453", border: "#F6C453" },
+      pending: { fill: "#322A1E", text: "#F6C453", border: "#F6C453" },
+      correct: { fill: "#1C342B", text: "#70DEA4", border: "#70DEA4" },
+      incorrect: { fill: "#3B252C", text: "#FF9C9C", border: "#FF9C9C" },
+      void: { fill: "#28343D", text: "#B1BEC8", border: "#B1BEC8" },
+    },
     market: {
       "match-result": { solid: "#70DEA4", soft: "#1C342B", text: "#70DEA4", gradient: "#70DEA4" },
       "double-chance": { solid: "#C6AEFF", soft: "#322B45", text: "#C6AEFF", gradient: "#C6AEFF" },
@@ -366,31 +375,28 @@ export const darkTheme: GoalHintTheme = {
   },
   header: {
     ...lightTheme.header,
-    background: "#052451",
-    gradient: "linear-gradient(140deg, transparent 60%, #0078FF14 60%, #0078FF14 68%, transparent 68%, transparent 76%, #0078FF0D 76%, #0078FF0D 82%, transparent 82%), linear-gradient(110deg, #04162E 0%, #003071 100%)",
-    navigationBackground: "#031525",
+    background: "#041525",
+    gradient: "#041525",
+    navigationBackground: "#041525",
     text: "#F4F7FF",
     mutedText: "#D8E9FF",
     placeholder: "#A8CBEF",
     accent: "#00B9F2",
+    onAccent: "#03111F",
     controlFill: "#06264A",
     controlHover: "#10385D",
     fieldFill: "#06264A",
     fieldFillActive: "#10385D",
     border: "#17334F",
     controlBorder: "#6785A1",
+    tone: {
+      teal: "#7DDFFF", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
+      pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
+    },
   },
+  shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
+  phoneCardFrame: { border: "#597895", radius: "0", shadow: "none" },
 };
-
-/**
- * The phone card frame shared by match cards and slip cards (owner request, 2026-10-25: strong card chrome). The cards
- * keep design 09's light palette in both themes, so one frame serves both: a firm border and a lifted shadow.
- */
-export const phoneCardFrame = {
-  border: "#A9BBD1",
-  radius: "6px",
-  shadow: "0 1px 2px rgb(7 23 71 / 12%), 0 6px 14px -4px rgb(7 23 71 / 18%)",
-} as const;
 
 /**
  * Static media queries for styled rules. Plain strings keep a rule static, so styled-components

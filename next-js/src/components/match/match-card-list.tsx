@@ -3,7 +3,7 @@
 import type { ComponentPropsWithRef } from "react";
 import styled, { css } from "styled-components";
 import { createMessages } from "@/i18n/messages";
-import { media, phoneCardFrame } from "@/styles/theme";
+import { media } from "@/styles/theme";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 
 export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & { locale?: string; rowNumberMaximum?: number };
@@ -56,12 +56,11 @@ const List = styled.ul`
 
   > li { display: grid; min-inline-size: 0; }
   ${media.belowDesktop} {
-    /* Framed cards need clear space between them. Keep every match searchable and accessible while deferring
-     * offscreen layout; remember measured heights as visitors scroll through the list. Content-visibility clips what a
-     * card paints outside its item, so the item itself carries the card's lifted shadow. */
+    /* Keep framed cards separate and every match searchable and accessible while deferring offscreen layout.
+     * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
     gap: 10px;
     > li { content-visibility: auto; contain-intrinsic-block-size: auto 140px; }
-    > li:has(> article:only-child) { border-radius: ${phoneCardFrame.radius}; box-shadow: ${phoneCardFrame.shadow}; }
+    > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.phoneCardFrame.radius}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
   ${media.desktop} {

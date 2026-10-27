@@ -82,7 +82,8 @@ const Pitch = styled.ol`
   margin: 0;
   padding: 10px 6px;
   list-style: none;
-  background: repeating-linear-gradient(180deg, #15803D 0 2.5rem, #16A34A 2.5rem 5rem);
+  background: repeating-linear-gradient(180deg, ${({ theme }) => theme.color.accent.emerald.soft} 0 2.5rem,
+    color-mix(in srgb, ${({ theme }) => theme.color.accent.emerald.solid} 8%, ${({ theme }) => theme.color.accent.emerald.soft}) 2.5rem 5rem);
   border-radius: ${({ theme }) => theme.border.radius};
   > li { display: flex; justify-content: space-around; gap: 4px; }
   button {
@@ -92,7 +93,7 @@ const Pitch = styled.ol`
     min-inline-size: 0;
     max-inline-size: 5.5rem;
     padding: 2px;
-    color: #fff;
+    color: ${({ theme }) => theme.color.accent.emerald.text};
     background: none;
     border: 0;
     border-radius: ${({ theme }) => theme.border.radius};
@@ -101,9 +102,9 @@ const Pitch = styled.ol`
     line-height: 1.15;
     text-align: center;
     cursor: pointer;
-    &:focus-visible { outline: 2px solid #fff; }
-    ${media.hover} { &:hover { background: rgb(255 255 255 / 15%); } }
-    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: #fff; border-radius: 50%; font-size: ${size("caption")}; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; }
+    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surface}; } }
+    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border-radius: 50%; font-size: ${size("caption")}; }
     > span { overflow-wrap: anywhere; }
   }
   ${desktop} { button { font-size: ${size("caption")}; } }

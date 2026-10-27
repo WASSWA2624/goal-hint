@@ -3,25 +3,22 @@
 import type { ReactNode } from "react";
 import styled from "styled-components";
 import type { MarketFamily } from "@/domain/markets";
-import { lightTheme } from "@/styles/theme";
 
 /** A market family's square icon, or a locked or missing pick. */
 export type MarketGlyphKind = MarketFamily | "locked" | "none";
 
-/** The icon only appears on the phone tiles, which keep design 09's light palette in both themes: a ground in the
- * family's solid colour with white marks. */
-const light = lightTheme.color;
+/** A market ground and its contrasting marks follow the active theme together. */
 const Svg = styled.svg<{ $kind: MarketGlyphKind }>`
   display: block;
   flex: none;
   inline-size: var(--gh-glyph-size, 2rem);
   block-size: var(--gh-glyph-size, 2rem);
   [data-ground] {
-    fill: ${({ $kind }) => $kind === "locked" ? light.mutedText : $kind === "none" ? light.surface : light.market[$kind].solid};
-    stroke: ${({ $kind }) => $kind === "none" ? light.border : "none"};
+    fill: ${({ theme, $kind }) => $kind === "locked" ? theme.color.mutedText : $kind === "none" ? theme.color.surface : theme.color.market[$kind].solid};
+    stroke: ${({ theme, $kind }) => $kind === "none" ? theme.color.border : "none"};
   }
-  [data-ink] { fill: none; stroke: ${({ $kind }) => $kind === "none" ? light.mutedText : light.surface}; stroke-linecap: round; stroke-linejoin: round; }
-  [data-ink-fill] { fill: ${light.surface}; }
+  [data-ink] { fill: none; stroke: ${({ theme, $kind }) => $kind === "none" ? theme.color.mutedText : theme.color.onBrand}; stroke-linecap: round; stroke-linejoin: round; }
+  [data-ink-fill] { fill: ${({ theme }) => theme.color.onBrand}; }
 `;
 
 const marks: Readonly<Record<MarketGlyphKind, ReactNode>> = {

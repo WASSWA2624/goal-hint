@@ -62,7 +62,7 @@ const Popup = styled.div`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
-  box-shadow: ${({ theme }) => theme.shadow.cardHover};
+  box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const Identity = styled.div`
   display: flex;

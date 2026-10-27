@@ -51,9 +51,8 @@ export const TopActions = styled.div`
   form { display: contents; }
 `;
 const pulse = keyframes`
-  0% { box-shadow: 0 0 0 0 rgb(83 213 198 / 0.6); }
-  70% { box-shadow: 0 0 0 8px rgb(83 213 198 / 0); }
-  100% { box-shadow: 0 0 0 0 rgb(83 213 198 / 0); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 `;
 export const LivePill = styled.span`
   display: inline-flex;
@@ -213,7 +212,7 @@ export const Chip = styled.li`
     font-size: 1rem;
     cursor: pointer;
   }
-  button:hover { background: rgb(0 0 0 / 0.08); }
+  button:hover { background: ${({ theme }) => theme.color.rowHover}; }
 `;
 export const Cards = styled.section<{ $busy?: boolean }>`
   display: grid;

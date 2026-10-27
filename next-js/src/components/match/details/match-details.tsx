@@ -53,7 +53,7 @@ const PhoneSubscriptionStatus = styled(SubscriptionStatusBar)`
 `;
 /**
  * The phone top bar matches the feed's branded bar and quiet separator, full bleed
- * past the page gutter and up through the app page's 10px top padding, with white text and icons.
+ * past the page gutter and up through the app page's 10px top padding, with themed text and icons.
  */
 const PhoneBar = styled.div`
   position: relative;
@@ -77,7 +77,7 @@ const PhoneHome = styled(Link)`
   @media (max-width: 359px) { img { inline-size: 80px; } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
 `;
-/** Inverse-teal focus rings read on every stop of the bar. */
+/** The header accent keeps focus visible on the active bar surface. */
 const barFocus = css`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
 `;
@@ -145,7 +145,7 @@ function PhoneHeader() {
   return <PhoneHeaderGroup>
     <PhoneBar>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
-      <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><BrandLogo alt="" variant="inverse" /></PhoneHome>
+      <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><BrandLogo alt="" /></PhoneHome>
       <AccountLinks locale={locale} showAccount={showAccount === true} />
       <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>

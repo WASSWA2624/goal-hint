@@ -7,7 +7,7 @@
 | ☐ Not started | No implementation yet. |
 | — Unassessed | No completion status was recorded; inspect implementation and acceptance evidence before assigning one. |
 
-**Tracked totals:** 51 completed · 10 partial · 8 not started · 1 unassessed (70 tracked plans).
+**Tracked totals:** 52 completed · 10 partial · 8 not started · 1 unassessed (71 tracked plans).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -82,6 +82,7 @@
 | ◐ Partial | [069-offline-shell-support.md](dev-plan/069-offline-shell-support.md) | Anonymous cache and safe-update coordinator implemented; browser/Windows cold A/B, measured retries, retention and available lifecycle checks passed. Android testing is deferred; Apple/Linux remain unqualified. |
 
 | ◐ Partial | [073-probability-qualified-prediction-engine.md](dev-plan/073-probability-qualified-prediction-engine.md) | Implementation, deterministic checks and all ten genuine MySQL acceptance cases passed; live account/source qualification and chronological evaluation remain unverified. |
+| ☑ Completed | [074-theme-homogeneity.md](dev-plan/074-theme-homogeneity.md) | Light/dark cards, headers, navigation, overlays and branding verified at 320/375/1440 px, including reload and open mobile menus. |
 
 ## Partial rows
 

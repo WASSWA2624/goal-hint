@@ -235,7 +235,6 @@ test("the phone pick panel shows the market icon, market over pick, and the odds
   // Owner decision (2026-10-25): design 09 "Pick Panel" replaces the one-line pick.
   const pick = (await styledBlock("Pick")).tile.split("${table}")[0];
   assert.match(pick, /grid-template-areas: "glyph market numbers" "glyph pick numbers";/u);
-  assert.match(pick, /background: \$\{\(\{ \$family \}\) => light\.market\[\$family\]\.soft\};/u);
   // Locked picks use the same compact panel without a second subscription row.
   assert.doesNotMatch(pick, /"hint hint hint"/u);
   assert.match((await styledBlock("CardGlyph")).tile, /grid-area: glyph;/u);
@@ -252,19 +251,6 @@ test("the phone pick panel shows the market icon, market over pick, and the odds
   assert.deepEqual(["match.likely", "match.chance", "details.odds", "paywall.locked", "paywall.unlockPrediction"].map((key) => messages.text(key)),
     ["likely", "chance", "Odds", "Locked", "Unlock prediction"]);
   assert.equal(messages.text("paywall.unlockPredictionPrice", { price: "1,000" }), "Unlock for UGX 1,000");
-});
-
-test("phone tiles keep design 09's light palette and strong frame in both themes", async () => {
-  // Owner decision (2026-10-25): white cards on a dark page too; only the desktop table follows the theme.
-  const source = await cardSource;
-  assert.match(source, /const light = lightTheme\.color;/u);
-  const card = (await styledBlock("Card")).tile.split("${table}")[0];
-  assert.match(card, /color: \$\{light\.text\};\s*background: \$\{light\.surface\};/u);
-  assert.match(card, /solid \$\{phoneCardFrame\.border\};/u);
-  // The list item draws the shadow, because its content-visibility clips anything a card paints outside it.
-  const list = await readFile(new URL("../src/components/match/match-card-list.tsx", import.meta.url), "utf8");
-  assert.match(list, /> li:has\(> article:only-child\) \{ border-radius: \$\{phoneCardFrame\.radius\}; box-shadow: \$\{phoneCardFrame\.shadow\}; \}/u);
-  assert.doesNotMatch(card, /box-shadow/u);
 });
 
 test("enlarged text wraps the phone kickoff under the league instead of under the result tag", async () => {

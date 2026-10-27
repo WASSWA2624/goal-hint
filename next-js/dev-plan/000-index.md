@@ -229,12 +229,18 @@ native feature implementation.
 This owner-approved engine behavior supersedes earlier shadow-only source-order
 restrictions. Public odds display and production activation remain separately controlled.
 
+### 074 Theme homogeneity
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [074 Theme homogeneity](074-theme-homogeneity.md) | Consistent light/dark surfaces, adaptive branding, phone cards, overlays, member/admin details and offline assets, with rendered theme checks. |
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |
 | --- | --- |
 | Scope, stack and operating decisions (§§1, 9, 14–15) | 001–003, 008, 010, 014, 046–049 |
-| Navigation, cards and styling (§§2–3) | 015–018, 032–037, 050–051, 055–056, 062 |
+| Navigation, cards and styling (§§2–3) | 015–018, 032–037, 050–051, 055–056, 062, 074 |
 | Market probabilities and outcomes (§§4, 7–8) | 005, 012–014, 022–024, 027, 030, 038, 052–054 |
 | EAT windows, daily selection and cadence (§5) | 004, 020–026, 037, 043 |
 | Provider, research, canonical identities and images (§§6, 10) | 006–013, 018–019, 026 |

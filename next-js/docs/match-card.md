@@ -15,7 +15,7 @@ Import directly from the owning module under `@/components/match`:
 | `team-logo` | `TeamLogo`: shared by cards and match details, with a team name, optional image URL and explicit eager/lazy loading. Containers size it with `--gh-logo-size` (default 32px) and may place it by its `data-team-logo` attribute. Initials remain visible when a logo is missing or fails. |
 | `probability-label` | `ProbabilityLabel`, `ProbabilityLabelProps`: a complete `AcceptedMarket`, optional selection within that market, and locale. Displays an estimated probability using domain group rounding. |
 | `outcome-badge` | `OutcomeBadge`, `OutcomeBadgeProps`: one canonical settlement outcome status and locale. Explicit text plus the shared decorative icon; no live-region announcements for static cards. |
-| `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children and an optional locale. One column of tiles below `lg` (64rem) and an aligned table with a decorative navy column header from `lg`. Source order remains visual and keyboard order. |
+| `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children and an optional locale. One column of tiles below `lg` (64rem) and an aligned table with a themed decorative column header from `lg`. Source order remains visual and keyboard order. |
 | `match-icons` | Decorative inline SVG icons (`aria-hidden`, not focusable). |
 | Domain `prediction-label` | `predictionLabel` supplies generic full-word outcomes to cards, details, history, slips and metadata. `predictionRuleLabel` formats extended market rules without participant-name substitution or lost goal lines. |
 
@@ -66,8 +66,8 @@ the left, with its match count aligned to the right.
 
 ### Phone and tablet tile (below 64rem)
 
-The mobile card ("Verdict Corner", design 09) has three rows on one grid
-(`"meta result" "teams teams" "pick pick"`), about 75px tall in every state:
+The mobile card ("Pick Panel") has three rows on one grid
+(`"meta result" "teams teams" "pick pick"`) and grows naturally with its content:
 
 1. **Meta and verdict.** One quiet muted line: country flag, one-line ellipsized
    league name, `·`, then the kickoff date and 24-hour time with its zone. An
@@ -76,11 +76,11 @@ The mobile card ("Verdict Corner", design 09) has three rows on one grid
    `match-card` inline-size container; below 18rem), the league takes the
    first line and the kickoff moves to a second one instead of running under
    the tag. The result tag
-   owns the top-right corner (at least 4.75rem wide, overlapping the card's
-   border). Tags use the bright `theme.color.verdict` palette with dark text
-   (5.8:1 or better in both themes): bright green Win with a check, coral Loss
-   with a cross, amber Pending, light slate Void, and a pale amber tag with an
-   amber border for Upcoming. Labels are uppercase words; an unavailable result
+   sits beside the metadata at a shared 5.25rem width. Tags use the active
+   `theme.color.verdict` palette: vivid fills with dark text in light mode,
+   dark tinted fills with readable light text in dark mode. Win is green with a
+   check, Loss red with a cross, Pending and Upcoming amber, and Void neutral.
+   Labels remain explicit words; an unavailable result
    shows no tag. The desktop Result column uses the same colours, and every
    badge fills the column so all results share one width.
 2. **Teams.** Home name and crest, the centre column, away crest and name, with
@@ -89,22 +89,23 @@ The mobile card ("Verdict Corner", design 09) has three rows on one grid
    beneath it: `FT`, `AET*`/`Pens*`, or a halted status such as Postponed in grey.
    While live, the side ahead has the bold name and the corner tag shows the live
    minute with a glowing red dot (`67′`, `90+4′`, or the phase) instead of Pending.
-3. **Pick line.** Right-aligned under the teams: market caption in its family colour, the full-word pick
-   (`Home win`, `Over 2.5`, `Not both teams to score`), the exact available
-   price as `@ 1.85`, and the probability as `54% likely`. At narrow widths the
-   word "likely" drops first (it wraps onto a clipped second line, never below
-   the percentage's own width) and the market caption shortens next, so the
-   pick and its numbers stay whole. A missing pick reads `No pick · Too early` (the
-   short reason). The decorative meter and the bracketed desktop price stay in
-   the markup but are hidden on the tile.
+3. **Pick panel.** A family-tinted panel under the teams contains the market
+   glyph, the market caption over a full-word pick (`Home win`, `Over 2.5`,
+   `Not both teams to score`), and a surface-colored numbers box pairing the
+   exact available price (`@ 1.85`) with estimated chance (`54%`). Market and
+   pick shorten first; at narrow effective widths the numbers take their own
+   row. Locked picks use a neutral dashed panel with their public chance and
+   unlock copy. A missing pick reads `No prediction · Too early` or its supplied
+   reason. The decorative meter and desktop price remain hidden on the tile.
 
 All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Desktop keeps both date and kickoff clock in the Date & Time column; elapsed time and FT share the separate status slot above the score. An unknown kickoff retains its localized date-column fallback without inventing a clock or `datetime`. Phone date/time composition stays unchanged. Within the existing desktop league column, the country sits above the league name and logo on one line: a long recognized name (over 13 characters) uses a familiar short form from `countryShortName` (Dominican Rep., Bosnia & Herz., N. Ireland, UAE…), anything still too wide ends in an ellipsis, and the full name stays in its title. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the row number with the country and align the league logo/name, both team names/logos, score, market, prediction, probability and result on the lower track, with the country on its single line. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
 
-Tile rows use 10px side padding, 8px page gutters and 6px list gaps. Metadata
-is 11px, team names and picks 12px bold, scores 16px, and captions, state and
-the result tag 10px. The list's offscreen placeholder
-(`contain-intrinsic-block-size`) matches the 75px card. Fine borders and square edges separate
-white or dark cards from the darker page canvas; mobile cards have no shadow.
+Tiles use 12px side padding and 10px list gaps. The list defers offscreen layout
+with `content-visibility` and a remembered intrinsic height. `theme.phoneCardFrame`
+supplies the shared square edges, themed border and no shadow. Match cards,
+slip cards, number boxes, logo fallbacks and locked/missing regions all use the
+active theme: white surfaces in light mode and dark navy surfaces in dark mode.
+Slip headers, summary strips and individual legs follow the same rule.
 Long names ellipsize on one line. Captions, metric values and the inline price
 stay on one line, with bounded ellipsis only at unusually narrow effective
 widths or enlarged text. Full semantic descriptions remain accessible. Text
@@ -139,17 +140,16 @@ Browser acceptance covers 320, 360, 390 and 430px, 200% root text, long names, s
 ([football catalog](football-catalog.md#team-codes-spare-quota-import)). Cards
 do not display it, following the owner's decision for full names.
 
-Use the existing root style provider. The desktop table uses the per-family
-`theme.color.market` hues (match result
-emerald `#00824A`, double chance violet `#7C3AED`, total goals blue `#2563EB`,
-BTTS orange `#C2410C`; clean tints share one lightness). Match result uses the
-lightest, most vivid emerald that still holds white text, and its gradient
-turns toward fresh green (`#00824A` to `#07802F`) instead of fading into the
-brand teal. Market colours use the `MarketColors` type, which is stricter than
-`AccentColors`: white keeps 4.5:1 on every solid and on both gradient stops, and
-each family's text colour keeps 4.5:1 on its tint and on white, so all of them
-can carry small text. `tests/market-colors.test.mjs` computes these ratios for
-every family. Long names and words wrap inside bounded
+Use the existing root style provider. Phone panels and the desktop table use
+the active `theme.color.market` palette: emerald for match result, violet for
+double chance, blue for total goals and orange for BTTS. Glyph solids and
+their `theme.color.onBrand` marks switch together; light-mode white marks and
+dark-mode dark marks keep contrast on the corresponding solid. Family text
+keeps at least 4.5:1 contrast on the themed soft tint and content surface.
+`tests/market-colors.test.mjs` checks solids, gradient stops and text pairs in
+both themes. The match-detail phone logo uses adaptive branding on the themed
+header, and lineup pitches pair themed emerald stripes/text with surface-colored
+player markers. Long names and words wrap inside bounded
 grid tracks. The analysis link uses `matchHref`, canonical fixture identity and
 the supplied slug, with prefetch disabled. It covers the whole card, so the
 entire card or row is the click target. The eventual detail route owns identity
@@ -323,4 +323,6 @@ not real-provider CDN reliability or media rights. Browser artifacts remain
 under ignored `output/playwright/`. Actual results are recorded in
 [development progress](development-progress.md).
 
-Ended fixtures display the final score without VS on every screen. Unknown final scores display a dash. Phone cards use square edges and a fine border on a cool canvas.
+Ended fixtures display the final score without VS on every screen. Unknown
+final scores display a dash. Phone cards use square edges and a fine themed
+border on the selected white or navy page surface.

@@ -66,7 +66,8 @@ export const RailStep = styled.li`
 `;
 export const RailNumber = styled.span`
   display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: ${({ theme }) => theme.border.radius};
-  background: ${({ theme }) => theme.color.text}; color: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link};
+  border: 1px solid ${({ theme }) => theme.color.controlBorder};
   font-size: 12px; line-height: 1; font-weight: ${({ theme }) => theme.typography.weight.heavy};
 `;
 

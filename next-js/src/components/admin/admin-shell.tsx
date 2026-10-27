@@ -26,7 +26,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
       <Header>
         <AdminHeaderContent>
           <HomeLink href={homeHref("en")} aria-label={messages.text("navigation.home")} prefetch={false}>
-            <BrandLogo alt="" variant="inverse" />
+            <BrandLogo alt="" />
           </HomeLink>
           <AdminMark>Admin</AdminMark>
           <DesktopNav aria-label={messages.text("navigation.primary")}>

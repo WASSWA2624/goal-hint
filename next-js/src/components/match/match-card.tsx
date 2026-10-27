@@ -20,7 +20,7 @@ import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
-import { lightTheme, media, phoneCardFrame, type OutcomeTone } from "@/styles/theme";
+import { media, type GoalHintTheme, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { MarketGlyph } from "./market-glyph";
@@ -60,19 +60,15 @@ const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
 const glow = keyframes`0%, 100% { box-shadow: 0 0 1px 0 var(--gh-live-glow); } 50% { box-shadow: 0 0 6px 2px var(--gh-live-glow); }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
-const tileRadius = phoneCardFrame.radius;
-/** Owner decision (2026-10-25): phone tiles always use design 09's light palette, so white cards stand out on a dark
- * page too; the desktop table follows the theme. Tile rules take their colours from here, never from the theme. */
-const light = lightTheme.color;
 const lockGlow = keyframes`
-  0%, 100% { filter: drop-shadow(0 0 1px color-mix(in srgb, ${light.brand} 35%, transparent)); }
-  50% { filter: drop-shadow(0 0 6px color-mix(in srgb, ${light.brand} 80%, transparent)); }
+  0%, 100% { filter: drop-shadow(0 0 1px color-mix(in srgb, var(--gh-lock-glow) 35%, transparent)); }
+  50% { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--gh-lock-glow) 80%, transparent)); }
 `;
 /** A locked panel's dashed edge, and the rule between the odds and the chance: the control border or the market's colour
  * softened towards the card surface. */
-const dashedBorder = `color-mix(in srgb, ${light.controlBorder} 55%, ${light.surface})`;
-const rule = ({ $family, $locked }: { $family: MarketFamily; $locked: boolean }) =>
-  `color-mix(in srgb, ${$locked ? light.controlBorder : light.market[$family].solid} 30%, ${light.surface})`;
+const dashedBorder = ({ theme }: { theme: GoalHintTheme }) => `color-mix(in srgb, ${theme.color.controlBorder} 55%, ${theme.color.surface})`;
+const rule = ({ theme, $family, $locked }: { theme: GoalHintTheme; $family: MarketFamily; $locked: boolean }) =>
+  `color-mix(in srgb, ${$locked ? theme.color.controlBorder : theme.color.market[$family].solid} 30%, ${theme.color.surface})`;
 const Card = styled.article`
   position: relative;
   display: grid;
@@ -97,12 +93,9 @@ const Card = styled.article`
     grid-template-areas: "meta result" "teams teams" "pick pick";
     gap: 8px;
     padding: 10px 12px;
-    color: ${light.text};
-    background: ${light.surface};
-    /* The lifted shadow is drawn by the list item: its content-visibility would clip a shadow drawn here. */
-    border: ${({ theme }) => theme.border.width} solid ${phoneCardFrame.border};
-    border-radius: ${tileRadius};
-    &:focus-visible { outline-color: ${light.focus}; }
+    /* Match and slip tiles share the active theme's square, shadow-free phone frame. */
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
+    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
   }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
@@ -117,7 +110,6 @@ const Card = styled.article`
   ${wideTable} { grid-template-columns: ${matchTableColumns.full}; }
   /* Touch taps would otherwise leave a stuck tint after returning to the list. */
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  ${tile} { ${media.hover} { &:hover { background: ${light.rowHover}; } } }
 `;
 
 /** Tile: one quiet line, flag and bold league then the kickoff date and time; the result tag sits beside it. A long
@@ -132,7 +124,7 @@ const Meta = styled.header`
     gap: 2px 6px;
     min-inline-size: 0;
     min-block-size: 1.25rem;
-    color: ${light.mutedText};
+    color: ${({ theme }) => theme.color.mutedText};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
     font-weight: ${({ theme }) => theme.typography.weight.body};
     line-height: 1rem;
@@ -219,7 +211,7 @@ const Dot = styled.span`
 const KickoffTime = styled.span`
   /* Tile: an upcoming kickoff is the card's state, so only its clock stands out. */
   ${tile} {
-    [data-status="scheduled"] & { color: ${light.text}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+    [data-status="scheduled"] & { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   }
   ${table} {
     grid-column: 2;
@@ -232,7 +224,7 @@ const KickoffTime = styled.span`
 const KickoffZone = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   font-weight: 400;
-  ${tile} { color: ${light.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${tile} { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   ${table} { overflow-wrap: anywhere; }
 `;
 const KickoffDetails = styled.span`
@@ -252,7 +244,6 @@ const CountryDetails = styled.span`
   > span { flex: none; }
   /* One line: a long recognized country uses its short form; anything still too wide ends in an ellipsis. */
   > [data-country-name] { flex: 1; ${ellipsis} }
-  ${tile} { color: ${light.mutedText}; }
 `;
 const CountryName = styled.span`
   ${tile} { display: none; }
@@ -264,7 +255,7 @@ const FlagImage = styled.img`
   margin-inline-end: 4px;
   object-fit: cover;
   border-radius: 1px;
-  box-shadow: 0 0 0 0.5px rgb(11 31 51 / 22%);
+  box-shadow: 0 0 0 0.5px ${({ theme }) => theme.color.border};
   ${tile} { margin-inline-end: 0; }
 `;
 const FlagFallback = styled.span`
@@ -288,9 +279,9 @@ const Teams = styled.div`
     --gh-logo-size: 1.75rem;
     --gh-logo-font: ${({ theme }) => theme.typography.scale.caption};
     --gh-logo-radius: 50%;
-    --gh-logo-ring: inset 0 0 0 1.5px ${light.border};
-    --gh-logo-fill: ${light.surfaceMuted};
-    --gh-logo-ink: ${light.mutedText};
+    --gh-logo-ring: inset 0 0 0 1.5px ${({ theme }) => theme.color.border};
+    --gh-logo-fill: ${({ theme }) => theme.color.surfaceMuted};
+    --gh-logo-ink: ${({ theme }) => theme.color.mutedText};
     grid-area: teams;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -312,7 +303,7 @@ const Team = styled.div`
     grid-column: 3;
     gap: 6px;
     &[data-team-side="home"] { grid-column: 1; flex-direction: row-reverse; }
-    &[data-result="loss"] { color: ${light.mutedText}; }
+    &[data-result="loss"] { color: ${({ theme }) => theme.color.mutedText}; }
   }
   /* Both crests sit beside the score; the home name aligns towards it. */
   ${table} {
@@ -359,9 +350,9 @@ const Versus = styled.span`
     min-inline-size: 2.125rem;
     block-size: 1.5rem;
     padding-inline: 4px;
-    color: ${light.mutedText};
-    background: ${light.page};
-    border: ${({ theme }) => theme.border.width} solid ${light.border};
+    color: ${({ theme }) => theme.color.mutedText};
+    background: ${({ theme }) => theme.color.page};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: ${({ theme }) => theme.border.radius};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
@@ -387,10 +378,10 @@ const Score = styled.span`
     gap: 5px;
     font-size: 1.375rem;
     line-height: 1.625rem;
-    color: ${light.text};
-    > span:nth-child(2) { color: ${light.mutedText}; font-size: 1rem; }
-    > [data-loss] { color: ${light.mutedText}; }
-    [data-status="live"] &, [data-status="live"] & > span:nth-child(2) { color: ${light.live.solid}; }
+    color: ${({ theme }) => theme.color.text};
+    > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
+    > [data-loss] { color: ${({ theme }) => theme.color.mutedText}; }
+    [data-status="live"] &, [data-status="live"] & > span:nth-child(2) { color: ${({ theme }) => theme.color.live.solid}; }
   }
 `;
 const StateChip = styled.span<{ $tone: StateTone }>`
@@ -414,7 +405,7 @@ const StateChip = styled.span<{ $tone: StateTone }>`
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     letter-spacing: 0.02em;
     line-height: 0.875rem;
-    color: ${({ $tone }) => $tone === "final" ? light.mutedText : light.outcome.void.text};
+    color: ${({ theme, $tone }) => $tone === "final" ? theme.color.mutedText : theme.color.outcome.void.text};
   }
 `;
 const LiveDot = styled.span`
@@ -427,7 +418,6 @@ const LiveDot = styled.span`
   animation: ${glow} 1.6s ease-in-out infinite;
   /* Reduced motion keeps a still halo. */
   @media (prefers-reduced-motion: reduce) { animation: none; box-shadow: 0 0 3px 1px var(--gh-live-glow); }
-  ${tile} { --gh-live-glow: color-mix(in srgb, ${light.live.solid} 65%, transparent); background: ${light.live.solid}; }
 `;
 
 /** Tile: the pick panel under the teams, tinted in the market's colour: the market icon, the market over the pick, then
@@ -443,18 +433,18 @@ const Pick = styled.div<{ $family: MarketFamily }>`
     column-gap: 10px;
     min-inline-size: 0;
     padding: 6px 7px 6px 9px;
-    background: ${({ $family }) => light.market[$family].soft};
+    background: ${({ theme, $family }) => theme.color.market[$family].soft};
     border: ${({ theme }) => theme.border.width} solid transparent;
     border-radius: ${({ theme }) => theme.border.radius};
     line-height: 1.25;
     white-space: nowrap;
     &[data-pick-state="subscriber"] {
-      background: ${light.surfaceMuted};
+      background: ${({ theme }) => theme.color.surfaceMuted};
       border: ${({ theme }) => theme.border.width} dashed ${dashedBorder};
     }
     &[data-pick-state="none"] {
-      background: ${light.page};
-      border: ${({ theme }) => theme.border.width} dashed ${light.border};
+      background: ${({ theme }) => theme.color.page};
+      border: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.border};
     }
     /* Enlarged text: the numbers box takes its own row, so the pick keeps its width and nothing is clipped. */
     ${narrowTile} {
@@ -465,6 +455,7 @@ const Pick = styled.div<{ $family: MarketFamily }>`
   ${table} { display: grid; grid-column: 7 / span 4; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
 const CardGlyph = styled(MarketGlyph)`
+  --gh-lock-glow: ${({ theme }) => theme.color.brand};
   display: none;
   ${tile} {
     display: block; grid-area: glyph;
@@ -472,7 +463,7 @@ const CardGlyph = styled(MarketGlyph)`
       animation: ${lockGlow} 2s ease-in-out infinite;
       @media (prefers-reduced-motion: reduce) {
         animation: none;
-        filter: drop-shadow(0 0 2px color-mix(in srgb, ${light.brand} 50%, transparent));
+        filter: drop-shadow(0 0 2px color-mix(in srgb, ${({ theme }) => theme.color.brand} 50%, transparent));
       }
     }
   }
@@ -498,12 +489,12 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
     [data-pick-state="none"] > & { display: none; }
     > [data-pick-value] {
       ${ellipsis}
-      color: ${({ $family }) => light.market[$family].text};
+      color: ${({ theme, $family }) => theme.color.market[$family].text};
       font-size: ${({ theme }) => theme.typography.scale.secondary};
       font-weight: ${({ theme }) => theme.typography.weight.bold};
       line-height: 0.9375rem;
     }
-    [data-pick-state="subscriber"] > & > [data-pick-value] { color: ${light.mutedText}; }
+    [data-pick-state="subscriber"] > & > [data-pick-value] { color: ${({ theme }) => theme.color.mutedText}; }
   }
   ${table} {
     justify-self: start;
@@ -528,7 +519,7 @@ const GatedPick = styled.span`
   > [data-mobile-only] { display: none; }
   ${tile} {
     grid-area: pick;
-    color: ${light.text};
+    color: ${({ theme }) => theme.color.text};
     font-size: 1rem;
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     line-height: 1.25rem;
@@ -554,10 +545,10 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
     grid-area: pick;
     align-items: baseline;
     gap: 6px;
-    color: ${({ $available }) => $available ? light.text : light.mutedText};
+    color: ${({ theme, $available }) => $available ? theme.color.text : theme.color.mutedText};
     > [data-pick-value] {
       ${ellipsis}
-      color: ${({ $family, $available }) => $available ? light.market[$family].text : light.mutedText};
+      color: ${({ theme, $family, $available }) => $available ? theme.color.market[$family].text : theme.color.mutedText};
       font-size: 1rem;
       letter-spacing: -0.01em;
       line-height: 1.25rem;
@@ -609,14 +600,14 @@ const Percent = styled.span`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 `;
-/** Tile only: the shown pick's odds and chance side by side, each over its caption, in a white box split by a thin
+/** Tile only: the shown pick's odds and chance side by side, each over its caption, in a surface box split by a thin
  * rule in the market's colour; a locked pick shows only its public chance. */
 const PickNumbers = styled.span<{ $family: MarketFamily; $locked: boolean }>`
   display: none;
   ${tile} {
     grid-area: numbers;
     display: flex;
-    background: ${light.surface};
+    background: ${({ theme }) => theme.color.surface};
     border-radius: ${({ theme }) => theme.border.radius};
     ${narrowTile} { justify-self: start; margin-block-start: 6px; }
     > span {
@@ -631,14 +622,14 @@ const PickNumbers = styled.span<{ $family: MarketFamily; $locked: boolean }>`
       background: linear-gradient(${rule}, ${rule}) left center / 1px calc(100% - 12px) no-repeat;
     }
     [data-number] {
-      color: ${light.text};
+      color: ${({ theme }) => theme.color.text};
       font-size: 1rem;
       font-weight: ${({ theme }) => theme.typography.weight.heavy};
       line-height: 1.25rem;
       font-variant-numeric: tabular-nums;
     }
     [data-caption] {
-      color: ${({ $family, $locked }) => $locked ? light.mutedText : light.market[$family].text};
+      color: ${({ theme, $family, $locked }) => $locked ? theme.color.mutedText : theme.color.market[$family].text};
       font-size: ${({ theme }) => theme.typography.scale.caption};
       font-weight: ${({ theme }) => theme.typography.weight.heavy};
       letter-spacing: 0.06em;
@@ -683,9 +674,6 @@ const Result = styled(OutcomeBadge)`
     &[data-result-badge="unavailable"] { display: none; }
     &[data-result-badge="live"] {
       gap: 5px;
-      color: ${light.live.text};
-      background: ${light.live.soft};
-      border-color: color-mix(in srgb, ${light.live.solid} 35%, ${light.live.soft});
     }
   }
   /* Table: every result badge fills the Result column, so Upcoming, Win, Loss, Pending and Void share one width. */
@@ -713,10 +701,9 @@ const Open = styled(Link)`
   /* The link covers the tile, so its press tint lands at once over everything, chips included, in place of the
    * browser's tap overlay, inside the card's border. */
   ${tile} {
-    border-radius: ${tileRadius};
+    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
     -webkit-tap-highlight-color: transparent;
-    &:active { background: color-mix(in srgb, ${light.text} 8%, transparent); }
-    &:focus-visible { outline-color: ${light.focus}; }
+    &:active { background: color-mix(in srgb, ${({ theme }) => theme.color.text} 8%, transparent); }
   }
   ${table} {
     position: static;

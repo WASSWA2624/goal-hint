@@ -50,7 +50,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
       <Header $app={app}>
         <HeaderContent $wide={app || wide}>
           <HomeLink href={homeHref(language)} aria-label={messages.text("navigation.home")} prefetch={false}>
-            <BrandLogo alt="" variant="inverse" />
+            <BrandLogo alt="" />
           </HomeLink>
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />

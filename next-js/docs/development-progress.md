@@ -1,5 +1,36 @@
 # Development progress
 
+## 074 — Theme homogeneity (27 October 2026)
+
+Implemented [plan 074](../dev-plan/074-theme-homogeneity.md). Light mode now uses
+white page, header and navigation surfaces; dark mode uses dark surfaces throughout.
+Phone match/slip cards no longer import the light palette. Their prediction panels,
+number boxes, glyph ink, team placeholders and frames follow the selected theme.
+Dark verdict badges use dark tinted fills with readable status colors. Shared
+branding adapts to the theme, including offline logo/mark assets. Member payment
+steps, squad details, menu/dialog overlays and analytics details reuse semantic
+colors and shadows. Phone card frames are square and shadow-free.
+
+Verification:
+
+- Lint, TypeScript and the production build passed; the offline bundle contains
+  24 pinned assets, including all four primary/inverse logo/mark files.
+- The full unit run passed 2,134 checks, with three timing/subprocess failures
+  during concurrent builds and one existing POSIX-permission skip on Windows.
+  Sequential reruns of all three affected suites (`catalog-service`, `database-cli`
+  and `fallback-service`) passed all 61 checks without source changes. The initial
+  run is recorded as a failure, rather than reported as a clean full-suite pass.
+- All 75 Python checks passed, including the updated offline proxy asset tests.
+  Offline worker tests cover retaining both branding variants through a cold restart.
+- The synthetic production theme fixture built, typechecked and passed its SSR
+  checks. Browser checks passed light/dark at 320, 375 and 1440 px, including theme
+  switching, reload persistence, actual shared headers, match/slip surfaces and
+  open phone More menus. Computed popup backgrounds/text matched the selected
+  palette. Screenshots were visually inspected; captures remain ignored under
+  `output/playwright/theme-homogeneity/`.
+
+Production configuration, data, paid services and deployment were unchanged.
+
 ## 073 — Disposable MySQL acceptance follow-up (27 October 2026)
 
 Resolved all ten database acceptance skips from the original engine delivery.

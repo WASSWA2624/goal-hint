@@ -136,7 +136,7 @@ def derive_bundles(origin, epoch):
     resources = {}
     for entry in [manifest["entry"], *manifest["assets"]]:
         path = entry["url"]
-        if not re.fullmatch(r"/(?:offline|_next/static/[A-Za-z0-9_./-]+|brand/goal-hint-(?:logo-inverse|mark-primary)\.svg)", path) or ".." in path:
+        if not re.fullmatch(r"/(?:offline|_next/static/[A-Za-z0-9_./-]+|brand/goal-hint-(?:logo|mark)-(?:primary|inverse)\.svg)", path) or ".." in path:
             raise ValueError("Unapproved fixture resource.")
         resource = fetch_backend(origin, path)
         if resource.status != 200 or len(resource.body) != entry["bytes"] or digest(resource.body) != entry["sha256"]:

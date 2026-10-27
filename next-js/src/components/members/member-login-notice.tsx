@@ -30,7 +30,7 @@ const LoginNotice = styled.div`
   color: ${({ theme }) => theme.color.outcome.correct.text};
   background: ${({ theme }) => theme.color.outcome.correct.background};
   border-color: ${({ theme }) => theme.color.outcome.correct.border};
-  box-shadow: ${({ theme }) => theme.shadow.cardHover};
+  box-shadow: ${({ theme }) => theme.shadow.popover};
   button { flex: none; min-block-size: 44px; margin: 0; }
 `;
 

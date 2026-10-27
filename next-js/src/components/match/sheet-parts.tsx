@@ -14,7 +14,7 @@ export const SheetScrim = styled.div`
   position: fixed;
   inset: 0;
   z-index: 59;
-  background: ${({ theme }) => theme.mode === "dark" ? "rgb(0 0 0 / 0.62)" : "rgb(11 31 51 / 0.5)"};
+  background: ${({ theme }) => theme.color.scrim};
   ${media.desktop} { display: none; }
 `;
 /** Fixed above the tab bar; no ancestor of a sheet may be a size container, which would trap it. */
@@ -30,7 +30,7 @@ export const sheetFrame = css`
   padding-block-end: env(safe-area-inset-bottom);
   background: ${({ theme }) => theme.color.surface};
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  box-shadow: 0 -12px 32px -16px rgb(0 0 0 / 0.5);
+  box-shadow: ${({ theme }) => theme.shadow.popover};
   outline: none;
   animation: ${sheetIn} 180ms ease-out;
   @media (prefers-reduced-motion: reduce) { animation: none; }

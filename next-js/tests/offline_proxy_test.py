@@ -20,7 +20,12 @@ def resources():
     body, script = b"<html><body data-offline-view>Saved</body></html>", b"void 0;"
     entry = {"url": "/offline", "sha256": proxy.digest(body), "bytes": len(body)}
     asset = {"url": "/_next/static/chunks/fixture-a.js", "sha256": proxy.digest(script), "bytes": len(script)}
-    manifest = {"schemaVersion": 1, "entry": entry, "assets": [asset], "createdAt": 1000}
+    branding = {
+        f"/brand/goal-hint-{kind}-{variant}.svg": f'<svg data-brand="{kind}-{variant}"/>'.encode()
+        for kind in ["logo", "mark"] for variant in ["primary", "inverse"]
+    }
+    brand_assets = [{"url": path, "sha256": proxy.digest(content), "bytes": len(content)} for path, content in branding.items()]
+    manifest = {"schemaVersion": 1, "entry": entry, "assets": [asset, *brand_assets], "createdAt": 1000}
     manifest["version"] = proxy.digest(proxy.json_bytes(proxy.canonical_manifest(manifest)))
     snapshot = {"schemaVersion": 1, "capturedAt": 1000, "expiresAt": 86401000, "reportingDate": "1970-01-01", "records": [{
         "fixtureId": "fixture", "dataVersion": "1", "homeTeam": {"id": "home", "name": "Home", "code": None},
@@ -30,6 +35,7 @@ def resources():
         "/en": proxy.Resource(b"<main data-offline-fixture>Isolated fixture</main>", {}),
         "/offline": proxy.Resource(body, {"content-type": "text/html", "cache-control": "public, max-age=0"}),
         asset["url"]: proxy.Resource(script, {"content-type": "application/javascript", "cache-control": "public, max-age=0"}),
+        **{path: proxy.Resource(content, {"content-type": "image/svg+xml"}) for path, content in branding.items()},
         "/offline-manifest.json": proxy.Resource(proxy.json_bytes(manifest), {"x-goalhint-offline-manifest": "1"}),
         "/api/offline/snapshot": proxy.Resource(proxy.json_bytes(snapshot), {"x-goalhint-offline-snapshot": "1"}),
     }
@@ -63,6 +69,10 @@ class OfflineProxyTest(unittest.TestCase):
         self.assertNotIn(proxy.NEW_ASSET, bundles["A"])
         self.assertIn(proxy.NEW_ASSET, bundles["B"])
         self.assertEqual(bundles["A"]["/offline"].body, bundles["B"]["/offline"].body)
+        for path, resource in source.items():
+            if path.startswith("/brand/"):
+                for generation in ["A", "B"]:
+                    self.assertEqual(bundles[generation][path].body, resource.body)
         first, second = [json.loads(bundles[g]["/api/offline/snapshot"].body) for g in ["A", "B"]]
         self.assertEqual(second["capturedAt"], first["capturedAt"] + 1000)
         self.assertEqual(second["records"][0]["dataVersion"], "2")

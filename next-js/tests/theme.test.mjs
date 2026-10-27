@@ -49,6 +49,11 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(theme.header.text, background, `${theme.mode} title bar`);
       readable(theme.header.accent, background, `${theme.mode} current navigation`);
     }
+    readable(theme.header.onAccent, theme.header.accent, `${theme.mode} selected header controls`);
+    for (const background of [theme.header.fieldFill, theme.header.fieldFillActive]) {
+      readable(theme.header.text, background, `${theme.mode} header input`);
+      readable(theme.header.placeholder, background, `${theme.mode} header placeholder`);
+    }
     for (const background of theme.header.navigationBackground.match(/#[0-9a-f]{6}/gi)) {
       readable(theme.header.mutedText, background, `${theme.mode} navigation`);
       readable(theme.header.accent, background, `${theme.mode} active navigation`);
@@ -57,9 +62,32 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(colors.text, colors.background, `${theme.mode} ${outcome}`);
       readable(colors.text, theme.color.surface, `${theme.mode} inline ${outcome}`);
     }
+    for (const [verdict, colors] of Object.entries(theme.color.verdict)) {
+      readable(colors.text, colors.fill, `${theme.mode} ${verdict} verdict`);
+    }
     for (const [accent, colors] of Object.entries(theme.color.accent)) {
       readable(colors.text, colors.soft, `${theme.mode} ${accent} caption`);
     }
+  }
+});
+
+test("page, cards, navigation and table chrome share the selected theme", () => {
+  for (const theme of [lightTheme, darkTheme]) {
+    for (const color of [theme.color.page, theme.color.surface, theme.color.surfaceMuted,
+      theme.color.cardHeader, theme.gradient.page, theme.gradient.tableHeader,
+      theme.header.background, theme.header.gradient, theme.header.navigationBackground]) {
+      const brightness = luminance(color);
+      assert.ok(theme.mode === "light" ? brightness >= 0.85 : brightness <= 0.08,
+        `${theme.mode} neutral surface ${color} belongs to the selected palette`);
+    }
+    assert.equal(theme.phoneCardFrame.radius, "0");
+    assert.equal(theme.phoneCardFrame.shadow, "none");
+    readable(theme.phoneCardFrame.border, theme.color.surface, `${theme.mode} phone card frame`, 3);
+  }
+  assert.equal(lightTheme.color.page, "#FFFFFF");
+  assert.equal(lightTheme.color.surface, "#FFFFFF");
+  for (const colors of Object.values(darkTheme.color.verdict)) {
+    assert.ok(luminance(colors.fill) <= 0.08, "Dark result badges must not inherit light fills");
   }
 });
 

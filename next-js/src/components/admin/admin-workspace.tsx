@@ -217,7 +217,7 @@ const MenuPopup = styled.nav`
   padding: 6px 8px 10px;
   background: ${({ theme }) => theme.color.surface};
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  box-shadow: 0 10px 24px rgb(6 23 71 / 18%);
+  box-shadow: ${({ theme }) => theme.shadow.popover};
   ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
   li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
 `;

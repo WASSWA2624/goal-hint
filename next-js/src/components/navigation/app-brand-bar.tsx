@@ -44,7 +44,7 @@ const Home = styled(Link)`
 export function AppBrandBar({ locale, showAccount = true }: { locale: string; showAccount?: boolean }) {
   return <Group><Bar>
     <Home href={homeHref(locale)} prefetch={false} aria-label={createMessages(locale).text("navigation.home")}>
-      <BrandLogo alt="" variant="inverse" />
+      <BrandLogo alt="" />
     </Home>
     <AccountLinks locale={locale} showAccount={showAccount} />
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />

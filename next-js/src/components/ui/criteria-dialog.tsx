@@ -28,7 +28,7 @@ const Dialog = styled.dialog`
   font: inherit;
 
   &[open] { display: flex; flex-direction: column; }
-  &::backdrop { background: ${({ theme }) => theme.header.background}; opacity: 0.6; }
+  &::backdrop { background: ${({ theme }) => theme.color.scrim}; }
 
   /* One successful input tree remains usable before hydration and without JavaScript. */
   &[data-enhanced="false"] {

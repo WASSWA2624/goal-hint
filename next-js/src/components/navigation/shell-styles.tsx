@@ -17,7 +17,7 @@ const focusRing = css`
     outline-offset: ${({ theme }) => theme.border.focusOffset};
   }
 `;
-/** On the dark bar the ring is inverse teal (5:1 on every stop), drawn inside so the bar never clips it. */
+/** Keep the theme's header focus ring inside the bar so it never clips. */
 const headerFocus = css`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
@@ -51,7 +51,7 @@ export const SkipLink = styled.a`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
 
-  /* A navy ring inside the white box reads on the dark bar and on the light page alike. */
+  /* The inner ring stays visible on both the header and page surfaces. */
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
     outline-offset: -6px;
@@ -69,8 +69,8 @@ export const SkipLink = styled.a`
 `;
 
 /**
- * The branded bar: solid navy/charcoal behind the inverse logo, with a quiet edge along
- * the bottom. App pages own their phone bar (same fill), so this one is desktop-only there.
+ * The shared theme surface with a quiet bottom edge. App pages own their phone bar
+ * with the same fill, so this one is desktop-only there.
  */
 export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "data-app-header": "" })<{ $app?: boolean }>`
   position: sticky;
@@ -104,7 +104,7 @@ export const HomeLink = styled(TextLink)`
   flex: none;
   display: inline-flex;
   text-decoration: none;
-  /* Doubled to win over the shared link's navy ring. */
+  /* Doubled to win over the shared link's page focus ring. */
   &&:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
     outline-offset: -6px;
@@ -138,9 +138,8 @@ export const TopNavList = styled.ul`
 `;
 
 /**
- * Light links on the dark bar; each section's icon keeps its own hue as a light tint, matching the
- * phone tab bar. The current page turns white and bold over a 3px inverse-teal indicator that rests
- * on the brand edge; hover previews a faint one.
+ * Header links and section icons share the phone tab bar's theme colors. The current
+ * page uses stronger text and a 3px accent indicator; hover previews a faint one.
  */
 const topLink = css<{ $tone?: AccentName }>`
   position: relative;
@@ -219,7 +218,7 @@ export const TabMeasure = styled.span<{ $tone?: AccentName }>`
   > span { white-space: nowrap; }
 `;
 
-/** The summary sits on the bar; its popup stays a light surface with dark links. */
+/** The summary sits on the header; its popup uses the theme's content surface. */
 const MoreMenuDetails = styled.details<{ $tone?: AccentName; $mobile?: boolean }>`
   position: relative;
   display: flex;
@@ -274,7 +273,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
-  box-shadow: ${({ theme }) => theme.shadow.cardHover};
+  box-shadow: ${({ theme }) => theme.shadow.popover};
   a {
     display: flex;
     min-inline-size: 0;

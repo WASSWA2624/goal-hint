@@ -1,9 +1,9 @@
 "use client";
 
-import styled from "styled-components";
+import styled, { useTheme } from "styled-components";
 import { inverseLogoSource } from "./brand-inline";
 
-type BrandVariant = "primary" | "inverse" | "monochrome" | "monochrome-inverse";
+type BrandVariant = "adaptive" | "primary" | "inverse" | "monochrome" | "monochrome-inverse";
 
 const LogoSpace = styled.span`
   display: inline-flex;
@@ -34,24 +34,28 @@ const MarkImage = styled.img`
 export interface BrandImageProps {
   /** Use an empty alt when surrounding text or a link already names the brand. */
   alt?: string;
-  /** `primary` on white or paper; `inverse` on the navy header bars (theme.header). */
+  /** Adapt to the active theme by default; explicit variants are for fixed brand artwork. */
   variant?: BrandVariant;
 }
 
-export function BrandLogo({ alt = "Goal Hint", variant = "primary" }: BrandImageProps) {
+export function BrandLogo({ alt = "Goal Hint", variant = "adaptive" }: BrandImageProps) {
+  const theme = useTheme();
+  const resolvedVariant = variant === "adaptive" ? (theme.mode === "dark" ? "inverse" : "primary") : variant;
   return (
     <LogoSpace>
-      <LogoImage src={variant === "inverse" ? inverseLogoSource : `/brand/goal-hint-logo-${variant}.svg`}
+      <LogoImage src={resolvedVariant === "inverse" ? inverseLogoSource : `/brand/goal-hint-logo-${resolvedVariant}.svg`}
         alt={alt} width={553} height={128} fetchPriority="high" />
     </LogoSpace>
   );
 }
 
 /** Lazy, so React does not hoist a preload for this below-the-fold footer mark. */
-export function BrandMark({ alt = "Goal Hint", variant = "primary" }: BrandImageProps) {
+export function BrandMark({ alt = "Goal Hint", variant = "adaptive" }: BrandImageProps) {
+  const theme = useTheme();
+  const resolvedVariant = variant === "adaptive" ? (theme.mode === "dark" ? "inverse" : "primary") : variant;
   return (
     <MarkSpace>
-      <MarkImage src={`/brand/goal-hint-mark-${variant}.svg`} alt={alt} width={160} height={160}
+      <MarkImage src={`/brand/goal-hint-mark-${resolvedVariant}.svg`} alt={alt} width={160} height={160}
         loading="lazy" decoding="async" />
     </MarkSpace>
   );
