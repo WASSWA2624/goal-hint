@@ -26,6 +26,29 @@ def git(*args: str) -> str:
 
 
 
+def stage_source(destination: Path) -> None:
+    """Export Git-visible application files without private or generated state."""
+    excluded = {".git", ".private", ".goal-hint", ".next", "node_modules", "__pycache__",
+                "deploy", "build", "out", "dist", "coverage", "test-results", "playwright-report",
+                "output", ".tmp", ".vercel"}
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in filter(None, git("ls-files", "-z", "--cached", "--others", "--exclude-standard").split("\0")):
+        relative = Path(name)
+        if re.search(r"(^|/)\.env(?!\.example$)[^/]*$", relative.as_posix()):
+            raise CommandError(f"Refusing to stage an environment file: {name}")
+        if any(part in excluded for part in relative.parts) or relative.parts[:3] == ("src", "server", "generated"):
+            continue
+        original, target = ROOT / relative, destination / relative
+        if not original.exists():
+            continue
+        if original.is_symlink() or not original.resolve().is_relative_to(ROOT):
+            raise CommandError(f"Refusing to stage a working-tree link: {name}")
+        if not original.is_file():
+            raise CommandError(f"Unsupported source file: {name}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(original, target)
+
+
 def write_zip(directory: Path, target: Path, prefix: str = "goal-hint") -> int:
     entries = sorted(directory.rglob("*"), key=lambda item: item.relative_to(directory).as_posix())
     for item in entries:

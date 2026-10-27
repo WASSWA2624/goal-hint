@@ -8,6 +8,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'release-common.ps1')
+. (Join-Path $PSScriptRoot 'setup-builder.ps1')
 $project = Get-FullPath (Join-Path $PSScriptRoot '../..')
 $pin = Get-Content -LiteralPath (Join-Path $project 'release-toolchain.json') -Raw | ConvertFrom-Json
 $sdkJson = & $Flutter --version --machine
@@ -129,45 +130,7 @@ the browser profile. This ZIP is not an MSIX, signed installer or store release.
     New-Item -ItemType Directory -Path $delivery | Out-Null
     $setup = Join-Path $delivery ('Goal-Hint-Setup-' + $releaseVersion + '.exe')
     $sed = Join-Path $staging 'installer.sed'
-    $sourceDirectory = $installer.TrimEnd('\') + '\'
-    @"
-[Version]
-Class=IEXPRESS
-SEDVersion=3
-[Options]
-PackagePurpose=InstallApp
-ShowInstallProgramWindow=1
-HideExtractAnimation=1
-UseLongFileName=1
-InsideCompressed=0
-CAB_FixedSize=0
-CAB_ResvCodeSigning=0
-RebootMode=N
-InstallPrompt=Install Goal Hint $releaseVersion for the current user?
-DisplayLicense=
-FinishMessage=
-TargetName=$setup
-FriendlyName=Goal Hint $releaseVersion Setup
-AppLaunched=cmd.exe /d /c setup.cmd
-PostInstallCmd=<None>
-AdminQuietInstCmd=
-UserQuietInstCmd=
-SourceFiles=SourceFiles
-[SourceFiles]
-SourceFiles0=$sourceDirectory
-[SourceFiles0]
-%FILE0%=
-%FILE1%=
-%FILE2%=
-[Strings]
-FILE0="payload.zip"
-FILE1="setup.ps1"
-FILE2="setup.cmd"
-"@ | Set-Content -LiteralPath $sed -Encoding ASCII
-    $iexpress = Join-Path $env:SystemRoot 'System32/iexpress.exe'
-    if (-not (Test-Path -LiteralPath $iexpress -PathType Leaf)) { throw 'Windows IExpress is required to create the setup executable.' }
-    $builder = Start-Process -FilePath $iexpress -ArgumentList @('/N', '/Q', ('"' + $sed + '"')) -WindowStyle Hidden -PassThru -Wait
-    if ($builder.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'IExpress setup executable creation failed.' }
+    New-GoalHintSetup $installer $setup $sed $releaseVersion
     @"
 Goal Hint $releaseVersion for Windows x64
 Extract this ZIP, then run Goal-Hint-Setup-$releaseVersion.exe.

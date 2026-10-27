@@ -6,7 +6,43 @@ acceptance record is [plan 007](../dev-plan/007-platform-builds-and-release.md)
 and the [tracker](../dev-tracker.md). No store submission is performed by these
 commands.
 
-## Central delivery packages
+## Development delivery packages
+
+The current deliverables are development versions, named
+`deploy/goal-hint-android-1.0.0-dev.zip` and
+`deploy/goal-hint-windows-1.0.0-dev.zip`. From `flutter/`, build/package with:
+
+```sh
+python tool/package_development.py android --origin http://192.168.1.148:3000
+python tool/package_development.py windows --origin http://192.168.1.148:3000
+```
+
+Use the development computer's current reachable LAN origin. Keep Next.js
+running with `npm --prefix next-js run dev` from the repository root. Android
+uses the standard Android Debug signing key; Windows creates an unsigned setup
+EXE with a separate `Goal Hint Development` per-user installation and shortcuts.
+Windows Debug builds require the Visual Studio C++ Debug runtime already on the
+developer's computer; those non-redistributable CRT DLLs are excluded from ZIPs.
+WebView2 Runtime is also required. These packages are for development machines.
+
+`--skip-build` packages only the immediately completed same-checkout Debug build.
+Android verifies the supplied URL in the APK's compiled kernel; Windows checks
+the normal entry point and requested development defines in generated CMake
+configuration. Both check identity/version and include a development manifest
+and brief instructions. They are not production provenance attestations.
+Use `--force` only to replace an existing development ZIP explicitly.
+
+iOS/macOS development packages remain pending a macOS/Xcode host. On that host,
+use the normal debug commands with `APP_ENV=development` and the reachable origin:
+`flutter build ipa --debug --export-method development --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=<origin>`
+for a properly provisioned development IPA, or
+`flutter build macos --debug --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=<origin>`.
+Export through the owner's Apple development provisioning and place the resulting
+verified development packages only under root `deploy/`, using the same
+`goal-hint-ios-1.0.0-dev.zip` / `goal-hint-macos-1.0.0-dev.zip` naming. No Apple
+archive is created by the Windows host, and Linux remains excluded.
+
+## Production delivery packages
 
 The root [`deploy/`](../../deploy/README.md) folder is the only delivery
 location. Initial packages keep public version **1.0.0**; `pubspec.yaml` is

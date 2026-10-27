@@ -23,6 +23,7 @@ production requires its own hashed credentials).
 - [Development prompts](dev-plan/000-index.md): run numbered feature prompts in order to implement the application.
 - [Release packages](../deploy/README.md): versioned production ZIPs for the web and native hosts.
 - [cPanel deployment](docs/deployment/README.md): upload layout and runtime configuration.
+- [Development package](docs/deployment/development.md): clean source ZIP and LAN startup instructions.
 - [Brand guide](assets/brand/README.md): logo variants, palette, file inventory, usage and regeneration.
 - [Brand preview](assets/brand/goal-hint-brand-preview.html): open locally to inspect the complete identity.
 - [Brand sheet](assets/brand/goal-hint-brand-sheet.png): shareable visual overview.

@@ -37,7 +37,11 @@ version is **1.0.0**, with Flutter build number **1**. Use
 `python tool/package_release.py android` for the signed APK ZIP, the Windows
 packager for its setup EXE ZIP, and the Apple commands in
 [the release guide](docs/releases.md) on a macOS signing host. Linux is excluded
-from this initial set of delivery packages.
+from this initial set of delivery packages. For the current development builds,
+use `python tool/package_development.py android --origin http://192.168.1.148:3000`
+or replace `android` with `windows` on the Windows host. These produce clearly
+labelled `1.0.0-dev.zip` packages that use the development web server; production
+signing gates remain unchanged. See [development packaging](docs/releases.md#development-delivery-packages).
 The configured production hosting currently returns an Account Suspended page;
 production launch and publication remain blocked. No release is claimed merely
 because an artifact compiles.

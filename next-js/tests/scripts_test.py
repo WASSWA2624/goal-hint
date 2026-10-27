@@ -18,6 +18,7 @@ from lib.backup_contract import BackupError, parse_backup_policy
 from lib.backup_crypto import backup_text, decrypt_backup, seal_backup, verify_backup
 from lib.backup_engine import validate_log_chain
 from lib.rendering import create_fixture
+from lib import deployment
 from lib.runtime import node_binary
 
 
@@ -150,6 +151,25 @@ await sealBackup(input.node,backupText('Synthetic Node backup.'),{...options,met
         self.assertEqual(deployer.ZIP, ROOT.parent / "deploy/goal-hint-nextjs-1.0.0.zip")
         for name, path in deployer.LOCAL_CONFIG.items():
             self.assertEqual(path, ROOT.parent / "deploy/.private/nextjs" / name)
+        self.assertEqual(deployment.web_archive(development=True), ROOT.parent / "deploy/goal-hint-nextjs-1.0.0-dev.zip")
+
+    def test_source_export_excludes_generated_private_and_missing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout, output = (root / "checkout").resolve(), root / "source"
+            names = ["src/app/page.tsx", ".env.example", "node_modules/private.js", ".next/server.js",
+                     "src/server/generated/client.ts", ".private/owner.json", ".goal-hint/owner.json"]
+            for name in names:
+                path = checkout / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("Synthetic source or excluded state.")
+            with mock.patch.object(deployment, "ROOT", checkout), mock.patch.object(deployment, "git", return_value="\0".join([*names, "removed.ts"])):
+                deployment.stage_source(output)
+            files = {path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()}
+            self.assertEqual(files, {"src/app/page.tsx", ".env.example"})
+            with mock.patch.object(deployment, "ROOT", checkout), mock.patch.object(deployment, "git", return_value=".env.local"):
+                with self.assertRaises(deployment.CommandError):
+                    deployment.stage_source(output)
 
     def test_web_publication_checksums_and_cleans_staging_after_failed_copy(self):
         packager = load_script("package-cpanel")

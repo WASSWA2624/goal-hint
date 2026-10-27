@@ -13,6 +13,7 @@
     "build": "next build && node scripts/build-offline-manifest.mjs",
     "start": "next start",
     "package:cpanel": "python scripts/package-cpanel.py",
+    "package:development": "python scripts/package-development.py",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "postinstall": "npm run db:generate && node scripts/ocr-assets.mjs",
