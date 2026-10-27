@@ -102,3 +102,36 @@ No counted live calls, actual-account market coverage, chronological held-out
 evaluation or profitability claim follows from deterministic tests. Actual
 coverage remains competition-, season-, fixture- and subscription-specific.
 Absent production credentials/permissions or stored odds can cause abstention.
+
+## Disposable MySQL acceptance
+
+The ten database acceptance cases passed on genuine MySQL Community Server
+8.4.11 on 27 October 2026 (96 tests including nested cases, no failures or skips).
+The earlier skips came from default binary discovery missing the portable local
+installation. The harness reused only its executables: every case initialized a
+fresh owned `.tmp/mysql-instance-*` data directory and random loopback TCP port,
+verified directory/server UUID/port ownership, deployed migrations with temporary
+test roles and removed its own child and data directory afterward.
+
+From `next-js/`, explicitly select a genuine portable binary with `mysql.exe`
+and `mysqladmin.exe` beside it, then use the consolidated acceptance command:
+
+```powershell
+$env:MYSQL_TEST_SERVER_BINARY = Join-Path $env:LOCALAPPDATA 'GoalHint\mysql-8.4.11\bin\mysqld.exe'
+npm run test:prediction-engine:mysql
+```
+
+This setting is process-local. The command refuses a missing/incompatible binary
+instead of reporting success when every database check skips. It runs prediction
+refresh, recommendation refresh, revision publication, odds, history and quote
+integration files sequentially. It never attaches to an installed service or
+uses the application's configured database. All football/model transports,
+permissions, results and clocks are synthetic; no production worker, configuration,
+schema, odds flag or provider account was changed.
+
+The database run reproduced and fixed exhausted-budget publication: a valid zero
+cost cap in the sealed refresh intent was being decoded as a positive UInt64
+identifier. Publication now shares the existing refresh decoder, preserving
+nonnegative 38-digit cost amounts without widening identifier validation. The
+regression proves baseline publication after `job-budget-exhausted`, immutable
+quote retention and replay without additional provider/model calls.

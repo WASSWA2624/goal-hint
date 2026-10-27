@@ -17,7 +17,9 @@ The default is provisional engineering policy, not an accuracy claim. Public odd
 See [the engine runbook](../docs/prediction-engine.md) and [development progress](../docs/development-progress.md) for implemented rules and verification evidence.
 
 Implementation delivered: full unit run 2,134 passed/0 failed/1 Windows-specific
-skip; 75 Python checks, lint, typecheck and build passed. Ten genuine MySQL
-acceptance cases skipped because `mysqld` is unavailable. Live source/account
-qualification and chronological evaluation remain unverified; production was not
-activated or changed.
+skip; 75 Python checks, lint, typecheck and build passed. The initial ten MySQL
+skips were resolved in the 27 October follow-up: all ten top-level cases passed
+(96 including nested cases, zero failures/skips) using fresh owned MySQL 8.4.11
+instances. The zero-budget publication regression was reproduced and fixed.
+Live source/account qualification and chronological evaluation remain unverified;
+production was not activated or changed.

@@ -50,6 +50,7 @@
     "test:cutoff": "node --conditions=react-server --test tests/cutoff-locking.test.mjs tests/cutoff-locking.integration.mjs",
     "test:lifecycle": "node --conditions=react-server --test tests/schedule-lifecycle.test.mjs tests/schedule-lifecycle.integration.mjs",
     "test:refresh": "node --conditions=react-server --test tests/prediction-refresh.test.mjs tests/prediction-refresh.integration.mjs",
+    "test:prediction-engine:mysql": "node --conditions=react-server scripts/test-prediction-engine-mysql.mjs",
     "worker:jobs": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/jobs.ts",
     "worker:results": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/results.ts",
     "worker:slips": "node --conditions=react-server --env-file-if-exists=.env.local --env-file-if-exists=.env.operations src/workers/slips.ts",

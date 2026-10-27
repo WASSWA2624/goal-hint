@@ -1,5 +1,75 @@
 # Development progress
 
+## 073 — Disposable MySQL acceptance follow-up (27 October 2026)
+
+Resolved all ten database acceptance skips from the original engine delivery.
+Default discovery had missed the existing portable MySQL Community Server 8.4.11
+executables under `%LOCALAPPDATA%\GoalHint`; no new installation or Windows service
+was needed. Only those executables were reused. Every case created a new owned
+`.tmp/mysql-instance-*` data directory, random loopback TCP port and temporary
+application/migration roles. The harness verified the actual data directory,
+server UUID and port before administrative writes and removed its own child and
+data directory in `finally`. Final inspection found no remaining test instances.
+The existing application's database, private configuration and services were not
+used or changed.
+
+The ten top-level cases passed against genuine MySQL, **96 tests including nested
+cases, zero failures and zero skips**:
+
+| Integration file | Top-level cases | Tests including nested cases |
+| --- | ---: | ---: |
+| `prediction-refresh.integration.mjs` | 5 | 37 |
+| `recommendation-refresh.integration.mjs` | 1 | 1 |
+| `revision-publication.integration.mjs` | 1 | 19 |
+| `odds.integration.mjs` | 1 | 12 |
+| `prediction-history.integration.mjs` | 1 | 18 |
+| `prediction-quotes.integration.mjs` | 1 | 9 |
+
+The run verified migrations and drift, restricted grants, native constraints and
+append-only triggers, concurrent writers, cutoff races, retention, restart/replay,
+private odds, quote immutability and settlement/history compatibility.
+
+Corrected a contradictory fallback fixture: its original AI match-result
+distribution supplied a qualifying priced double-chance selection, so AI
+precedence was correct. The fixture now supplies a validated, evidence-qualified
+AI totals forecast without a totals quote and proves that the baseline is used
+specifically because the quote is unavailable.
+
+Added an exhausted-budget scenario and reproduced a real publication failure:
+the sealed refresh intent contained a valid `0n` AI cost cap, but recommendation
+publication used the positive UInt64 history decoder on the whole intent. The
+new shared refresh archive decoder preserves nonnegative `DECIMAL(38,0)` costs,
+including zero, while existing identity parsers retain their strict bounds.
+The real database regression failed before the fix and passed afterward, with
+the expected `job-budget-exhausted` baseline recommendation and no extra AI call.
+
+Actual commands, with `MYSQL_TEST_SERVER_BINARY` set only in the test process:
+
+```text
+node --conditions=react-server --test --test-concurrency=1 tests/odds.integration.mjs tests/prediction-refresh.integration.mjs tests/revision-publication.integration.mjs
+node --conditions=react-server --test --test-concurrency=1 tests/prediction-history.integration.mjs tests/prediction-quotes.integration.mjs tests/recommendation-refresh.integration.mjs
+node --conditions=react-server --test tests/recommendation-refresh.integration.mjs
+node --conditions=react-server --test --test-concurrency=1 tests/refresh-archive.test.mjs tests/recommendation-publication.test.mjs tests/recommendation-refresh.test.mjs tests/prediction-refresh.test.mjs tests/provider-baseline.test.mjs
+```
+
+The first two batches passed **68/68** and **28/28** respectively. The standalone
+recommendation rerun passed after the zero-budget fix; it replaces the earlier
+result for that same case rather than counting it twice. The focused unit batch
+passed **25/25**. `npm run lint`, `npm run typecheck`, `npm run build` and
+`git diff --check` passed. The build included offline bundle generation.
+
+Added `npm run test:prediction-engine:mysql` for the same six integration files;
+it fails clearly if a genuine binary is unavailable instead of succeeding with
+only skipped database checks. The negative prerequisite path and script syntax
+were verified. See [the process-local setup](prediction-engine.md#disposable-mysql-acceptance).
+
+All football/model transports, evidence, permissions, results and clocks remained
+synthetic. No paid provider request, production migration, deployment, worker,
+odds flag or private environment change occurred. Live-source qualification and
+chronological accuracy evaluation remain separate, unverified work. An unused
+portable-download cache was preserved after automatic approval review blocked
+its deletion; none of those downloaded files was executed or committed.
+
 ## 073 — Probability-qualified prediction engine (27 October 2026)
 
 Implemented [the approved engine request](../../prompts/prediction-engine-improvement.md)

@@ -20,8 +20,11 @@ test('qualified recommendations traverse the durable refresh and atomic publicat
   await withPredictionPipeline(t, async (db) => {
     const groups = (home, draw, away) => ({ 'match-result': { period: 'regulation-including-stoppage-time',
       probabilities: { 'home-win': home, draw, 'away-win': away } }, 'total-goals': null, 'both-teams-to-score': null });
-    const scenarios = [{ aiPlan: 'none' }, { groups: groups(.2, .4, .4), sourceOrder: 'ai-first' },
-      { groups: groups(.7, .2, .1), sourceOrder: 'ai-first' }].map((scenario) => ({ ...scenario, recommendations: true,
+    const scenarios = [{ aiPlan: 'none' }, { groups: { 'match-result': null, 'total-goals': {
+      period: 'regulation-including-stoppage-time', line: 2.5, probabilities: { 'over-2.5': .3, 'under-2.5': .7 } },
+      'both-teams-to-score': null }, sourceOrder: 'ai-first' },
+      { groups: groups(.7, .2, .1), sourceOrder: 'ai-first' },
+      { ai: 'budget', sourceOrder: 'ai-first' }].map((scenario) => ({ ...scenario, recommendations: true,
       evidenceSources: recommendationFootballSources }));
     const h = await refreshHarness(db, scenarios, { fallbackSelectionPolicy: 'optional-ai-primary' });
     const policy = oddsPolicy(), accountId = evidenceHash('recommendation-refresh-odds-account'), clock = { now: db.now };
@@ -33,8 +36,10 @@ test('qualified recommendations traverse the durable refresh and atomic publicat
     const request = (kind) => oddsRequest(kind, Math.floor(db.now() / 10800000) * 10800000,
       { policy, date: kind === 'prices' ? '2026-10-12' : null, id: evidenceHash(`${kind}:${db.now()}`) });
     transport.state.bets = launchBetCatalog(); await odds.importCatalog(request('bets'));
-    const rows = (homeAway) => h.rows.map((row) => rawOddsRow(row.fixture.id, Date.parse(row.fixture.date),
-      { update: offsetTime(db.now() - 1000), bets: launchBets({ home: '2.00', homeDraw: '1.20', drawAway: '1.20', homeAway }) }));
+    const rows = (homeAway) => h.rows.map((row, index) => rawOddsRow(row.fixture.id, Date.parse(row.fixture.date),
+      { update: offsetTime(db.now() - 1000), bets: launchBets({ home: '2.00', homeDraw: '1.20', drawAway: '1.20', homeAway })
+        // Fixture two has a valid AI totals distribution but no totals quote; its independent baseline remains priced.
+        .filter((bet) => index !== 1 || bet.id !== 5) }));
     transport.state.rows = rows('1.90'); await odds.importDate(request('prices')); db.setTime(db.now() + 1000);
     const publisher = createRevisionPublicationService({ database: db.a, queue: db.queue, policy: publicationPolicy(),
       authority: publicationAuthority({ verifyRecommendation: () => true }) });
@@ -45,7 +50,7 @@ test('qualified recommendations traverse the durable refresh and atomic publicat
         freshnessMs: policy.freshnessMs, expectedPolicyHash: oddsPolicyHash(policy), verifyInternalUse: () => true }) } });
     const worker = createJobWorker({ queue: db.queue, registry: createJobRegistry([service.definition]), ownerId: evidenceHash('recommendation-worker') });
     const revisions = [];
-    for (const [index, source] of ['api-football', 'api-football', 'ai'].entries()) {
+    for (const [index, source] of ['api-football', 'api-football', 'ai', 'api-football'].entries()) {
       assert.equal(await worker.runOnce(), true);
       const outcome = await h.outcome(index); assert.equal(outcome.outcome, 'published');
       const revision = await db.history.findRevision(outcome.revisionId); revisions.push(revision);
@@ -53,8 +58,13 @@ test('qualified recommendations traverse the durable refresh and atomic publicat
       assert.equal(revision.candidate.audit.recommendation.evidenceSnapshotId, revision.evidenceSnapshotId);
     }
     assert.equal(revisions[0].candidate.audit.recommendation.selected.selection, 'home-or-away');
+    const unpricedAi = revisions[1].candidate.audit.recommendation.decisions.find((entry) =>
+      entry.source === 'ai' && entry.family === 'total-goals' && entry.selection === 'under-2.5');
+    assert.equal(unpricedAi.probability, .7);
+    assert.deepEqual(unpricedAi.reasons, ['no-valid-permitted-quote']);
     assert.equal(revisions[2].candidate.audit.recommendation.selected.selection, 'home-win');
-    assert.equal(h.calls.ai.length, 2); assert.equal(h.calls.fallback.length, 3);
+    assert.equal(revisions[3].candidate.audit.recommendation.fallbackReason, 'job-budget-exhausted');
+    assert.equal(h.calls.ai.length, 2); assert.equal(h.calls.fallback.length, 4);
     assert.equal((await db.a.query((tx) => tx.fixtureOddsPrice.count())), 0, 'all quotes remain private');
     const original = revisions[0].candidate.audit.recommendation;
     transport.state.rows = rows('2.20'); db.setTime(db.now() + 1000); await odds.importDate(request('prices'));
@@ -62,6 +72,6 @@ test('qualified recommendations traverse the durable refresh and atomic publicat
     const replay = await publisher.publish(attempts[0].input, attempts[0].lease);
     assert.equal(replay.revision.id, revisions[0].id); assert.deepEqual(replay.revision.candidate.audit.recommendation, original);
     assert.equal(original.selected.quote.decimal, '1.9');
-    assert.equal(h.calls.ai.length, 2); assert.equal(h.calls.fallback.length, 3);
+    assert.equal(h.calls.ai.length, 2); assert.equal(h.calls.fallback.length, 4);
   });
 });

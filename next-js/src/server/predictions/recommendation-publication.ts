@@ -7,14 +7,15 @@ import { recommendationQuotesFromSnapshots } from "../odds/recommendation-quotes
 import { storedOddsBatchSchema, storedOddsSnapshotSchema } from "../odds/odds-mysql-store.ts";
 import type { OddsBatchBody } from "../odds/odds-contract.ts";
 import { assertHistorySeal, historyJson } from "./history-read.ts";
+import { refreshArchiveJson } from "../refresh/refresh-archive.ts";
 import { publicationFail, type PublishRevisionInput } from "./publication-contract.ts";
 
 type Tx = Prisma.TransactionClient;
 type Sealed = { body: unknown; validIntegrity: unknown };
-const body = (row: Sealed | undefined) => {
+const body = (row: Sealed | undefined, decode = historyJson) => {
   if (!row) return publicationFail("invalid-request");
   assertHistorySeal(row.validIntegrity);
-  const value = historyJson(row.body);
+  const value = decode(row.body);
   if (value === null || typeof value !== "object" || Array.isArray(value)) return publicationFail("invalid-request");
   return value as Record<string, unknown>;
 };
@@ -26,10 +27,10 @@ export async function validatePublishedRecommendation(tx: Tx, input: PublishRevi
   if (recommendation === undefined) return true;
   const context = input.candidate.context, jobId = context.jobId;
   const stage = body((await tx.$queryRaw<Sealed[]>`SELECT body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
-    FROM PredictionRefreshStage WHERE jobId=${jobId} AND phase='fallback' AND kind='completed'`)[0]);
+    FROM PredictionRefreshStage WHERE jobId=${jobId} AND phase='fallback' AND kind='completed'`)[0], refreshArchiveJson);
   const resolved = stage.value as { candidate?: unknown } | undefined;
   const intent = body((await tx.$queryRaw<Sealed[]>`SELECT body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
-    FROM PredictionRefreshIntent WHERE jobId=${jobId}`)[0]);
+    FROM PredictionRefreshIntent WHERE jobId=${jobId}`)[0], refreshArchiveJson);
   const frozen = intent.plan as { recommendationPolicy?: unknown } | undefined;
   const owner = intent.member as { jobId?: string; context?: unknown } | undefined;
   if (stage.jobId !== jobId || stage.phase !== "fallback" || stage.kind !== "completed" ||

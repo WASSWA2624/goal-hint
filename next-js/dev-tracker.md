@@ -81,7 +81,7 @@
 | — Unassessed | [068-payment-approval-verification.md](dev-plan/068-payment-approval-verification.md) | No completion status was recorded; review implementation and acceptance evidence before assigning one. |
 | ◐ Partial | [069-offline-shell-support.md](dev-plan/069-offline-shell-support.md) | Anonymous cache and safe-update coordinator implemented; browser/Windows cold A/B, measured retries, retention and available lifecycle checks passed. Android testing is deferred; Apple/Linux remain unqualified. |
 
-| ◐ Partial | [073-probability-qualified-prediction-engine.md](dev-plan/073-probability-qualified-prediction-engine.md) | Implementation and deterministic checks delivered; genuine MySQL acceptance, live account/source qualification and chronological evaluation remain unavailable. |
+| ◐ Partial | [073-probability-qualified-prediction-engine.md](dev-plan/073-probability-qualified-prediction-engine.md) | Implementation, deterministic checks and all ten genuine MySQL acceptance cases passed; live account/source qualification and chronological evaluation remain unverified. |
 
 ## Partial rows
 
@@ -95,7 +95,7 @@
 - **066 Policy copy:** all local checks pass; notices remain drafts pending legal, privacy and refund facts; local test mode is open.
 - **067 Launch readiness:** verifiers and checklist are implemented; all required local regression checks and both local production verifiers pass. Real-message, owner/host/phone and activation evidence remains pending.
 - **069 Shared offline support:** the anonymous saved view has one bounded reachability/retry coordinator, owned cancellation, public status metadata and serialized staged updates. Browser cold/privacy/recovery, measured 5/15/30/60/300-second retries, failed derived-B retention and healthy-B/full-process cold A/B passed. Windows additionally preserved its draft through actual OS visibility changes and valid B recovery, then passed separate-process cold B. See [the contract](docs/offline-startup.md) and [development progress](docs/development-progress.md#069--anonymous-offline-startup-26-october-2026). Android testing is deferred; Apple/Linux remain unqualified, keeping the overall status Partial.
-- **073 Prediction engine:** new refreshes freeze the shared evidence/0.65-probability/quote policy, select highest exact odds after qualification, prefer usable optional AI and retain the enriched baseline. Immutable recommendation/quote provenance drives existing reads without UI edits. The environment has no genuine `mysqld`; database acceptance checks skip explicitly. No paid calls, actual account coverage qualification or held-out accuracy study was performed. See [the engine runbook](docs/prediction-engine.md) and [development progress](docs/development-progress.md).
+- **073 Prediction engine:** new refreshes freeze the shared evidence/0.65-probability/quote policy, select highest exact odds after qualification, prefer usable optional AI and retain the enriched baseline. Immutable recommendation/quote provenance drives existing reads without UI edits. All ten previously skipped database acceptance cases passed against fresh owned MySQL 8.4.11 instances (96 including nested cases, no failures/skips); the exhausted-budget publication regression was fixed. No paid calls, actual account coverage qualification or held-out accuracy study was performed. See [the engine runbook](docs/prediction-engine.md) and [development progress](docs/development-progress.md).
 
 ## Unassessed rows
 

@@ -12,26 +12,18 @@ import type { SelectionManifest } from "../selection/selection-contract.ts";
 import { selectionRunWindow } from "../selection/selection-read.ts";
 import { PredictionRefreshError, refreshFail, type RefreshIntent, type RefreshMember, type RefreshOutcome, type RefreshPhase } from "./refresh-contract.ts";
 import { parseRefreshPlan, refreshPin } from "./refresh-input.ts";
+import { refreshArchiveJson } from "./refresh-archive.ts";
 
 type Transaction = Prisma.TransactionClient;
 type Table = "PredictionRefreshIntent" | "PredictionRefreshStage" | "PredictionRefreshOutcome";
 type Stage = Readonly<{ jobId: string; phase: RefreshPhase; kind: "started" | "completed"; attemptId: string; at: number; value: unknown }>;
-function decode(value: unknown): unknown {
-  return JSON.parse(typeof value === "string" ? value : JSON.stringify(value), (_key, child: unknown) => {
-    if (child !== null && typeof child === "object" && "$evidenceInteger" in child) {
-      if (Object.keys(child).length !== 1 || typeof child.$evidenceInteger !== "string" || !/^(?:0|[1-9][0-9]{0,37})$/u.test(child.$evidenceInteger)) return refreshFail("unavailable");
-      return BigInt(child.$evidenceInteger);
-    }
-    return child;
-  });
-}
 async function read<Value>(tx: Transaction, table: Table, jobId: string, phase?: RefreshPhase, kind?: Stage["kind"]): Promise<Value | null> {
   // Identifiers are closed internal constants; all external values remain bound parameters.
   const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT body, integrity = SHA2(CAST(body AS CHAR), 256) AS sealed
     FROM ${table} WHERE jobId = ?${phase === undefined ? "" : " AND phase = ? AND kind = ?"}`, jobId, ...(phase === undefined ? [] : [phase, kind]));
   if (!rows[0]) return null;
   if (![true, 1, 1n].includes(rows[0].sealed as boolean | number | bigint)) return refreshFail("unavailable");
-  return freezeEvidence(decode(rows[0].body) as Value);
+  return freezeEvidence(refreshArchiveJson(rows[0].body) as Value);
 }
 async function insert(tx: Transaction, table: Table, jobId: string, body: unknown, phase?: RefreshPhase, kind?: Stage["kind"]) {
   const encoded = evidenceSerialize(body);

@@ -135,19 +135,24 @@ test('publication rechecks the sealed owning decision, original quote provenance
     fixtures: [{ externalId: context.externalFixtureId, outcome: 'apply', observationHash: evidenceHash('observed-row'),
       quoteManifest: { bookmakerId: 8, kickoffAt: context.kickoffAt, bets: [{ betId: 12, betName: 'Double Chance', valuesHash: snapshot.valuesHash }] } }], catalog: [] };
   const state = { stage: { jobId: candidate.context.jobId, phase: 'fallback', kind: 'completed', at: context.analysisAt + 2500,
-    value: { status: 'candidate', candidate } }, snapshot, sourceBatch: base, observedBatch: null };
+    value: { status: 'candidate', candidate } }, snapshot, sourceBatch: base, observedBatch: null, costCapUsdPicos: 0n };
   const sealed = (body, extra = {}) => [{ body: evidenceSerialize(body), validIntegrity: true, ...extra }];
   const tx = { async $queryRaw(strings, ...parameters) {
     const sql = strings.join('');
     if (sql.includes('PredictionRefreshStage')) return sealed(state.stage);
-    if (sql.includes('PredictionRefreshIntent')) return sealed({ member: { jobId: candidate.context.jobId, context }, plan: { recommendationPolicy } });
+    if (sql.includes('PredictionRefreshIntent')) return sealed({ member: { jobId: candidate.context.jobId, context },
+      plan: { recommendationPolicy, ai: { job: { costCapUsdPicos: state.costCapUsdPicos } } } });
     if (sql.includes('ProviderOddsSnapshot')) return sealed(state.snapshot, { batchId: base.id });
     if (sql.includes("scopeKey='bets'")) return sealed({ ...base, kind: 'bets', scopeKey: 'bets', fixtures: [], catalog: [{ id: 12, name: 'Double Chance' }] });
     if (sql.includes('OddsImportBatch')) return sealed(parameters[0] === state.observedBatch?.id ? state.observedBatch : state.sourceBatch);
     throw new Error(`Unexpected query: ${sql}`);
   } };
   const input = { candidate, evidenceSnapshotId: decision.evidenceSnapshotId };
-  assert.equal(await validatePublishedRecommendation(tx, input, context.analysisAt + 3000), true);
+  for (const costCapUsdPicos of [0n, 10n ** 30n, 10n ** 38n - 1n]) {
+    state.costCapUsdPicos = costCapUsdPicos;
+    assert.equal(await validatePublishedRecommendation(tx, input, context.analysisAt + 3000), true,
+      'the sealed refresh intent retains the full nonnegative DECIMAL(38,0) cost range');
+  }
   assert.equal(await validatePublishedRecommendation(tx, input, context.analysisAt + recommendationPolicy.quoteMaxAgeMs), false);
   state.stage = { ...state.stage, value: { ...state.stage.value, candidate: forecast } };
   await assert.rejects(validatePublishedRecommendation(tx, input, context.analysisAt + 3000), /publication refused|unavailable/iu);
