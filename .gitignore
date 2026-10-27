@@ -3,6 +3,8 @@
 .DS_Store
 Thumbs.db
 *.log
+.playwright-mcp/
+.playwright-cli/
 
 # Keep private environment files out of every project.
 .env*

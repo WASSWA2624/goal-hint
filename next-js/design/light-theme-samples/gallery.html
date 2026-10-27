@@ -1,0 +1,134 @@
+<style>
+  #goal-hint-light-theme-review { width: 100%; }
+  #goal-hint-light-theme-review [data-variant] { min-width: 0; }
+  #goal-hint-light-theme-review .gh-review-stage { min-height: 880px; min-width: 0; }
+  #goal-hint-light-theme-review[data-device="desktop"] [data-device-view="mobile"],
+  #goal-hint-light-theme-review[data-device="mobile"] [data-device-view="desktop"] { display: none; }
+  #goal-hint-light-theme-review figure { margin: 0; min-width: 0; }
+  #goal-hint-light-theme-review figcaption { margin-bottom: 8px; }
+  #goal-hint-light-theme-review .gh-review-viewport { position: relative; width: 100%; overflow: hidden; }
+  #goal-hint-light-theme-review .gh-review-viewport[data-screen="mobile"] { max-width: 390px; margin-inline: auto; }
+  #goal-hint-light-theme-review .gh-review-product { display: block; position: absolute; inset: 0 auto auto 0; transform-origin: top left; }
+  #goal-hint-light-theme-review [data-screen="desktop"] .gh-review-product { width: 1440px; height: 1100px; }
+  #goal-hint-light-theme-review [data-screen="mobile"] .gh-review-product { width: 390px; height: 844px; }
+  #goal-hint-light-theme-review .gh-review-error { color: var(--destructive); }
+</style>
+<div id="goal-hint-light-theme-review" data-device="desktop">
+  <div class="viz-controls" role="group" aria-label="Preview device">
+    <button type="button" class="btn" data-review-device="desktop" aria-pressed="true">Desktop</button>
+    <button type="button" class="btn" data-review-device="mobile" aria-pressed="false">Mobile</button>
+  </div>
+  <div class="viz-carousel" aria-label="Goal Hint light themes for desktop and mobile">
+    <!-- THEME_VARIANTS -->
+  </div>
+  <output class="gh-review-error" role="status" aria-live="polite"></output>
+</div>
+<!-- THEME_PAYLOAD -->
+<script>
+(() => {
+  const root = document.getElementById("goal-hint-light-theme-review");
+  const payload = document.getElementById("goal-hint-theme-payload");
+  const error = root.querySelector(".gh-review-error");
+  const frameSizes = { desktop: { width: 1440, height: 1100 }, mobile: { width: 390, height: 844 } };
+  const mounted = new Set();
+  const resizeObservers = [];
+  function selectDevice(device) {
+    root.dataset.device = device;
+    for (const button of root.querySelectorAll("[data-review-device]")) button.setAttribute("aria-pressed", String(button.dataset.reviewDevice === device));
+  }
+  selectDevice(innerWidth < 600 ? "mobile" : "desktop");
+  for (const button of root.querySelectorAll("[data-review-device]")) button.addEventListener("click", () => selectDevice(button.dataset.reviewDevice));
+
+  function replaceColor(css, color, token) {
+    const hex = color.slice(1);
+    const rgb = [0, 2, 4].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
+    const expression = new RegExp(`${color}\\b|rgb\\(\\s*${rgb[0]}\\s*[, ]\\s*${rgb[1]}\\s*[, ]\\s*${rgb[2]}\\s*\\)`, "gi");
+    return css.replace(expression, `var(${token})`);
+  }
+
+  function prepareStyles(snapshot, size, palette) {
+    let css = snapshot.css;
+    css = css.replace(/\bhtml\b(?=[\s,{.:#>])/g, ":host").replace(/\bbody\b(?=[\s,{.:#>])/g, ".gh-capture-body");
+    css = css.replace(/(-?(?:\d+\.)?\d+)(?:s|d|l)?vh\b/g, (_, value) => `${Number(value) * size.height / 100}px`);
+    css = replaceColor(css, palette.colors.brand, "--gh-review-accent");
+    css = replaceColor(css, palette.colors.page, "--gh-review-page");
+    return `${css}\n:host { display:block; overflow:hidden; color-scheme:light; position:relative; background:var(--gh-review-page); font-family:${snapshot.font || "Arial,sans-serif"}; }\n.gh-capture-body { position:relative; transform:translateZ(0); height:${size.height}px; min-height:${size.height}px; overflow:hidden; margin:0; background:var(--gh-review-page); }\n.gh-capture-body * { content-visibility:visible!important; contain-intrinsic-size:none!important; }`;
+  }
+
+  function mountScreen(container, snapshot, screen, palette, state) {
+    const size = frameSizes[screen];
+    const product = container.querySelector(".gh-review-product");
+    const shadow = product.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = prepareStyles(snapshot, size, palette);
+    const template = document.createElement("template");
+    template.innerHTML = snapshot.html;
+    shadow.append(style, template.content.cloneNode(true));
+    shadow.querySelector(".gh-capture-body").style.background = "var(--gh-review-page)";
+    // These are visual review samples. All links and submissions stay inside the preview.
+    shadow.addEventListener("click", event => {
+      if (event.composedPath().some(node => node instanceof HTMLAnchorElement)) event.preventDefault();
+    });
+    shadow.addEventListener("submit", event => event.preventDefault());
+    const resize = () => {
+      const available = container.getBoundingClientRect().width;
+      if (!available) return;
+      const scale = Math.min(1, available / size.width);
+      product.style.transform = `scale(${scale})`;
+      container.style.height = `${size.height * scale}px`;
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    resizeObservers.push(observer);
+    resize();
+    const renderColors = () => {
+      product.style.setProperty("--gh-review-accent", state.accent);
+      product.style.setProperty("--gh-review-page", state.page);
+    };
+    renderColors();
+    return renderColors;
+  }
+
+  async function start() {
+    const encoded = JSON.parse(payload.textContent);
+    const bytes = Uint8Array.from(atob(encoded.gzip), character => character.charCodeAt(0));
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const captures = JSON.parse(await new Response(stream).text());
+    for (const theme of captures.themes) for (const screen of ["desktop", "mobile"]) {
+      for (const field of ["html", "css"]) {
+        theme[screen][field] = theme[screen][field].replace(/__GH_EMBEDDED_ASSET_(\d+)__/g, (_, id) => captures.assets[Number(id)]);
+      }
+    }
+    const fontRules = [...new Set(captures.themes.flatMap(theme => [theme.desktop, theme.mobile]).flatMap(snapshot => snapshot.css.match(/@font-face\s*\{[^}]*\}/gi) || []))];
+    if (fontRules.length) {
+      const fonts = document.createElement("style");
+      fonts.textContent = fontRules.join("\n");
+      root.append(fonts);
+    }
+    const byId = new Map(captures.themes.map(theme => [theme.id, theme]));
+    const palettes = new Map(encoded.palettes.map(palette => [palette.id, palette]));
+    function renderVisible() {
+      for (const section of root.querySelectorAll("[data-theme-id]")) {
+        if (section.hidden || mounted.has(section)) continue;
+        const palette = palettes.get(section.dataset.themeId);
+        const capture = byId.get(palette.id);
+        if (!capture) throw new Error(`Missing theme capture: ${palette.name}`);
+        const state = { accent: palette.colors.brand, page: palette.colors.page };
+        const renders = ["desktop", "mobile"].map(screen => mountScreen(section.querySelector(`[data-screen="${screen}"]`), capture[screen], screen, palette, state));
+        const render = () => renders.forEach(update => update());
+        if (globalThis.Tweak) {
+          const tweak = new Tweak({ container: section, onChange: render });
+          tweak.addColorPicker(state, "accent", { label: "Accent", reference: "--gh-review-accent" });
+          tweak.addColorPicker(state, "page", { label: "Page background", reference: "--gh-review-page" });
+        }
+        mounted.add(section);
+      }
+    }
+    renderVisible();
+    const observer = new MutationObserver(renderVisible);
+    observer.observe(root.querySelector(".viz-carousel"), { attributes: true, subtree: true, attributeFilter: ["hidden"] });
+  }
+
+  start().catch(reason => { error.textContent = `The theme preview could not load: ${reason.message}`; });
+})();
+</script>
