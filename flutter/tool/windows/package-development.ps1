@@ -68,6 +68,7 @@ try {
         schema = 1; platform = 'windows'; appId = $script:GoalHintAppId; mode = 'debug'; environment = 'development'
         version = $version; origin = $Origin; entryPoint = 'lib/main.dart'; architecture = 'x64'
         sourceRevision = (& git rev-parse HEAD).Trim(); skippedBuild = [bool]$SkipBuild
+        sourceDirty = @(& git status --porcelain=v1 --untracked-files=all).Count -gt 0
         toolchain = [ordered]@{ flutter = $sdk.frameworkVersion; dart = ($sdk.dartSdkVersion -split ' ')[0] }
         files = $files
     }
@@ -76,9 +77,7 @@ try {
     $delivery = Get-PackagePath $staging 'delivery'
     New-Item -ItemType Directory -Path $installer, $delivery | Out-Null
     Compress-Archive -LiteralPath $payload -DestinationPath (Join-Path $installer 'payload.zip') -CompressionLevel Optimal
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup.ps1') -Destination $installer
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup.cmd') -Destination $installer
-    New-GoalHintSetup $installer (Join-Path $delivery "Goal-Hint-Development-Setup-$releaseVersion.exe") (Join-Path $staging 'installer.sed') "$releaseVersion Development"
+    New-GoalHintSetup $installer (Join-Path $delivery "Goal-Hint-Development-Setup-$releaseVersion.exe")
     @"
 Goal Hint $releaseVersion WINDOWS DEVELOPMENT BUILD (Debug x64)
 Extract this ZIP, then run Goal-Hint-Development-Setup-$releaseVersion.exe.

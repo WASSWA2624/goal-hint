@@ -119,18 +119,15 @@ the browser profile. This ZIP is not an MSIX, signed installer or store release.
     }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $package 'manifest.json') -Encoding UTF8
     $null = Read-ReleaseManifest $package -VerifyFiles
-    # IExpress wraps the same verified per-user installer in a real setup EXE.
+    # The setup host wraps the verified per-user installer in a real EXE.
     # Build work stays in deploy/.staging; the only deliverable is the outer ZIP.
     $installer = Get-PackagePath $staging 'installer'
     New-Item -ItemType Directory -Path $installer | Out-Null
     Compress-Archive -LiteralPath $package -DestinationPath (Join-Path $installer 'payload.zip') -CompressionLevel Optimal
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup.ps1') -Destination $installer
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup.cmd') -Destination $installer
     $delivery = Get-PackagePath $staging 'delivery'
     New-Item -ItemType Directory -Path $delivery | Out-Null
     $setup = Join-Path $delivery ('Goal-Hint-Setup-' + $releaseVersion + '.exe')
-    $sed = Join-Path $staging 'installer.sed'
-    New-GoalHintSetup $installer $setup $sed $releaseVersion
+    New-GoalHintSetup $installer $setup
     @"
 Goal Hint $releaseVersion for Windows x64
 Extract this ZIP, then run Goal-Hint-Setup-$releaseVersion.exe.

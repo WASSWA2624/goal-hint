@@ -11,7 +11,7 @@ See [the release plan](../dev-plan/007-platform-builds-and-release.md) and
 ## Build modes and public configuration
 
 The Android application ID remains `com.goalhint.goal_hint`, its display name is
-Goal Hint, and `pubspec.yaml` supplies version `1.0.0+1`. The initial release
+Goal Hint, and `pubspec.yaml` supplies version `1.0.0+5`. The initial release
 archives remain at public version `1.0.0` until the first production release.
 Increment the build number
 for a subsequent distributed build, preserving the registered application ID and

@@ -46,7 +46,7 @@ archive is created by the Windows host, and Linux remains excluded.
 
 The root [`deploy/`](../../deploy/README.md) folder is the only delivery
 location. Initial packages keep public version **1.0.0**; `pubspec.yaml` is
-`1.0.0+1`. The internal build number stays distinct from the public ZIP filename.
+`1.0.0+5`. The internal build number stays distinct from the public ZIP filename.
 Do not increment the public version until the first production release.
 Compiler caches/intermediates remain ignored under `flutter/build/`; they are
 not additional release locations. Linux is excluded from these initial packages.
@@ -70,7 +70,7 @@ For iOS, configure the existing Apple team, bundle identifier
 macOS. Export the real `ExportOptions.plist` for the intended App Store/TestFlight,
 ad-hoc or enterprise channel and keep it outside Git. The packager rejects
 development exports and unsigned/ad-hoc-signed app binaries, and checks the
-application ID and `1.0.0` / `1` version. An IPA installs only through the Apple
+application ID and `1.0.0` / `5` version. An IPA installs only through the Apple
 channel authorized by its provisioning; it is not a universal sideload installer.
 
 For macOS, first build the normal production entry point on the pinned macOS

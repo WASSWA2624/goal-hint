@@ -83,6 +83,7 @@ def package_android(args: argparse.Namespace) -> Path:
             "version": version, "build": build, "appId": release.ANDROID_APP_ID,
             "origin": args.origin, "entryPoint": "lib/main.dart", "debugSigned": True,
             "sourceRevision": release.run("git", "rev-parse", "HEAD", capture=True).strip(),
+            "sourceDirty": bool(release.run("git", "status", "--porcelain=v1", "--untracked-files=all", capture=True).strip()),
             "skippedBuild": args.skip_build, "apkSha256": artifact_hash,
         }
         with zipfile.ZipFile(candidate, "w", compression=zipfile.ZIP_DEFLATED) as archive:

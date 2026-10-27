@@ -25,29 +25,54 @@ $root = Get-FullPath (Join-Path ([Environment]::GetFolderPath('LocalApplicationD
 Assert-NoReparsePoint $root
 Assert-AppClosed $root
 $receiptPath = Get-PackagePath $root 'installation.json'
-if (Test-Path -LiteralPath $root) {
+if ((Test-Path -LiteralPath $root) -and @(Get-ChildItem -LiteralPath $root -Force).Count -gt 0) {
     $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
     if ($receipt.environment -ne 'development' -or $receipt.appId -ne $script:GoalHintAppId) { throw 'Preserving an unrelated existing installation directory.' }
 }
 $destination = Get-PackagePath $root ('versions/' + $manifest.version)
 if (Test-Path -LiteralPath $destination) { throw 'This development version is already installed. Remove it using its uninstaller before replacing it.' }
-New-Item -ItemType Directory -Path $destination -Force | Out-Null
-foreach ($entry in $manifest.files) {
-    $target = Get-PackagePath $destination $entry.path
-    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
-    Copy-Item -LiteralPath (Get-PackagePath $PSScriptRoot $entry.path) -Destination $target
-}
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'development-manifest.json') -Destination $destination
-@{ schema = 1; appId = $script:GoalHintAppId; environment = 'development'; version = $manifest.version } |
-    ConvertTo-Json | Set-Content -LiteralPath $receiptPath -Encoding UTF8
 $shortcuts = @((Join-Path ([Environment]::GetFolderPath('Programs')) 'Goal Hint Development.lnk'))
 if ($DesktopShortcut) { $shortcuts += Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Goal Hint Development.lnk' }
 $shell = New-Object -ComObject WScript.Shell
 try {
+    # Check every destination before copying or changing the managed receipt.
     foreach ($path in $shortcuts) {
         Assert-NoReparsePoint $path
         $shortcut = $shell.CreateShortcut($path)
         if ((Test-Path -LiteralPath $path) -and -not $shortcut.TargetPath.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Preserving an unrelated existing shortcut.' }
+    }
+    $temporaryRoot = Get-FullPath ([IO.Path]::GetTempPath())
+    $staging = Get-PackagePath $temporaryRoot ('GoalHint-development-install-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $staging | Out-Null
+    try {
+        foreach ($entry in $manifest.files) {
+            $target = Get-PackagePath $staging $entry.path
+            New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
+            Copy-Item -LiteralPath (Get-PackagePath $PSScriptRoot $entry.path) -Destination $target
+            if ((Get-FileDigest $target) -ne $entry.sha256) { throw 'Staged development payload integrity check failed.' }
+        }
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'development-manifest.json') -Destination $staging
+        New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
+        $null = Assert-ChildPath $staging $temporaryRoot
+        $null = Assert-ChildPath $destination $root
+        Move-Item -LiteralPath $staging -Destination $destination
+    } finally {
+        if (Test-Path -LiteralPath $staging) {
+            $directories = @()
+            foreach ($relative in @($manifest.files.path) + 'development-manifest.json') {
+                $file = Get-PackagePath $staging $relative
+                if (Test-Path -LiteralPath $file -PathType Leaf) { Remove-Item -LiteralPath $file }
+                $parent = [IO.Path]::GetDirectoryName($file)
+                while ($parent -ne $staging) { $directories += $parent; $parent = [IO.Path]::GetDirectoryName($parent) }
+            }
+            Remove-EmptyPackageDirectories $directories $staging
+            $null = Assert-ChildPath $staging $temporaryRoot
+            if (@(Get-ChildItem -LiteralPath $staging -Force).Count -eq 0) { Remove-Item -LiteralPath $staging }
+        }
+    }
+    Write-InstallReceipt $root @{ schema = 1; appId = $script:GoalHintAppId; environment = 'development'; version = $manifest.version }
+    foreach ($path in $shortcuts) {
+        $shortcut = $shell.CreateShortcut($path)
         $shortcut.TargetPath = Join-Path $destination 'goal_hint.exe'
         $shortcut.WorkingDirectory = $destination
         $shortcut.IconLocation = $shortcut.TargetPath + ',0'

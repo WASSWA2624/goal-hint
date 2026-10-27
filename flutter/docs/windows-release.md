@@ -50,8 +50,8 @@ The output is:
 ../deploy/goal-hint-windows-1.0.0.zip.sha256
 ```
 
-The ZIP contains `Goal-Hint-Setup-1.0.0.exe` and a brief README. Windows' built-in
-IExpress creates this self-extracting setup. Its payload contains `goal_hint.exe`,
+The ZIP contains `Goal-Hint-Setup-1.0.0.exe` and a brief README. A small .NET
+Framework setup host embeds the verified payload, containing `goal_hint.exe`,
 native DLLs, `data/`, install/uninstall scripts, a README and `manifest.json`.
 Build staging exists only under root `deploy/.staging/` and is removed after
 packaging; no deliverables are written under `flutter/build/releases/`.
@@ -61,7 +61,7 @@ file's length/SHA256. It contains no signing credentials or private build paths.
 PDB/debug/test/private files are rejected or excluded. Existing candidate output
 is preserved unless `-Force` explicitly replaces an unpublished package of the
 same public version. Keep all output ignored. The public archive version remains
-`1.0.0` until the first production release; Flutter's internal version is `1.0.0+1`.
+`1.0.0` until the first production release; Flutter's internal version is `1.0.0+5`.
 
 The ZIP checksum detects corruption when obtained from a trusted separate
 channel. The embedded manifest checks extracted file consistency; neither is
@@ -103,7 +103,7 @@ The installation is per-user:
 
 ```text
 %LOCALAPPDATA%/Programs/Goal Hint/installation.json
-%LOCALAPPDATA%/Programs/Goal Hint/versions/1.0.0+1/goal_hint.exe
+%LOCALAPPDATA%/Programs/Goal Hint/versions/1.0.0+5/goal_hint.exe
 %APPDATA%/Microsoft/Windows/Start Menu/Programs/Goal Hint.lnk
 ```
 
@@ -128,7 +128,7 @@ still targets an older version. The same explicit app ID keeps grouping stable.
 To remove the managed installation, close its windows and run:
 
 ```powershell
-powershell -File "$env:LOCALAPPDATA\Programs\Goal Hint\versions\1.0.0+1\uninstall.ps1"
+powershell -File "$env:LOCALAPPDATA\Programs\Goal Hint\versions\1.0.0+5\uninstall.ps1"
 ```
 
 The uninstaller validates the fixed per-user root and each managed version's

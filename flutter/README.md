@@ -33,7 +33,7 @@ gates. See [builds and release acceptance](docs/releases.md),
 [Windows packaging](docs/windows-release.md) and [Android signing](docs/android-release.md).
 All distributable archives belong in the root [`deploy/`](../deploy/README.md)
 folder; `build/` contains ignored compiler intermediates only. The initial public
-version is **1.0.0**, with Flutter build number **1**. Use
+version is **1.0.0**, with Flutter build number **5**. Use
 `python tool/package_release.py android` for the signed APK ZIP, the Windows
 packager for its setup EXE ZIP, and the Apple commands in
 [the release guide](docs/releases.md) on a macOS signing host. Linux is excluded
