@@ -10,17 +10,22 @@ honest development state until their later implementation prompts.
 `src/styles/theme.ts` exports `lightTheme`, `darkTheme`, `GoalHintTheme` and `OutcomeTone`.
 Semantic colors, typography, spacing, breakpoints, borders, focus and control
 dimensions share one contract, including a light/dark mode for native controls.
-Light mode uses a white page, white content surfaces and white header/navigation
-chrome with dark text. Dark mode uses navy page, content and header surfaces
+Light mode uses the approved Porcelain Blue palette: a cool `#F0F3F8` page,
+white content surfaces and header/navigation chrome, `#E8EDF5` muted regions,
+`#15243B` body text, `#53647C` secondary text and a `#2457C5` action accent.
+Dark mode uses navy page, content and header surfaces
 with light text. Muted surfaces, fields, menus, dialogs, tables, match cards and
 slip cards all resolve colors from the active theme. `theme.phoneCardFrame`
 provides the shared square, shadow-free match/slip frame with a themed border;
 phone cards do not force the light palette when dark mode is selected.
-Brand teal remains separate from outcome
+The interface's brand accent remains separate from outcome
 colors: Win is green, Loss is red, Pending is amber, and Void/Unavailable are
 neutral. Light-mode verdict tags retain vivid fills and dark text; dark-mode
-tags use dark tinted fills with readable light semantic text. Explicit result
-labels preserve their meaning without depending on color.
+tags use dark tinted fills with readable light semantic text. Performance
+summary counts use quiet green, red and amber tints with darker semantic text in
+light mode, while dark mode retains its prominent solid outcome fills. Market
+families keep their existing hues with softer light tints and flat solid accent
+fills. Explicit result labels preserve their meaning without depending on color.
 
 The server root layout wraps its children in one `StyleProvider`. Its Client
 Component registry creates a `ServerStyleSheet` per instance, inserts collected
@@ -88,17 +93,20 @@ Spacing and the page gutter use fixed pixel tokens so enlarging text leaves
 usable content width. Controls have a 2.75rem (44px) minimum height from 64rem;
 phones and tablets use the 2.25rem (36px) compact height.
 
-Use `theme.border.radius` for the shared subtle 2px corner radius, sourced from
+Use `theme.border.radius` for the shared square `0` corner radius, sourced from
 `shape.componentRadius` in `assets/brand/brand-tokens.json`. Apply it consistently
 to fields, buttons, menus, dialogs and standalone panels on every screen size.
 Keep joined control edges, tables and dense row structures square where they
 meet. Preserve functional circular or pill shapes and the logo's artwork geometry.
 
-Keep passive frames quiet with `theme.color.border`: neutral `#D7DFE7` in light
-mode and `#203448` in dark mode. Use it for section and card outlines, dialog
+Keep passive frames quiet with `theme.color.border`: neutral `#D9E1ED` in light
+mode and `#142A3D` in dark mode. Use it for section and card outlines, dialog
 frames, menu containers and dividers. Editable fields and outlined controls use
-`theme.color.controlBorder` (`#7D8997` light, `#597895` dark) so they remain easy
-to recognize. Preserve existing border widths, dimensions and layout; focus,
+`theme.color.controlBorder` (`#718099` light, `#58728C` dark) so they remain easy
+to recognize. Labeled buttons use `theme.color.buttonBorder`, which retains the
+light control outline and uses the quieter `#263D50` outline in dark mode.
+Phone match/slip frames use `#D9E1ED` in light mode and `#172D40` in dark mode.
+Preserve existing border widths, dimensions and layout; focus,
 selection, validation and outcome indicators retain their meaningful colors.
 
 ## Reusable exports
@@ -175,10 +183,11 @@ remain direct browser requests.
 ## Contrast and motion
 
 Body, caption, link and outcome text keep at least 4.5:1 contrast against their
-intended surfaces. Input and secondary-button boundaries use the stronger
-`controlBorder` token, which keeps at least 3:1 contrast against the main page,
-surface and muted-surface colors in both themes. The quieter `border` token is
-reserved for passive frames and divisions. On light surfaces focus uses the
+intended surfaces. Editable-field boundaries use the stronger `controlBorder`
+token, which keeps at least 3:1 contrast against the main page, surface and
+muted-surface colors in both themes. Labeled secondary buttons use
+`buttonBorder`; their text and focus treatment identify the action. The quieter
+`border` token is reserved for passive frames and divisions. On light surfaces focus uses the
 3px blue `theme.color.focus` outline with a 3px offset; dark surfaces use the
 same token's cyan value. Header bars use the active theme's 3px
 `theme.header.accent` ring: drawn 4px inside
@@ -199,8 +208,8 @@ light text in dark mode, `mutedText` for resting links, search `placeholder`,
 follow the same selected mode. Menus and sheets use semantic surfaces,
 `theme.color.scrim` for the backdrop and `theme.shadow.popover` for elevation.
 Use `theme.header.border` for passive separators and
-`theme.header.controlBorder` for actual control boundaries (`#7D8997` light,
-`#6785A1` dark). Keep focus and active-navigation accents distinct from these
+`theme.header.controlBorder` for actual control boundaries (`#718099` light,
+`#294159` dark). Keep focus and active-navigation accents distinct from these
 quiet frames. New small text on the bar must keep 4.5:1 contrast on every
 background stop and relevant control fill.
 
@@ -246,8 +255,9 @@ and the installed Next.js 16.4 documentation. The components use
 and [transient props](https://styled-components.com/docs/api#transient-props).
 Font delivery uses [Next.js local fonts](https://nextjs.org/docs/app/api-reference/components/font#local-fonts).
 
-Feed and slip surfaces follow the selected mode throughout: white in light
-mode and dark navy in dark mode, with muted themed regions and clear control
-and selection states. Phone match/slip cards and connected table/row edges
+Feed and slip content surfaces follow the selected mode throughout: white cards
+over the cool Porcelain Blue page in light mode and dark navy in dark mode,
+with muted themed regions and clear control and selection states. Phone
+match/slip cards and connected table/row edges
 remain square. Market panels, glyphs and result tags retain semantic colors
 with foregrounds and fills paired for the active theme.

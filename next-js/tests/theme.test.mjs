@@ -15,6 +15,7 @@ registerHooks({
   },
 });
 const { darkTheme, lightTheme } = await import("../src/styles/theme.ts");
+const { default: reviewPalettes } = await import("../design/light-theme-samples/palettes.json");
 
 const luminance = (hex) => {
   assert.match(hex, /^#[0-9a-f]{6}$/i);
@@ -42,6 +43,7 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(theme.color.controlBorder, background, `${theme.mode} control boundaries`, 3);
     }
     readable(theme.color.onBrand, theme.color.brand, `${theme.mode} primary actions`);
+    readable(theme.color.disabledText, theme.color.disabledSurface, `${theme.mode} disabled labels`);
     for (const background of [theme.gradient.action, theme.gradient.actionHover]) {
       readable(theme.color.onAction, background, `${theme.mode} blue primary actions`);
     }
@@ -80,17 +82,44 @@ test("page, cards, navigation and table chrome share the selected theme", () => 
       theme.color.cardHeader, theme.gradient.page, theme.gradient.tableHeader,
       theme.header.background, theme.header.gradient, theme.header.navigationBackground]) {
       const brightness = luminance(color);
-      assert.ok(theme.mode === "light" ? brightness >= 0.85 : brightness <= 0.08,
+      assert.ok(theme.mode === "light" ? brightness >= 0.8 : brightness <= 0.08,
         `${theme.mode} neutral surface ${color} belongs to the selected palette`);
     }
     assert.equal(theme.phoneCardFrame.radius, "0");
     assert.equal(theme.phoneCardFrame.shadow, "none");
-    if (theme.mode === "light") readable(theme.phoneCardFrame.border, theme.color.surface, "light phone card frame", 3);
   }
-  assert.equal(lightTheme.color.page, "#FFFFFF");
-  assert.equal(lightTheme.color.surface, "#FFFFFF");
   for (const colors of Object.values(darkTheme.color.verdict)) {
     assert.ok(luminance(colors.fill) <= 0.08, "Dark result badges must not inherit light fills");
+  }
+});
+
+test("the light theme uses the approved Porcelain Blue palette", () => {
+  const palette = reviewPalettes.find(({ id }) => id === "porcelain-blue");
+  assert.ok(palette, "The approved review palette must remain available");
+  const { colors } = palette;
+  for (const name of ["page", "surface", "surfaceMuted", "text", "mutedText", "border", "controlBorder", "brand", "brandHover", "brandSoft", "onBrand", "rowHover"]) {
+    assert.equal(lightTheme.color[name], colors[name], `Approved light ${name}`);
+  }
+  assert.equal(lightTheme.color.link, colors.brand);
+  assert.equal(lightTheme.color.focus, colors.brand);
+  assert.equal(lightTheme.gradient.action, colors.brand);
+  assert.equal(lightTheme.gradient.actionHover, colors.brandHover);
+  assert.equal(lightTheme.color.cardHeader, colors.tableHeader);
+  assert.equal(lightTheme.gradient.tableHeader, colors.tableHeader);
+  for (const [name, expected] of Object.entries({
+    background: colors.header, gradient: colors.header, navigationBackground: colors.header,
+    text: colors.headerText, mutedText: colors.headerMuted, placeholder: colors.headerMuted,
+    accent: colors.brand, border: colors.headerBorder,
+  })) assert.equal(lightTheme.header[name], expected, `Approved light header ${name}`);
+});
+
+test("Porcelain Blue separates page and card surfaces with quiet decorative frames", () => {
+  assert.ok(luminance(lightTheme.color.surface) > luminance(lightTheme.color.page));
+  assert.ok(luminance(lightTheme.color.page) > luminance(lightTheme.color.surfaceMuted));
+  assert.equal(lightTheme.phoneCardFrame.border, lightTheme.color.border);
+  for (const background of [lightTheme.color.page, lightTheme.color.surface]) {
+    assert.ok(contrast(lightTheme.phoneCardFrame.border, background) <
+      contrast(lightTheme.color.controlBorder, background), "Phone card frames should be quieter than editable-field boundaries");
   }
 });
 
@@ -104,14 +133,15 @@ test("dark decorative frames stay quiet while form controls retain visible bound
     contrast(darkTheme.color.controlBorder, darkTheme.color.surface), "Labeled buttons should have quieter outlines than editable controls");
 });
 
-test("performance outcomes use prominent text on strong dark fills and preserve light pairings", () => {
+test("performance outcomes use readable light tints and prominent text on strong dark fills", () => {
   for (const theme of [lightTheme, darkTheme]) {
     for (const outcome of ["correct", "incorrect", "pending"]) {
       const colors = theme.color.performanceOutcome[outcome];
       readable(colors.text, colors.background, `${theme.mode} ${outcome} performance`, theme.mode === "dark" ? 7 : 4.5);
       if (theme.mode === "light") {
-        assert.equal(colors.background, theme.color.verdict[outcome].fill);
-        assert.equal(colors.text, theme.color.verdict[outcome].text);
+        assert.equal(colors.background, theme.color.outcome[outcome].background);
+        assert.equal(colors.text, theme.color.outcome[outcome].text);
+        assert.ok(contrast(colors.background, theme.color.surface) < 1.3, `Light ${outcome} performance should use a restrained tint`);
       } else {
         assert.ok(contrast(colors.background, theme.color.surface) >= 4.5, `Dark ${outcome} performance fill should stand out from the surrounding surface`);
       }

@@ -40,6 +40,13 @@ test("every market family has colours", () => {
   }
 });
 
+test("Porcelain Blue uses flat market accents and restrained light tints", () => {
+  for (const [family, colours] of Object.entries(lightTheme.color.market)) {
+    assert.equal(colours.gradient, colours.solid, `${family} keeps the approved flat accent`);
+    assert.ok(luminance(colours.soft) >= 0.85, `${family} soft fill should stay close to the white card surface`);
+  }
+});
+
 test("market colours keep small text at 4.5:1 or better", () => {
   for (const theme of [lightTheme, darkTheme]) {
     const ink = theme.color.onBrand;

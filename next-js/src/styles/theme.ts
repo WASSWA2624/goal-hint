@@ -29,7 +29,7 @@ export type MarketColors = Readonly<{
   soft: string;
   /** Keeps 4.5:1 or better on `soft` and on the theme's surface. */
   text: string;
-  /** Light theme retains its desktop market gradients; dark theme uses flat fills. */
+  /** Flat market fills keep the same family identity across both themes. */
   gradient: string;
 }>;
 export type AccentName = "teal" | "blue" | "violet" | "orange" | "pink" | "amber" | "emerald" | "red";
@@ -58,7 +58,7 @@ export interface GoalHintTheme {
     /** Selected chips and segments on light surfaces; pairs with `brand` text. */
     readonly brandSoft: string;
     readonly onBrand: string;
-    /** White text on the royal-blue primary action fill in either mode. */
+    /** White text on primary action fills in either mode. */
     readonly onAction: string;
     readonly focus: string;
     readonly disabledText: string;
@@ -76,7 +76,7 @@ export interface GoalHintTheme {
     readonly rowHover: string;
   };
   readonly gradient: {
-    /** Flat primary action fills paired with `onBrand`. */
+    /** Flat primary action fills paired with `onAction`. */
     readonly action: string;
     readonly actionHover: string;
     readonly tableHeader: string;
@@ -187,28 +187,29 @@ export interface GoalHintTheme {
   readonly phoneCardFrame: Readonly<{ border: string; radius: string; shadow: string }>;
 }
 
+/** Porcelain Blue separates cool page surfaces from clean white cards. */
 export const lightTheme: GoalHintTheme = {
   mode: "light",
   color: {
-    text: "#071747",
-    mutedText: "#486B9F",
-    page: "#FFFFFF",
+    text: "#15243B",
+    mutedText: "#53647C",
+    page: "#F0F3F8",
     surface: brandTokens.colors.white,
-    surfaceMuted: "#F2F5F8",
+    surfaceMuted: "#E8EDF5",
     scrim: "rgb(0 8 20 / 65%)",
     // Neutral section dividers stay quiet; controls retain a contrasting boundary.
-    border: "#D7DFE7",
-    controlBorder: "#7D8997",
-    buttonBorder: "#7D8997",
-    brand: "#0066F5",
-    link: "#005BD6",
-    brandHover: "#0054CC",
-    brandSoft: "#E1F0FF",
+    border: "#D9E1ED",
+    controlBorder: "#718099",
+    buttonBorder: "#718099",
+    brand: "#2457C5",
+    link: "#2457C5",
+    brandHover: "#19449F",
+    brandSoft: "#E3ECFF",
     onBrand: brandTokens.colors.white,
     onAction: brandTokens.colors.white,
-    focus: "#0066F5",
-    disabledText: "#486B9F",
-    disabledSurface: "#F2F5F8",
+    focus: "#2457C5",
+    disabledText: "#53647C",
+    disabledSurface: "#E8EDF5",
     // Outcome meanings stay separate from the blue brand accent.
     outcome: {
       correct: { text: "#007754", background: "#E5F4EC", border: "#007754" },
@@ -226,25 +227,21 @@ export const lightTheme: GoalHintTheme = {
       void: { fill: "#CBD5E1", text: "#0F172A", border: "#CBD5E1" },
     },
     performanceOutcome: {
-      correct: { background: "#22C55E", text: "#052E16" },
-      incorrect: { background: "#F87171", text: "#450A0A" },
-      pending: { background: "#FBBF24", text: "#451A03" },
+      correct: { background: "#E5F4EC", text: "#007754" },
+      incorrect: { background: "#FFF0F1", text: "#9C2328" },
+      pending: { background: "#FFF3D6", text: "#8B5700" },
     },
-    // Each market family keeps one hue on every card, row and filter state: match result emerald, double chance
-    // violet, total goals blue, both teams to score orange. Clean tints sit at one lightness (OKLCH L ≈ 0.95). See
-    // MarketColors: `text` keeps 4.5:1 on `soft` and on white, and white keeps 4.5:1 on `solid` and on BOTH gradient
-    // stops, so market gradients may sit behind small text. Match result is the lightest, most vivid emerald that
-    // still holds white text (#00824A: OKLCH L 0.533, C 0.131; white 4.89:1, 4.61:1 under the tile press tint), and its
-    // gradient turns toward fresh green (#07802F, C 0.152; white 5.08:1) instead of fading into the brand teal.
+    // Preserve each market's hue with flat solids and soft fills blended 65% with 35% white.
+    // Small labels retain 4.5:1 contrast on the tint and on white; icons remain readable on solids.
     market: {
-      "match-result": { solid: "#00824A", soft: "#DBF9E7", text: "#00603B", gradient: "linear-gradient(135deg, #00824A 0%, #07802F 100%)" },
-      "double-chance": { solid: "#7C3AED", soft: "#EFE9FF", text: "#5B21B6", gradient: "linear-gradient(135deg, #7C3AED 0%, #A21CAF 100%)" },
-      "total-goals": { solid: "#2563EB", soft: "#E3EDFF", text: "#1E40AF", gradient: "linear-gradient(135deg, #2563EB 0%, #0369A1 100%)" },
-      "both-teams-to-score": { solid: "#C2410C", soft: "#FFEADB", text: "#9A3412", gradient: "linear-gradient(135deg, #C2410C 0%, #BE185D 100%)" },
+      "match-result": { solid: "#00824A", soft: "#E8FBEF", text: "#00603B", gradient: "#00824A" },
+      "double-chance": { solid: "#7C3AED", soft: "#F5F1FF", text: "#5B21B6", gradient: "#7C3AED" },
+      "total-goals": { solid: "#2563EB", soft: "#EDF3FF", text: "#1E40AF", gradient: "#2563EB" },
+      "both-teams-to-score": { solid: "#C2410C", soft: "#FFF1E8", text: "#9A3412", gradient: "#C2410C" },
     },
     live: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     accent: {
-      teal: { solid: "#0066F5", soft: "#E1F0FF", text: "#0054CC", gradient: "linear-gradient(135deg, #0066F5 0%, #0054CC 100%)" },
+      teal: { solid: "#2457C5", soft: "#E3ECFF", text: "#2457C5", gradient: "#2457C5" },
       blue: { solid: "#2563EB", soft: "#E0EAFF", text: "#1E40AF", gradient: "linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)" },
       violet: { solid: "#7C3AED", soft: "#EDE4FF", text: "#5B21B6", gradient: "linear-gradient(135deg, #7C3AED 0%, #C026D3 100%)" },
       orange: { solid: "#C2410C", soft: "#FFE8D6", text: "#9A3412", gradient: "linear-gradient(135deg, #EA580C 0%, #D97706 100%)" },
@@ -253,8 +250,8 @@ export const lightTheme: GoalHintTheme = {
       emerald: { solid: "#047857", soft: "#D1FAE5", text: "#065F46", gradient: "linear-gradient(135deg, #059669 0%, #0D9488 100%)" },
       red: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     },
-    cardHeader: "#F2F5F8",
-    rowHover: "#F2F5F8",
+    cardHeader: "#E8EDF5",
+    rowHover: "#F0F4FC",
   },
   typography: {
     family: "var(--font-manrope), Arial, sans-serif",
@@ -288,26 +285,26 @@ export const lightTheme: GoalHintTheme = {
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px" },
   control: { minHeight: "2.75rem", compactHeight: "2.25rem" },
   gradient: {
-    action: "#0066F5",
-    actionHover: "#0054CC",
-    tableHeader: "#F2F5F8",
-    page: "#FFFFFF",
+    action: "#2457C5",
+    actionHover: "#19449F",
+    tableHeader: "#E8EDF5",
+    page: "#F0F3F8",
   },
   header: {
     background: "#FFFFFF",
     gradient: "#FFFFFF",
     navigationBackground: "#FFFFFF",
-    text: "#071747",
-    mutedText: "#486B9F",
-    placeholder: "#486B9F",
-    accent: "#005BD6",
+    text: "#15243B",
+    mutedText: "#53647C",
+    placeholder: "#53647C",
+    accent: "#2457C5",
     onAccent: "#FFFFFF",
-    controlFill: "#F2F5F8",
-    controlHover: "#E1F0FF",
-    fieldFill: "#F2F5F8",
-    fieldFillActive: "#E1F0FF",
-    border: "#D7DFE7",
-    controlBorder: "#7D8997",
+    controlFill: "#E8EDF5",
+    controlHover: "#E3ECFF",
+    fieldFill: "#E8EDF5",
+    fieldFillActive: "#E3ECFF",
+    border: "#D9E1ED",
+    controlBorder: "#718099",
     tone: {
       teal: "#0054CC", blue: "#1E40AF", violet: "#5B21B6", orange: "#9A3412",
       pink: "#9D174D", amber: "#92400E", emerald: "#065F46", red: "#991B1B",
@@ -319,7 +316,7 @@ export const lightTheme: GoalHintTheme = {
     cardHover: "none",
     popover: "0 8px 24px rgb(7 23 71 / 16%)",
   },
-  phoneCardFrame: { border: "#7D8997", radius: "0", shadow: "none" },
+  phoneCardFrame: { border: "#D9E1ED", radius: "0", shadow: "none" },
 };
 
 /** The same semantic contract keeps every native control and detail panel readable in dark mode. */

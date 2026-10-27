@@ -37,14 +37,14 @@ Do not stretch, recolor, add shadows or place artwork in rounded containers. UI 
 
 Brand accents do not communicate prediction outcomes. Use separately defined outcome colors with readable Correct, Incorrect, Pending, Void or Unavailable labels. Keep the logo's surrounding background compatible with its variant.
 
-The app theme uses quiet neutral frames (`theme.color.border`: `#DFE6EE` light,
-`#203448` dark) for sections, cards, dialogs and menu containers. Recognizable
+The app theme uses quiet neutral frames (`theme.color.border`: `#D9E1ED` light,
+`#142A3D` dark) for sections, cards, dialogs and menu containers. Recognizable
 input and outlined-button boundaries use `theme.color.controlBorder`
-(`#7D8997` light, `#597895` dark), which maintains at least 3:1 contrast against
+(`#718099` light, `#58728C` dark), which maintains at least 3:1 contrast against
 the main theme surfaces. On the branded header, use `theme.header.border` for
-passive separators and `theme.header.controlBorder` (`#798EA8` light,
-`#6785A1` dark) for controls. Keep border widths, layout and the shared 2px
-radius unchanged; focus, selection, validation and status colors retain their meaning.
+passive separators and `theme.header.controlBorder` (`#718099` light,
+`#294159` dark) for controls. Keep border widths, layout and the shared square
+corners unchanged; focus, selection, validation and status colors retain their meaning.
 
 Use `alt="Goal Hint"` for a standalone logo. A logo-only home link needs an accessible name such as “Goal Hint home”; when adjacent text already names the brand, use empty image alt text to avoid repetition. Exported wordmark outlines do not supply live UI typography: load Manrope separately if using it for interface text.
 
