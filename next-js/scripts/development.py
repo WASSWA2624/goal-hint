@@ -9,6 +9,7 @@ import sys
 import threading
 
 from lib.development_mysql import DevelopmentMysql
+from lib.development_process import process_record, process_snapshot, release_port, stop_process
 from lib.runtime import CommandError, ROOT, hidden_process, main_guard, node_binary
 
 
@@ -70,24 +71,79 @@ def run_checked(args, env, timeout=300):
         child.stdout.close()
 
 
-def run_web(args, env):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    child = subprocess.Popen([development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--webpack", *args],
-                             cwd=ROOT, env=env, creationflags=hidden_process(), stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-    try:
-        for line in child.stdout:
-            print(line, end="", flush=True)
-        return child.wait()
-    finally:
-        if child.poll() is None:
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, creationflags=hidden_process())
-            else:
-                child.terminate()
-            child.wait(timeout=15)
-        child.stdout.close()
+def web_arguments(args, source=None):
+    """Choose one explicit port; Next must not silently fall back to another."""
+    source = os.environ if source is None else source
+    port = source.get("PORT") or "3000"
+    forwarded = []
+    index = 0
+    while index < len(args):
+        value = args[index]
+        if value in ("--port", "-p"):
+            index += 1
+            if index >= len(args):
+                raise CommandError("The development port requires a value between 1 and 65535.")
+            port = args[index]
+        elif value.startswith(("--port=", "-p=")):
+            port = value.split("=", 1)[1]
+        elif value.startswith("-p") and value[2:].isdigit():
+            port = value[2:]
+        else:
+            forwarded.append(value)
+        index += 1
+    if not re.fullmatch(r"[0-9]+", str(port)) or not 1 <= int(port) <= 65535:
+        raise CommandError("The development port must be an integer between 1 and 65535.")
+    return [*forwarded, "--port", str(int(port))], int(port)
+
+
+def release_development_web(port):
+    release_port(port)
+    # An orphan instance of this checkout on a different port also holds Next's
+    # development lock. Stop its process tree, never an app-name-wide selection.
+    project = os.path.normcase(str(ROOT.resolve())).replace("\\", "/") + "/node_modules/"
+    for process in process_snapshot():
+        if process["name"].lower() not in ("node", "node.exe"):
+            continue
+        command = os.path.normcase(process["command"]).replace("\\", "/")
+        next_dev = project + "next/dist/bin/next" in command and re.search(r"\sdev(?:\s|$)", command)
+        nodemon = project + "nodemon/bin/nodemon.js" in command
+        if next_dev or nodemon:
+            print(f"Stopping the previous development web process (PID {process['pid']})…", flush=True)
+            stop_process(process, tree=True)
+
+
+def run_web(args, env, port, *, live=False):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    command = [development_node_binary(), str(ROOT / "node_modules/nodemon/bin/nodemon.js"), *args] if live else [
+        development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--webpack", *args]
+    for attempt in range(3):
+        release_port(port)
+        child = subprocess.Popen(command, cwd=ROOT, env=env, creationflags=hidden_process(), stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        address_in_use = False
+        try:
+            for line in child.stdout:
+                print(line, end="", flush=True)
+                address_in_use |= "EADDRINUSE" in line or "address already in use" in line.lower()
+            code = child.wait()
+        finally:
+            if child.poll() is None:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(child.pid), "/T", "/F"], stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL, creationflags=hidden_process())
+                else:
+                    known_child = process_record(child.pid)
+                    if known_child:
+                        stop_process(known_child, tree=True)
+                    else:
+                        child.terminate()
+                child.wait(timeout=15)
+            child.stdout.close()
+        if not code or not address_in_use or live or attempt == 2:
+            return code
+        print(f"Port {port} was occupied during startup; releasing it and restarting Next…", flush=True)
+    return 1
 
 
 def main():
@@ -102,11 +158,20 @@ def main():
     args = [value for value in args if value != "--verify-only"]
     full = "--full" in args
     args = [value for value in args if value != "--full"]
+    if live and (prepare_only or verify_only or full):
+        raise CommandError("Preparation and verification flags apply only to the development demo.")
+    if prepare_only and verify_only:
+        raise CommandError("Choose either --prepare-only or --verify-only.")
+    if "--help" in args or "-h" in args:
+        return subprocess.call([development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--help"], cwd=ROOT)
+    if not prepare_only and not verify_only:
+        args, port = web_arguments(args)
+        release_development_web(port)
     if live:
         env = dict(os.environ, GOAL_HINT_DEMO="false", NEXT_PUBLIC_GOAL_HINT_DEMO="false")
         env["PATH"] = os.pathsep.join([str(ROOT / "node_modules/.bin"), str(Path(development_node_binary()).parent), env.get("PATH", "")])
-        return subprocess.call([development_node_binary(), str(ROOT / "node_modules/nodemon/bin/nodemon.js"), *args], cwd=ROOT, env=env)
-    with DevelopmentMysql() as instance:
+        return run_web(args, env, port, live=True)
+    with DevelopmentMysql(replace_running=not (prepare_only or verify_only)) as instance:
         env = demo_environment(instance.url)
         catalog = subprocess.run([development_node_binary(), "--conditions=react-server", "--input-type=module", "-e",
             "import {demoFootballCatalog} from './src/server/demo/api-football.ts'; console.log(demoFootballCatalog.leagues.map(row=>row.id).join(','))"],
@@ -125,7 +190,7 @@ def main():
         if prepare_only:
             return 0
         print("Development demo ready. The normal app uses synthetic API-Football data; Ctrl+C preserves the demo database.", flush=True)
-        return run_web(args, env)
+        return run_web(args, env, port)
 
 
 if __name__ == "__main__":

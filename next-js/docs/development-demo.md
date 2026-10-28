@@ -28,8 +28,24 @@ Production performance cache and transaction budgets remain unchanged.
 The launcher starts its own loopback MySQL
 process on an available port; it never connects to an installed MySQL service.
 The private database lives in ignored `.goal-hint/development-demo/mysql`.
-Ctrl+C stops the owned server and preserves its data for the next start. Only
-one launcher can own this directory at a time. Existing local environment files,
+Ctrl+C stops the owned server and preserves its data for the next start.
+Running `npm run dev` again replaces the previous development instance and
+reclaims the requested web port, including another process listening on that
+port. The default is 3000; `--port`/`-p` overrides `PORT`. Next receives an explicit
+port and does not silently move to another. For example:
+
+```sh
+npm run dev -- --port 3000
+```
+
+The restart verifies process creation identities and the owned MySQL data
+directory before shutdown. It preserves the database files and installed MySQL
+services. Port-binding races retry the web server without repeating preparation.
+Only one launcher can own this directory at a time. Preparation and verification
+commands retain exclusive access and do not replace a running app. A process
+owned by another system account may require a terminal with permission to stop
+it; the launcher reports that failure instead of selecting a different port.
+Existing local environment files,
 provider credentials and database targets are excluded from this demo process.
 
 Use `npm run dev:live` to use the existing configured development services. This
