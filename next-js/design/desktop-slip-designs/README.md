@@ -35,13 +35,18 @@ short and long names so truncation is visible without extra controls. Canvases
 fit the review surface down to a 960px minimum and scroll locally in smaller
 windows; enlarged text scales that minimum width.
 
-The variants scope their styles to `DesktopSlipSample` wrappers and reuse the
-aggregate `CompactSlipDisclosure`, original-snapshot adapter, prediction labels
-and shared probability formatter. A dedicated desktop row handles this preview's
-order and truncation; live `CompactSlip` rows retain their current markup and
-layout. The mobile and live desktop layouts remain unchanged until the owner
-selects a desktop design for integration. No providers or private slip APIs are
-called by these samples.
+Desktop production slips now use **09 — Subtle dividers**, with centred
+intrinsic team-name pairs. Long names still shrink and ellipsize. The native
+desktop disclosure starts collapsed in Best slips, builder results and history;
+locked summaries share the same header and relevant access action. The existing
+64rem responsive hook selects one row implementation and preserves the selected
+phone layout. A desktop-only pending rule prevents an expanded-content flash
+before hydration; JavaScript-disabled browsers retain the server fallback.
+
+Production and preview share the desktop snapshot row, tooltip, base geometry
+and selected divider CSS. Production **vs** links open canonical match analysis
+without nesting links around full-name controls. Samples remain synthetic and
+non-navigating; no providers or private slip APIs are called by them.
 
 To keep reviews available while the main application is being built, run an
 isolated review from `next-js/`:
@@ -58,3 +63,7 @@ that flag to include source changes. No private environment files are copied.
 Use an existing running server when available. Layout screenshots and browser
 check scripts are generated in ignored `output/playwright/desktop-slips/` and
 `.tmp/` directories rather than committed.
+
+Verify production snapshot rendering and locked-summary privacy with
+`python scripts/verify-desktop-slip-rendering.py`. Its isolated routes and
+browser checks are described in `tests/helpers/rendering/desktop-slips/README.md`.

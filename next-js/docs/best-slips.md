@@ -2,7 +2,7 @@
 
 `/en` is Best Slips; `/en/matches` preserves the match feed and `/en/slips` keeps
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
-previews use the selected Inline ledger layout and show the rank, match count,
+previews use the selected responsive slip layout and show the rank, match count,
 total odds and average match probability to every visitor. Match identities, selections and individual
 prices/probabilities require entitlement. Both the initial DTO and the final
 entitlement recheck use that allowlist.
@@ -31,7 +31,13 @@ which opens login and retains a return to Best Slips. The login page also offers
 sign-up. Signed-in members without access see **Subscribe**; entitled members
 see the actual matches. There is no repeated subscriber-only explanatory text.
 Native expansion works before hydration.
-Custom builder results and completed-slip history retain their expanded layout.
+On desktop, Best slips, builder results and completed-slip history use Subtle
+dividers: a slim single-row header and one line per selection, initially
+collapsed. Short team-name pairs are centred in their column; long names use
+ellipsis with hover/focus full-text tooltips. Date/time, league/logo,
+country/flag, market/pick, odds and probability remain visible. The vs link opens
+the original fixture's analysis. Phone presentation retains its own selected
+layout and disclosure behavior.
 
 Compact selection rows and prediction columns use shared outcome definitions:
 `1`/`X`/`2`, `1X`/`X2`/`12`, `O`/`U` with the actual line, and `Yes`/`No`

@@ -66,7 +66,7 @@ const Footer = styled.p`
   a { color: ${({ theme }) => theme.color.link}; }
 `;
 
-/** Only the review canvas uses desktop layout wrappers; live and mobile displays remain unchanged. */
+/** Review candidates reuse the production desktop rows within an isolated comparison canvas. */
 export function DesktopSlipGallery({ locale }: { locale: string }) {
   const [focused, setFocused] = useState<DesktopSlipVariant | "all">("all");
   const [context, setContext] = useState<"best" | "builder">("best");
@@ -78,7 +78,7 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
       <Intro>
         <p data-eyebrow>Goal Hint · Desktop design review</p>
         <h1>Single-line desktop slips</h1>
-        <p>Ten match-row variants with the same slimmer design 01 header. Each row reads from date and time through league, country, teams, market, odds and probability. Compare collapsed and expanded states, then choose a design number.</p>
+        <p>Ten match-row variants with the same slimmer design 01 header. Each row reads from date and time through league, country, teams, market, odds and probability. Design 09, Subtle dividers, is now used on desktop with centred team-name pairs.</p>
         <p>These are desktop canvases at actual size. On a smaller window, scroll within a sample to see its full width.</p>
       </Intro>
       <Toolbar aria-label="Desktop preview controls">
@@ -115,7 +115,7 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative fixtures, picks and generic crests for design review. Hover or focus a shortened name to read its full text; Escape closes the tooltip. Average match probability is the mean of the individual selections, not the chance that every selection wins. The current mobile and live desktop displays stay in place until a desktop option is chosen. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
+      <Footer>Illustrative fixtures, picks and generic crests for design review. Hover or focus a shortened name to read its full text; Escape closes the tooltip. Average match probability is the mean of the individual selections, not the chance that every selection wins. Desktop Best slips and slip builder use design 09, Subtle dividers. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }

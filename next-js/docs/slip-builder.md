@@ -5,8 +5,10 @@ the criteria and generated slips on every screen size, without Save actions,
 saved-slip history or win/loss performance summaries. Opening or submitting the
 builder does not read saved history or persist generated slips, including for
 signed-in members. Each generated slip retains its odds, probability and match
-count summary. The selected Inline ledger design keeps the identity/count and
-odds/average on two compact lines, with wrapping at narrow widths.
+count summary. On desktop, the selected Subtle dividers design keeps these facts
+on one slim header row, initially collapsed. Its selections share one horizontal
+line with centred short team-name pairs, ellipsis/full-text tooltips and tiny
+logos/flags. Phone screens retain their independently selected compact layout.
 
 `/en/slips` uses the Balanced slip builder. Each slip keeps its total odds,
 average forecast probability and selection count in its title. Its selections
