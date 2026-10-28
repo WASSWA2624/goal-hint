@@ -1,6 +1,7 @@
 """Start the normal Next application with an isolated, persistent demo database."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import re
@@ -19,10 +20,34 @@ def development_node_binary():
     return os.environ.get("npm_node_execpath") or node_binary()
 
 
+ADMINISTRATOR_KEYS = ("GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD_HASH", "GOAL_HINT_ADMIN_PASSWORD")
+
+
+def administrator_environment(source=None, directory=ROOT):
+    """Resolve only administrator settings with Next's normal development precedence."""
+    source = dict(os.environ if source is None else source)
+    script = ("import nextEnv from '@next/env'; "
+              "nextEnv.loadEnvConfig(process.argv[1], true, {info(){}, error(){}}, true); "
+              "const keys=['GOAL_HINT_ADMIN_PHONES','GOAL_HINT_ADMIN_PASSWORD_HASH','GOAL_HINT_ADMIN_PASSWORD']; "
+              "process.stdout.write(JSON.stringify(Object.fromEntries(keys.filter(key=>process.env[key]!==undefined)"
+              ".map(key=>[key,process.env[key]]))));")
+    try:
+        resolved = subprocess.run([development_node_binary(), "--input-type=module", "-e", script, str(directory)],
+            cwd=ROOT, env=dict(source, NODE_ENV="development"), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=30, creationflags=hidden_process())
+        values = json.loads(resolved.stdout) if resolved.returncode == 0 else None
+        if not isinstance(values, dict) or any(key not in ADMINISTRATOR_KEYS or not isinstance(value, str) for key, value in values.items()):
+            raise ValueError
+        return values
+    except (OSError, subprocess.SubprocessError, ValueError):
+        raise CommandError("The existing administrator configuration could not be loaded; private values were withheld.") from None
+
+
 def demo_environment(url: str, source=None):
     env = dict(os.environ if source is None else source)
+    administrator = administrator_environment() if source is None else {key: source[key] for key in ADMINISTRATOR_KEYS if key in source}
     # Next loads .env files automatically. Explicit empty values stop private local
-    # provider/owner settings from filling missing keys in this owned demo process.
+    # provider/database settings from filling missing keys in this owned demo process.
     keys = set(env)
     for path in ROOT.glob(".env*"):
         if path.is_file():
@@ -43,9 +68,9 @@ def demo_environment(url: str, source=None):
         GOAL_HINT_TEAM_CODES_IMPORT_ENABLED="false", GOAL_HINT_ANALYTICS_ENABLED="true",
         GOAL_HINT_ADS_ENABLED="false", GOAL_HINT_DARK_MODE_ENABLED="false",
         GOAL_HINT_EXACT_SCORES_ENABLED="false", GOAL_HINT_LOCALES="en")
-    # Public fictional credentials belong only to this isolated development process.
-    # Ordinary administrator allowlist/password/session checks remain in force.
-    env.update(GOAL_HINT_ADMIN_PHONES='["256700000099"]', GOAL_HINT_ADMIN_PASSWORD="DemoGoalHintAdmin2026!")
+    # Keep the same private administrator authentication as the normal app. The
+    # production allowlist, hash precedence and session checks remain in force.
+    env.update({key: administrator.get(key, "") for key in ADMINISTRATOR_KEYS})
     return env
 
 

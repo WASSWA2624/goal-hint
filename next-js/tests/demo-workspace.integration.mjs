@@ -3,17 +3,19 @@ import test from "node:test";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds } from "../src/domain/calendar.ts";
 import { getDatabase, disconnectDatabase } from "../src/server/database/client.ts";
 import { demoId } from "../src/server/demo/forecast.ts";
-import { demoAdmin, seedDemoWorkspace } from "../src/server/demo/workspace-seed.ts";
+import { seedDemoWorkspace } from "../src/server/demo/workspace-seed.ts";
 import { seedDemoMember } from "../src/server/demo/member-seed.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { createPaymentReview } from "../src/server/admin/payment-review.ts";
 import { createAnalyticsReporter } from "../src/server/analytics/analytics-report.ts";
 import { getAnalyticsServices, verifyAdminSession } from "../src/server/analytics/analytics-http.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
+import { fixtureAdminPhone, fixtureAdminPassword, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
 
 test("isolated demo populates protected owner screens through normal services and administrator authentication", {
   skip: process.env.DEMO_DATABASE_INTEGRATION !== "1", timeout: 240_000,
 }, async (t) => {
+  t.after(installAdminFixtureEnvironment());
   const database = getDatabase(), nowMs = Date.now();
   t.after(disconnectDatabase);
   await seedDemoMember(database, nowMs);
@@ -50,7 +52,7 @@ test("isolated demo populates protected owner screens through normal services an
   const services = await getAnalyticsServices();
   assert.equal(await verifyAdminSession(services, undefined), null, "a cookie-free public demo visitor is not an administrator");
   const auth = createMemberAuth({ database, config: services.config });
-  const login = await auth.login(demoAdmin.phone, demoAdmin.password, "demo-workspace-integration");
+  const login = await auth.login(fixtureAdminPhone, fixtureAdminPassword, "demo-workspace-integration");
   assert.equal(login.status, "authenticated"); assert.equal(login.administrator, true);
   assert.ok(await verifyAdminSession(services, login.token));
   t.diagnostic("Owner overview, all payment tabs, subscriber history, reset queue, analytics and normal admin login passed.");

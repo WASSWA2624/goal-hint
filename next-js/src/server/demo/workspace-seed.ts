@@ -12,7 +12,7 @@ import { appendWalletEntry } from "../members/wallet.ts";
 import { demoId } from "./forecast.ts";
 import { assertDemoDatabase, demoMember } from "./member.ts";
 
-export const demoAdmin = Object.freeze({ phone: "256700000099", password: "DemoGoalHintAdmin2026!" });
+const demoWorkspaceAccount = Object.freeze({ phone: "256700000099" });
 const dayMs = 86_400_000, workspaceMarker = "development-demo-workspace-v1";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const planDefinitions = [
@@ -38,8 +38,9 @@ export async function seedDemoWorkspace(database: DatabaseRuntime, nowMs = Date.
       const plans = planDefinitions.map((plan, index) => ({ ...plan, id: demoId("workspace-plan", index), sortOrder: index + 1,
         createdAt: new Date(nowMs - 60 * dayMs), updatedAt: at }));
       await tx.subscriptionPlan.createMany({ data: plans });
-      await tx.memberAccount.create({ data: { id: demoId("workspace-admin", 0), phone: demoAdmin.phone,
-        createdAt: at, lastSignInAt: at, ownerNote: "Synthetic local administrator; sign in with the documented demo credential." } });
+      // Keep the established identity without granting it administrator privileges.
+      await tx.memberAccount.create({ data: { id: demoId("workspace-admin", 0), phone: demoWorkspaceAccount.phone,
+        createdAt: at, lastSignInAt: at, ownerNote: "Synthetic development account; administrator access follows the private configuration." } });
       for (let index = 0; index < 48; index++) {
         const id = demoId("workspace-member", index), phone = `25670000${String(index + 1000).padStart(4, "0")}`;
         const createdAt = new Date(nowMs - (index + 2) * dayMs), plan = plans[index % 3]!;

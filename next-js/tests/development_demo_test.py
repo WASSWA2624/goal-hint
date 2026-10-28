@@ -1,10 +1,11 @@
-"""The demo launcher must never inherit real provider/database configuration."""
+"""The demo isolates providers/database while retaining configured administrator auth."""
 import importlib.util
 import io
 from pathlib import Path
 import sys
 import unittest
 import subprocess
+import tempfile
 from unittest.mock import patch
 from unittest.mock import MagicMock
 
@@ -19,7 +20,8 @@ class DemoEnvironmentTests(unittest.TestCase):
     def test_private_targets_and_paid_provider_settings_are_replaced(self):
         source = {"DATABASE_URL": "mysql://private@remote.invalid/real", "API_FOOTBALL_KEY": "private-football-key",
                   "AI_API_KEY": "private-ai-key", "GOAL_HINT_OPERATION_SCOPE": "production",
-                  "GOAL_HINT_ADMIN_PASSWORD": "private-admin-password", "GOAL_HINT_FOOTBALL_ENABLED": "true",
+                  "GOAL_HINT_ADMIN_PASSWORD": "private-admin-password", "GOAL_HINT_ADMIN_PASSWORD_HASH": "configured-hash",
+                  "GOAL_HINT_ADMIN_PHONES": '["256700009991"]', "GOAL_HINT_FOOTBALL_ENABLED": "true",
                   "GOAL_HINT_AI_ENABLED": "true", "NEXT_PUBLIC_OTHER_FLAG": "secret", "PATH": "runtime-path"}
         env = MODULE.demo_environment("mysql://root@127.0.0.1:43210/goal_hint_demo", source)
         self.assertEqual(env["DATABASE_URL"], "mysql://root@127.0.0.1:43210/goal_hint_demo")
@@ -27,14 +29,40 @@ class DemoEnvironmentTests(unittest.TestCase):
         self.assertEqual(env["GOAL_HINT_OPERATION_SCOPE"], "disabled")
         self.assertEqual(env["GOAL_HINT_FOOTBALL_ENABLED"], "false")
         self.assertEqual(env["GOAL_HINT_AI_ENABLED"], "false")
-        self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD"], "DemoGoalHintAdmin2026!")
-        self.assertEqual(env["GOAL_HINT_ADMIN_PHONES"], '["256700000099"]')
-        self.assertEqual(env.get("GOAL_HINT_ADMIN_PASSWORD_HASH", ""), "")
+        self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD"], "private-admin-password")
+        self.assertEqual(env["GOAL_HINT_ADMIN_PHONES"], '["256700009991"]')
+        self.assertEqual(env["GOAL_HINT_ADMIN_PASSWORD_HASH"], "configured-hash")
         self.assertEqual(env["API_FOOTBALL_KEY"], "")
         self.assertEqual(env["AI_API_KEY"], "")
         self.assertEqual(env["NEXT_PUBLIC_OTHER_FLAG"], "")
         self.assertEqual(env["PATH"], "runtime-path")
         self.assertEqual(source["GOAL_HINT_OPERATION_SCOPE"], "production")
+
+    def test_missing_administrator_configuration_does_not_enable_public_credentials(self):
+        env = MODULE.demo_environment("mysql://root@127.0.0.1:43210/goal_hint_demo", {})
+        for key in MODULE.ADMINISTRATOR_KEYS:
+            self.assertEqual(env[key], "")
+
+    def test_next_development_env_precedence_and_process_overrides_are_retained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env").write_text('GOAL_HINT_ADMIN_PASSWORD=base-sentinel-password\nGOAL_HINT_ADMIN_PHONES=["256700009991"]\nAPI_FOOTBALL_KEY=never-return-this\n', encoding="utf-8")
+            (root / ".env.local").write_text('GOAL_HINT_ADMIN_PASSWORD=local-sentinel-password\nGOAL_HINT_ADMIN_PASSWORD_HASH=local-hash-sentinel\n', encoding="utf-8")
+            (root / ".env.development.local").write_text('GOAL_HINT_ADMIN_PASSWORD="development-sentinel-password"\n', encoding="utf-8")
+            source = {key: value for key, value in MODULE.os.environ.items() if key not in MODULE.ADMINISTRATOR_KEYS}
+            resolved = MODULE.administrator_environment(source, root)
+            self.assertEqual(resolved, {"GOAL_HINT_ADMIN_PHONES": '["256700009991"]',
+                "GOAL_HINT_ADMIN_PASSWORD": "development-sentinel-password", "GOAL_HINT_ADMIN_PASSWORD_HASH": "local-hash-sentinel"})
+            overridden = MODULE.administrator_environment(dict(source, GOAL_HINT_ADMIN_PASSWORD="process-sentinel-password", GOAL_HINT_ADMIN_PASSWORD_HASH=""), root)
+            self.assertEqual(overridden["GOAL_HINT_ADMIN_PASSWORD"], "process-sentinel-password")
+            self.assertEqual(overridden["GOAL_HINT_ADMIN_PASSWORD_HASH"], "")
+
+    def test_configuration_loader_failure_does_not_print_private_child_diagnostics(self):
+        with patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess([], 1,
+                stdout="private-sentinel-password", stderr="private-sentinel-password")):
+            with self.assertRaises(MODULE.CommandError) as failure:
+                MODULE.administrator_environment({})
+        self.assertNotIn("private-sentinel-password", str(failure.exception))
 
     def test_demo_members_can_be_explicitly_disabled(self):
         env = MODULE.demo_environment("mysql://root@127.0.0.1:43210/goal_hint_demo", {"GOAL_HINT_DEMO_MEMBER": "false"})

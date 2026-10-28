@@ -45,8 +45,8 @@ Only one launcher can own this directory at a time. Preparation and verification
 commands retain exclusive access and do not replace a running app. A process
 owned by another system account may require a terminal with permission to stop
 it; the launcher reports that failure instead of selecting a different port.
-Existing local environment files,
-provider credentials and database targets are excluded from this demo process.
+Provider credentials and database targets remain excluded from this demo process.
+The existing private administrator configuration is retained as described below.
 
 Use `npm run dev:live` to use the existing configured development services. This
 explicit opt-out preserves their existing configuration and authorization rules.
@@ -95,9 +95,13 @@ reporting day. Starting the demo after kickoff therefore still shows the same
 original slips with their current pending, won or lost results. Custom builds
 continue to use the normal current eligibility and kickoff checks.
 
-The protected owner workspace uses the regular account login with administrator
-**+256700000099**, password **DemoGoalHintAdmin2026!**. Its separate fictional
-allowlist and password are installed only in the isolated launcher environment.
+The protected owner workspace uses the regular account login with your existing
+administrator phone and password. The launcher reads `GOAL_HINT_ADMIN_PHONES`,
+`GOAL_HINT_ADMIN_PASSWORD_HASH` and `GOAL_HINT_ADMIN_PASSWORD` with Next's normal
+development environment-file precedence and process overrides. A configured hash
+keeps precedence over a plain password. No public demo administrator credential
+is installed. A valid configured administrator is provisioned in the isolated
+demo database through normal login; the original database is not connected.
 The demo includes 48 additional members with active, expired, blocked and reset
 states, multiple plans, pending/approved/rejected/superseded/reversed payments,
 access periods, wallet ledgers and owner audit entries. Analytics includes 61
