@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fixturePriceSchema, type FixturePrice } from "./fixture-snapshot.ts";
-import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "./match-feed.ts";
+import { storedMatchFeedResponseSchema, type StoredMatchFeedRecord, type StoredMatchFeedResponse } from "./match-feed.ts";
 import { isMarketSelection, marketSelections } from "./markets.ts";
 
 export const slipPricePageRules = Object.freeze({
@@ -9,12 +9,13 @@ export const slipPricePageRules = Object.freeze({
 
 /** Supplemental prices for published alternatives. The ordinary feed's selected-pick prices remain unchanged.
  * Freshness and public display permission come from the stored projection, not a browser age heuristic. */
-export const slipPricePageSchema = z.strictObject({
-  feed: storedMatchFeedResponseSchema,
-  selectionPrices: z.record(z.string(), z.array(fixturePriceSchema).max(slipPricePageRules.maximumPricesPerFixture)),
-}).superRefine(({ feed, selectionPrices }, context) => {
-  const fixtures = new Map(feed.records.map((record) => [record.fixtureId, record]));
-  for (const record of feed.records) {
+export const slipSelectionPricesSchema = z.record(z.string(), z.array(fixturePriceSchema).max(slipPricePageRules.maximumPricesPerFixture));
+
+/** Identical outcome ownership, uniqueness and observation-cutoff checks for pages and atomic cohorts. */
+export function refineSlipPricePools(records: readonly StoredMatchFeedRecord[], selectionPrices: Readonly<Record<string, readonly FixturePrice[]>>,
+  asOf: number, context: z.RefinementCtx) {
+  const fixtures = new Map(records.map((record) => [record.fixtureId, record]));
+  for (const record of records) {
     if (!Object.hasOwn(selectionPrices, record.fixtureId)) {
       context.addIssue({ code: "custom", path: ["selectionPrices", record.fixtureId], message: "Every feed fixture requires a price pool." });
     }
@@ -37,12 +38,16 @@ export const slipPricePageSchema = z.strictObject({
       if (!market || !isMarketSelection(price.family, price.selection) || !Object.hasOwn(market.probabilities, price.selection)) {
         context.addIssue({ code: "custom", path, message: "A price must belong to a published market outcome." });
       }
-      if (price.retrievedAt > feed.asOf || price.providerUpdatedAt !== null && price.providerUpdatedAt > feed.asOf) {
+      if (price.retrievedAt > asOf || price.providerUpdatedAt !== null && price.providerUpdatedAt > asOf) {
         context.addIssue({ code: "custom", path, message: "A price observation cannot be later than the feed observation." });
       }
     });
   }
-});
+}
+
+export const slipPricePageSchema = z.strictObject({
+  feed: storedMatchFeedResponseSchema, selectionPrices: slipSelectionPricesSchema,
+}).superRefine(({ feed, selectionPrices }, context) => refineSlipPricePools(feed.records, selectionPrices, feed.asOf, context));
 
 export type SlipPricePage = Readonly<{
   feed: StoredMatchFeedResponse;

@@ -1,3 +1,5 @@
+import { isDevelopmentDemo } from "./development-demo.ts";
+
 /** Source-owned, nonsecret product settings. Safe for browser imports. */
 export const publicPolicy = Object.freeze({
   name: "Goal Hint",
@@ -21,9 +23,9 @@ export const publicPolicy = Object.freeze({
     additionalLocales: false,
     darkMode: false,
     exactScores: false,
-    /** Bookmaker prices beside picks and the `odds=` filter. Off until the owner records odds display
-     * rights (OP-36); while off, `odds=` is an unknown feed key and the odds controls stay disabled. */
-    providerOdds: false,
+    /** Synthetic development prices enable the ordinary odds controls. Production
+     * prices remain off until the owner records odds display rights (OP-36). */
+    providerOdds: isDevelopmentDemo(),
     /** Stored match statistics/events use the existing verified football public-display rights. */
     liveMatchDetails: true,
   }),

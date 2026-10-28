@@ -2,10 +2,11 @@ import "server-only";
 
 import { marketSelections, type AcceptedMarket, type MarketFamily, type MarketSource } from "../../domain/markets.ts";
 import { settleMarketSelection, type SettlementContext } from "../../domain/market-settlement.ts";
+import { performanceRules } from "../../domain/performance.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import type { EvaluationMetrics, HorizonBand, MetricObservation, QualityGate } from "../evaluation/evaluation-contract.ts";
+import type { EvaluationMetrics, HorizonBand, QualityGate } from "../evaluation/evaluation-contract.ts";
 import { evaluateQualityGate } from "../evaluation/evaluation-gates.ts";
-import { evaluateMarketMetrics, wilson } from "../evaluation/evaluation-metrics.ts";
+import { createMarketMetricsAccumulator, wilson } from "../evaluation/evaluation-metrics.ts";
 import type { ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { SourceReceiptRead } from "./source-receipts-read.ts";
 
@@ -22,8 +23,6 @@ export type SourceComparisonOptions = Readonly<{
   /** Only AI candidate or public-claim gates on the API-Football baseline apply. */
   gates?: readonly QualityGate[];
 }>;
-type Pair = Readonly<{ key: string; record: SourceComparisonRecord; ai: AcceptedMarket; provider: AcceptedMarket;
-  conflicting: boolean; limitedNews: boolean }>;
 const differences = (ai: EvaluationMetrics, provider: EvaluationMetrics) => ({
   brierDifference: ai.brier === null || provider.brier === null ? null : ai.brier - provider.brier,
   logLossDifference: ai.logLoss === null || provider.logLoss === null ? null : ai.logLoss - provider.logLoss });
@@ -32,75 +31,105 @@ const differences = (ai: EvaluationMetrics, provider: EvaluationMetrics) => ({
  * matched only when both receipts have the family available and its selection settles correct or incorrect on the
  * cycle's one settlement context. Nothing is filled: absent receipts count as not captured, and families the provider
  * never supplies are reported as unavailable rather than scored. */
-export function compareSources(records: readonly SourceComparisonRecord[], receipts: ReadonlyMap<string, SourceReceiptRead>,
-  options: SourceComparisonOptions) {
+export function createSourceComparisonAccumulator(options: SourceComparisonOptions) {
   const horizons: readonly (HorizonBand | null)[] = options.horizons ?? [null];
   const orders = { "provider-first": 0, "ai-first": 0, none: 0 };
-  for (const record of records) if (record.state === "closed" && record.locked) orders[record.locked.sourceOrder ?? "none"]++;
-  const metrics = (family: MarketFamily, markets: readonly AcceptedMarket[], contexts: readonly SettlementContext[]) =>
-    evaluateMarketMetrics(family, markets.map((market, index): MetricObservation => ({ market, result: contexts[index]! })),
-      options.bands, options.confidenceZ);
-  const scored = (family: MarketFamily, pairs: readonly Pair[]) => {
-    const contexts = pairs.map((pair) => pair.record.settlement);
-    const ai = metrics(family, pairs.map((pair) => pair.ai), contexts), provider = metrics(family, pairs.map((pair) => pair.provider), contexts);
-    const interval = (value: EvaluationMetrics) => value.count === 0 ? null : wilson(value.correct, value.count, options.confidenceZ);
-    return { count: pairs.length, ai, "api-football": provider, ...differences(ai, provider),
-      hitRateIntervals: { ai: interval(ai), "api-football": interval(provider) } };
-  };
-  const comparisons = options.families.flatMap((family) => horizons.map((horizon) => {
+  let fixtureCount = 0;
+  const recent: {
+    fixtureId: string; matchLabel: string; href: string; kickoffAt: number; sourceOrder: ForecastSourceOrder;
+    published: MarketSource | null; ai: { selection: string; probability: number; outcome: ReturnType<typeof settleMarketSelection>["status"] };
+    "api-football": { selection: string; probability: number; outcome: ReturnType<typeof settleMarketSelection>["status"] };
+  }[] = [];
+  function scores(family: MarketFamily) {
+    const ai = createMarketMetricsAccumulator(family, options.bands, options.confidenceZ);
+    const provider = createMarketMetricsAccumulator(family, options.bands, options.confidenceZ);
+    let count = 0;
+    return { add(aiMarket: AcceptedMarket, providerMarket: AcceptedMarket, result: SettlementContext) {
+      count++; ai.add([{ market: aiMarket, result }]); provider.add([{ market: providerMarket, result }]);
+    }, snapshot() {
+      const a = ai.snapshot(), p = provider.snapshot();
+      const interval = (value: EvaluationMetrics) => value.count === 0 ? null : wilson(value.correct, value.count, options.confidenceZ);
+      return { count, ai: a, "api-football": p, ...differences(a, p), hitRateIntervals: { ai: interval(a), "api-football": interval(p) } };
+    } };
+  }
+  const cells = options.families.flatMap((family) => horizons.map((horizon) => {
     const coverage = { locked: 0, void: 0, notCaptured: 0, captured: 0, aiAvailable: 0, providerAvailable: 0,
       both: 0, aiOnly: 0, providerOnly: 0, neither: 0, pending: 0, settled: 0 };
-    const pairs: Pair[] = [];
-    for (const record of records) {
-      if (record.state === "void") { coverage.void++; continue; }
-      if (record.state !== "closed" || !record.locked) continue;
+    const matchedScores = scores(family), disagreementScores = scores(family), conflictingScores = scores(family), limitedScores = scores(family);
+    const keys: string[] = [];
+    let aiCorrect = 0, providerCorrect = 0;
+    function add(record: SourceComparisonRecord, receipts: ReadonlyMap<string, SourceReceiptRead>) {
+      if (record.state === "void") { coverage.void++; return; }
+      if (record.state !== "closed" || !record.locked) return;
       const horizonMs = record.kickoffAt - record.locked.forecastAt;
-      if (horizon && (horizonMs < horizon.minimumMs || horizonMs >= horizon.maximumMs)) continue;
+      if (horizon && (horizonMs < horizon.minimumMs || horizonMs >= horizon.maximumMs)) return;
       coverage.locked++;
       const receipt = record.locked.sourceOrder === null ? "not-captured" : receipts.get(record.locked.jobId) ?? "not-captured";
-      if (receipt === "not-captured") { coverage.notCaptured++; continue; }
+      if (receipt === "not-captured") { coverage.notCaptured++; return; }
       coverage.captured++;
       const ai = receipt.ai.markets.markets[family], provider = receipt["api-football"].markets.markets[family];
       if (ai.available) coverage.aiAvailable++;
       if (provider.available) coverage.providerAvailable++;
-      if (!ai.available || !provider.available) { coverage[ai.available ? "aiOnly" : provider.available ? "providerOnly" : "neither"]++; continue; }
+      if (!ai.available || !provider.available) { coverage[ai.available ? "aiOnly" : provider.available ? "providerOnly" : "neither"]++; return; }
       coverage.both++;
       // Both selections are graded on the same context, so either both settle or neither does.
-      const settled = [ai.market.selection, provider.market.selection].every((selection) =>
-        ["correct", "incorrect"].includes(settleMarketSelection(family, selection, record.settlement).status));
-      if (!settled) { coverage.pending++; continue; }
+      const a = settleMarketSelection(family, ai.market.selection, record.settlement).status;
+      const p = settleMarketSelection(family, provider.market.selection, record.settlement).status;
+      if (!["correct", "incorrect"].includes(a) || !["correct", "incorrect"].includes(p)) { coverage.pending++; return; }
       coverage.settled++;
-      pairs.push({ key: `${record.fixtureId}:${record.cycleId}:${record.locked.jobId}`, record, ai: ai.market, provider: provider.market,
-        conflicting: receipt.ai.evidence?.conflicting === true, limitedNews: receipt.ai.evidence?.limitedNews === true });
+      keys.push(`${record.fixtureId}:${record.cycleId}:${record.locked.jobId}`);
+      matchedScores.add(ai.market, provider.market, record.settlement);
+      if (ai.market.selection !== provider.market.selection) {
+        disagreementScores.add(ai.market, provider.market, record.settlement);
+        if (a === "correct") aiCorrect++;
+        if (p === "correct") providerCorrect++;
+      }
+      if (receipt.ai.evidence?.conflicting === true) conflictingScores.add(ai.market, provider.market, record.settlement);
+      if (receipt.ai.evidence?.limitedNews === true) limitedScores.add(ai.market, provider.market, record.settlement);
     }
-    const counterpart = family === "match-result" || family === "double-chance";
-    const matched = { ...scored(family, pairs), fixtureKeysHash: evidenceFingerprint(pairs.map((pair) => pair.key).sort()) };
-    const disagreements = pairs.filter((pair) => pair.ai.selection !== pair.provider.selection);
-    const correct = (source: "ai" | "provider") => disagreements.filter((pair) => settleMarketSelection(family, pair[source].selection,
-      pair.record.settlement).status === "correct").length;
-    const gates = (options.gates ?? []).filter((gate) => gate.system === "ai" && gate.baseline === "api-football" && gate.family === family &&
-      (horizon === null || gate.horizonId === horizon.id)).map((gate) => ({ id: gate.id, purpose: gate.purpose,
-      ...evaluateQualityGate(gate, matched.ai, { total: coverage.locked + coverage.void, void: coverage.void, available: coverage.both }, matched) }));
-    return { family, horizonId: horizon?.id ?? null, derivedFrom: family === "double-chance" ? "match-result" as const : null,
-      state: !counterpart ? "unavailable" as const : pairs.length === 0 ? "unavailable" as const : "available" as const,
-      reason: !counterpart ? "no-provider-counterpart" : pairs.length === 0 ? "no-matched-settled-pairs" : null,
-      coverage, matched, disagreements: { ...scored(family, disagreements), aiCorrect: correct("ai"), providerCorrect: correct("provider") },
-      segments: { conflictingEvidence: scored(family, pairs.filter((pair) => pair.conflicting)),
-        limitedNews: scored(family, pairs.filter((pair) => pair.limitedNews)) }, gates };
+    function finish() {
+      const counterpart = family === "match-result" || family === "double-chance";
+      const matched = { ...matchedScores.snapshot(), fixtureKeysHash: evidenceFingerprint([...keys].sort()) };
+      const gates = (options.gates ?? []).filter((gate) => gate.system === "ai" && gate.baseline === "api-football" && gate.family === family &&
+        (horizon === null || gate.horizonId === horizon.id)).map((gate) => ({ id: gate.id, purpose: gate.purpose,
+        ...evaluateQualityGate(gate, matched.ai, { total: coverage.locked + coverage.void, void: coverage.void, available: coverage.both }, matched) }));
+      return { family, horizonId: horizon?.id ?? null, derivedFrom: family === "double-chance" ? "match-result" as const : null,
+        state: !counterpart ? "unavailable" as const : matched.count === 0 ? "unavailable" as const : "available" as const,
+        reason: !counterpart ? "no-provider-counterpart" : matched.count === 0 ? "no-matched-settled-pairs" : null,
+        coverage: { ...coverage }, matched, disagreements: { ...disagreementScores.snapshot(), aiCorrect, providerCorrect },
+        segments: { conflictingEvidence: conflictingScores.snapshot(), limitedNews: limitedScores.snapshot() }, gates };
+    }
+    return { add, finish };
   }));
-  const recent = records.flatMap((record) => {
-    if (record.state !== "closed" || !record.locked || record.locked.sourceOrder === null) return [];
-    const receipt = receipts.get(record.locked.jobId);
-    if (!receipt || receipt === "not-captured") return [];
-    const ai = receipt.ai.markets.markets["match-result"], provider = receipt["api-football"].markets.markets["match-result"];
-    if (!ai.available || !provider.available) return [];
-    const side = (market: AcceptedMarket) => ({ selection: market.selection, probability: market.selectedProbability,
-      outcome: settleMarketSelection("match-result", market.selection, record.settlement).status });
-    return [{ fixtureId: record.fixtureId, matchLabel: record.matchLabel, href: record.href, kickoffAt: record.kickoffAt,
-      sourceOrder: record.locked.sourceOrder, published: record.locked.published["match-result"] ?? null,
-      ai: side(ai.market), "api-football": side(provider.market) }];
-  }).sort((left, right) => right.kickoffAt - left.kickoffAt || (left.fixtureId < right.fixtureId ? -1 : 1)).slice(0, 20);
-  return freezeEvidence({ orders, comparisons, recent });
+  function add(records: readonly SourceComparisonRecord[], receipts: ReadonlyMap<string, SourceReceiptRead>) {
+    if (fixtureCount + records.length > performanceRules.maximumCohortFixtures) throw new RangeError("Source comparison exceeds the bounded fixture cohort.");
+    fixtureCount += records.length;
+    for (const record of records) {
+      if (record.state === "closed" && record.locked) orders[record.locked.sourceOrder ?? "none"]++;
+      for (const cell of cells) cell.add(record, receipts);
+      if (record.state !== "closed" || !record.locked || record.locked.sourceOrder === null) continue;
+      const receipt = receipts.get(record.locked.jobId);
+      if (!receipt || receipt === "not-captured") continue;
+      const ai = receipt.ai.markets.markets["match-result"], provider = receipt["api-football"].markets.markets["match-result"];
+      if (!ai.available || !provider.available) continue;
+      const side = (market: AcceptedMarket) => ({ selection: market.selection, probability: market.selectedProbability,
+        outcome: settleMarketSelection("match-result", market.selection, record.settlement).status });
+      recent.push({ fixtureId: record.fixtureId, matchLabel: record.matchLabel, href: record.href, kickoffAt: record.kickoffAt,
+        sourceOrder: record.locked.sourceOrder, published: record.locked.published["match-result"] ?? null,
+        ai: side(ai.market), "api-football": side(provider.market) });
+      recent.sort((left, right) => right.kickoffAt - left.kickoffAt || (left.fixtureId < right.fixtureId ? -1 : 1));
+      if (recent.length > 20) recent.length = 20;
+    }
+  }
+  return Object.freeze({ add, finish: () => freezeEvidence({ orders: { ...orders }, comparisons: cells.map((cell) => cell.finish()), recent: [...recent] }) });
+}
+
+/** Compatibility entry point; batches use the same numeric accumulator without retaining candidate or receipt bodies. */
+export function compareSources(records: readonly SourceComparisonRecord[], receipts: ReadonlyMap<string, SourceReceiptRead>,
+  options: SourceComparisonOptions) {
+  const accumulator = createSourceComparisonAccumulator(options);
+  accumulator.add(records, receipts);
+  return accumulator.finish();
 }
 export type SourceComparison = ReturnType<typeof compareSources>;
 export const sourceComparisonFamilies = Object.freeze(Object.keys(marketSelections) as MarketFamily[]);

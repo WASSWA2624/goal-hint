@@ -128,6 +128,11 @@ export const ContextSection = memo(function ContextSection() {
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
   const rest = (days: number | null) => days === null ? messages.text("details.notAvailable") : messages.text("details.restDays", { days: messages.number(days, { maximumFractionDigits: 1 }) });
+  const standing = (side: "home" | "away") => {
+    const row = value?.standings?.[side];
+    return row ? messages.text("details.standingSummary", { team: side === "home" ? home : away,
+      rank: messages.number(row.rank), points: messages.number(row.points), played: messages.number(row.played) }) : null;
+  };
   const kickoff = fixture.kickoffAt;
   return <SectionCard section="context" icon={<ContextIcon />} title={messages.text("details.section.context")}
     meta={value?.competition.round ?? null} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
@@ -142,9 +147,11 @@ export const ContextSection = memo(function ContextSection() {
         <dt>{messages.text("match.kickoff")}</dt><dd>{kickoff === null ? messages.text("details.kickoffUnknown")
           : <time dateTime={toUtcIsoString(kickoff)}>{messages.reportingInstant(kickoff)}</time>}</dd>
         <dt>{messages.text("details.status")}</dt><dd>{messages.text(`match.status.${fixture.status}`)}</dd>
-        <dt>{messages.text("details.venue")}</dt><dd>{messages.text("details.notAvailable")}</dd>
+        <dt>{messages.text("details.venue")}</dt><dd>{value?.venue ? [value.venue.name, value.venue.city].filter(Boolean).join(", ") : messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.weather")}</dt><dd>{messages.text("details.notAvailable")}</dd>
-        <dt>{messages.text("details.standings")}</dt><dd>{messages.text("details.notAvailable")}</dd>
+        <dt>{messages.text("details.standings")}</dt><dd>{value?.standings
+          ? <>{(["home", "away"] as const).map((side) => { const summary = standing(side); return summary ? <div key={side}>{summary}</div> : null; })}</>
+          : messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.restFor", { team: home })}</dt><dd>{rest(value?.restDays.home ?? null)}</dd>
         <dt>{messages.text("details.restFor", { team: away })}</dt><dd>{rest(value?.restDays.away ?? null)}</dd>
       </Facts>
@@ -175,14 +182,19 @@ export const ContextSection = memo(function ContextSection() {
 });
 
 export const RefereeSection = memo(function RefereeSection() {
-  const { messages } = useStableDetails();
+  const { messages, fixtureId, preview, view } = useDetails();
+  const referee = useInsightSection(fixtureId, "referee", view.section === "referee", preview);
+  const value = referee.data ?? preview?.sections.referee ?? { state: "not-available" as const };
   return <SectionCard section="referee" icon={<RefereeIcon />} title={messages.text("details.section.referee")}
-    meta={messages.text("details.notAvailable")}>
+    meta={value.state === "available" ? value.name : messages.text("details.notAvailable")}>
+    <SectionState loading={referee.loading} error={referee.error} onRetry={referee.retry} />
     <Facts>
-      <dt>{messages.text("details.official")}</dt><dd>{messages.text("details.notAvailable")}</dd>
+      <dt>{messages.text("details.official")}</dt><dd>{value.state === "available" ? value.name : messages.text("details.notAvailable")}</dd>
       <dt>{messages.text("details.refereeStats")}</dt><dd>{messages.text("details.notAvailable")}</dd>
+      {value.state === "available" && <><dt>{messages.text("detail.retrieved")}</dt><dd>
+        <time dateTime={toUtcIsoString(at(value.retrievedAt))}>{messages.reportingInstant(at(value.retrievedAt))}</time></dd></>}
     </Facts>
-    <Note>{messages.text("details.refereeMissing")}</Note>
+    <Note>{messages.text(value.state === "available" ? "details.refereeStatsMissing" : "details.refereeMissing")}</Note>
   </SectionCard>;
 });
 

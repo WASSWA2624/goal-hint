@@ -8,17 +8,22 @@ import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 import { validTeamCode } from "../../domain/team-name.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
-import { historyTime, storedCycleDisplay } from "../predictions/history-read.ts";
+import { Prisma } from "../generated/prisma/client.ts";
+import { cycleFromRows, historyTime, revisionFromRows, storedCycleDisplay, type HistoryRow } from "../predictions/history-read.ts";
+import { historyFail, type CycleDisplay } from "../predictions/history-contract.ts";
 import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { storedSettlementProjection } from "../settlement/settlement-read.ts";
-import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
+import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { storedFixturePrices } from "../odds/odds-read.ts";
 import { publicRecommendation, recommendationMarket } from "../../domain/recommendation-view.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { formatOddsHundredths, oddsDisplayHundredths, parseDecimalOdds } from "../../domain/odds.ts";
 
 const families = Object.keys(marketSelections) as MarketFamily[];
+const fixtureInclude = { homeTeam: true, awayTeam: true, season: { include: { competition: true } },
+  resultState: true, lifecycleState: true } satisfies Prisma.FootballFixtureInclude;
+type FeedFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureInclude }>;
+type FeedFixtureSource = Readonly<{ fixture: FeedFixture; display: CycleDisplay | null; result: StoredFixtureResult | null }>;
 const text = (value: string | null) => value?.normalize("NFC").replace(/\p{Cc}/gu, " ").trim() || null;
 const voidKeys = { "formal-postponement": "outcome.postponement", "fixture-canceled": "outcome.cancellation",
   "fixture-abandoned": "outcome.abandonment", "fixture-awarded": "outcome.award", "locked-cutoff-invalidated": "outcome.invalidCutoff",
@@ -31,13 +36,15 @@ export function publicVoidReason(reason: string | null, locale = "en") {
 
 /** `prices` defaults to publicPolicy.features.providerOdds; prices come from the same snapshot as the feed SQL. */
 export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string,
-  options: Readonly<{ prices?: boolean }> = {}): Promise<StoredMatchFeedRecord> {
-  const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: { homeTeam: true, awayTeam: true,
-    season: { include: { competition: true } }, resultState: true, lifecycleState: true } });
-  const messages = createMessages(locale), display = fixture.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
+  options: Readonly<{ prices?: boolean; source?: FeedFixtureSource }> = {}): Promise<StoredMatchFeedRecord> {
+  const fixture = options.source?.fixture ?? await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: fixtureInclude });
+  const messages = createMessages(locale), display = options.source ? options.source.display
+    : fixture.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
   const cycle = display?.cycle ?? null, revision = display?.revision ?? null;
+  if (fixture.id !== id || options.source && (cycle?.lockedSetId || (cycle?.id ?? null) !== fixture.activeCycleId)) return historyFail("invalid-state");
   const settlement = cycle?.lockedSetId ? await storedSettlementProjection(tx, id, cycle.id) : null;
-  const result = settlement?.result ?? (fixture.resultState?.resultId ? await storedFixtureResult(tx, id, fixture.resultState.resultId) : null);
+  const result = options.source ? options.source.result
+    : settlement?.result ?? (fixture.resultState?.resultId ? await storedFixtureResult(tx, id, fixture.resultState.resultId) : null);
   const latest = cycle ? await tx.predictionRefreshResult.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: [{ runSequence: "desc" }, { fixtureVersion: "desc" }], select: { id: true } }) : null;
   const refresh = latest ? await storedRefreshResult(tx, latest.id) : null;
   const work = cycle ? await tx.runFixture.findFirst({ where: { fixtureId: id, cycleId: cycle.id }, orderBy: { run: { sequence: "desc" } }, select: { job: { select: { state: true } } } }) : null;
@@ -114,4 +121,60 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
       updateDelayed: delayed === true, provisional: available.some((item) => item.provenance.kind !== "ai" || item.provenance.provisional) } : null,
     unavailableMarkets, update: { prediction, result: fixture.resultState?.delayReason ? "delayed" : fixture.resultState ? "current" : "untracked" },
     availabilityMessage: outside && !revision ? messages.text("feed.sevenDayAvailability") : null, prices };
+}
+
+/** Hydrate a bounded ordered cohort with the same canonical projection and archive
+ * validators as individual feed reads. Open cycles share their fixture, schedule,
+ * forecast and result queries; settled/void cycles retain their full audit reader. */
+export async function storedFeedFixtures(tx: Prisma.TransactionClient, ids: readonly string[], partialCoverage: boolean,
+  window: InstantWindow, locale: string, options: Readonly<{ prices?: boolean }> = {}): Promise<StoredMatchFeedRecord[]> {
+  if (!ids.length) return [];
+  if (ids.length > 100 || new Set(ids).size !== ids.length) return historyFail("invalid-state");
+  const fixtures = await tx.footballFixture.findMany({ where: { id: { in: [...ids] } }, include: fixtureInclude });
+  const fixtureMap = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
+  if (fixtureMap.size !== ids.length || ids.some((id) => !fixtureMap.has(id))) return historyFail("invalid-state");
+  const cycleIds = fixtures.flatMap((fixture) => fixture.activeCycleId ? [fixture.activeCycleId] : []);
+  const cycles = cycleIds.length ? await tx.predictionCycle.findMany({ where: { id: { in: cycleIds } } }) : [];
+  const cycleMap = new Map(cycles.map((cycle) => [cycle.id, cycle]));
+  if (cycleMap.size !== cycleIds.length) return historyFail("invalid-state");
+  const open = cycles.filter((cycle) => cycle.state === "open" && cycle.lockedSetId === null);
+  const schedules = open.length ? await tx.predictionSchedule.findMany({ where: {
+    OR: open.map((cycle) => ({ cycleId: cycle.id, version: cycle.scheduleVersion })) } }) : [];
+  const scheduleMap = new Map(schedules.map((schedule) => [`${schedule.cycleId}:${schedule.version}`, schedule]));
+  const displays = new Map<string, CycleDisplay>();
+  const sets = open.flatMap((cycle) => cycle.currentSetId ? [cycle.currentSetId] : []);
+  const setRows = sets.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,
+    r.integrity=SHA2(CONCAT(r.id,':',r.requestHash,':',CAST(r.candidateJson AS CHAR)),256) AS validIntegrity
+    FROM PredictionSet r WHERE r.id IN (${Prisma.join(sets)})`) : [];
+  const marketRows = sets.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,
+    r.integrity=SHA2(CAST(r.payloadJson AS CHAR),256) AS validIntegrity
+    FROM MarketPrediction r WHERE r.setId IN (${Prisma.join(sets)})`) : [];
+  const markets = new Map<string, HistoryRow[]>();
+  for (const row of marketRows) {
+    const key = String(row.setId), members = markets.get(key) ?? [];
+    members.push(row); markets.set(key, members);
+  }
+  const revisions = new Map(setRows.map((row) => [String(row.id), revisionFromRows(row, markets.get(String(row.id)) ?? [])]));
+  if (revisions.size !== sets.length) return historyFail("invalid-state");
+  for (const row of open) {
+    const cycle = cycleFromRows(row, scheduleMap.get(`${row.id}:${row.scheduleVersion}`) ?? null);
+    const revision = cycle.currentSetId ? revisions.get(cycle.currentSetId) ?? null : null;
+    if (cycle.currentSetId && !revision || revision && (revision.fixtureId !== cycle.fixtureId || revision.cycleId !== cycle.id)) return historyFail("invalid-state");
+    displays.set(cycle.id, { cycle, mode: "current", revision });
+  }
+  const eligible = fixtures.filter((fixture) => fixture.activeCycleId === null || displays.has(fixture.activeCycleId));
+  const resultIds = eligible.flatMap((fixture) => fixture.resultState?.resultId ? [fixture.resultState.resultId] : []);
+  const resultRows = resultIds.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,
+    r.integrity=SHA2(CAST(r.body AS CHAR),256) AS validIntegrity FROM FixtureResult r WHERE r.id IN (${Prisma.join(resultIds)})`) : [];
+  const results = new Map(resultRows.map((row) => [String(row.id), fixtureResultFromRow(row)]));
+  if (results.size !== resultIds.length) return historyFail("invalid-state");
+  return Promise.all(ids.map(async (id) => {
+    const fixture = fixtureMap.get(id)!;
+    if (fixture.activeCycleId && !displays.has(fixture.activeCycleId)) return storedFeedFixture(tx, id, partialCoverage, window, locale, options);
+    const display = fixture.activeCycleId ? displays.get(fixture.activeCycleId)! : null;
+    if (display && display.cycle.fixtureId !== id) return historyFail("invalid-state");
+    const result = fixture.resultState?.resultId ? results.get(fixture.resultState.resultId)! : null;
+    if (result && result.fixtureId !== id) return historyFail("invalid-state");
+    return storedFeedFixture(tx, id, partialCoverage, window, locale, { ...options, source: { fixture, display, result } });
+  }));
 }

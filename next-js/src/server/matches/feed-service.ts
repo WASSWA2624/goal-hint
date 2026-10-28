@@ -19,6 +19,7 @@ import { storedFeedFixture } from "./fixture-read.ts";
 import { readFeedPerformance } from "./feed-performance.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
+import { prepareDemoRange } from "../demo/read-seed.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
   context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean; asOf?: number }> = {}) {
@@ -55,6 +56,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
     const sourceRange = validateReportingDateRange(getReportingDate(range.window.startInclusive),
       getReportingDate(utcInstantFromEpochMilliseconds(range.window.endExclusive - 1)), feedQueryRules.maximumDays + 2);
     try {
+      await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await limiter.consume();
       const read = () => database.transaction(async (tx) => {
         // Source writes and these generations commit atomically. Progress-only
@@ -86,13 +88,14 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
-        const records = [];
-        for (const { id } of rows) {
+        // Independent fixture reads share this one repeatable-read snapshot.
+        // Starting them together also lets Prisma coalesce matching unique lookups.
+        const records = await Promise.all(rows.map(async ({ id }) => {
           const record = await storedFeedFixture(tx, id, false, window, query.locale, { prices: providerOdds });
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
-          records.push(record);
-        }
+          return record;
+        }));
         const totalPages = Math.ceil(total / query.pageSize);
         const nextPage = query.page < totalPages && query.page < feedQueryRules.maximumPage ? query.page + 1 : null;
         const previousPage = query.page > 1 ? Math.max(1, Math.min(query.page - 1, totalPages)) : null;

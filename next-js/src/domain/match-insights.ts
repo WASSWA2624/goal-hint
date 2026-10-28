@@ -45,6 +45,8 @@ export const evidenceMetricSchema = z.strictObject({ metric: text(64), unit: tex
 export const teamSummarySchema = z.strictObject({ matches: count, wins: count, draws: count, losses: count, goalsFor: count, goalsAgainst: count,
   bttsRate: rate.nullable(), over25Rate: rate.nullable(), cleanSheetRate: rate.nullable(), failedToScoreRate: rate.nullable() });
 export type TeamSummary = z.infer<typeof teamSummarySchema>;
+export const insightVenueSchema = z.strictObject({ name: text(256).min(1), city: text(256).nullable(), retrievedAt: at });
+export const insightStandingSchema = z.strictObject({ rank: count.min(1), points: count, played: count, group: text(512) });
 
 export const insightSectionsSchema = z.strictObject({
   form: z.strictObject({ home: z.array(insightResultSchema).max(40), away: z.array(insightResultSchema).max(40) }),
@@ -59,9 +61,12 @@ export const insightSectionsSchema = z.strictObject({
     kickoffAt: at.nullable(), restDays: z.strictObject({ home: z.number().nullable(), away: z.number().nullable() }),
     lastResults: z.strictObject({ home: insightResultSchema.nullable(), away: insightResultSchema.nullable() }),
     nextFixtures: z.strictObject({ home: upcomingFixtureSchema.nullable(), away: upcomingFixtureSchema.nullable() }),
+    venue: insightVenueSchema.nullable().optional(),
+    standings: z.strictObject({ home: insightStandingSchema.nullable(), away: insightStandingSchema.nullable(), retrievedAt: at }).nullable().optional(),
   }),
-  /** No referee, venue or weather source is stored yet; the states stay explicit. */
-  referee: z.strictObject({ state: z.enum(["not-available"]) }),
+  /** Assignment is separate from officiating statistics; missing observations stay explicit. */
+  referee: z.discriminatedUnion("state", [z.strictObject({ state: z.literal("not-available") }),
+    z.strictObject({ state: z.literal("available"), name: text(256).min(1), retrievedAt: at })]),
   history: z.strictObject({ state: z.enum(["available"]) }),
 });
 export type InsightSections = z.infer<typeof insightSectionsSchema>;

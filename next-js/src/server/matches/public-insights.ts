@@ -5,9 +5,13 @@ import { getDatabase } from "../database/client.ts";
 import { createMysqlPublicResponseCache } from "../cache/mysql-public-cache.ts";
 import { createMatchInsightsService } from "./insights-service.ts";
 import { resultStatus } from "../results/result-read.ts";
+import { prepareDemoFixture } from "../demo/read-seed.ts";
+import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 
 export async function readPublicMatchStatus(id: string) {
-  const row = await getDatabase().query((tx) => tx.footballFixture.findUnique({ where: { id }, select: { status: true } }));
+  const database = getDatabase();
+  await prepareDemoFixture(database, id, utcInstantFromEpochMilliseconds(Date.now()));
+  const row = await database.query((tx) => tx.footballFixture.findUnique({ where: { id }, select: { status: true } }));
   return resultStatus.parse(row?.status);
 }
 

@@ -34,9 +34,9 @@ function Scores({ value, label }: { value: ForecastSourceScores; label: string }
   return <PanelBody><FactList aria-label={label}>{rows.map(([name, text]) => <div key={name}><dt>{name}</dt><dd>{text}</dd></div>)}</FactList></PanelBody>;
 }
 
-function FamilyPanel({ value }: { value: ForecastSourceFamily }) {
+function FamilyPanel({ value, replay = false }: { value: ForecastSourceFamily; replay?: boolean }) {
   const { coverage } = value, id = `forecast-source-${value.family}`;
-  const tiles = [["Locked", coverage.locked], ["Both captured", coverage.captured], ["Not captured", coverage.notCaptured],
+  const tiles = [["Locked", coverage.locked], [replay ? "Pairs present" : "Both captured", coverage.captured], [replay ? "Pairs missing" : "Not captured", coverage.notCaptured],
     ["Both available", coverage.both], ["AI only", coverage.aiOnly], ["API-Football only", coverage.providerOnly],
     ["Settled pairs", coverage.settled], ["Pending pairs", coverage.pending]] as const;
   return <Panel aria-labelledby={id}>
@@ -57,6 +57,7 @@ export function ForecastSourcesReport({ value }: { value: ForecastSourcesReport 
     <DeskHead><DeskTitle><h1>Forecast sources</h1>
       <MetaLine>{value.from} to {value.to} · {value.fixtureCount} fixtures · kickoff dates in East Africa Time</MetaLine></DeskTitle></DeskHead>
     <Notice $tone="info">Diagnostic only. Small samples are noisy; AI-first publication needs an owner-approved evaluation report.</Notice>
+    {value.diagnostic && <Notice $tone="info" role="note">{value.diagnostic.label} {value.diagnostic.replayedFixtures} legacy fixtures use replay diagnostics; source-order totals below retain the original audit.</Notice>}
     <Segmented aria-label="Market">{markets.map(([key, label]) =>
       <Link key={key} href={query(key)} prefetch={false} aria-current={value.market === key ? "page" : undefined}>{label}</Link>)}</Segmented>
     <Panel aria-labelledby="forecast-source-order">
@@ -67,7 +68,7 @@ export function ForecastSourcesReport({ value }: { value: ForecastSourcesReport 
         <div><dt>Before source receipts</dt><dd>{value.orders.none}</dd></div>
       </StatGrid>
     </Panel>
-    {value.comparisons.map((entry) => <FamilyPanel key={entry.family} value={entry} />)}
+    {value.comparisons.map((entry) => <FamilyPanel key={entry.family} value={entry} replay={!!value.diagnostic} />)}
     {result && <>
       <Panel aria-labelledby="forecast-source-disagreements">
         <PanelHead><h2 id="forecast-source-disagreements">Disagreements · match result</h2>
@@ -85,7 +86,7 @@ export function ForecastSourcesReport({ value }: { value: ForecastSourcesReport 
       </Panel>
     </>}
     <Panel aria-labelledby="forecast-source-recent">
-      <PanelHead><h2 id="forecast-source-recent">Recent matched predictions</h2><Quiet>Match result, newest kickoff first</Quiet></PanelHead>
+      <PanelHead><h2 id="forecast-source-recent">Recent matched predictions</h2><Quiet>{value.diagnostic ? "Synthetic replay pairs, newest kickoff first" : "Match result, newest kickoff first"}</Quiet></PanelHead>
       {value.recent.length === 0 ? <PanelBody><MetaLine>No locked match has both predictions yet.</MetaLine></PanelBody>
         : <RowList>{value.recent.map((pair) => <Pair key={pair.fixtureId}>
           <RowTitle><Link href={pair.href} prefetch={false}>{pair.matchLabel}</Link></RowTitle>

@@ -3,6 +3,7 @@ import "server-only";
 import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 import { getDatabase } from "../database/client.ts";
@@ -44,7 +45,12 @@ export const readBestSlips: ReturnType<typeof createBestSlipsService> = async (a
   const empty = { day, slips: [], searchLimited: false, partialCoverage: false } as const;
   if (!publicPolicy.features.providerOdds) return { ...empty, state: "odds-unavailable" };
   try {
-    const published = await createPublishedSlips(getDatabase()).day(day);
+    const database = getDatabase();
+    if (isDevelopmentDemo()) {
+      const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
+      await ensureDemoSlipDates(database, [day]);
+    }
+    const published = await createPublishedSlips(database).day(day);
     return published ? gateBestSlips(published, access) : { ...empty, state: "model-unavailable" };
   } catch { return { ...empty, state: "data-unavailable" }; }
 };

@@ -6,6 +6,7 @@ import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics
 import { signedOutPath } from "../../domain/member-navigation.ts";
 import { cookie, isSameOrigin, json, privateHeaders, readCookie, redirect } from "../http/private-http.ts";
 import { createMemberSessions, memberCookieName, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
 import { createAccessCodes, type AccessCodes } from "./access-codes.ts";
 import { createMemberAuth, type MemberAuth } from "./member-auth.ts";
@@ -82,7 +83,10 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
     if (legacyToken !== undefined) {
       try { await (await legacySource()).auth?.logout(legacyToken); } catch { /* Cookie clearing survives a legacy storage outage. */ }
     }
-    const next = signedOutPath, cleared = [cookie(config, name, "", 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
+    // Preserve an explicit anonymous choice in demo mode, where the first cookie-free
+    // visit otherwise selects the seeded member. A normal login replaces this cookie.
+    const demo = isDevelopmentDemo();
+    const next = signedOutPath, cleared = [cookie(config, name, demo ? "signed-out" : "", demo ? 34_560_000 : 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
     const response = wantsJson(request) ? json({ next, phone: null }) : redirect(next);
     for (const value of cleared) response.headers.append("Set-Cookie", value);
     response.headers.set("Clear-Site-Data", '"cache"');

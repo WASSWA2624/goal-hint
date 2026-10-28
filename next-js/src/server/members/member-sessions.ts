@@ -8,6 +8,7 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { createMemberRateLimit, memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { decide } from "./settings.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
+import { developmentMemberToken } from "../demo/member.ts";
 
 export const memberSessionRules = Object.freeze({ expiryMs: 90 * 86_400_000, touchAfterMs: 86_400_000,
   // This storage cap covers restricted flows; an authenticated login always replaces every other session.
@@ -74,6 +75,7 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
     },
 
     async verify(token?: string): Promise<MemberIdentity | null> {
+      token = developmentMemberToken(token);
       if (!validMemberToken(token)) return null;
       const at = new Date(now()), hash = memberTokenHash(token);
       const row = await database.query((tx) => tx.memberSession.findUnique({ where: { tokenHash: hash }, include: { account: true } }));
@@ -93,6 +95,7 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
     },
 
     async signOut(token?: string): Promise<void> {
+      token = developmentMemberToken(token);
       if (validMemberToken(token)) await database.query((tx) => tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(token) } }));
     },
 

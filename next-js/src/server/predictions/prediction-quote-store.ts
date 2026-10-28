@@ -86,6 +86,28 @@ export function predictionQuoteFromRow(row: HistoryRow): PredictionQuote {
   return freezeEvidence(value);
 }
 
+/** Append-only persistence for already authorized, source-bound quote bodies.
+ * Callers establish publication authority before this shared sealed writer runs. */
+export async function writePreparedPredictionQuotes(tx: Tx, incoming: readonly PredictionQuote[]): Promise<void> {
+  const quotes = incoming.map((quote) => quoteSchema.parse(quote)), identities = new Set<string>();
+  for (const quote of quotes) {
+    const key = `${quote.revisionId}:${quote.family}`;
+    if (identities.has(key)) return historyFail("invalid-request");
+    identities.add(key);
+  }
+  for (let offset = 0; offset < quotes.length; offset += 100) {
+    await tx.$executeRaw(Prisma.sql`INSERT INTO PredictionQuote
+      (revisionId, cycleId, fixtureId, family, selection, state, reason, snapshotId, displayHundredths, quotedAt, recordedAt, integrity, body)
+      VALUES ${Prisma.join(quotes.slice(offset, offset + 100).map((quote) => {
+        const body = evidenceSerialize(quote);
+        return Prisma.sql`(${quote.revisionId}, ${quote.cycleId}, ${quote.fixtureId}, ${quote.family}, ${quote.selection}, ${quote.state},
+          ${quote.reason}, ${quote.price?.snapshotId ?? null}, ${quote.price?.hundredths ?? null},
+          ${quote.price ? new Date(quote.price.retrievedAt) : null}, ${new Date(quote.recordedAt)},
+          SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
+      }))}`);
+  }
+}
+
 /** Same canonical publication transaction, after the revision and its extensions and before the cycle pointer moves.
  * No provider call, no retrospective attachment and no second capture for a revision. */
 export async function appendPredictionQuotes(tx: Tx, input: QuoteIdentity): Promise<readonly PredictionQuote[]> {
@@ -101,14 +123,6 @@ export async function appendPredictionQuotes(tx: Tx, input: QuoteIdentity): Prom
       await tx.predictionQuote.findFirst({ where: { revisionId: revision.id }, select: { family: true } })) return historyFail("invalid-request");
   const quotes = preparePredictionQuotes({ ...identity, markets: input.markets, source: await storedQuoteSource(tx, identity.fixtureId) });
   if (quotes.length === 0) return quotes;
-  await tx.$executeRaw(Prisma.sql`INSERT INTO PredictionQuote
-    (revisionId, cycleId, fixtureId, family, selection, state, reason, snapshotId, displayHundredths, quotedAt, recordedAt, integrity, body)
-    VALUES ${Prisma.join(quotes.map((quote) => {
-      const body = evidenceSerialize(quote);
-      return Prisma.sql`(${quote.revisionId}, ${quote.cycleId}, ${quote.fixtureId}, ${quote.family}, ${quote.selection}, ${quote.state},
-        ${quote.reason}, ${quote.price?.snapshotId ?? null}, ${quote.price?.hundredths ?? null},
-        ${quote.price ? new Date(quote.price.retrievedAt) : null}, ${new Date(quote.recordedAt)},
-        SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
-    }))}`);
+  await writePreparedPredictionQuotes(tx, quotes);
   return quotes;
 }

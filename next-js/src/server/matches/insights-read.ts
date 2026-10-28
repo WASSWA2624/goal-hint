@@ -19,6 +19,20 @@ const team = (row: { id: string; name: string | null; logoUrl: string | null }) 
 
 const fixtureInclude = { homeTeam: true, awayTeam: true, season: { include: { competition: true } } } as const;
 type FixtureRow = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureInclude }>;
+type RefereeFacts = { providerFixtureId: bigint; referee: string | null; infoRetrievedAt: Date | null };
+type VenueFacts = { providerFixtureId: bigint; venueName: string | null; venueCity: string | null; infoRetrievedAt: Date | null };
+
+/** Only the same fixture's already-observed assignment is public; no officiating record is inferred. */
+export function publicRefereeAssignment(externalId: bigint, facts: RefereeFacts | null, asOf: number): StoredMatchInsights["sections"]["referee"] {
+  const name = text(facts?.referee)?.slice(0, 256) ?? null, retrievedAt = facts?.infoRetrievedAt?.getTime();
+  return facts && facts.providerFixtureId === externalId && name && retrievedAt !== undefined && Number.isFinite(retrievedAt) && retrievedAt <= asOf
+    ? { state: "available", name, retrievedAt } : { state: "not-available" };
+}
+export function publicFixtureVenue(externalId: bigint, facts: VenueFacts | null, asOf: number): StoredMatchInsights["sections"]["context"]["venue"] {
+  const name = text(facts?.venueName)?.slice(0, 256) ?? null, retrievedAt = facts?.infoRetrievedAt?.getTime();
+  return facts && facts.providerFixtureId === externalId && name && retrievedAt !== undefined && Number.isFinite(retrievedAt) && retrievedAt <= asOf
+    ? { name, city: text(facts.venueCity)?.slice(0, 256) ?? null, retrievedAt } : null;
+}
 
 /** Only verified regulation scores from the canonical catalog become results. */
 function result(row: FixtureRow): InsightResult | null {
@@ -38,7 +52,8 @@ function permitted(snapshot: EvidenceSnapshot | null, asOf: number): readonly Ev
 
 export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureId: string, asOf: number,
   evidenceStore: ReturnType<typeof createMysqlEvidenceStore>): Promise<StoredMatchInsights> {
-  const fixture = await tx.footballFixture.findUnique({ where: { id: fixtureId }, include: fixtureInclude });
+  const fixture = await tx.footballFixture.findUnique({ where: { id: fixtureId }, include: { ...fixtureInclude,
+    facts: { select: { providerFixtureId: true, referee: true, venueName: true, venueCity: true, infoRetrievedAt: true } } } });
   if (!fixture) throw new MatchFeedError("not-found");
   const homeId = fixture.homeTeamId, awayId = fixture.awayTeamId;
   const before = fixture.kickoff ?? new Date(asOf);
@@ -144,8 +159,9 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
     news: { items: news.slice(0, 80), limitedNews: evidence?.coverage.limitedNews ?? false },
     context: { competition: { id: competition.id, name: text(competition.name), country: text(competition.country), logoUrl: logo(competition.logoUrl),
       round: text(fixture.round) }, kickoffAt: fixture.kickoff?.getTime() ?? null, restDays: { home: rest(homeForm), away: rest(awayForm) },
-      lastResults: { home: homeForm[0] ?? null, away: awayForm[0] ?? null }, nextFixtures: { home: await next(homeId), away: await next(awayId) } },
-    referee: { state: "not-available" },
+      lastResults: { home: homeForm[0] ?? null, away: awayForm[0] ?? null }, nextFixtures: { home: await next(homeId), away: await next(awayId) },
+      venue: publicFixtureVenue(fixture.externalId, fixture.facts, asOf) },
+    referee: publicRefereeAssignment(fixture.externalId, fixture.facts, asOf),
     history: { state: "available" },
   } });
 }

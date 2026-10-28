@@ -14,6 +14,8 @@ import { publicMatchFailure, privateMatchHeaders } from "./public-http.ts";
 import { createGatedReads } from "../members/gated-reads.ts";
 import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
+import { prepareDemoFixture } from "../demo/read-seed.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 
 /**
  * Reads in flight per database and fixture. Services are created per request, so concurrent section
@@ -28,10 +30,18 @@ export function createMatchInsightsService(options: Readonly<{ database: Databas
   async function load(id: string): Promise<StoredMatchInsights> {
     const asOf = clock.now();
     try {
-      const read = () => options.database.transaction(async (tx) => freezeEvidence(await storedMatchInsights(tx, id, asOf, evidenceStore)),
+      const demo = isDevelopmentDemo();
+      if (demo) await prepareDemoFixture(options.database, id, asOf);
+      const read = () => options.database.transaction(async (tx) => {
+        const insights = await storedMatchInsights(tx, id, asOf, evidenceStore);
+        const current = demo ? await (await import("../demo/insights.ts")).readDemoCurrentAvailability(tx, insights, asOf) : insights;
+        return freezeEvidence(current);
+      },
         { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       // The detail read family keeps the existing catalog and fixture invalidation tags.
-      return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
+      // Demo availability follows its current simulation clock across confirmation
+      // boundaries, independently of the cached immutable prediction evidence.
+      return !demo && options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
         query: { view: "match-insights-v1", id }, parse: (value) => storedMatchInsightsSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

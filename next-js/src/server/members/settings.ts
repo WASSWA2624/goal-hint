@@ -1,6 +1,7 @@
 import "server-only";
 
 import { privacyNotice } from "../../domain/privacy-notice.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeRequirements, paywallModes, parseSettingsChanges,
   type CopyFormat, type EditableSettingField, type ModeFacts, type ModeRequirement, type PaywallMode, type ProtectedSettingField,
   protectedSettingFields, type ShortcutField, type SubscriptionIdentity, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
@@ -116,9 +117,12 @@ export function configuredSubscriptionSettings(settings: SubscriptionSettings, e
 }
 
 export function createSettingsService(database: DatabaseRuntime,
-  { now = Date.now, readiness = noticeReadiness, environment = getRuntimePolicy().choices.subscriptionIdentity }: {
+  { now = Date.now, readiness = noticeReadiness,
+    // The isolated demo stores editable fictional receiving details in its own row.
+    // Cleared private environment fields must not mask them as managed empty values.
+    environment = isDevelopmentDemo() ? null : getRuntimePolicy().choices.subscriptionIdentity }: {
     now?: () => number; readiness?: ReleaseReadiness;
-    /** Explicit null is for isolated historical-storage fixtures only. Production reads environment identity. */
+    /** Null uses stored identity in isolated demos/fixtures. Production defaults to environment identity. */
     environment?: SubscriptionIdentity | null;
   } = {}) {
   const environmentFields = environment ? protectedSettingFields : [];

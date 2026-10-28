@@ -19,6 +19,7 @@ import { publicDetailCycle, publicDetailRevision, publicDetailSnapshot } from ".
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { storedLiveMatchSnapshot } from "../live-match/live-match-read.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
+import { prepareDemoFixture } from "../demo/read-seed.ts";
 
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
@@ -33,6 +34,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
     let refused: MatchFeedError | undefined;
     let permissionDeadline = Number.MAX_SAFE_INTEGER;
     try {
+      await prepareDemoFixture(options.database, id, asOf);
       const read = () => options.database.transaction(async (tx) => {
         try {
           const known = await tx.footballFixture.findUnique({ where: { id }, select: { id: true, kickoff: true } });

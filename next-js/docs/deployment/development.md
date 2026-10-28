@@ -16,9 +16,15 @@ shell uses `APP_ENV=development` and that address as `DEV_APP_ORIGIN`; use the
 actual current address of the development computer.
 
 The source export includes the lockfile and `.env.example`. Dependencies, build
-caches and private settings are excluded. To configure local features, copy
-`.env.example` to `.env.local` and edit it privately. With no settings, the app
-starts with database and providers disabled. Development packages do not contain
+caches and private settings are excluded. Development starts with the
+[comprehensive football demo](../development-demo.md), using Python and a genuine
+MySQL 8.4+ executable to own a separate persistent loopback database. It includes
+560 synthetic fixtures per day from January through November 2026 and uses the
+normal application screens and services. Set `GOAL_HINT_DEMO_MYSQL_BINARY` if
+MySQL is not discovered automatically.
+
+To use configured development services, copy `.env.example` to `.env.local`,
+edit it privately and run `npm run dev:live`. Development packages do not contain
 production credentials or enable production services.
 
 `BUILD_INFO.json` identifies the source revision and development configuration.

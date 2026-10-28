@@ -14,6 +14,7 @@ import {
 } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
+import { FallbackStyleProvider } from "@/styles/provider";
 import {
   DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HomeLink,
   ShellFrame, SkipLink, TabBar,
@@ -44,7 +45,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const destinations = navigationDestinations(today, language, zone);
 
   return (
-    <ShellFrame>
+    <FallbackStyleProvider><ShellFrame>
       {app && <MemberNavigationRecovery />}
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header $app={app}>
@@ -87,6 +88,6 @@ export async function PublicShell({ children, locale, current, today: reportingD
       <TabBar aria-label={messages.text("navigation.tabs")}>
         <SessionNavigation mobile destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
       </TabBar>
-    </ShellFrame>
+    </ShellFrame></FallbackStyleProvider>
   );
 }

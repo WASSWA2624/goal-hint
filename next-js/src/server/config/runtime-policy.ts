@@ -122,6 +122,14 @@ const databaseUrl = optional(z.string().refine((value) => {
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development")
     .describe("Use development, test or production."),
+  NEXT_PUBLIC_GOAL_HINT_DEMO: optional(z.enum(["true", "false"]))
+    .describe("Only this nonsecret public flag selects development demo controls; production always ignores it."),
+  GOAL_HINT_DEMO: optional(z.enum(["true", "false"]))
+    .describe("Use true or false to select the isolated development launcher."),
+  GOAL_HINT_DEMO_MEMBER: optional(z.enum(["true", "false"]))
+    .describe("Set false to exercise signed-out development pages instead of the seeded demo member."),
+  GOAL_HINT_DEMO_MYSQL_BINARY: text
+    .describe("Optional launcher-only path to a genuine local MySQL executable; never a provider credential."),
   GOAL_HINT_OPERATION_SCOPE: z.enum(["disabled", "trial", "shadow", "production"]).default("disabled")
     .describe("Use disabled, trial, shadow or production; deployment mode does not qualify forecasts."),
   GOAL_HINT_DEPLOYMENT_ENVIRONMENT: text
@@ -341,7 +349,7 @@ export function parseRuntimePolicy(env: Environment): RuntimePolicy {
   const issues: PolicyIssue[] = [];
   const shape = environmentSchema.shape;
   for (const key of Object.keys(env)) {
-    if (key.startsWith("NEXT_PUBLIC_")) {
+    if (key.startsWith("NEXT_PUBLIC_") && key !== "NEXT_PUBLIC_GOAL_HINT_DEMO") {
       issues.push({ field: "NEXT_PUBLIC_*", reason: "Runtime settings must stay server-owned; public settings come from publicPolicy." });
     } else if (key.startsWith("GOAL_HINT_") && !(key in shape) && !retiredSetting.test(key)) {
       issues.push({ field: "GOAL_HINT_*", reason: "Unknown policy setting; use the documented environment contract." });

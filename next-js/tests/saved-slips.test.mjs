@@ -143,7 +143,7 @@ test('selected saved-slip performance covers the complete cohort while only rece
   assert.deepEqual(history.statistics, { total: 125, won: 30, lost: 30, pending: 35, void: 30 });
   assert.equal(history.records.length, 20); assert.equal(history.records[0].id, rows[0].id);
   assert.deepEqual(projections, [100, 25]);
-  assert.match(queries[0].sql, /NOT EXISTS.*JSON_TABLE/s);
+  assert.match(queries[0].sql, /0 = \(SELECT COUNT\(\*\).*JSON_TABLE.*NOT COALESCE/s);
   assert.ok(queries[0].values.includes(Date.parse(`${today}T10:00:00Z`)), 'kickoff range uses reporting-zone wall time');
   assert.ok(queries[0].values.includes(Date.parse(`${today}T11:01:00Z`)), 'end minute is inclusive');
   assert.ok(queries[1].values.includes(rows[99].id), 'subsequent batch uses the prior keyset cursor');

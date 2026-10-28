@@ -3,7 +3,8 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { savedSlipCompletedStatuses, savedSlipOutcome, savedSlipSnapshotSchema, savedSlipView, type SavedSlipHistory, type SavedSlipHistoryQuery, type SavedSlipView } from "../../domain/saved-slips.ts";
 import { slipBuilderRules, type BuiltSlip } from "../../domain/slip-builder.ts";
-import { validateReportingDateRange } from "../../domain/calendar.ts";
+import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { fullDayKickoffTime, kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { getAnalyticsServices } from "../analytics/analytics-http.ts";
@@ -47,8 +48,10 @@ export function createSavedSlips(database: DatabaseRuntime, config: Pick<Analyti
         const rows = await tx.$queryRaw<{ id: string; createdAt: Date; snapshotJson: unknown }[]>(Prisma.sql`
           SELECT s.id, s.createdAt, s.snapshotJson FROM SavedSlip s
           WHERE EXISTS (SELECT 1 FROM SavedSlipFixture sf WHERE sf.slipId=s.id)
-            AND NOT EXISTS (
-              SELECT 1 FROM JSON_TABLE(s.snapshotJson, '$.selections[*]' COLUMNS (
+            -- A scalar count retains per-slip JSON_TABLE correlation across query
+            -- plans, with every original-cycle exclusion evaluated before LIMIT.
+            AND 0 = (
+              SELECT COUNT(*) FROM JSON_TABLE(s.snapshotJson, '$.selections[*]' COLUMNS (
                 fixtureId CHAR(36) PATH '$.fixtureId', family VARCHAR(32) PATH '$.family',
                 cycleId CHAR(36) PATH '$.forecast.cycleId' NULL ON EMPTY,
                 publishedAt BIGINT PATH '$.forecast.publishedAt' NULL ON EMPTY
@@ -99,7 +102,7 @@ export function createSavedSlips(database: DatabaseRuntime, config: Pick<Analyti
             SELECT s.id, s.createdAt, s.snapshotJson FROM SavedSlip s
             WHERE s.createdAt<=${new Date(asOf)}
               AND JSON_LENGTH(s.snapshotJson,'$.selections')>0
-              AND NOT EXISTS (SELECT 1 FROM JSON_TABLE(s.snapshotJson, '$.selections[*]' COLUMNS (
+              AND 0 = (SELECT COUNT(*) FROM JSON_TABLE(s.snapshotJson, '$.selections[*]' COLUMNS (
                 kickoffAt BIGINT PATH '$.kickoffAt' NULL ON EMPTY
               )) leg WHERE NOT COALESCE((${kickoffMatches}),FALSE))
               ${after}
@@ -123,6 +126,11 @@ export function createSavedSlips(database: DatabaseRuntime, config: Pick<Analyti
 export async function readCompletedSlips(): Promise<readonly SavedSlipView[] | null> {
   try {
     const { database, config } = await getAnalyticsServices();
+    if (database && isDevelopmentDemo()) {
+      const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
+      const today = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
+      await ensureDemoSlipDates(database, [addReportingDays(today, -1), addReportingDays(today, -2)]);
+    }
     return database ? await createSavedSlips(database, config).completed() : null;
   } catch { return null; }
 }
@@ -130,6 +138,11 @@ export async function readCompletedSlips(): Promise<readonly SavedSlipView[] | n
 export async function readSavedSlipHistory(query: SavedSlipHistoryQuery): Promise<SavedSlipHistory | null> {
   try {
     const { database, config } = await getAnalyticsServices();
+    if (database && isDevelopmentDemo()) {
+      const range = validateReportingDateRange(query.dateFrom, query.dateTo, slipBuilderRules.maximumDays);
+      const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
+      await ensureDemoSlipDates(database, Array.from({ length: range.dayCount }, (_, index) => addReportingDays(range.startDate, index)));
+    }
     return database ? await createSavedSlips(database, config).history(query) : null;
   } catch { return null; }
 }

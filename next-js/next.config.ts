@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  ...(process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_GOAL_HINT_DEMO === "true"
+    ? { devIndicators: false as const } : {}),
   // No `X-Powered-By: Next.js` response header.
   poweredByHeader: false,
   // Development only: let phones and other machines on the local network open `next dev` by its LAN address

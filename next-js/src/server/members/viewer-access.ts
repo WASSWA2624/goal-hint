@@ -10,6 +10,7 @@ import { createAccessCodes } from "./access-codes.ts";
 import { memberCookieName, memberSessionRules, memberTokenHash, validMemberToken } from "./member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
 import { accessMode, settingsServiceFor, type SettingsState } from "./settings.ts";
+import { developmentMemberToken } from "../demo/member.ts";
 
 export type ViewerAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean; mode: PaywallMode | "free" }>;
 type AccessRow = { accountId: string; phone: string; passwordHash: string | null; blockedAt: Date | null;
@@ -27,7 +28,7 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       const owner = cookieValue(resolved.config.cookies.session);
       if (owner && await resolved.auth?.verify(owner, { touch: false })) return { tier: "full", signedIn: false, mode };
       if (!resolved.database) return { tier: "free", signedIn: false, mode };
-      const token = cookieValue(memberCookieName(resolved.config.production)), at = new Date(now());
+      const token = developmentMemberToken(cookieValue(memberCookieName(resolved.config.production))), at = new Date(now());
       let row: AccessRow | undefined;
       if (validMemberToken(token)) {
         const hash = memberTokenHash(token), database = resolved.database;

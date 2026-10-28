@@ -33,15 +33,19 @@ export const performanceQuoteKey = (revisionId: string, family: string) => `${re
 /** Only contemporaneous immutable sidecars may price a locked selection. Older revisions remain explicitly unpriced.
  * The bounded reader never reconstructs publication availability from transient provider snapshots. */
 export async function readPerformanceQuotes(tx: Prisma.TransactionClient, targets: readonly Target[],
-  policy: PerformanceQuotePolicy, budget: { remainingBytes: number }): Promise<PerformanceQuotes> {
+  policy: PerformanceQuotePolicy, budget: { remainingBytes: number; overflow?: () => never }): Promise<PerformanceQuotes> {
   const quotes = new Map<string, string>();
   if (!targets.length) return quotes;
   const from = Prisma.sql`FROM PredictionQuote r WHERE r.revisionId IN (${Prisma.join(targets.map(target => target.revisionId))})`;
   const [size] = await tx.$queryRaw<{ bytes: bigint; total: bigint }[]>(Prisma.sql`SELECT
     COALESCE(SUM(OCTET_LENGTH(CAST(r.body AS CHAR))),0) AS bytes,COUNT(*) AS total ${from}`);
   const bytes = Number(size?.bytes), total = Number(size?.total);
-  if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > budget.remainingBytes ||
+  if (!Number.isSafeInteger(bytes) || bytes < 0 ||
     !Number.isSafeInteger(total) || total < 0 || total > targets.length * 4) throw new MatchFeedError("unavailable");
+  if (bytes > budget.remainingBytes) {
+    if (budget.overflow) budget.overflow();
+    throw new MatchFeedError("unavailable");
+  }
   budget.remainingBytes -= bytes;
   const rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*,r.integrity=SHA2(CAST(r.body AS CHAR),256) AS validIntegrity ${from}`);
   if (rows.length !== total) throw new MatchFeedError("unavailable");

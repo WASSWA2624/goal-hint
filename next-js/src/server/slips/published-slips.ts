@@ -12,6 +12,8 @@ import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
+import { addReportingDays } from "../../domain/calendar.ts";
 import { bindSlipForecasts, readSlipForecastResults } from "./slip-forecast.ts";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/u), instant = z.number().int().positive();
@@ -208,5 +210,13 @@ async function readSnapshots(tx: Prisma.TransactionClient, rows: readonly SlipRo
 }
 
 export async function readPublishedSlipHistory(query: PublishedSlipHistoryQuery): Promise<PublishedSlipHistory | null> {
-  try { return await createPublishedSlips(getDatabase()).history(query); } catch { return null; }
+  try {
+    const database = getDatabase();
+    if (isDevelopmentDemo()) {
+      const range = validateReportingDateRange(query.from, query.to, publishedSlipRules.maximumDays);
+      const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
+      await ensureDemoSlipDates(database, Array.from({ length: range.dayCount }, (_, index) => addReportingDays(range.startDate, index)));
+    }
+    return await createPublishedSlips(database).history(query);
+  } catch { return null; }
 }

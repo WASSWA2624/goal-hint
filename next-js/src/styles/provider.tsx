@@ -4,7 +4,7 @@ import { useContext, useSyncExternalStore, type ReactNode } from "react";
 import { ThemeContext, ThemeProvider } from "styled-components";
 import { GlobalStyle } from "./global-style";
 import { StyledComponentsRegistry } from "./registry";
-import { darkTheme, lightTheme } from "./theme";
+import { darkTheme, isGoalHintTheme, lightTheme } from "./theme";
 import { getServerThemeSnapshot, getThemeSnapshot, subscribeThemePreference, type ThemeMode } from "./theme-preference";
 import { webAppearance } from "./web-appearance";
 
@@ -40,13 +40,13 @@ const themes = { light: lightTheme, dark: darkTheme };
 export function ServerThemeUntilHydrated({ children }: { children: ReactNode }) {
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
   const theme = useContext(ThemeContext);
-  return <ThemeProvider theme={hydrated && theme ? theme : themes[getServerThemeSnapshot()]}>{children}</ThemeProvider>;
+  return <ThemeProvider theme={hydrated && isGoalHintTheme(theme) ? theme : themes[getServerThemeSnapshot()]}>{children}</ThemeProvider>;
 }
 
 /**
- * Next renders the root not-found page without the root layout when it rejects a URL-encoded
- * Server Action request; supply the root provider only there, never a second one under the layout.
+ * Next can render a standalone or streamed shell before the root style context is available.
+ * Supply one complete provider there; preserve the existing provider and theme everywhere else.
  */
 export function FallbackStyleProvider({ children }: { children: ReactNode }) {
-  return useContext(ThemeContext) ? children : <StyleProvider>{children}</StyleProvider>;
+  return isGoalHintTheme(useContext(ThemeContext)) ? children : <StyleProvider>{children}</StyleProvider>;
 }

@@ -13,6 +13,9 @@ import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatist
   type NormalizationContext, type NormalizationResult, type NormalizedFixture, type NormalizedFixtureOdds } from "./api-football-normalize.ts";
 import { createPolicyQuotaGateway, type createQuotaGateway, type GatewayQuotaLimiter } from "./quota-gateway.ts";
 import { quotaPriorities, type QuotaFeedback } from "./quota-contract.ts";
+import { isDevelopmentDemo } from "../../domain/development-demo.ts";
+import { createDemoApiFootballFetch } from "../demo/api-football.ts";
+import { authorizeDemoFootball, createDemoFootballGateway, demoFootballAccountId } from "../demo/provider-runtime.ts";
 
 export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; season?: number;
   teamId?: number; from?: string; to?: string; round?: string; fixtureId?: number }>;
@@ -549,6 +552,14 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
 export function createPolicyApiFootballAdapter(options: Omit<ApiFootballAdapterOptions, "credential" | "gateway" | "authorize"> & {
   policy: RuntimePolicy; limiter: GatewayQuotaLimiter; verifyEvidence?: EvidenceVerifier;
 }) {
+  if (isDevelopmentDemo() && options.policy.mode === "development") {
+    const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
+    return createApiFootballAdapter({ ...options, accountId: demoFootballAccountId, clock,
+      credential: { read: () => "synthetic-development-demo" }, authorize: authorizeDemoFootball,
+      gateway: createDemoFootballGateway(clock), fetcher: createDemoApiFootballFetch({ now: () => clock.now() }),
+      verifyLogo: () => true, verifyRegulationScore: () => true, verifyHalfTimeScore: () => true,
+    });
+  }
   return createApiFootballAdapter({ ...options,
     credential: { read: () => options.policy.secrets.footballKey?.read() ?? "" },
     authorize: () => assertOperationAllowed(options.policy, "football", options.verifyEvidence),
