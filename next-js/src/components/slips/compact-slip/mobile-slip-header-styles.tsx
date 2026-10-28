@@ -73,7 +73,7 @@ export const MobileHeaderRow = styled.summary`
       justify-content: center; text-align: center; white-space: normal;
       font-size: 0.875rem;
     }
-    [data-header-field] {
+    [data-header-field], [data-header-status] {
       flex-direction: column; justify-content: center; gap: 0.1875rem;
       padding: 4px 2px;
     }

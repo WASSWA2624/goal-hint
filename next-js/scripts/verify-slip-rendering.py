@@ -59,7 +59,13 @@ def verify_mobile_header(header, path, selection_count=None):
     """The shared mobile header retains each fact and the mean's full meaning."""
     assert "data-mobile-slip-header" in header.attrs and "data-header-summary" in header.attrs, f"{path}: shared mobile slip header"
     identity = header.nodes("h3", "data-header-identity")
-    assert len(identity) == 1 and re.search(r"\bSlip \d+\b", identity[0].text), f"{path}: slip number remains the heading"
+    assert len(identity) == 1, f"{path}: one slip identity heading"
+    numbers = identity[0].nodes(attr="data-header-number")
+    assert len(numbers) == 1 and re.fullmatch(r"\d+", numbers[0].text), f"{path}: visible slip identity contains only its number"
+    assert numbers[0].attrs.get("aria-hidden") == "true", f"{path}: visible number does not duplicate the accessible title"
+    accessible_title = f"Slip {numbers[0].text}"
+    titles = [node for node in identity[0].nodes() if node.text == accessible_title and node.attrs.get("aria-hidden") != "true"]
+    assert len(titles) == 1 and "hidden" not in titles[0].attrs, f"{path}: full Slip N title remains available to assistive technology"
     metrics = header.nodes(attr="data-header-field")
     fields = {node.attrs["data-header-field"]: node for node in metrics}
     assert len(metrics) == 3 and set(fields) == {"odds", "probability", "count"}, f"{path}: distinct odds, probability and match count"
@@ -73,8 +79,11 @@ def verify_mobile_header(header, path, selection_count=None):
         assert fields["count"].nodes("strong")[0].text == str(selection_count), f"{path}: original match count remains visible"
     statuses = header.nodes(attr="data-header-status")
     status_labels = {"pending": "Pending", "won": "Won", "lost": "Lost", "void": "Void"}
-    assert len(statuses) == 1 and statuses[0].text == status_labels.get(header.attrs.get("data-header-outcome")), f"{path}: full status word agrees with the original outcome"
-    assert len(statuses[0].nodes(attr="data-status-full")) == 1, f"{path}: statuses keep their full word at every width"
+    assert len(statuses) == 1, f"{path}: one distinct status column"
+    captions = statuses[0].nodes(attr="data-header-label")
+    assert len(captions) == 1 and captions[0].text == "Status" and captions[0].attrs.get("aria-hidden") == "true", f"{path}: status has its requested visible caption"
+    outcomes = statuses[0].nodes(attr="data-status-full")
+    assert len(outcomes) == 1 and outcomes[0].text == status_labels.get(header.attrs.get("data-header-outcome")), f"{path}: full status word agrees with the original outcome"
     descriptions = [node for node in header.nodes() if node.attrs.get("id") == header.attrs.get("aria-describedby")]
     assert len(descriptions) == 1 and "hidden" in descriptions[0].attrs, f"{path}: header retains its accessible probability description"
     assert "Average match probability" in descriptions[0].text and "not the chance that every selection wins" in descriptions[0].text, f"{path}: probability remains explicitly the mean rather than joint winning probability"

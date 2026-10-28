@@ -7,9 +7,10 @@ their existing presentation. The Clean ledger match rows are unchanged.
 `CompactSlipDisclosure` selects the shared `MobileSlipHeader` for Clean ledger.
 Its minimum 44px row contains the slip number, odds, probability, match count
 and status in five side-by-side columns. Figures, slip numbers and status use
-14px text; metric labels use 12px text above their figures. The localized slip
-title wraps naturally instead of shrinking, including Slip 100. Metric cells
-have 4px vertical and 2px horizontal padding.
+14px text; metric labels use 12px text above their figures. The first column
+shows only the centered slip number, including 100, while its accessible heading
+retains the full localized Slip N title. Status uses the same label-above-value
+arrangement as the other columns. Cells have 4px vertical and 2px horizontal padding.
 
 At the default text size, the identity/odds/matches/status/chevron tracks are
 32/80/56/62/10px. Probability receives the remaining width with a 58px minimum.

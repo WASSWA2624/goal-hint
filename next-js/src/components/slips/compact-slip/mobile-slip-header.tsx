@@ -15,12 +15,17 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
 }) {
   const m = createMessages(locale), id = useId(), noteId = `${id}-probability-note`;
   const label = m.text(`slips.header.${outcome}`);
+  const statusCaption = m.text("slips.header.status");
+  const number = m.number(index + 1), slipTitle = m.text("slips.slipTitle", { number });
   return <MobileHeaderRow as={headerOnly ? "header" : "summary"} className={className} data-slip-summary data-mobile-slip-header
       data-slip-toggle={headerOnly ? undefined : ""} data-header-summary data-header-variant={variant}
       data-header-outcome={outcome} data-header-only={headerOnly ? "" : undefined} data-large-odds={totalOdds.length > 5 ? "" : undefined}
       aria-describedby={noteId}>
       <h3 id={headingId ?? `${id}-heading`} data-header-identity data-dense-identity={index >= 99 ? "" : undefined}>
-        {m.text("slips.slipTitle", { number: m.number(index + 1) })}
+        {variant ? slipTitle : <>
+          <span data-header-number aria-hidden="true">{number}</span>
+          <VisuallyHidden>{slipTitle}</VisuallyHidden>
+        </>}
         {index === 0 && showRank && <VisuallyHidden> · {m.text("slips.topRanked")}</VisuallyHidden>}
       </h3>
       <span data-header-field="odds" title={m.text("slips.totalOdds")}>
@@ -35,7 +40,13 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
         <strong>{m.number(selectionCount)}</strong><span data-header-label aria-hidden="true">{m.text("slips.header.matches")}</span>
         <VisuallyHidden> {m.text("slips.header.matches")}</VisuallyHidden>
       </span>
-      <span data-header-status title={label}><span data-status-full>{label}</span></span>
+      <span data-header-status title={variant ? label : `${statusCaption}: ${label}`}>
+        {!variant && <>
+          <span data-header-label aria-hidden="true">{statusCaption}</span>
+          <VisuallyHidden>{statusCaption}: </VisuallyHidden>
+        </>}
+        <span data-status-full>{label}</span>
+      </span>
       <span data-header-chevron aria-hidden="true" />
       <span id={noteId} hidden>{m.text("slips.averageHint")}</span>
     </MobileHeaderRow>;

@@ -2,6 +2,7 @@ export const slipsMessages = {
   "slips.header.matches": "Matches",
   "slips.header.matchCount": { one: "{count} match", other: "{count} matches" },
   "slips.header.probabilityShort": "Prob.",
+  "slips.header.status": "Status",
   "slips.header.pending": "Pending",
   "slips.header.won": "Won",
   "slips.header.lost": "Lost",
