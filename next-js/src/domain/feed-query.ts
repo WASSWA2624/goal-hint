@@ -10,6 +10,9 @@ import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
 export type FeedStatus = (typeof feedStatuses)[number];
+/** Shared status choices for the unified Matches interface; transport codes remain stable. */
+export const feedFilterStatuses = ["all", "scheduled", "live", "finished"] as const satisfies readonly FeedStatus[];
+export type FeedFilterStatus = (typeof feedFilterStatuses)[number];
 export const feedDatePresets = ["last-30-days", "last-7-days", "last-3-days", "yesterday", "today", "tomorrow", "next-3-days", "next-7-days", "next-30-days"] as const;
 export type FeedDatePreset = (typeof feedDatePresets)[number];
 export const defaultFeedDatePreset: FeedDatePreset = "last-30-days";

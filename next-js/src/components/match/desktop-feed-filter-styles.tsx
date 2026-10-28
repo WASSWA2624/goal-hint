@@ -43,7 +43,7 @@ export const Panel = styled.form`
 
 export const SearchRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: stretch;
   gap: 8px;
   min-inline-size: 0;
@@ -51,7 +51,7 @@ export const SearchRow = styled.div`
 
 export const PeriodField = styled.label`
   display: flex;
-  inline-size: 214px;
+  inline-size: 168px;
   min-inline-size: 0;
   > select { ${fieldControl} block-size: 100%; cursor: pointer; }
 `;

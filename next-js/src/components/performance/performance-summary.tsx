@@ -3,7 +3,7 @@
 import styled from "styled-components";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
-import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
+import { predictedPerformanceSummary, type PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
 import type { OutcomeTone } from "@/styles/theme";
 
@@ -65,6 +65,15 @@ const OutcomeCount = styled(OutcomeBadge)<{ $outcome: "correct" | "incorrect" | 
   dt { order: 2; }
   dd { display: inline-flex; align-items: center; gap: 4px; order: 1; }
   dd > svg { flex: none; font-size: 0.875rem; }
+  ${wide} { max-inline-size: none; }
+`;
+const PredictedCount = styled(Count)`
+  flex: 1 0 100%;
+  ${wide} { flex: none; margin-inline-end: 6px; }
+`;
+const OutcomePercentage = styled.span`
+  display: none;
+  ${wide} { display: inline; margin-inline-start: 5px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Extras = styled.dl`
   display: flex; flex-wrap: wrap; gap: 4px 10px; min-inline-size: 0; margin: 6px 0 0;
@@ -89,10 +98,11 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
   showCoverage?: boolean | undefined;
 }) {
   const m = createMessages(locale), label = title ?? m.text("performance.summary.title");
+  const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const outcomes = [
-    { tone: "correct", label: m.text("performance.won"), count: counts.won, icon: CheckIcon },
-    { tone: "incorrect", label: m.text("performance.lost"), count: counts.lost, icon: CloseIcon },
-    { tone: "pending", label: m.text("performance.pending"), count: counts.pending, icon: ClockIcon },
+    { key: "won", tone: "correct", label: m.text("performance.won"), count: counts.won, icon: CheckIcon },
+    { key: "lost", tone: "incorrect", label: m.text("performance.lost"), count: counts.lost, icon: CloseIcon },
+    { key: "pending", tone: "pending", label: m.text("performance.pending"), count: counts.pending, icon: ClockIcon },
   ] as const;
   const coverage = [
     { key: "unavailable", tone: "unavailable" as const, label: m.text("performance.summary.noPrediction"), count: counts.unavailable ?? 0 },
@@ -107,9 +117,19 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
       <Header>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
       <Counts $fill={extras.length === 0}>
         {showCoverage && <Count $zero={counts.total === 0}><dt>{m.text(`performance.summary.${kind}`)}</dt><dd>{m.number(counts.total)}</dd></Count>}
-        {outcomes.map(({ tone, label, count, icon: OutcomeIcon }) => <OutcomeCount as="div" key={tone} $outcome={tone} data-summary-outcome={tone}>
-          <dt>{label}</dt><dd><OutcomeIcon />{m.number(count)}</dd>
-        </OutcomeCount>)}
+        {predicted && <PredictedCount $zero={predicted.total === 0} data-summary-predicted>
+          <dt>{m.text("performance.summary.predicted")}</dt><dd>{m.number(predicted.total)}</dd>
+        </PredictedCount>}
+        {outcomes.map(({ key, tone, label, count, icon: OutcomeIcon }) => {
+          const fraction = predicted?.[key], percentage = fraction === null || fraction === undefined ? null
+            : m.number(fraction, { style: "percent", maximumFractionDigits: 1 });
+          return <OutcomeCount as="div" key={tone} $outcome={tone} data-summary-outcome={tone}>
+            <dt>{label}{predicted && <OutcomePercentage data-summary-percentage={tone}
+              title={percentage ? m.text("performance.summary.percentageOfPredicted", { percentage }) : m.text("performance.summary.noPredicted")}>
+              {percentage ? `(${percentage})` : "—"}
+            </OutcomePercentage>}</dt><dd><OutcomeIcon />{m.number(count)}</dd>
+          </OutcomeCount>;
+        })}
       </Counts>
       {extras.length > 0 && <Extras>{extras.map(({ key, tone, label, count }) => <Count key={key} $tone={tone}>
         <dt>{label}</dt><dd>{m.number(count)}</dd>

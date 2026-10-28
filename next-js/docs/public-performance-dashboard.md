@@ -14,6 +14,15 @@ closed instead of silently changing the sample.
 
 ## Different samples stay separate
 
+The Matches overview includes a **Predicted** total beside Won, Lost and Pending.
+It counts those three outcomes plus predictions later voided, excluding fixtures
+without a prediction and predictions outside the selected source/version. Its
+desktop percentages divide each outcome by that predicted total; they describe
+the selected cohort's composition, rather than the settled-sample win rate below.
+Void counts remain separate, so the three shares can sum to less than 100%.
+An empty predicted sample shows no inferred percentage. Phone layouts keep the
+Predicted total and outcome counts while omitting percentages.
+
 Individual-prediction counts use fixture kickoff dates and one locked selection
 per market. A fixture can appear in multiple market cards, so their counts are
 not added together as unique matches. Available, correct, incorrect, pending,
@@ -88,6 +97,9 @@ period-end streaks therefore do not claim a run extending outside the selected
 window or through unresolved outcomes.
 
 ## Verification
+
+`tests/performance-summary.test.mjs` checks the predicted denominator, unavailable
+and filtered-out coverage, void forecasts, ordinary proportions and empty samples.
 
 `tests/slip-performance.test.mjs` checks exact returns, quote exclusions,
 pending-price privacy, empty/losing cohorts, duplicate rejection and chronological

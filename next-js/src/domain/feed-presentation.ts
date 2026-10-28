@@ -78,8 +78,7 @@ export function countryOptions(leagues: MatchFeedResponse["leagues"]): FilterOpt
 /** The feed's one H1: live/results views, today/tomorrow, a named single day, else the generic collection. */
 export function feedHeading(query: FeedQuery, today: ReportingDate, messages: ReturnType<typeof createMessages>) {
   const range = resolveFeedDates(query, today);
-  if (query.status === "live") return messages.text("feed.heading.live");
-  if (query.status === "finished") return messages.text("feed.heading.results");
+  if (query.status === "live" || query.status === "finished") return messages.text("navigation.matches");
   if (range.dayCount === 1 && range.startDate === today) return messages.text("feed.heading.today");
   if (query.dates.kind === "tomorrow") return messages.text("feed.heading.tomorrow");
   // A single archived or upcoming day names its date, matching the page title's topic.

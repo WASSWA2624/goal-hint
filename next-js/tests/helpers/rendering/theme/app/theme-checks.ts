@@ -34,10 +34,20 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   check("#theme-member-step", theme.color.brandSoft);
   check("#theme-member-step", theme.color.link, "color");
   check("#theme-performance [data-performance-summary]", theme.color.surface);
+  const summary = document.querySelector("#theme-performance [data-performance-summary]");
+  const predicted = summary?.querySelector("[data-summary-predicted]");
+  assert(!!predicted && visible(predicted), "Predicted match total remains visible on phone and desktop");
+  assert(predicted?.querySelector("dt")?.textContent === "Predicted" && predicted.querySelector("dd")?.textContent === "116",
+    "Predicted total excludes four unavailable or filtered-out fixtures and includes two void forecasts");
+  const wideSummary = (summary?.clientWidth ?? 0) >= 56 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const shares = { correct: "(62.1%)", incorrect: "(20.7%)", pending: "(15.5%)" } as const;
   for (const outcome of ["correct", "incorrect", "pending"] as const) {
     const selector = `#theme-performance [data-summary-outcome="${outcome}"]`;
     check(selector, theme.color.performanceOutcome[outcome].background);
     check(`${selector}, ${selector} dt, ${selector} dd, ${selector} svg`, theme.color.performanceOutcome[outcome].text, "color");
+    const percentage = summary?.querySelector(`[data-summary-percentage="${outcome}"]`);
+    assert(percentage?.textContent === shares[outcome], `${outcome} percentage uses the predicted total`);
+    assert(!!percentage && visible(percentage) === wideSummary, `${outcome} percentage shows only in the desktop summary layout`);
   }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
   check(headerSelector, theme.header.background);

@@ -448,7 +448,7 @@ def owner_navigation(origin):
         assert len(re.findall(r"<h1(?:\s|>)", html)) == 1, path
         for layout in ["desktop", "mobile"]:
             match(rf'data-responsive-navigation="{layout}"', html, path)
-        for destination in ["/en", "/en/matches", "/en/matches?status=live", "/en/slips", "/en/help",
+        for destination in ["/en", "/en/matches", "/en/slips", "/en/help",
                 "/en/privacy", "/en/terms", "/en/contact", "/admin/payments"]:
             match(rf'href="{re.escape(destination)}"', html, f"{path}: regular destination {destination}")
         for destination in routes:

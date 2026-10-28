@@ -8,6 +8,7 @@ import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui
 import { RangeFields, RangeFieldset, RangeHelp, RangeLegend } from "./feed-range-fields";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { adjacentDays, dayLinkRel, feedDateNavigation } from "@/domain/feed-date-navigation";
+import { selectFeedDates } from "@/domain/feed-controls";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type DateSelection, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -16,8 +17,8 @@ import { focusRing, plainClick } from "./filter-parts";
 const DateCalendar = dynamic(() => import("./date-calendar").then((module) => module.DateCalendar));
 
 /** Always-visible dates; equal endpoints select one date. */
-export function DateRangePicker({ query, today, from, to, onChange }: {
-  query: FeedQuery; today: ReportingDate; from: string; to: string; onChange: (from: string, to: string) => void;
+export function DateRangePicker({ query, today, from, to, onChange, disabled = false }: {
+  query: FeedQuery; today: ReportingDate; from: string; to: string; onChange: (from: string, to: string) => void; disabled?: boolean;
 }) {
   const messages = createMessages(query.locale), id = useId();
   let dates: DateSelection | null = null, maximumTo: ReportingDate | undefined;
@@ -31,7 +32,7 @@ export function DateRangePicker({ query, today, from, to, onChange }: {
     dates = selection;
   } catch { /* Incomplete or invalid endpoints stay editable without changing the applied query. */ }
   const invalid = dates === null;
-  return <RangeFieldset aria-label={messages.text("feed.date.range")}>
+  return <RangeFieldset aria-label={messages.text("feed.date.range")} disabled={disabled}>
     <RangeLegend>{messages.text("feed.date.title")}</RangeLegend>
     <RangeFields data-range="dates">
       <label><span>{messages.text("feed.date.from")}</span><input type="date" value={from}
@@ -73,8 +74,8 @@ export function DatePresets({ query, today, onApply, kinds = ["today", "next-3-d
 }) {
   const messages = createMessages(query.locale), presets = feedDateNavigation(query, today).presets.filter((preset) => kinds.includes(preset.kind));
   return <PresetList role="group" aria-label={messages.text("feed.date.presets")}>
-    {presets.map(({ kind, href, current }) => <Link key={kind} href={href} prefetch={false} aria-current={current ? "date" : undefined}
-      onClick={(event) => plainClick(event, () => onApply({ ...query, dates: { kind }, page: 1 }))}>
+    {presets.map(({ kind, current }) => <Link key={kind} href={feedQueryHref(selectFeedDates(query, { kind }, today), today)} prefetch={false} aria-current={current ? "date" : undefined}
+      onClick={(event) => plainClick(event, () => onApply(selectFeedDates(query, { kind }, today)))}>
       {messages.text(`feed.date.${kind}`)}
     </Link>)}
   </PresetList>;
@@ -269,12 +270,13 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
       {days.map((date) => {
         const parts = messages.reportingDayParts(date);
         return <li key={date} data-date={date}>
-          <Day href={feedQueryHref({ ...query, dates: selection(date), page: 1 }, today)} prefetch={false} scroll={false} rel={dayLinkRel(date, today)}
+          <Day href={feedQueryHref(selectFeedDates(query, selection(date), today), today)} prefetch={false} scroll={false} rel={dayLinkRel(date, today)}
             aria-current={range.dayCount === 1 && date === range.startDate ? "date" : undefined} data-selected={date === selected || undefined}
             aria-label={date === today ? `${messages.text("feed.date.today")}, ${messages.reportingDate(date)}` : messages.reportingDate(date)}
             onClick={(event) => plainClick(event, () => {
-              setChosen(date); center(date, smooth());
-              onApply({ ...query, dates: selection(date), page: 1 });
+              const next = selectFeedDates(query, selection(date), today), nextRange = resolveFeedDates(next, today);
+              setChosen(nextRange.dayCount === 1 ? nextRange.startDate : null); center(nextRange.startDate, smooth());
+              onApply(next);
             })}>
             <small data-today={date === today || undefined}>{messages.text("feed.date.dayMonth", { weekday: parts.weekday, month: parts.month })}</small>
             <b>{parts.day}</b>
@@ -294,7 +296,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     {calendarOpen && <DateCalendar locale={query.locale} today={today} from={range.startDate} to={range.endDate} onClose={closeCalendar}
       onApply={(from, to) => {
         setCalendarOpen(false);
-        onApply({ ...query, dates: from === to ? selection(from) : { kind: "range", from, to }, page: 1 });
+        onApply(selectFeedDates(query, from === to ? selection(from) : { kind: "range", from, to }, today));
       }} />}
   </Strip>;
 }

@@ -9,8 +9,10 @@ provider and requires no visitor credentials, tokens or cookies.
 | Address | Contract |
 | --- | --- |
 | `/` | Permanent 308 redirect to `/en`, independent of browser language. |
-| `/en` | The Today view of the shared feed; hydration adopts the device's browsing day. |
-| `/en?tz=America%2FLos_Angeles` | Today in the named browsing zone, using its actual UTC day boundaries. |
+| `/en` | Best Slips home page. |
+| `/en/matches` | Shared Matches feed, with status and date filters. |
+| `/en/matches?when=today&status=live` | Today's live matches in the shared feed. |
+| `/en/matches?date=YYYY-MM-DD&status=finished` | Completed matches for the selected day. |
 | `/en/predictions/YYYY-MM-DD` | One named EAT reporting day; `tz` selects that same calendar date in a browsing zone. |
 | `/en/predictions/YYYY-MM-DD?status=finished` | The same feed restricted to finished fixtures. |
 | `/en/slips` | Automatic slip builder with its own selection criteria. |
@@ -21,12 +23,15 @@ provider and requires no visitor credentials, tokens or cookies.
 
 `src/domain/navigation.ts` is the shared route contract. `slipsHref` produces the
 locale-prefixed builder destination independently of feed dates and statuses;
-Slip builder is an app section alongside Matches, Live and Results. `feedDefaults`, owned
+Slip builder is an app section alongside Matches and Performance. Live and
+Completed are Matches filters rather than separate navigation destinations.
+`feedDefaults`, owned
 by `src/domain/feed-query.ts` and re-exported by navigation, defines
 Today as day offset **0**, status **all**, and Results as day offset **−1**,
-status **finished**. Server fallback links use `getFeedEntry` and `feedHref`;
-after hydration `deviceFeedEntryHref` keeps Today/Live relative in the device
-zone and opens Results on the device's previous calendar date. `/en/results` is
+status **finished**. `getFeedEntry` and `feedHref` retain existing dated archive
+links. `deviceFeedEntryHref` sends legacy Live and Results entries to
+`/en/matches`, with Today for live matches and the previous calendar date for
+completed matches, in the selected browsing zone. `/en/results` is
 intentionally not an independent application or route. The finished filter is a
 language-neutral group for regulation, extra-time and penalty finals; actual
 query mapping belongs to 028/032. It does not imply a settled prediction.
@@ -86,7 +91,7 @@ identities remain independent of display strings.
 ## Rendering and interim surfaces
 
 `src/app/_components/public-shell.tsx` composes the server-rendered header,
-home link, Today/Results links, single main landmark and information footer.
+home link, unified Matches link, single main landmark and information footer.
 Pages supply the current location before hydration. `aria-current`, text
 underlines and brand styling make it visible without relying on color alone.
 The native fragment skip link moves keyboard focus to the main landmark.
@@ -98,8 +103,11 @@ The earlier development primitive demo is no longer mounted on public pages;
 the isolated `test:styling` fixture remains available.
 
 Both desktop and phone navigation derive their primary links and overflow from
-one serializable destination list. Initial HTML shows Matches, Live and Results
-directly, with Slip builder, Help, Privacy, Terms and Contact in native More.
+one serializable destination list. Initial HTML shows Best Slips, Matches and
+Slip builder directly, with Performance, Help, Privacy, Terms and Contact in native More.
+All match status filters, including old Live and Results links, select Matches
+as the current navigation destination. Historical archive URLs continue to
+render that same shared feed.
 After hydration, each bar measures its available width and the actual label,
 icon and control sizes to show as many ordered destinations as fit. Overflow
 keeps at least three primary destinations plus More; when all destinations fit,

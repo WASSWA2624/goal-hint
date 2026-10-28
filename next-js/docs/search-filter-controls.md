@@ -1,8 +1,14 @@
 # Match search and filters
 
+`scripts/verify-unified-match-filters.js` exercises applied desktop and phone
+status/date changes and native GET forms against the SQL-backed rendering
+fixture. `scripts/verify-desktop-feed-controls.js` covers draft transactions,
+dialog resets and responsive lifecycles. Run them through Playwright CLI's
+`run-code --filename` after the local rendering fixture's verification passes.
+
 The feed uses labeled native fields and editable drafts; URLs and stored server
 projections remain authoritative. At desktop widths (64rem and above), the
-Crisp Outline controls put the search field and period selector on the first
+Crisp Outline controls put search, match status and period selectors on the first
 row, with no visible page title or Period prefix. Five optional-filter buttons
 occupy the next horizontal row, followed by one action row ordered Predictions
 only, Sort by, Reset, Apply filters. Compact fields, neutral

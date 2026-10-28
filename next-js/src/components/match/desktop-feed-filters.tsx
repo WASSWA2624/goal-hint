@@ -7,9 +7,9 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { searchFilterOptions } from "@/domain/filter-option-search";
-import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, resetFeedFilterSection, type FeedFilterSection } from "@/domain/feed-controls";
+import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, resetFeedFilterSection, selectFeedDates, selectFeedStatus, type FeedFilterSection } from "@/domain/feed-controls";
 import { countryOptions, feedHeading, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
-import { defaultMarkets, feedQueryHref, feedQueryRules, formatProbabilityValue, resolveFeedDates, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
+import { defaultMarkets, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
@@ -21,6 +21,7 @@ import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { PicksOnlyFilter } from "./feed-controls";
 import { FeedSearchInput } from "./feed-search-input";
+import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
 import { OptionLogo } from "./filter-parts";
 import { ActionButton, ActionRow, Count, DialogContent, Error as FilterError, Muted, OptionsRow, Panel, PeriodField, SearchRow, SectionButton, SortField } from "./desktop-feed-filter-styles";
@@ -32,7 +33,7 @@ type Draft = {
   times: { from: string; to: string };
   probability: { min: string; max: string };
 };
-const periods: readonly FeedDatePreset[] = ["last-30-days", "last-7-days", "last-3-days", "yesterday", "today", "tomorrow"];
+const periods = feedDatePresets;
 const sections: readonly FeedFilterSection[] = ["dates", "leagues", "countries", "markets", "limits"];
 const sectionIcons: Record<FeedFilterSection, ComponentType<IconProps>> = {
   dates: CalendarIcon, leagues: TrophyIcon, countries: GlobeIcon, markets: GridIcon, limits: SlidersIcon,
@@ -160,7 +161,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
     setIssue(null); setDialogVersion((current) => current + 1);
   }
   function save(section: FeedFilterSection) {
-    const candidate = copySection(fromQuery(resetFeedFilters(draft.query, subscriberOnly), today), draft, section);
+    const candidate = copySection(fromQuery({ ...resetFeedFilters(draft.query, subscriberOnly), status: draft.query.status }, today), draft, section);
     const checked = compile(candidate, today, zone);
     if (!checked) {
       const message = section === "dates" ? messages.text(validKickoffTime({ ...draft.times, zone }) ? "feed.date.tooLong" : "feed.time.invalid")
@@ -179,7 +180,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
     const selected = periods.find((kind) => kind === value);
     if (!selected) return;
     setDraft((current) => {
-      const next = { ...current.query, dates: { kind: selected }, page: 1 }, range = resolveFeedDates(next, today);
+      const next = selectFeedDates(current.query, { kind: selected }, today), range = resolveFeedDates(next, today);
       return { ...current, query: next, dates: { from: range.startDate, to: range.endDate } };
     });
   }
@@ -194,7 +195,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   return <Panel data-desktop-feed-filters aria-label={messages.text("feed.filters.form")} aria-busy={pending} noValidate
     onReset={(event) => { event.preventDefault(); resetAll(); }} onSubmit={(event) => {
       event.preventDefault();
-      if (complete) { setIssue(null); onApply(complete); }
+      if (complete) { setDraft(fromQuery(complete, today)); setIssue(null); onApply(complete); }
       else setIssue({ section: null, message: messages.text("feed.invalidQuery") });
     }}>
     <VisuallyHidden as="h1">{feedHeading(query, today, messages)}</VisuallyHidden>
@@ -203,17 +204,22 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
         placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
         submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
         onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
-      <PeriodField><select name="when" aria-label={messages.text("feed.filters.period")}
-        value={period} onChange={(event) => changePeriod(event.target.value)}>
-        {periods.map((kind) => <option key={kind} value={kind}>{messages.text(`feed.date.${kind}`)}</option>)}
-        <option value="custom">{messages.text("feed.filters.customDates")}</option>
-      </select></PeriodField>
+      <PeriodField><FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} onChange={(status) => {
+        setDraft((current) => {
+          const selected = selectFeedStatus(current.query, status, today), next = fromQuery(selected, today);
+          return { ...current, query: selected, dates: next.dates, times: next.times };
+        });
+        setIssue(null);
+      }} /></PeriodField>
+      <PeriodField><FeedPeriodSelect name="when" locale={query.locale} value={period} disabled={draft.query.status === "live"}
+        title={draft.query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={changePeriod} /></PeriodField>
     </SearchRow>
     <OptionsRow>{sections.map((section) => {
       const Icon = sectionIcons[section];
       return <SectionButton key={section} type="button" data-filter-section={section} data-active={modified[section]}
         aria-haspopup="dialog" aria-controls={`${prefix}-${section}`} aria-expanded={active === section}
-        aria-describedby={`${prefix}-${section}-summary`} onClick={() => open(section)}>
+        aria-describedby={`${prefix}-${section}-summary`} disabled={section === "dates" && draft.query.status === "live"}
+        title={section === "dates" && draft.query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onClick={() => open(section)}>
         <Icon /><span data-section-label>{titles[section]}</span>{counts[section] > 0 && <Count aria-hidden="true">{messages.number(counts[section])}</Count>}<ChevronDownIcon />
       </SectionButton>;
     })}</OptionsRow>
@@ -222,7 +228,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
         : messages.text("feed.filters.selectedCount", { count: messages.number(counts[section]) })}
     </VisuallyHidden>)}
     <ActionRow data-desktop-filter-actions>
-      <div data-picks><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={subscriberOnly && query.status !== "finished"}
+      <div data-picks><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={subscriberOnly && draft.query.status !== "finished"}
         onChange={(checked) => setDraft((current) => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} /></div>
       <SortField><span>{messages.text("feed.sort.label")} ·</span><select name="sort" aria-label={messages.text("feed.sort.label")}
         value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={(event) => {

@@ -1,7 +1,7 @@
 """Inspect anonymous navigation from the actual local production build."""
 import re
 from html import unescape
-from urllib.parse import parse_qs, urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from lib.policy_rendering import acceptance_origin, assert_navigation, assert_navigation_overflow, notices
 from lib.rendering import match, no_match, request, visible_html
@@ -39,8 +39,8 @@ def main() -> None:
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
         visible = unescape(visible_html(html, comments=False))
         assert_navigation_overflow(visible,
-            primary=["/en", "/en/matches", "/en/matches?status=live"],
-            overflow=[results_path, "/en/slips", "/en/performance", *[f"/en/{page}" for page in information_pages]],
+            primary=["/en", "/en/matches", "/en/slips"],
+            overflow=["/en/performance", *[f"/en/{page}" for page in information_pages]],
             footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
@@ -61,11 +61,9 @@ def main() -> None:
         elif target.path == "/en/slips":
             assert_navigation(visible, primary="/en/slips", mobile="/en/slips")
         else:
-            status = parse_qs(target.query).get("status", ["all"])[0]
-            expected = results_path if status == "finished" else "/en/matches?status=live" if status == "live" else "/en/matches"
-            assert_navigation(visible, primary=expected, mobile=expected)
+            assert_navigation(visible, primary="/en/matches", mobile="/en/matches")
         assert 'href="/en"' in visible, f"{path}: Best Slips home target"
-        assert f'href="{results_path}"' in visible, f"{path}: Results target"
+        no_match(r'data-nav-key="(?:live|results)"', visible)
         assert 'href="/en/slips"' in visible, f"{path}: Slips target"
         assert 'href="/en/account"' in visible and 'href="/en/subscribe"' in visible
         no_match(r'(?:href|action)="[^"\s]*/(?:sign[-_]?in|log[-_]?in|auth)(?:[/?#]|"|$)', visible, flags=re.I)

@@ -12,8 +12,7 @@ export function MatchFeedPage(props: {
   startingPriceUgx?: number | null | undefined;
 }) {
   const { query, today } = props;
-  const current = query.status === "finished" ? "results" : query.status === "live" ? "live" : "today";
-  return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current={current} showAccount={props.showAccount === true} app compact>
+  return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current="today" showAccount={props.showAccount === true} app compact>
     <FeedSurface key={`${props.subscriberOnly ?? props.result.data?.access.tier}:${props.result.data?.access.signedIn}`} {...props} />
   </PublicShell>;
 }

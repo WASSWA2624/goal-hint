@@ -1,11 +1,11 @@
 """Build and inspect SQL-backed feed, detail, revision and live-clock fixtures."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import html as html_module
 import json
 import re
 import shutil
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 
 from lib.capture_rendering import captured_directory, unique_options
 from lib.rendering import ROOT, Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request, run_node, visible_html, write_json
@@ -84,6 +84,7 @@ def get(origin, path):
 
 
 def verify_feed(origin, directory, scenarios):
+    verify_status_routes(origin)
     empty_titles = {
         "no-fixtures": "No fixtures confirmed",
         "no-filter-matches": "No matches for these filters",
@@ -160,12 +161,63 @@ def verify_feed(origin, directory, scenarios):
             no_match("No fixtures confirmed|prediction jobs completed", visible)
         if name == "outside":
             match("Predictions start within 7 days", visible)
+        # A long future period explains the forecast horizon even when its
+        # current first page contains only fixtures inside that horizon.
+        window_end = (datetime.strptime(scenario["today"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            + timedelta(days=7, hours=-3)).timestamp() * 1000
+        if data and data["range"]["endExclusive"] > window_end:
             match("Predictions become available within seven days of the match", visible)  # Accessible full reason.
         else:
             no_match("Predictions become available within seven days of the match", visible)
         if name in ("not-started", "selecting"):
             no_match(r"of \d+ prediction jobs completed", visible)
     print(f"PASS {len(scenarios)} anonymous server-rendered scenarios: stored cards/clocks, initial CSS, coverage/errors, current/locked forecasts and EAT window.")
+
+
+def verify_status_routes(origin):
+    """The real page route repairs incompatible filters before accessing any stored data."""
+    redirects = [
+        ({"date": "2026-10-01", "status": "live", "timeFrom": "08:00", "timeTo": "10:00", "tz": "Africa/Kampala",
+          "q": "Club", "league": "league-a", "page": "3"}, "/en/matches",
+         {"when": "today", "tz": "Africa/Kampala", "q": "Club", "league": "league-a", "status": "live", "picks": "only"}),
+        ({"date": "2026-10-01", "status": "scheduled"}, "/en/matches",
+         {"when": "next-30-days", "status": "scheduled", "picks": "only"}),
+        ({"when": "tomorrow", "status": "finished"}, "/en/matches", {"status": "finished", "picks": "only"}),
+        ({"period": "next-7-days", "date": "2026-10-01"}, "/en/matches", {"when": "next-7-days", "picks": "only"}),
+        ({"period": "next-3-days", "from": "2026-10-01", "to": "2026-10-04", "q": "Club"}, "/en/matches",
+         {"when": "next-3-days", "q": "Club", "picks": "only"}),
+        ({"period": "custom", "date": "2026-10-01", "country": "Spain"}, "/en/predictions/2026-10-01",
+         {"country": "Spain", "picks": "only"}),
+        ({"period": "next-30-days", "status": "live", "timeFrom": "08:00", "timeTo": "10:00", "tz": "Africa/Kampala"}, "/en/matches",
+         {"when": "today", "tz": "Africa/Kampala", "status": "live", "picks": "only"}),
+    ]
+    for parameters, path, expected in redirects:
+        response = request(origin, "/route-status?" + urlencode(parameters))
+        assert response.status == 307, f"Status/date request must redirect before reading: {parameters}, got {response.status}"
+        location = urlsplit(urljoin(origin, response.headers.get("location", "")))
+        assert location.path == path, f"Status/date redirect retains the correct destination: {parameters}"
+        assert parse_qs(location.query) == {name: [value] for name, value in expected.items()}, f"Synchronized redirect criteria: {parameters}"
+        assert response.headers.get("set-cookie") is None, "Read-only synchronization must not create visitor state"
+    invalid = [
+        {"period": "invalid"}, [("period", "today"), ("period", "tomorrow")],
+        {"period": "custom", "from": "2026-10-09", "to": "2026-10-01"},
+        {"from": "2026-10-09", "to": "2026-10-01", "status": "live"}, {"status": "invalid"},
+    ]
+    for parameters in invalid:
+        response = request(origin, "/route-status?" + urlencode(parameters))
+        assert response.status == 404, f"Malformed status/date/period values must fail before reading: {parameters}"
+    archives = [
+        ({"status": "live"}, "/en/matches", {"when": "today", "status": "live", "picks": "only"}),
+        ({"period": "next-7-days"}, "/en/matches", {"when": "next-7-days", "picks": "only"}),
+        ({"period": "custom", "status": "finished"}, "/en/predictions/2026-10-01", {"status": "finished", "picks": "only"}),
+        ({"period": "custom", "to": "2026-10-04"}, "/en/predictions/2026-10-01", {"to": "2026-10-04", "picks": "only"}),
+    ]
+    for parameters, path, expected in archives:
+        response = request(origin, "/route-status-archive/2026-10-01?" + urlencode(parameters))
+        assert response.status == 307, f"Legacy archive filter transition redirects before reading: {parameters}"
+        location = urlsplit(urljoin(origin, response.headers.get("location", "")))
+        assert location.path == path and parse_qs(location.query) == {name: [value] for name, value in expected.items()}, f"Legacy archive retains the synchronized filter: {parameters}"
+    print(f"PASS {len(redirects) + len(archives)} status/date redirects and {len(invalid)} invalid-query guards: Live Today, native periods, compatible filters and historical custom dates.")
 
 
 def verify_detail(origin, directory, scenarios):

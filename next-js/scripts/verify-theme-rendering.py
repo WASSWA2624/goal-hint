@@ -19,11 +19,14 @@ def verify(origin, directory):
         match(selector, visible)
     match(r'goal-hint-logo-primary\.svg', visible)
     match(r'goal-hint-mark-primary\.svg', visible)
+    match(r'<div\b[^>]*data-summary-predicted[^>]*>\s*<dt\b[^>]*>Predicted</dt>\s*<dd\b[^>]*>116</dd>', visible)
+    for outcome, percentage in [("correct", r"62\.1%"), ("incorrect", r"20\.7%"), ("pending", r"15\.5%")]:
+        match(rf'<span\b[^>]*data-summary-percentage="{outcome}"[^>]*>\({percentage}\)</span>', visible)
     no_match(r'https?://[^"<>]*(?:match-card\.test|synthetic\.test)', visible)
     assert 0 <= html.find("data-styled=") < html.find("<main"), "Theme styles must be server rendered."
     session = request(origin, "/api/account/session")
     assert session.status == 200 and '"phone":null' in session.text
-    print("Theme SSR verification passed: real shared components, adaptive light branding, isolated anonymous synthetic records.", flush=True)
+    print("Theme SSR verification passed: real shared components, predicted-match totals and outcome shares, adaptive light branding, isolated anonymous synthetic records.", flush=True)
 
 
 def main():

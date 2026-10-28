@@ -7,15 +7,15 @@ import { useDeviceTimeZone, useMessages } from "@/i18n/use-messages";
 import { RangeFields, RangeFieldset, RangeHelp, RangeHint, RangeLegend } from "./feed-range-fields";
 
 /** Equal endpoints select one kickoff minute; cleared endpoints return to the full-day bounds. */
-export function FeedTimeFilter({ query, from, to, onChange }: {
-  query: FeedQuery; from: string; to: string; onChange: (from: string, to: string) => void;
+export function FeedTimeFilter({ query, from, to, onChange, disabled = false }: {
+  query: FeedQuery; from: string; to: string; onChange: (from: string, to: string) => void; disabled?: boolean;
 }) {
   const messages = useMessages(query.locale), deviceZone = useDeviceTimeZone();
   const zone = query.zone ?? query.time?.zone ?? deviceZone, id = useId();
   const fromTime = from || fullDayKickoffTime.from, toTime = to || fullDayKickoffTime.to;
   const invalid = !validKickoffTime({ from: fromTime, to: toTime, zone });
   const descriptionId = `${id}-zone${invalid ? ` ${id}-error` : ""}`;
-  return <RangeFieldset aria-label={messages.text("feed.time.range")}>
+  return <RangeFieldset aria-label={messages.text("feed.time.range")} disabled={disabled}>
     <RangeLegend>{messages.text("feed.time.title")}</RangeLegend>
     <RangeFields>
       <label><span>{messages.text("feed.time.from")}</span><input type="time" step="60" value={fromTime} title={zone}

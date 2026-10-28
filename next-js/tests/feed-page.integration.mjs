@@ -1,7 +1,7 @@
 import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseFeedQuery } from '../src/domain/feed-query.ts';
+import { parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { parseReportingDate, utcInstantFromEpochMilliseconds } from '../src/domain/calendar.ts';
 import { loadMatchFeedPage } from '../src/server/matches/feed-page.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
@@ -24,7 +24,7 @@ import { savePageScenarios } from './helpers/page-capture.mjs';
 
 const saveScenarios = (t, captured) => savePageScenarios(t, 'MATCH_FEED_PAGE_CAPTURE', captured);
 
-test('match page handoff uses genuine stored fixtures, cache, coverage and locked results', { timeout: 240_000 }, async (t) => {
+test('match page handoff uses genuine stored fixtures, cache, coverage and locked results', { timeout: 360_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     const today = parseReportingDate('2026-10-09'), captured = {};
     const rows = Array.from({ length: 35 }, (_, index) => catalogFixture(3000 + index, {
@@ -70,10 +70,49 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
       assert.equal(published.forecast.publishedAt, PUBLICATION_NOW); assert.notEqual(published.syncedAt, data.asOf);
       const closed = earliest.records.find((record) => record.fixtureId === unlocked.fixture.id);
       assert.equal(closed.cycle.state, 'closed'); assert.equal(closed.forecast, null);
+
+      const predicted = await capture('predictions-only', { picks: 'only' });
+      const predictedEarliest = await capture('predictions-only-earliest', { picks: 'only', dir: 'asc' });
+      const publishedIds = [state.fixture.id, other.fixture.id].sort();
+      assert.equal(predicted.total, 2); assert.equal(predictedEarliest.total, 2);
+      assert.deepEqual(predicted.records.map((record) => record.fixtureId), [...publishedIds].reverse());
+      assert.deepEqual(predictedEarliest.records.map((record) => record.fixtureId), publishedIds);
+      for (const selected of [predicted, predictedEarliest]) {
+        assert.ok(selected.records.every((record) => record.forecast?.markets.length > 0));
+        assert.ok(selected.records.every((record) => record.forecast.publishedAt === PUBLICATION_NOW));
+      }
+
+      // Compare status filters with canonical stored fixtures; a closed prediction
+      // cycle cannot fabricate a live or completed fixture for browser acceptance.
+      for (const status of ['all', 'live', 'finished', 'scheduled']) {
+        const name = `status-${status}-today`, selected = await capture(name, { when: 'today', ...(status === 'all' ? {} : { status }) });
+        const range = resolveFeedDates(captured[name].query, today);
+        const stored = await p.a.query((tx) => tx.footballFixture.findMany({ where: {
+          kickoff: { gte: new Date(range.window.startInclusive), lt: new Date(range.window.endExclusive) },
+          ...(status === 'all' ? {} : { status: status === 'finished'
+            ? { in: ['finished-regulation', 'finished-extra-time', 'finished-penalties'] } : status }),
+        }, select: { id: true, kickoff: true, status: true }, orderBy: [{ kickoff: 'desc' }, { id: 'desc' }] }));
+        assert.equal(selected.total, stored.length, `${status}: exact stored status count`);
+        assert.deepEqual(selected.records.map((record) => record.fixtureId), stored.slice(0, 30).map((record) => record.id));
+        assert.ok(selected.records.every((record) => status === 'all' || (status === 'finished'
+          ? record.status.startsWith('finished-') : record.status === status)));
+      }
     });
     await t.test('tomorrow, next seven days, final inclusive instant and exclusive boundary', async () => {
       assert.equal((await capture('tomorrow', { when: 'tomorrow' })).records.length, 1);
       const seven = await capture('seven', { when: 'next-7-days' }); assert.equal(seven.total, 34);
+      for (const [name, parameters] of [
+        ['next-three', { when: 'next-3-days' }], ['next-thirty', { when: 'next-30-days' }],
+        ['upcoming-next-thirty', { when: 'next-30-days', status: 'scheduled' }],
+      ]) {
+        const selected = await capture(name, parameters), range = resolveFeedDates(captured[name].query, today);
+        const stored = await p.a.query((tx) => tx.footballFixture.findMany({ where: {
+          kickoff: { gte: new Date(range.window.startInclusive), lt: new Date(range.window.endExclusive) },
+          ...(parameters.status ? { status: parameters.status } : {}),
+        }, select: { id: true, kickoff: true }, orderBy: [{ kickoff: 'desc' }, { id: 'desc' }] }));
+        assert.equal(selected.total, stored.length, `${parameters.when}: exact stored range count`);
+        assert.deepEqual(selected.records.map((record) => record.fixtureId), stored.slice(0, 30).map((record) => record.id));
+      }
       const last = await capture('last-day', { date: '2026-10-15' });
       assert.equal(last.records[0].kickoffAt, Date.parse('2026-10-15T20:59:59Z')); assert.equal(last.records[0].availabilityMessage, null);
       await importDate('2026-10-16', [rows[34]]);
@@ -163,7 +202,7 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
     }
     // Captured SQL projections and explicitly synthetic presentation variants remain test-only.
     await saveScenarios(t, captured);
-  });
+  }, { migrationTimeoutMs: 180_000 });
 });
 
 test('pagination detects genuine cohort changes and supplies consistent multi-page restoration', { timeout: 240_000 }, async (t) => {

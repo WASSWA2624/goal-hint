@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { DashboardIcon, DocumentIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
 import type { NavigationLocation } from "@/domain/navigation";
+import { normalizeNavigationLocation } from "@/domain/navigation-paths";
 import type { AccentName } from "@/styles/theme";
 import { fitNavigationItems, minimumPrimaryDestinations } from "./navigation-fit";
 import { MoreList, MoreMenu, TabLink, TabList, TabMeasure, TopNavLink, TopNavList, TopNavMeasure } from "./shell-styles";
@@ -36,9 +37,10 @@ function restoreTarget(container: HTMLElement, target: FocusTarget) {
 }
 
 /** The server leaves phone room for More; hydration fills the measured space. */
-export function ResponsiveNavigation({ destinations, current, moreLabel, mobile = false }: {
+export function ResponsiveNavigation({ destinations, current: selected, moreLabel, mobile = false }: {
   destinations: readonly NavigationDestination[]; current?: NavigationLocation; moreLabel: string; mobile?: boolean;
 }) {
+  const current = normalizeNavigationLocation(selected);
   const root = useRef<HTMLDivElement>(null), measurements = useRef<HTMLDivElement>(null), list = useRef<HTMLUListElement>(null);
   const [count, setCount] = useState(Math.min(mobile ? 1 : minimumPrimaryDestinations, destinations.length));
   const pendingFocus = useRef<{ target: FocusTarget; previous: Element | null } | null>(null);

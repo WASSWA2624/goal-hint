@@ -7,8 +7,9 @@ import { breadcrumbStructuredData, feedDiscovery, serializeStructuredData } from
 import { homeHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
-import { applyFeedPageDefaults, getFeedToday, serializeFeedQuery } from "@/domain/feed-query";
+import { applyFeedPageDefaults, getFeedToday, isFeedDatePreset, serializeFeedQuery } from "@/domain/feed-query";
 import { feedQueryHref } from "@/domain/feed-query";
+import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { withoutSubscriberFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
@@ -41,12 +42,26 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     let query, today, result;
     // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
     try {
-      const parameters = await searchParams;
+      const { period, ...parameters } = await searchParams;
+      // The native phone selector can replace an applied custom date without JavaScript.
+      // Its form field is page-only; the stored API continues to accept canonical query keys.
+      if (period !== undefined) {
+        if (typeof period !== "string" || period !== "custom" && !isFeedDatePreset(period)) throw new MatchFeedError("invalid-query");
+        if (isFeedDatePreset(period)) {
+          delete parameters.date; delete parameters.from; delete parameters.to; delete parameters.when;
+          parameters.when = period;
+        }
+      }
       query = parseMatchFeedQuery(parameters, getReportingDate(at), { locale: route.locale, asOf: at,
         ...(access.tier === "free" ? { providerOdds: true } : {}),
-        ...(dated ? { routeDate: route.date } : {}) });
+        ...(dated && (period === undefined || period === "custom") ? { routeDate: route.date } : {}) });
       query = applyFeedPageDefaults(query, parameters, access.tier === "free");
       today = getFeedToday(query, at);
+      if (!dated || query.status === "live" || period !== undefined) {
+        const synchronized = synchronizeFeedStatusDates(query, today);
+        if (period !== undefined || feedQueryHref(synchronized, today) !== feedQueryHref(query, today)) redirect(feedQueryHref(synchronized, today));
+        query = synchronized;
+      }
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }

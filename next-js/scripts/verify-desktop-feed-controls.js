@@ -22,7 +22,7 @@ async function verifyDesktopFeedControls(page) {
   await form.waitFor({ state: "visible" });
   require(await page.getByRole("heading", { level: 1 }).count() === 1, "Desktop must retain one main heading.");
   const periods = await form.locator('[name="when"] option').allTextContents();
-  require(JSON.stringify(periods) === JSON.stringify(["Last 30 days", "Last 7 days", "Last 3 days", "Yesterday", "Today", "Tomorrow", "Custom dates"]),
+  require(JSON.stringify(periods) === JSON.stringify(["Last 30 days", "Last 7 days", "Last 3 days", "Yesterday", "Today", "Tomorrow", "Next 3 days", "Next 7 days", "Next 30 days", "Custom dates"]),
     "The desktop period options and order must match the selected design.");
   const sections = ["dates", "leagues", "countries", "markets", "limits"];
   const control = (section) => form.locator(`[data-filter-section="${section}"]`);
@@ -53,7 +53,7 @@ async function verifyDesktopFeedControls(page) {
   for (const width of [1024, 1440]) await assertDesktopLayout(width);
   require(await count("markets") === "4" && await count("limits") === null, "Only Markets has a count by default: all four selected markets.");
   const search = form.locator('[name="q"]'), sort = form.locator('[name="sort"]');
-  const picks = form.getByRole("checkbox", { name: "Picks only", exact: true });
+  const picks = form.getByRole("checkbox", { name: "Predictions only", exact: true });
   require(await picks.isEnabled(), "Use the full-access acceptance fixture for draft-preservation checks.");
   const open = async (section) => {
     await control(section).click();
@@ -192,7 +192,7 @@ async function verifyDesktopFeedControls(page) {
     await page.waitForURL((url) => url.pathname === "/en/matches" && !url.searchParams.has("q") && !url.searchParams.has("dir"));
     await form.waitFor({ state: "visible" });
     await settled();
-    require(await search.inputValue() === "" && !await picks.isChecked() && await sort.inputValue() === "kickoff-desc", "Main Reset must restore all essentials.");
+    require(await search.inputValue() === "" && await picks.isChecked() && await sort.inputValue() === "kickoff-desc", "Main Reset must restore full-access prediction defaults and all essentials.");
     require(await count("leagues") === null && await count("countries") === null && await count("markets") === "4" && await count("limits") === null,
       "Main Reset must restore every independent section's default count.");
     const resetHref = page.url();
@@ -227,8 +227,69 @@ async function verifyDesktopFeedControls(page) {
     require(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mobile must retain its fitting layout.");
     await page.setViewportSize({ width: 1440, height: 900 });
     await form.waitFor({ state: "visible" });
+    const status = form.locator('[name="status"]'), period = form.locator('[name="when"]');
+    require(JSON.stringify(await status.locator("option").allTextContents()) === JSON.stringify(["All", "Upcoming", "Live", "Completed"]),
+      "Matches must offer the four unified status filters with their public labels.");
+    require(JSON.stringify(await status.locator("option").evaluateAll((options) => options.map((option) => option.value)))
+      === JSON.stringify(["all", "scheduled", "live", "finished"]), "Status filters retain the existing transport codes.");
+    page.on("request", recordRequest);
+    await period.selectOption("last-7-days");
+    dialog = await open("dates");
+    await dialog.locator('[name="timeFrom"]').fill("08:00");
+    await dialog.locator('[name="timeTo"]').fill("10:00");
+    await done(dialog);
+    dialog = await open("leagues");
+    await dialog.locator('input[name="league"]').first().check();
+    const statusLeagues = await selected(dialog, "league");
+    await done(dialog);
+    dialog = await open("markets");
+    await dialog.locator('input[name="market"]').first().uncheck();
+    const statusMarkets = await selected(dialog, "market");
+    await done(dialog);
+    dialog = await open("limits");
+    await dialog.locator('[name="probMin"]').fill("70");
+    await dialog.locator('[name="probMax"]').fill("95");
+    await done(dialog);
+    await search.fill("Keep status drafts"); await picks.check(); await sort.selectOption("probability-desc");
+    await status.selectOption("live");
+    require(await period.inputValue() === "today" && await period.isDisabled() && await control("dates").isDisabled(),
+      "Selecting Live must immediately select Today and prevent incompatible period/calendar choices.");
+    await status.selectOption("all");
+    require(await period.inputValue() === "today" && await period.isEnabled() && await control("dates").isEnabled(),
+      "Leaving Live must restore date controls while retaining Today.");
+    dialog = await open("dates");
+    require(await dialog.locator('[name="from"]').inputValue() === defaultTo && await dialog.locator('[name="to"]').inputValue() === defaultTo
+      && await dialog.locator('[name="timeFrom"]').inputValue() === "00:00" && await dialog.locator('[name="timeTo"]').inputValue() === "23:59",
+      "Live must use the current browsing day and clear a stale kickoff-time window.");
+    await cancel(dialog);
+    dialog = await open("leagues");
+    require(JSON.stringify(await selected(dialog, "league")) === JSON.stringify(statusLeagues), "Status changes preserve compatible league choices.");
+    await cancel(dialog);
+    dialog = await open("markets");
+    require(JSON.stringify(await selected(dialog, "market")) === JSON.stringify(statusMarkets), "Status changes preserve selected markets.");
+    await cancel(dialog);
+    dialog = await open("limits");
+    require(await dialog.locator('[name="probMin"]').inputValue() === "70" && await dialog.locator('[name="probMax"]').inputValue() === "95",
+      "Status changes preserve probability bounds.");
+    await cancel(dialog);
+    require(await search.inputValue() === "Keep status drafts" && await picks.isChecked() && await sort.inputValue() === "probability-desc",
+      "Status changes preserve search, prediction choices and sorting.");
+    await period.selectOption("last-7-days");
+    await status.selectOption("scheduled");
+    require(await period.inputValue() === "next-7-days" && await period.isEnabled(), "Upcoming synchronizes a past relative period to its future equivalent.");
+    await status.selectOption("finished");
+    require(await period.inputValue() === "last-7-days", "Completed synchronizes a future relative period to its past equivalent.");
+    await status.selectOption("all");
+    require(await period.inputValue() === "last-7-days", "All retains the selected compatible date period.");
+    require(requests.length === 0, "Desktop status/date synchronization and compatible filter edits remain drafts until Apply.");
+    page.off("request", recordRequest);
+    await form.getByRole("button", { name: "Reset filters", exact: true }).click();
+    await settled();
+    require(await status.inputValue() === "all" && await period.inputValue() === "last-30-days" && await period.isEnabled(),
+      "Main Reset restores All and Last 30 days, clearing the new status filter too.");
     return { passed: true, dialogs: 5, localReset: true, independentCounts: true, cancelRollback: true, unrelatedDraftsPreserved: true,
-      draftRequests: requests.length, completeApply: true, queryRestoration: true, desktopWidths: [1024, 1440], mobileLifecycle: true };
+      draftRequests: requests.length, completeApply: true, queryRestoration: true, desktopWidths: [1024, 1440], mobileLifecycle: true,
+      futurePeriods: true, unifiedStatuses: true, liveToday: true, staleTimesCleared: true, statusDateSync: true, statusReset: true };
   } finally {
     page.off("request", recordRequest);
   }

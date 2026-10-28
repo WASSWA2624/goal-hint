@@ -43,7 +43,9 @@ test("Reset restores the viewer's eligible predictions default", () => {
   const original = page("picks=all&q=Club&page=3");
   assert.equal(resetFeedFilters(original).picks, "only");
   assert.equal(resetFeedFilters(original, true).picks, "all");
-  assert.equal(resetFeedFilters({ ...original, status: "finished" }, true).picks, "only");
+  const resetCompleted = resetFeedFilters({ ...original, status: "finished" }, true);
+  assert.equal(resetCompleted.status, "all");
+  assert.equal(resetCompleted.picks, "all", "Reset returns to All, where guests cannot request subscriber predictions");
   assert.equal(resetFeedFilters(original).search, "");
   assert.equal(resetFeedFilters(original).page, 1);
 });

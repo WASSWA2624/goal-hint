@@ -11,7 +11,7 @@ remain readable without clipping.
 
 `/en/slips` uses the Balanced slip builder. Each slip keeps its total odds,
 average forecast probability and selection count in its title. Its selections
-use the same `MatchCard` and `MatchCardList` as Matches, Live and Results, including
+use the same `MatchCard` and `MatchCardList` as Matches, including
 their phone tiles and desktop columns. Best Slips, completed saved slips and
 published performance slips reuse that presentation too. A browser-safe adapter
 preserves each original selection's kickoff, teams, pick, probability and price;

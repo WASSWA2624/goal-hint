@@ -22,6 +22,7 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
 import { parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { isAnyKickoffTime } from "@/domain/kickoff-time";
 import { publicPolicy } from "@/domain/public-policy";
 import { feedRowNumber } from "@/domain/feed-presentation";
@@ -139,7 +140,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   }, [href]);
   const failed = result.error !== null;
   const apply = useCallback((next: FeedQuery) => {
-    const nextHref = feedQueryHref(next, today);
+    const nextHref = feedQueryHref(synchronizeFeedStatusDates(next, today), today);
     // App Router discards superseded navigations. No per-keystroke requests.
     startTransition(() => {
       // Explicit Clear must supersede Apply even before React exposes pending=true.

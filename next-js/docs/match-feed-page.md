@@ -1,5 +1,20 @@
 # Stored match feed page
 
+Matches is the single browsing destination. Its status filter offers All,
+Upcoming (`scheduled`), Live and Completed (`finished`), with the same choices on
+phone and desktop. Live selects Today in the active browsing zone, removes
+kickoff-time bounds and locks date/time controls until another status is selected.
+Status changes retain compatible filters and mirror past/future relative periods
+for Upcoming and Completed. Wholly incompatible explicit ranges are repaired.
+Reset restores All and the default Last 30 days.
+
+The period selector includes Last 30/7/3 days, Yesterday, Today, Tomorrow,
+Next 3/7/30 days and Custom. The native phone form's `period` field is validated
+only by the page route, replaces older applied dates, and redirects to canonical
+parameters. Stored API query validation stays unchanged. Direct stale Live links,
+including dated archive links, redirect to the current filtered Matches view
+before reading records. Other historical archive routes remain available.
+
 Prompt 033 adds [search/filter controls](search-filter-controls.md) through a
 persistent client surface. Failed filter navigations retain and label the
 previous successful server projection. Prompt 034 adds
@@ -10,10 +25,10 @@ Explicit filter actions always dispatch normal navigation, so Clear can
 supersede a rapid Apply even when returning to the currently displayed URL.
 An idle retry of a failed read at the same URL uses `router.refresh()`.
 
-Prompt 032 connects `/en` and `/en/predictions/YYYY-MM-DD` to the existing feed
-service. Today and Results share `FeedShell` and `MatchFeedPage`; Results retains
-the yesterday/finished default. The first page contains at most the existing
-30-card default in kickoff/fixture-ID order. Validated URL variants retain the
+`/en/matches` and `/en/predictions/YYYY-MM-DD` share the same feed service and
+`MatchFeedPage`; dated URLs preserve historical links without separate Live or
+Results navigation destinations. The first page uses the configured page-size
+limit in kickoff/fixture-ID order. Validated URL variants retain the
 existing selected market, filters, sorting and bounded page-size contract.
 
 `server/matches/public-feed.ts` composes the same database, configured competition

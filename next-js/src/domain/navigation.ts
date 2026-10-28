@@ -3,7 +3,7 @@ import { feedDefaults, parseFeedStatus, type FeedStatus } from "./feed-query.ts"
 import { homeHref, type InformationPage } from "./navigation-paths.ts";
 
 export { feedDefaults } from "./feed-query.ts";
-export { homeHref, matchesHref, performanceHref, informationHref, informationPages, type InformationPage } from "./navigation-paths.ts";
+export { homeHref, matchesHref, performanceHref, informationHref, informationPages, normalizeNavigationLocation, type InformationPage } from "./navigation-paths.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
 export type AppSection = FeedEntry | "live" | "slips" | "best-slips" | "performance";

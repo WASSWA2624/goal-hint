@@ -8,10 +8,10 @@ import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
-import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters } from "@/domain/feed-controls";
+import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, selectFeedDates, selectFeedStatus } from "@/domain/feed-controls";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  canonicalMarkets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates,
+  canonicalMarkets, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates,
   serializeFeedQuery, type FeedQuery, type ProbabilityRange,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -21,8 +21,9 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
-import { FeedDraftStatus, PicksOnlyFilter } from "./feed-controls";
+import { FeedDraftStatus, FeedNote, PicksOnlyFilter } from "./feed-controls";
 import { FeedSearchInput } from "./feed-search-input";
+import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker, DayStrip } from "./feed-dates";
@@ -60,6 +61,17 @@ const Panel = styled.form`
   gap: 4px;
   min-inline-size: 0;
   ${media.belowDesktop} { gap: 6px; padding-inline: 6px; }
+`;
+const QueryChoices = styled.div`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;
+  > select {
+    inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 8px;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0;
+    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+    font: inherit; font-size: 0.8125rem;
+    ${focusRing}
+    &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
+  }
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
 const PhoneToolbar = styled.div`
@@ -566,8 +578,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
       const time = isAnyKickoffTime(timeInputs) ? null : { ...timeInputs, zone };
       if (time && !validKickoffTime(time)) return null;
       const next = { ...draft, dates, time, probability, page: 1 };
-      applyFeedDraft(next, today);
-      return next;
+      return applyFeedDraft(next, today);
     } catch { return null; }
   }, [dateInputs, draft, probability, query.dates, range.endDate, range.startDate, timeInputs, today, zone]);
   const messages = createMessages(query.locale);
@@ -580,7 +591,9 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   const edit = (next: FeedQuery) => { if (valid(next, today)) dispatch(draftChanged({ ...next, page: 1 })); };
   /** One application step for the complete draft. */
   const apply = (next: FeedQuery) => {
-    const applied = { ...next, page: 1 };
+    const applied = applyFeedDraft(next, today), selectedRange = resolveFeedDates(applied, today);
+    setDateInputs({ from: selectedRange.startDate, to: selectedRange.endDate });
+    setTimeInputs({ from: applied.time?.from ?? fullDayKickoffTime.from, to: applied.time?.to ?? fullDayKickoffTime.to });
     dispatch(draftChanged(applied));
     onApply(applied);
   };
@@ -677,11 +690,20 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     onOpenChange(false);
     apply(applyFeedDraft(completeDraft, today));
   }}>
-    {[...new URLSearchParams(parameters)].map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+    {[...new URLSearchParams(parameters)].filter(([name]) => name !== "status").map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
     <FeedSearchInput name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
       placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
       submitLabel={messages.text("feed.search.submit")}
       onChange={(event) => edit({ ...draft, search: event.target.value })} />
+    <QueryChoices data-phone-query-filters>
+      <FeedStatusSelect name="status" locale={query.locale} value={query.status} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
+      <FeedPeriodSelect name="period" locale={query.locale} value={feedDatePresets.some((preset) => preset === query.dates.kind) ? query.dates.kind : "custom"}
+        disabled={query.status === "live"} title={query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={(period) => {
+          if (period === "custom") { onOpenChange(true); return; }
+          const kind = feedDatePresets.find((preset) => preset === period);
+          if (kind) apply(selectFeedDates(query, { kind }, today));
+        }} />
+    </QueryChoices>
     {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
     <PhoneToolbar data-phone-filter-toolbar>
       <SortField>
@@ -721,8 +743,9 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
             }}>{messages.text("feed.date.useReporting")}</MarketToggle>}
           </MarketToggles>
         </PhoneSection>
-        <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
-        <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
+        {query.status === "live" && <FeedNote>{messages.text("feed.filters.liveToday")}</FeedNote>}
+        <DateRangePicker query={query} today={today} {...dateInputs} disabled={query.status === "live"} onChange={(from, to) => setDateInputs({ from, to })} />
+        <FeedTimeFilter query={query} {...timeInputs} disabled={query.status === "live"} onChange={(from, to) => setTimeInputs({ from, to })} />
         <PhoneSection role="group" aria-labelledby={marketsId}>
           <SectionLabel><span id={marketsId}>{messages.text("feed.filters.markets")}</span>
             <small>{messages.text(isAnyMarkets(draft.markets) ? "feed.filters.any" : "feed.filters.marketsHint")}</small>
