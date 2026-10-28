@@ -1,0 +1,556 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&display=swap">
+<style>
+  #gh-builder-samples {
+    --sb-phone-width: 340px;
+    --sb-page: light-dark(#F0F3F8, #03111F);
+    --sb-surface: light-dark(#FFFFFF, #081B2C);
+    --sb-soft: light-dark(#E8EDF5, #0D253B);
+    --sb-text: light-dark(#15243B, #F4F7FF);
+    --sb-muted: light-dark(#53647C, #A8CBEF);
+    --sb-line: light-dark(#D9E1ED, #142A3D);
+    --sb-input: light-dark(#718099, #58728C);
+    --sb-brand: light-dark(#2457C5, #00B9F2);
+    --sb-tint: light-dark(#E3ECFF, #073052);
+    --sb-action: light-dark(#2457C5, #0066F5);
+    --sb-on-action: #FFFFFF;
+    --sb-error: light-dark(#9C2328, #FF9C9C);
+    color: var(--sb-text);
+    font: 400 13px/1.5 Manrope, Arial, sans-serif;
+    text-align: start;
+  }
+  #gh-builder-samples *, #gh-builder-samples *::before, #gh-builder-samples *::after { box-sizing: border-box; }
+  #gh-builder-samples [hidden] { display: none !important; }
+  #gh-builder-samples .sb-stage { min-block-size: 1180px; padding-block: 8px 22px; }
+  #gh-builder-samples .sb-caption { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-block-end: 14px; padding-inline: 2px; }
+  #gh-builder-samples .sb-caption h2 { font: 500 18px/1.4 Manrope, Arial, sans-serif; margin: 0; }
+  #gh-builder-samples .sb-caption p { margin: 0; color: var(--sb-muted); font-size: 12px; }
+  #gh-builder-samples .sb-pair { display: grid; grid-template-columns: minmax(0, 1fr) var(--sb-phone-width); align-items: start; gap: 18px; }
+  #gh-builder-samples .sb-frame { min-inline-size: 0; }
+  #gh-builder-samples .sb-device { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 2px 8px; color: var(--sb-muted); font-size: 12px; }
+  #gh-builder-samples .sb-product { background: var(--sb-page); border: 1px solid var(--sb-line); min-inline-size: 0; color: var(--sb-text); }
+  #gh-builder-samples .sb-chrome { display: flex; align-items: center; justify-content: space-between; min-block-size: 46px; padding: 10px 14px; gap: 10px; background: var(--sb-surface); border-block-end: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-wordmark { font-size: 16px; font-weight: 500; letter-spacing: -.5px; }
+  #gh-builder-samples .sb-wordmark span { color: var(--sb-brand); }
+  #gh-builder-samples .sb-nav { display: flex; gap: 12px; font-size: 11px; color: var(--sb-muted); }
+  #gh-builder-samples .sb-nav b { font-weight: 500; color: var(--sb-brand); }
+  #gh-builder-samples .sb-main { padding: 14px; min-inline-size: 0; }
+  #gh-builder-samples .sb-page-title { margin: 0 0 12px; font: 500 18px/1.4 Manrope, Arial, sans-serif; }
+  #gh-builder-samples .sb-panel { background: var(--sb-surface); border: 1px solid var(--sb-line); padding: 10px; min-inline-size: 0; }
+  #gh-builder-samples .sb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-inline-size: 0; }
+  #gh-builder-samples .sb-stack { display: grid; gap: 10px; min-inline-size: 0; }
+  #gh-builder-samples .sb-essentials { display: grid; grid-template-columns: minmax(62px, .48fr) repeat(2, minmax(0, 1fr)); align-items: end; gap: 10px; }
+  #gh-builder-samples .sb-refinements { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; padding-block-start: 9px; margin-block-start: 9px; border-block-start: 1px solid var(--sb-line); }
+  #gh-builder-samples button, #gh-builder-samples input, #gh-builder-samples select, #gh-builder-samples summary { font: inherit; border-radius: 0; }
+  #gh-builder-samples button, #gh-builder-samples select { color: var(--sb-text); }
+  #gh-builder-samples button { background: var(--sb-surface); }
+  #gh-builder-samples .sb-button, #gh-builder-samples summary {
+    display: inline-flex; justify-content: center; align-items: center; gap: 6px;
+    min-block-size: 34px; padding: 5px 9px; border: 1px solid var(--sb-line);
+    background: var(--sb-surface); color: var(--sb-text); font-size: 12px;
+    font-weight: 500; text-align: start; max-inline-size: 100%;
+  }
+  #gh-builder-samples .sb-button:hover, #gh-builder-samples summary:hover { background: var(--sb-tint); }
+  #gh-builder-samples .sb-button[aria-pressed="true"] { color: var(--sb-brand); background: var(--sb-tint); border-color: var(--sb-brand); }
+  #gh-builder-samples .sb-primary { color: var(--sb-on-action); background: var(--sb-action); border-color: var(--sb-action); }
+  #gh-builder-samples .sb-primary:hover { background: var(--sb-action); filter: brightness(.94); }
+  #gh-builder-samples .sb-quiet { color: var(--sb-muted); border-color: transparent; background: transparent; }
+  #gh-builder-samples .sb-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; margin-inline-start: auto; }
+  #gh-builder-samples .sb-actions-row { border-block-start: 1px solid var(--sb-line); margin-block-start: 10px; padding-block-start: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  #gh-builder-samples .sb-hint { font-size: 11px; color: var(--sb-muted); }
+  #gh-builder-samples fieldset { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+  #gh-builder-samples legend, #gh-builder-samples .sb-field > span { display: block; font-size: 11px; color: var(--sb-muted); padding: 0; margin-block-end: 4px; }
+  #gh-builder-samples input:not([type="checkbox"]), #gh-builder-samples select {
+    background: var(--sb-surface); color: var(--sb-text); border: 1px solid var(--sb-input);
+    inline-size: 100%; min-inline-size: 0; block-size: 34px; padding: 5px 7px;
+    font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  #gh-builder-samples input::placeholder { color: var(--sb-muted); opacity: 1; }
+  #gh-builder-samples input:disabled, #gh-builder-samples select:disabled { background: var(--sb-soft); opacity: .7; }
+  #gh-builder-samples .sb-field { display: block; min-inline-size: 0; }
+  #gh-builder-samples .sb-bounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  #gh-builder-samples .sb-bound { display: flex; align-items: center; border: 1px solid var(--sb-input); min-inline-size: 0; }
+  #gh-builder-samples .sb-bound > span { font-size: 11px; color: var(--sb-muted); padding-inline-start: 6px; }
+  #gh-builder-samples .sb-bound input { border: 0; padding-inline: 5px; }
+  #gh-builder-samples .sb-bound:focus-within { outline: 2px solid var(--sb-brand); outline-offset: 1px; }
+  #gh-builder-samples .sb-bound input:focus-visible { outline-offset: -3px; }
+  #gh-builder-samples .sb-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #gh-builder-samples .sb-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  #gh-builder-samples .sb-date-line { display: grid; grid-template-columns: minmax(0, 1fr) 78px; gap: 5px; }
+  #gh-builder-samples .sb-date-line input { padding-inline: 4px; }
+  #gh-builder-samples .sb-market-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+  #gh-builder-samples .sb-market { display: grid; grid-template-columns: minmax(0, 1fr) 92px; align-items: center; gap: 5px; }
+  #gh-builder-samples .sb-market-picker summary { border-color: var(--sb-input); font-size: 11px; padding-inline: 6px; overflow-wrap: anywhere; }
+  #gh-builder-samples .sb-market-options { background: var(--sb-soft); padding: 5px; }
+  #gh-builder-samples .sb-market-options .sb-button { inline-size: 100%; font-size: 11px; padding-inline: 4px; }
+  #gh-builder-samples .sb-check { display: flex; align-items: center; gap: 6px; min-block-size: 30px; font-size: 12px; }
+  #gh-builder-samples .sb-check input { accent-color: var(--sb-brand); inline-size: 15px; block-size: 15px; margin: 0; flex: none; }
+  #gh-builder-samples .sb-reuse { margin-block-start: 8px; padding-block-start: 7px; border-block-start: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-editor { margin-block-start: 10px; padding-block-start: 10px; border-block-start: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-editor-title { margin-block-end: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 500; }
+  #gh-builder-samples details { min-inline-size: 0; }
+  #gh-builder-samples summary { list-style: none; justify-content: space-between; }
+  #gh-builder-samples summary::-webkit-details-marker { display: none; }
+  #gh-builder-samples summary::after { content: "+"; margin-inline-start: 8px; color: var(--sb-brand); }
+  #gh-builder-samples details[open] > summary::after { content: "−"; }
+  #gh-builder-samples .sb-disclosure { margin-block-start: 10px; }
+  #gh-builder-samples .sb-disclosure > summary { inline-size: 100%; background: var(--sb-soft); }
+  #gh-builder-samples .sb-disclosure-content { padding-block-start: 10px; }
+  #gh-builder-samples .sb-tabs { display: flex; flex-wrap: wrap; gap: 3px; border-block-end: 1px solid var(--sb-line); padding-block-end: 7px; margin-block-end: 10px; }
+  #gh-builder-samples .sb-tab { flex: 1 1 auto; padding-inline: 7px; }
+  #gh-builder-samples .sb-summary { color: var(--sb-muted); font-size: 11px; margin-block-start: 9px; }
+  #gh-builder-samples .sb-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--sb-line); border: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-cell { border: 0; background: var(--sb-surface); padding: 9px; min-block-size: 58px; text-align: start; min-inline-size: 0; }
+  #gh-builder-samples .sb-cell span { display: block; color: var(--sb-muted); font-size: 11px; }
+  #gh-builder-samples .sb-cell strong { display: block; font-weight: 500; font-size: 12px; overflow-wrap: anywhere; }
+  #gh-builder-samples .sb-cell strong span { color: inherit; font: inherit; }
+  #gh-builder-samples .sb-cell[aria-pressed="true"] { background: var(--sb-tint); }
+  #gh-builder-samples .sb-ledger { inline-size: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+  #gh-builder-samples .sb-ledger th { font-size: 11px; font-weight: 400; color: var(--sb-muted); text-align: start; padding: 0 5px 6px; }
+  #gh-builder-samples .sb-ledger td { padding: 5px; border-block-start: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-ledger th:first-child { inline-size: 40%; }
+  #gh-builder-samples .sb-ledger input { inline-size: 100%; }
+  #gh-builder-samples .sb-accordion > details { border-block-end: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-accordion summary { border: 0; inline-size: 100%; padding: 8px 0; min-block-size: 44px; }
+  #gh-builder-samples .sb-accordion summary span { display: grid; gap: 2px; min-inline-size: 0; }
+  #gh-builder-samples .sb-accordion summary small { color: var(--sb-muted); font-size: 11px; font-weight: 400; }
+  #gh-builder-samples .sb-accordion .sb-disclosure-content { padding-block: 3px 12px; }
+  #gh-builder-samples .sb-sentence { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 14px; }
+  #gh-builder-samples .sb-sentence .sb-count { inline-size: 65px; }
+  #gh-builder-samples .sb-sentence-range { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  #gh-builder-samples .sb-sentence-range .sb-bounds { inline-size: 180px; }
+  #gh-builder-samples .sb-sentence-line { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding-block: 8px; border-block-end: 1px solid var(--sb-line); }
+  #gh-builder-samples .sb-sentence-line > span { min-inline-size: 130px; color: var(--sb-muted); font-size: 12px; }
+  #gh-builder-samples .sb-side-editor { display: grid; grid-template-columns: 138px minmax(0, 1fr); gap: 12px; margin-block-start: 12px; border-block-start: 1px solid var(--sb-line); padding-block-start: 12px; }
+  #gh-builder-samples .sb-side-editor .sb-tabs { display: grid; align-content: start; border: 0; border-inline-end: 1px solid var(--sb-line); padding: 0 10px 0 0; margin: 0; }
+  #gh-builder-samples .sb-side-editor .sb-tab { justify-content: flex-start; }
+  #gh-builder-samples .sb-side-editor .sb-dates, #gh-builder-samples .sb-side-editor .sb-market-list { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-side-editor .sb-essentials { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-quiet-title { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 14px; }
+  #gh-builder-samples .sb-scope { display: flex; flex-wrap: wrap; gap: 5px 14px; padding-block: 8px; color: var(--sb-muted); font-size: 12px; }
+  #gh-builder-samples .sb-result { margin-block-start: 18px; border-block: 1px solid var(--sb-line); background: var(--sb-surface); }
+  #gh-builder-samples .sb-result-header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--sb-soft); padding: 8px; font-size: 12px; }
+  #gh-builder-samples .sb-result-body { padding: 12px 8px; color: var(--sb-muted); font-size: 12px; }
+  #gh-builder-samples .sb-feedback { margin: 8px 0 0; font-size: 12px; color: var(--sb-brand); overflow-wrap: anywhere; }
+  #gh-builder-samples .sb-feedback[data-error="true"] { color: var(--sb-error); }
+  #gh-builder-samples .sb-phone .sb-main { padding: 11px; }
+  #gh-builder-samples .sb-phone .sb-chrome { padding-inline: 11px; }
+  #gh-builder-samples .sb-phone .sb-nav { gap: 8px; }
+  #gh-builder-samples .sb-phone .sb-nav > span { display: none; }
+  #gh-builder-samples .sb-phone .sb-essentials { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  #gh-builder-samples .sb-phone .sb-essentials > .sb-field { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; }
+  #gh-builder-samples .sb-phone .sb-essentials > .sb-field > span { font-size: 12px; margin: 0; }
+  #gh-builder-samples .sb-phone .sb-essentials > .sb-field input { inline-size: 78px; margin-inline-start: auto; }
+  #gh-builder-samples .sb-phone .sb-refinements { gap: 5px; }
+  #gh-builder-samples .sb-phone .sb-refinements > .sb-button { flex: 1 1 90px; }
+  #gh-builder-samples .sb-phone .sb-refinements .sb-actions { inline-size: 100%; margin-block-start: 3px; }
+  #gh-builder-samples .sb-phone .sb-actions .sb-primary { flex: 1; }
+  #gh-builder-samples .sb-phone .sb-actions { inline-size: 100%; }
+  #gh-builder-samples .sb-phone .sb-actions-row { gap: 7px; }
+  #gh-builder-samples .sb-phone .sb-dates, #gh-builder-samples .sb-phone .sb-market-list { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-phone .sb-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #gh-builder-samples .sb-phone .sb-two { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-phone .sb-side-editor { grid-template-columns: 104px minmax(0, 1fr); gap: 8px; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-tabs { padding-inline-end: 6px; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-tab { font-size: 11px; padding-inline: 5px; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-dates { grid-column: 1 / -1; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-date-line { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-market { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-tab-pane > .sb-two { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-essentials { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-essentials > .sb-field { display: block; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-essentials > .sb-field > span { margin-block-end: 4px; font-size: 11px; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-essentials > .sb-field input { inline-size: 100%; }
+  #gh-builder-samples .sb-phone .sb-sentence-line > span { min-inline-size: 100px; }
+  #gh-builder-samples .sb-phone .sb-sentence-range .sb-bounds { inline-size: 156px; }
+  #gh-builder-samples .sb-phone .sb-sentence { font-size: 13px; }
+  #gh-builder-samples .sb-phone input:not([type="checkbox"]), #gh-builder-samples .sb-phone select { font-size: 16px; block-size: 44px; }
+  #gh-builder-samples .sb-phone .sb-button, #gh-builder-samples .sb-phone summary { min-block-size: 44px; }
+  #gh-builder-samples .sb-phone .sb-check { min-block-size: 44px; }
+  #gh-builder-samples .sb-phone .sb-bound > span { padding-inline-start: 4px; font-size: 11px; }
+  #gh-builder-samples .sb-phone .sb-bound input { padding-inline: 3px; }
+  #gh-builder-samples .sb-phone .sb-bound { display: block; border: 0; }
+  #gh-builder-samples .sb-phone .sb-bound > span { padding: 0; display: block; margin-block-end: 3px; }
+  #gh-builder-samples .sb-phone .sb-bound input { border: 1px solid var(--sb-input); padding-inline: 4px; }
+  #gh-builder-samples .sb-phone .sb-tabs { gap: 3px; }
+  #gh-builder-samples .sb-phone .sb-tab { font-size: 11px; }
+  #gh-builder-samples .sb-phone .sb-ledger td, #gh-builder-samples .sb-phone .sb-ledger th { padding-inline: 3px; }
+  #gh-builder-samples .sb-phone .sb-market { grid-template-columns: minmax(0, 1fr) 105px; }
+  #gh-builder-samples .sb-phone .sb-side-editor .sb-market { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 890px) {
+    #gh-builder-samples .sb-pair { grid-template-columns: minmax(0, 1fr); }
+    #gh-builder-samples .sb-frame:last-child { inline-size: min(100%, var(--sb-phone-width)); justify-self: center; }
+    #gh-builder-samples .sb-stage { min-block-size: 1500px; }
+  }
+  @media (max-width: 560px) {
+    #gh-builder-samples .sb-desktop .sb-essentials { grid-template-columns: minmax(0, 1fr); }
+    #gh-builder-samples .sb-desktop .sb-dates, #gh-builder-samples .sb-desktop .sb-market-list { grid-template-columns: minmax(0, 1fr); }
+    #gh-builder-samples .sb-desktop .sb-two { grid-template-columns: minmax(0, 1fr); }
+    #gh-builder-samples .sb-desktop .sb-side-editor { grid-template-columns: minmax(0, 1fr); }
+    #gh-builder-samples .sb-desktop .sb-side-editor .sb-tabs { display: flex; border: 0; padding: 0; }
+    #gh-builder-samples .sb-main { padding: 10px; }
+    #gh-builder-samples .sb-stage { min-block-size: 1720px; }
+  }
+  @media (max-width: 380px) {
+    #gh-builder-samples .sb-phone .sb-essentials { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+<div id="gh-builder-samples">
+  <div class="viz-carousel viz-dotted-background" aria-label="Slip Builder filter designs">
+    <section class="sb-stage" data-variant="Compact toolbar" aria-label="Compact toolbar"></section>
+    <section class="sb-stage" data-variant="Visible field grid" aria-label="Visible field grid" hidden></section>
+    <section class="sb-stage" data-variant="Range ledger" aria-label="Range ledger" hidden></section>
+    <section class="sb-stage" data-variant="Editable summary cells" aria-label="Editable summary cells" hidden></section>
+    <section class="sb-stage" data-variant="Essentials plus expand" aria-label="Essentials plus expand" hidden></section>
+    <section class="sb-stage" data-variant="Grouped tabs" aria-label="Grouped tabs" hidden></section>
+    <section class="sb-stage" data-variant="Summary accordions" aria-label="Summary accordions" hidden></section>
+    <section class="sb-stage" data-variant="Inline builder sentence" aria-label="Inline builder sentence" hidden></section>
+    <section class="sb-stage" data-variant="Side-tab editor" aria-label="Side-tab editor" hidden></section>
+    <section class="sb-stage" data-variant="Quiet settings header" aria-label="Quiet settings header" hidden></section>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById("gh-builder-samples");
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Kampala", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+  const defaults = {
+    count: "5", totalMin: "0.01", totalMax: "", matchesMin: "1", matchesMax: "",
+    oddsMin: "0.01", oddsMax: "", probMin: "", probMax: "100",
+    dateFrom: today, dateTo: today, timeFrom: "00:00", timeTo: "23:59",
+    marketResult: true, marketDouble: true, marketGoals: true, marketBtts: true,
+    outcomeResult: "Automatic", outcomeDouble: "Automatic", outcomeGoals: "Automatic", outcomeBtts: "Automatic", reuse: false
+  };
+  const concepts = [
+    ["Compact toolbar", "Two quiet rows; closest to the Matches filters."],
+    ["Visible field grid", "All settings exposed in a compact, labeled grid."],
+    ["Range ledger", "Aligned minimum and maximum columns for easy scanning."],
+    ["Editable summary cells", "Tap any value group to edit it in place."],
+    ["Essentials plus expand", "Frequent settings first; refinements expand below."],
+    ["Grouped tabs", "A shared editing area for four small groups."],
+    ["Summary accordions", "Readable group summaries with inline expansion."],
+    ["Inline builder sentence", "Slips, matches and odds read as one instruction."],
+    ["Side-tab editor", "A compact vertical index beside the active group."],
+    ["Quiet settings header", "A short criteria summary with one complete editor."]
+  ];
+  const markets = [
+    ["Result", "Match result", ["Home", "Draw", "Away"]],
+    ["Double", "Double chance", ["1X", "X2", "12"]],
+    ["Goals", "Total goals 2.5", ["Over", "Under"]],
+    ["Btts", "Both teams score", ["Yes", "No"]]
+  ];
+  const settings = { access: "Subscriber", phoneWidth: 340 };
+  const states = concepts.map(() => ({ ...defaults }));
+  const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
+  const actionLabel = () => ({ "Signed out": "Sign in", "No subscription": "Subscribe", Subscriber: "Build slips" })[settings.access];
+  const input = (key, label, value, options = "") =>
+    '<input data-key="' + key + '" aria-label="' + escape(label) + '" value="' + escape(value) + '" ' + options + '>';
+  const number = (key, label, state, min = "0.01", step = "0.01", placeholder = "Any") =>
+    input(key, label, state[key], 'type="number" inputmode="' + (step === "1" ? "numeric" : "decimal") + '" min="' + min + '" step="' + step + '" placeholder="' + placeholder + '"' + (key.startsWith("prob") ? ' max="100"' : ""));
+  function count(state) {
+    return '<label class="sb-field"><span>Number of slips</span>' + number("count", "Number of slips", state, "1", "1", "5") + '</label>';
+  }
+  function bounds(prefix, label, state, min = "0.01", step = "0.01") {
+    return '<div class="sb-bounds"><label class="sb-bound"><span>Min</span>' +
+      number(prefix + "Min", label + " minimum", state, min, step, prefix === "prob" ? "Any" : min) +
+      '</label><label class="sb-bound"><span>Max</span>' +
+      number(prefix + "Max", label + " maximum", state, min, step) + '</label></div>';
+  }
+  function range(prefix, label, state, min, step) {
+    return '<fieldset class="sb-range"><legend>' + label + '</legend>' + bounds(prefix, label, state, min, step) + '</fieldset>';
+  }
+  function essentials(state) {
+    return '<div class="sb-essentials">' + count(state) +
+      range("total", "Total odds / slip", state, "0.01", "0.01") +
+      range("matches", "Matches / slip", state, "1", "1") + '</div>';
+  }
+  function limits(state) {
+    return '<div class="sb-two">' + range("odds", "Individual odds", state, "0.01", "0.01") +
+      range("prob", "Match probability %", state, "0", "0.01") + '</div>';
+  }
+  function dates(state) {
+    return '<fieldset class="sb-date-group"><legend>Match date &amp; time · EAT</legend><div class="sb-dates">' +
+      ["From", "To"].map((suffix) => '<div class="sb-field"><span>' + suffix + '</span><div class="sb-date-line">' +
+        input("date" + suffix, suffix + " date", state["date" + suffix], 'type="date" required') +
+        input("time" + suffix, suffix + " time EAT", state["time" + suffix], 'type="time" required') + '</div></div>').join("") +
+      '</div></fieldset>';
+  }
+  function marketFields(state) {
+    return '<fieldset class="sb-market-group"><legend>Markets &amp; results</legend><div class="sb-market-list">' +
+      markets.map(([key, name, options]) => '<div class="sb-market"><label class="sb-check"><input type="checkbox" data-key="market' + key +
+        '" ' + (state["market" + key] ? "checked" : "") + '><span>' + name + '</span></label>' +
+        '<details class="sb-market-picker"><summary class="cursor-interaction" aria-label="' + name + ' results"><span data-outcome-summary="' + key + '">' +
+        escape(state["outcome" + key]) + '</span></summary><div class="sb-market-options"><button type="button" class="sb-button cursor-interaction" data-auto="' + key + '"' +
+        (state["market" + key] ? "" : " disabled") + '>Automatic</button>' +
+        options.map((value) => '<label class="sb-check"><input type="checkbox" data-key="outcome' + key + '" data-choice="' + value + '"' +
+          (state["outcome" + key].split(", ").includes(value) ? " checked" : "") + (state["market" + key] ? "" : " disabled") + '>' + value + '</label>').join("") +
+        '</div></details></div>').join("") +
+      '</div><label class="sb-check sb-reuse"><input type="checkbox" data-key="reuse" ' + (state.reuse ? "checked" : "") + '>Reuse matches across slips</label></fieldset>';
+  }
+  function allFields(state) {
+    return '<div class="sb-stack">' + essentials(state) + limits(state) + dates(state) + marketFields(state) + '</div>';
+  }
+  function actions() {
+    return '<div class="sb-actions"><button type="button" class="sb-button sb-quiet cursor-interaction" data-action="reset">Reset</button>' +
+      '<button type="button" class="sb-button sb-primary cursor-interaction" data-action="build">' + actionLabel() + '</button></div>';
+  }
+  function footer(hint = "Blank max = Any · Blank min = lowest") {
+    return '<div class="sb-actions-row"><span class="sb-hint">' + hint + '</span>' + actions() + '</div>';
+  }
+  function trigger(group, text) {
+    return '<button type="button" class="sb-button cursor-interaction" data-edit="' + group + '" aria-expanded="false">' + text + ' <span aria-hidden="true">⌄</span></button>';
+  }
+  function refinements(withActions = true) {
+    return '<div class="sb-refinements">' + trigger("limits", "Odds &amp; probability") + trigger("dates", "Date &amp; time") +
+      trigger("markets", "Markets · Auto") + (withActions ? actions() : "") + '</div><div class="sb-editor" data-editor hidden></div>';
+  }
+  function disclose(label, content, open = false) {
+    return '<details class="sb-disclosure"' + (open ? " open" : "") + '><summary class="cursor-interaction">' + label +
+      '</summary><div class="sb-disclosure-content">' + content + '</div></details>';
+  }
+  function summaries(state) {
+    const bounded = (prefix, minimum, suffix = "") => (state[prefix + "Min"] || minimum) + "–" + (state[prefix + "Max"] || "Any") + suffix;
+    const selected = markets.filter(([key]) => state["market" + key]).length;
+    const auto = markets.every(([key]) => !state["market" + key] || state["outcome" + key] === "Automatic");
+    const date = state.dateFrom === today && state.dateTo === today ? "Today" :
+      state.dateFrom === state.dateTo ? state.dateFrom : state.dateFrom + " → " + state.dateTo;
+    return {
+      setup: (state.count || "5") + " slips · " + bounded("total", "0.01") + " total odds · " + bounded("matches", "1") + " matches",
+      count: (state.count || "5") + " slips",
+      total: bounded("total", "0.01"),
+      matches: bounded("matches", "1"),
+      limits: "Odds " + bounded("odds", "0.01") + " · Probability " + bounded("prob", "Any", "%"),
+      dates: date + " · " + state.timeFrom + "–" + state.timeTo,
+      markets: selected + " markets · " + (auto ? "Auto" : "Custom") + (state.reuse ? " · Reuse on" : ""),
+      all: (state.count || "5") + " slips · " + date + " · " + selected + " markets · " + (auto ? "Auto" : "Custom")
+    };
+  }
+  function summary(key, state) {
+    return '<span data-summary="' + key + '">' + escape(summaries(state)[key]) + '</span>';
+  }
+  function tabs(state, vertical = false) {
+    const groups = [["setup", "Slip setup"], ["limits", "Odds & probability"], ["dates", "Date & time"], ["markets", "Markets"]];
+    return (vertical ? '<div class="sb-side-editor">' : '<div>') +
+      '<div class="sb-tabs" role="group" aria-label="Settings groups">' +
+      groups.map(([key, name], index) => '<button type="button" class="sb-button sb-tab cursor-interaction" data-tab="' + key +
+        '" aria-pressed="' + (index === 0) + '">' + name + '</button>').join("") +
+      '</div>' + groups.map(([key], index) => '<div class="sb-tab-pane" data-pane="' + key + '"' + (index ? " hidden" : "") + '>' +
+        ({ setup: essentials, limits, dates, markets: marketFields })[key](state) + '</div>').join("") + '</div>';
+  }
+  function layout(index, state) {
+    if (index === 0) return essentials(state) + refinements() + '<div class="sb-summary">' + summary("dates", state) + ' · ' + summary("markets", state) + '</div>';
+    if (index === 1) return '<div class="sb-stack">' + essentials(state) + limits(state) + dates(state) + marketFields(state) + '</div>' + footer();
+    if (index === 2) return '<div class="sb-row">' + count(state) + '</div><table class="sb-ledger"><thead><tr><th scope="col">Setting</th><th scope="col">Minimum</th><th scope="col">Maximum</th></tr></thead><tbody>' +
+      [["total", "Total odds / slip", "0.01", "0.01"], ["matches", "Matches / slip", "1", "1"], ["odds", "Individual odds", "0.01", "0.01"], ["prob", "Probability %", "0", "0.01"]].map(([key, label, min, step]) =>
+        '<tr><td>' + label + '</td><td>' + number(key + "Min", label + " minimum", state, min, step, key === "prob" ? "Any" : min) + '</td><td>' +
+        number(key + "Max", label + " maximum", state, min, step) + '</td></tr>').join("") + '</tbody></table>' +
+      disclose("Match date & time · EAT · " + summary("dates", state), dates(state)) +
+      disclose("Markets & results · " + summary("markets", state), marketFields(state)) + footer();
+    if (index === 3) return '<div class="sb-cells">' +
+      [["count", "Number of slips", "count"], ["total", "Total odds / slip", "total"], ["matches", "Matches / slip", "matches"], ["limits", "Odds & probability", "limits"], ["dates", "Date & time · EAT", "dates"], ["markets", "Markets & results", "markets"]].map(([key, label, group]) =>
+        '<button type="button" class="sb-cell cursor-interaction" data-edit="' + group + '" aria-expanded="false"><span>' + label + '</span><strong>' +
+        summary(key, state) + '</strong></button>').join("") + '</div><div class="sb-editor" data-editor hidden></div>' + footer();
+    if (index === 4) return essentials(state) + disclose("Odds, probability, dates & markets", '<div class="sb-stack">' + limits(state) + dates(state) + marketFields(state) + '</div>') +
+      '<div class="sb-summary">' + summary("dates", state) + ' · ' + summary("markets", state) + '</div>' + footer();
+    if (index === 5) return tabs(state) + '<div class="sb-summary">' + summary("all", state) + '</div>' + footer();
+    if (index === 6) return '<div class="sb-accordion">' + [
+      ["Slip setup", "setup", essentials(state), true], ["Odds & probability", "limits", limits(state), false],
+      ["Match date & time · EAT", "dates", dates(state), false], ["Markets & results", "markets", marketFields(state), false]
+    ].map(([name, key, content, open]) => '<details' + (open ? " open" : "") + '><summary class="cursor-interaction"><span>' + name + '<small>' +
+      summary(key, state) + '</small></span></summary><div class="sb-disclosure-content">' + content + '</div></details>').join("") + '</div>' + footer();
+    if (index === 7) return '<div class="sb-sentence">Build <span class="sb-count">' + number("count", "Number of slips", state, "1", "1", "5") +
+      '</span> slips</div><div class="sb-sentence-line"><span>With matches per slip</span><div class="sb-sentence-range">' +
+      bounds("matches", "Matches per slip", state, "1", "1") + '</div></div><div class="sb-sentence-line"><span>And total odds per slip</span><div class="sb-sentence-range">' +
+      bounds("total", "Total odds per slip", state, "0.01", "0.01") + '</div></div>' + refinements(false) + footer();
+    if (index === 8) return '<div class="sb-quiet-title">' + summary("all", state) + '</div>' + tabs(state, true) + footer();
+    return '<div class="sb-quiet-title">' + summary("count", state) + '<span class="sb-hint">·</span>' + summary("dates", state) +
+      '</div><div class="sb-scope"><span>Total odds ' + summary("total", state) + '</span><span>Matches ' + summary("matches", state) + '</span><span>' +
+      summary("markets", state) + '</span></div>' + disclose("Edit all settings", allFields(state)) + footer();
+  }
+  function product(index, phone) {
+    const state = states[index];
+    return '<div class="sb-frame"><div class="sb-device"><span>' + (phone ? 'Mobile · <span data-phone-size>340</span> px' : "Desktop") +
+      '</span><span data-height></span></div><div class="sb-product ' + (phone ? "sb-phone" : "sb-desktop") + '" data-concept="' + index + '" data-device="' + (phone ? "mobile" : "desktop") + '">' +
+      '<header class="sb-chrome"><div class="sb-wordmark">Goal<span>Hint</span></div><div class="sb-nav"><span>Matches</span><b>Slip Builder</b></div></header>' +
+      '<div class="sb-main"><h3 class="sb-page-title">Slip Builder</h3><section class="sb-panel" aria-label="Slip Builder settings">' + layout(index, state) +
+      '<p class="sb-feedback" aria-live="polite" hidden></p></section>' +
+      '<div class="sb-result"><div class="sb-result-header"><span>Generated slips</span><span>Preview</span></div><div class="sb-result-body">Your slips appear here after building.</div></div></div></div></div>';
+  }
+  const stages = [...root.querySelectorAll("[data-variant]")];
+  stages.forEach((stage, index) => {
+    stage.innerHTML = '<div class="sb-caption"><h2>' + String(index + 1).padStart(2, "0") + ' · ' + concepts[index][0] +
+      '</h2><p>' + concepts[index][1] + '</p></div><div class="sb-pair">' + product(index, false) + product(index, true) + '</div>';
+    stage.querySelectorAll("[data-concept]").forEach((product) => {
+      const editor = product.querySelector("[data-editor]");
+      if (!editor) return;
+      editor.id = "sb-editor-" + index + "-" + product.dataset.device;
+      product.querySelectorAll("[data-edit]").forEach((button) => { button.setAttribute("aria-controls", editor.id); });
+    });
+  });
+  function save() {
+    if (window.openai && window.openai.setWidgetState) {
+      window.openai.setWidgetState({
+        modelContent: { preview: "Slip Builder filters", access: settings.access },
+        privateContent: { access: settings.access, phoneWidth: settings.phoneWidth }
+      }).catch(() => {});
+    }
+  }
+  function measure() {
+    root.querySelectorAll(".sb-product").forEach((product) => {
+      if (product.getBoundingClientRect().width) product.closest(".sb-frame").querySelector("[data-height]").textContent =
+        Math.round(product.querySelector(".sb-panel").getBoundingClientRect().height) + " px settings";
+    });
+  }
+  function appearance() {
+    root.style.setProperty("--sb-phone-width", settings.phoneWidth + "px");
+    root.querySelectorAll("[data-phone-size]").forEach((element) => { element.textContent = settings.phoneWidth; });
+    root.querySelectorAll('[data-action="build"]').forEach((button) => { button.textContent = actionLabel(); });
+    requestAnimationFrame(measure);
+  }
+  function restore(saved) {
+    const value = saved && saved.privateContent;
+    if (!value) return;
+    if (["Signed out", "No subscription", "Subscriber"].includes(value.access)) settings.access = value.access;
+    if (Number.isFinite(value.phoneWidth) && value.phoneWidth >= 320 && value.phoneWidth <= 430) settings.phoneWidth = value.phoneWidth;
+    appearance();
+  }
+  restore(window.openai && window.openai.widgetState);
+  window.addEventListener("openai:set_globals", (event) => restore(event.detail && event.detail.globals && event.detail.globals.widgetState));
+  function refresh(index) {
+    const state = states[index];
+    const values = summaries(state);
+    root.querySelectorAll('[data-concept="' + index + '"]').forEach((product) => {
+      product.querySelectorAll("[data-key]").forEach((field) => {
+        if (field.dataset.choice) field.checked = state[field.dataset.key].split(", ").includes(field.dataset.choice);
+        else if (field.type === "checkbox") field.checked = state[field.dataset.key];
+        else if (field !== document.activeElement) field.value = state[field.dataset.key];
+        if (field.dataset.key.startsWith("outcome")) field.disabled = !state["market" + field.dataset.key.slice(7)];
+      });
+      product.querySelectorAll("[data-summary]").forEach((element) => { element.textContent = values[element.dataset.summary]; });
+      product.querySelectorAll("[data-outcome-summary]").forEach((element) => { element.textContent = state["outcome" + element.dataset.outcomeSummary]; });
+      product.querySelectorAll("[data-auto]").forEach((button) => { button.disabled = !state["market" + button.dataset.auto]; });
+      const marketTrigger = product.querySelector('[data-edit="markets"].sb-button');
+      if (marketTrigger) marketTrigger.firstChild.textContent = "Markets · " + (values.markets.includes("Custom") ? "Custom " : "Auto ");
+    });
+    requestAnimationFrame(measure);
+  }
+  root.addEventListener("input", (event) => {
+    const field = event.target.closest("[data-key]");
+    if (!field) return;
+    const index = Number(field.closest("[data-concept]").dataset.concept);
+    if (field.dataset.choice) {
+      const existing = states[index][field.dataset.key].split(", ").filter((value) => value !== "Automatic" && value !== field.dataset.choice);
+      if (field.checked) existing.push(field.dataset.choice);
+      states[index][field.dataset.key] = existing.length ? existing.join(", ") : "Automatic";
+    } else {
+      states[index][field.dataset.key] = field.type === "checkbox" ? field.checked : field.value;
+    }
+    refresh(index);
+  });
+  root.addEventListener("change", (event) => {
+    if (event.target.matches("select[data-key]")) event.target.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  function feedback(product, message, error = false) {
+    const element = product.querySelector(".sb-feedback");
+    element.textContent = message; element.hidden = false; element.dataset.error = error;
+  }
+  function validate(product, state) {
+    for (const field of product.querySelectorAll("input[data-key]")) {
+      if (!field.checkValidity()) return field.validationMessage;
+    }
+    if (!state.count || !Number.isInteger(Number(state.count)) || Number(state.count) < 1) return "Enter a whole number of slips, at least 1.";
+    for (const [prefix, floor, label] of [["total", .01, "Total odds"], ["matches", 1, "Matches"], ["odds", .01, "Individual odds"], ["prob", 0, "Probability"]]) {
+      const lower = state[prefix + "Min"] === "" ? floor : Number(state[prefix + "Min"]);
+      const upper = state[prefix + "Max"] === "" ? Infinity : Number(state[prefix + "Max"]);
+      if (lower < floor || upper < floor || lower > upper) return label + ": minimum must not exceed maximum.";
+      if (prefix === "prob" && (lower > 100 || (upper !== Infinity && upper > 100))) return "Probability must be between 0 and 100%.";
+      if (prefix === "matches" && (!Number.isInteger(lower) || (upper !== Infinity && !Number.isInteger(upper)))) return "Matches must use whole numbers, at least 1.";
+    }
+    if (!state.dateFrom || !state.dateTo || !state.timeFrom || !state.timeTo) return "Choose both dates and both times.";
+    if (state.dateFrom > state.dateTo || state.timeFrom > state.timeTo) return "From values must not exceed To values.";
+    if (!markets.some(([key]) => state["market" + key])) return "Keep at least one market selected.";
+    return "";
+  }
+  root.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const product = button.closest("[data-concept]");
+    if (!product) return;
+    const index = Number(product.dataset.concept);
+    const state = states[index];
+    if (button.dataset.auto) {
+      state["outcome" + button.dataset.auto] = "Automatic";
+      refresh(index);
+    }
+    if (button.dataset.edit) {
+      const editor = product.querySelector("[data-editor]");
+      const closing = editor.dataset.group === button.dataset.edit && !editor.hidden;
+      product.querySelectorAll("[data-edit]").forEach((trigger) => {
+        const active = trigger === button && !closing;
+        trigger.setAttribute("aria-expanded", String(active));
+        if (trigger.classList.contains("sb-cell")) trigger.setAttribute("aria-pressed", String(active));
+      });
+      editor.hidden = closing;
+      if (!closing) {
+        const key = button.dataset.edit;
+        const content = {
+          setup: () => essentials(state), count: () => count(state),
+          total: () => range("total", "Total odds / slip", state, "0.01", "0.01"),
+          matches: () => range("matches", "Matches / slip", state, "1", "1"),
+          limits: () => limits(state), dates: () => dates(state), markets: () => marketFields(state)
+        }[key]();
+        editor.dataset.group = key;
+        editor.innerHTML = '<div class="sb-editor-title"><span>' +
+          ({ count: "Number of slips", total: "Total odds / slip", matches: "Matches / slip", limits: "Odds & probability", dates: "Match date & time · EAT", markets: "Markets & results" })[key] +
+          '</span><button type="button" class="sb-button sb-quiet cursor-interaction" data-action="close">Done</button></div>' + content;
+        const field = editor.querySelector("input:not(:disabled), select:not(:disabled)");
+        if (field) field.focus();
+      }
+    }
+    if (button.dataset.tab) {
+      const parent = button.closest(".sb-side-editor") || button.closest(".sb-tabs").parentElement;
+      parent.querySelectorAll("[data-tab]").forEach((tab) => { tab.setAttribute("aria-pressed", String(tab === button)); });
+      parent.querySelectorAll("[data-pane]").forEach((pane) => { pane.hidden = pane.dataset.pane !== button.dataset.tab; });
+    }
+    if (button.dataset.action === "close") {
+      const editor = button.closest("[data-editor]");
+      const trigger = product.querySelector('[data-edit="' + editor.dataset.group + '"]');
+      editor.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      if (trigger.hasAttribute("aria-pressed")) trigger.setAttribute("aria-pressed", "false");
+      trigger.focus();
+    }
+    if (button.dataset.action === "reset") {
+      states[index] = { ...defaults };
+      refresh(index);
+      root.querySelectorAll('[data-concept="' + index + '"] .sb-feedback').forEach((element) => { element.hidden = true; });
+    }
+    if (button.dataset.action === "build") {
+      if (settings.access !== "Subscriber") {
+        feedback(product, settings.access === "Signed out" ? "Preview: opens Sign in, with access to Sign up." : "Preview: opens subscription options.");
+      } else {
+        const error = validate(product, state);
+        feedback(product, error || "Preview: ready to build " + state.count + " slips with these settings.", Boolean(error));
+      }
+    }
+    requestAnimationFrame(measure);
+  });
+  root.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const product = event.target.closest("[data-concept]");
+    const editor = product && product.querySelector("[data-editor]:not([hidden])");
+    if (editor) editor.querySelector('[data-action="close"]').click();
+  });
+  root.addEventListener("toggle", () => requestAnimationFrame(measure), true);
+  new ResizeObserver(measure).observe(root);
+  new MutationObserver(() => requestAnimationFrame(measure)).observe(root.querySelector(".viz-carousel"), { attributes: true, attributeFilter: ["hidden"], subtree: true });
+  appearance();
+  if (globalThis.Tweak) {
+    const tweak = new Tweak({ container: root, onChange: () => { appearance(); save(); } });
+    tweak.addSelect(settings, "access", { label: "Account state", options: ["Subscriber", "Signed out", "No subscription"] });
+    tweak.addSlider(settings, "phoneWidth", { label: "Mobile width", min: 320, max: 430, step: 10, unit: "px" });
+  }
+})();
+</script>
