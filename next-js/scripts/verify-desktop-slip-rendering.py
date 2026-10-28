@@ -127,7 +127,7 @@ def verify_states(document):
 
 
 def verify(origin, directory):
-    scenarios = ["desktop", "saved", "states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder"]
+    scenarios = ["desktop", "saved", "states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder", "best-auto", "builder-auto"]
     for scenario in scenarios:
         response = request(origin, f"/{scenario}")
         assert response.status == 200, f"{scenario}: HTTP 200"
@@ -151,8 +151,12 @@ def verify(origin, directory):
             assert action.text.strip() == expected, f"{scenario}: correct access action"
         else:
             assert not document.nodes(attr="data-desktop-row"), "Responsive SSR retains the existing mobile fallback"
-            count = 3 if scenario == "responsive" else 10
+            count = 3 if scenario == "responsive" else 6 if scenario.endswith("-auto") else 10
             assert len(document.nodes("li", "data-slip-selection")) == count, "Responsive SSR sends one original selection set per slip"
+            if scenario.endswith("-auto"):
+                assert "00000000-0000-4000-8000-00000000a001" in response.text, "Automatic fixture retains valid original UUID identities"
+                cards = document.nodes(attr="data-compact-slip")
+                assert len(cards) == 2 and all(card.attrs["data-compact-slip"] == "clean-ledger" for card in cards), "Automatic fixture retains unchanged mobile SSR slips"
         print(f"PASS desktop slip SSR: {scenario}", flush=True)
 
 
@@ -169,7 +173,7 @@ def main():
     with Server(directory) as server:
         verify(server.origin, directory)
         print(f"Fixture artifacts: {directory}", flush=True)
-        print(f"Browser routes: {server.origin}/desktop, /saved, /states, /locked, /locked-member, /responsive, /best-locked, /best-locked-member, /best-full, /builder", flush=True)
+        print(f"Browser routes: {server.origin}/desktop, /saved, /states, /locked, /locked-member, /responsive, /best-locked, /best-locked-member, /best-full, /builder, /best-auto, /builder-auto", flush=True)
         if args.serve:
             server.serve()
 

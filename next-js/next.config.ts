@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "same-origin" },
     ];
     const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*",
-      "/en/account", "/en/subscribe", "/api/account/:path*"];
+      "/en/account", "/en/subscribe", "/api/account/:path*", "/api/slips/:path*"];
     const publicCache = [["/flags/:file*", "public, max-age=2592000, stale-while-revalidate=86400"],
       ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"]] as const;
     // The global rule stays first and the private rules last: when a key repeats, the last matching rule wins.

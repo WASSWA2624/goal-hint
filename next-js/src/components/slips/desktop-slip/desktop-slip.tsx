@@ -7,6 +7,7 @@ import type { SlipMatchState } from "@/domain/slip-match-state";
 import { CompactSlipDisclosure } from "../compact-slip/compact-slip";
 import { DesktopSlipRow } from "./desktop-slip-row";
 import { DesktopSlipLayout } from "./desktop-slip-styles";
+import { useRefreshedSlipMatchStates } from "../slip-match-refresh";
 
 export type DesktopSlipDisclosureProps = {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
@@ -25,12 +26,13 @@ export function DesktopSlip({ slip, index, locale, results, matchStates, initial
   slip: BuiltSlip; index: number; locale: string; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
 }) {
   const headingId = useId();
+  const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
   return <DesktopSlipDisclosure index={index} locale={locale} initiallyOpen={initiallyOpen} headingId={headingId}
     totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length} slipId={slip.id}>
     <ul aria-labelledby={headingId}>{slip.selections.map((selection) => {
       const result = results?.find((item) => item.fixtureId === selection.fixtureId);
       return <DesktopSlipRow key={selection.fixtureId} selection={selection} locale={locale} analysisLinks {...(result ? { result } : {})}
-        {...(matchStates ? { matchStates } : {})} />;
+        {...(currentStates ? { matchStates: currentStates } : {})} />;
     })}</ul>
   </DesktopSlipDisclosure>;
 }

@@ -3,6 +3,7 @@ import "server-only";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
+import type { SlipMatchWatch } from "../../domain/slip-match-refresh.ts";
 import { savedSlipCompletedStatuses, type SavedSlipResult } from "../../domain/saved-slips.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -23,7 +24,7 @@ const fixtureSelect = { id: true, status: true, activeCycleId: true, kickoff: tr
   lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } } as const;
 type Fixture = Prisma.FootballFixtureGetPayload<{ select: typeof fixtureSelect }>;
 
-export function slipRevisionMatches(selection: SlipSelection, revision: StoredRevision | null): revision is StoredRevision {
+export function slipRevisionMatches(selection: SlipMatchWatch, revision: StoredRevision | null): revision is StoredRevision {
   const reference = selection.forecast, market = revision?.candidate.markets[selection.family];
   return revision !== null && revision.fixtureId === selection.fixtureId && market?.available === true &&
     (market.market.probabilities as Readonly<Record<string, number>>)[selection.selection] === selection.probability &&
@@ -53,14 +54,14 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
   return { ...slip, selections };
 }
 
-const emptyResult = (selection: SlipSelection): SavedSlipResult => ({ fixtureId: selection.fixtureId,
+const emptyResult = (selection: SlipMatchWatch): SavedSlipResult => ({ fixtureId: selection.fixtureId,
   family: selection.family, selection: selection.selection,
   ...(selection.forecast ? { forecast: selection.forecast } : {}), completed: false, status: "unknown",
   regulationVerified: false, regulationHome: null, regulationAway: null });
 
 type HistoricalResult = Readonly<{ result: StoredFixtureResult | null; terminalVoid: boolean; completed?: boolean }>;
 /** Pure projection of already validated, sealed records. The saved choice never changes to the cutoff's later choice. */
-export function projectSlipForecastResult(selection: SlipSelection, input: Readonly<{
+export function projectSlipForecastResult(selection: SlipMatchWatch, input: Readonly<{
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number;
 }>): SavedSlipResult {
@@ -106,7 +107,7 @@ function resultProjection(base: SavedSlipResult, status: SavedSlipResult["status
 }
 
 /** Resolve only the original cycle's final evidence when a later cycle has become active. */
-async function historicalResult(tx: Tx, selection: SlipSelection, asOf: number): Promise<HistoricalResult | null> {
+async function historicalResult(tx: Tx, selection: SlipMatchWatch, asOf: number): Promise<HistoricalResult | null> {
   const reference = selection.forecast;
   if (!reference) return null;
   const row = await tx.marketSettlementRevision.findFirst({ where: { fixtureId: selection.fixtureId, cycleId: reference.cycleId,
@@ -190,7 +191,7 @@ async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionId
 }
 
 /** Batch current result reads; per-original-cycle caches prevent one query per repeated slip leg. */
-export async function readSlipForecastResults(tx: Tx, selections: readonly SlipSelection[], asOf: number): Promise<readonly SavedSlipResult[]> {
+export async function readSlipForecastResults(tx: Tx, selections: readonly SlipMatchWatch[], asOf: number): Promise<readonly SavedSlipResult[]> {
   utcInstantFromEpochMilliseconds(asOf);
   if (selections.length > slipForecastReadRules.maximumSelections) return historyFail("invalid-request");
   const fixtureIds = [...new Set(selections.map((selection) => selection.fixtureId))];

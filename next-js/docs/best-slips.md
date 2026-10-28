@@ -14,8 +14,10 @@ and selection outcome are sidecar observations matched to the original forecast,
 never replacements for snapshot names, picks, prices or probabilities. Only
 released entitled slips carry these observations. Missing evidence stays Unknown
 or Saved result; it does not invent elapsed minutes or a final score. The existing
-page refresh updates published observations while visible. Mobile slips retain
-their existing presentation and spacing.
+desktop match-details batch updates observations every 20 seconds while visible
+and online, without rebuilding the slips. Cohort/statistics refresh every 60
+seconds on watched desktop lists; mobile and aggregate-only page refresh remain
+at 20 seconds. Mobile slips retain their existing presentation and spacing.
 
 The daily Kampala cohort targets 4.50–5.50 combined odds and up to 100 distinct
 slips; source-owned `bestSlipsRules` configures the range/count. Daily slips do

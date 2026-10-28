@@ -1,4 +1,5 @@
 export const slipsMessages = {
+  "slips.generatedAt": "Slips generated at {time}",
   "slips.match.unknown": "Unknown",
   "slips.match.snapshot": "Saved result",
   "slips.result.won": "Won",

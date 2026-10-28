@@ -55,3 +55,19 @@ export const matchStates: readonly SlipMatchState[] = stateSelections.map((selec
   liveClock: index === 1 ? { phase: "first-half", minute: 30 } : index === 2 ? { phase: "half-time", minute: null } : null,
   outcome: index === 3 ? "correct" : index === 4 ? "incorrect" : "pending",
 }));
+
+/** UUID-bound original snapshots exercise the real desktop polling request contract. */
+export const autoSlip: BuiltSlip = {
+  ...desktopSlip, id: "desktop-auto-original", totalOdds: "8.00",
+  selections: selections.map((selection, index): SlipSelection => ({
+    ...selection, fixtureId: `00000000-0000-4000-8000-00000000a00${index + 1}`,
+    family: "match-result", selection: "home-win", odds: "2.00",
+    forecast: { cycleId: `00000000-0000-4000-8000-00000000b00${index + 1}`,
+      revisionId: `00000000-0000-4000-8000-00000000c00${index + 1}`, publishedAt: Date.parse("2026-10-28T08:00:00Z") },
+  })),
+};
+
+export const autoInitialStates: readonly SlipMatchState[] = autoSlip.selections.map((selection) => ({
+  fixtureId: selection.fixtureId, family: selection.family, selection: selection.selection,
+  forecast: selection.forecast!, status: "scheduled", score: null, liveClock: null, outcome: "pending",
+}));

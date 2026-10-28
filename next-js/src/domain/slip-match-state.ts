@@ -12,8 +12,9 @@ export type SlipMatchState = Readonly<{
   outcome: "correct" | "incorrect" | "pending" | "void";
 }>;
 export type SlipMatchProgress = Pick<SlipMatchState, "score" | "liveClock">;
+type SelectionIdentity = Pick<SlipSelection, "fixtureId" | "family" | "selection" | "forecast">;
 
-function matchesSelection(selection: SlipSelection, state: Pick<SlipMatchState, "fixtureId" | "family" | "selection" | "forecast">) {
+function matchesSelection(selection: SelectionIdentity, state: Pick<SlipMatchState, "fixtureId" | "family" | "selection" | "forecast">) {
   const original = selection.forecast, supplied = state.forecast;
   return state.fixtureId === selection.fixtureId && state.family === selection.family && state.selection === selection.selection
     && (original ? supplied?.cycleId === original.cycleId && supplied.revisionId === original.revisionId
@@ -21,7 +22,7 @@ function matchesSelection(selection: SlipSelection, state: Pick<SlipMatchState, 
 }
 
 /** A replacement cycle or another pick on the same fixture can never populate this row. */
-export function slipMatchStateForSelection(selection: SlipSelection, states: readonly SlipMatchState[] = []): SlipMatchState | undefined {
+export function slipMatchStateForSelection(selection: SelectionIdentity, states: readonly SlipMatchState[] = []): SlipMatchState | undefined {
   return states.find((state) => matchesSelection(selection, state));
 }
 
@@ -29,7 +30,7 @@ const validScore = (home: number | null | undefined, away: number | null | undef
   Number.isSafeInteger(home) && home! >= 0 && home! <= 1000 && Number.isSafeInteger(away) && away! >= 0 && away! <= 1000;
 
 /** Reuses original-cycle result adjudication; live scores never settle a selection early. */
-export function slipMatchStatesFromResults(selections: readonly SlipSelection[], results: readonly SavedSlipResult[]): readonly SlipMatchState[] {
+export function slipMatchStatesFromResults(selections: readonly SelectionIdentity[], results: readonly SavedSlipResult[]): readonly SlipMatchState[] {
   return selections.flatMap<SlipMatchState>((selection) => {
     const result = results.find((candidate) => candidate.family !== undefined && candidate.selection !== undefined
       && matchesSelection(selection, { ...candidate, family: candidate.family, selection: candidate.selection }));

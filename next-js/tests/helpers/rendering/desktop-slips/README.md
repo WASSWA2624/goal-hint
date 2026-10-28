@@ -22,6 +22,9 @@ Routes:
   set and desktop hydration switches to Aligned ledger at 64rem.
 - `/best-full` and `/builder`: actual BestSlips and SlipBuilder components,
   each with two slips and the same explicit observations for gap/alignment checks.
+- `/best-auto` and `/builder-auto`: actual screens with two unchanged slips
+  sharing three UUID/forecast-bound selections, initially scheduled. These routes
+  exercise the real desktop polling provider and handler against controlled facts.
 - `/locked` and `/locked-member`: aggregate-only native disclosures with the
   correct login or subscription action and no original selection identities.
 - `/best-locked` and `/best-locked-member`: the actual BestSlips locked-summary
@@ -42,3 +45,30 @@ markup. The midnight original displays 30-Oct at 00:00 EAT while retaining its
 After a successful build, rerun against that exact build with
 `--fixture .tmp/<printed-directory>`. Add `--serve` to keep it available for
 browser checks. Rebuild after source changes.
+
+## Automatic-update fixture controls
+
+This isolated app supplies `POST /api/slips/match-states` through the real
+production handler with injected entitlement and observation reads. It never
+calls an account service, provider or database. `GET /api/slips/fixture-control`
+returns request/read counts, deduplicated batch sizes and maximum concurrency.
+
+Send JSON to `POST /api/slips/fixture-control` to set the illustrative source:
+
+```json
+{"reset":true,"phase":"scheduled","mode":"ok"}
+```
+
+Available phases are `scheduled`, `live` (1-0, 30′), `halftime` (1-1, HT), and
+`finished` (2-1, FT/Won). Modes are `ok`, `unavailable` (503) and `forbidden`
+(403/expired entitlement). Optional `delayMs` (0–2000) makes request cancellation
+and overlap checks observable. The controls exist only in this acceptance app.
+Both auto pages gate their refreshed server result after forbidden mode is set.
+
+Use Playwright's browser clock to advance the normal 20-second cadence. Check
+that the actual match rows change without a form submission or a rebuilt slip;
+header, selection, odds, probability, open disclosure and edited builder controls
+remain intact. Two slips produce one request with three unique watches. At phone
+width, hide/offline, or pending navigation, no polling requests should continue;
+visibility/online restoration resumes promptly. Temporary failures keep the last
+coherent state. Forbidden replies withdraw private desktop rows and recheck access.

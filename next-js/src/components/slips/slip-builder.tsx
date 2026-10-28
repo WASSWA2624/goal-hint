@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
@@ -21,6 +21,8 @@ import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCrit
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
+import { SlipMatchRefreshProvider } from "./slip-match-refresh";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { Actions, BuildButton, BuilderHeader, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOptions, CriteriaTrigger, FieldGroup,
   Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
 
@@ -87,6 +89,8 @@ type Props = Readonly<{
 export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
+  const desktop = useDesktopLayout();
+  const recheckAccess = useCallback(() => { startTransition(() => router.refresh()); }, [router]);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const formRef = useRef<HTMLFormElement>(null), errorRef = useRef<HTMLParagraphElement>(null);
   const action = slipsHref(locale), errorId = `${prefix}-error`, formId = `${prefix}-form`;
@@ -229,6 +233,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
+  const accessRequired = <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
+    action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} />;
 
   return <SlipStack aria-busy={pending}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
@@ -329,13 +335,16 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     <Results data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
       {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
         requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
-      {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} /> : generated ? <>
+      {subscriberOnly ? accessRequired : generated ? <>
         <Note>{messages.text(data.jointProbabilities ? "slips.jointRanking" : "slips.ranking")}</Note>
+        <SlipMatchRefreshProvider slips={data.slips} enabled={desktop && !pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
+          {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList $phoneGap={9} data-slip-list>{data.slips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
           return <SlipTable key={slip.id} slip={slip} index={index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>
+        </SlipMatchRefreshProvider>
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={messages.text(emptyState ? `slips.state.${emptyState}.description` : "slips.idle")} />}
@@ -345,7 +354,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       {data && (data.excludedMissingOdds > 0 || data.excludedMissingForecast > 0) && <Note>{messages.text("slips.excluded", {
         odds: messages.number(data.excludedMissingOdds), forecasts: messages.number(data.excludedMissingForecast) })}</Note>}
       {data?.excludedUnestimated !== undefined && data.excludedUnestimated > 0 && <Note>{messages.plural("slips.unestimated", data.excludedUnestimated)}</Note>}
-      {result && <Note>{messages.text("slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
+      {result && <Note>{messages.text(desktop ? "slips.generatedAt" : "slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
       {!result && !publicPolicy.features.providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>
     </Results>

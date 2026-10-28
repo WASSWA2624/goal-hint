@@ -10,8 +10,10 @@ on one slim header row, initially collapsed. Its selections share one horizontal
 line with aligned score/VS and crest columns, fixed country/league/status widths,
 ellipsis/full-text tooltips and tiny logos/flags. Adjacent desktop slips have a
 3px gap. Supplied match progress and selection outcomes occupy the score and
-status cells; generated matches use the stored scheduled observation. The builder
-does not poll or rebuild a generated slip to follow live play. Phone screens
+status cells. Desktop match details refresh automatically every 20 seconds from
+stored original-cycle evidence, without regenerating the slip or changing form
+drafts, original picks, prices or probabilities. Updates pause while hidden,
+offline or navigating and resume immediately when available. Phone screens
 retain their independently selected compact layout and spacing.
 
 `/en/slips` uses the Balanced slip builder. Each slip keeps its total odds,
