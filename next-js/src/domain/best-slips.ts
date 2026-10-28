@@ -5,9 +5,13 @@ import type { ReportingDate } from "./calendar.ts";
 import type { SlipBuildState } from "./slip-page.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 
-export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 10 });
+export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
 
 export type BestSlip = BuiltSlip & Readonly<{ estimatedProbability: number }>;
+export function compareBestSlips(left: BestSlip, right: BestSlip): number {
+  return right.estimatedProbability - left.estimatedProbability || left.selections.length - right.selections.length
+    || Number(right.totalOdds) - Number(left.totalOdds) || left.id.localeCompare(right.id);
+}
 export type BestSlipSummary = Readonly<{ rank: number; totalOdds?: string; estimatedProbability?: number; matchCount: number }>;
 export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip }>;
 export type BestSlipsResult = Readonly<{
@@ -32,6 +36,6 @@ export function bestSlipBuilder(model: JointSlipModel) {
 
 /** Explicit allowlist: even internal slip IDs contain fixture/selection identifiers. */
 export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean): readonly BestSlipView[] {
-  return slips.map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
+  return [...slips].sort(compareBestSlips).map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
     ...(entitled ? { totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, slip } : {}) }));
 }

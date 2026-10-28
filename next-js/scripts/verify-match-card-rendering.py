@@ -63,8 +63,8 @@ def verify(origin, directory):
             assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
             no_match(r"Odds", re.search(r"<header\b[^>]*>([\s\S]*?)</header>", article).group(1))
             picks = re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article)
-            assert len(picks) == 1 and not re.fullmatch(r"[12Xx]+|Yes|No", picks[0]), "One full-word generic prediction per card"
-            no_match(r'>(?:1X2|DC|BTTS|O/U 2\.5)</span>', article)
+            assert len(picks) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", picks[0]), "One compact prediction outcome per card"
+            match(r'data-pick-selection=""[^>]*title="[^\"]+"', article)
         no_match(r"\(—\)", article)
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
@@ -86,7 +86,7 @@ def verify(origin, directory):
         match(r'<b data-mobile-only=""[^>]*>No prediction</b>', by_id[card])
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
-    match(r'data-pick-selection=""[^>]*>Home win</span>', by_id["card-correct"])
+    match(r'data-pick-selection=""[^>]*>1</span>', by_id["card-correct"])
     match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-card-odds[^>]*>1\.85</span>', by_id["card-correct"])
@@ -101,8 +101,8 @@ def verify(origin, directory):
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
     no_match(r"data-pick-odds=", by_id["card-incorrect"])
     match("Odds: Unavailable", by_id["card-incorrect"])
-    match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
-    match(r'data-pick-selection=""[^>]*>Not both teams to score</span>', by_id["card-limited"])
+    match(r'data-pick-selection=""[^>]*>U 2\.5</span>', by_id["card-long"])
+    match(r'data-pick-selection=""[^>]*>No</span>', by_id["card-limited"])
     match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*>Bosnia &amp; Herz\.</span>',
           by_id["card-long"])
     match(r'data-card-odds[^>]*>9999\.99</span>', by_id["card-long"])

@@ -6,20 +6,32 @@ previews show the rank and match count of available premium slips. Active
 selections, total odds and estimated joint probability require entitlement.
 Both the initial DTO and the final entitlement recheck use that allowlist.
 
-The daily Kampala cohort targets 4.50–5.50 combined odds and up to ten distinct
+The daily Kampala cohort targets 4.50–5.50 combined odds and up to 100 distinct
 slips; source-owned `bestSlipsRules` configures the range/count. Daily slips do
 not share fixtures. The bounded compatible-batch search maximizes the feasible
 slip count, then compares slip ranks. Individual ranking prioritizes calibrated
 joint probability, then fewer matches for equal estimates, then higher odds.
 The selection-count tie-break never overrides a higher estimated joint chance.
 Matches sort by individual probability. The editable custom builder retains its
-optional match-reuse control. Scarce cohorts produce fewer slips with a visible
-explanation. Existing candidate/search limits remain disclosed.
+optional match-reuse control. Scarce cohorts produce fewer valid slips. Coverage
+and search limits remain disclosed when reached.
 
 Entitled summaries show total odds, estimated whole-slip probability, arithmetic
 average match probability and selection count separately. Average match
 probability remains a description of the individual forecasts, not a joint
 probability estimate.
+
+Each daily slip initially shows only its summary. Clicking anywhere on the
+summary or pressing Enter/Space expands the matches; repeating the action
+collapses them. Locked previews use the same disclosure, with subscription
+links in the expanded content. Native expansion works before hydration.
+Custom builder results and completed-slip history retain their expanded layout.
+
+Match cards and prediction columns use shared compact outcome definitions:
+`1`/`X`/`2`, `1X`/`X2`/`12`, `O`/`U` with the actual line, and `Yes`/`No`
+for boolean markets. Full descriptions accompany the codes, and a touch-accessible
+Prediction key explains the core outcomes. Stored keys and settlement rules
+retain their original meanings.
 
 The stored-cohort reader and price freshness/rights gates are reused. A qualified
 server-side joint model must provide calibration and correlation evidence and a
@@ -42,10 +54,11 @@ Local test mode exposes sign-in, plans, automatic registration trials, payment r
 activation. Every fixture's predictions/odds remain gated; valid unlocked periods
 are honored until expiry. Nothing was deployed or activated on a production host.
 
-Daily Best Slips are still recomputed from the stored cohort. They are not yet
-automatically published as immutable dated slip snapshots. Custom saved slips
-retain their original selections, probabilities, prices and save timestamp;
-completing the daily publication archive is a separate checklist requirement.
+The private daily publisher stores immutable dated slip snapshots, and public
+visitors read the committed publication. An existing daily publication retains
+its original cohort and count; the higher capacity applies to newly generated
+publications. Custom saved slips retain their original selections, probabilities,
+prices and save timestamp. See `docs/daily-slip-publications.md`.
 
 `tests/best-slips.test.mjs` verifies diversification, scarcity, whole-slip ranking,
 model qualification and both access gates. `scripts/verify-paywall-rendering.py`

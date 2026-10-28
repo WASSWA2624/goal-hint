@@ -4,6 +4,7 @@ import styled from "styled-components";
 import type { ComponentPropsWithoutRef } from "react";
 import type { MarketFamily } from "@/domain/markets";
 import type { OutcomeTone } from "@/styles/theme";
+export { PredictionOutcome } from "./prediction-outcome";
 
 const OddsValue = styled.span`
   color: ${({ theme }) => theme.color.mutedText};

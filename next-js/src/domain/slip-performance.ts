@@ -1,3 +1,5 @@
+import { bestSlipsRules } from "./best-slips.ts";
+
 /** Descriptive publication outcomes, separate from forecast-quality claims and bookmaker payouts. */
 export type SlipPerformanceSample = Readonly<{
   id: string;
@@ -35,7 +37,7 @@ export function summarizeSlipPerformance(samples: readonly SlipPerformanceSample
   const ids = new Set<string>();
   for (const sample of samples) {
     if (!sample.id || ids.has(sample.id) || !Number.isSafeInteger(sample.publishedAt) ||
-      sample.rank !== undefined && (!Number.isInteger(sample.rank) || sample.rank < 1 || sample.rank > 10) ||
+      sample.rank !== undefined && (!Number.isInteger(sample.rank) || sample.rank < 1 || sample.rank > bestSlipsRules.count) ||
       !["won", "lost", "void", "pending"].includes(sample.outcome)) throw new RangeError("Invalid slip performance cohort.");
     ids.add(sample.id);
   }

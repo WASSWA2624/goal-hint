@@ -4,7 +4,8 @@ import { SubscriberPanel } from "@/components/members/subscriber-panel";
 
 import { memo } from "react";
 import styled from "styled-components";
-import { PredictionOdds } from "@/components/match/prediction-presentation";
+import { PredictionOdds, PredictionOutcome } from "@/components/match/prediction-presentation";
+import { predictionDescription } from "@/domain/prediction-label";
 import { noPickReason } from "@/domain/feed-presentation";
 import { detailRecordNotices } from "@/domain/detail-presentation";
 import { featuredFamily, liveStanding, marketRow, resultOutlook, selectedDetailPrice } from "@/domain/match-details";
@@ -98,7 +99,7 @@ function outlookText(messages: Messages, outlook: NonNullable<ReturnType<typeof 
   if (outlook.likeliest === "draw") parts.push(messages.text("details.drawLikeliest"));
   else if (outlook.likeliest) parts.push(messages.text("details.favourites", { team: team(outlook.likeliest) }));
   if (outlook.least) parts.push(messages.text("details.leastLikely", {
-    outcome: pickLabel(messages, outlook.least),
+    outcome: predictionDescription(messages, outlook.least),
   }));
   if (parts.length === 0) return null;
   const text = `${parts.join("; ")}.`;
@@ -135,7 +136,7 @@ export const Verdict = memo(function Verdict() {
     <PredictionRecord />
   </Box>;
   const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);
-  const pick = pickLabel(messages, item.market.selection), chance = percent(messages, item.market.selectedProbability);
+  const pick = predictionDescription(messages, item.market.selection), chance = percent(messages, item.market.selectedProbability);
   const settled = snapshot?.applicability === "historical" ? null : row.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
   const sentence = outlook ? outlookText(messages, outlook, home, away) : null;
   const sides = { "home-win": ["home", pickLabel(messages, "home-win")], draw: ["draw", pickLabel(messages, "draw")],
@@ -146,15 +147,15 @@ export const Verdict = memo(function Verdict() {
     <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))}
       aria-label={[messages.text("details.featuredOpen", { market: marketName(messages, featured), pick, probability: chance }),
         price ? `${messages.text("details.odds")}: ${price}` : null].filter(Boolean).join(". ")}>
-      <span data-pick><strong>{pick}</strong><small>{marketName(messages, featured)}<PredictionOdds odds={price} /></small></span>
+      <span data-pick><strong><PredictionOutcome messages={messages} selection={item.market.selection} /></strong><small>{marketName(messages, featured)}<PredictionOdds odds={price} /></small></span>
       <span data-chance><b>{chance}</b><small>{messages.text("details.chance")}</small></span>
     </Pick>
     {(sentence || standing || (settled && settled !== "pending")) && <Outlook>
       {sentence}{standing && <Standing standing={standing} />}{settled && settled !== "pending" && <DetailOutcome status={settled} />}
     </Outlook>}
     {outlook && <Chances role="img" aria-label={messages.text("details.resultChances", {
-      chances: outlook.chances.map(({ selection, probability }) => `${sides[selection][1]} ${percent(messages, probability)}`).join(", ") })}>
-      {outlook.chances.map(({ selection, probability }) => <span key={selection} data-side={sides[selection][0]} style={{ flex: `${Math.max(probability, 0.04)} 1 0` }}>
+      chances: outlook.chances.map(({ selection, probability }) => `${predictionDescription(messages, selection)} ${percent(messages, probability)}`).join(", ") })}>
+      {outlook.chances.map(({ selection, probability }) => <span key={selection} title={predictionDescription(messages, selection)} data-side={sides[selection][0]} style={{ flex: `${Math.max(probability, 0.04)} 1 0` }}>
         {probability >= 0.18 ? `${sides[selection][1]} ` : ""}{percent(messages, probability)}</span>)}
     </Chances>}
     <PredictionRecord />

@@ -93,14 +93,14 @@ terminal. Active picks, quotes and probabilities never enter the public archive
 response. Pending aggregate counts are allowed; pending/void quotes are excluded
 from return and average-odds statistics.
 
-History accepts at most 31 EAT publication dates and ten publications per day,
+History accepts at most 31 EAT publication dates and 100 slips per day,
 then paginates completed records. Statistics use the whole selected period,
 including pending counts, before slicing the page. A corrupt seal, inconsistent
 membership or incomplete publication produces unavailable, never a fabricated
 empty or winning history. See [public performance](public-performance-dashboard.md)
 for flat-stake illustration and streak conventions.
 
-Result resolution caps input at 2,480 selections. Larger cohorts prefetch sealed
+Result resolution caps input at 24,800 selections. Larger cohorts prefetch sealed
 cycles, schedules, revisions and markets in 100-identity batches and reuse the
 existing history validators. This avoids a separate database round trip for
 every market of every original slip leg.

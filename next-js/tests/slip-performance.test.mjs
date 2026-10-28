@@ -54,5 +54,6 @@ test("a simultaneous daily publication uses original slip rank before row identi
     { ...sample("b", "won", "2.00", 0), rank: 2 },
   ]);
   assert.equal(result.longestLosingStreak, 1); assert.equal(result.currentLosingStreak, 1);
-  assert.throws(() => summarizeSlipPerformance([{ ...sample("1", "won"), rank: 11 }]), RangeError);
+  assert.equal(summarizeSlipPerformance([{ ...sample("1", "won"), rank: 100 }]).won, 1);
+  assert.throws(() => summarizeSlipPerformance([{ ...sample("1", "won"), rank: 101 }]), RangeError);
 });

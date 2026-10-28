@@ -1,7 +1,8 @@
 import type { SavedSlipView } from "./saved-slips.ts";
 import type { SlipPerformanceSummary } from "./slip-performance.ts";
+import { bestSlipsRules } from "./best-slips.ts";
 
-export const publishedSlipRules = Object.freeze({ maximumDays: 31, maximumDailySlips: 10, maximumPageSize: 50, pageSize: 10 });
+export const publishedSlipRules = Object.freeze({ maximumDays: 31, maximumDailySlips: bestSlipsRules.count, maximumPageSize: 50, pageSize: 10 });
 export type PublishedSlipView = SavedSlipView & Readonly<{
   publicationDay: string; publishedAt: string; modelId: string; rank: number; estimatedProbability: number;
 }>;

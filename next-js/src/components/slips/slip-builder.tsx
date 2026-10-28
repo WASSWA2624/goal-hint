@@ -21,6 +21,7 @@ import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCrit
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
+import { PredictionDefinitions } from "@/components/match/prediction-definitions";
 import { Actions, BuildButton, BuilderHeader, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOptions, CriteriaTrigger, FieldGroup,
   Fields, HeadingRow, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipStack, TargetGroups } from "./slip-styles";
 
@@ -326,6 +327,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         </Actions>
       </CriteriaForm>
     </BuilderPanel>
+    <PredictionDefinitions locale={locale} />
     <Results data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-labelledby={`${prefix}-results`}>
       <HeadingRow><h2 id={`${prefix}-results`}>{messages.text("slips.generated")}</h2>
         {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),

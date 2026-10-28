@@ -15,7 +15,7 @@ import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
-import { predictionLabel } from "@/domain/prediction-label";
+import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
@@ -925,7 +925,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         </PickNumbers>}
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
-          {selection ? <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span></span> : <>
+          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span></span> : <>
             <b data-mobile-only="">{messages.text("match.noPick")}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{messages.text("match.noPick")}</span>
@@ -940,7 +940,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability>
-        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionLabel(messages, selection),
+        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
           {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {resultLabel}
         </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}

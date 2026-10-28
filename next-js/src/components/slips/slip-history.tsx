@@ -6,6 +6,7 @@ import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { createMessages } from "@/i18n/messages";
 import { EmptyState } from "@/components/ui/feedback";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
+import { PredictionDefinitions } from "@/components/match/prediction-definitions";
 import { HeadingRow, Note, Results, SlipStack } from "./slip-styles";
 import { SlipTable } from "./slip-table";
 
@@ -19,6 +20,7 @@ export function SlipHistory({ slips, locale, statistics, period }: {
       title={m.text("performance.summary.savedTitle")} />}
     <HeadingRow><h2 id="completed-slips">{m.text("slips.history")}</h2></HeadingRow>
     <Note>{m.text("slips.historyHint")}</Note>
+    {Boolean(slips?.length) && <PredictionDefinitions locale={locale} />}
     {slips?.length ? <SlipStack>{slips.map((item, index) => <div key={item.id}>
       <HeadingRow><strong>{m.text(`slips.outcome.${item.outcome}`)}</strong><time dateTime={item.savedAt}>{m.reportingInstant(utcInstantFromEpochMilliseconds(Date.parse(item.savedAt)))}</time></HeadingRow>
       <SlipTable slip={item.slip} index={index} locale={locale} results={item.results} />

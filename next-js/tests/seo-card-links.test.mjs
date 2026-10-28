@@ -138,7 +138,7 @@ test("a delivered forecast stays locked for free viewers, and finished matches s
   assert.doesNotMatch(whole, prediction);
   assert.match(whole, />Locked prediction</u);
   assert.equal(pickState(finished), "settled");
-  assert.match(finished, /data-pick-selection=""[^>]*>Home or draw</u);
+  assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
 });
 
 test("the match page locks the verdict, markets and analysis only over a published forecast", () => {

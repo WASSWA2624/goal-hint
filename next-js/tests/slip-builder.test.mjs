@@ -29,6 +29,15 @@ function criteria(overrides = {}) {
     probMin: 0, probMax: 100, totalMin: 101, totalMax: 10_000_000, teamsMin: 1, teamsMax: 8, slips: 10, reuse: true, ...overrides };
 }
 const fixtureIds = (slip) => slip.selections.map((selection) => selection.fixtureId).sort();
+
+test('the full slip-count range parses and round-trips while selection counts remain bounded', () => {
+  for (const slips of [1, 10, 11, 99, 100]) {
+    const parsed = parseSlipCriteria({ slips: String(slips) }, today);
+    assert.equal(parsed.slips, slips);
+    assert.equal(parseSlipCriteria(serializeSlipCriteria(parsed), today).slips, slips);
+  }
+  assert.throws(() => parseSlipCriteria({ teamsMax: '100' }, today), SlipCriteriaError);
+});
 // Synthetic evidence only; no production qualification follows from these tests.
 const jointModel = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
   validFrom: asOf - 1, validUntil: asOf + 1000, estimate: selections => selections.length === 1 ? selections[0].probability : 0.65 };
@@ -227,7 +236,8 @@ for (const [parameters, code] of [
   [{ totalMin: '100000.01' }, 'invalid-odds-range'], [{ oddsMin: '1e2' }, 'invalid-odds-range'],
   [{ totalMin: '3.001' }, 'invalid-odds-range'], [{ probMin: '100.01' }, 'invalid-probability-range'],
   [{ probMin: '80', probMax: '69.99' }, 'invalid-probability-range'], [{ teamsMin: '5', teamsMax: '4' }, 'invalid-selection-range'],
-  [{ teamsMax: '9' }, 'invalid-selection-range'], [{ slips: '11' }, 'invalid-slip-count'],
+  [{ teamsMax: '9' }, 'invalid-selection-range'], [{ slips: '101' }, 'invalid-slip-count'],
+  [{ slips: '1000' }, 'invalid-slip-count'], [{ slips: '010' }, 'invalid-slip-count'],
   [{ slips: '0' }, 'invalid-slip-count'], [{ reuse: 'yes' }, 'invalid-query'],
   [{ build: '0' }, 'invalid-query'], [{ locale: 'en' }, 'invalid-query'],
   [{ totalMax: ['6', '8'] }, 'invalid-query'], [{ reuse: ['1', '0'] }, 'invalid-query'],
@@ -427,8 +437,20 @@ test('bounded candidate and search budgets disclose limited results and remain d
   const result = buildSlips(criteria({ teamsMax: 1 }), records, asOf);
   assert.equal(result.searchLimited, true); assert.equal(result.qualifyingMatches, records.length); assert.equal(result.slips.length, 10);
   assert.deepEqual(buildSlips(criteria({ teamsMax: 1 }), [...records].reverse(), asOf), result);
-  const boundedSearch = buildSlips(criteria({ teamsMin: 4, teamsMax: 4, totalMin: 2000 }), records.slice(0, 60), asOf);
-  assert.equal(boundedSearch.searchLimited, true); assert.equal(boundedSearch.slips.length, 0);
+  const impossible = buildSlips(criteria({ teamsMin: 4, teamsMax: 4, totalMin: 2000 }), records.slice(0, 60), asOf);
+  assert.equal(impossible.searchLimited, false); assert.equal(impossible.slips.length, 0, 'exact price bounds prove the target is impossible');
+  const boundedSearch = buildSlips(criteria({ teamsMin: 4, teamsMax: 4, totalMin: 1500 }), records.slice(0, 60), asOf);
+  assert.equal(boundedSearch.searchLimited, true); assert.equal(boundedSearch.slips.length, 10);
   const retained = buildSlips(criteria({ teamsMin: 3, teamsMax: 3 }), records.slice(0, 60), asOf);
   assert.equal(retained.searchLimited, true); assert.equal(retained.slips.length, 10);
+});
+
+test('price reachability bounds remain safe when probability order puts the lowest odds first', () => {
+  const result = buildSlips(criteria({ totalMin: 480, totalMax: 490, teamsMax: 2, slips: 1 }), [
+    record('highest-probability', '1.20', 0.95), record('first-priced', '2.20', 0.7), record('second-priced', '2.20', 0.7),
+  ], asOf);
+  assert.equal(result.slips.length, 1);
+  assert.deepEqual(fixtureIds(result.slips[0]), ['first-priced', 'second-priced']);
+  assert.equal(result.slips[0].totalOdds, '4.84');
+  assert.equal(result.searchLimited, false);
 });

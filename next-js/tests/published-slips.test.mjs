@@ -63,6 +63,31 @@ function fixture() {
 }
 const query = { from: today, to: today, page: 1, pageSize: 1 };
 
+test('one hundred daily slips publish, read and settle across the complete history cohort', async () => {
+  const f = fixture(), slips = Array.from({ length: 100 }, (_, index) => slip(index + 1));
+  assert.equal(await f.publish({ slips }), 'published');
+  assert.equal(f.rows.length, 100);
+  const day = await f.store.day(today);
+  assert.equal(day.slips.length, 100); assert.equal(day.slips[99].rank, 100);
+  slips.forEach(item => f.outcomes.set(item.selections[0].fixtureId, 'won'));
+  const history = await f.store.history({ ...query, page: 2, pageSize: 50 });
+  assert.equal(history.records.length, 50); assert.equal(history.total, 100);
+  assert.equal(history.statistics.won, 100);
+  assert.equal(history.records[49].rank, 100);
+  const oversized = fixture();
+  await assert.rejects(() => oversized.publish({ slips: [...slips, slip(101)] }));
+  assert.equal(oversized.parents.length, 0);
+});
+
+test('publication assigns probability order before sealing snapshot ranks', async () => {
+  const f = fixture(), probabilities = [0.65, 0.8, 0.7];
+  const slips = probabilities.map((probability, index) => ({ ...slip(index + 1), averageProbability: probability,
+    estimatedProbability: probability, selections: slip(index + 1).selections.map(selection => ({ ...selection, probability })) }));
+  await f.publish({ slips, model: { ...model, estimate: selections => selections[0].probability } });
+  assert.deepEqual(f.rows.map(row => row.snapshotJson.estimatedProbability), [0.8, 0.7, 0.65]);
+  assert.deepEqual((await f.store.day(today)).slips.map(view => view.estimatedProbability), [0.8, 0.7, 0.65]);
+});
+
 test('first qualified publication preserves quotes, model evidence and original references; retries never replace it', async () => {
   const f = fixture();
   assert.equal(await f.publish(), 'published');
@@ -161,7 +186,9 @@ test('an ignored non-duplicate insert is unavailable and a slow write crossing c
 test('published forecasts survive model expiry and preserve the historical odds-target criteria', async () => {
   const f = fixture(); await f.publish();
   f.parents[0].bodyJson.criteria = f.parents[0].bodyJson.criteria.replace('totalMin=4.50', 'totalMin=4.00');
+  f.parents[0].bodyJson.criteria = f.parents[0].bodyJson.criteria.replace('slips=100', 'slips=10');
   f.advance(model.validUntil + 1);
   assert.equal((await f.store.day(today)).slips[0].slip.totalOdds, '5.00');
   assert.match(f.parents[0].bodyJson.criteria, /totalMin=4.00/);
+  assert.match(f.parents[0].bodyJson.criteria, /slips=10/);
 });

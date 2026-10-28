@@ -3,7 +3,8 @@
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
-import { PredictionOdds, ProbabilityBar } from "@/components/match/prediction-presentation";
+import { PredictionOdds, PredictionOutcome, ProbabilityBar } from "@/components/match/prediction-presentation";
+import { predictionDescription } from "@/domain/prediction-label";
 import { detailAnalysis } from "@/domain/detail-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
@@ -20,7 +21,7 @@ import {
   desktop, focusRing, size, useDetails, useRevealOnOpen, useStableDetails,
 } from "./details-ui";
 import { useReturnFocus } from "./section-card";
-import { marketName, percent, pickLabel } from "./labels";
+import { marketName, percent } from "./labels";
 
 const Search = styled.label`
   display: flex;
@@ -178,14 +179,14 @@ function MarketPanel({ family }: { family: MarketFamily }) {
     <PanelHeading ref={heading} tabIndex={-1}>{marketName(messages, family)}</PanelHeading>
     {item && snapshot ? <>
       <Facts>
-        <dt>{messages.text("details.prediction")}</dt><dd><strong>{pickLabel(messages, item.market.selection)}<PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
+        <dt>{messages.text("details.prediction")}</dt><dd><strong><PredictionOutcome messages={messages} selection={item.market.selection} /><PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
         <dt>{messages.text("details.estimatedProbability")}</dt><dd><b>{percent(messages, item.market.selectedProbability)}</b></dd>
       </Facts>
       <SubHeading>{messages.text("details.allOutcomes")}</SubHeading>
       <Outcomes aria-label={messages.text("details.allOutcomes")}>
         {marketOutcomes(item.market.probabilities as Readonly<Record<string, number>>, family).map(({ selection, probability }) =>
           <li key={selection} data-selected={selection === item.market.selection || undefined}>
-            <span>{pickLabel(messages, selection)}{selection === item.market.selection && <> · {messages.text("details.predicted")}</>}</span>
+            <span><PredictionOutcome messages={messages} selection={selection} />{selection === item.market.selection && <> · {messages.text("details.predicted")}</>}</span>
             <ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${(probability ?? 0) * 100}%` }} /></ProbabilityBar>
             <b>{percent(messages, probability)}</b>
           </li>)}
@@ -273,7 +274,7 @@ export const MarketsCard = memo(function MarketsCard() {
             {shown.map((family) => {
               const { item, outcome } = marketRow(data, family), Icon = familyIcon[family];
               const settled = data.snapshot?.applicability !== "historical" && outcome && outcome.status !== "pending" ? outcome.status : null;
-              const pick = item ? pickLabel(messages, item.market.selection) : messages.text("details.notAvailable");
+              const pick = item ? predictionDescription(messages, item.market.selection) : messages.text("details.notAvailable");
               const price = selectedDetailPrice(data, family), standing = liveStanding(data, family);
               return <li key={family}>
                 <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} onClick={() => update((current) => ({ ...current, market: family }))}
@@ -282,7 +283,7 @@ export const MarketsCard = memo(function MarketsCard() {
                     standing ? messages.text("details.standingLabel", { standing: messages.text(`details.standing.${standing}`) }) : null].filter(Boolean).join(". ")}>
                   <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span>{marketName(messages, family)}</span></span>
                   <span data-code aria-hidden="true">{marketName(messages, family)}</span>
-                  <span data-pick><span>{pick}<PredictionOdds odds={price} /></span>{standing ? <Standing standing={standing} compact /> : settled && <DetailOutcome status={settled} />}</span>
+                  <span data-pick><span>{item ? <PredictionOutcome messages={messages} selection={item.market.selection} /> : pick}<PredictionOdds odds={price} /></span>{standing ? <Standing standing={standing} compact /> : settled && <DetailOutcome status={settled} />}</span>
                   <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b><ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${item.market.selectedProbability * 100}%` }} /></ProbabilityBar></>
                     : <b>—</b>}</span>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}><path d="m9 6 6 6-6 6" /></svg>

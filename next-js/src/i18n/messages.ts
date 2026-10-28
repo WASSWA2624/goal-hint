@@ -2,6 +2,10 @@ import { getKickoffDisplayInput, getReportingDayBounds, utcInstantFromEpochMilli
 import { publicPolicy } from "../domain/public-policy.ts";
 import { resolveLocale } from "./locales.ts";
 import { en } from "./messages/en.ts";
+import { predictionMessages } from "./messages/predictions.ts";
+import { slipsMessages } from "./messages/slips.ts";
+
+const catalog = { ...en, ...predictionMessages, ...slipsMessages };
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
   days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
@@ -57,9 +61,9 @@ export function fillMessage(message: string, values: Readonly<Record<string, str
 }
 
 export type TextKey = {
-  [Key in keyof typeof en]: (typeof en)[Key] extends string ? Key : never;
-}[keyof typeof en];
-export type PluralKey = Exclude<keyof typeof en, TextKey>;
+  [Key in keyof typeof catalog]: (typeof catalog)[Key] extends string ? Key : never;
+}[keyof typeof catalog];
+export type PluralKey = Exclude<keyof typeof catalog, TextKey>;
 type PluralMessage = Readonly<Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }>;
 export type MessageCatalog = Readonly<Record<TextKey, string> & Record<PluralKey, PluralMessage>>;
 
@@ -87,11 +91,11 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
 
   return {
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
-      return fillMessage(translations[key] ?? en[key], values);
+      return fillMessage(translations[key] ?? catalog[key], values);
     },
     plural(key: PluralKey, count: number): string {
       if (!Number.isSafeInteger(count) || count < 0) throw new RangeError("Count must be a nonnegative safe integer.");
-      const message: PluralMessage = translations[key] ?? en[key];
+      const message: PluralMessage = translations[key] ?? catalog[key];
       return (message[plurals.select(count)] ?? message.other).replaceAll("{count}", numbers.format(count));
     },
     number(value: number, options?: Intl.NumberFormatOptions): string {

@@ -12,10 +12,10 @@ from lib.rendering import ROOT, Server, build_fixture, create_fixture, environme
 from lib.runtime import main_guard
 
 PREDICTION_LABELS = {
-    "home-win": "Home win", "draw": "Draw", "away-win": "Away win",
-    "home-or-draw": "Home or draw", "away-or-draw": "Away or draw", "home-or-away": "Home or away",
-    "over-2.5": "Over 2.5", "under-2.5": "Under 2.5",
-    "yes": "Both teams to score", "no": "Not both teams to score",
+    "home-win": "1", "draw": "X", "away-win": "2",
+    "home-or-draw": "1X", "away-or-draw": "X2", "home-or-away": "12",
+    "over-2.5": "O 2.5", "under-2.5": "U 2.5",
+    "yes": "Yes", "no": "No",
 }
 
 
@@ -207,11 +207,11 @@ def verify_detail(origin, directory, scenarios):
                 _, panel = get(origin, f"/detail-cases/{name}?market={family}")
                 match(f'data-market-panel="{family}"', panel)
                 prediction = re.escape(PREDICTION_LABELS[item["market"]["selection"]])
-                match(r'>Our prediction</dt><dd><strong>' + prediction + r'(?:<|$)', panel)
+                match(r'>Our prediction</dt><dd><strong><span\b[^>]*>' + prediction + r'(?:<|$)', panel)
                 rounded = int(item["market"]["selectedProbability"] * 100 + 0.5)
                 match(r'>Estimated probability</dt><dd><b>' + str(rounded) + r'%</b>', panel)
                 for selection in item["market"]["probabilities"]:
-                    match(r'<li\b[^>]*><span>' + re.escape(PREDICTION_LABELS[selection]) + r'(?:<| ·)', panel)
+                    match(r'<li\b[^>]*><span><span\b[^>]*>' + re.escape(PREDICTION_LABELS[selection]) + r'(?:<| ·)', panel)
                 assert iso(snapshot["publishedAt"]) in panel
                 outcome = next((entry for entry in snapshot["outcomes"] if entry["family"] == family), None)
                 if snapshot["applicability"] != "historical":

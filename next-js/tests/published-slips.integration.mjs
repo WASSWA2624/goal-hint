@@ -18,6 +18,7 @@ test('genuine MySQL publication DDL, concurrent first-writer ownership, sealed r
     CREATE TABLE PredictionSet (id CHAR(36) NOT NULL, cycleId CHAR(36) NOT NULL, fixtureId CHAR(36) NOT NULL,
       PRIMARY KEY(id), UNIQUE KEY(id,cycleId,fixtureId)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;`);
   await root.query(await readFile(new URL('../prisma/migrations/20261025113516_daily_slip_publications/migration.sql', import.meta.url), 'utf8'));
+  await root.query(await readFile(new URL('../prisma/migrations/20261028130000_daily_slip_capacity/migration.sql', import.meta.url), 'utf8'));
   for (const table of ['DailySlipPublication', 'PublishedSlip', 'PublishedSlipLeg'])
     await root.query(`GRANT SELECT, INSERT ON goal_hint_test.${table} TO 'paid_application'@'127.0.0.1'`);
   await root.query("GRANT SELECT ON goal_hint_test.FootballFixture TO 'paid_application'@'127.0.0.1'");
@@ -58,4 +59,15 @@ test('genuine MySQL publication DDL, concurrent first-writer ownership, sealed r
   // A mismatched source revision/fixture cannot enter normalized membership.
   await assert.rejects(root.query('INSERT INTO PublishedSlipLeg(slipId,fixtureId,cycleId,revisionId) VALUES (?,?,?,?)',
     [history.records[0].id, randomUUID(), cycleId, revisionId]));
+  // The forward migration widens both database boundaries without weakening append-only history.
+  await root.query(`INSERT INTO PublishedSlip(id,publicationId,\`rank\`,snapshotJson,integrity)
+    SELECT REPEAT('a',64),publicationId,100,snapshotJson,integrity FROM PublishedSlip WHERE \`rank\`=1`);
+  await assert.rejects(root.query(`INSERT INTO PublishedSlip(id,publicationId,\`rank\`,snapshotJson,integrity)
+    SELECT REPEAT('b',64),publicationId,101,snapshotJson,integrity FROM PublishedSlip WHERE \`rank\`=1`), /check|constraint/i);
+  await root.query(`INSERT INTO DailySlipPublication(id,eatDate,publishedAt,modelId,bodyJson,integrity)
+    SELECT REPEAT('c',64),DATE_ADD(eatDate,INTERVAL 1 DAY),publishedAt,modelId,JSON_SET(bodyJson,'$.count',100),integrity
+    FROM DailySlipPublication LIMIT 1`);
+  await assert.rejects(root.query(`INSERT INTO DailySlipPublication(id,eatDate,publishedAt,modelId,bodyJson,integrity)
+    SELECT REPEAT('d',64),DATE_ADD(eatDate,INTERVAL 2 DAY),publishedAt,modelId,JSON_SET(bodyJson,'$.count',101),integrity
+    FROM DailySlipPublication ORDER BY eatDate LIMIT 1`), /check|constraint/i);
 });

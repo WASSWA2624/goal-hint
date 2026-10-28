@@ -10,10 +10,10 @@ export type { SlipForecastReference } from "./slip-forecast-reference.ts";
 
 /** Limits apply equally to native GET forms, browser validation and the bounded server search. */
 export const slipBuilderRules = Object.freeze({
-  maximumDays: 31, maximumSelections: 8, maximumSlips: 10,
+  maximumDays: 31, maximumSelections: 8, maximumSlips: 100,
   minimumOddsHundredths: oddsRules.minimumHundredths, maximumOddsHundredths: oddsRules.maximumHundredths,
   maximumTotalOddsHundredths: 10_000_000,
-  maximumCandidates: 60, maximumSearchNodes: 100_000, maximumCombinations: 2_000, maximumBatchNodes: 100_000,
+  maximumCandidates: 800, maximumSearchNodes: 100_000, maximumCombinations: 2_000, maximumBatchNodes: 100_000,
 });
 
 export type SlipCriteria = Readonly<{
@@ -137,7 +137,7 @@ function oddsBound(value: string | undefined, fallback: number, blank: number, f
 function integer(value: string | undefined, fallback: number, maximum: number, field: keyof SlipCriteria): number {
   const code = field === "slips" ? "invalid-slip-count" : "invalid-selection-range";
   if (value === undefined || value === "" && field !== "slips") return fallback;
-  if (!/^[1-9]\d?$/u.test(value)) fail(field, code);
+  if (!/^[1-9]\d{0,2}$/u.test(value)) fail(field, code);
   const result = Number(value);
   return result <= maximum ? result : fail(field, code);
 }
@@ -257,15 +257,39 @@ function combination(selected: readonly Candidate[], product: bigint): Combinati
     oddsBasis: selections[0]!.oddsBasis, averageProbability: selections.reduce((sum, item) => sum + item.probability, 0) / selections.length } };
 }
 
+type CompletionBounds = Readonly<{ minimum: readonly (readonly (bigint | undefined)[])[];
+  maximum: readonly (readonly (bigint | undefined)[])[] }>;
+/** Exact suffix price bounds, independent of probability order. Ignoring fixture conflicts only widens the bounds. */
+function completionBounds(candidates: readonly Candidate[], maximumSelections: number): CompletionBounds {
+  const minimum: (bigint | undefined)[][] = Array.from({ length: candidates.length + 1 }, () => [1n]);
+  const maximum: (bigint | undefined)[][] = Array.from({ length: candidates.length + 1 }, () => [1n]);
+  for (let index = candidates.length - 1; index >= 0; index--) {
+    for (let count = 1; count <= maximumSelections; count++) {
+      const skippedMinimum = minimum[index + 1]![count], priorMinimum = minimum[index + 1]![count - 1];
+      const skippedMaximum = maximum[index + 1]![count], priorMaximum = maximum[index + 1]![count - 1];
+      const includedMinimum = priorMinimum === undefined ? undefined : priorMinimum * candidates[index]!.scaledOdds;
+      const includedMaximum = priorMaximum === undefined ? undefined : priorMaximum * candidates[index]!.scaledOdds;
+      minimum[index]![count] = skippedMinimum === undefined ? includedMinimum : includedMinimum === undefined
+        ? skippedMinimum : skippedMinimum < includedMinimum ? skippedMinimum : includedMinimum;
+      maximum[index]![count] = skippedMaximum === undefined ? includedMaximum : includedMaximum === undefined
+        ? skippedMaximum : skippedMaximum > includedMaximum ? skippedMaximum : includedMaximum;
+    }
+  }
+  return { minimum, maximum };
+}
+
 /** Exact compatible-batch search: maximize the requested count, then compare ordered slip ranks lexicographically.
  * This avoids a greedy best slip excluding a feasible larger batch. Work is explicitly bounded. */
-function compatibleBatch(combinations: readonly Combination[], requested: number): { slips: BuiltSlip[]; limited: boolean } {
-  let best: Combination[] = [], nodes = 0, limited = false, complete = false;
+function compatibleBatch(combinations: readonly Combination[], requested: number, seed: readonly Combination[]): { slips: BuiltSlip[]; limited: boolean } {
+  const order = new Map(combinations.map((item, index) => [item.key, index]));
+  let best = [...seed].sort((left, right) => order.get(left.key)! - order.get(right.key)!), nodes = 0, limited = false, complete = false;
   const selected: Combination[] = [], fixtures = new Set<string>();
   function visit(start: number) {
-    if (selected.length > best.length) best = [...selected];
-    if (selected.length === requested) { complete = true; return; }
-    if (selected.length + combinations.length - start <= best.length) return;
+    const difference = selected.length === best.length ? selected.findIndex((item, index) => item.key !== best[index]!.key) : -1;
+    if (selected.length > best.length || difference >= 0
+      && order.get(selected[difference]!.key)! < order.get(best[difference]!.key)!) best = [...selected];
+    if (selected.length === requested) { best = [...selected]; complete = true; return; }
+    if (selected.length + combinations.length - start < best.length) return;
     for (let index = start; index < combinations.length && !complete && !limited; index++) {
       if (++nodes > slipBuilderRules.maximumBatchNodes) { limited = true; break; }
       const current = combinations[index]!;
@@ -330,17 +354,30 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   }
   candidates.sort(compareCandidates);
   if (candidates.length > slipBuilderRules.maximumCandidates) { candidates.length = slipBuilderRules.maximumCandidates; searchLimited = true; }
-  const retained: Combination[] = [];
+  const retained: Combination[] = [], diversified: Combination[] = [], diversifiedFixtures = new Set<string>();
   const compare = ranking ? (left: Combination, right: Combination) => ranking.compare(left.slip, right.slip) : compareCombinations;
   let searchNodes = 0, exhausted = false;
+  const maximumSelections = Math.min(criteria.teamsMax, qualifying.size), bounds = completionBounds(candidates, maximumSelections);
+  const denominators = Array.from({ length: maximumSelections + 1 }, (_, count) => SCALE ** BigInt(count));
+  const minimumProducts = denominators.map((denominator) => BigInt(criteria.totalMin) * denominator);
+  const maximumProducts = denominators.map((denominator) => BigInt(criteria.totalMax) * denominator);
+  const candidateIndexes = new Map(candidates.map((candidate, index) => [candidate, index]));
+  // At most one quarter of the existing node budget seeds disjoint slips before broad ranked enumeration.
+  const diversificationBudget = Math.floor(slipBuilderRules.maximumSearchNodes / 4), seedResults = new Map<string, boolean>();
+  let diversificationLimited = false;
   const selected: Candidate[] = [], fixtures = new Set<string>();
-  function retain(value: Combination) {
-    if (ranking && !ranking.accepts(value.slip)) return;
+  function retain(value: Combination): boolean {
+    if (ranking && !ranking.accepts(value.slip)) return false;
     if (ranking?.probability) {
       const probability = ranking.probability(value.slip), tolerance = Number.EPSILON * value.slip.selections.length * 2;
       if (probability === null || !Number.isFinite(probability) || probability < 0 || probability > 1
         || probability < probabilityFraction(criteria.totalProbMin ?? 0) - tolerance
-        || probability > probabilityFraction(criteria.totalProbMax ?? 100) + tolerance) return;
+        || probability > probabilityFraction(criteria.totalProbMax ?? 100) + tolerance) return false;
+    }
+    // A small disjoint reserve prevents the best-scoring heap from crowding out a feasible large batch.
+    if (!criteria.reuse && diversified.length < criteria.slips
+      && value.slip.selections.every((item) => !diversifiedFixtures.has(item.fixtureId))) {
+      diversified.push(value); value.slip.selections.forEach((item) => diversifiedFixtures.add(item.fixtureId));
     }
     // Max-heap keeps the worst retained slip at the root, bounding both memory and insertion work.
     if (retained.length < slipBuilderRules.maximumCombinations) {
@@ -350,10 +387,10 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
         if (compare(retained[index]!, retained[parent]!) <= 0) break;
         [retained[index], retained[parent]] = [retained[parent]!, retained[index]!]; index = parent;
       }
-      return;
+      return true;
     }
     searchLimited = true;
-    if (compare(value, retained[0]!) >= 0) return;
+    if (compare(value, retained[0]!) >= 0) return true;
     retained[0] = value;
     let index = 0;
     while (index * 2 + 1 < retained.length) {
@@ -362,34 +399,54 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       if (compare(retained[worse]!, retained[index]!) <= 0) break;
       [retained[index], retained[worse]] = [retained[worse]!, retained[index]!]; index = worse;
     }
+    return true;
   }
-  function enumerate(start: number, target: number, product: bigint) {
+  function enumerate(pool: readonly Candidate[], prices: CompletionBounds, start: number, target: number, product: bigint,
+    diversifying = false): boolean {
+    const remaining = target - selected.length, minimum = prices.minimum[start]?.[remaining], maximum = prices.maximum[start]?.[remaining];
+    if (minimum === undefined || maximum === undefined || product * maximum * 100n < minimumProducts[target]!
+      || product * minimum * 100n > maximumProducts[target]!) return false;
     if (selected.length === target) {
-      const denominator = SCALE ** BigInt(target);
-      if (product * 100n >= BigInt(criteria.totalMin) * denominator) retain(combination(selected, product));
-      return;
+      // Compact candidate indexes keep the bounded seed memo small and prevent duplicate model estimates.
+      const seedKey = !criteria.reuse ? selected.map((candidate) => candidateIndexes.get(candidate)!).join(",") : "";
+      if (seedResults.has(seedKey)) return seedResults.get(seedKey)!;
+      const accepted = retain(combination(selected, product));
+      if (diversifying) seedResults.set(seedKey, accepted);
+      return accepted;
     }
-    if (candidates.length - start < target - selected.length) return;
-    for (let index = start; index < candidates.length && !exhausted; index++) {
+    for (let index = start; index < pool.length && !exhausted; index++) {
+      if (diversifying && searchNodes >= diversificationBudget) {
+        diversificationLimited = true; searchLimited = true; break;
+      }
       if (++searchNodes > slipBuilderRules.maximumSearchNodes) { exhausted = true; searchLimited = true; break; }
-      const candidate = candidates[index]!;
+      const candidate = pool[index]!;
       if (fixtures.has(candidate.selection.fixtureId) || selected.length > 0 && candidate.selection.oddsBasis !== selected[0]!.selection.oddsBasis) continue;
       const nextProduct = product * candidate.scaledOdds, denominator = SCALE ** BigInt(selected.length + 1);
       if (nextProduct * 100n > BigInt(criteria.totalMax) * denominator) continue;
       selected.push(candidate); fixtures.add(candidate.selection.fixtureId);
-      enumerate(index + 1, target, nextProduct);
+      const accepted = enumerate(pool, prices, index + 1, target, nextProduct, diversifying);
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
+      if (diversifying && (accepted || diversificationLimited)) return accepted;
     }
+    return false;
   }
   function select(): BuiltSlip[] {
-    const combinations = [...retained].sort(compare);
+    const combinations = [...new Map([...retained, ...diversified].map((item) => [item.key, item])).values()].sort(compare);
     if (criteria.reuse) return combinations.slice(0, criteria.slips).map((item) => item.slip);
-    const batch = compatibleBatch(combinations, criteria.slips); searchLimited ||= batch.limited;
+    const batch = compatibleBatch(combinations, criteria.slips, diversified); searchLimited ||= batch.limited;
     return batch.slips;
   }
   let slips: BuiltSlip[] = [];
-  for (let count = criteria.teamsMin; count <= Math.min(criteria.teamsMax, qualifying.size) && !exhausted; count++) {
-    enumerate(0, count, 1n);
+  if (!criteria.reuse) {
+    for (let count = criteria.teamsMin; count <= maximumSelections && diversified.length < criteria.slips && !diversificationLimited; count++) {
+      while (diversified.length < criteria.slips && !diversificationLimited) {
+        const available = candidates.filter((candidate) => !diversifiedFixtures.has(candidate.selection.fixtureId));
+        if (!enumerate(available, completionBounds(available, count), 0, count, 1n, true)) break;
+      }
+    }
+  }
+  for (let count = criteria.teamsMin; count <= maximumSelections && !exhausted; count++) {
+    enumerate(candidates, bounds, 0, count, 1n);
     if (ranking) continue;
     slips = select();
     if (slips.length === criteria.slips) break;

@@ -4,7 +4,7 @@ import type { createMessages } from "@/i18n/messages";
 
 type Messages = ReturnType<typeof createMessages>;
 
-/** The same generic outcome wording used by cards, slips and revision history. */
+/** The same compact outcome used by cards, slips and revision history. */
 export function pickLabel(messages: Messages, selection: MarketSelection): string {
   return predictionLabel(messages, selection);
 }

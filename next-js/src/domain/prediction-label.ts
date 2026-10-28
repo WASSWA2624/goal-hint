@@ -1,4 +1,4 @@
-import { createMessages, type Messages } from "../i18n/messages.ts";
+import { createMessages, type Messages, type TextKey } from "../i18n/messages.ts";
 import type { GoalRule } from "./score-distribution-markets.ts";
 import type { NonGoalRule } from "./non-goal-market-definitions.ts";
 
@@ -18,6 +18,41 @@ const result = (messages: LabelMessages, value: Result) => messages.text(value =
 const signedLine = (line: number) => line > 0 ? `+${line}` : String(line);
 const lineLabel = (messages: LabelMessages, direction: "over" | "under", line: number) =>
   messages.text(`market.selection.${direction}`, { line: String(line) });
+
+const compactKeys: Readonly<Partial<Record<TextKey, TextKey>>> = {
+  "market.selection.home-win": "prediction.short.home-win",
+  "market.selection.draw": "prediction.short.draw",
+  "market.selection.away-win": "prediction.short.away-win",
+  "market.selection.home-or-draw": "prediction.short.home-or-draw",
+  "market.selection.away-or-draw": "prediction.short.away-or-draw",
+  "market.selection.home-or-away": "prediction.short.home-or-away",
+  "market.selection.over": "prediction.short.over",
+  "market.selection.under": "prediction.short.under",
+  "market.selection.yes": "market.selection.answer.yes",
+  "market.selection.no": "market.selection.answer.no",
+  "market.selection.home-clean-sheet": "market.selection.answer.yes",
+  "market.selection.away-clean-sheet": "market.selection.answer.yes",
+  "market.selection.home-concede": "market.selection.answer.no",
+  "market.selection.away-concede": "market.selection.answer.no",
+  "market.selection.home-win-to-nil": "market.selection.answer.yes",
+  "market.selection.away-win-to-nil": "market.selection.answer.yes",
+  "market.selection.home-not-win-to-nil": "market.selection.answer.no",
+  "market.selection.away-not-win-to-nil": "market.selection.answer.no",
+  "market.selection.home-handicap": "prediction.short.home-handicap",
+  "market.selection.away-handicap": "prediction.short.away-handicap",
+  "market.selection.exact-count": "prediction.short.exact-count",
+  "market.selection.other-count": "prediction.short.other",
+  "market.selection.other-score": "prediction.short.other",
+  "market.selection.none-of": "prediction.short.other",
+  "market.selection.and": "prediction.short.and",
+  "market.selection.home-team": "prediction.short.home-team",
+  "market.selection.away-team": "prediction.short.away-team",
+  "market.selection.no-event": "prediction.short.no-event",
+};
+
+function compactMessages(messages: LabelMessages): LabelMessages {
+  return { text: (key, values) => messages.text(compactKeys[key] ?? key, values) };
+}
 
 function ruleLabel(messages: LabelMessages, rule: GoalRule | NonGoalRule): string {
   switch (rule.kind) {
@@ -89,8 +124,7 @@ function extendedLabel(messages: LabelMessages, selection: string, context: Pred
   return null;
 }
 
-/** One label for cards, details, slips, history and metadata; canonical selection values remain untouched. */
-export function predictionLabel(messages: LabelMessages, selection: string, context: PredictionLabelContext = {}): string {
+function formatPrediction(messages: LabelMessages, selection: string, context: PredictionLabelContext): string {
   if (context.rule) return ruleLabel(messages, context.rule);
   const value = selection.trim().toLowerCase();
   const extended = extendedLabel(messages, value, context);
@@ -103,4 +137,23 @@ export function predictionLabel(messages: LabelMessages, selection: string, cont
   if (value === "odd" || value === "even") return messages.text(`market.selection.${value}`);
   // Custom source-mapped combinations already carry descriptive labels; preserve their exact stated event.
   return context.label ?? selection;
+}
+
+/** Compact display codes; every supported structured rule retains its line, score or settlement choice. */
+export function predictionLabel(messages: LabelMessages, selection: string, context: PredictionLabelContext = {}): string {
+  return formatPrediction(compactMessages(messages), selection, context);
+}
+
+/** Human-readable meaning for tooltips, screen readers and the prediction key. */
+export function predictionDescription(messages: LabelMessages, selection: string, context: PredictionLabelContext = {}): string {
+  const descriptions: LabelMessages = { text: (key, values) => messages.text(key === "market.selection.yes"
+    ? "prediction.definition.yes" : key === "market.selection.no" ? "prediction.definition.no"
+      : key === "market.selection.answer.yes" ? "prediction.definition.event-yes"
+        : key === "market.selection.answer.no" ? "prediction.definition.event-no" : key, values) };
+  return formatPrediction(descriptions, selection, context);
+}
+
+/** A single definition supplies both short text and its accessible explanation. */
+export function predictionOutcome(messages: LabelMessages, selection: string, context: PredictionLabelContext = {}): Readonly<{ label: string; description: string }> {
+  return { label: predictionLabel(messages, selection, context), description: predictionDescription(messages, selection, context) };
 }

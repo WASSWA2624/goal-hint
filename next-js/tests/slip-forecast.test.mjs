@@ -202,7 +202,7 @@ test('archive-sized mixed-cycle reads batch sealed forecasts across the chunk bo
 });
 
 test('forecast history rejects more than the supported 31-day publication range before any database read', async () => {
-  assert.equal(slipForecastReadRules.maximumSelections, 31 * 10 * 8);
+  assert.equal(slipForecastReadRules.maximumSelections, 31 * 100 * 8);
   const source = slipForecastFixture(), selections = Array.from({ length: slipForecastReadRules.maximumSelections + 1 }, () => bound(source));
   const tx = { footballFixture: { findMany: async () => assert.fail('oversized history must not reach storage') } };
   await assert.rejects(readSlipForecastResults(tx, selections, source.at), error => error.reason === 'invalid-request');

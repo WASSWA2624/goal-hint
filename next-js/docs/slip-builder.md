@@ -66,7 +66,7 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank (Any supported probability) |
 | Combined probability | Optional `totalProbMin` / `totalProbMax`, inclusive percentage bounds, 0–100; requires a verified joint model | Blank (no joint filter) |
 | Selection count | Minimum and maximum of 1–8 matches per slip | Blank (Any supported count) |
-| Number of slips | 1–10 | 3 |
+| Number of slips | 1–100 | 3 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
 
 The numeric range fields start blank and display Any as their placeholder.
@@ -228,10 +228,12 @@ Changing, malformed or unavailable data produces an explicit unavailable state
 instead of a partially mixed result. Matches entering the cutoff while the read
 finishes are excluded before generation.
 
-The pure engine retains at most 60 qualifying selection candidates, ordered by
+The pure engine retains at most 800 qualifying selection candidates, ordered by
 probability, odds and canonical identifiers. Combination enumeration has a
-100,000-node budget; a bounded heap retains at most 2,000 combinations; compatible
-batch selection has a 100,000-node budget per selection-count stage. The maximum
+100,000-node budget, with at most one quarter used to seed disjoint slips. Safe
+suffix price bounds skip lengths that cannot meet the total-odds range. A bounded
+heap retains at most 2,000 combinations, plus up to 100 disjoint reserve slips;
+compatible batch selection has a 100,000-node budget per selection-count stage. The maximum
 slip length and count also bound the returned output. Reaching a database,
 candidate, enumeration, retention or batch bound sets `searchLimited`. Limited
 results are ranked among the explored candidates and do not claim global

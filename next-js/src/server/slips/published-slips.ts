@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
-import { bestSlipCriteria, bestSlipViews, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
+import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { savedSlipOutcome, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
@@ -76,7 +76,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       };
       const ids = new Set<string>();
       if (!input.slips.length || input.slips.length > publishedSlipRules.maximumDailySlips) fail("invalid-input");
-      const proposed = input.slips.map(({ estimatedProbability, ...slip }) => {
+      const proposed = [...input.slips].sort(compareBestSlips).map(({ estimatedProbability, ...slip }) => {
         const snapshot = savedSlipSnapshotSchema.parse(slip);
         if (jointSlipProbability(input.model, snapshot as BuiltSlip) !== estimatedProbability) fail("invalid-input");
         const denominator = 100n ** BigInt(snapshot.selections.length);
@@ -169,7 +169,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         if (publications.length > publishedSlipRules.maximumDays) fail("unavailable");
         const parents = new Map(publications.map((row) => [row.id, publication(row)]));
         const rows = publications.length ? await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
-          FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\` LIMIT 311`) : [];
+          FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\`
+          LIMIT ${publishedSlipRules.maximumDays * publishedSlipRules.maximumDailySlips + 1}`) : [];
         if (rows.length !== [...parents.values()].reduce((sum, value) => sum + value.count, 0)) fail("unavailable");
         const snapshots = await readSnapshots(tx, rows);
         for (const id of parents.keys()) {

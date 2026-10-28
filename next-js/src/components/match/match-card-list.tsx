@@ -5,8 +5,11 @@ import styled, { css } from "styled-components";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { matchTableColumns, matchTableGap } from "./match-columns";
+import { PredictionDefinitions } from "./prediction-definitions";
 
-export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & { locale?: string; rowNumberMaximum?: number };
+export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & {
+  locale?: string; rowNumberMaximum?: number; showPredictionDefinitions?: boolean;
+};
 
 const Board = styled.div<{ $indexLength: number }>`
   min-inline-size: 0;
@@ -94,20 +97,23 @@ export function MatchListDivider({ title, note }: { title: string; note?: string
 }
 
 /** Cards below 64rem, an aligned match table above it. Source order is also visual and keyboard order. */
-export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardListProps) {
+export function MatchCardList({ locale, rowNumberMaximum, showPredictionDefinitions = true, ...props }: MatchCardListProps) {
   const messages = createMessages(locale);
   const indexLabel = rowNumberMaximum !== undefined && Number.isSafeInteger(rowNumberMaximum) && rowNumberMaximum > 0
     ? messages.number(Math.min(rowNumberMaximum, 9_999)) : "";
-  return <Board $indexLength={indexLabel.length} data-match-board>
-    <Columns aria-hidden="true" data-match-table-header>
-      <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.dateTime")}</span>
-      <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
-      <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>
-      <span>{messages.text("match.columns.market")}</span><span>{messages.text("match.columns.prediction")}</span>
-      <span>{messages.text("details.odds")}</span>
-      <span><span data-short>{messages.text("match.columns.probabilityShort")}</span><span data-full>{messages.text("match.columns.probability")}</span></span>
-      <span>{messages.text("match.columns.result")}</span><span />
-    </Columns>
-    <List role="list" {...props} />
-  </Board>;
+  return <>
+    {showPredictionDefinitions && <PredictionDefinitions locale={locale ?? "en"} />}
+    <Board $indexLength={indexLabel.length} data-match-board>
+      <Columns aria-hidden="true" data-match-table-header>
+        <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.dateTime")}</span>
+        <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
+        <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>
+        <span>{messages.text("match.columns.market")}</span><span>{messages.text("match.columns.prediction")}</span>
+        <span>{messages.text("details.odds")}</span>
+        <span><span data-short>{messages.text("match.columns.probabilityShort")}</span><span data-full>{messages.text("match.columns.probability")}</span></span>
+        <span>{messages.text("match.columns.result")}</span><span />
+      </Columns>
+      <List role="list" {...props} />
+    </Board>
+  </>;
 }

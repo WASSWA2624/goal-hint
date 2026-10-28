@@ -177,8 +177,8 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             assert len(cards) == 1 and cards[0].attrs["data-fixture-id"] == row.attrs["data-slip-selection"], f"{path}: shared card retains fixture identity"
             card = cards[0]
             labels = card.nodes(attr="data-pick-selection")
-            assert len(labels) == 1 and not re.fullmatch(r"[12Xx]+|Yes|No", labels[0].text), f"{path}: one generic full-word prediction"
-            assert not re.search(r"\b(?:1X2|BTTS|O/U)\b", card.text), f"{path}: full market names on every screen"
+            assert len(labels) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one compact prediction outcome"
+            assert labels[0].attrs.get("title") and labels[0].attrs["title"] != labels[0].text, f"{path}: compact outcomes retain their full meaning"
             prices = card.nodes(attr="data-card-odds")
             assert len(prices) == 1 and re.fullmatch(r"\d+\.\d{2}", prices[0].text), f"{path}: original selected price uses the shared odds column"
             assert len(card.nodes("h4")) == 1, f"{path}: match heading follows its slip heading"
@@ -227,6 +227,8 @@ def verify_defaults(document):
     assert fields["timeFrom"] == "00:00" and fields["timeTo"] == "23:59", "SSR defaults explicitly select all-day kickoff times"
     assert fields["reuse"] == "0", "SSR default leaves match reuse off"
     assert len([name for name, _ in native_inputs(document) if name == "slips"]) == 1, "The title count remains part of native GET submission"
+    quantity = next(node for node in document.nodes("input") if node.attrs.get("name") == "slips")
+    assert quantity.attrs.get("max") == "100", "The native quantity control supports up to 100 slips"
 
 
 def verify_custom_numeric_bounds(document, expected):
@@ -260,13 +262,49 @@ def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_ma
         assert len(fixture_ids) == len(set(fixture_ids)), "Match reuse stays disabled across the entire generated batch"
 
 
+def verify_best_slips(origin, directory):
+    for scenario, count in [("entitled", 3), ("locked", 3), ("hundred", 100), ("limited", 3)]:
+        response = request(origin, f"/best-slips/{scenario}")
+        assert response.status == 200, f"Best Slips {scenario}: HTTP 200"
+        (directory / f"best-slips-{scenario}.html").write_text(response.text, encoding="utf-8")
+        document = Document(response.text).root
+        disclosures = document.nodes("details", "data-slip-disclosure")
+        assert len(disclosures) == count, f"Best Slips {scenario}: renders all {count} slips"
+        probabilities = []
+        for index, disclosure in enumerate(disclosures):
+            assert "open" not in disclosure.attrs, f"Best Slips {scenario}: slip {index + 1} starts collapsed before hydration"
+            toggles = disclosure.nodes("summary", "data-slip-toggle")
+            assert len(toggles) == 1, f"Best Slips {scenario}: one native summary toggles the entire header"
+            toggle = toggles[0]
+            assert not any(toggle.nodes(tag) for tag in ["a", "button", "input"]), "Header toggles have no competing interactive descendants"
+            assert not any(toggle.nodes(tag) for tag in ["dl", "div", "fieldset"]), "Native summaries contain valid phrasing and heading content"
+            assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
+            assert "Total odds" in toggle.text and "Win probability" in toggle.text, "Collapsed headers retain odds and probability context"
+            contents = disclosure.nodes(attr="data-slip-content")
+            assert len(contents) == 1, "Every toggle owns one expandable content region"
+            if scenario == "locked":
+                assert not contents[0].nodes(attr="data-fixture-id"), "Locked slip bodies expose no premium picks"
+                assert contents[0].nodes("a"), "Subscriber navigation stays inside the expandable body"
+                assert "Synthetic" not in document.text and not document.nodes(attr="data-slip-id"), "Public results contain no slip identity or synthetic picks"
+            else:
+                assert len(contents[0].nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
+                estimate = toggle.nodes(attr="data-slip-combined-probability")[0]
+                probabilities.append(Decimal(re.search(r"([\d.]+)%", estimate.text).group(1)))
+        assert probabilities == sorted(probabilities, reverse=True), "Best Slips display highest win probability first"
+        statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status"]
+        assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
+        assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"
+        print(f"PASS Best Slips SSR: {scenario} ({count} collapsed slips)", flush=True)
+
+
 def verify(origin, directory):
+    verify_best_slips(origin, directory)
     snapshots = request(origin, "/snapshot-cards")
     assert snapshots.status == 200
     snapshot_cards = {node.attrs["data-fixture-id"]: node for node in Document(snapshots.text).root.nodes("article", "data-fixture-id")}
     authorized = snapshot_cards["snapshot-authorized"]
     assert authorized.nodes(attr="data-card-odds")[0].text == "7.73" and "23.5%" in authorized.text, "Original saved probability and price survive the shared card"
-    assert authorized.nodes(attr="data-pick-selection")[0].text == "Home win", "The saved alternative remains selected"
+    assert authorized.nodes(attr="data-pick-selection")[0].text == "1", "The saved alternative remains selected with its shared short form"
     assert authorized.nodes(attr="data-result-badge")[0].attrs["data-result-badge"] == "incorrect", "Supplied saved loss survives an unknown current fixture status"
     assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", authorized.text), "A supplied 2–1 regulation score retains its own score label"
     assert authorized.nodes(attr="data-match-state")[0].attrs["data-match-state"] == "snapshot", "No final or live phase is invented"

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { bestSlipCriteria } from "../../domain/best-slips.ts";
+import { bestSlipCriteria, bestSlipsRules } from "../../domain/best-slips.ts";
 import { selectedCardPrediction, selectedCardPrice } from "../../domain/match-card.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { serializeSlipCriteria, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
@@ -173,7 +173,8 @@ export async function ensureDemoSlipDates(database: DatabaseRuntime, dates: read
       validFrom: Date.parse("2025-01-01T00:00:00Z"), validUntil: Date.parse("2030-01-01T00:00:00Z") };
     const modelId = evidenceFingerprint(model), publicationId = evidenceFingerprint({ kind: "daily-best-slips", version: 1, day: date });
     const body = JSON.stringify({ version: 1, day: date, publishedAt: publicationAt, model: { id: modelId, ...model },
-      criteria: serializeSlipCriteria(bestSlipCriteria(date)).toString(), count: slips.length, searchLimited: nextPage !== null, partialCoverage: false });
+      criteria: serializeSlipCriteria(bestSlipCriteria(date, { ...bestSlipsRules, count: demoSlipRules.count })).toString(),
+      count: slips.length, searchLimited: nextPage !== null, partialCoverage: false });
     await database.transaction(async (tx) => {
       const inserted = await tx.$executeRaw`INSERT IGNORE INTO DailySlipPublication(id,eatDate,publishedAt,modelId,bodyJson,integrity)
         VALUES(${publicationId},${new Date(`${date}T00:00:00Z`)},${new Date(publicationAt)},${modelId},
