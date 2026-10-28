@@ -197,7 +197,7 @@ export function MobileSlipGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Clean ledger (01) is selected for matches and slips. These comparison samples use illustrative fixtures, generic crests, dates such as 28-Oct, time with AM/PM, VS and compact prediction labels. Times follow your device. Tap a slip header to open or close it. Average probability is the mean of the individual picks. <a href={`/${locale}/slips/designs/desktop`}>Compare desktop samples</a>.</Footer>
+      <Footer>Clean ledger (01) is selected for matches and slips. These comparison samples use illustrative fixtures, generic crests, dates such as 28-Oct, time with AM/PM, VS and compact prediction labels. Times follow your device. Tap a slip header to open or close it. Average probability is the mean of the individual picks. <a href={`/${locale}/slips/designs/headers`}>Compare single-row mobile headers</a> · <a href={`/${locale}/slips/designs/desktop`}>Compare desktop samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }
