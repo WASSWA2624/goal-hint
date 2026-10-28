@@ -2,8 +2,10 @@
 
 Open `/en/slips/designs/headers`. These ten revised candidates build on the
 selected Vertical rules direction. **09 Minimal rules is the production mobile
-header**, with slightly more horizontal padding around all header text. The
-approved Clean ledger match rows stay unchanged.
+header**. Production now uses a minimum 44px target, 14px figures/status and
+12px labels above the figures to address readability feedback. These historical
+samples retain their original sizing. The approved Clean ledger match rows stay
+unchanged.
 
 | Option | Header | Height |
 | --- | --- | --- |

@@ -62,4 +62,26 @@ export const MobileHeaderRow = styled.summary`
   @container compact-slip (max-width: 12rem) {
     block-size: max(var(--header-height), 2rem);
   }
+
+  /* Production uses a readable scale; historical comparison samples retain their original sizing. */
+  &:not([data-header-variant]) {
+    --header-height: 2.75rem;
+    grid-template-columns: 2rem 5rem minmax(3.625rem, 1fr) 3.5rem 3.875rem 0.625rem;
+    block-size: auto;
+    font-size: 0.875rem;
+    > h3, > h3[data-dense-identity] {
+      justify-content: center; text-align: center; white-space: normal;
+      font-size: 0.875rem;
+    }
+    [data-header-field] {
+      flex-direction: column; justify-content: center; gap: 0.1875rem;
+      padding: 4px 2px;
+    }
+    [data-header-field] strong { font-size: 0.875rem; }
+    [data-header-label] { order: -1; font-size: 0.75rem; }
+    &[data-large-odds] [data-header-field="odds"] [data-header-label] { display: inline; }
+    &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.875rem; }
+    [data-header-status] { padding-inline: 2px; font-size: 0.875rem; }
+    [data-header-chevron] { inline-size: 6px; block-size: 6px; }
+  }
 `;
