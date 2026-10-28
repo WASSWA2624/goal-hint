@@ -8,6 +8,11 @@ import { media } from "@/styles/theme";
 const compactControlHeight = "2.125rem";
 
 export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; }`;
+/** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
+export const SlipList = styled.div<{ $phoneGap?: number }>`
+  display: grid; min-inline-size: 0; gap: ${({ $phoneGap = 10 }) => $phoneGap}px;
+  ${media.desktop} { gap: 3px; }
+`;
 export const SlipHeading = styled(PageHeading)`font-size: 1.25rem; ${media.desktop} { font-size: 1.5rem; }`;
 export const HeadingRow = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;

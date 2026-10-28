@@ -1,4 +1,4 @@
-# Selected desktop slip acceptance
+# Aligned ledger desktop acceptance
 
 Run from `next-js/`:
 
@@ -6,29 +6,39 @@ Run from `next-js/`:
 python scripts/verify-desktop-slip-rendering.py --serve
 ```
 
-The script creates an isolated production application in an ignored `.tmp/`
-folder, copies local generic crests, and verifies raw rendered HTML. It never
-reads application accounts, providers, database records or private configuration.
+The script builds an isolated production application in ignored `.tmp/`, copies
+local generic crests, and checks rendered HTML. It does not read real accounts,
+provider services, database records or private environment files.
 
 Routes:
 
-- `/desktop`: the actual selected desktop component with a short Ajax/PSV pair,
-  longer names, local league/team crests and country flags.
-- `/saved`: original selected odds/probabilities and supplied regulation scores
-  with correct/lost/void outcomes.
+- `/desktop`: immutable original selections without current observations. They
+  display Unknown/Pending and VS rather than inferring a phase from kickoff.
+- `/saved`: supplied snapshot results and regulation scores, including Won,
+  Lost and Void. A saved result alone never invents FT or elapsed minutes.
+- `/states`: five explicit supplied states: upcoming/VS, live/1-0/30′,
+  halftime/1-1/HT, finished/2-1/Won and finished/0-1/Lost.
+- `/responsive`: actual shared `SlipTable`; SSR retains one mobile selection
+  set and desktop hydration switches to Aligned ledger at 64rem.
+- `/best-full` and `/builder`: actual BestSlips and SlipBuilder components,
+  each with two slips and the same explicit observations for gap/alignment checks.
 - `/locked` and `/locked-member`: aggregate-only native disclosures with the
-  appropriate login or subscription action and no original selections.
-- `/responsive`: the actual shared `SlipTable`, retaining one mobile selection
-  set in SSR and selecting the desktop design after browser hydration at 64rem.
-- `/best-locked` and `/best-locked-member`: the actual `BestSlips` component with
-  a valid aggregate-only result, exercising its responsive locked-summary branch.
+  correct login or subscription action and no original selection identities.
+- `/best-locked` and `/best-locked-member`: the actual BestSlips locked-summary
+  branch with an aggregate-only result.
 
-Desktop disclosures start closed. Open the first slip with mouse, Enter or Space
-to inspect the single-line fields and the canonical match-analysis VS link.
-At desktop widths the short pair is centred within its team column; longer names
-use ellipsis with full-text hover/focus tooltips. The midnight fixture displays
-30 Oct at 00:00 EAT while retaining its original 29 Oct UTC instant.
+Desktop slips start collapsed. Open with mouse, Enter or Space. Verify the
+28-Oct / 24-hour EAT date/time grouping, country-before-league order, fixed
+country/league/status tracks, and score/VS and crest alignment across long and
+short team names. Long names show full-text hover/focus tooltips; Escape closes
+those tooltips. The score/VS analysis link never surrounds tooltip buttons.
 
-After a successful build, use `--fixture .tmp/<printed-directory>` to rerun the
-HTML checks against that exact build without rebuilding it. Add `--serve` to keep
-the local fixture available for browser checks. Rebuild after source changes.
+The actual Best slips and builder result stacks have a 3px desktop slip gap.
+In both themes, rows remain one compact line; match state and selection result
+occupy the final equal-width cell. Mobile retains its existing Clean ledger
+markup. The midnight original displays 30-Oct at 00:00 EAT while retaining its
+29 Oct UTC instant. Original selected odds, probability and market are unchanged.
+
+After a successful build, rerun against that exact build with
+`--fixture .tmp/<printed-directory>`. Add `--serve` to keep it available for
+browser checks. Rebuild after source changes.

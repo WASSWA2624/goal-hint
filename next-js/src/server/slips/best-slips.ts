@@ -4,6 +4,7 @@ import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, qualifiedJointModel, 
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
+import { slipMatchStateForSelection } from "../../domain/slip-match-state.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 import { getDatabase } from "../database/client.ts";
@@ -12,7 +13,10 @@ import { createPublishedSlips } from "./published-slips.ts";
 export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
   return { ...result, slips: result.slips.map((view) => ({ rank: view.rank, matchCount: view.matchCount,
     totalOdds: view.totalOdds, estimatedProbability: view.estimatedProbability, averageProbability: view.averageProbability,
-    ...(access.tier === "full" && view.slip ? { slip: view.slip } : {}) })) };
+    ...(access.tier === "full" && view.slip ? { slip: view.slip,
+      ...(view.matchStates ? { matchStates: view.slip.selections.flatMap((selection) => {
+        const state = slipMatchStateForSelection(selection, view.matchStates); return state ? [state] : [];
+      }) } : {}) } : {}) })) };
 }
 
 /** Recomputed from today's current stored cohort; no shared cache ever contains a viewer response. */
@@ -33,7 +37,7 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
     }
     const slips = (result.data?.slips ?? []) as readonly BestSlip[];
     if (slips.some((slip) => !Number.isFinite(slip.estimatedProbability))) return { ...base, state: "model-unavailable" };
-    return { day, state: result.state, slips: bestSlipViews(slips, access.tier === "full"),
+    return { day, state: result.state, slips: bestSlipViews(slips, access.tier === "full", result.matchStates),
       searchLimited: result.searchLimited, partialCoverage: result.partialCoverage,
       statistics: { total: slips.length, won: 0, lost: 0, pending: slips.length, void: 0 } };
   };

@@ -6,6 +6,7 @@ import { isPlayedFinalStatus, settleMarketSelection, type CycleEligibility, type
 import { slipBuilderRules, type BuiltSlip, type SlipCriteria, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
+import type { SlipMatchProgress } from "./slip-match-state.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 
 const record = storedMatchFeedRecordSchema.shape;
@@ -33,6 +34,8 @@ export type SavedSlipResult = Readonly<{
   /** A terminal original cycle stays complete even when a replacement fixture is active. */
   completed?: boolean;
   cycleEligibility?: CycleEligibility;
+  /** Validated current/original-cycle presentation facts; never part of the persisted slip. */
+  progress?: SlipMatchProgress;
 }>;
 export const savedSlipCompletedStatuses: readonly SettlementStatus[] = Object.freeze([
   "finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded",

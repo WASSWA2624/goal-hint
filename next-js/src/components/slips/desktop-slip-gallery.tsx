@@ -80,7 +80,7 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
       <Intro>
         <p data-eyebrow>Goal Hint · Desktop design review</p>
         <h1>Desktop slips · scores and status</h1>
-        <p>Ten new concepts with tighter slip spacing, fixed country and league columns, and teams aligned around a shared score or VS. Compare compact ways to show match progress and selection outcomes.</p>
+        <p>Ten concepts with tighter slip spacing, fixed country and league columns, and teams aligned around a shared score or VS. Design 01, Aligned ledger, is now used for desktop Best slips and the slip builder.</p>
         <p>These are desktop canvases at actual size. On a smaller window, scroll within a sample to see its full width.</p>
       </Intro>
       <Toolbar aria-label="Desktop preview controls">
@@ -119,7 +119,7 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Preview only: fixtures, scores, clocks and outcomes are illustrative. These concepts do not change the current desktop implementation or the mobile layout. Hover or focus a shortened name for its full text; Escape closes the tooltip. Average match probability is the mean of the selections. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
+      <Footer>Fixtures, scores, clocks and outcomes here are illustrative. Desktop Best slips and the slip builder use design 01, Aligned ledger; the mobile layout is unchanged. Hover or focus a shortened name for its full text; Escape closes the tooltip. Average match probability is the mean of the selections. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }

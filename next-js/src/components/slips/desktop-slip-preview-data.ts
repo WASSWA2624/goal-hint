@@ -1,13 +1,9 @@
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
+import type { SlipMatchState } from "@/domain/slip-match-state";
 import { compactSlipPreview } from "./compact-slip-preview-data";
 
 /** Illustrative presentation states belong only to the desktop design review. */
-type PreviewScore = Readonly<{ home: number; away: number }>;
-export type DesktopPreviewMatchState = Readonly<
-  | { match: "upcoming"; outcome: "pending"; clock?: never; score?: never }
-  | { match: "live" | "halftime"; outcome: "pending"; clock: string; score: PreviewScore }
-  | { match: "finished"; outcome: "correct" | "incorrect"; clock: "FT"; score: PreviewScore }
->;
+export type DesktopPreviewMatchState = Pick<SlipMatchState, "status" | "outcome" | "liveClock" | "score">;
 
 export type DesktopSlipPreview = Readonly<{
   slip: BuiltSlip;
@@ -17,15 +13,15 @@ export type DesktopSlipPreview = Readonly<{
 const crests = ["azure", "red", "green", "ink"] as const;
 const examples = [
   { home: "Ajax", away: "PSV", league: "Eredivisie", country: "Netherlands", source: 0,
-    state: { match: "upcoming", outcome: "pending" } },
+    state: { status: "scheduled", outcome: "pending", liveClock: null, score: null } },
   { home: "Wolverhampton Wanderers", away: "Brighton & Hove Albion", league: "International Club Championship — Qualification", country: "United Arab Emirates", source: 1,
-    state: { match: "live", outcome: "pending", clock: "30′", score: { home: 1, away: 0 } } },
+    state: { status: "live", outcome: "pending", liveClock: { phase: "first-half", minute: 30 }, score: { home: 1, away: 0 } } },
   { home: "Borussia Mönchengladbach", away: "1. FC Heidenheim 1846", league: "Bundesliga", country: "Germany", source: 0,
-    state: { match: "halftime", outcome: "pending", clock: "HT", score: { home: 1, away: 1 } } },
+    state: { status: "live", outcome: "pending", liveClock: { phase: "half-time", minute: null }, score: { home: 1, away: 1 } } },
   { home: "Arsenal", away: "Chelsea", league: "Premier League", country: "England", source: 0,
-    state: { match: "finished", outcome: "correct", clock: "FT", score: { home: 2, away: 1 } } },
+    state: { status: "finished-regulation", outcome: "correct", liveClock: null, score: { home: 2, away: 1 } } },
   { home: "Sporting CP", away: "Braga", league: "Primeira Liga", country: "Portugal", source: 2,
-    state: { match: "finished", outcome: "incorrect", clock: "FT", score: { home: 0, away: 1 } } },
+    state: { status: "finished-regulation", outcome: "incorrect", liveClock: null, score: { home: 0, away: 1 } } },
 ] as const satisfies readonly (Readonly<{
   home: string; away: string; league: string; country: string; source: number; state: DesktopPreviewMatchState;
 }>)[];

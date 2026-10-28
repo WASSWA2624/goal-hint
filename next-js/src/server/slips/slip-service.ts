@@ -5,6 +5,7 @@ import { feedQueryRules, type FeedParameters } from "../../domain/feed-query.ts"
 import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
+import { scheduledSlipMatchStates } from "../../domain/slip-match-state.ts";
 import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
 import { jointSlipBuilder } from "../../domain/joint-slip-model.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
@@ -132,7 +133,8 @@ export function createSlipBuildService(options: Readonly<SlipReadSource & {
         throw new MatchFeedError("unavailable");
       }
       return { ...base, state: data.slips.length > 0 ? "generated" : data.qualifyingMatches === 0 ? "no-qualifying" : "no-combinations",
-        data, asOf: returnedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage };
+        data, asOf: returnedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage,
+        matchStates: scheduledSlipMatchStates(data.slips, current) };
     } catch (error) {
       if (isDevelopmentDemo()) {
         const kind = error instanceof MatchFeedError ? error.code : error instanceof Error ? error.name : "unknown";

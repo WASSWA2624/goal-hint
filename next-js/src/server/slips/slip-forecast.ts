@@ -2,6 +2,7 @@ import "server-only";
 
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
+import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { savedSlipCompletedStatuses, type SavedSlipResult } from "../../domain/saved-slips.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -69,6 +70,12 @@ export function projectSlipForecastResult(selection: SlipSelection, input: Reado
   if (cycle.state === "void" && cycle.voidedAt !== null && cycle.voidedAt <= asOf) {
     return { ...base, completed: true, cycleEligibility: cycleEligibilityFor(cycle) };
   }
+  if (cycle.state === "open") {
+    return fixture.activeCycleId === cycle.id && fixture.status === "scheduled" && !fixture.lifecycleState?.issue
+      && fixture.kickoff?.getTime() === selection.kickoffAt && fixture.homeTeamId === selection.homeTeam.id
+      && fixture.awayTeamId === selection.awayTeam.id
+      ? resultProjection(base, "scheduled", null, false) : base;
+  }
   if (cycle.state !== "closed" || cycle.closedAt === null || cycle.closedAt > asOf) return base;
   const cutoff = reconstructCutoff(cycle, input.schedules, utcInstantFromEpochMilliseconds(asOf), cycle.closedAt);
   if (!cycle.lockedSetId || !revisionEligibleForLock(revision, cycle, input.schedules, cutoff.effectiveCloseAt)) {
@@ -89,8 +96,13 @@ export function projectSlipForecastResult(selection: SlipSelection, input: Reado
 function resultProjection(base: SavedSlipResult, status: SavedSlipResult["status"], result: StoredFixtureResult | null,
   completed: boolean): SavedSlipResult {
   const verified = isPlayedFinalStatus(status) && result?.regulation.verified === true;
+  const live = status === "live" && result?.status === "live";
+  const liveScore = live && result.reportedGoals.home !== null && result.reportedGoals.away !== null;
   return { ...base, status, completed, regulationVerified: verified,
-    regulationHome: verified ? result!.regulation.home : null, regulationAway: verified ? result!.regulation.away : null };
+    regulationHome: verified ? result!.regulation.home : null, regulationAway: verified ? result!.regulation.away : null,
+    progress: { score: verified ? { home: result!.regulation.home!, away: result!.regulation.away! }
+      : liveScore ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
+    liveClock: live ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes, result!.stoppageMinutes) : null } };
 }
 
 /** Resolve only the original cycle's final evidence when a later cycle has become active. */

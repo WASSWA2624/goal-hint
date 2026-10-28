@@ -7,6 +7,16 @@ total odds and average match probability to every visitor. Match identities, sel
 prices/probabilities require entitlement. Both the initial DTO and the final
 entitlement recheck use that allowlist.
 
+Desktop Best slips use Aligned ledger: a collapsed compact header, 3px gaps,
+hyphenated EAT dates/times, country before league, fixed metadata/status tracks,
+and strictly aligned score/VS and crest columns. Current score, provider clock
+and selection outcome are sidecar observations matched to the original forecast,
+never replacements for snapshot names, picks, prices or probabilities. Only
+released entitled slips carry these observations. Missing evidence stays Unknown
+or Saved result; it does not invent elapsed minutes or a final score. The existing
+page refresh updates published observations while visible. Mobile slips retain
+their existing presentation and spacing.
+
 The daily Kampala cohort targets 4.50–5.50 combined odds and up to 100 distinct
 slips; source-owned `bestSlipsRules` configures the range/count. Daily slips do
 not share fixtures. The bounded compatible-batch search maximizes the feasible

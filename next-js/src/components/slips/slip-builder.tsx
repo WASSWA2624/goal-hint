@@ -22,7 +22,7 @@ import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
 import { Actions, BuildButton, BuilderHeader, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOptions, CriteriaTrigger, FieldGroup,
-  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipStack, TargetGroups } from "./slip-styles";
+  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   const messages = createMessages(locale);
@@ -331,11 +331,11 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} /> : generated ? <>
         <Note>{messages.text(data.jointProbabilities ? "slips.jointRanking" : "slips.ranking")}</Note>
-        {data.slips.map((slip, index) => {
+        <SlipList $phoneGap={9} data-slip-list>{data.slips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
-          return <SlipTable key={slip.id} slip={slip} index={index} locale={locale}
+          return <SlipTable key={slip.id} slip={slip} index={index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
-        })}
+        })}</SlipList>
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={messages.text(emptyState ? `slips.state.${emptyState}.description` : "slips.idle")} />}

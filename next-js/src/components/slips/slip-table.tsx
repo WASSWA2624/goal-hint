@@ -2,6 +2,7 @@
 
 import type { BuiltSlip } from "@/domain/slip-builder";
 import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipMatchState } from "@/domain/slip-match-state";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import styled from "styled-components";
 import { media } from "@/styles/theme";
@@ -17,11 +18,12 @@ const PhoneSlipFallback = styled.div`
 `;
 
 /** One responsive slip renderer preserves the selected phone and desktop presentations. */
-export function SlipTable({ slip, index, locale, results, collapsible = false }: {
-  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; collapsible?: boolean;
+export function SlipTable({ slip, index, locale, results, matchStates, collapsible = false }: {
+  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[]; collapsible?: boolean;
 }) {
   const desktop = useDesktopLayout();
-  if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} {...(results ? { results } : {})} />;
+  if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} {...(results ? { results } : {})}
+    {...(matchStates ? { matchStates } : {})} />;
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" collapsible={collapsible}
     {...(results ? { results } : {})} /></PhoneSlipFallback>;
 }

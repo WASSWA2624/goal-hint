@@ -57,26 +57,25 @@ def single(nodes, message):
     return nodes[0]
 
 
-def verify_desktop(document, path, saved=False):
+def verify_frame(document, path, total="21.95", average="72.4%", count=3):
     wrapper = single(document.nodes(attr="data-desktop-design"), f"{path}: one selected desktop layout")
-    assert wrapper.attrs["data-desktop-design"] == "subtle-dividers", f"{path}: selected variant 09"
+    assert wrapper.attrs["data-desktop-design"] == "aligned-ledger", f"{path}: selected variant 01"
     disclosure = single(wrapper.nodes("details", "data-slip-disclosure"), f"{path}: native disclosure")
     assert "open" not in disclosure.attrs, f"{path}: desktop starts collapsed before hydration"
     summary = single(disclosure.nodes("summary", "data-slip-summary"), f"{path}: one compact summary")
     assert not summary.nodes("a") and not summary.nodes("button"), f"{path}: no competing summary controls"
-    assert all(value in summary.text for value in ["Slip 1", "21.95", "72.4%", "3 selections"]), f"{path}: correct aggregate facts"
+    assert all(value in summary.text for value in ["Slip 1", total, average, f"{count} selections"]), f"{path}: correct aggregate facts"
     assert "Win probability" not in summary.text, f"{path}: average replaces whole-slip estimate"
     rows = disclosure.nodes(attr="data-desktop-row")
-    assert len(rows) == 3, f"{path}: all original selections survive SSR"
-    fields = ("data-row-date", "data-row-time", "data-row-league", "data-row-country", "data-row-teams", "data-row-market", "data-row-odds", "data-row-probability")
-    for index, row in enumerate(rows):
+    assert len(rows) == count, f"{path}: all original selections survive SSR"
+    fields = ("data-row-date", "data-row-time", "data-row-country", "data-row-league", "data-row-teams", "data-row-market", "data-row-odds", "data-row-probability", "data-row-status")
+    for row in rows:
         children = [child for child in row.children if isinstance(child, Element)]
         ordered = [next((field for field in fields if field in child.attrs), None) for child in children]
         assert [field for field in ordered if field] == list(fields), f"{path}: one-line logical field order"
-        assert row.attrs.get("data-status") == "unknown" and row.attrs.get("data-match-state") == "snapshot", f"{path}: no invented live/final state"
         date = single(row.nodes("time", "data-row-date"), f"{path}: date")
         clock = single(row.nodes("time", "data-row-time"), f"{path}: kickoff")
-        assert re.fullmatch(r"\d{1,2} [A-Z][a-z]{2}", date.text.strip()), f"{path}: short date omits weekday"
+        assert re.fullmatch(r"\d{1,2}-[A-Z][a-z]{2}", date.text.strip()), f"{path}: short hyphenated date omits weekday"
         assert re.fullmatch(r"\d{2}:\d{2} EAT", clock.text.strip()), f"{path}: 24-hour reporting timezone"
         assert date.attrs.get("datetime", "").endswith("Z"), f"{path}: canonical source instant"
         assert single(row.nodes("img", "data-country-flag"), f"{path}: local country flag").attrs["src"].startswith("/flags/")
@@ -88,23 +87,48 @@ def verify_desktop(document, path, saved=False):
         analysis = single(row.nodes("a", "data-match-analysis-link"), f"{path}: one accessible analysis link")
         assert analysis.attrs.get("aria-label") and urlsplit(analysis.attrs["href"]).path.startswith("/en/matches/"), f"{path}: canonical analysis destination"
         assert not analysis.nodes("button"), f"{path}: analysis never nests tooltip buttons"
+        assert row.nodes(attr="data-centre") and row.nodes(attr="data-score") and row.nodes(attr="data-clock"), f"{path}: dedicated score and clock anchors"
         assert single(row.nodes(attr="data-row-odds"), f"{path}: original odds").nodes("strong"), f"{path}: numerical price"
         assert single(row.nodes(attr="data-row-probability"), f"{path}: original probability").nodes("strong"), f"{path}: numerical forecast"
-        if not saved:
-            assert not row.nodes(attr="data-row-result"), f"{path}: no invented saved outcome"
-    assert rows[1].nodes(attr="data-row-date")[0].text.strip() == "30 Oct" and rows[1].nodes(attr="data-row-time")[0].text.strip() == "00:00 EAT", f"{path}: EAT midnight rollover"
+        assert row.nodes(attr="data-match-label") and row.nodes(attr="data-outcome-label"), f"{path}: match state and selection outcome are separate"
+    return rows
+
+
+def verify_desktop(document, path, saved=False):
+    rows = verify_frame(document, path)
+    assert all(row.attrs.get("data-status") == "unknown" for row in rows), f"{path}: no invented fixture observation"
+    assert all(row.attrs.get("data-match-state") == ("snapshot" if saved else "unknown") for row in rows), f"{path}: no invented live/final state"
+    assert rows[1].nodes(attr="data-row-date")[0].text.strip() == "30-Oct" and rows[1].nodes(attr="data-row-time")[0].text.strip() == "00:00 EAT", f"{path}: EAT midnight rollover"
     assert rows[1].nodes(attr="data-row-odds")[0].nodes("strong")[0].text == "7.73", f"{path}: original alternative price"
     assert rows[1].nodes(attr="data-row-probability")[0].nodes("strong")[0].text == "61.7%", f"{path}: original forecast precision"
     assert rows[1].nodes(attr="data-pick-label")[0].text == "U 2.5", f"{path}: original alternative selection"
     assert "synthetic-metropolitan-international-athletic-football-club" in rows[2].nodes("a")[0].attrs["href"], f"{path}: original full-name canonical slug"
     if saved:
         assert [row.attrs["data-outcome"] for row in rows] == ["correct", "incorrect", "void"], f"{path}: original saved outcomes"
-        scores = [row.nodes(attr="data-saved-score") for row in rows]
-        assert "2–1" in scores[0][0].text and "4–0" in scores[1][0].text and not scores[2], f"{path}: supplied regulation scores only"
+        scores = [row.nodes(attr="data-score")[0].text for row in rows]
+        assert "2-1" in scores[0] and "4-0" in scores[1] and "VS" in scores[2], f"{path}: supplied regulation scores only"
+        assert all(not row.nodes(attr="data-clock")[0].text.strip() for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
+        assert all(row.nodes(attr="data-match-label")[0].text.strip() == "Saved result" for row in rows), f"{path}: saved observation is identified as a snapshot"
+        assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Won", "Lost", "Void"], f"{path}: explicit saved selection labels"
+    else:
+        assert all("VS" in row.nodes(attr="data-score")[0].text and row.nodes(attr="data-match-label")[0].text.strip() == "Unknown" for row in rows), f"{path}: original snapshot has no assumed upcoming/live state"
+        assert all(row.nodes(attr="data-outcome-label")[0].text.strip() == "Pending" for row in rows), f"{path}: no invented selection settlement"
+
+
+def verify_states(document):
+    rows = verify_frame(document, "states", total="62.35", average="74.5%", count=5)
+    assert [row.attrs["data-match-state"] for row in rows] == ["upcoming", "live", "halftime", "finished", "finished"], "states: supplied fixture phases"
+    assert [row.attrs["data-outcome"] for row in rows] == ["pending", "pending", "pending", "correct", "incorrect"], "states: original selection outcomes"
+    assert [row.nodes(attr="data-clock")[0].text.strip() for row in rows] == ["", "30′", "HT", "FT", "FT"], "states: supplied minute, halftime and final labels"
+    for row, score in zip(rows, ["VS", "1-0", "1-1", "2-1", "0-1"]):
+        assert score in row.nodes(attr="data-score")[0].text, "states: actual supplied score"
+    assert [row.nodes(attr="data-match-label")[0].text.strip() for row in rows] == ["Upcoming", "Live", "HT", "Finished", "Finished"], "states: match states are distinct from selection results"
+    assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Pending", "Pending", "Pending", "Won", "Lost"], "states: fixed final status content"
 
 
 def verify(origin, directory):
-    for scenario in ["desktop", "saved", "locked", "locked-member", "responsive", "best-locked", "best-locked-member"]:
+    scenarios = ["desktop", "saved", "states", "locked", "locked-member", "responsive", "best-locked", "best-locked-member", "best-full", "builder"]
+    for scenario in scenarios:
         response = request(origin, f"/{scenario}")
         assert response.status == 200, f"{scenario}: HTTP 200"
         (directory / f"{scenario}.html").write_text(response.text, encoding="utf-8")
@@ -112,11 +136,13 @@ def verify(origin, directory):
         assert len(document.nodes("h1")) == 1 and len(document.nodes("main")) == 1, f"{scenario}: one page heading/landmark"
         if scenario in {"desktop", "saved"}:
             verify_desktop(document, scenario, saved=scenario == "saved")
+        elif scenario == "states":
+            verify_states(document)
         elif scenario in {"locked", "locked-member", "best-locked", "best-locked-member"}:
             disclosure = single(document.nodes("details", "data-slip-disclosure"), f"{scenario}: native locked disclosure")
             assert "open" not in disclosure.attrs
             assert not document.nodes(attr="data-fixture-id") and not document.nodes(attr="data-slip-id"), f"{scenario}: no private identities"
-            assert not re.search(r"desktop-fixture-|Ajax|Original Inter|home-win|7\.73|0\.6173", response.text), f"{scenario}: no private HTML or flight values"
+            assert not re.search(r"desktop-(?:fixture|state|best)-|Ajax|Original Inter|home-win|7\.73|0\.6173", response.text), f"{scenario}: no private HTML or flight values"
             summary = single(disclosure.nodes("summary"), f"{scenario}: summary")
             assert all(value in summary.text for value in ["21.95", "72.4%", "3 selections"]), f"{scenario}: public aggregate facts"
             content = single(disclosure.nodes(attr="data-slip-content"), f"{scenario}: locked body")
@@ -125,7 +151,8 @@ def verify(origin, directory):
             assert action.text.strip() == expected, f"{scenario}: correct access action"
         else:
             assert not document.nodes(attr="data-desktop-row"), "Responsive SSR retains the existing mobile fallback"
-            assert len(document.nodes("li", "data-slip-selection")) == 3, "Responsive SSR sends one original selection set"
+            count = 3 if scenario == "responsive" else 10
+            assert len(document.nodes("li", "data-slip-selection")) == count, "Responsive SSR sends one original selection set per slip"
         print(f"PASS desktop slip SSR: {scenario}", flush=True)
 
 
@@ -142,7 +169,7 @@ def main():
     with Server(directory) as server:
         verify(server.origin, directory)
         print(f"Fixture artifacts: {directory}", flush=True)
-        print(f"Browser routes: {server.origin}/desktop, /saved, /locked, /locked-member, /responsive, /best-locked, /best-locked-member", flush=True)
+        print(f"Browser routes: {server.origin}/desktop, /saved, /states, /locked, /locked-member, /responsive, /best-locked, /best-locked-member, /best-full, /builder", flush=True)
         if args.serve:
             server.serve()
 

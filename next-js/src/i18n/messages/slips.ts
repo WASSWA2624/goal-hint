@@ -1,4 +1,8 @@
 export const slipsMessages = {
+  "slips.match.unknown": "Unknown",
+  "slips.match.snapshot": "Saved result",
+  "slips.result.won": "Won",
+  "slips.result.lost": "Lost",
   "bestSlips.loginToAccess": "Log in to access",
   "slips.showMatches": "Show matches",
   "slips.hideMatches": "Hide matches",

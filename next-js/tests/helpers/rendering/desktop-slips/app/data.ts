@@ -1,5 +1,6 @@
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
 import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipMatchState } from "@/domain/slip-match-state";
 
 const selections: readonly SlipSelection[] = [
   {
@@ -35,3 +36,22 @@ export const savedResults: SavedSlipView["results"] = [
   { fixtureId: selections[1]!.fixtureId, home: 4, away: 0, outcome: "incorrect" },
   { fixtureId: selections[2]!.fixtureId, home: null, away: null, outcome: "void" },
 ];
+
+const stateSelections = [0, 1, 2, 0, 2].map((source, index): SlipSelection => ({
+  ...selections[source]!, fixtureId: `desktop-state-${index}`,
+}));
+
+/** Original pre-match facts are separate from these explicitly supplied fixture observations. */
+export const stateSlip: BuiltSlip = {
+  id: "desktop-state-slip", selections: stateSelections, oddsBasis: "bookmaker",
+  totalOdds: stateSelections.reduce((product, item) => product * Number(item.odds), 1).toFixed(2),
+  averageProbability: stateSelections.reduce((sum, item) => sum + item.probability, 0) / stateSelections.length,
+};
+
+export const matchStates: readonly SlipMatchState[] = stateSelections.map((selection, index) => ({
+  fixtureId: selection.fixtureId, family: selection.family, selection: selection.selection,
+  status: (["scheduled", "live", "live", "finished-regulation", "finished-regulation"] as const)[index]!,
+  score: ([null, { home: 1, away: 0 }, { home: 1, away: 1 }, { home: 2, away: 1 }, { home: 0, away: 1 }] as const)[index]!,
+  liveClock: index === 1 ? { phase: "first-half", minute: 30 } : index === 2 ? { phase: "half-time", minute: null } : null,
+  outcome: index === 3 ? "correct" : index === 4 ? "incorrect" : "pending",
+}));

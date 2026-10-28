@@ -6,6 +6,7 @@ import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { savedSlipOutcome, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
+import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { serializeSlipCriteria, type BuiltSlip } from "../../domain/slip-builder.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -155,7 +156,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           statistics[savedSlipOutcome(snapshot.slip, results)]++;
         });
         return { day: parseReportingDate(day), state: "generated", slips: bestSlipViews(snapshots.map((snapshot) =>
-          ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true),
+          ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true,
+          slipMatchStatesFromResults(snapshots.flatMap((snapshot) => snapshot.slip.selections), results)),
           searchLimited: value.searchLimited, partialCoverage: value.partialCoverage, statistics };
       });
     },

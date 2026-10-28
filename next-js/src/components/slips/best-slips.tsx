@@ -12,7 +12,7 @@ import { matchesHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
 import type { BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaPanel, Note, SlipStack } from "./slip-styles";
+import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
 import { CompactSlipDisclosure } from "./compact-slip/compact-slip";
 import { DesktopSlipDisclosure } from "./desktop-slip/desktop-slip";
 import { SlipTable } from "./slip-table";
@@ -48,15 +48,15 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
       <TextLink href={matchesHref(locale)} prefetch={false}>{m.text("bestSlips.browseMatches")}</TextLink>
     </Stack></CriteriaPanel> : <>
       {(result.searchLimited || result.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
-      {result.slips.map((view) => view.slip ? <SlipTable key={view.slip.id} index={view.rank - 1} locale={locale}
-        slip={view.slip} collapsible /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
+      <SlipList data-slip-list>{result.slips.map((view) => view.slip ? <SlipTable key={view.slip.id} index={view.rank - 1} locale={locale}
+        slip={view.slip} collapsible {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
           totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}>
         <CriteriaPanel>
           <ButtonLink href={subscriberHref(signedIn, "/en", "login")} prefetch={false}>
             {m.text(signedIn ? "subscribe.title" : "bestSlips.loginToAccess")}
           </ButtonLink>
         </CriteriaPanel>
-      </SummaryDisclosure>)}
+      </SummaryDisclosure>)}</SlipList>
     </>}
     <Note>{m.text("bestSlips.disclaimer")}</Note>
   </SlipStack>;

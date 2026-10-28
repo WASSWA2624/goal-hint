@@ -4,8 +4,9 @@ Open `/en/slips/designs/desktop` on the running application, or the isolated
 review at <http://127.0.0.1:3120/en/slips/designs/desktop>. The route is marked
 `noindex, nofollow`.
 
-These ten new concepts are previews for selection. The current production
-Subtle dividers layout and mobile presentation remain unchanged.
+Desktop Best slips and the slip builder now use selected concept **01 — Aligned
+ledger**. The other nine concepts remain available for comparison. The mobile
+presentation is unchanged.
 
 | Option | Layout |
 | --- | --- |
@@ -45,8 +46,9 @@ have equal widths. Header odds and average probability are computed from the
 five sample selections.
 
 Samples do not request providers, live results or private slip APIs. Production
-snapshot rows and settlement behavior are unchanged. Only the existing tooltip
-component is exported for reuse by the review. The 64rem minimum desktop canvas
+and review reuse the same row formatting, tooltips and selected geometry. Current
+match observations are separate from the immutable production snapshots and are
+matched to the original selection and forecast before display. The 64rem minimum desktop canvas
 scrolls locally in narrower windows.
 
 To build and serve an isolated review from `next-js/`:

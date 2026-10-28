@@ -71,6 +71,28 @@ test('a superseded but cutoff-eligible saved selection is graded unchanged; a re
   assert.equal(correction.regulationHome, null, 'pending corrections cannot reuse a prior winning score');
 });
 
+test('desktop progress uses only coherent original-cycle live scores and provider clocks', () => {
+  const f = slipForecastFixture(), selection = bound(f), input = projection(f);
+  const fixture = { ...f.fixture, status: 'live' };
+  const result = { fixtureId: fixture.id, observedAt: input.asOf - 1000, status: 'live', providerStatus: '1H', elapsedMinutes: 30,
+    reportedGoals: { home: 1, away: 0 }, regulationVerifiedAt: null,
+    regulation: { verified: false, home: null, away: null, evidenceRef: null } };
+  const live = projectSlipForecastResult(selection, { ...input, fixture, result });
+  assert.deepEqual(live.progress, { score: { home: 1, away: 0 }, liveClock: { phase: 'first-half', minute: 30 } });
+  assert.equal(live.completed, false); assert.equal(live.regulationVerified, false);
+  const halfTime = projectSlipForecastResult(selection, { ...input, fixture, result: { ...result, providerStatus: 'HT', elapsedMinutes: 45 } });
+  assert.deepEqual(halfTime.progress.liveClock, { phase: 'half-time', minute: null });
+  const missingScore = projectSlipForecastResult(selection, { ...input, fixture,
+    result: { ...result, reportedGoals: { home: null, away: null } } });
+  assert.equal(missingScore.progress.score, null);
+  assert.deepEqual(missingScore.progress.liveClock, { phase: 'first-half', minute: 30 }, 'a coherent clock remains available without a score');
+  const incoherent = projectSlipForecastResult(selection, { ...input, fixture,
+    result: { ...result, regulation: { ...result.regulation, home: 4 } } });
+  assert.equal(incoherent.progress.score, null); assert.equal(incoherent.progress.liveClock, null);
+  const replacement = projectSlipForecastResult(selection, { ...input, fixture: { ...fixture, activeCycleId: randomUUID() }, result });
+  assert.equal(replacement.progress, undefined, 'replacement live data never populates the original cycle');
+});
+
 test('open, foreign, future or altered snapshot bindings never expose a completed slip', () => {
   const f = slipForecastFixture(), selection = bound(f), input = projection(f), snapshot = { ...f.slip, selections: [selection] };
   for (const change of [{ cycle: { ...input.cycle, state: 'open' } }, { cycle: { ...input.cycle, id: randomUUID() } },

@@ -4,6 +4,7 @@ export { jointSlipProbability, qualifiedJointModel, type JointSlipModel } from "
 import type { ReportingDate } from "./calendar.ts";
 import type { SlipBuildState } from "./slip-page.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
+import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-state.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
 
@@ -15,7 +16,7 @@ export function compareBestSlips(left: BestSlip, right: BestSlip): number {
 export type BestSlipSummary = Readonly<{
   rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;
 }>;
-export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip }>;
+export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip; matchStates?: readonly SlipMatchState[] }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
   searchLimited: boolean; partialCoverage: boolean;
@@ -37,8 +38,10 @@ export function bestSlipBuilder(model: JointSlipModel) {
 }
 
 /** Public aggregate allowlist: the displayed arithmetic mean is distinct from the joint estimate used for ranking. */
-export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean): readonly BestSlipView[] {
+export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean, matchStates?: readonly SlipMatchState[]): readonly BestSlipView[] {
   return [...slips].sort(compareBestSlips).map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
     totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, averageProbability: slip.averageProbability,
-    ...(entitled ? { slip } : {}) }));
+    ...(entitled ? { slip, ...(matchStates ? { matchStates: slip.selections.flatMap((selection) => {
+      const state = slipMatchStateForSelection(selection, matchStates); return state ? [state] : [];
+    }) } : {}) } : {}) }));
 }
