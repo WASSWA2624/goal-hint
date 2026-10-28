@@ -1,5 +1,7 @@
 import "server-only";
 
+import { demoLiveFixtureOdds, demoLiveOddsAvailable, demoLiveOddsBets } from "./api-football-live-odds.ts";
+
 import { DEMO_START_DATE, DEMO_END_DATE, DEMO_MATCHES_PER_DAY, DEMO_DAY_MS, DEMO_START_MS, DEMO_DAYS,
   DEMO_FIXTURE_ID_BASE, demoFootballCatalog, demoLeagueById, demoTeamById, demoCountryFlag,
   demoRawTeam, demoRawLeague, demoDateIndex, demoDateAt, demoFixtureCoordinates, demoFixtureTeams, demoHash,
@@ -270,6 +272,37 @@ export function demoFixtureStatistics(id: number, nowMs = Date.now()) {
   });
 }
 
+/** Cumulative observations give the regulation halves the same event timeline as
+ * the ordinary match statistics. The first half freezes at its interval; extra
+ * time never gets assigned to the second regulation half. */
+export function demoFixtureStatisticsPeriods(id: number, nowMs = Date.now()) {
+  const all = demoFixtureStatistics(id, nowMs), kickoff = demoFixtureKickoff(id);
+  if (!all.length || kickoff === null) return [];
+  const first = demoFixtureStatistics(id, Math.min(nowMs, kickoff + 45 * 60_000));
+  const regulation = demoFixtureStatistics(id, Math.min(nowMs, kickoff + 105 * 60_000));
+  const secondStarted = nowMs >= kickoff + 60 * 60_000;
+  return all.map((row, index) => {
+    const firstHalf = first[index]!.statistics, observed = regulation[index]!.statistics;
+    const firstValues = new Map(firstHalf.map((statistic) => [statistic.type, statistic.value]));
+    const difference = (type: string) => Number(observed.find((statistic) => statistic.type === type)?.value ?? 0)
+      - Number(firstValues.get(type) ?? 0);
+    const secondHalf = !secondStarted ? null : observed.map(({ type, value }) => {
+      const earlier = firstValues.get(type);
+      if (value === null || earlier === null || earlier === undefined) return { type, value: null };
+      if (type === "Ball Possession") return { type, value };
+      if (type === "Passes %") {
+        const passes = difference("Total passes"), accurate = difference("Passes accurate");
+        return { type, value: `${passes ? Math.round(accurate / passes * 100) : 0}%` };
+      }
+      if (typeof value === "number" && typeof earlier === "number") return { type, value: value - earlier };
+      // Decimal source values remain decimal strings, including signed prevented goals.
+      const hundredths = Math.round(Number(value) * 100) - Math.round(Number(earlier) * 100);
+      return { type, value: (hundredths / 100).toFixed(2) };
+    });
+    return { team: row.team, statistics: row.statistics, firstHalf, secondHalf };
+  });
+}
+
 export function demoFixturePlayers(id: number, nowMs = Date.now()) {
   const fixture = demoFixtureById(id, nowMs);
   if (!fixture || !playedCodes.has(fixture.fixture.status.short) || ["AWD", "WO"].includes(fixture.fixture.status.short)) return [];
@@ -405,7 +438,7 @@ function standings(league: DemoLeague, nowMs: number) {
   return { league: { ...demoRawLeague(league), standings: groups } };
 }
 
-function probabilities(homeGoals: number, awayGoals: number) {
+function probabilities(homeGoals: number, awayGoals: number, homeOffset = 0, awayOffset = 0) {
   const home: number[] = [], away: number[] = [];
   home[0] = Math.exp(-homeGoals); away[0] = Math.exp(-awayGoals);
   for (let n = 1; n <= 14; n += 1) { home[n] = home[n - 1]! * homeGoals / n; away[n] = away[n - 1]! * awayGoals / n; }
@@ -413,14 +446,16 @@ function probabilities(homeGoals: number, awayGoals: number) {
   const totals = new Map<number, number>();
   for (let i = 0; i < home.length; i += 1) for (let j = 0; j < away.length; j += 1) {
     const value = home[i]! * away[j]!;
-    if (i > j) h += value; else if (i === j) d += value; else a += value;
-    if (i > 0 && j > 0) btts += value;
-    totals.set(i + j, (totals.get(i + j) ?? 0) + value);
+    const homeScore = i + homeOffset, awayScore = j + awayOffset, total = homeScore + awayScore;
+    if (homeScore > awayScore) h += value; else if (homeScore === awayScore) d += value; else a += value;
+    if (homeScore > 0 && awayScore > 0) btts += value;
+    totals.set(total, (totals.get(total) ?? 0) + value);
   }
   const sum = h + d + a;
   return { home: h / sum, draw: d / sum, away: a / sum, btts: btts / sum, over: (line: number) => [...totals].reduce((n, [goals, p]) => n + (goals > line ? p : 0), 0) / sum,
-    exact: (h: number, a: number) => home[h]! * away[a]! / sum };
+    exact: (h: number, a: number) => (home[h - homeOffset] ?? 0) * (away[a - awayOffset] ?? 0) / sum };
 }
+export { probabilities as demoScoreProbabilities };
 export function demoFixtureProbabilities(id: number) {
   const model = demoFixtureModel(id); return model ? probabilities(model.homeGoals, model.awayGoals) : null;
 }
@@ -607,6 +642,31 @@ export function demoApiFootballResponse(endpoint: string, params: Parameters = {
   };
   const error = (field: string, message: string): ApiFootballDemoEnvelope => ({ ...envelope([]), errors: { [field]: message } });
   if (!Number.isFinite(nowMs)) return error("time", "Invalid local demo observation time.");
+  if (get === "odds/live" || get === "odds/live/bets") {
+    const catalog = get === "odds/live/bets", allowed = catalog ? ["id", "search"] : ["fixture", "league", "bet"];
+    for (const field of Object.keys(params)) {
+      if (!allowed.includes(field)) return error(field, `The ${field} field is not supported by this endpoint.`);
+      if (field !== "search" && (!/^[1-9]\d*$/u.test(params[field]!) || !Number.isSafeInteger(Number(params[field])))) {
+        return error(field, `The ${field} field must be a positive integer.`);
+      }
+    }
+    if (catalog) {
+      if (params.search !== undefined && params.search.length < 3) return error("search", "The Search field must contain at least 3 characters.");
+      return envelope(demoLiveOddsBets.filter((row) => (!params.id || row.id === Number(params.id))
+        && (!params.search || row.name.toLowerCase().includes(params.search.toLowerCase()))));
+    }
+    const selected = params.fixture ? demoFixtureById(Number(params.fixture), nowMs) : null;
+    if (params.fixture && !selected) return envelope([]);
+    // Include adjacent reporting dates so midnight does not drop late matches or
+    // fixtures entering the live feed shortly before the first covered day.
+    const reportingDay = Math.floor((nowMs + 10_800_000) / DEMO_DAY_MS) * DEMO_DAY_MS;
+    const candidates = selected ? [selected] : [-1, 0, 1].flatMap((offset) =>
+      demoFixturesForDate(new Date(reportingDay + offset * DEMO_DAY_MS).toISOString().slice(0, 10), nowMs));
+    return envelope(candidates.filter((row) => (!params.league || row.league.id === Number(params.league)) && demoLiveOddsAvailable(row, nowMs))
+      .map((row) => demoLiveFixtureOdds(row, demoFixtureModel(row.fixture.id)!, nowMs, probabilities, {
+        ...(params.bet ? { betId: Number(params.bet) } : {}), statistics: demoFixtureStatistics(row.fixture.id, nowMs),
+      })).filter((row) => row !== null));
+  }
   if (params.timezone) { try { new Intl.DateTimeFormat("en", { timeZone: params.timezone }); } catch { return error("timezone", "The Timezone field is invalid."); } }
   if (params.page && (!/^\d+$/u.test(params.page) || Number(params.page) < 1)) return error("page", "The Page field must be a positive integer.");
   if (params.season && params.season !== "2026") return envelope([]);
@@ -679,6 +739,9 @@ export function demoApiFootballResponse(endpoint: string, params: Parameters = {
     const rows = fixtureRows(params, nowMs);
     return envelope(params.id || params.ids ? rows.map((row) => withDetails(row, nowMs)) : params.live ? rows.map((row) => ({ ...row, events: demoFixtureEvents(row.fixture.id, nowMs) })) : rows);
   }
+  if (get === "fixtures/statistics" && params.half !== undefined && !["true", "false"].includes(params.half)) {
+    return error("half", "The Half field must be true or false.");
+  }
   const fixture = params.fixture ? demoFixtureById(Number(params.fixture), nowMs, params.timezone ?? "UTC") : null;
   if (params.fixture && !fixture) return envelope([]);
   if (["fixtures/events", "fixtures/lineups", "fixtures/statistics", "fixtures/players", "predictions"].includes(get)) {
@@ -691,11 +754,24 @@ export function demoApiFootballResponse(endpoint: string, params: Parameters = {
     if (get === "fixtures/lineups") return envelope(demoFixtureLineups(id, nowMs).filter((row) => (!params.team || row.team.id === Number(params.team)) &&
       (!params.player || [...row.startXI, ...row.substitutes].some((player) => player.player.id === Number(params.player)))));
     if (get === "fixtures/statistics") {
-      // The published full-time response example is verified. Do not invent extra
-      // properties for an optional response variant without an authoritative schema.
-      if (params.half === "true") return error("half", "Half-by-half statistics are unavailable in this synthetic dataset.");
-      return envelope(demoFixtureStatistics(id, nowMs).filter((row) => !params.team || row.team.id === Number(params.team))
-        .map((row) => ({ ...row, statistics: row.statistics.filter((stat) => !params.type || stat.type === params.type) })));
+      const matchesTeam = (row: { team: { id: number } }) => !params.team || row.team.id === Number(params.team);
+      const matchesType = (statistic: { type: string }) => !params.type || statistic.type === params.type;
+      if (params.half === "true") {
+        // The provider's half variant represents goals_prevented as a number.
+        // Preserve the existing default response for ordinary production consumers.
+        const select = (statistics: ReturnType<typeof demoFixtureStatistics>[number]["statistics"]) => statistics.filter(matchesType)
+          .map((statistic) => statistic.type === "goals_prevented" && statistic.value !== null
+            ? { ...statistic, value: Number(statistic.value) } : statistic);
+        // API-Football v3.9.3's "With half parameter" example adds these two
+        // arrays beside the full-match statistics, using the same entry shape.
+        // Source: https://api-sports.io/public/documentations/football-v3.yaml
+        return envelope(demoFixtureStatisticsPeriods(id, nowMs).filter(matchesTeam).map((row) => ({
+          team: row.team, statistics: select(row.statistics), statistics_1h: select(row.firstHalf),
+          statistics_2h: select(row.secondHalf ?? []),
+        })));
+      }
+      return envelope(demoFixtureStatistics(id, nowMs).filter(matchesTeam)
+        .map((row) => ({ ...row, statistics: row.statistics.filter(matchesType) })));
     }
     return envelope(demoFixturePlayers(id, nowMs).filter((row) => !params.team || row.team.id === Number(params.team)));
   }

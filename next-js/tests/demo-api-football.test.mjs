@@ -80,7 +80,11 @@ test("official list/detail shape and envelope do not leak internal generator met
   for (const field of ["events", "lineups", "statistics", "players"]) assert.ok(Array.isArray(detail.response[0][field]));
   const stats = request("fixtures/statistics", { fixture: String(row.fixture.id) }, finishedAt);
   for (const team of stats.response) for (const statistic of team.statistics) assert.deepEqual(Object.keys(statistic).sort(), ["type", "value"]);
-  assert.ok(request("fixtures/statistics", { fixture: String(row.fixture.id), half: "true" }, finishedAt).errors.half);
+  const halfStats = request("fixtures/statistics", { fixture: String(row.fixture.id), half: "true" }, finishedAt);
+  assert.deepEqual(halfStats.errors, []);
+  for (const team of halfStats.response) {
+    assert.ok(Array.isArray(team.statistics_1h)); assert.ok(Array.isArray(team.statistics_2h));
+  }
   assert.deepEqual(request("fixtures", { ids: `${row.fixture.id}-${list.response[1].fixture.id}` }).response.map((f) => f.fixture.id).sort(),
     [row.fixture.id, list.response[1].fixture.id].sort());
 });

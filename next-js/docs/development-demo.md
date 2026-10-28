@@ -51,8 +51,8 @@ The generator implements the documented API-Football v3 envelopes and endpoint
 payloads, including `get`, `parameters`, `errors`, `results`, `paging`, and
 `response`. Fixture detail responses include events, lineups, statistics and
 players. Other endpoints cover teams, competitions, venues, squads, injuries,
-standings, historical fixtures, team/player statistics, predictions, odds,
-bookmakers and betting markets. Lineups and live statistics follow match-state
+standings, historical fixtures, team/player statistics, predictions, pre-match
+and live odds, bookmakers and betting markets. Lineups and live statistics follow match-state
 availability; future scores remain null. Match status and progress follow the
 observation clock.
 
@@ -99,12 +99,39 @@ While the demo server runs, inspect provider-shaped JSON directly:
 /api/demo/football/fixtures?date=2026-11-30&timezone=Africa/Kampala
 /api/demo/football/fixtures?id=<synthetic fixture id>
 /api/demo/football/fixtures/events?fixture=<synthetic fixture id>
+/api/demo/football/fixtures/statistics?fixture=<synthetic fixture id>&half=true
 /api/demo/football/odds?fixture=<synthetic fixture id>&bookmaker=8
+/api/demo/football/odds/live
+/api/demo/football/odds/live?fixture=<currently available synthetic fixture id>&bet=59
+/api/demo/football/odds/live/bets?search=chance
 ```
 
 These routes return 404 outside development demo mode. Internal catalog metadata
 and app projections are never added to raw provider envelopes. The authoritative
 reference is the [official API-Football v3 documentation](https://www.api-football.com/documentation_v3).
+
+`fixtures/statistics?half=true` returns each team's `statistics`, `statistics_1h`
+and `statistics_2h` arrays, containing the provider's `{type, value}` entries.
+Team and statistic-type filters apply to all three arrays. The first half freezes
+at the interval; the second half contains observations since the restart and
+excludes extra time. An unstarted second half has no observations. Omitted or
+`half=false` requests keep the ordinary full-match response.
+
+Live odds use the provider's separate `/odds/live/bets` market IDs and the
+`fixture`, `league`, `teams`, `status`, `update` and `odds` response fields.
+Prices follow the observed score and remaining match time, update in five-second
+steps, and include handicap, main-price and suspension flags. Fixtures enter the
+live feed 5–15 minutes before kickoff and leave 5–20 minutes after completion;
+the endpoint has no historical archive. Fixture, league and bet filters can be
+combined. Extra-time markets and paused or closed markets follow match status.
+Normal pages continue to use the same production services and components;
+the slip builder retains the production pre-match price and eligibility rules.
+
+Variant field trees were checked against the provider's OpenAPI 3.9.3 examples.
+The [archived official specification](https://web.archive.org/web/20251204223402id_/https://api-sports.io/public/documentations/football-v3.yaml)
+preserves the selectable “With half parameter” example, which the indexed
+documentation does not expand. This is a copy of the provider's specification,
+not a separately designed demo schema.
 
 ```sh
 npm run demo:prepare
@@ -132,10 +159,9 @@ time. Stop the development server before running either preparation command or
 the real production projections, including slip generation, without provider
 credentials, and verifies the protected owner workspace through normal login.
 
-The simulator explicitly rejects optional `half=true` statistics and in-play odds
-endpoints whose variant contracts are not implemented. Default full-match
-statistics, live scores/events and the pre-match odds used by the application are
-covered. Optional round-date responses and lineup `type` projections are outside
+Default and half-by-half statistics, live scores/events, live odds and the
+pre-match odds used by the application are covered. Optional round-date responses
+and lineup `type` projections are outside
 the supported demo contract, as are unrelated API families such as transfers and
 coaches. Compatibility is checked against official endpoint examples and the
 application's production normalizers; it is not certification of every optional
