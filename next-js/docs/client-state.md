@@ -46,7 +46,7 @@ validation response, rather than accepting a more permissive query.
 
 | Input | Contract |
 | --- | --- |
-| Date | `/en` defaults to relative `today`; `when=today`, `tomorrow`, or `next-7-days` retains that relative intent. |
+| Date | `/en/matches` defaults to relative `today`; API reads retain `last-30-days`. Named presets retain their relative intent, while dated archive routes retain their named dates. |
 | Explicit date | `date=YYYY-MM-DD` is accepted at the feed root; canonical href is `/en/predictions/YYYY-MM-DD`. |
 | Browsing zone | `tz` accepts an IANA timezone independently of time bounds; relative dates and complete-day UTC boundaries use that zone. Clear preserves it. Unzoned explicit dates retain EAT boundaries. |
 | Range | `from` + `to` at the root, or `to` with the dated route. Inclusive, ordered, maximum seven days, including historical ranges. |
@@ -54,13 +54,18 @@ validation response, rather than accepting a more permissive query.
 | League | `league`, canonical identifier text, 1–128 ASCII letters/digits/underscore/hyphen with an alphanumeric first character; absent or empty means null. No display-name lookup. |
 | Status | `all` default; `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. Finished groups played finals; provider mapping/query implementation belongs to 028. |
 | Market | Any by default: all supported families (`match-result`, `double-chance`, `total-goals`, `both-teams-to-score`), showing each fixture's highest-probability available pick. |
-| Sort | `kickoff` default, or `probability` requiring an explicit `market`. In state, probability sort carries that market. Optional inbound `sortMarket` must agree; serialization omits this redundant alias. |
+| Sort | Matches defaults to `probability` descending (Highest chance). API reads and dated archive routes retain `kickoff` descending. Explicit `sort` and `dir` choices take precedence; probability sorts the shown pick across the selected markets. |
 | Position | `page` default 1, maximum 10,000; `pageSize` default 50, maximum 100. Canonical positive decimal integers only. |
 
 Unknown parameters, repeated parameters (including arrays supplied by Next),
 mixed date modes, partial ranges and incompatible market sorts fail closed.
 Serialization validates typed callers too. Defaults are omitted in a stable
 parameter order. English remains the only supported locale.
+
+Page links explicitly retain Last 30 days, kickoff sorting and an unchecked
+Predictions only choice when selected, so omitted API defaults cannot override
+the reader's choices when Matches applies its page defaults. Reset restores
+Today and Highest chance while retaining the browsing zone and page size.
 
 `feedQueryKey` includes locale, resolved start/end dates, normalized search,
 league, status, market, sort and page size. It excludes **page position** so one

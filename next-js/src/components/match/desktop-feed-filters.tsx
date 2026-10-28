@@ -128,15 +128,14 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
   const changeLeagues = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, leagues: values } })), []);
   const changeCountries = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, countries: values } })), []);
-  const reset = resetFeedFilters(draft.query, subscriberOnly), resetRange = resolveFeedDates(reset, today), currentRange = resolveFeedDates(draft.query, today);
+  const currentRange = resolveFeedDates(draft.query, today);
   const probability = parseProbabilityInputs(draft.probability);
   const probabilityLimits = probability === null
     ? Number(draft.probability.min.trim() !== "") + Number(draft.probability.max.trim() !== "")
     : Number(probability.min !== 0) + Number(probability.max !== 100);
   const oddsLimits = draft.query.odds === null ? 0
     : Number(draft.query.odds.min !== oddsRules.minimumHundredths) + Number(draft.query.odds.max !== oddsRules.maximumHundredths);
-  const datesChanged = draft.dates.from !== resetRange.startDate || draft.dates.to !== resetRange.endDate;
-  const counts = { dates: Number(datesChanged) + Number(!isAnyKickoffTime(draft.times)),
+  const counts = { dates: 1 + Number(!isAnyKickoffTime(draft.times)),
     leagues: draft.query.leagues.length, countries: draft.query.countries.length, markets: draft.query.markets.length,
     limits: probabilityLimits + oddsLimits };
   const modified = { dates: counts.dates > 0, leagues: counts.leagues > 0, countries: counts.countries > 0,

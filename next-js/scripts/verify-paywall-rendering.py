@@ -91,6 +91,8 @@ def main():
                         assert response.status == 200, (viewer, url, response.status)
                         assert response.headers.get("Set-Cookie") is None, url
                         text = response.text  # Keep every flight script; never strip raw RSC data.
+                        if url.startswith("/en/matches?q="):
+                            assert "data-subscriber-banner" not in text and "Predictions are for subscribers" not in text, (viewer, url, "removed subscriber banner returned")
                         if not full and not free_fixture:
                             assert not re.search(SENTINELS, text), (viewer, url, "premium sentinel leaked")
                             # Shared row styles contain static outcome/market selectors in every theme.
@@ -104,7 +106,6 @@ def main():
                                 assert re.search(rf'href="/en/matches/{fixture_id}/[a-z0-9-]+"', text), (viewer, url, "card link")
                                 assert f'return=%2Fen%2Fmatches%2F{fixture_id}' not in text, (viewer, url, "card links the account page")
                             if url.startswith("/en/matches?q=") and not full:
-                                assert 'data-subscriber-banner' in text and ('/en/account?view=register' in text if viewer in {'anonymous', 'off', 'evicted'} else '/en/subscribe?return=' in text)
                                 assert 'Subscribers only' in text
                                 assert not re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) and not re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
                                 # The card element's state, not the stylesheet's selectors.
@@ -136,8 +137,8 @@ def main():
                     page = request(server.origin, "/en/matches?" + oracle, headers=headers)
                     assert page.status == 307, (oracle, page.status)
                     safe_query = parse_qs(urlsplit(page.headers.get("Location")).query)
-                    assert (safe_query.get("picks") in (None, ["all"]) and "prob" not in safe_query and "odds" not in safe_query
-                        and not any(value.startswith("probability") for value in safe_query.get("sort", []))), (viewer, oracle, "protected oracle criteria survived redirect")
+                    assert safe_query.get("picks") in (None, ["all"]) and "odds" not in safe_query, (viewer, oracle, "protected oracle criteria survived redirect")
+                    assert safe_query.get("when") == ["today"] and safe_query.get("sort") == ["probability"], (viewer, oracle, "safe redirect retains public page defaults")
                     checks += 2
                 slips = request(server.origin, "/en/slips?build=1", headers=headers)
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)

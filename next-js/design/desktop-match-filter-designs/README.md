@@ -7,6 +7,10 @@ filters. Its implementation is tracked in
 including the completed rendering and interaction checks. The gallery remains
 an illustrative design reference.
 
+Production Matches now opens on Today with Highest chance order; Reset restores
+those choices. Predictions only defaults on where the existing access rules
+allow it. The gallery retains its original preview defaults below.
+
 ## Concepts
 
 1. **Compact toolbar — selected** — two compact rows with every filter within reach.

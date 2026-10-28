@@ -67,6 +67,11 @@ export const feedQueryRules = Object.freeze({ maximumDays: 366, maximumSearchLen
 export const defaultMarkets: readonly MarketFamily[] = publicPolicy.markets;
 export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100 });
 export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "desc", probability: "desc" });
+/** Matches screen and Reset defaults; the public API keeps its existing date and sort defaults. */
+export const matchFeedPageDefaults = Object.freeze({
+  dates: Object.freeze({ kind: "today" }),
+  sort: Object.freeze({ by: "probability", direction: "desc" }),
+} as const satisfies Pick<FeedQuery, "dates" | "sort">);
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -268,10 +273,15 @@ export function defaultPagePicks(status: FeedStatus, subscriberOnly = false): Pi
   return subscriberOnly && status !== "finished" ? "all" : "only";
 }
 
-/** Explicit choices, including an unchecked filter, take precedence over the page default. */
-export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, subscriberOnly = false): FeedQuery {
-  const explicit = input instanceof URLSearchParams ? input.has("picks") : input.picks !== undefined;
-  return explicit ? query : { ...query, picks: defaultPagePicks(query.status, subscriberOnly) };
+/** Explicit filters and archive dates take precedence; dated archives retain their existing order. */
+export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, subscriberOnly = false, { dated = false }: { dated?: boolean } = {}): FeedQuery {
+  const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
+  const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
+  return { ...query,
+    dates: dated || explicitDates ? query.dates : matchFeedPageDefaults.dates,
+    sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
+    picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly),
+  };
 }
 
 export function isAnyMarkets(markets: readonly MarketFamily[]): boolean {
@@ -338,7 +348,12 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   if (dates.kind === "date" || dates.kind === "range") {
     path += `/predictions/${dates.kind === "date" ? dates.date : dates.from}`;
     parameters.delete("date"); parameters.delete("from");
-  } else path += "/matches";
+  } else {
+    path += "/matches";
+    // These API defaults are explicit choices on Matches, whose entry defaults differ.
+    if (dates.kind === defaultFeedDatePreset) parameters.set("when", dates.kind);
+    if (query.sort.by === "kickoff") parameters.set("sort", "kickoff");
+  }
   const search = parameters.toString();
   return search ? `${path}?${search}` : path;
 }

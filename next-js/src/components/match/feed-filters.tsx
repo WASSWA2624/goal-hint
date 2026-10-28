@@ -12,7 +12,7 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, selectFeedDates, selectFeedStatus } from "@/domain/feed-controls";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  canonicalMarkets, defaultPagePicks, defaultSortDirection, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates,
+  canonicalMarkets, defaultPagePicks, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, matchFeedPageDefaults, panelFilterCount, resolveFeedDates,
   serializeFeedQuery, type FeedQuery, type ProbabilityRange,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -716,7 +716,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
 
   const count = panelFilterCount(query) + (compactPhone
     ? Number(query.picks !== defaultPagePicks(query.status, subscriberOnly))
-      + Number(query.sort.by !== "kickoff" || query.sort.direction !== defaultSortDirection.kickoff)
+      + Number(query.sort.by !== matchFeedPageDefaults.sort.by || query.sort.direction !== matchFeedPageDefaults.sort.direction)
     : 0);
   const filtersLabel = messages.text("feed.filters.toggle");
   const sortKey = `${query.sort.by}-${query.sort.direction}`;

@@ -32,10 +32,11 @@ restoration, background scroll locking, and safe-area spacing. The selected
 implementation preserves those behaviors and gives dates a separate draft
 editor while moving sorting into Advanced filters.
 
-The production default is Last 30 days with Latest first, all market families,
+The production Matches default is Today with Highest chance, all market families,
 and unrestricted kickoff time/probability. Predictions only depends on access
-and status. These query defaults are separate from the illustrative Today view
-used consistently across all ten previews.
+and status. Reset restores these production defaults. The illustrative Today
+view used consistently across all ten previews remains an independent design
+reference.
 
 The previews use the match cards' compact 12–13px text, quiet borders, flat blue
 selection color, restrained spacing, and square edges. Touch controls retain

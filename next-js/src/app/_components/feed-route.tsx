@@ -55,7 +55,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       query = parseMatchFeedQuery(parameters, getReportingDate(at), { locale: route.locale, asOf: at,
         ...(access.tier === "free" ? { providerOdds: true } : {}),
         ...(dated && (period === undefined || period === "custom") ? { routeDate: route.date } : {}) });
-      query = applyFeedPageDefaults(query, parameters, access.tier === "free");
+      query = applyFeedPageDefaults(query, parameters, access.tier === "free", { dated });
       today = getFeedToday(query, at);
       if (!dated || query.status === "live" || period !== undefined) {
         const synchronized = synchronizeFeedStatusDates(query, today);

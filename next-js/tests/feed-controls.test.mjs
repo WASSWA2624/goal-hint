@@ -35,12 +35,12 @@ test('Clear filters resets status, dates and limits while retaining the browsing
     const query = parseFeedQuery({ ...dates, q: 'team', league: 'league-a,league-b', country: 'Spain', status: 'live', market: 'total-goals,both-teams-to-score',
       prob: '60-100', timeFrom: '12:00', timeTo: '18:00', tz: 'Africa/Kampala', picks: 'only', sort: 'probability', dir: 'asc', page: '3', pageSize: '40' }, { today });
     const reset = resetFeedFilters(query);
-    assert.deepEqual(reset.dates, { kind: 'last-30-days' }); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
+    assert.deepEqual(reset.dates, { kind: 'today' }); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
     assert.equal(reset.time, undefined); assert.equal(reset.zone, query.zone);
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'all', 'Live and Completed are filters on the unified Matches page');
     assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'only');
-    assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'desc' });
+    assert.deepEqual(reset.sort, { by: 'probability', direction: 'desc' });
     assert.equal(reset.odds, null);
     assert.equal(panelFilterCount(reset), 0);
     assert.deepEqual(applyFeedDraft(reset, today), reset);
@@ -69,7 +69,7 @@ test('each dialog reset changes only its own filters and preserves the original 
       if (field !== 'page' && !fields.includes(field)) assert.equal(reset[field], draft[field], `${section} must preserve ${field}`);
     }
     if (section === 'dates') {
-      assert.deepEqual(reset.dates, { kind: 'last-30-days' }); assert.equal(reset.time, undefined);
+      assert.deepEqual(reset.dates, { kind: 'today' }); assert.equal(reset.time, undefined);
       assert.equal(reset.zone, 'America/New_York');
     } else if (section === 'leagues') {
       assert.deepEqual(reset.leagues, []);
@@ -131,7 +131,7 @@ test('Reset clears odds bounds (052); Apply never carries them while provider od
   const query = parseFeedQuery({ odds: '1.50-3.00', prob: '60-100' }, { today, providerOdds: true });
   assert.deepEqual(query.odds, { min: 150, max: 300 });
   const reset = resetFeedFilters(query);
-  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches?picks=only');
+  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches?when=today&picks=only&sort=probability');
   // The odds controls stay disabled while publicPolicy.features.providerOdds is false; a forged draft fails closed.
   assert.throws(() => applyFeedDraft(query, today));
   assert.equal(applyFeedDraft(reset, today).odds, null);

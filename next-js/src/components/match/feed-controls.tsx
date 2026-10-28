@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
 import { formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
@@ -9,7 +8,6 @@ import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { subscriberHref } from "@/domain/subscriber-navigation";
 
 /** Secondary feed notes: 12px on phones and tablets so they never outrank cards and controls. */
 export const FeedNote = styled(MutedText)`
@@ -17,16 +15,6 @@ export const FeedNote = styled(MutedText)`
   line-height: 1.4;
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
-const DesktopSubscriberNote = styled(FeedNote)`
-  display: none;
-  ${media.desktop} { display: block; }
-`;
-
-export function SubscriberFeedBanner({ locale, signedIn = false }: { locale: string; signedIn?: boolean }) {
-  const messages = createMessages(locale);
-  return <DesktopSubscriberNote data-subscriber-banner>{messages.text("paywall.banner")} · <Link href={subscriberHref(signedIn, "/en/matches")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</Link></DesktopSubscriberNote>;
-}
-
 const PicksLabel = styled.label`
   display: flex;
   flex-wrap: wrap;

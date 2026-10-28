@@ -19,6 +19,12 @@ The established `src/domain/feed-query.ts` contract is reused. Unknown or
 duplicate parameters and incompatible combinations are rejected before database
 access. All SQL values, limits and offsets are bound parameters.
 
+These are API defaults. The Matches page supplies Today and probability
+descending (Highest chance) when those choices are absent, and selects
+Predictions only where the existing access rules allow it. Dated archive routes
+retain their named dates and kickoff default; explicit page choices remain
+authoritative.
+
 | Parameter | Contract |
 | --- | --- |
 | `date` | Exact EAT Gregorian `YYYY-MM-DD`, including historical dates whose UTC bounds fit MySQL DATETIME (earliest EAT date 1000-01-02). |

@@ -27,9 +27,9 @@ test('page URLs retain filters/order/size and pin relative reporting dates', () 
 });
 
 test('rolling default navigation stays on the feed while API appends pin its current range', () => {
-  assert.equal(feedPageHref(query(),today,2),'/en/matches?page=2&picks=all');
+  assert.equal(feedPageHref(query(),today,2),'/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
   const filtered=query('q=Alias&country=England&status=finished&pageSize=40');
-  assert.equal(feedPageHref(filtered,today,2),'/en/matches?q=Alias&country=England&status=finished&page=2&pageSize=40&picks=all');
+  assert.equal(feedPageHref(filtered,today,2),'/en/matches?q=Alias&country=England&status=finished&page=2&pageSize=40&picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedPageApiHref(filtered,today,2),'/api/matches?from=2026-09-10&to=2026-10-09&q=Alias&country=England&status=finished&page=2&pageSize=40');
 });
 test('append uses contiguous, stable cohorts and fails atomically on drift or overlap', () => {

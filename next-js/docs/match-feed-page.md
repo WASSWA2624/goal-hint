@@ -6,7 +6,10 @@ phone and desktop. Live selects Today in the active browsing zone, removes
 kickoff-time bounds and locks date/time controls until another status is selected.
 Status changes retain compatible filters and mirror past/future relative periods
 for Upcoming and Completed. Wholly incompatible explicit ranges are repaired.
-Reset restores All and the default Last 30 days.
+Matches opens with an empty search, All statuses, Today, Highest chance order,
+all four markets and no league, country, time, probability or odds constraints.
+Reset restores those choices and the Predictions only default allowed by access,
+while retaining the browsing zone and page size.
 
 The period selector includes Last 30/7/3 days, Yesterday, Today, Tomorrow,
 Next 3/7/30 days and Custom. The native phone form's `period` field is validated
@@ -27,8 +30,10 @@ An idle retry of a failed read at the same URL uses `router.refresh()`.
 
 `/en/matches` and `/en/predictions/YYYY-MM-DD` share the same feed service and
 `MatchFeedPage`; dated URLs preserve historical links without separate Live or
-Results navigation destinations. The first page uses the configured page-size
-limit in kickoff/fixture-ID order. Validated URL variants retain the
+Results navigation destinations. The Matches page defaults to probability
+descending; dated archive routes retain their named dates and kickoff/fixture-ID
+order. Stored API defaults remain Last 30 days and kickoff descending. The first
+page uses the configured page-size limit. Validated URL variants retain the
 existing selected market, filters, sorting and bounded page-size contract.
 
 `server/matches/public-feed.ts` composes the same database, configured competition
@@ -198,9 +203,9 @@ does not request an advisory count or change that label. Empty-result messages
 appear below the action row. The sort menu
 contains both kickoff directions and
 both probability directions. Predictions only is a checkbox in the filter actions;
-there is no separate reverse-order button. Reset returns to the last 30 days,
-the available Predictions only default and default ordering while retaining the
-browsing zone, status and page size.
+there is no separate reverse-order button. Reset returns to Today, All statuses,
+Highest chance and the available Predictions only default while retaining the
+browsing zone and page size.
 
 Desktop retains the shell logo and shared Aligned ledger matches, with its theme control at the
 far right of the shell header. Its top filter row contains search and an unlabeled

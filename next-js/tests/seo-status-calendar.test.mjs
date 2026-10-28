@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { parseReportingDate, parseUtcInstant } from '../src/domain/calendar.ts';
 import { adjacentDays, archiveWindowDays, dayLinkRel, emptyArchiveIsMissing } from '../src/domain/feed-date-navigation.ts';
+import { parseFeedQuery } from '../src/domain/feed-query.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { isDocumentRequest, PublicReadUnavailableError } from '../src/server/seo/read-status.ts';
 import { fullAccess } from './helpers/full-access.ts';
@@ -100,11 +101,28 @@ function feed({ dated = false, read = unavailable, policy = indexing, document =
   return createFeedRoute({ dated, read, policy, document, instant: async () => at, resolveAccess: fullAccess });
 }
 
+test('Matches page defaults reach the stored read while retaining viewer eligibility and explicit choices', async () => {
+  for (const tier of ['free', 'full']) {
+    for (const parameters of [{}, { status: 'finished' }, { when: 'last-30-days', sort: 'kickoff', picks: 'all' }]) {
+      let storedQuery;
+      const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
+        resolveAccess: async () => ({ tier, signedIn: false, mode: tier === 'full' ? 'off' : 'free' }), readOffer: async () => null,
+        read: async (input) => { storedQuery = parseFeedQuery(input, { today }); throw new MatchFeedError('rate-limited'); } });
+      const rendered = view(await page.Page(props({}, parameters)), 'MatchFeedPage');
+      assert.deepEqual(storedQuery, rendered.query, 'The rendered controls and stored read use the same effective query.');
+      assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'today' });
+      assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'probability', direction: 'desc' });
+      assert.equal(storedQuery.picks, parameters.picks ?? (tier === 'free' && parameters.status !== 'finished' ? 'all' : 'only'));
+      assert.equal(rendered.result.error, 'rate-limited');
+    }
+  }
+});
+
 test('an indexable feed whose stored read fails answers 5xx to full document requests', async () => {
   for (const [dated, route, query] of [[false, {}, {}], [false, {}, { page: '2' }], [true, { date: '2026-10-20' }, {}], [false, {}, { when: 'today' }]]) {
     const page = feed({ dated });
-    // Full-access pages default to a predictions filter; request the indexable all-fixture collection explicitly.
-    const indexable = { ...query, picks: 'all' };
+    // Matches defaults to Highest chance; request the indexable kickoff-ordered collection explicitly.
+    const indexable = { ...query, picks: 'all', sort: 'kickoff' };
     await assert.rejects(page.Page(props(route, indexable)), failed, JSON.stringify({ route, indexable }));
     await assert.rejects(page.generateMetadata(props(route, indexable)), failed);
   }

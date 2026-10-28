@@ -1,5 +1,5 @@
 import type { ReportingDate } from "./calendar.ts";
-import { anyProbability, defaultFeedDatePreset, defaultMarkets, defaultPagePicks, defaultSortDirection, parseFeedQuery, parseProbabilityValue, resolveFeedDates, serializeFeedQuery, validProbabilityRange,
+import { anyProbability, defaultFeedDatePreset, defaultMarkets, defaultPagePicks, matchFeedPageDefaults, parseFeedQuery, parseProbabilityValue, resolveFeedDates, serializeFeedQuery, validProbabilityRange,
   type DateSelection, type FeedDatePreset, type FeedQuery, type FeedStatus, type ProbabilityRange } from "./feed-query.ts";
 
 const upcomingPeriods: Partial<Record<FeedDatePreset, FeedDatePreset>> = {
@@ -63,8 +63,7 @@ export type FeedFilterSection = "dates" | "leagues" | "countries" | "markets" | 
 export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSection): FeedQuery {
   switch (section) {
     case "dates": {
-      const kind = draft.status === "live" ? "today" : draft.status === "scheduled" ? "next-30-days" : defaultFeedDatePreset;
-      const reset = { ...draft, dates: { kind }, page: 1 };
+      const reset = { ...draft, dates: matchFeedPageDefaults.dates, page: 1 };
       delete reset.time;
       return reset;
     }
@@ -79,7 +78,7 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): FeedQuery {
   const reset = { ...query };
   delete reset.time;
-  return { ...reset, status: "all", dates: { kind: defaultFeedDatePreset }, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
+  return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
     picks: defaultPagePicks("all", subscriberOnly),
-    sort: { by: "kickoff", direction: defaultSortDirection.kickoff }, page: 1 };
+    page: 1 };
 }

@@ -40,9 +40,13 @@ including its named period selector and day links. Desktop keeps its existing
 Compact toolbar and dialog behavior. Only the selected responsive control tree
 is mounted after hydration.
 
-The default date range is the last 30 calendar days through today, resolving
-from today minus 29 days to today in the browsing zone. The
-relative preset remains current across midnight; explicit date selections stay unchanged.
+The Matches page opens with an empty search, All statuses, Today, Highest chance
+order, all four markets, and unrestricted leagues, countries, kickoff time,
+probability and odds. Predictions only follows the existing access rules below.
+Today resolves in the browsing zone and remains current across midnight;
+explicit date selections stay unchanged. Stored API defaults remain Last 30 days
+and kickoff descending; dated archive routes retain their named dates and
+kickoff default.
 Desktop search, period, sort, Picks only and optional-filter edits remain
 unsubmitted until Enter in the search field or Apply filters submits the complete
 draft. The desktop Period dropdown offers Last 30 days, Last 7 days, Last 3 days,
@@ -90,7 +94,7 @@ The desktop Match Date & Time dialog holds both date and time pairs. Leagues and
 Countries each hold their own searchable selection. Markets holds the market
 choices; Limits holds probability bounds and current Odds availability. Each
 dialog has its own Reset, Cancel and Done controls. Local Reset changes only that dialog's
-draft and keeps it open: dates return to Last 30 days and 00:00–23:59; Leagues
+draft and keeps it open: dates return to Today and 00:00–23:59; Leagues
 returns to all leagues, Countries to all countries, Markets to all supported
 families, and Limits returns probability and odds to Any. Resetting one selection
 does not reset any of the others. The browsing zone is retained. Search, Picks
@@ -101,7 +105,8 @@ Done validates and retains that section's draft; it does not submit the
 whole feed. Cancel, Escape, the close button and backdrop dismissal restore the
 section's values from when it opened, including undoing a local Reset. Native
 dialog behavior contains focus and restores it to the trigger on close. Count
-badges replace an Edited label: Match Date & Time counts active date/time ranges;
+badges replace an Edited label: Match Date & Time counts the selected date range
+as one, including Today, plus one for an active kickoff-time restriction;
 Leagues and Countries each count their own selections; Markets counts selected
 market families; Limits counts configured numeric bounds, with minimum and maximum
 counted separately. Two restricted probability endpoints count as two; non-default
@@ -135,7 +140,7 @@ links and distant-day indexing policy remain unchanged (see
 [SEO discovery](seo-discovery.md)).
 
 Equal date endpoints select one day; different endpoints select an inclusive
-range of up to 366 days (the last-30-days view is only the default). Equal time endpoints select one kickoff minute; different
+range of up to 366 days. Equal time endpoints select one kickoff minute; different
 endpoints select an inclusive minute range. Unrestricted time fields show From
 00:00 and To 23:59 in the initial HTML and after reset. Clearing an endpoint
 restores its corresponding full-day bound. The full-day pair is unrestricted:
@@ -143,8 +148,8 @@ it adds no time constraint, canonical time parameters or active-filter count.
 A reversed range or invalid date/time remains editable and disables its editor's
 Apply action. Browsing `tz` is independent of optional time bounds: dates select
 complete local days, including DST boundaries, and full-day time fields keep
-that zone. Reset filters removes time constraints, restores the last 30 days
-through today and retains the browsing zone. An unzoned relative entry adopts the device
+that zone. Reset filters removes time constraints, restores Today
+and retains the browsing zone. An unzoned relative entry adopts the device
 zone after hydration; explicit named dates and shared applied zones remain
 stable. Unzoned explicit dates retain their EAT boundaries. New time selections
 use the applied browsing zone, or the device zone when none is applied; its IANA
@@ -169,10 +174,12 @@ by fresh odds for the same published family/selection, then policy order. The sa
 picks the market shown on the card (`bestCardFamily`). Markets defaults to Any,
 which includes every supported family. Probability and Odds default to Any,
 applying no bounds. Odds, when available, belong to the shown pick rather than
-another market's higher price. Default order is kickoff descending (Latest first), then fixture ID descending.
-`dir=asc` selects Earliest first. Probability order
-is descending by default (`dir=asc` reverses it), with missing picks last and
-kickoff/ID ties. The probability range (`prob`) accepts integer or decimal
+another market's higher price. Matches defaults to probability descending
+(Highest chance), with missing picks last and kickoff/ID ties. The API and dated
+archive routes retain kickoff descending (Latest first), then fixture ID
+descending. `dir=asc` reverses the selected sort. Explicit page choices,
+including Last 30 days and kickoff ordering, survive navigation and reloads.
+The probability range (`prob`) accepts integer or decimal
 percentages in 0–100 and keeps only fixtures whose shown pick's unrounded
 percentage lies between both inclusive endpoints. Equal endpoints select an
 exact probability; no display-rounding allowance is used. Predictions only is
@@ -228,7 +235,7 @@ requests. Apply filters submits the complete
 search, time and optional-filter draft while retaining the separately applied
 dates. Reset filters resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
-the last 30 days through today, all supported markets and kickoff descending order (Latest first),
+Today, all supported markets and probability descending order (Highest chance),
 and resets page to one. Predictions only returns to the available page default,
 rather than always being cleared. The time fields show 00:00–23:59 without restricting kickoff times.
 It restores All match statuses and retains the browsing zone and page size. The button labels are

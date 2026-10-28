@@ -96,13 +96,13 @@ test('Live uses the same browsing calendar date as stored queries, including mid
 });
 
 test('date-section reset stays compatible with status while reset-all clears the status filter', () => {
-  for (const [status, kind] of [['live', 'today'], ['scheduled', 'next-30-days'], ['finished', 'last-30-days'], ['all', 'last-30-days']]) {
+  for (const status of ['live', 'scheduled', 'finished', 'all']) {
     const original = query({ status, when: 'next-7-days', q: 'Example', timeFrom: '08:00', timeTo: '10:00', tz: 'America/New_York' });
     const section = resetFeedFilterSection(original, 'dates');
-    assert.deepEqual(section.dates, { kind }); assert.equal(section.status, status); assert.equal(section.time, undefined);
+    assert.deepEqual(section.dates, { kind: 'today' }); assert.equal(section.status, status); assert.equal(section.time, undefined);
     assert.equal(section.search, 'Example'); assert.equal(section.zone, 'America/New_York');
     const all = resetFeedFilters(original);
-    assert.equal(all.status, 'all'); assert.deepEqual(all.dates, { kind: 'last-30-days' }); assert.equal(all.time, undefined);
+    assert.equal(all.status, 'all'); assert.deepEqual(all.dates, { kind: 'today' }); assert.equal(all.time, undefined);
     assert.equal(all.zone, 'America/New_York'); assert.equal(all.search, '');
   }
 });

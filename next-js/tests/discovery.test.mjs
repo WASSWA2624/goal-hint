@@ -93,8 +93,8 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
     assert.throws(() => canonicalUrl(path), RangeError);
   }
   // An explicit all-fixture page cannot canonicalize to a page that defaults to predictions only.
-  assert.equal(feedDiscovery(query({}), today).path, '/en/matches?picks=all');
-  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2&picks=all');
+  assert.equal(feedDiscovery(query({}), today).path, '/en/matches?picks=all&when=last-30-days&sort=kickoff');
+  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09?picks=all');
   assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3&picks=all');
   assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08?picks=all');
@@ -103,7 +103,7 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
     assert.equal(feedDiscovery(query(values), today).eligible, false);
     assert.equal(feedMetadata(query(values), today, populated, approved).robots.index, false);
   }
-  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en/matches?picks=all');
+  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en/matches?picks=all&when=last-30-days&sort=kickoff');
   assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, true);
 });
 
@@ -138,7 +138,7 @@ test('page metadata has independent social fields, real canonical pagination and
   const page = feedMetadata(query({ page: '2' }), today, populated, approved);
   assert.equal(page.title, 'Daily Football Predictions · Page 2 | Goal Hint');
   assert.equal(page.description, home.description, 'A rolling collection is not described as only its first day.');
-  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?page=2&picks=all');
+  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?page=2&picks=all&when=last-30-days&sort=kickoff');
   assert.equal(page.openGraph.url, page.alternates.canonical);
   assert.equal(page.openGraph.title, page.title); assert.equal(page.twitter.title, page.title);
   assert.equal(page.openGraph.images[0].url, 'https://goalhint.com/brand/goal-hint-open-graph.png');
