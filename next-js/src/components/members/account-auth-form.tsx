@@ -11,7 +11,6 @@ import { MemberForm } from "./member-controls";
 import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPrimary, AccountSingleDeviceInfo } from "./account-styles";
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
-import { saveMemberLoginFlash } from "./member-login-flash";
 import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 
 export type AccountAuthView = "login" | "register" | "forgot";
@@ -28,8 +27,7 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string; otherDeviceSignedOut?: boolean; trial?: FreeTrialAccess }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
-      if (view === "login" && typeof result.otherDeviceSignedOut === "boolean") saveMemberLoginFlash(result.otherDeviceSignedOut);
+      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
       if (view === "register" && result.trial) { setPassword(""); setCreatedTrial({ trial: result.trial, next: result.next }); return; }
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }

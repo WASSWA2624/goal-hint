@@ -90,7 +90,7 @@ test("the root layout, public shell and public pages ship no phone library, coun
   assert.ok(!pages.some((path) => /\/(?:account|subscribe)\//u.test(path)), "the account and subscribe pages are left out");
   const roots = ["src/app/layout.tsx", "src/app/page.tsx", "src/app/not-found.tsx", "src/app/[locale]/layout.tsx", "src/app/_components/public-shell.tsx",
     "src/app/_components/information-shell.tsx", "src/app/_components/app-providers.tsx", "src/components/members/account-link.tsx",
-    "src/components/members/member-login-notice.tsx", ...pages];
+    "src/app/_components/online-runtime.tsx", ...pages];
   const graph = clientGraph(roots);
   for (const name of ["src/components/ui/controls.tsx", "src/components/members/account-link.tsx", "src/domain/phone.ts", "styled-components"]) {
     assert.ok(graph.has(name), `${name} is in the shell's client graph`);

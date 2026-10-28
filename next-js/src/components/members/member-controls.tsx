@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
 import { paymentDraftStoragePrefix } from "@/domain/member-navigation";
 import { getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
-import { saveMemberSignOutFlash } from "./member-login-flash";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
 export const MemberPanel = styled(Surface)`
@@ -47,6 +46,5 @@ export function MemberSignOut({ children, logoutAction = "/api/account/sign-out"
 }) {
   return <form method="post" action={logoutAction} onSubmit={() => {
     try { for (const key of Object.keys(sessionStorage)) if (key.startsWith(paymentDraftStoragePrefix)) sessionStorage.removeItem(key); } catch { /* Browser storage may be disabled. */ }
-    saveMemberSignOutFlash();
   }} data-analytics-ignore><Button variant="secondary" {...props} type="submit">{children}</Button></form>;
 }
