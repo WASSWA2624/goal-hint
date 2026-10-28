@@ -53,4 +53,5 @@
 
 ## Approval
 
-- Pending the user's selection; no production header option is applied.
+- The user selected option 04, Quiet controls. Its production implementation is
+  tracked in `106-quiet-controls-shared-header.md`.

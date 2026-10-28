@@ -37,13 +37,13 @@ const Option = styled.button`
 
 const Toggle = styled.button`
   ${compactHeaderControl}
-  inline-size: 2rem;
+  inline-size: 2.75rem;
   padding: 4px;
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.controlFill};
+  background: transparent;
   border-color: transparent;
   > svg { font-size: 1rem; }
-  ${media.desktop} { inline-size: 2.25rem; }
+  ${media.desktop} { inline-size: 2rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
 `;
 

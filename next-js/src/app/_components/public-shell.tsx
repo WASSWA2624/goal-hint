@@ -1,6 +1,6 @@
 import "server-only";
 import type { ReactNode } from "react";
-import { BrandLogo, BrandMark } from "@/components/ui/brand";
+import { HeaderBrand, BrandMark } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
@@ -51,7 +51,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
       <Header $app={app}>
         <HeaderContent $wide={app || wide}>
           <HomeLink href={homeHref(language)} aria-label={messages.text("navigation.home")} prefetch={false}>
-            <BrandLogo alt="" />
+            <HeaderBrand alt="" />
           </HomeLink>
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />

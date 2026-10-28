@@ -17,7 +17,7 @@ def verify(origin, directory):
                      'id="theme-matches"', 'id="theme-slips"', 'id="theme-dialog"', "data-run-theme-checks",
                      "data-fixture-id", "data-slip-id", "data-responsive-navigation"]:
         match(selector, visible)
-    match(r'goal-hint-logo-primary\.svg', visible)
+    match(r'goal-hint-header-primary\.svg', visible)
     match(r'goal-hint-mark-primary\.svg', visible)
     match(r'<div\b[^>]*data-summary-predicted[^>]*>\s*<dt\b[^>]*>Predicted</dt>\s*<dd\b[^>]*>116</dd>', visible)
     for outcome, percentage in [("correct", r"62\.1%"), ("incorrect", r"20\.7%"), ("pending", r"15\.5%")]:

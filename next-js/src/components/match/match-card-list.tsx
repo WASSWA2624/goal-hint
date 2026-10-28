@@ -26,7 +26,7 @@ const Columns = styled.div`
   display: none;
   ${media.desktop} {
     position: sticky;
-    inset-block-start: var(--app-header-height, calc(4rem + 2px));
+    inset-block-start: var(--app-header-height, 3rem);
     z-index: 10;
     display: grid;
     grid-template-columns: ${matchTableColumns.compact};

@@ -22,7 +22,7 @@ def resources():
     asset = {"url": "/_next/static/chunks/fixture-a.js", "sha256": proxy.digest(script), "bytes": len(script)}
     branding = {
         f"/brand/goal-hint-{kind}-{variant}.svg": f'<svg data-brand="{kind}-{variant}"/>'.encode()
-        for kind in ["logo", "mark"] for variant in ["primary", "inverse"]
+        for kind in ["logo", "mark", "header"] for variant in ["primary", "inverse"]
     }
     brand_assets = [{"url": path, "sha256": proxy.digest(content), "bytes": len(content)} for path, content in branding.items()]
     manifest = {"schemaVersion": 1, "entry": entry, "assets": [asset, *brand_assets], "createdAt": 1000}

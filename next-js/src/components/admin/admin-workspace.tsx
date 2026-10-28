@@ -94,12 +94,16 @@ export const AdminHeaderContent = styled.div`
   align-items: center;
   gap: 6px;
   inline-size: 100%;
-  min-block-size: ${({ theme }) => theme.header.phoneHeight};
+  min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
   padding-inline: 12px 8px;
-  ${media.belowDesktop} { > ${HomeLink} { flex-shrink: 1; min-inline-size: 0; } }
-  ${media.desktop} { gap: 12px; min-block-size: var(--app-header-content-height, 4rem); padding-inline: 24px 20px; }
+  ${media.belowDesktop} {
+    > ${HomeLink} { flex-shrink: 1; img { max-inline-size: 100%; block-size: auto; } }
+  }
+  ${media.desktop} { gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 24px 20px; }
 `;
 export const AdminMark = styled.span`
+  display: none;
+  ${media.desktop} { display: inline; }
   flex: none;
   white-space: nowrap;
   color: ${({ theme }) => theme.header.mutedText};

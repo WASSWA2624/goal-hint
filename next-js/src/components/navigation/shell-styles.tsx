@@ -5,7 +5,7 @@ import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
-import { compactHeaderBrand } from "@/components/ui/header-controls";
+import { compactHeaderBrand, compactHeaderSurface } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
@@ -26,9 +26,9 @@ const headerFocus = css`
 `;
 
 export const ShellFrame = styled.div`
-  --app-header-content-height: 4rem;
-  --app-header-border-width: 2px;
-  --app-header-height: calc(var(--app-header-content-height) + var(--app-header-border-width));
+  --app-header-height: 3rem;
+  --app-header-border-width: 1px;
+  --app-header-content-height: calc(var(--app-header-height) - var(--app-header-border-width));
   display: flex;
   flex-direction: column;
   min-block-size: 100dvh;
@@ -77,9 +77,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
   inset-block-start: 0;
   z-index: 20;
   display: ${({ $app }) => $app ? "none" : "block"};
-  color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.gradient};
-  border-block-end: var(--app-header-border-width, 2px) solid ${({ theme }) => theme.header.border};
+  ${compactHeaderSurface}
   box-shadow: ${({ theme }) => theme.header.shadow};
   ${desktop} { display: block; }
 `;
@@ -88,8 +86,9 @@ export const HeaderContent = styled(Container)`
   display: flex;
   align-items: center;
   gap: 6px;
-  min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  ${desktop} { flex-wrap: nowrap; gap: 12px; min-block-size: var(--app-header-content-height, 4rem); }
+  min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
+  padding-inline: 8px;
+  ${desktop} { flex-wrap: nowrap; gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 20px; }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
 `;
 
@@ -99,18 +98,15 @@ export const HeaderActions = styled.div`
   margin-inline-start: auto;
 `;
 
-/** The complete wordmark scales down alongside compact phone authentication controls. */
+/** All header variants share the approved compact brand spacing and home target. */
 export const HomeLink = styled(TextLink)`
-  flex: none;
-  display: inline-flex;
-  text-decoration: none;
+  ${compactHeaderBrand}
   /* Doubled to win over the shared link's page focus ring. */
   &&:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
     outline-offset: -6px;
   }
   ${media.belowDesktop} {
-    ${compactHeaderBrand}
     &&:focus-visible { outline-offset: 2px; }
   }
 `;
@@ -265,7 +261,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   ${({ $mobile }) => $mobile && css`inline-size: min(16rem, calc(100vw - 16px));`}
   max-block-size: ${({ $mobile }) => $mobile
     ? `calc(100dvh - ${mobileTabHeight} - 9px - env(safe-area-inset-bottom))`
-    : "calc(100dvh - 4rem - env(safe-area-inset-bottom))"};
+    : "calc(100dvh - var(--app-header-height, 3rem) - 4px - env(safe-area-inset-bottom))"};
   overflow-y: auto;
   margin: 0;
   padding: ${({ theme }) => theme.space.xs};

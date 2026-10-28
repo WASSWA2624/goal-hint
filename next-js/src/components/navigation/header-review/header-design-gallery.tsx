@@ -15,7 +15,7 @@ export function HeaderDesignGallery({ locale }: { locale: string }) {
   const [mobileWidth, setMobileWidth] = useState(390);
   const [desktopWidth, setDesktopWidth] = useState(1280);
   const [option, setOption] = useState(0);
-  const [notice, setNotice] = useState("Design review only · choose an option in chat before implementation.");
+  const [notice, setNotice] = useState("Selected: 04 · Quiet controls. Applied to the shared mobile and desktop headers.");
   const toggleTheme = () => setDark((value) => !value);
   const designs = option ? headerReviewDesigns.filter((design) => design.id === option) : headerReviewDesigns;
 
@@ -47,7 +47,7 @@ export function HeaderDesignGallery({ locale }: { locale: string }) {
         <Gallery>
           {designs.map((design) => <Option key={design.id} id={`option-${design.id}`} data-header-option={design.id}>
             <header><span data-number aria-hidden="true">{String(design.id).padStart(2, "0")}</span><div>
-              <h2>{design.name}{design.recommended && <span data-recommended>Recommended</span>}</h2>
+              <h2>{design.name}{design.id === 4 && <span data-recommended>Selected · Applied</span>}</h2>
               <p>{design.description}</p>
             </div></header>
             <Label><strong>Desktop · {desktopWidth}px</strong><span>{design.desktopHeight}px header · {design.controlHeight}px controls</span></Label>
@@ -66,7 +66,7 @@ export function HeaderDesignGallery({ locale }: { locale: string }) {
             </Spec></MobileRow>
           </Option>)}
         </Gallery>
-        <Footer>Preview accounts and payment counts are illustrative. Subscribe and access status remain separate from the header. Approval is pending; the live header has not changed. <a href={`/${resolveLocale(locale)}`}>Return to app</a></Footer>
+        <Footer>Option 04, Quiet controls, is applied to the app. Preview accounts and payment counts are illustrative; Subscribe and access status remain separate from the header. <a href={`/${resolveLocale(locale)}`}>Return to app</a></Footer>
       </Content>
     </Review>
   </ThemeProvider>;

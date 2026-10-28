@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { ComponentProps } from "react";
-import { BrandLogo } from "@/components/ui/brand";
+import { HeaderBrand } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { DesktopNav, Header, HeaderActions, HomeLink, ShellFrame, SkipLink, TabBar } from "@/components/navigation/shell-styles";
@@ -26,7 +26,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
       <Header>
         <AdminHeaderContent>
           <HomeLink href={homeHref("en")} aria-label={messages.text("navigation.home")} prefetch={false}>
-            <BrandLogo alt="" />
+            <HeaderBrand alt="" />
           </HomeLink>
           <AdminMark>Admin</AdminMark>
           <DesktopNav aria-label={messages.text("navigation.primary")}>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore }
 import { usePathname } from "next/navigation";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { ChevronRightIcon, SignInIcon, SignOutIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
+import { CardIcon, ChevronRightIcon, SignInIcon, SignOutIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { compactHeaderControl } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
@@ -21,15 +21,25 @@ const Actions = styled.div`
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
-  ${media.desktop} { gap: 12px; }
+  gap: 4px;
+  ${media.desktop} { gap: 6px; }
 `;
 const AuthLink = styled(Link)<{ $primary?: boolean }>`
   ${compactHeaderControl}
   color: ${({ theme, $primary }) => $primary ? theme.header.onAccent : theme.header.text};
   background: ${({ theme, $primary }) => $primary ? theme.header.accent : "transparent"};
-  border-color: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.header.controlBorder};
+  border-color: ${({ theme, $primary }) => $primary ? theme.header.accent : "transparent"};
   text-decoration: none;
+  > svg { display: none; }
+  ${media.desktop} { > svg { display: block; } }
+  &[data-admin-payments-link] {
+    > svg { display: block; }
+    > span { display: none; }
+    ${media.desktop} { > svg { display: none; } > span { display: inline; } }
+  }
+  @media (max-width: 359px) {
+    &[data-header-auth="register"] { > svg { display: block; } > span { display: none; } }
+  }
   ${media.hover} { &:hover { filter: brightness(1.1); background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.header.controlHover}; } }
 `;
 const Disclosure = styled.details`
@@ -37,14 +47,14 @@ const Disclosure = styled.details`
   flex: none;
   > summary {
     ${compactHeaderControl}
-    inline-size: 2rem;
+    inline-size: 2.75rem;
     padding: 4px;
     color: ${({ theme }) => theme.header.text};
-    background: ${({ theme }) => theme.header.controlFill};
+    background: transparent;
     border-color: transparent;
     list-style: none;
     > svg { font-size: 1.125rem; }
-    ${media.desktop} { inline-size: 2.25rem; }
+    ${media.desktop} { inline-size: 2rem; }
     &::-webkit-details-marker { display: none; }
     ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
   }
@@ -141,8 +151,8 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
 function AdminPaymentsLink() {
   const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const label = count === null ? "Payments" : count === 0 ? "Payments, none awaiting review" : `${count} payment${count === 1 ? "" : "s"} awaiting review`;
-  return <AuthLink href="/admin/payments?tab=pending" prefetch={false} $primary={!!count} aria-label={label} title={label} data-admin-payments-link>
-    Payments{count !== null && count > 0 && <strong aria-live="polite" aria-atomic="true">{count > 99 ? "99+" : count}</strong>}
+  return <AuthLink href="/admin/payments?tab=pending" prefetch={false} aria-label={label} title={label} data-admin-payments-link>
+    <CardIcon /><span>Payments</span>{count !== null && count > 0 && <strong aria-live="polite" aria-atomic="true">{count > 99 ? "99+" : count}</strong>}
   </AuthLink>;
 }
 
@@ -154,11 +164,12 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   useEffect(() => { void refreshMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
   const base = `/${resolveLocale(locale)}/account`;
+  const adminIdentity = administratorName ?? (administrator ? messages.text("navigation.dashboard") : undefined);
   return <Actions data-account-actions>
     {(administratorName || administrator) && <AdminPaymentsLink />}
-    {phone || administratorName ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
-      <AuthLink href={`${base}?view=login`} prefetch={false}><SignInIcon />{messages.text("account.login")}</AuthLink>
-      <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>
+    {phone || adminIdentity ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} /></> : <>
+      <AuthLink href={`${base}?view=login`} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("account.login")}</span></AuthLink>
+      <AuthLink href={`${base}?view=register`} prefetch={false} $primary aria-label={messages.text("account.register")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("account.register")}</span></AuthLink>
       <ThemeToggle locale={locale} />
     </>}
   </Actions>;

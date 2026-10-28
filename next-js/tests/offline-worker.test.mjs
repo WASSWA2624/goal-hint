@@ -146,7 +146,8 @@ test("complete anonymous bundle survives a cold worker restart and renders with 
 test("both theme branding variants remain available after an offline restart", async () => {
   const initial = await bundle();
   const branding = ["/brand/goal-hint-logo-primary.svg", "/brand/goal-hint-logo-inverse.svg",
-    "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg"];
+    "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg",
+    "/brand/goal-hint-header-primary.svg", "/brand/goal-hint-header-inverse.svg"];
   for (const url of branding) {
     const body = `<svg data-brand="${url}"/>`, bytes = encode(body);
     initial.manifest.assets.push({ url, sha256: await hash(bytes), bytes: bytes.byteLength });

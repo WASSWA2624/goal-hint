@@ -2,7 +2,8 @@
 
 Open `/en/header/designs` on the running application. This separate review
 gallery presents ten proposed headers before the user selects a design.
-Approval is pending; the production header is unchanged.
+Option 04, Quiet controls, was approved and applied to the shared mobile and
+desktop headers. The other options remain available for comparison.
 
 Each option shows desktop and mobile views of the existing single-row header.
 The emblem and Goal Hint name have the same visual height. Layouts retain the
@@ -11,10 +12,10 @@ vertical space.
 
 | Option | Treatment | Desktop | Mobile |
 | --- | --- | --- | --- |
-| 01 | Balanced — recommended | 48px | 48px |
+| 01 | Balanced | 48px | 48px |
 | 02 | Slim | 44px | 48px |
 | 03 | Comfortable | 52px | 52px |
-| 04 | Quiet controls | 48px | 48px |
+| 04 | Quiet controls — selected | 48px | 48px |
 | 05 | Divided groups | 50px | 48px |
 | 06 | Joined toolbar | 48px | 48px |
 | 07 | Matching outlines | 48px | 48px |
@@ -41,7 +42,8 @@ while the full Goal Hint brand name stays visible.
 
 Option metadata is shared by the gallery through
 `src/components/navigation/header-review/designs.ts`. Changing a preview or
-selecting a sample does not apply it to the production app.
+selecting a sample does not change the production app's approved Quiet controls
+treatment.
 
 ## Isolated preview
 

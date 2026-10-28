@@ -2,8 +2,8 @@
 
 import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
-import { BrandLogo } from "@/components/ui/brand";
-import { compactHeaderBrand } from "@/components/ui/header-controls";
+import { HeaderBrand } from "@/components/ui/brand";
+import { compactHeaderBrand, compactHeaderSurface } from "@/components/ui/header-controls";
 import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { homeHref } from "@/domain/navigation";
@@ -26,11 +26,9 @@ const Bar = styled.div`
   justify-content: space-between;
   gap: 6px;
   min-inline-size: 0;
-  min-block-size: 3rem;
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
   padding-inline: 8px;
-  color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.gradient};
-  border-block-end: 2px solid ${({ theme }) => theme.header.border};
+  ${compactHeaderSurface}
   ${media.desktop} { display: none; }
 `;
 const Home = styled(Link)`
@@ -44,7 +42,7 @@ const Home = styled(Link)`
 export function AppBrandBar({ locale, showAccount = true }: { locale: string; showAccount?: boolean }) {
   return <Group><Bar>
     <Home href={homeHref(locale)} prefetch={false} aria-label={createMessages(locale).text("navigation.home")}>
-      <BrandLogo alt="" />
+      <HeaderBrand alt="" />
     </Home>
     <AccountLinks locale={locale} showAccount={showAccount} />
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />

@@ -309,7 +309,7 @@ export const lightTheme: GoalHintTheme = {
       teal: "#0054CC", blue: "#1E40AF", violet: "#5B21B6", orange: "#9A3412",
       pink: "#9D174D", amber: "#92400E", emerald: "#065F46", red: "#991B1B",
     },
-    phoneHeight: "3.25rem",
+    phoneHeight: "3rem",
     shadow: "none",
   },
   shadow: {

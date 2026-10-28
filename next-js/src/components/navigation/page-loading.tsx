@@ -1,7 +1,7 @@
 "use client";
 
 import styled from "styled-components";
-import { BrandLogo } from "@/components/ui/brand";
+import { HeaderBrand } from "@/components/ui/brand";
 import { Container, PageMain, Stack } from "@/components/ui/layout";
 import { FallbackStyleProvider } from "@/styles/provider";
 import { Header, HeaderContent, ShellFrame } from "./shell-styles";
@@ -20,7 +20,7 @@ const LoadingStatus = styled.p`
 /** A request-independent shell that can be prefetched before any stored page reads. */
 export function PageLoading({ label }: { label: string }) {
   return <FallbackStyleProvider><ShellFrame>
-    <Header><HeaderContent $wide><BrandLogo /></HeaderContent></Header>
+    <Header><HeaderContent $wide><HeaderBrand /></HeaderContent></Header>
     <PageMain id="main-content" tabIndex={-1} $app $compact>
       <Container $wide><Stack>
         <LoadingStatus role="status">{label}</LoadingStatus>

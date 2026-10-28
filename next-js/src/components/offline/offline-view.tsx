@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import styled from "styled-components";
-import { BrandLogo } from "@/components/ui/brand";
+import { HeaderBrand } from "@/components/ui/brand";
 import { Button } from "@/components/ui/controls";
 import { Container, Inline, PageHeading, PageMain, Stack, Surface } from "@/components/ui/layout";
 import { Header, HeaderContent } from "@/components/navigation/shell-styles";
@@ -52,7 +52,7 @@ export function OfflineView() {
   }, [snapshot]);
   const saved = snapshot && supported;
   return <div data-offline-view data-offline-state={loading ? "loading" : saved ? "saved" : "unavailable"}>
-    <Header><Heading $wide><BrandLogo /><span>Saved view</span></Heading></Header>
+    <Header><Heading $wide><HeaderBrand /><span>Saved view</span></Heading></Header>
     <PageMain id="main-content" $app $compact><Container $wide><Stack>
       <PageHeading>{supported ? "Saved matches" : "This page needs a connection"}</PageHeading>
       <Notice aria-live="polite"><Stack $gap="sm">

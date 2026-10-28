@@ -25,7 +25,8 @@ const identityPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 const statuses = new Set(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
   "postponed", "canceled", "abandoned", "awarded", "unknown"]);
 const brandAssets = new Set(["/brand/goal-hint-logo-primary.svg", "/brand/goal-hint-logo-inverse.svg",
-  "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg"]);
+  "/brand/goal-hint-mark-primary.svg", "/brand/goal-hint-mark-inverse.svg",
+  "/brand/goal-hint-header-primary.svg", "/brand/goal-hint-header-inverse.svg"]);
 let preparation;
 
 class CacheFailure extends Error {

@@ -63,7 +63,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   for (const image of document.querySelectorAll<HTMLImageElement>("[data-app-header] img, #theme-phone-header img")) {
     assert(dark ? image.src.startsWith("data:image/svg+xml") || image.src.includes("logo-inverse.svg")
-      : image.src.includes("logo-primary.svg"), `${theme.mode} header needs adaptive brand artwork`);
+      : image.src.includes("header-primary.svg"), `${theme.mode} header needs adaptive brand artwork`);
   }
   const mark = document.querySelector<HTMLImageElement>("footer img");
   assert(!!mark?.src.includes(`mark-${dark ? "inverse" : "primary"}.svg`), "Footer brand mark follows the active theme");

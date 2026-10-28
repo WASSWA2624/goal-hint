@@ -4,8 +4,8 @@ import Link from "@/components/navigation/navigation-link";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
-import { BrandLogo } from "@/components/ui/brand";
-import { compactHeaderBrand } from "@/components/ui/header-controls";
+import { HeaderBrand } from "@/components/ui/brand";
+import { compactHeaderBrand, compactHeaderSurface } from "@/components/ui/header-controls";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
@@ -58,23 +58,24 @@ const PhoneSubscriptionStatus = styled(SubscriptionStatusBar)`
 const PhoneBar = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: -10px;
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
   padding-inline: 8px;
-  color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.gradient};
-  border-block-end: 2px solid ${({ theme }) => theme.header.border};
+  ${compactHeaderSurface}
+  @media (max-width: 379px) {
+    [data-header-auth="register"] { > svg { display: block; } > span { display: none; } }
+  }
   ${desktop} { display: none; }
 `;
 const PhoneHome = styled(Link)`
   ${compactHeaderBrand}
   justify-self: start;
-  @media (max-width: 479px) { img { inline-size: 112px; } }
-  @media (max-width: 359px) { img { inline-size: 80px; } }
+  max-inline-size: 100%;
+  img { max-inline-size: 100%; block-size: auto; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
 `;
 /** The header accent keeps focus visible on the active bar surface. */
@@ -84,10 +85,10 @@ const barFocus = css`
 const RoundLink = styled(Link)`
   display: grid;
   place-items: center;
-  inline-size: 1.5rem;
-  block-size: 2rem;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
   color: ${({ theme }) => theme.header.text};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: 0;
   font-size: 1.375rem;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}
@@ -145,7 +146,7 @@ function PhoneHeader() {
   return <PhoneHeaderGroup>
     <PhoneBar>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
-      <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><BrandLogo alt="" /></PhoneHome>
+      <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><HeaderBrand alt="" /></PhoneHome>
       <AccountLinks locale={locale} showAccount={showAccount === true} />
       <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>
