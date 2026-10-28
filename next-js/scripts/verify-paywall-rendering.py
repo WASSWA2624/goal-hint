@@ -1,12 +1,17 @@
 """Inspect complete HTML, flight data and real handler responses from synthetic raw stored readers."""
 import json
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 import re
+import runpy
+from urllib.parse import parse_qs, urlsplit
 from lib.rendering import ROOT, Server, build_fixture, create_fixture, environment, parse_args, request, run_node, write_json
 from lib.runtime import main_guard
 
 SENTINELS = r"SENTINEL-|(?<![\d.])7\.73(?!\d)"
 VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "test", "off"]
+PUBLIC_SLIP_FIELDS = {"rank", "matchCount", "totalOdds", "estimatedProbability"}
+PRIVATE_SLIP_VALUES = SENTINELS + r"|0\.6173|61\.7%|home-win|averageProbability|10000000-0000-4000-8000-000000000001"
 
 
 def verify_private_routes(origin):
@@ -20,12 +25,8 @@ def verify_private_routes(origin):
     return len(routes)
 
 
-def main():
-    args = parse_args("paid-access leak scan")
+def prepare_fixture(scenarios):
     directory = create_fixture("paywall")
-    generated = run_node(["--conditions=react-server", "--input-type=module", "--eval",
-        "import {scenarios} from './tests/helpers/paywall-fixtures.mjs'; process.stdout.write(JSON.stringify(scenarios));"])
-    scenarios = json.loads(generated.stdout)
     write_json(directory / "app/scenarios.json", scenarios)
     # Exercise the production private-route headers alongside isolated member/owner pages.
     for route, source in [("admin", "src/app/(owner)/admin/page.tsx")]:
@@ -42,9 +43,24 @@ def main():
     config_source = config.read_text(encoding="utf-8")
     if 'import production from' not in config_source:
         config.write_text(config_source.replace("export default {", 'import production from "../../next.config.ts";\nexport default { headers: production.headers,'), encoding="utf-8")
+    return directory
+
+
+def main():
+    args = parse_args("paid-access leak scan", extra=("--fixture",))
+    generated = run_node(["--conditions=react-server", "--input-type=module", "--eval",
+        "import {scenarios} from './tests/helpers/paywall-fixtures.mjs'; process.stdout.write(JSON.stringify(scenarios));"])
+    scenarios = json.loads(generated.stdout)
+    slip_checks = runpy.run_path(str(ROOT / "scripts/verify-slip-rendering.py"))
+    document = slip_checks["Document"]
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
-    print(f"Building leak-scan fixture: {directory}", flush=True)
-    build_fixture(directory, env, timeout=240)
+    if args.fixture:
+        directory = Path(args.fixture).resolve()
+        assert directory.is_relative_to(ROOT / ".tmp") and (directory / ".next/BUILD_ID").is_file()
+    else:
+        directory = prepare_fixture(scenarios)
+        print(f"Building leak-scan fixture: {directory}", flush=True)
+        build_fixture(directory, env, timeout=240)
     checks = 0
     with Server(directory, env, ready="/en") as server:
         def verify_viewer(viewer):
@@ -114,7 +130,9 @@ def main():
                     assert request(server.origin, "/api/matches?" + oracle, headers=headers).status == 403
                     page = request(server.origin, "/en/matches?" + oracle, headers=headers)
                     assert page.status == 307, (oracle, page.status)
-                    assert not re.search(r"prob=|sort=probability|picks=|odds=", page.headers.get("Location"))
+                    safe_query = parse_qs(urlsplit(page.headers.get("Location")).query)
+                    assert (safe_query.get("picks") in (None, ["all"]) and "prob" not in safe_query and "odds" not in safe_query
+                        and not any(value.startswith("probability") for value in safe_query.get("sort", []))), (viewer, oracle, "protected oracle criteria survived redirect")
                     checks += 2
                 slips = request(server.origin, "/en/slips?build=1", headers=headers)
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)
@@ -124,24 +142,58 @@ def main():
                 assert response.status == 200, (viewer, path, response.status)
                 assert "no-store" in response.headers.get("Cache-Control", ""), path
                 if not full:
-                    assert not re.search(SENTINELS, response.text), (viewer, path, "Best Slips selections leaked")
-                    assert not re.search(r"estimatedProbability|0\.3456|34\.6%", response.text), (viewer, path, "Best Slips probability leaked")
+                    assert not re.search(PRIVATE_SLIP_VALUES, response.text), (viewer, path, "Best Slips private selections or per-match values leaked")
+                if extra:
+                    assert all(value in response.text for value in ["totalOdds", "5.00", "estimatedProbability", "0.3456"]), (viewer, "public aggregate facts survive flight transport")
                 if path == "/api/best-slips":
                     view = json.loads(response.text)["slips"][0]
-                    assert set(view) == {"rank", "matchCount"} | ({"slip", "totalOdds", "estimatedProbability"} if full else set())
-                    assert (view.get("estimatedProbability") == 0.3456) == full
-                    assert (view.get("totalOdds") == "5.00") == full
+                    assert set(view) == PUBLIC_SLIP_FIELDS | ({"slip"} if full else set())
+                    assert view["estimatedProbability"] == 0.3456
+                    assert view["totalOdds"] == "5.00"
                 elif not extra:
                     assert "Best Slips" in response.text and 'href="/en/matches"' in response.text
                     assert ('data-slip-selection=' in response.text) == full
+                    markup = document(response.text).root
+                    toggles = markup.nodes("summary", "data-slip-toggle")
+                    assert len(toggles) == 1 and "5.00" in toggles[0].text and "34.6%" in toggles[0].text, (viewer, "original aggregate header")
+                    assert not any(toggles[0].nodes(tag) for tag in ["a", "button"]), (viewer, "whole header remains a toggle")
                     if full:
                         assert 'Win probability' in response.text and '34.6%' in response.text
                         assert 'Average match probability' in response.text and '61.7%' in response.text
+                    else:
+                        signed_in = viewer not in {"anonymous", "off", "evicted"}
+                        expected_cta = "Subscribe" if signed_in else "Log in to access"
+                        body = markup.nodes(attr="data-slip-content")[0]
+                        assert body.text.strip() == expected_cta, (viewer, "only the relevant access action remains")
+                        links = body.nodes("a")
+                        assert len(links) == 1 and links[0].text.strip() == expected_cta, (viewer, "one access action")
+                        destination = urlsplit(links[0].attrs["href"])
+                        assert destination.path == ("/en/subscribe" if signed_in else "/en/account"), (viewer, "access destination")
+                        if not signed_in:
+                            assert parse_qs(destination.query).get("view", ["login"]) == ["login"], (viewer, "guest login view")
+                        assert "The matches and selections in this slip are for subscribers." not in body.text
                 checks += 1
             print(f"PASS {viewer}: raw HTML, flight, APIs and access rules ({checks} checks).", flush=True)
             return checks
         with ThreadPoolExecutor(max_workers=4) as pool:
             checks = sum(pool.map(verify_viewer, VIEWERS))
+        for viewer, expected_cta in [("anonymous", "Log in to access"), ("expired", "Subscribe")]:
+            for extra in [{}, {"RSC": "1"}]:
+                path = f"/refresh-access/{viewer}" + ("?_rsc" if extra else "")
+                response = request(server.origin, path, headers=extra)
+                assert response.status == 200 and not re.search(PRIVATE_SLIP_VALUES, response.text), (viewer, "fresh access removes original entitled details")
+                assert "no-store" in response.headers.get("Cache-Control", ""), path
+                if not extra:
+                    markup = document(response.text).root
+                    body = markup.nodes(attr="data-slip-content")[0]
+                    assert body.text.strip() == expected_cta, (viewer, "access action follows the second access check")
+                    toggle = markup.nodes("summary", "data-slip-toggle")[0]
+                    assert "5.00" in toggle.text and "34.6%" in toggle.text, "Fresh access checks retain the same public aggregate facts"
+                else:
+                    assert all(value in response.text for value in ["totalOdds", "5.00", "estimatedProbability", "0.3456"]), "Fresh access retains public flight aggregates"
+                checks += 1
+            print(f"PASS fresh access during read: {viewer} uses {expected_cta} without private slip data.", flush=True)
+        slip_checks["verify_best_slips"](server.origin, directory)
         checks += verify_private_routes(server.origin)
         print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across nine viewer states.", flush=True)
         if args.serve: server.serve()

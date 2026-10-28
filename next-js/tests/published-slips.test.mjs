@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bestSlipViews } from '../src/domain/best-slips.ts';
+import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createPublishedSlips, parsePublishedSlipHistoryQuery } from '../src/server/slips/published-slips.ts';
 import { createDailySlipPublisher, runDailySlipPublisher } from '../src/server/slips/daily-slip-publication.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
@@ -98,7 +99,10 @@ test('first qualified publication preserves quotes, model evidence and original 
   assert.equal(f.legs[0].cycleId, fixtureId(90)); assert.equal(f.legs[0].revisionId, fixtureId(91));
   const day = await f.store.day(today);
   assert.equal(day.slips[0].slip.totalOdds, '5.00');
-  assert.deepEqual(bestSlipViews(day.slips.map(view => view.slip), false), [{ rank: 1, matchCount: 1 }]);
+  const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
+  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7 }]);
+  assert.deepEqual(gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' }).slips, publicViews);
+  assert.doesNotMatch(JSON.stringify(publicViews), /original-1|home-win|selections|cycleId|revisionId|fixtureId/);
 });
 
 test('active publications expose counts only; original-cycle completion releases original losses and quotes', async () => {

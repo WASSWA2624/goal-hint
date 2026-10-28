@@ -87,11 +87,17 @@ pending without restoring an older winning score.
 Legacy personal snapshots remain explicitly unbound. Their missing identities
 are not guessed or backfilled from current forecasts.
 
-An active editorial publication reveals only the existing premium preview to
-free viewers. Public completed history waits until every original leg is
-terminal. Active picks, quotes and probabilities never enter the public archive
-response. Pending aggregate counts are allowed; pending/void quotes are excluded
-from return and average-odds statistics.
+The active Best Slips page and API show every viewer each slip's rank, selection
+count, total odds and estimated joint probability. Those aggregate facts remain
+public when route/API access is checked again. The expanded match list, fixture
+identifiers, individual predictions, per-match prices and probabilities remain
+restricted to viewers with full access.
+
+Public completed history has its own release boundary: every original leg must
+be terminal before its match details and original quotes are included. Pending
+aggregate counts are allowed; pending/void quotes are excluded from return and
+average-odds statistics. Making the daily slip summary public does not release
+an active slip's match details through the completed-history response.
 
 History accepts at most 31 EAT publication dates and 100 slips per day,
 then paginates completed records. Statistics use the whole selected period,

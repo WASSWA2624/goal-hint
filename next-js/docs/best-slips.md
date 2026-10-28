@@ -2,9 +2,10 @@
 
 `/en` is Best Slips; `/en/matches` preserves the match feed and `/en/slips` keeps
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
-previews show the rank and match count of available premium slips. Active
-selections, total odds and estimated joint probability require entitlement.
-Both the initial DTO and the final entitlement recheck use that allowlist.
+previews show the rank, match count, total odds and estimated whole-slip win
+probability to every visitor. Match identities, selections and individual
+prices/probabilities require entitlement. Both the initial DTO and the final
+entitlement recheck use that allowlist.
 
 The daily Kampala cohort targets 4.50–5.50 combined odds and up to 100 distinct
 slips; source-owned `bestSlipsRules` configures the range/count. Daily slips do
@@ -24,7 +25,11 @@ probability estimate.
 Each daily slip initially shows only its summary. Clicking anywhere on the
 summary or pressing Enter/Space expands the matches; repeating the action
 collapses them. Locked previews use the same disclosure, with subscription
-links in the expanded content. Native expansion works before hydration.
+links in the expanded content. Signed-out visitors see **Log in to access**,
+which opens login and retains a return to Best Slips. The login page also offers
+sign-up. Signed-in members without access see **Subscribe**; entitled members
+see the actual matches. There is no repeated subscriber-only explanatory text.
+Native expansion works before hydration.
 Custom builder results and completed-slip history retain their expanded layout.
 
 Match cards and prediction columns use shared compact outcome definitions:
@@ -43,7 +48,7 @@ Custom builds reuse the same ranking contract (`jointSlipRanking` in
 `src/domain/joint-slip-model.ts`) when a verified request-time model is bound; none
 is bound today, so custom ranking stays average-based (`docs/slip-builder.md`).
 
-The page and `/api/best-slips` recheck entitlement after generation. Responses
+The page and `/api/best-slips` recheck entitlement after reading the slips. Responses
 are private/no-store. Public DTOs omit even the internal slip ID, because it
 encodes fixture and selection identifiers. Shared caches never contain a viewer
 response. The page refreshes while visible and after a background tab returns.

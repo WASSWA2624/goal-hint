@@ -23,7 +23,8 @@ export function createBestSlipsRoute({ read = readBestSlips, access = resolveVie
     async Page({ params, searchParams }: Props) {
       const { locale } = await params, m = createMessages(locale);
       redirectLegacyFeedQuery(locale, await searchParams);
-      const viewer = await access(), result = gateBestSlips(await read(viewer, locale), await access());
+      const initialViewer = await access(), published = await read(initialViewer, locale);
+      const viewer = await access(), result = gateBestSlips(published, viewer);
       const browse = homeBrowseLinks(result, locale);
       return <PublicShell locale={locale} current="best-slips" app compact>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />

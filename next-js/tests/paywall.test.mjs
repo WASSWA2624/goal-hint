@@ -134,4 +134,7 @@ test('locked destinations preserve safe return paths and distinguish guests from
   assert.equal(subscriberHref(false, '/en/matches'), '/en/account?view=register&return=%2Fen%2Fmatches');
   assert.equal(subscriberHref(true, '/en/slips'), '/en/subscribe?return=%2Fen%2Fslips');
   assert.equal(subscriberHref(false, 'https://outside.test'), '/en/account?view=register');
+  assert.equal(subscriberHref(false, '/en', 'login'), '/en/account?view=login&return=%2Fen');
+  assert.equal(subscriberHref(true, '/en', 'login'), '/en/subscribe?return=%2Fen');
+  assert.equal(subscriberHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
 });

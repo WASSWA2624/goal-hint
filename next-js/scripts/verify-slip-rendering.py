@@ -3,7 +3,7 @@ from html.parser import HTMLParser
 from decimal import Decimal
 from pathlib import Path
 import re
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from lib.rendering import Server, build_fixture, create_fixture, parse_args, request, visible_html
 from lib.runtime import ROOT, main_guard
@@ -263,7 +263,8 @@ def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_ma
 
 
 def verify_best_slips(origin, directory):
-    for scenario, count in [("entitled", 3), ("locked", 3), ("hundred", 100), ("limited", 3)]:
+    for scenario, count in [("entitled", 3), ("locked", 3), ("locked-member", 3), ("hundred", 100), ("limited", 3)]:
+        locked = scenario in {"locked", "locked-member"}
         response = request(origin, f"/best-slips/{scenario}")
         assert response.status == 200, f"Best Slips {scenario}: HTTP 200"
         (directory / f"best-slips-{scenario}.html").write_text(response.text, encoding="utf-8")
@@ -280,20 +281,34 @@ def verify_best_slips(origin, directory):
             assert not any(toggle.nodes(tag) for tag in ["dl", "div", "fieldset"]), "Native summaries contain valid phrasing and heading content"
             assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
             assert "Total odds" in toggle.text and "Win probability" in toggle.text, "Collapsed headers retain odds and probability context"
+            facts = {fact.nodes(attr="data-slip-fact-label")[0].text: fact.nodes(attr="data-slip-fact-value")[0].text
+                     for fact in toggle.nodes(attr="data-slip-fact")}
+            assert facts["Total odds"] == "3.06", "Every viewer sees the original whole-slip odds"
+            probability = Decimal(facts["Win probability"].rstrip("%"))
+            assert probability == Decimal("75") - Decimal(index) / 10, "Every viewer sees the original whole-slip win estimate"
+            probabilities.append(probability)
             contents = disclosure.nodes(attr="data-slip-content")
             assert len(contents) == 1, "Every toggle owns one expandable content region"
-            if scenario == "locked":
+            if locked:
                 assert not contents[0].nodes(attr="data-fixture-id"), "Locked slip bodies expose no premium picks"
-                assert contents[0].nodes("a"), "Subscriber navigation stays inside the expandable body"
+                links = contents[0].nodes("a")
+                expected_action = "Subscribe" if scenario == "locked-member" else "Log in to access"
+                assert len(links) == 1 and links[0].text.strip() == expected_action, "The locked body has exactly the relevant access action"
+                assert contents[0].text.strip() == expected_action, "The locked body contains no redundant subscriber explanation"
+                destination = urlsplit(links[0].attrs["href"])
+                if scenario == "locked-member":
+                    assert destination.path == "/en/subscribe", "Signed-in viewers go directly to subscription"
+                else:
+                    assert destination.path == "/en/account" and parse_qs(destination.query).get("view", ["login"]) == ["login"], "Guests go directly to login"
                 assert "Synthetic" not in document.text and not document.nodes(attr="data-slip-id"), "Public results contain no slip identity or synthetic picks"
+                assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"averageProbability\"", response.text), "Locked HTML and flight data contain no private slip details"
             else:
                 assert len(contents[0].nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
-                estimate = toggle.nodes(attr="data-slip-combined-probability")[0]
-                probabilities.append(Decimal(re.search(r"([\d.]+)%", estimate.text).group(1)))
         assert probabilities == sorted(probabilities, reverse=True), "Best Slips display highest win probability first"
         statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status"]
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
         assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"
+        assert "The matches and selections in this slip are for subscribers." not in document.text, "Locked slips omit the removed explanatory sentence"
         print(f"PASS Best Slips SSR: {scenario} ({count} collapsed slips)", flush=True)
 
 

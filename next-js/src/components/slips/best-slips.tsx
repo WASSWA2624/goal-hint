@@ -12,8 +12,9 @@ import { matchesHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
 import type { BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaPanel, Note, SlipStack, SlipSummary } from "./slip-styles";
-import { SlipDisclosure, SlipFact } from "./slip-disclosure";
+import { CriteriaPanel, Note, SlipStack } from "./slip-styles";
+import { SlipDisclosure } from "./slip-disclosure";
+import { SlipSummaryFacts } from "./slip-summary-facts";
 import { SlipTable } from "./slip-table";
 
 export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
@@ -50,15 +51,13 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
         slip={view.slip} estimatedProbability={view.slip.estimatedProbability} collapsible /> : <SlipDisclosure key={view.rank} locale={locale} summary={<>
         <h3>{m.text("slips.slipTitle", { number: m.number(view.rank) })}</h3>
         {view.rank === 1 && <span data-slip-rank>{m.text("slips.topRanked")}</span>}
-          <SlipSummary>
-            <SlipFact label={m.text("slips.totalOdds")}>{m.text("paywall.lockedOdds")}</SlipFact>
-            <SlipFact label={m.text("bestSlips.probability")}>{m.text("paywall.subscribersOnly")}</SlipFact>
-            <SlipFact label={m.text("slips.selectionCount")}>{m.number(view.matchCount)}</SlipFact>
-          </SlipSummary>
+        <SlipSummaryFacts locale={locale} totalOdds={view.totalOdds} probability={view.estimatedProbability} selectionCount={view.matchCount} />
         </>}>
-        <CriteriaPanel><Stack $gap="sm"><p>{m.text("bestSlips.subscriberMatches")}</p>
-          <ButtonLink href={subscriberHref(signedIn)} prefetch={false}>{m.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>
-        </Stack></CriteriaPanel>
+        <CriteriaPanel>
+          <ButtonLink href={subscriberHref(signedIn, "/en", "login")} prefetch={false}>
+            {m.text(signedIn ? "subscribe.title" : "bestSlips.loginToAccess")}
+          </ButtonLink>
+        </CriteriaPanel>
       </SlipDisclosure>)}
     </>}
     <Note>{m.text("bestSlips.disclaimer")}</Note>
