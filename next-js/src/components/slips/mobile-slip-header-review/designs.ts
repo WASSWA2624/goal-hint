@@ -1,15 +1,15 @@
 /** Stable review identifiers; no candidate changes the selected production header. */
 export const mobileSlipHeaderDesigns = [
-  { id: "plain-ledger", name: "Plain ledger", description: "Short inline labels and balanced spacing keep the five facts on one line." },
-  { id: "vertical-rules", name: "Vertical rules", description: "Fine separators give the odds, average, picks and status distinct columns." },
-  { id: "icon-labels", name: "Icon labels", description: "Small symbols replace longer labels while the figures and status stay explicit." },
-  { id: "outlined-facts", name: "Outlined facts", description: "Square outlined metric cells distinguish each figure without adding another row." },
-  { id: "number-tab", name: "Number tab", description: "A solid slip-number tab anchors the header, followed by quiet inline figures." },
-  { id: "outcome-endcap", name: "Outcome endcap", description: "A flat status block at the right makes Won, Lost and Pending easy to scan." },
-  { id: "aligned-tracks", name: "Aligned tracks", description: "Right-aligned numeric tracks give the odds and average a consistent rhythm." },
-  { id: "probability-line", name: "Probability line", description: "A thin underline marks the average probability while preserving the single baseline." },
-  { id: "ticket-dividers", name: "Ticket dividers", description: "Dashed rules and tabular type give the header the feel of a compact ticket." },
-  { id: "minimal-notation", name: "Minimal notation", description: "Slip number, multiplier, average, pick count and abbreviated status use minimal notation." },
+  { id: "fine-rules", name: "Fine rules", description: "32px · Fine, full-height dividers and compact inline labels." },
+  { id: "continuous-rules", name: "Continuous rules", description: "30px · Continuous separators in a shorter, tightly spaced strip." },
+  { id: "inset-rules", name: "Inset rules", description: "32px · Short inset separators keep the fixed columns light." },
+  { id: "strong-rules", name: "Strong rules", description: "32px · Darker one-pixel rules make the column boundaries clearer." },
+  { id: "status-cell", name: "Status cell", description: "32px · A tinted status cell keeps exactly the same width for every outcome." },
+  { id: "metric-cells", name: "Metric cells", description: "32px · Quiet metric fills separate the figures while retaining aligned rules." },
+  { id: "centered-columns", name: "Centered columns", description: "32px · Centered labels and figures inside the same fixed tracks." },
+  { id: "right-aligned", name: "Right-aligned figures", description: "30px · Numeric groups align to the right of their fixed columns." },
+  { id: "minimal-rules", name: "Minimal rules", description: "28px · The shortest header, with restrained type and quiet separators." },
+  { id: "bold-identity", name: "Bold slip number", description: "34px · A stronger slip number leads the same aligned columns." },
 ] as const;
 
 export type MobileSlipHeaderVariant = typeof mobileSlipHeaderDesigns[number]["id"];

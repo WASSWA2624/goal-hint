@@ -6,7 +6,7 @@ export const mobileHeaderScenarios = [
   { id: "won", label: "Won slip" },
   { id: "lost", label: "Lost slip" },
   { id: "void", label: "Void slip" },
-  { id: "eight", label: "8 selections" },
+  { id: "eight", label: "8 matches" },
   { id: "large-values", label: "Slip 100 · large odds" },
   { id: "long-names", label: "Long team names" },
 ] as const;

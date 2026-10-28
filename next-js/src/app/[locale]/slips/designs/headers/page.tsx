@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { MobileSlipHeaderGallery } from "@/components/slips/mobile-slip-header-gallery";
 
 export const metadata: Metadata = {
-  title: "Mobile slip header designs | Goal Hint",
-  description: "Compare ten single-row mobile slip headers with original Clean ledger match rows.",
+  title: "Vertical rules mobile slip headers | Goal Hint",
+  description: "Compare ten shorter mobile headers with aligned columns, equal status widths and unchanged Clean ledger matches.",
   robots: { index: false, follow: false },
 };
 

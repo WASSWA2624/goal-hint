@@ -88,8 +88,8 @@ export function MobileSlipHeaderGallery({ locale }: { locale: string }) {
     <Review data-mobile-header-gallery data-appearance={mode}>
       <Intro>
         <p data-eyebrow>Goal Hint · Mobile header review</p>
-        <h1>One row. Ten slip headers.</h1>
-        <p>Compare slip number, total odds, average probability, selection count and status on one horizontal row. Every expanded sample keeps the same Clean ledger match rows. Tap a slip header to open or close it.</p>
+        <h1>Ten tighter Vertical rules headers.</h1>
+        <p>Compare Slip, Odds, Probability, Matches and Status on one row in 28–34px headers. Fixed column widths keep the separators aligned, and every status uses the same width. Expanded examples use the unchanged Clean ledger match rows. Tap a slip header to open or close it.</p>
         <Toolbar aria-label="Mobile header preview controls">
           <label><span>Design</span><select value={focused} onChange={(event) => setFocused(event.target.value as MobileSlipHeaderVariant | "all")}>
             <option value="all">Compare all 10</option>
@@ -118,8 +118,8 @@ export function MobileSlipHeaderGallery({ locale }: { locale: string }) {
                 {focused === "all" ? "Inspect" : "All 10"}
               </button>
             </header>
-            <Phone $width={width} data-preview-phone data-preview-width={width}>
-              <Context><strong>Header sample</strong><span>Same matches · {sample.slip.selections.length} selections</span></Context>
+            <Phone $width={width} data-preview-phone data-preview-width={width} data-header-alignment-group>
+              <Context><strong>Header sample</strong><span>Match rows unchanged · {sample.slip.selections.length} matches</span></Context>
               <Samples key={`${scenario}-${design.id}`}>
                 <div data-collapsed-sample><p>Collapsed</p><MobileSlipHeaderSample {...sample} locale={locale} variant={design.id} /></div>
                 <div data-status-samples><p>Other statuses</p>{otherOutcomes.map((outcome) =>
@@ -130,7 +130,7 @@ export function MobileSlipHeaderGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative fixtures, generic crests and predictions for layout review. These ten headers are samples for your selection. Average probability is the mean of the individual match probabilities. <a href={`/${locale}/slips/designs`}>View the approved match layout</a> · <a href={`/${locale}/slips/designs/desktop`}>Desktop samples</a>.</Footer>
+      <Footer>Illustrative fixtures, generic crests and predictions for layout review. Choose from these ten Vertical rules samples before the revised header is applied. Probability remains the mean of the individual match probabilities; its calculation is unchanged. <a href={`/${locale}/slips/designs`}>View the approved match layout</a> · <a href={`/${locale}/slips/designs/desktop`}>Desktop samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }
