@@ -1,0 +1,93 @@
+"use client";
+
+import { useId } from "react";
+import Link from "@/components/navigation/navigation-link";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
+import { snapshotCardPrediction } from "@/domain/match-card";
+import { canonicalMatchSlug } from "@/domain/match-slug";
+import { matchHref } from "@/domain/navigation";
+import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
+import type { SavedSlipView } from "@/domain/saved-slips";
+import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
+import { slipSelectionCard } from "@/domain/slip-card";
+import { createMessages, type Messages } from "@/i18n/messages";
+import type { CompactSlipVariant } from "./designs";
+import { CompactCard, MatchRow } from "./compact-slip-styles";
+
+function probabilityLabel(value: number, messages: Messages): string {
+  if (value > 0 && Math.round(value * 1000) === 0) return messages.text("probability.compact.less-than-one");
+  if (value < 1 && Math.round(value * 1000) === 1000) return messages.text("probability.compact.more-than-ninety-nine");
+  return messages.number(value, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function SelectionRow({ selection, position, locale, result, analysisLinks }: {
+  selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean;
+}) {
+  const messages = createMessages(locale), id = useId();
+  const { fixture, snapshotPick } = slipSelectionCard(selection, result);
+  const prediction = snapshotCardPrediction(snapshotPick);
+  const home = selection.homeTeam.name?.trim() || messages.text("match.homeUnknown");
+  const away = selection.awayTeam.name?.trim() || messages.text("match.awayUnknown");
+  const family = messages.text(`market.family.${selection.family}`);
+  const description = predictionDescription(messages, selection.selection);
+  const outcomeLabel = prediction.status === "correct" ? messages.text("match.result.won")
+    : prediction.status === "incorrect" ? messages.text("match.result.lost") : messages.text(`outcome.${prediction.status}`);
+  const kickoff = fixture.kickoffAt!;
+  const rowProps = { "aria-labelledby": `${id}-${analysisLinks ? "analysis" : "teams"}`,
+    "aria-describedby": `${id}-meta ${id}-kickoff ${id}-pick ${id}-odds ${id}-probability${result ? ` ${id}-result` : ""}`,
+    "data-fixture-id": selection.fixtureId, "data-market": selection.family, "data-outcome": prediction.status };
+  const content = <>
+      <span data-leg-number aria-hidden="true">{messages.number(position)}</span>
+      <h4 data-teams id={`${id}-teams`}><span data-home>{home}</span><span data-versus>vs</span><span data-away>{away}</span></h4>
+      <span data-meta id={`${id}-meta`}>
+        <span data-competition>{selection.competition.name || messages.text("match.competitionUnknown")}</span>
+        {selection.competition.country && <span data-country>{selection.competition.country}</span>}
+      </span>
+      <time data-kickoff id={`${id}-kickoff`} dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)}>
+        <span data-date>{messages.reportingDay(kickoff)}</span><span data-clock>{messages.reportingTime(kickoff)} EAT</span>
+      </time>
+      <span data-pick id={`${id}-pick`} title={`${family}: ${description}${selection.forecast ? ` · ${messages.text("match.published")}: ${messages.reportingInstant(utcInstantFromEpochMilliseconds(selection.forecast.publishedAt))}` : ""}`}>
+        <span data-market-label>{family}</span><strong data-pick-label aria-hidden="true">{predictionLabel(messages, selection.selection)}</strong>
+        <VisuallyHidden>{description}</VisuallyHidden>
+      </span>
+      <span data-leg-odds id={`${id}-odds`}><span data-number-label>{messages.text("slips.odds")}</span><strong>{selection.odds}</strong></span>
+      <span data-leg-probability id={`${id}-probability`}><span data-number-label>{messages.text("slips.probability")}</span><strong>{probabilityLabel(selection.probability, messages)}</strong></span>
+      {result && <span data-result id={`${id}-result`}>
+        <span data-outcome-label>{outcomeLabel}</span>
+        {fixture.score && <span data-saved-score title={messages.text("match.regulationScoreNote")}><VisuallyHidden>{messages.text("match.regulationScoreNote")}: </VisuallyHidden>{messages.number(fixture.score.home)}–{messages.number(fixture.score.away)}</span>}
+      </span>}
+      {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
+  </>;
+  return <li data-compact-selection={selection.fixtureId}>
+    {analysisLinks ? <MatchRow as={Link} href={matchHref(selection.fixtureId, canonicalMatchSlug(home, away), locale)} prefetch={false} {...rowProps}>{content}</MatchRow>
+      : <MatchRow {...rowProps}>{content}</MatchRow>}
+  </li>;
+}
+
+/** The same snapshot-based display can serve Best slips and generated slips without changing either data contract. */
+export function CompactSlip({ slip, index, locale, variant, initiallyOpen = false, results, analysisLinks = true }: {
+  slip: BuiltSlip; index: number; locale: string; variant: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"]; analysisLinks?: boolean;
+}) {
+  const messages = createMessages(locale), id = useId();
+  return <CompactCard data-compact-slip={variant} data-slip-id={slip.id}>
+    <details open={initiallyOpen}>
+      <summary aria-describedby={`${id}-average-note`}>
+        <h3 data-summary-identity id={`${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
+          {index === 0 && <span data-rank>{messages.text("slips.topRanked")}</span>}</h3>
+        <span data-summary-odds data-summary-fact><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{slip.totalOdds}</strong></span>
+        <span data-summary-average data-summary-fact title={messages.text("slips.averageHint")}>
+          <span data-fact-label aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}: </VisuallyHidden>
+          <strong>{probabilityLabel(slip.averageProbability, messages)}</strong></span>
+        <span data-summary-count><span aria-hidden="true">{messages.plural("slips.selections", slip.selections.length)}</span>
+          <VisuallyHidden>{messages.text("slips.selectionCount")}: {messages.number(slip.selections.length)}</VisuallyHidden></span>
+        <span data-toggle-chevron aria-hidden="true" />
+        <VisuallyHidden id={`${id}-average-note`}>{messages.text("slips.averageHint")}</VisuallyHidden>
+      </summary>
+      <ul aria-labelledby={`${id}-heading`}>
+        {slip.selections.map((selection, selectionIndex) => <SelectionRow key={selection.fixtureId} selection={selection}
+          position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} result={results?.find((item) => item.fixtureId === selection.fixtureId)} />)}
+      </ul>
+    </details>
+  </CompactCard>;
+}
