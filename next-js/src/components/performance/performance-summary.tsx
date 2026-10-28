@@ -5,37 +5,47 @@ import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
-import type { OutcomeTone } from "@/styles/theme";
+import { media, type OutcomeTone } from "@/styles/theme";
 
 const wide = "@container performance-summary (min-width: 56rem)";
 
 const Panel = styled.div`
   container: performance-summary / inline-size;
-  min-inline-size: 0; border: 1px solid ${({ theme }) => theme.color.border}; border-block-end: 0;
+  position: relative; min-inline-size: 0; block-size: max(44px, 2.75rem); box-sizing: border-box;
+  border: 1px solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface}; border-radius: 0; line-height: 1.35;
+  ${media.desktop} { block-size: 2.25rem; }
+  @media (pointer: coarse) { block-size: max(44px, 2.75rem); ${media.desktop} { block-size: max(44px, 2.25rem); } }
 `;
 const Content = styled.div`
-  padding: 8px 12px 9px;
-  ${wide} {
-    display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; padding-inline: 14px;
-  }
+  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 1px;
+  block-size: 100%; min-inline-size: 0; padding: 3px 8px 5px; box-sizing: border-box;
+  ${media.desktop} { display: flex; align-items: center; gap: 12px; padding: 3px 12px 5px; }
 `;
 const Header = styled.header`
-  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px;
-  > h2, > h3 { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.3; }
-  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
-  ${wide} {
-    flex: none; max-inline-size: 100%; justify-content: flex-start; gap: 8px;
-    padding-inline-end: 14px; margin-inline-end: 14px; border-inline-end: 1px solid ${({ theme }) => theme.color.border};
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  min-inline-size: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  > h2, > h3 { flex: none; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.2; }
+  > p { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  ${media.desktop} {
+    display: grid; flex: none; gap: 1px; max-inline-size: 40%;
+    padding-inline-end: 12px; border-inline-end: 1px solid ${({ theme }) => theme.color.border};
   }
 `;
-const Counts = styled.dl<{ $fill: boolean }>`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  min-inline-size: 0; margin: 6px 0 0;
-  ${wide} {
-    margin: 0;
-    flex-grow: ${({ $fill }) => $fill ? 1 : 0}; padding-inline-end: ${({ $fill }) => $fill ? "24px" : "0"};
-  }
+/** One focusable strip preserves every figure at phone widths without increasing the summary height. */
+const Figures = styled.div`
+  display: flex; align-items: center; gap: 8px; min-inline-size: 0;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
+  scrollbar-width: thin; scrollbar-color: ${({ theme }) => theme.color.border} transparent;
+  &::-webkit-scrollbar { block-size: 3px; }
+  &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
+  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  ${media.desktop} { flex: 1; align-self: stretch; }
+`;
+const Counts = styled.dl`
+  display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 6px;
+  inline-size: max-content; margin: 0;
 `;
 const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean }>`
   --summary-tone: ${({ theme, $tone }) => $tone === "unavailable" ? theme.color.controlBorder
@@ -43,48 +53,43 @@ const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean }>`
   display: flex; align-items: baseline; min-inline-size: 0; white-space: nowrap;
   &::before {
     content: ${({ $tone }) => $tone ? '""' : "none"}; order: 0; flex: none;
-    inline-size: 8px; block-size: 8px; margin-inline-end: 5px;
+    inline-size: 6px; block-size: 6px; margin-inline-end: 4px;
     background: ${({ $zero }) => $zero ? "transparent" : "var(--summary-tone)"}; border: 1.5px solid var(--summary-tone);
   }
   dd {
-    order: 1; margin: 0; font-size: 0.875rem;
+    order: 1; margin: 0; font-size: 0.75rem; line-height: 1.25;
     font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
     color: ${({ theme, $tone, $zero }) => $zero ? theme.color.mutedText
       : $tone === "unavailable" ? theme.color.text : "var(--summary-tone)"};
   }
-  dt { order: 2; margin-inline-start: 4px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
+  dt { order: 2; margin-inline-start: 4px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 1.25; }
 `;
 const OutcomeCount = styled(OutcomeBadge)<{ $outcome: "correct" | "incorrect" | "pending" }>`
-  flex: 1 0 0; min-inline-size: max-content; max-inline-size: 8.625rem;
-  min-block-size: 33px; padding: 4px 6px;
+  flex: none; min-inline-size: max-content; min-block-size: 16px; padding: 0 4px;
   border: 0; border-radius: 0; white-space: nowrap;
   color: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].background};
-  font-size: 0.875rem; line-height: 1.3; font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem; line-height: 1.25; font-variant-numeric: tabular-nums;
   dt, dd { margin: 0; color: inherit; font: inherit; }
   dt { order: 2; }
   dd { display: inline-flex; align-items: center; gap: 4px; order: 1; }
-  dd > svg { flex: none; font-size: 0.875rem; }
-  ${wide} { max-inline-size: none; }
+  dd { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  dd > svg { flex: none; font-size: 0.625rem; }
 `;
 const PredictedCount = styled(Count)`
-  flex: 1 0 100%;
-  ${wide} { flex: none; margin-inline-end: 6px; }
+  flex: none;
 `;
 const OutcomePercentage = styled.span`
   display: none;
-  ${wide} { display: inline; margin-inline-start: 5px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  ${wide} { display: inline; margin-inline-start: 4px; font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Extras = styled.dl`
-  display: flex; flex-wrap: wrap; gap: 4px 10px; min-inline-size: 0; margin: 6px 0 0;
-  dd, dt { font-size: 0.75rem; }
-  ${wide} {
-    flex-grow: 1; gap: 4px 18px; margin: 0; margin-inline-start: 18px; padding-inline-end: 24px;
-    dd { font-size: 0.875rem; }
-  }
+  display: flex; flex: none; gap: 8px; margin: 0; padding-inline-start: 8px;
+  border-inline-start: 1px solid ${({ theme }) => theme.color.border};
 `;
 const Distribution = styled.div`
-  display: flex; block-size: 3px; margin-inline: -1px; background: ${({ theme }) => theme.color.border};
+  position: absolute; inset-inline: 0; inset-block-end: 0; display: flex; block-size: 2px;
+  background: ${({ theme }) => theme.color.border};
 `;
 const Segment = styled.span<{ $tone: OutcomeTone }>`
   flex-basis: 0; min-inline-size: 2px;
@@ -114,8 +119,9 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
   const segments = [...outcomes, voidOutcome, ...coverage];
   return <Panel role="group" aria-label={label} data-performance-summary={kind}>
     <Content>
-      <Header>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
-      <Counts $fill={extras.length === 0}>
+      <Header tabIndex={0} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
+      <Figures tabIndex={0} role="region" aria-label={`${label}: ${m.text("performance.summary.figures")}`} data-performance-figures>
+      <Counts>
         {showCoverage && <Count $zero={counts.total === 0}><dt>{m.text(`performance.summary.${kind}`)}</dt><dd>{m.number(counts.total)}</dd></Count>}
         {predicted && <PredictedCount $zero={predicted.total === 0} data-summary-predicted>
           <dt>{m.text("performance.summary.predicted")}</dt><dd>{m.number(predicted.total)}</dd>
@@ -134,6 +140,7 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
       {extras.length > 0 && <Extras>{extras.map(({ key, tone, label, count }) => <Count key={key} $tone={tone}>
         <dt>{label}</dt><dd>{m.number(count)}</dd>
       </Count>)}</Extras>}
+      </Figures>
     </Content>
     <Distribution aria-hidden="true">{segments.filter(({ count }) => count > 0).map(({ tone, label, count }) =>
       <Segment key={label} $tone={tone} style={{ flexGrow: count }} />)}</Distribution>

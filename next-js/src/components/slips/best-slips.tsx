@@ -3,7 +3,6 @@
 import { useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import { PredictionDefinitions } from "@/components/match/prediction-definitions";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
@@ -42,7 +41,6 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
     <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
     {result.statistics && <PerformanceSummary counts={result.statistics} locale={locale} kind="slips" period={`${m.reportingDateMedium(result.day)} · EAT`} />}
-    {result.slips.some((view) => view.slip) && <PredictionDefinitions locale={locale} />}
     {result.slips.length === 0 ? <CriteriaPanel role="status"><Stack $gap="sm">
       <h2>{m.text("bestSlips.emptyTitle")}</h2>
       <p>{m.text(result.state === "odds-unavailable" ? "bestSlips.oddsUnavailable" : result.state === "model-unavailable"
