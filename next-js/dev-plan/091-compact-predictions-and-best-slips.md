@@ -43,5 +43,15 @@
   100 three-match slips in 1,856 ms. At lower odds, it generated 83 six-match
   slips from 498 unique fixtures in 4,698 ms. Searches disclose their bounds.
   Twenty randomized small cohorts agreed with exhaustive ranking oracles.
-- Existing immutable daily publications and the curated ten-slip demo showcase
-  retain their original count. Newly generated daily publications support 100.
+- Existing immutable daily publications retain their original count. New daily
+  publications, including demo mode, support up to 100 and accept fewer when
+  the qualifying cohort is smaller. Demo mode scans the full daily cohort until
+  reaching capacity, rather than stopping after its former ten-slip showcase.
+- Eight demo regressions passed, including 100 complete disjoint slips,
+  nonempty partial sets, original forecast chronology, and more than ten slips
+  from the unmodified raw demo fixtures. The builder quantity field also has
+  enough room for its new three-digit maximum.
+- The final combined run passed all 270 slip, prediction, authentication and
+  client-graph tests without skips. Focused lint and the optimized production
+  build (including TypeScript and the offline manifest) passed after the demo
+  capacity follow-up.

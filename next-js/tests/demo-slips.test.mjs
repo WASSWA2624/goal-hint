@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildDemoSlipSnapshots, demoSlipQuote } from "../src/server/demo/slips-seed.ts";
+import { buildDemoSlipSnapshots, demoSlipQuote, demoSlipRules } from "../src/server/demo/slips-seed.ts";
 import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds } from "../src/domain/calendar.ts";
 import { settleMarketSelection } from "../src/domain/market-settlement.ts";
 import { demoFixturesForDate, demoFixtureOdds, demoFixtureProbabilities } from "../src/server/demo/api-football.ts";
@@ -24,13 +24,13 @@ test("editorial odds bounds use exact products rather than rounded displayed tot
   assert.deepEqual(quote(["1.10", "1.25", "1.60", "2.50"]), { totalOdds: "5.50", belowMinimum: false, aboveMaximum: false });
 });
 
-test("today receives ten disjoint opening publications with original prices, probability and forecast chronology", () => {
+test("today receives every available disjoint opening slip with original prices, probability and forecast chronology", () => {
   const candidates = Array.from({ length: 80 }, (_, index) => candidate(index)), original = JSON.stringify(candidates);
   const dayStart = Date.parse("2026-10-28T00:00:00+03:00");
   const invalid = candidate(1000); invalid.selection.kickoffAt = dayStart + 29 * 60_000;
   const low = candidate(1001); low.selection.probability = 0.6499;
   const result = buildDemoSlipSnapshots("2026-10-28", [...candidates, invalid, low], now), ids = new Set();
-  assert.equal(result.slips.length, 10);
+  assert.equal(result.slips.length, 20);
   for (const slip of result.slips) {
     assert.ok(slip.selections.length >= 4 && slip.selections.length <= 8); assert.equal(slip.totalOdds, "5.06");
     for (const selection of slip.selections) {
@@ -61,14 +61,16 @@ test("first startup late in the day retains the original editorial cohort withou
 test("daily editorial publications exclude forecasts not yet known at their original publication clock", () => {
   const candidates = Array.from({ length: 80 }, (_, index) => candidate(index));
   for (const entry of candidates.slice(39)) entry.selection.forecast.publishedAt = Date.parse("2026-10-28T01:00:00+03:00");
-  assert.throws(() => buildDemoSlipSnapshots("2026-10-28", candidates, now), /10 complete disjoint slips/u);
+  const result = buildDemoSlipSnapshots("2026-10-28", candidates, now);
+  assert.equal(result.slips.length, 9);
+  assert.ok(result.slips.every(slip => slip.selections.every(selection => selection.forecast.publishedAt < Date.parse("2026-10-28T00:00:00+03:00"))));
 });
 
 test("historical snapshots include real won and lost examples and exclude unpublishable midnight fixtures", () => {
   const date = "2026-10-27", candidates = Array.from({ length: 100 }, (_, index) => candidate(index, date, index % 5 === 0 ? "incorrect" : "correct"));
   const midnight = candidate(1000, date, "correct"); midnight.selection.kickoffAt = Date.parse(`${date}T00:05:00+03:00`);
   const result = buildDemoSlipSnapshots(date, [...candidates, midnight], now), outcomes = new Map(candidates.map((entry) => [entry.selection.fixtureId, entry.outcome]));
-  assert.equal(result.slips.length, 10);
+  assert.equal(result.slips.length, 25);
   assert.ok(result.slips[0].selections.every((selection) => outcomes.get(selection.fixtureId) === "correct"));
   assert.ok(result.slips[1].selections.some((selection) => outcomes.get(selection.fixtureId) === "incorrect"));
   assert.ok(result.slips.every((slip) => slip.selections.every((selection) => selection.fixtureId !== midnight.selection.fixtureId)));
@@ -76,10 +78,22 @@ test("historical snapshots include real won and lost examples and exclude unpubl
     result.publicationAt < getPublicationDeadline(selection.kickoffAt))));
 });
 
-test("insufficient or reused fixture cohorts cannot be committed as a partial daily publication", () => {
-  assert.throws(() => buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 39 }, (_, index) => candidate(index)), now), /10 complete disjoint slips/u);
+test("sparse days publish only complete qualifying slips and duplicate fixtures cannot inflate the set", () => {
+  assert.equal(buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 39 }, (_, index) => candidate(index)), now).slips.length, 9);
   const duplicates = Array.from({ length: 80 }, (_, index) => candidate(index % 20));
-  assert.throws(() => buildDemoSlipSnapshots("2026-10-28", duplicates, now), /10 complete disjoint slips/u);
+  const result = buildDemoSlipSnapshots("2026-10-28", duplicates, now);
+  assert.equal(result.slips.length, 5);
+  const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
+  assert.equal(new Set(ids).size, ids.length);
+  assert.throws(() => buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 3 }, (_, index) => candidate(index)), now), /No complete qualifying/u);
+});
+
+test("demo generation shares the one hundred slip capacity and does not require filling it", () => {
+  assert.equal(demoSlipRules.count, 100);
+  const result = buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 480 }, (_, index) => candidate(index)), now);
+  assert.equal(result.slips.length, 100);
+  const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
+  assert.equal(new Set(ids).size, 400);
 });
 
 function actualCandidates(date) {
@@ -113,10 +127,10 @@ function actualCandidates(date) {
   });
 }
 
-test("real raw demo prices and forecast probabilities supply ten current and diverse historical slips", () => {
+test("real raw demo prices and forecast probabilities supply more than ten current and diverse historical slips", () => {
   for (const date of ["2026-10-28", "2026-10-27", "2026-10-26"]) {
     const candidates = actualCandidates(date), result = buildDemoSlipSnapshots(date, candidates, now);
-    assert.equal(result.slips.length, 10, date);
+    assert.ok(result.slips.length > 10 && result.slips.length <= demoSlipRules.count, date);
     assert.ok(result.slips.every((slip) => !demoSlipQuote(slip.selections).belowMinimum && !demoSlipQuote(slip.selections).aboveMaximum));
     if (date !== "2026-10-28") {
       const outcomes = new Map(candidates.map((candidate) => [`${candidate.selection.fixtureId}:${candidate.selection.family}`, candidate.outcome]));

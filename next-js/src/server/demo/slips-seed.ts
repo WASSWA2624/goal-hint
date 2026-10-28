@@ -21,7 +21,7 @@ import type { SettlementOutcomeStatus } from "../../domain/market-settlement.ts"
 import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { DEMO_MATCHES_PER_DAY } from "./api-football.ts";
 
-export const demoSlipRules = Object.freeze({ count: 10, minimumSelections: 4, maximumSelections: 8, minimumProbability: 0.65,
+export const demoSlipRules = Object.freeze({ count: bestSlipsRules.count, minimumSelections: 4, maximumSelections: 8, minimumProbability: 0.65,
   minimumTotalHundredths: 450, maximumTotalHundredths: 550, minimumLeadMs: 30 * 60_000 });
 export type DemoSlipCandidate = Readonly<{ selection: SlipSelection; outcome: SettlementOutcomeStatus }>;
 class IncompleteDemoPublication extends Error {}
@@ -95,7 +95,7 @@ export function buildDemoSlipSnapshots(date: string, candidates: readonly DemoSl
     }
   }
   while (slips.length < demoSlipRules.count && find(eligible)) { /* One disjoint snapshot is accepted per pass. */ }
-  if (slips.length !== demoSlipRules.count) throw new IncompleteDemoPublication(`Synthetic editorial publication needs ${demoSlipRules.count} complete disjoint slips.`);
+  if (slips.length === 0) throw new IncompleteDemoPublication("No complete qualifying synthetic editorial slip is available.");
   const selections = slips.flatMap((slip) => slip.selections);
   const latestForecast = Math.max(...selections.map((item) => item.forecast!.publishedAt));
   const publicationAt = Math.max(dayStart, latestForecast,
@@ -136,7 +136,8 @@ export async function ensureDemoSlipDates(database: DatabaseRuntime, dates: read
     await ensureDemoDates(database, [date], nowMs);
     const exists = await database.query((tx) => tx.dailySlipPublication.findUnique({ where: { eatDate: new Date(`${date}T00:00:00Z`) }, select: { id: true, bodyJson: true } }));
     if (exists) {
-      if (!exists.bodyJson || typeof exists.bodyJson !== "object" || Array.isArray(exists.bodyJson) || exists.bodyJson.count !== demoSlipRules.count) {
+      if (!exists.bodyJson || typeof exists.bodyJson !== "object" || Array.isArray(exists.bodyJson)
+        || !Number.isSafeInteger(exists.bodyJson.count) || Number(exists.bodyJson.count) < 1 || Number(exists.bodyJson.count) > demoSlipRules.count) {
         throw new Error("An older incomplete synthetic publication requires regeneration of the isolated demo database.");
       }
       continue;
@@ -157,11 +158,10 @@ export async function ensureDemoSlipDates(database: DatabaseRuntime, dates: read
         records.push(record); seen.add(record.fixtureId);
       }
       nextPage = feed.nextPage;
-      // A complete editorial publication needs ten valid disjoint snapshots, not
-      // every fixture. Continue paging only when the current cohort cannot supply them.
+      // Keep collecting qualifying fixtures until capacity or the end of the daily cohort.
       try {
         prepared = buildDemoSlipSnapshots(date, storedSlipCandidates(records), nowMs);
-        break;
+        if (prepared.slips.length >= demoSlipRules.count || nextPage === null) break;
       } catch (error) {
         if (!(error instanceof IncompleteDemoPublication)) throw error;
         if (nextPage === null) throw error;
@@ -173,7 +173,7 @@ export async function ensureDemoSlipDates(database: DatabaseRuntime, dates: read
       validFrom: Date.parse("2025-01-01T00:00:00Z"), validUntil: Date.parse("2030-01-01T00:00:00Z") };
     const modelId = evidenceFingerprint(model), publicationId = evidenceFingerprint({ kind: "daily-best-slips", version: 1, day: date });
     const body = JSON.stringify({ version: 1, day: date, publishedAt: publicationAt, model: { id: modelId, ...model },
-      criteria: serializeSlipCriteria(bestSlipCriteria(date, { ...bestSlipsRules, count: demoSlipRules.count })).toString(),
+      criteria: serializeSlipCriteria(bestSlipCriteria(date)).toString(),
       count: slips.length, searchLimited: nextPage !== null, partialCoverage: false });
     await database.transaction(async (tx) => {
       const inserted = await tx.$executeRaw`INSERT IGNORE INTO DailySlipPublication(id,eatDate,publishedAt,modelId,bodyJson,integrity)

@@ -25,7 +25,7 @@ export const BuilderHeader = styled.div`
   > h1 { font-size: 1.1875rem; }
   > div { flex: none; display: flex; flex-direction: row; align-items: center; gap: 7px; }
   > div > label { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; color: ${({ theme }) => theme.color.mutedText}; }
-  > div > input { inline-size: 3rem; min-block-size: ${compactControlHeight}; padding: 4px 6px; border-radius: ${({ theme }) => theme.border.radius}; font-size: 1rem; }
+  > div > input { inline-size: 4rem; min-block-size: ${compactControlHeight}; padding: 4px 6px; border-radius: ${({ theme }) => theme.border.radius}; font-size: 1rem; }
   ${media.desktop} { > h1 { font-size: 1.375rem; } }
   @media (pointer: coarse) { > div > input { min-block-size: 44px; } }
 `;
