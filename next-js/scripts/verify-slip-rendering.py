@@ -71,7 +71,7 @@ def verify_mobile_header(header, path, selection_count=None):
     assert len(metrics) == 3 and set(fields) == {"odds", "probability", "count"}, f"{path}: distinct odds, probability and match count"
     assert all(len(field.nodes("strong")) == 1 for field in metrics), f"{path}: one original value per header metric"
     assert [node.attrs["data-header-field"] for node in metrics] == ["odds", "probability", "count"], f"{path}: header facts retain their compact reading order"
-    assert [node.text for node in fields["odds"].nodes(attr="data-header-label")] == ["Odds"], f"{path}: concise odds label"
+    assert [node.text for node in fields["odds"].nodes(attr="data-header-label")] == ["Total odds"], f"{path}: aggregate odds have their full label"
     assert [node.text for node in fields["probability"].nodes(attr="data-label-full")] == ["Probability"], f"{path}: probability replaces the average label"
     assert [node.text for node in fields["probability"].nodes(attr="data-label-compact")] == ["Prob."], f"{path}: narrow headers retain a clear probability abbreviation"
     assert [node.text for node in fields["count"].nodes(attr="data-header-label")] == ["Matches"], f"{path}: match count uses the requested Matches label"
