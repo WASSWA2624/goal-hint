@@ -159,7 +159,21 @@ async function insertRows(tx: Tx, table: string, rows: readonly SqlRow[], update
   }
 }
 
-const ready = new WeakMap<DatabaseRuntime, Promise<void>>();
+const readyMarkerVersion = `${VERSION}:readiness-v1`;
+type PreparationState = {
+  version: string;
+  catalog: WeakMap<DatabaseRuntime, Promise<void>>;
+  pending: WeakMap<DatabaseRuntime, Map<string, Promise<void>>>;
+  refreshed: WeakMap<DatabaseRuntime, Map<string, number>>;
+};
+const processState = globalThis as typeof globalThis & { goalHintDemoPreparation?: PreparationState };
+// getDatabase survives route bundles and development reloads. Its preparation
+// promises must have the same lifetime to avoid duplicate catalog/date writes.
+const preparation = processState.goalHintDemoPreparation?.version === readyMarkerVersion
+  ? processState.goalHintDemoPreparation
+  : (processState.goalHintDemoPreparation = { version: readyMarkerVersion,
+    catalog: new WeakMap(), pending: new WeakMap(), refreshed: new WeakMap() });
+const ready = preparation.catalog;
 async function assertDemoDatabase(database: DatabaseRuntime) {
   assertDemoEnvironment();
   if (!isDevelopmentDemo()) throw new Error("Demo data is available only in development demo mode.");
@@ -454,9 +468,7 @@ async function seedObservations(tx: Tx, incoming: readonly ApiFootballDemoFixtur
   await insertRows(tx, "MarketSettlement", pointers, ["revisionId"]);
 }
 
-const pending = new WeakMap<DatabaseRuntime, Map<string, Promise<void>>>();
-const refreshed = new WeakMap<DatabaseRuntime, Map<string, number>>();
-const readyMarkerVersion = `${VERSION}:readiness-v1`;
+const { pending, refreshed } = preparation;
 const readyMarkerSchema = z.strictObject({ version: z.literal(readyMarkerVersion), date: z.string().regex(/^2026-\d{2}-\d{2}$/u),
   kind: z.enum(["future", "current", "past"]), generation: z.string().regex(/^[1-9]\d*$/u),
   readyAt: z.number().int().nonnegative(), expiresAt: z.number().int().nonnegative(), oldestQuoteAt: z.number().int().nonnegative() });
@@ -686,7 +698,7 @@ export async function seedDemoDatabase(database: DatabaseRuntime, options: Reado
   await database.query((tx) => tx.$queryRaw`ANALYZE TABLE PredictionCycle,PredictionSchedule,PredictionSet,MarketPrediction,ModelVersion,FixtureResultState,FixtureResult,MarketSettlement,MarketSettlementRevision,FixtureOddsState,FixtureOddsPrice,PredictionQuote,ProviderOddsSnapshot,OddsImportBatch`);
   if (options.enrich !== false) await database.query((tx) => tx.$queryRaw`ANALYZE TABLE DevelopmentDemoSourcePair`);
   if (options.enrich !== false && options.enrich !== "current") {
-    // Both ordinary readers retain one preparation clock. Advancing it after the
+    // Ordinary report readers retain one preparation clock. Advancing it after the
     // first aggregate would update live observations and invalidate its cache fill.
     const warmAsOf = utcInstantFromEpochMilliseconds(Date.now()), warmClock = { now: () => warmAsOf };
     options.onProgress?.("Preparing the validated default demo performance snapshot.");
@@ -706,6 +718,10 @@ export async function seedDemoDatabase(database: DatabaseRuntime, options: Reado
       throw new Error("The validated default owner source comparison is not ready.");
     }
     options.onProgress?.("Demo default owner source comparison ready.");
+    options.onProgress?.("Preparing the validated default match summaries.");
+    const { warmDemoFeedSummaries } = await import("./feed-summary.ts");
+    await warmDemoFeedSummaries(warmClock, demoFootballCatalog.leagues.map((league) => league.id));
+    options.onProgress?.("Demo default match summaries ready.");
   }
   return { dates: dates.length, matchesPerDay: DEMO_MATCHES_PER_DAY, fixtures: expected, leagues: demoFootballCatalog.leagues.length, teams: demoFootballCatalog.teams.length };
 }

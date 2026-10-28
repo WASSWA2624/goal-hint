@@ -3,7 +3,8 @@ import "server-only";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import { createPublicResponseCache, publicCacheRules, type PublicCacheStore } from "./public-cache.ts";
+import { createPublicReadCoordinator, createPublicResponseCache, publicCacheRules, type PublicCacheStore, type PublicReadCoordinator } from "./public-cache.ts";
+import { observeCache } from "../monitoring/server-measurements.ts";
 
 type Tx = Prisma.TransactionClient;
 export async function readPublicCacheGenerations(tx: Tx, tags: readonly string[]) {
@@ -53,6 +54,12 @@ export function createMysqlPublicCacheStore(database: DatabaseRuntime): PublicCa
   };
   return Object.freeze(store);
 }
+const processState = globalThis as typeof globalThis & { goalHintPublicReadCoordinators?: WeakMap<DatabaseRuntime, PublicReadCoordinator> };
 export function createMysqlPublicResponseCache(database: DatabaseRuntime, now = Date.now) {
-  return createPublicResponseCache(createMysqlPublicCacheStore(database), now);
+  // App pages and APIs have separate bundles and create services per request.
+  // Retain only their unfinished reads across those wrappers, never cached data.
+  const coordinators = processState.goalHintPublicReadCoordinators ??= new WeakMap();
+  let coordinator = coordinators.get(database);
+  if (!coordinator) { coordinator = createPublicReadCoordinator(); coordinators.set(database, coordinator); }
+  return createPublicResponseCache(createMysqlPublicCacheStore(database), now, observeCache, coordinator);
 }

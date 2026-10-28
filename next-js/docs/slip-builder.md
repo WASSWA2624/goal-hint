@@ -1,8 +1,13 @@
 # Slip builder
 
-`/en/slips` uses the Balanced slip builder with the existing classic table
-slips. Each slip has its total odds, average forecast
-probability and selection count in its title, with one semantic table row per match.
+`/en/slips` uses the Balanced slip builder. Each slip keeps its total odds,
+average forecast probability and selection count in its title. Its selections
+use the same `MatchCard` and `MatchCardList` as Matches, Live and Results, including
+their phone tiles and desktop columns. Best Slips, completed saved slips and
+published performance slips reuse that presentation too. A browser-safe adapter
+preserves each original selection's kickoff, teams, pick, probability and price;
+it never substitutes the current top pick or constructs missing forecast groups.
+Saved leg outcomes and regulation scores are displayed only when supplied.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
 navigation. Controls use the shared themed components with a subtle 2px corner radius;
 connected result-table edges remain square.
@@ -296,4 +301,8 @@ real server-rendered controls, the three dialog groups and their inline
 no-JavaScript fallback, blank Any defaults, retained custom numeric bounds, and
 unique form-associated inputs. It also checks result states, native GET builds, invalid criteria,
 navigation overflow, summaries inside slip titles and one row per selection.
+Selection rows render the shared match-card board, preserve a manually selected
+alternative's probability and price, and keep an unobserved fixture status
+unknown. `tests/slip-card.test.mjs` also verifies immutable original values,
+saved regulation scores, supplied outcomes and probability boundary labels.
 Its `--serve` option keeps the fixture available for browser inspection.

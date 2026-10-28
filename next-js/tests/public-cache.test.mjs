@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateReportingDateRange } from '../src/domain/calendar.ts';
 import { parseMatchFeedQuery } from '../src/server/matches/feed-service.ts';
-import { publicCacheDescriptor, createPublicResponseCache, publicCacheRules } from '../src/server/cache/public-cache.ts';
+import { publicCacheDescriptor, createPublicReadCoordinator, createPublicResponseCache, publicCacheRules } from '../src/server/cache/public-cache.ts';
+import { createMysqlPublicResponseCache } from '../src/server/cache/mysql-public-cache.ts';
 
 const start = Date.parse('2026-10-09T20:59:58Z'), parse = value => {
   assert.equal(typeof value.version, 'string'); return value;
@@ -23,7 +24,13 @@ function memory() {
   return { cache: createPublicResponseCache(store, () => at), store,
     load: async () => ({ version: String(++loads), synchronizedAt: start - 60_000 }),
     advance: ms => { at += ms; }, invalidate: () => { version++; }, fail: () => { outage = true; },
-    get loads() { return loads; } };
+    get loads() { return loads; }, get now() { return at; } };
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise(complete => { resolve = complete; });
+  return { promise, resolve };
 }
 
 test('canonical keys resolve relative dates and isolate all allowed query and policy dimensions', () => {
@@ -121,4 +128,110 @@ test('replica clock skew cannot extend freshness, and a failed fill preserves th
   const noFill = { ...m.store, lookup: async () => ({ generations: {}, createdAt: null, value: null, expiresAt: null }),
     fill: async () => { throw new Error('cache write outage'); } };
   assert.equal((await createPublicResponseCache(noFill, () => start).read(descriptor(), m.load)).version, '2');
+});
+
+test('simultaneous same-generation reads share unfinished work across wrappers without changing source clocks', async () => {
+  const m = memory(), coordinator = createPublicReadCoordinator(), first = createPublicResponseCache(m.store, () => m.now, () => {}, coordinator);
+  const second = createPublicResponseCache(m.store, () => m.now, () => {}, coordinator), ready = deferred(), release = deferred();
+  let loads = 0;
+  const load = async () => { loads++; ready.resolve(); await release.promise; return { version: 'original', asOf: start, sourceAt: start - 60_000 }; };
+  const a = first.read(descriptor(), load); await ready.promise;
+  m.advance(100);
+  const b = second.read(descriptor(), load); await Promise.resolve();
+  release.resolve();
+  const [left, right] = await Promise.all([a, b]);
+  assert.deepEqual(right, left); assert.equal(right.asOf, start); assert.equal(right.sourceAt, start - 60_000);
+  assert.equal(loads, 1); assert.equal(coordinator.pending.size, 0);
+});
+
+test('an intervening generation change never joins an older pending read', async () => {
+  const m = memory(), ready = deferred(), release = deferred();
+  const old = m.cache.read(descriptor(), async () => { ready.resolve(); await release.promise; return { version: 'old' }; });
+  await ready.promise; m.invalidate();
+  assert.equal((await m.cache.read(descriptor(), async () => ({ version: 'new' }))).version, 'new');
+  release.resolve(); await old;
+  assert.equal((await m.cache.read(descriptor(), m.load)).version, 'new');
+});
+
+test('waiting for a slow read does not extend its five-second age or its original permission deadline', async () => {
+  for (const lifetime of ['age', 'permission', 'midnight']) {
+    const m = memory(), ready = deferred(), release = deferred();
+    const d = lifetime === 'age' ? { ...descriptor({ kind: 'revision' }), lifetimeMs: publicCacheRules.mutableMs }
+      : lifetime === 'permission' ? { ...descriptor({ kind: 'revision' }), validUntil: () => start + 100 } : descriptor();
+    const old = m.cache.read(d, async () => { ready.resolve(); await release.promise; return { version: 'old' }; });
+    await ready.promise;
+    const fresh = m.cache.read(d, async () => ({ version: 'new' })); await Promise.resolve();
+    m.advance(lifetime === 'age' ? 5000 : lifetime === 'permission' ? 100 : 2000);
+    release.resolve(); await old;
+    assert.equal((await fresh).version, 'new', lifetime);
+    assert.equal((await m.cache.read(descriptor({ kind: 'revision' }), m.load)).version, '1');
+  }
+});
+
+test('nested same-key materialization never waits for its own pending load', { timeout: 3000 }, async () => {
+  const m = memory(), coordinator = createPublicReadCoordinator();
+  const cache = createPublicResponseCache(m.store, () => m.now, () => {}, coordinator);
+  const value = await cache.read(descriptor(), () => cache.read(descriptor(), async () => ({ version: 'nested' })));
+  assert.equal(value.version, 'nested'); assert.equal(coordinator.pending.size, 0);
+});
+
+test('cache outages and failed loads are not hidden or retained by unfinished-read sharing', async () => {
+  const m = memory(), coordinator = createPublicReadCoordinator(), ready = deferred(), release = deferred();
+  const cache = createPublicResponseCache(m.store, () => m.now, () => {}, coordinator);
+  const old = cache.read(descriptor(), async () => { ready.resolve(); await release.promise; return { version: 'old' }; });
+  await ready.promise; m.fail();
+  assert.equal((await cache.read(descriptor(), async () => ({ version: 'fallback' }))).version, 'fallback');
+  release.resolve(); await old; assert.equal(coordinator.pending.size, 0);
+  await assert.rejects(cache.read(descriptor(), async () => { throw new Error('read failed'); }), /read failed/u);
+  assert.equal(coordinator.pending.size, 0);
+  assert.equal((await cache.read(descriptor(), async () => ({ version: 'recovered' }))).version, 'recovered');
+});
+
+test('per-request MySQL cache factories share pending work only for the same database runtime', async () => {
+  const database = { transaction: operation => operation({
+    publicCacheTag: { findMany: async () => [] },
+    publicResponseCache: { findUnique: async () => null, upsert: async () => {} },
+  }) };
+  const a = createMysqlPublicResponseCache(database, () => start), b = createMysqlPublicResponseCache(database, () => start);
+  const ready = deferred(), release = deferred(); let loads = 0;
+  const load = async () => { loads++; ready.resolve(); await release.promise; return { version: 'shared' }; };
+  const first = a.read(descriptor(), load); await ready.promise;
+  const second = b.read(descriptor(), load); await Promise.resolve();
+  release.resolve(); await Promise.all([first, second]); assert.equal(loads, 1);
+  // No completed value was retained locally: this fake database never stores a fill.
+  await b.read(descriptor(), async () => { loads++; return { version: 'next' }; }); assert.equal(loads, 2);
+});
+
+test('shared failures preserve each caller loader and its bundle-specific error class', async () => {
+  class OwnerError extends Error {}
+  class FollowerError extends Error {}
+  const m = memory(), coordinator = createPublicReadCoordinator(), ready = deferred(), release = deferred();
+  const cache = createPublicResponseCache(m.store, () => m.now, () => {}, coordinator);
+  const owner = cache.read(descriptor(), async () => { ready.resolve(); await release.promise; throw new OwnerError('owner'); });
+  await ready.promise;
+  const follower = cache.read(descriptor(), async () => { throw new FollowerError('follower'); }); await Promise.resolve();
+  release.resolve();
+  const results = await Promise.allSettled([owner, follower]);
+  assert.ok(results[0].reason instanceof OwnerError); assert.ok(results[1].reason instanceof FollowerError);
+  assert.equal(coordinator.pending.size, 0);
+});
+
+test('an unresolved leader cannot hold a follower beyond the original age, absolute deadline or permission bound', { timeout: 3000 }, async () => {
+  for (const bound of ['age', 'deadline', 'permission']) {
+    const m = memory(), coordinator = createPublicReadCoordinator(), ready = deferred(), release = deferred();
+    const wallStartedAt = Date.now(), now = () => start + Date.now() - wallStartedAt;
+    const cache = createPublicResponseCache(m.store, now, () => {}, coordinator);
+    const d = { ...descriptor({ kind: 'revision' }), lifetimeMs: bound === 'age' ? 15 : 10_000,
+      ...(bound === 'deadline' ? { deadlineAt: start + 15 } : {}),
+      ...(bound === 'permission' ? { validUntil: () => start + 15 } : {}) };
+    let leaderFinished = false, followerLoads = 0;
+    const leader = cache.read(d, async () => {
+      ready.resolve(); await release.promise; leaderFinished = true; return { version: 'leader' };
+    });
+    await ready.promise;
+    const follower = await cache.read(d, async () => { followerLoads++; return { version: 'follower' }; });
+    assert.equal(follower.version, 'follower', bound);
+    assert.equal(followerLoads, 1, bound); assert.equal(leaderFinished, false, bound);
+    release.resolve(); await leader; assert.equal(coordinator.pending.size, 0);
+  }
 });

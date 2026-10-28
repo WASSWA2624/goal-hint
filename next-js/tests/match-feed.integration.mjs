@@ -160,9 +160,10 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       const pair = await query({ q: 'Manchester United vs Newcastle United', pageSize: '100' });
       assert.deepEqual(pair.search, { exact: 0, similar: 3 });
       assert.deepEqual(new Set(pair.records.map((item) => item.fixtureId)), new Set([exact, related, unrelated[0]]));
-      // Home and away together cover every word, so that fixture alone is exact.
+      // Home and away cover every word; the related club remains a similar result.
       const both = await query({ q: 'Manchester United vs Synthetic club 6121', pageSize: '100' });
-      assert.deepEqual(both.search, { exact: 1, similar: 0 }); assert.equal(both.records[0]?.fixtureId, exact);
+      assert.deepEqual(both.search, { exact: 1, similar: 1 });
+      assert.deepEqual(both.records.map((item) => item.fixtureId), [exact, related]);
       assert.deepEqual((await query({ q: 'Manchester United', status: 'finished' })).search, { exact: 0, similar: 0 });
       assert.equal((await query()).search, null);
     });

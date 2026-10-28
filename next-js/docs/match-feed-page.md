@@ -24,6 +24,27 @@ render across dates. A serialized `tz` resolves Today and date presets in that
 zone. Cache hits preserve their original response/source clocks.
 Full-page HTTP caching remains disabled by dynamic request rendering.
 
+Feed cohort queries start with the kickoff-date index. The stored generated
+`PredictionSet.feedRecommendation` column supplies compact recommendation fields
+for filtering and ordering while the original sealed candidate stays authoritative.
+Apply migrations `20261028120000_compact_feed_recommendation` and
+`20261028121000_feed_choice_covering_index` before running the updated server
+against an existing database. The development launcher applies
+migrations to its owned database during startup.
+Page hydration batches fixture, cycle, forecast, result, settlement, refresh and
+price reads using the same validators as individual reads. Whole-cohort performance
+audits advance by kickoff and fixture ID so every batch continues along the date
+index, including fixtures with identical kickoff times.
+
+Pages and ordinary list/refresh API reads use `readPublicMatchFeedList`: the
+cards, exact filtered totals, sorting and pagination load without waiting for the
+full-period settlement audit. `/api/matches/summary` uses the same query and
+entitlement boundary and returns only complete counts, their observation clock,
+cohort version and viewer projection. The client loads this independently, checks
+that it still matches the visible cohort and viewer, and offers a separate retry
+on failure. Summary loading never marks the list or route as busy. Its separate
+90-second audit budget leaves ordinary list transaction budgets unchanged.
+
 `FeedStateProvider` receives the query with `data: null`: cards render from the
 server projection props and the store only holds the filter draft, so hydration
 does not validate the page's records a second time.

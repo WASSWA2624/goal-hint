@@ -17,7 +17,7 @@ verify the operating system preference.
 Stable scopes for additional computed-style assertions: `[data-app-header]`,
 `#theme-phone-header`, `#theme-controls`, `#theme-control-input`,
 `#theme-control-select`, `#theme-member-step`, `#theme-matches [data-fixture-id]`,
-`#theme-slips [data-slip-id]`, `[data-slip-summary]`, `[data-pick-panel]`,
+`#theme-slips [data-slip-id]`, `[data-slip-summary]`, `[data-pick-state]`,
 `#theme-performance [data-summary-outcome]` and
 `#theme-dialog`. `[data-open-theme-dialog]` opens the real modal dialog.
 

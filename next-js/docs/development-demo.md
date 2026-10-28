@@ -20,13 +20,22 @@ verified coverage summary before the web server reports ready. Redirected logs
 contain just that summary; failures retain their detailed diagnostics.
 This also prepares original-publication prices and 30 days
 of editorial/saved slip examples for the default history page. Later starts reuse
-the stored records. Startup also warms the default monthly performance view;
+the stored records. Route bundles and development reloads share preparation state
+for the same database runtime, including pending dates and recent observations,
+so navigating between pages does not repeat catalog initialization.
+Startup also warms the default monthly performance view;
 this full validated aggregation can take several minutes. Development performance
 responses retain a one-hour snapshot with its original observation time, so the
 initial report validation leaves enough time to browse the prepared pages.
 Historical corrections, catalog updates and permission changes invalidate it;
 today's live progress continues through the normal feed and detail refreshes.
 Production performance cache and transaction budgets remain unchanged.
+Startup also validates the default Matches summaries for both the page's
+predictions-only view and the unrestricted API view before opening the web
+server. Equivalent resolved SQL scopes warm only once. Their audited count
+batches remain reusable for up to six hours, with date and catalog generation
+checks invalidating corrections. Cards and prices keep their ordinary refresh
+and expiry rules; historical summaries load separately from navigation.
 The launcher starts its own loopback MySQL
 process on an available port; it never connects to an installed MySQL service.
 The private database lives in ignored `.goal-hint/development-demo/mysql`.

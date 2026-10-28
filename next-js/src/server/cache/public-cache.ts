@@ -1,12 +1,13 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type ReportingDateRange } from "../../domain/calendar.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { observeCache, type CacheOutcome, type ReadFamily } from "../monitoring/server-measurements.ts";
 
 export const publicCacheRules = Object.freeze({ mutableMs: 5000, immutableMs: 6 * 60 * 60 * 1000,
   // A year-long feed range (366 days plus two zone-window days) keeps one date tag per day beside the global tags.
-  maximumBytes: 1024 * 1024, maximumTags: 380, recoveryBatch: 100 });
+  maximumBytes: 1024 * 1024, maximumTags: 380, maximumPending: 128, recoveryBatch: 100 });
 export type CacheDescriptor<T> = Readonly<{ key: string; tags: readonly string[]; lifetimeMs: number;
   deadlineAt: number; kind?: ReadFamily; validUntil?: () => number; parse(value: unknown): T }>;
 export type CacheSnapshot = Readonly<{ generations: Readonly<Record<string, string>>; value: unknown; createdAt: number | null; expiresAt: number | null }>;
@@ -16,6 +17,27 @@ export type PublicCacheStore = Readonly<{
   reconcile(limit?: number): Promise<Readonly<{ acknowledged: number; removed: number }>>;
 }>;
 export type PublicResponseCache = ReturnType<typeof createPublicResponseCache>;
+type CompletedRead = Readonly<{ value: unknown; expiresAt: number }>;
+type PendingRead = Readonly<{ startedAt: number; result: Promise<CompletedRead> }>;
+export type PublicReadCoordinator = Readonly<{
+  pending: Map<string, PendingRead>; context: AsyncLocalStorage<ReadonlySet<string>>;
+}>;
+
+/** Only unfinished work is shared. Successful values and errors leave on settlement. */
+export function createPublicReadCoordinator(): PublicReadCoordinator {
+  return { pending: new Map(), context: new AsyncLocalStorage() };
+}
+
+function waitForPending(read: PendingRead, maximumWaitMs: number): Promise<CompletedRead | null> {
+  if (maximumWaitMs <= 0) return Promise.resolve(null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), Math.min(maximumWaitMs, 2_147_483_647));
+  });
+  return Promise.race([read.result.catch(() => null), expired]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
 
 /** One canonical, versioned key contract. Callers supply already validated queries.
  * The EAT day is part of every mutable key, including explicit historical reads:
@@ -39,7 +61,8 @@ export function publicCacheDescriptor<T>(input: Readonly<{ kind: "feed" | "detai
  * A failed probe disables filling for that read. A failed fill still returns the
  * successful bounded database read. Original response/source clocks are retained. */
 export function createPublicResponseCache(store: PublicCacheStore, now = Date.now,
-  onRead: (family: ReadFamily, outcome: CacheOutcome, durationMs: number) => void = observeCache) {
+  onRead: (family: ReadFamily, outcome: CacheOutcome, durationMs: number) => void = observeCache,
+  coordinator = createPublicReadCoordinator()) {
   return Object.freeze({ async read<T>(descriptor: CacheDescriptor<T>, load: () => Promise<T>): Promise<T> {
     const start = performance.now(); let outcome: CacheOutcome = "miss";
     const emit = () => { try { onRead(descriptor.kind ?? "other", outcome, performance.now() - start); } catch { /* Observability cannot break a public read. */ } };
@@ -53,12 +76,48 @@ export function createPublicResponseCache(store: PublicCacheStore, now = Date.no
         try { const value = freezeEvidence(descriptor.parse(snapshot.value)); outcome = "hit"; emit(); return value; } catch { /* Corrupt/obsolete cache data is disposable. */ }
       }
     } catch { outcome = "unavailable"; }
-    const startedAt = now(); let value: T;
-    try { value = await load(); } catch (error) { emit(); throw error; }
-    const expiresAt = Math.min(startedAt + descriptor.lifetimeMs, descriptor.deadlineAt, descriptor.validUntil?.() ?? Number.MAX_SAFE_INTEGER);
-    if (snapshot && now() < expiresAt && Buffer.byteLength(JSON.stringify(value), "utf8") <= publicCacheRules.maximumBytes) {
-      try { await store.fill(descriptor.key, descriptor.tags, snapshot.generations, value, startedAt, expiresAt); } catch { /* Best effort cache only. */ }
-    }
-    emit(); return value;
+    const startedAt = now();
+    // Every caller probes MySQL first. Changed generations, query/policy keys or
+    // deadlines cannot join older work; an outage never becomes an in-memory hit.
+    const flightKey = snapshot ? evidenceFingerprint({ key: descriptor.key, tags: descriptor.tags, generations: snapshot.generations,
+      lifetimeMs: descriptor.lifetimeMs, deadlineAt: descriptor.deadlineAt }) : null;
+    const owned = coordinator.context.getStore();
+    const shared = flightKey && !owned?.has(flightKey) ? coordinator.pending.get(flightKey) : undefined;
+    try {
+      if (shared && shared.startedAt <= startedAt && startedAt - shared.startedAt < descriptor.lifetimeMs) {
+        // Errors remain owned by their loader/bundle so endpoint-specific error
+        // classes and recovery are preserved for every caller.
+        const waitUntil = Math.min(shared.startedAt + descriptor.lifetimeMs, descriptor.deadlineAt,
+          descriptor.validUntil?.() ?? Number.MAX_SAFE_INTEGER);
+        const completed = await waitForPending(shared, waitUntil - now()), at = now();
+        if (completed && shared.startedAt <= at && at - shared.startedAt < descriptor.lifetimeMs && at < completed.expiresAt &&
+          at < descriptor.deadlineAt && at < (descriptor.validUntil?.() ?? Number.MAX_SAFE_INTEGER)) {
+          try { const value = freezeEvidence(descriptor.parse(completed.value)); emit(); return value; }
+          catch { /* Different/obsolete parsers retain the ordinary stored-read fallback. */ }
+        }
+      }
+      const read = async (): Promise<CompletedRead> => {
+        const value = await load();
+        // Keep the original observation budget, including time spent loading.
+        // Slow reads remain uncacheable rather than being retimestamped as fresh.
+        const expiresAt = Math.min(startedAt + descriptor.lifetimeMs, descriptor.deadlineAt, descriptor.validUntil?.() ?? Number.MAX_SAFE_INTEGER);
+        if (snapshot && now() < expiresAt && Buffer.byteLength(JSON.stringify(value), "utf8") <= publicCacheRules.maximumBytes) {
+          try { await store.fill(descriptor.key, descriptor.tags, snapshot.generations, value, startedAt, expiresAt); } catch { /* Best effort cache only. */ }
+        }
+        return { value, expiresAt };
+      };
+      let completed: CompletedRead;
+      if (flightKey && !owned?.has(flightKey) && coordinator.pending.size < publicCacheRules.maximumPending) {
+        // A loader may deliberately make a nested read of the same key after
+        // materializing data. Its own async context must not await itself.
+        const result = Promise.resolve().then(() => coordinator.context.run(new Set([...(owned ?? []), flightKey]), read));
+        const pending: PendingRead = { startedAt, result: result.finally(() => {
+          if (coordinator.pending.get(flightKey) === pending) coordinator.pending.delete(flightKey);
+        }) };
+        coordinator.pending.set(flightKey, pending);
+        completed = await pending.result;
+      } else completed = await read();
+      emit(); return completed.value as T;
+    } catch (error) { emit(); throw error; }
   }, reconcile: store.reconcile.bind(store) });
 }

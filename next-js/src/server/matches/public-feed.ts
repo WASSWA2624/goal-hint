@@ -9,7 +9,21 @@ import { createMatchFeedService } from "./feed-service.ts";
 
 /** Pages and HTTP reads share the same stored projection, scope and cache. */
 export function readPublicMatchFeed(parameters: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}, clock?: Clock) {
+  return readStoredFeed(parameters, context, clock, true);
+}
+
+/** Match cards and their exact pagination do not wait for a historical audit. */
+export function readPublicMatchFeedList(parameters: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}, clock?: Clock) {
+  return readStoredFeed(parameters, context, clock, false);
+}
+
+/** Independently bounded aggregate request; list navigation keeps its 30s limit. */
+export function readPublicMatchFeedSummary(parameters: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}, clock?: Clock) {
+  return readStoredFeed(parameters, context, clock, true, true);
+}
+
+function readStoredFeed(parameters: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }>, clock: Clock | undefined, includePerformance: boolean, summary = false) {
   const database = getDatabase();
-  return createMatchFeedService({ database, cache: createMysqlPublicResponseCache(database), ...(clock ? { clock } : {}),
+  return createMatchFeedService({ database, cache: createMysqlPublicResponseCache(database), includePerformance, summary, ...(clock ? { clock } : {}),
     competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, context);
 }

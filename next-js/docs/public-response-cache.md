@@ -72,6 +72,20 @@ unservable; an older read cannot establish new-generation authority. Concurrent
 in-flight responses retain their original versions for clients to reject regression.
 There is no process-local cache that can hide a database outage.
 
+Concurrent callers may share an unfinished stored read after each has probed
+MySQL and observed the same key, generations, lifetime and absolute deadline.
+The process coordinator is shared across page/API bundles for the same database
+runtime and holds at most 128 pending keys. It removes values and failures as
+soon as their read settles. A follower rechecks the original age and permission
+deadline before returning the result; waiting cannot renew its five-second
+budget or change its `asOf` or source clocks. An invalidated generation, failed
+probe, expired result or different database never supplies a local hit. Nested
+same-key reads keep their own async ownership to avoid waiting on themselves,
+and failed shared work falls back to each caller's loader and error handling.
+A follower's timer also ends waiting at the earliest original lifetime,
+absolute deadline or permission bound, even if the leader remains unresolved;
+the timer is cleared when either branch settles.
+
 `npm run cache:reconcile -- 100` performs one bounded private maintenance pass;
 the optional batch is 1–1,000. It locks pending journal rows with `SKIP LOCKED`,
 verifies each generation is already applied, then acknowledges in the same

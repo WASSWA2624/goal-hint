@@ -20,7 +20,7 @@ function emptyDatabase(at) {
     publicCacheTag: { findMany: async ({ where }) => { observed.tags.push(...where.tag.in); return []; } },
     $queryRaw: async (statement) => {
       observed.sql.push(statement);
-      return statement.sql.trimStart().startsWith('SELECT COUNT') ? [{ total: 0n, available: 0n }] : [];
+      return /^SELECT(?: STRAIGHT_JOIN)? COUNT/u.test(statement.sql.trimStart()) ? [{ total: 0n, available: 0n }] : [];
     },
     // Coverage reads the whole range in one batch: the first seven days have complete receipts, the eighth none.
     footballImport: { findMany: async ({ where }) => {
@@ -103,6 +103,19 @@ test('local midnight bounds explicit-date caches independently of the later EAT 
     cache: { read: async (descriptor, load) => { descriptors.push(descriptor); return load(); } } });
   await service.query({ date: '2026-10-13', tz: 'Asia/Tehran' });
   assert.equal(text(descriptors[0].deadlineAt), '2026-10-13T20:30:00.000Z');
+});
+
+test('list-only reads defer performance and cannot reuse the full-response cache identity', async () => {
+  const descriptors = [], responses = [];
+  for (const includePerformance of [true, false]) {
+    const { database } = emptyDatabase(asOf);
+    responses.push(await createMatchFeedService({ database, competitionIds: [39], clock: { now: () => asOf }, includePerformance,
+      cache: { read: async (descriptor, load) => { descriptors.push(descriptor); return load(); } } }).query({ when: 'today' }));
+  }
+  assert.deepEqual(responses[0].performance, { total: 0, won: 0, lost: 0, pending: 0, void: 0, unavailable: 0 });
+  assert.equal(responses[1].performance, null);
+  assert.notEqual(descriptors[0].key, descriptors[1].key);
+  assert.deepEqual({ ...responses[0], performance: null }, responses[1]);
 });
 
 test('pagination pins local dates and retains timezone across midnight', () => {

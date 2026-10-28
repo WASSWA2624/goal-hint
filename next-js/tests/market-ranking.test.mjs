@@ -28,9 +28,12 @@ test("the Any default selects the highest-probability available family and keeps
   assert.equal(prices.find((entry) => entry.family === family)?.price, "1.30");
   assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
   const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
-  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC, CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC/su);
+  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC,\s+CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC/su);
   assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.doesNotMatch(sql.where.sql, /op.displayHundredths BETWEEN/u);
+  assert.doesNotMatch(sql.countJoins.sql, /ROW_NUMBER|FixtureOddsPrice|selectedProbability DESC/u,
+    'availability counts do not rank every match or fetch prices');
+  assert.equal(sql.pageJoins.sql, sql.countJoins.sql, 'ordinary kickoff pagination uses the same availability projection');
 });
 
 test("only exact probability ties use the highest available price for the published family and selection", () => {
@@ -65,16 +68,17 @@ test("feed SQL ranks the candidate's exact fresh price only when provider odds a
   const query = parseFeedQuery(new URLSearchParams("market=match-result,total-goals&prob=60-100&odds=1.50-3.00&sort=probability"), { today, providerOdds: true });
   const enabled = feedSql(query, range, [39], true);
   assert.match(enabled.joins.sql, /LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id\s+AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE/u);
-  assert.match(enabled.joins.sql, /ORDER BY b.selectedProbability DESC, CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC, FIELD\(b.family,/su);
+  assert.match(enabled.joins.sql, /ROW_NUMBER\(\) OVER \(PARTITION BY f.id ORDER BY b.selectedProbability DESC,\s+CASE WHEN .*? THEN NULL ELSE bp.displayHundredths END DESC, FIELD\(b.family,/su);
   assert.match(enabled.joins.sql, /op.marketKey=m.family\s+AND op.selection=CASE WHEN/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END>=\?/u);
   assert.match(enabled.where.sql, /ELSE m.selectedProbability END<=\?/u);
   assert.match(enabled.where.sql, /ELSE op.displayHundredths END BETWEEN \? AND \?/u);
-  assert.match(enabled.where.sql, /\$\.audit.recommendation.selected.quote.decimal/u);
+  assert.match(enabled.where.sql, /rp\.feedRecommendation,[\s\S]*'\$\.decimal'/u);
   assert.match(enabled.order.sql, /ELSE m.selectedProbability END IS NULL ASC,/u);
   assert.match(enabled.order.sql, /ELSE m.selectedProbability END DESC/u);
   assert.match(enabled.joins.sql, /LEFT JOIN PredictionSet rp ON rp.id=/u);
-  assert.match(enabled.where.sql, /\$\.audit.recommendation.selected.probability/u);
+  assert.match(enabled.where.sql, /rp\.feedRecommendation,[\s\S]*'\$\.probability'/u);
+  assert.doesNotMatch(enabled.joins.sql + enabled.where.sql + enabled.order.sql, /candidateJson/u);
   const disabled = feedSql(query, range, [39], false);
   assert.doesNotMatch(disabled.joins.sql, /FixtureOdds|\bbp\.|\bop\./u);
   assert.doesNotMatch(disabled.where.sql, /\bop\./u);

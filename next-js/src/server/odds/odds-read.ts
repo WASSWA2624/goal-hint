@@ -14,10 +14,10 @@ type Tx = Prisma.TransactionClient;
 export const oddsPriceJoin = Prisma.sql`LEFT JOIN FixtureOddsPrice op ON op.fixtureId=f.id AND op.marketKey=m.family
       AND op.selection=m.selection AND op.stale=FALSE`;
 
-type PriceRow = { marketKey: string; selection: string; basis: string; displayHundredths: unknown; impliedProbability: string;
+export type FixturePriceRow = { marketKey: string; selection: string; basis: string; displayHundredths: unknown; impliedProbability: string;
   overround: string; method: string; snapshotId: string | null; retrievedAt: Date; providerUpdatedAt: Date | null };
-async function freshRows(tx: Tx, fixtureId: string): Promise<PriceRow[]> {
-  return tx.$queryRaw<PriceRow[]>`SELECT marketKey, selection, basis, displayHundredths, CAST(impliedProbability AS CHAR) AS impliedProbability,
+async function freshRows(tx: Tx, fixtureId: string): Promise<FixturePriceRow[]> {
+  return tx.$queryRaw<FixturePriceRow[]>`SELECT marketKey, selection, basis, displayHundredths, CAST(impliedProbability AS CHAR) AS impliedProbability,
     CAST(overround AS CHAR) AS overround, method, snapshotId, retrievedAt, providerUpdatedAt
     FROM FixtureOddsPrice WHERE fixtureId = ${fixtureId} AND stale = FALSE ORDER BY marketKey, selection`;
 }
@@ -28,7 +28,11 @@ const isBasis = (value: string): value is FixturePrice["basis"] => value === "bo
 export async function storedFixturePrices(tx: Tx, fixtureId: string, picks: readonly Readonly<{ family: MarketFamily; selection: string }>[],
   enabled: boolean = publicPolicy.features.providerOdds): Promise<FixturePrice[]> {
   if (!enabled || picks.length === 0) return [];
-  const rows = await freshRows(tx, fixtureId), prices: FixturePrice[] = [];
+  return fixturePricesFromRows(await freshRows(tx, fixtureId), picks);
+}
+
+export function fixturePricesFromRows(rows: readonly FixturePriceRow[], picks: readonly Readonly<{ family: MarketFamily; selection: string }>[]): FixturePrice[] {
+  const prices: FixturePrice[] = [];
   for (const family of publicPolicy.markets) {
     const pick = picks.find((item) => item.family === family);
     const row = pick && rows.find((item) => item.marketKey === family && item.selection === pick.selection);

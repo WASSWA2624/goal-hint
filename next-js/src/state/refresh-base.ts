@@ -14,8 +14,8 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
   }
   return controller.signal;
 }
-export async function readJson(href: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(href, { signal: anySignal([signal, AbortSignal.timeout(liveRefreshRules.timeoutMs)]),
+export async function readJson(href: string, signal: AbortSignal, timeoutMs: number = liveRefreshRules.timeoutMs): Promise<unknown> {
+  const response = await fetch(href, { signal: anySignal([signal, AbortSignal.timeout(timeoutMs)]),
     cache: "no-store", credentials: "same-origin" });
   if (!response.ok) throw new FeedPaginationError(response.status === 403 ? "subscription-required" : response.status === 429 ? "rate-limited" : "unavailable");
   const text = await response.text(), max = matchFeedRules.maximumResponseBytes;

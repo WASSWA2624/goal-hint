@@ -43,9 +43,12 @@ function source() {
   }
   const tx = {
     footballFixture: { findMany: async () => fixtures, findUniqueOrThrow: async ({ where }) => fixtures.find(fixture => fixture.id === where.id) },
-    predictionCycle: { findMany: async () => cycles, findUnique: async ({ where }) => cycles.find(cycle => cycle.id === where.id) },
+    predictionCycle: { findMany: async ({ where }) => cycles.filter(cycle => !where.fixtureId || cycle.fixtureId === where.fixtureId),
+      findUnique: async ({ where }) => cycles.find(cycle => cycle.id === where.id) },
     predictionSchedule: { findMany: async () => schedules, findUnique: async ({ where }) => schedules.find(schedule =>
       schedule.cycleId === where.cycleId_version.cycleId && schedule.version === where.cycleId_version.version) },
+    fixtureLifecycleState: { findUnique: async () => null }, fixtureResultState: { findUnique: async () => null },
+    marketSettlement: { findMany: async () => [] },
     predictionRefreshResult: { findFirst: async () => null }, runFixture: { findFirst: async () => null },
     async $queryRaw(query, ...parameters) {
       const sql = query.sql ?? query.join(" "), values = Array.isArray(query) ? parameters : query.values;
@@ -53,6 +56,7 @@ function source() {
       if (sql.includes("FROM PredictionSet")) return sets.filter(row => values.includes(row.id));
       if (sql.includes("FROM MarketPrediction")) return markets.filter(row => values.includes(row.setId));
       if (sql.includes("FROM FixtureOddsPrice")) return [];
+      if (sql.includes("FROM MarketSettlement") || sql.includes("FROM PredictionCycle c")) return [];
       throw new Error("Unexpected bulk fixture query");
     },
   };
@@ -68,6 +72,25 @@ test("bulk open-cycle hydration matches ordinary feed projections using the same
   assert.equal(actual.reads.filter(sql => sql.includes("FROM PredictionSet")).length, 1);
   assert.equal(actual.reads.filter(sql => sql.includes("FROM MarketPrediction")).length, 1);
   assert.deepEqual(batch.map(record => record.fixtureId), ids, "the decision cohort retains its selected order");
+});
+
+test("bulk locked-cycle hydration preserves audited outcomes without per-fixture archive queries", async () => {
+  const expected = source(), actual = source();
+  for (const state of [expected, actual]) for (const cycle of state.cycles) {
+    cycle.state = "closed";
+    cycle.closedAt = cycle.cutoffAt;
+    cycle.lockedAt = cycle.cutoffAt;
+    cycle.lockedSetId = cycle.currentSetId;
+  }
+  const ids = actual.fixtures.map(fixture => fixture.id);
+  const ordinary = await Promise.all(ids.map(id => storedFeedFixture(expected.tx, id, false, window, "en", { prices: true })));
+  const batch = await storedFeedFixtures(actual.tx, ids, false, window, "en", { prices: true });
+  assert.deepEqual(batch, ordinary);
+  assert.ok(batch.every(record => record.cycle.mode === "locked" && record.update.prediction === "locked"));
+  assert.equal(actual.reads.filter(sql => sql.includes("FROM PredictionSet")).length, 1);
+  assert.equal(actual.reads.filter(sql => sql.includes("FROM MarketPrediction")).length, 1);
+  assert.equal(actual.reads.filter(sql => sql.includes("FROM MarketSettlement")).length, 1);
+  assert.equal(actual.reads.filter(sql => sql.includes("FROM FixtureOddsPrice")).length, 1);
 });
 
 test("bulk hydration rejects broken seals, incomplete markets, schedule mismatches and foreign fixture bindings", async () => {

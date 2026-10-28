@@ -35,6 +35,8 @@ The page and `/api/best-slips` recheck entitlement after generation. Responses
 are private/no-store. Public DTOs omit even the internal slip ID, because it
 encodes fixture and selection identifiers. Shared caches never contain a viewer
 response. The page refreshes while visible and after a background tab returns.
+Automatic refresh waits during a pending navigation or an unfinished refresh,
+so it cannot replace a user's page change.
 
 Local test mode exposes sign-in, plans, automatic registration trials, payment reports and code
 activation. Every fixture's predictions/odds remain gated; valid unlocked periods

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { feedPerformanceSchema } from '../src/domain/match-feed.ts';
 import { parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
-import { readFeedPerformance } from '../src/server/matches/feed-performance.ts';
+import { feedPerformanceCacheKey, readFeedPerformance } from '../src/server/matches/feed-performance.ts';
 import { feedSql } from '../src/server/matches/feed-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { settlementContextFor, settlementInputFor } from '../src/server/settlement/settlement-read.ts';
@@ -12,6 +12,19 @@ import { settlementContextFor, settlementInputFor } from '../src/server/settleme
 const today = parseReportingDate('2026-10-09'), at = Date.parse('2026-10-09T15:00:00Z');
 const query = parseFeedQuery({ date: today, page: '2', pageSize: '1' }, { today });
 const sql = feedSql(query, resolveFeedDates(query, today), [39]);
+
+test('statistics cache identity follows resolved UTC cohorts and exact filtering/ranking rules', () => {
+  const key = (parameters, scope = [39], prices = false) => {
+    const parsed = parseFeedQuery(parameters, { today, providerOdds: prices });
+    return feedPerformanceCacheKey(feedSql(parsed, resolveFeedDates(parsed, today), scope, prices), parsed.locale, prices);
+  };
+  assert.equal(key({ date: today }), key({ when: 'today', tz: 'Africa/Kampala' }), 'device adoption with the same UTC boundaries reuses audited statistics');
+  assert.equal(key({ date: today }), key({ date: today, page: '2', pageSize: '1', sort: 'probability' }), 'page position, page size and display order do not change the cohort');
+  for (const different of [{ date: today, tz: 'America/New_York' }, { date: '2026-10-10' }, { date: today, status: 'live' },
+    { date: today, market: 'match-result' }, { date: today, prob: '60-100' }]) assert.notEqual(key({ date: today }), key(different));
+  assert.notEqual(key({ date: today }), key({ date: today }, [40]));
+  assert.notEqual(key({ date: today }), key({ date: today }, [39], true));
+});
 
 function sample({ score = [2, 1], selection = 'home-win', family = 'match-result', issue = null, canonicalScore = score,
   probabilities = family === 'match-result' ? { 'home-win': .7, draw: .2, 'away-win': .1 }
@@ -30,7 +43,7 @@ function sample({ score = [2, 1], selection = 'home-win', family = 'match-result
   const previous = { id: evidenceFingerprint(cycle.id), batchId: 'c'.repeat(64), previousId: null,
     inputHash: evidenceFingerprint(input), at, correctedAt: null, kind: 'initial', ...input };
   const row = { ...previous, at: new Date(at), body: evidenceSerialize(previous), validIntegrity: 1n,
-    fixtureStatus: fixture.status, fixtureRegulationHome: canonicalScore[0], fixtureRegulationAway: canonicalScore[1],
+    fixtureKickoff: new Date(at), fixtureStatus: fixture.status, fixtureRegulationHome: canonicalScore[0], fixtureRegulationAway: canonicalScore[1],
     fixtureRegulationVerifiedAt: fixture.regulationVerifiedAt, fixtureRegulationEvidenceRef: fixture.regulationEvidenceRef,
     currentLockedSetId: cycle.lockedSetId, currentVoidReason: null, currentResultId: result.id, issue,
     currentFamily: family, currentSelection: selection, currentSource: market.source, currentProbability: market.selectedProbability,
@@ -42,12 +55,26 @@ function sample({ score = [2, 1], selection = 'home-win', family = 'match-result
 }
 function transaction(samples) {
   const calls = [];
-  let batch = 0;
+  let batch = 0, current = [];
   return { calls, async $queryRaw(statement) {
     calls.push(statement);
     if (statement.sql.includes('FROM FixtureResult r')) return samples.map((value) => value.resultRow).filter((row) => statement.values.includes(row.id));
-    return samples.slice(batch++ * 500, batch * 500).map((value) => value.row);
+    if (statement.sql.includes('SELECT STRAIGHT_JOIN f.id,f.kickoff')) {
+      current = samples.slice(batch++ * 500, batch * 500);
+      return current.map(value => ({ id: value.row.fixtureId, kickoff: value.row.fixtureKickoff }));
+    }
+    return current.map((value) => value.row);
   } };
+}
+
+function cachedTransaction(samples, entries, generations) {
+  return Object.assign(transaction(samples), {
+    publicCacheTag: { findMany: async ({ where }) => where.tag.in.map(tag => ({ tag, generation: generations.get(tag) ?? 0n })) },
+    publicResponseCache: {
+      findUnique: async ({ where }) => entries.get(where.key) ?? null,
+      upsert: async ({ where, create }) => { entries.set(where.key, structuredClone(create)); return create; },
+    },
+  });
 }
 
 test('cohort counts preserve missing predictions and voids without classifying them as pending or losses', async () => {
@@ -64,9 +91,10 @@ test('large cohorts continue across bounded batches without losing matches or ap
   const tx = transaction(samples);
   assert.deepEqual(await readFeedPerformance(tx, sql, { total: 501, available: 501, void: 0 }),
     { total: 501, won: 501, lost: 0, pending: 0, void: 0, unavailable: 0 });
-  const batches = tx.calls.filter((statement) => !statement.sql.includes('FROM FixtureResult r'));
+  const batches = tx.calls.filter((statement) => statement.sql.includes('SELECT STRAIGHT_JOIN f.id,f.kickoff'));
   assert.equal(batches.length, 2);
   assert.ok(batches[1].values.includes(samples[499].row.fixtureId));
+  assert.ok(batches[1].values.some(value => value instanceof Date && value.getTime() === samples[499].row.fixtureKickoff.getTime()));
 });
 
 test('summary settles one selected market per match across the complete cohort, independent of visible page', async () => {
@@ -74,10 +102,56 @@ test('summary settles one selected market per match across the complete cohort, 
   const tx = transaction(samples);
   assert.deepEqual(await readFeedPerformance(tx, sql, { total: 100, available: 80, void: 10 }),
     { total: 100, won: 1, lost: 2, pending: 67, void: 10, unavailable: 20 });
-  const statement = tx.calls[0];
-  assert.match(statement.sql, /ORDER BY f\.id LIMIT/u);
-  assert.doesNotMatch(statement.sql, /OFFSET/u);
-  assert.equal(statement.values.at(-1), 500);
+  assert.match(tx.calls[0].sql, /ORDER BY f\.kickoff,f\.id LIMIT/u);
+  assert.doesNotMatch(tx.calls[0].sql, /OFFSET/u);
+  assert.equal(tx.calls[0].values.at(-1), 500);
+  const audit = tx.calls.find(statement => statement.sql.includes('AS fixtureStatus'));
+  assert.ok(audit.values.includes(samples[0].row.fixtureId), 'only the bounded candidate page is ranked and audited');
+});
+
+test('a candidate batch removed by prediction filters still advances to later matching settlements', async () => {
+  const samples = Array.from({ length: 501 }, () => sample()).sort((left, right) => left.row.fixtureId.localeCompare(right.row.fixtureId));
+  const tx = transaction(samples), queryRaw = tx.$queryRaw.bind(tx), last = samples.at(-1).row.fixtureId;
+  tx.$queryRaw = async statement => {
+    if (statement.sql.includes('AS fixtureStatus') && !statement.values.includes(last)) return [];
+    return queryRaw(statement);
+  };
+  assert.deepEqual(await readFeedPerformance(tx, sql, { total: 1, available: 1, void: 0 }),
+    { total: 1, won: 1, lost: 0, pending: 0, void: 0, unavailable: 0 });
+  assert.equal(tx.calls.filter(statement => statement.sql.includes('SELECT STRAIGHT_JOIN f.id,f.kickoff')).length, 2);
+});
+
+test('audited batch caches reuse the same snapshot facts and invalidate on date or catalog corrections', async () => {
+  const entries = new Map(), generations = new Map(), context = { key: 'same-filter-scope-and-rules', nowMs: at };
+  const initial = sample(), counts = { total: 1, available: 1, void: 0 };
+  const first = cachedTransaction([initial], entries, generations);
+  assert.equal((await readFeedPerformance(first, sql, counts, context)).won, 1);
+  assert.equal(entries.size, 1);
+  const second = cachedTransaction([initial], entries, generations);
+  assert.equal((await readFeedPerformance(second, sql, counts, context)).won, 1);
+  assert.equal(second.calls.some(statement => statement.sql.includes('AS fixtureStatus')), false, 'a valid generation stamp reuses audited counts');
+
+  generations.set('date:2026-10-09', 1n);
+  const corrected = cachedTransaction([initial], entries, generations);
+  assert.equal((await readFeedPerformance(corrected, sql, counts, context)).won, 1);
+  assert.ok(corrected.calls.some(statement => statement.sql.includes('AS fixtureStatus')), 'a result-date correction requires the authoritative audit again');
+  generations.set('global:catalog', 1n);
+  const renamed = cachedTransaction([initial], entries, generations);
+  await readFeedPerformance(renamed, sql, counts, context);
+  assert.ok(renamed.calls.some(statement => statement.sql.includes('AS fixtureStatus')), 'catalog changes cannot retain a former filtered cohort');
+});
+
+test('corrupt, future or expired aggregate cache entries never replace an authoritative audit', async () => {
+  for (const corrupt of [entry => { entry.body.won = 501; }, entry => { entry.createdAt = new Date(at + 1); },
+    entry => { entry.expiresAt = new Date(at); }, entry => { entry.expiresAt = new Date(at + 6 * 60 * 60 * 1000 + 1); }]) {
+    const entries = new Map(), generations = new Map(), context = { key: 'same-query', nowMs: at }, row = sample();
+    const counts = { total: 1, available: 1, void: 0 };
+    await readFeedPerformance(cachedTransaction([row], entries, generations), sql, counts, context);
+    corrupt([...entries.values()][0]);
+    const checked = cachedTransaction([row], entries, generations);
+    assert.equal((await readFeedPerformance(checked, sql, counts, context)).won, 1);
+    assert.ok(checked.calls.some(statement => statement.sql.includes('AS fixtureStatus')));
+  }
 });
 
 test('canonical score corrections and unresolved lifecycle issues make old settled outcomes pending', async () => {

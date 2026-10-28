@@ -803,6 +803,9 @@ model PredictionSet {
   requestHash           String                     @db.Char(64)
   integrity             String                     @db.Char(64)
   candidateJson         Json
+  // Stored generated projection; migration owns the expression. The immutable
+  // candidate remains authoritative and application writers never set this.
+  feedRecommendation    Json?                      @default(dbgenerated())
   fixture               FootballFixture            @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   cycle                 PredictionCycle            @relation("CyclePredictionSets", fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
   run                   DailyRun                   @relation(fields: [runId, runSequence], references: [id, sequence], onDelete: Restrict, onUpdate: Restrict)
@@ -854,6 +857,7 @@ model MarketPrediction {
   set                 PredictionSet @relation(fields: [setId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([setId, family])
+  @@index([setId, family, available, selectedProbability, selection], map: "MarketPrediction_feed_choice_idx")
   @@index([family, source])
 }
 

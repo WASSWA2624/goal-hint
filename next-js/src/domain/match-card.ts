@@ -1,7 +1,27 @@
-import { presentMarketProbabilities, type AcceptedMarket, type MarketFamily, type MarketSelection } from "./markets.ts";
+import { isMarketSelection, presentMarketProbabilities, type AcceptedMarket, type MarketFamily, type MarketSelection, type ProbabilityLabelKey } from "./markets.ts";
 import type { FixtureSnapshot, liveClockPhases } from "./fixture-snapshot.ts";
 import { isPlayedFinalStatus, selectionOccurred, type SettlementOutcomeStatus } from "./market-settlement.ts";
 import { recommendationMarket, type DisplayedMarketPick } from "./recommendation-view.ts";
+import type { UtcInstant } from "./calendar.ts";
+
+/** An original saved selection has one probability, not a complete current forecast distribution. */
+export type CardSnapshotPick = Readonly<{
+  family: MarketFamily; selection: MarketSelection; probability: number; odds: string;
+  outcome: "correct" | "incorrect" | "pending" | "void";
+  publishedAt?: UtcInstant;
+}>;
+
+/** Reuse the ordinary card presentation without manufacturing a source, publication or other outcomes. */
+export function snapshotCardPrediction(pick: CardSnapshotPick) {
+  if (!isMarketSelection(pick.family, pick.selection) || !Number.isFinite(pick.probability) || pick.probability < 0 || pick.probability > 1)
+    throw new RangeError("Invalid saved card selection.");
+  const roundedPercent = Math.round(pick.probability * 1000) / 10;
+  const labelKey: ProbabilityLabelKey = roundedPercent === 0 && pick.probability > 0 ? "probability.less-than-one"
+    : roundedPercent === 100 && pick.probability < 1 ? "probability.more-than-ninety-nine" : "probability.percent";
+  return { item: { market: { family: pick.family, selection: pick.selection, source: null } },
+    probability: { probability: pick.probability, roundedPercent, labelKey }, status: pick.outcome,
+    publishedAt: pick.publishedAt ?? null, provisional: false };
+}
 
 export function teamInitials(name: string | null): string {
   const words = name?.normalize("NFC").match(/[\p{L}\p{N}]+/gu) ?? [];

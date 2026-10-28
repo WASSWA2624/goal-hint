@@ -151,30 +151,34 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
     assert len(states) == 1 and states[0].attrs["data-slip-state"] == expected_state, f"{path}: explicit result state"
     slips = document.nodes(attr="data-slip-id")
     assert len(slips) == expected_slips, f"{path}: expected {expected_slips} slips, found {len(slips)}"
-    rows = document.nodes("tr", "data-slip-selection")
+    rows = document.nodes("li", "data-slip-selection")
     if expected_slips:
         assert len(rows) == expected_slips * selections_per_slip, f"{path}: one row per selection"
         for slip in slips:
-            headers = slip.nodes("header")
+            headers = [header for header in slip.nodes("header") if header.nodes("h3")]
             assert len(headers) == 1 and len(headers[0].nodes("h3")) == 1, f"{path}: slip title header"
             assert len(headers[0].nodes(attr="data-slip-summary")) == 1, f"{path}: summary inside slip title header"
             summary = headers[0].nodes(attr="data-slip-summary")[0].text
             assert "%" in summary and re.search(r"\d+\.\d{2}", summary), f"{path}: title odds and average probability"
             assert re.search(rf"{selections_per_slip}\s+selections?\b", summary), f"{path}: selection count in title summary"
-            assert len(slip.nodes("tbody")) == 1 and len(slip.nodes("tr", "data-slip-selection")) == selections_per_slip, f"{path}: classic table slip"
-            assert len(slip.nodes("tbody")[0].nodes("tr")) == selections_per_slip, f"{path}: no extra rows inside a match table"
+            assert len(slip.nodes(attr="data-match-board")) == 1, f"{path}: shared responsive match board"
+            assert len(slip.nodes("article", "data-fixture-id")) == selections_per_slip, f"{path}: shared match card for every original selection"
+            assert not slip.nodes("table"), f"{path}: no duplicate slip-only match table"
         for row in rows:
             assert "Synthetic" in row.text and "%" in row.text, f"{path}: real synthetic selection details"
             assert re.search(r"\d+\.\d{2}", row.text), f"{path}: selection price"
-            pick = next(cell for cell in row.nodes("td") if cell.attrs.get("data-column") == "selection")
-            labels = pick.nodes(attr="data-pick-selection")
+            cards = row.nodes("article", "data-fixture-id")
+            assert len(cards) == 1 and cards[0].attrs["data-fixture-id"] == row.attrs["data-slip-selection"], f"{path}: shared card retains fixture identity"
+            card = cards[0]
+            labels = card.nodes(attr="data-pick-selection")
             assert len(labels) == 1 and not re.fullmatch(r"[12Xx]+|Yes|No", labels[0].text), f"{path}: one generic full-word prediction"
-            assert not re.search(r"\b(?:1X2|BTTS|O/U)\b", pick.text), f"{path}: full market names on every screen"
-            prices = pick.nodes(attr="data-pick-odds")
-            assert len(prices) == 1 and re.fullmatch(r"\(\d+\.\d{2}\)", prices[0].text), f"{path}: own price appears once in brackets beside its pick"
-            assert len(row.nodes(attr="data-pick-odds")) == 1, f"{path}: selection odds are not duplicated in another column"
+            assert not re.search(r"\b(?:1X2|BTTS|O/U)\b", card.text), f"{path}: full market names on every screen"
+            prices = card.nodes(attr="data-card-odds")
+            assert len(prices) == 1 and re.fullmatch(r"\d+\.\d{2}", prices[0].text), f"{path}: original selected price uses the shared odds column"
+            assert len(card.nodes("h4")) == 1, f"{path}: match heading follows its slip heading"
             assert {node.attrs["data-team-side"] for node in row.nodes(attr="data-team-side")} == {"home", "away"}, f"{path}: both team names retain separate mobile lines"
-            assert not row.nodes(attr="data-result-badge"), f"{path}: slips do not invent a result absent from their saved selections"
+            assert card.attrs["data-status"] == "unknown", f"{path}: no invented live or final fixture status"
+            assert [node.attrs["data-result-badge"] for node in card.nodes(attr="data-result-badge")] == ["pending"], f"{path}: an original selection without a saved result stays pending"
         assert "Average match probability" in document.text, f"{path}: average is identified correctly"
         assert "not the chance that every selection wins" in document.text, f"{path}: mean is distinguished from joint probability"
     else:
@@ -230,6 +234,21 @@ def verify_custom_numeric_bounds(document, expected):
 
 
 def verify(origin, directory):
+    snapshots = request(origin, "/snapshot-cards")
+    assert snapshots.status == 200
+    snapshot_cards = {node.attrs["data-fixture-id"]: node for node in Document(snapshots.text).root.nodes("article", "data-fixture-id")}
+    authorized = snapshot_cards["snapshot-authorized"]
+    assert authorized.nodes(attr="data-card-odds")[0].text == "7.73" and "23.5%" in authorized.text, "Original saved probability and price survive the shared card"
+    assert authorized.nodes(attr="data-pick-selection")[0].text == "Home win", "The saved alternative remains selected"
+    assert authorized.nodes(attr="data-result-badge")[0].attrs["data-result-badge"] == "incorrect", "Supplied saved loss survives an unknown current fixture status"
+    assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", authorized.text), "A supplied 2–1 regulation score retains its own score label"
+    assert authorized.nodes(attr="data-match-state")[0].attrs["data-match-state"] == "snapshot", "No final or live phase is invented"
+    for name in ["gated", "redacted", "offline"]:
+        card = snapshot_cards["snapshot-" + name]
+        assert not card.nodes(attr="data-pick-selection") and not card.nodes(attr="data-card-odds"), f"{name}: saved pick and odds are hidden"
+        assert "7.73" not in card.text and "23.5%" not in card.text, f"{name}: no saved premium values in rendered text"
+        assert not card.nodes(attr="data-outcome") or all(node.attrs["data-outcome"] == "unavailable" for node in card.nodes(attr="data-outcome")), f"{name}: saved settlement is hidden"
+    print("PASS saved snapshot cards: original alternative, price/probability, regulation score/outcome, gated/redacted/offline display boundaries.", flush=True)
     for scenario, (state, count) in SCENARIOS.items():
         document = inspect(origin, f"/cases/{scenario}", directory, scenario, state, count,
             selections_per_slip=1 if scenario == "manual-home-win" else 2)
@@ -281,7 +300,7 @@ def verify(origin, directory):
     invalid_pick = inspect(origin, "/en/slips?" + urlencode(invalid_outcomes), directory, "route-invalid-outcomes", "idle", 0, error_group="markets")
     assert "Choose Automatic or valid results" in invalid_pick.text, "Invalid manual results open the same market group"
     cutoff = inspect(origin, "/cutoff?" + urlencode(query), directory, "route-cutoff", "generated", 3)
-    assert all(row.attrs["data-slip-selection"] != "synthetic-slip-1" for row in cutoff.nodes("tr", "data-slip-selection")), "The route passes the fresh completion clock through to its stored build service"
+    assert all(row.attrs["data-slip-selection"] != "synthetic-slip-1" for row in cutoff.nodes("li", "data-slip-selection")), "The route passes the fresh completion clock through to its stored build service"
     invalid = [(name, "2026-10-12" if name == "dateTo" else value) for name, value in query]
     document = inspect(origin, "/en/slips?" + urlencode(invalid), directory, "route-invalid", "idle", 0, error_group="kickoff")
     assert "Choose a valid kickoff date range" in document.text, "Invalid criteria have a specific explanatory error"
@@ -301,9 +320,9 @@ def verify(origin, directory):
     manual = [(name, overrides.get(name, value)) for name, value in native if name != "markets" or value == "match-result"]
     manual.extend([("picks.match-result", "home-win"), ("picks.total-goals", "under-2.5")])
     selected = inspect(origin, "/en/slips?" + urlencode(manual), directory, "route-native-manual", "generated", 1, selections_per_slip=1)
-    row = selected.nodes("tr", "data-slip-selection")[0]
+    row = selected.nodes("li", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
-    assert row.nodes(attr="data-pick-odds")[0].text == "(2.00)" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
+    assert row.nodes(attr="data-card-odds")[0].text == "2.00" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
     print("Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, 12 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
 
 
@@ -315,7 +334,7 @@ def main():
     else:
         directory = create_fixture("slips")
         print(f"Building isolated slip fixture: {directory}", flush=True)
-        build_fixture(directory)
+        build_fixture(directory, timeout=240)
     with Server(directory) as server:
         verify(server.origin, directory)
         print(f"Fixture artifacts: {directory}", flush=True)

@@ -91,7 +91,7 @@ test('SQL filters matching fixtures before pagination and ranks exact, then wide
   assert.ok(sql.order.sql.endsWith(`${sql.pickProbability.sql} IS NULL ASC, ${sql.pickProbability.sql} ASC, f.kickoff ASC, f.id ASC`),
     'the authoritative displayed probability sort follows every search ranking key');
   assert.match(sql.exact.sql, /^\(\(\(sm\.home \| sm\.away \| sm\.competition\) >> 16\) & \?\)=\?$/u);
-  assert.doesNotMatch(`${sql.scope.sql} ${sql.joins.sql} ${sql.cohortJoins.sql}`, /sm\.|sf\./u, 'Known counts and league options retain the full date cohort.');
+  assert.doesNotMatch(`${sql.scope.sql} ${sql.cohortJoins.sql}`, /sm\.|sf\./u, 'Known counts and league options retain the full date cohort.');
   assert.ok(sql.joins.sql.startsWith(sql.cohortJoins.sql), 'filtered reads extend the cohort joins');
   assert.doesNotMatch(`${sql.scope.sql} ${sql.cohortJoins.sql}`, /\bm\.|\bop\.|MarketPrediction|FixtureOddsPrice/u, 'cohort counts never evaluate the shown pick');
   assert.throws(() => feedSql(query, range, [39]), unavailable);

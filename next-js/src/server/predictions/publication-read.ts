@@ -26,6 +26,11 @@ export async function storedRefreshResult(tx: Prisma.TransactionClient, id: stri
   const rows = await tx.$queryRaw<Record<string, unknown>[]>`SELECT *,
     integrity = SHA2(CAST(resultJson AS CHAR), 256) AS validIntegrity FROM PredictionRefreshResult WHERE id = ${id}`;
   const row = rows[0]; if (!row) return null;
+  return refreshResultFromRow(row);
+}
+
+/** Validate the same immutable receipt for individual and bounded cohort reads. */
+export function refreshResultFromRow(row: Record<string, unknown>): RefreshPublicationResult {
   try {
     assertHistorySeal(row.validIntegrity);
     const result = parsePublication(resultSchema, historyJson(row.resultJson));

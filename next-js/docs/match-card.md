@@ -19,6 +19,14 @@ Import directly from the owning module under `@/components/match`:
 | `match-icons` | Decorative inline SVG icons (`aria-hidden`, not focusable). |
 | Domain `prediction-label` | `predictionLabel` supplies generic full-word outcomes to cards, details, history, slips and metadata. `predictionRuleLabel` formats extended market rules without participant-name substitution or lost goal lines. |
 
+Best Slips, custom builds, saved-slip history and published-slip performance use
+these same card and list components. Their `snapshotPick` input retains the
+original selected outcome, single probability and price. `slipSelectionCard`
+adapts the stored facts without constructing a complete forecast distribution
+or substituting the current best pick. A saved regulation score and settlement
+are shown only when supplied; missing live phases and fixture statuses stay
+unknown. Existing feed forecasts and subscriber gates keep their normal path.
+
 Desktop presentation retains its compact table composition:
 
 When multiple market families are eligible, `bestCardFamily` uses the shared

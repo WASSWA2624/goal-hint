@@ -3,12 +3,9 @@
 import styled from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { PageHeading, Stack, Surface } from "@/components/ui/layout";
-import type { MarketFamily } from "@/domain/markets";
-import { media, type GoalHintTheme } from "@/styles/theme";
+import { media } from "@/styles/theme";
 
 const compactControlHeight = "2.125rem";
-/** The rule between a leg's odds and chance: its market colour softened towards the card surface. */
-const legRule = ({ theme, $family }: { theme: GoalHintTheme; $family: MarketFamily }) => `color-mix(in srgb, ${theme.color.market[$family].solid} 30%, ${theme.color.surface})`;
 
 export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; }`;
 export const SlipHeading = styled(PageHeading)`font-size: 1.25rem; ${media.desktop} { font-size: 1.5rem; }`;
@@ -138,8 +135,7 @@ export const Results = styled.section`
   display: grid; gap: 9px; min-inline-size: 0;
   &[aria-busy="true"] { opacity: 0.65; }
 `;
-/** Phones: a slip card with a tinted header, a four-fact summary strip and one pick panel per leg, matching
- * the match cards. The desktop keeps its classic table. */
+/** A slip groups its aggregate facts around the shared match-card list. */
 export const SlipCard = styled.article`
   color: ${({ theme }) => theme.color.text};
   min-inline-size: 0; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
@@ -196,115 +192,4 @@ export const SlipProbabilityNote = styled.p`
   color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.4;
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   ${media.belowDesktop} { padding-inline: 12px; color: ${({ theme }) => theme.color.mutedText}; border-block-end-color: ${({ theme }) => theme.color.border}; }
-`;
-/** Phones: one leg's pick panel, tinted in its market's colour: icon, market over pick, then odds and chance in a
- * surface box. The desktop table lays its parts out as before. */
-export const SlipPanel = styled.div<{ $family: MarketFamily }>`
-  display: contents;
-  ${media.belowDesktop} {
-    --gh-glyph-size: 1.5rem;
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
-    margin-block-start: 6px; padding: 5px 6px 5px 8px;
-    background: ${({ theme, $family }) => theme.color.market[$family].soft};
-    border-radius: ${({ theme }) => theme.border.radius};
-    [data-pick-text] { display: flex; flex-direction: column; min-inline-size: 0; }
-    [data-mobile="numbers"] {
-      display: flex; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.border.radius};
-      > span { display: flex; flex-direction: column; align-items: center; justify-content: center; min-inline-size: 3.5rem; padding: 2px 5px; }
-      > span + span {
-        background: linear-gradient(${legRule}, ${legRule}) left center / 1px calc(100% - 10px) no-repeat;
-      }
-      strong { font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.0625rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-      small {
-        color: ${({ theme, $family }) => theme.color.market[$family].text};
-        font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.heavy};
-        letter-spacing: 0.06em; line-height: 0.8125rem; text-transform: uppercase;
-      }
-    }
-  }
-  ${media.desktop} { [data-pick-text] { display: contents; } }
-`;
-export const SlipMarket = styled.span<{ $family: MarketFamily }>`
-  display: block;
-  color: ${({ theme, $family }) => theme.color.market[$family].text};
-  ${media.belowDesktop} {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: ${({ theme, $family }) => theme.color.market[$family].text};
-    font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 0.875rem;
-  }
-  ${media.desktop} { margin-block-end: 3px; font-size: 0.625rem; line-height: 1.2; }
-`;
-export const SlipPick = styled.span<{ $family: MarketFamily }>`
-  font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  ${media.belowDesktop} {
-    display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: ${({ theme, $family }) => theme.color.market[$family].text};
-    font-size: 0.9375rem; line-height: 1.125rem;
-    /* The numbers box shows the odds; this copy stays for screen readers, after its hidden "Odds:" label. */
-    [data-pick-odds] { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  }
-  ${media.desktop} {
-    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; max-inline-size: 100%; padding: 2px 5px;
-    border-inline-start: 2px solid ${({ theme, $family }) => theme.color.market[$family].solid};
-    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    font-size: 0.8125rem; line-height: 1.3;
-    [data-pick-selection] { white-space: normal; }
-  }
-`;
-export const Table = styled.table`
-  inline-size: 100%; table-layout: fixed; text-align: start;
-  thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-  tbody tr { position: relative; background: ${({ theme }) => theme.color.surface}; }
-  th, td { vertical-align: middle; overflow-wrap: anywhere; }
-  td { border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; font-size: 0.75rem; }
-  [data-column="kickoff"], [data-column="probability"] { display: none; }
-  [data-competition] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  [data-team-side] { display: flex; align-items: center; gap: 5px; min-inline-size: 0; line-height: 1.3; }
-  [data-team-logo] { --gh-logo-size: 17px; --gh-logo-font: 0.5625rem; }
-  [data-versus] { display: none; }
-  [data-probability-content] { display: flex; align-items: center; gap: 5px; min-inline-size: 0; max-inline-size: 8.25rem; }
-  [data-probability-content] strong { flex: none; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; }
-  a { color: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-decoration: none; }
-  a:hover { color: ${({ theme }) => theme.color.link}; text-decoration: underline; }
-  a:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  /* Phones: each leg stacks its league and kickoff, the teams, then its pick panel. */
-  ${media.belowDesktop} {
-    display: block;
-    tbody { display: block; }
-    tbody tr { display: grid; gap: 4px; padding: 8px 12px 10px; background: ${({ theme }) => theme.color.surface}; }
-    tbody tr + tr { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
-    td { display: block; min-inline-size: 0; padding: 0; border: 0; }
-    [data-team-logo] { --gh-logo-fill: ${({ theme }) => theme.color.surfaceMuted}; --gh-logo-ink: ${({ theme }) => theme.color.mutedText}; }
-    a:hover { color: ${({ theme }) => theme.color.link}; }
-    a:focus-visible { outline-color: ${({ theme }) => theme.color.focus}; }
-    [data-mobile="metadata"] {
-      display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-inline-size: 0;
-      color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1rem;
-      > [data-competition] { flex: 0 1 auto; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-      > time { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; &::before { content: "· "; } }
-    }
-    [data-team-list] { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-block-start: 4px; font-size: 0.875rem; }
-    [data-versus] { display: inline; color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-    [data-slip-result] { display: block; margin-block-start: 2px; color: ${({ theme }) => theme.color.mutedText}; }
-  }
-  ${media.desktop} {
-    border-collapse: collapse; border-spacing: 0; padding: 0; background: ${({ theme }) => theme.color.surface};
-    thead { position: static; inline-size: auto; block-size: auto; overflow: visible; clip-path: none; }
-    th, td { padding: 7px 9px; }
-    th { text-align: start; color: ${({ theme }) => theme.header.text}; background: ${({ theme }) => theme.header.background}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-    td { font-size: 0.8125rem; }
-    tbody tr:nth-child(even) { background: ${({ theme }) => theme.color.surfaceMuted}; }
-    tbody tr:last-child td { border-block-end: 0; }
-    [data-column="match"] { inline-size: 36%; border-inline-start: 0; }
-    [data-column="selection"] { inline-size: 26%; border-inline: 0; }
-    [data-column="kickoff"] { display: table-cell; inline-size: 24%; font-variant-numeric: tabular-nums; }
-    td[data-column="kickoff"] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-    [data-column="probability"] { display: table-cell; inline-size: 14%; }
-    [data-mobile] { display: none; }
-    [data-team-list] { display: flex; align-items: center; gap: 8px; }
-    [data-team-side] { flex: 1; }
-    [data-team-name] { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    [data-versus] { display: inline; color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.body}; }
-    [data-probability-content] { margin-inline-start: auto; }
-  }
 `;

@@ -16,7 +16,7 @@ import { contentAccess } from "@/server/members/gated-reads";
 import { readSubscriptionOffer } from "@/server/members/public-offer";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
 import { loadMatchFeedPage } from "@/server/matches/feed-page";
-import { readPublicMatchFeed } from "@/server/matches/public-feed";
+import { readPublicMatchFeedList } from "@/server/matches/public-feed";
 import { MatchFeedError } from "@/server/matches/feed-error";
 import { feedMetadata } from "@/server/seo/metadata";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
@@ -28,7 +28,7 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Metadata and initial HTML share the same stored read and request-owned clock. */
-export function createFeedRoute({ dated = false, read = readPublicMatchFeed, instant = getShellInstant, policy = getDiscoveryPolicy,
+export function createFeedRoute({ dated = false, read = readPublicMatchFeedList, instant = getShellInstant, policy = getDiscoveryPolicy,
   resolveAccess = resolveViewerAccess, readOffer = readSubscriptionOffer, document = isDocumentRequest } = {}) {
   const load = cache(async (parameters: string, locale: string, at: UtcInstant) => {
     const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at,

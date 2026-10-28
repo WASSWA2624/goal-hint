@@ -60,15 +60,15 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
     check("#theme-matches [data-fixture-id], #theme-slips [data-slip-id]", theme.phoneCardFrame.border, "borderTopColor");
-    check("#theme-slips [data-slip-summary], #theme-slips [data-mobile=\"numbers\"]", theme.color.surface);
+    check("#theme-slips [data-slip-summary]", theme.color.surface);
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {
     // Desktop articles are transparent so the board and alternating row supply their surfaces.
     check("#theme-matches [data-match-board]", theme.color.surface);
     check("#theme-matches [data-match-board] > ul > li:nth-child(even)", theme.color.cardHeader);
     check("#theme-matches [data-match-table-header]", theme.gradient.tableHeader);
-    check("#theme-slips th", theme.header.background);
-    for (const tableHeader of document.querySelectorAll("#theme-slips th, #theme-matches [data-match-table-header]")) {
+    check("#theme-slips [data-match-table-header]", theme.gradient.tableHeader);
+    for (const tableHeader of document.querySelectorAll("#theme-slips [data-match-table-header], #theme-matches [data-match-table-header]")) {
       const style = getComputedStyle(tableHeader);
       assert(style.backgroundImage === "none", "Desktop table header must use the theme's flat surface");
       assert(dark ? lightness(style.backgroundColor) < 0.25 : lightness(style.backgroundColor) > 0.85,

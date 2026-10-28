@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
@@ -16,12 +16,22 @@ import { SlipTable } from "./slip-table";
 
 export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
   const m = createMessages(locale), router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+  const refreshInFlight = useRef(false);
   useEffect(() => {
-    const timer = setInterval(() => { if (document.visibilityState === "visible") router.refresh(); }, 20_000);
-    const visible = () => { if (document.visibilityState === "visible") router.refresh(); };
-    document.addEventListener("visibilitychange", visible);
-    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
-  }, [router]);
+    refreshInFlight.current = refreshing;
+    if (refreshing) return;
+    const refresh = () => {
+      // A later refresh can replace a navigation that has not committed yet.
+      if (refreshInFlight.current || document.visibilityState !== "visible" || !navigator.onLine
+        || document.querySelector("[data-navigation-pending]")) return;
+      refreshInFlight.current = true;
+      startRefresh(() => router.refresh());
+    };
+    const timer = setInterval(refresh, 20_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [refreshing, router]);
   const complete = result.slips.length >= bestSlipsRules.count;
   return <SlipStack>
     <AppBrandBar locale={locale} />

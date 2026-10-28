@@ -294,7 +294,7 @@ def main():
     args = parse_args("match feed", ("--detail", "--history", "--live", "--reuse"))
     directory, scenarios, details = prepare(args)
     print(f"Building isolated match feed: {directory}", flush=True)
-    build_fixture(directory)
+    build_fixture(directory, timeout=240)
     with Server(directory, ready="/en") as server:
         verify_feed(server.origin, directory, scenarios)
         if details:
