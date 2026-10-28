@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { startOfflineRefresh } from "@/domain/offline-refresh";
 import { createOfflineTransport } from "./offline-transport";
 import { publishOfflineUpdate } from "./offline-update-store";
+import { scheduleOfflineStartup } from "./schedule-offline-startup";
 
 /** One shared controller; product data/authentication keep their existing refresh rules. */
 export function OfflineBootstrap() {
@@ -14,7 +15,7 @@ export function OfflineBootstrap() {
       return;
     }
     let pageActive = true, readyKey = "";
-    return startOfflineRefresh({ ...createOfflineTransport(), publish: (state) => {
+    return scheduleOfflineStartup(() => startOfflineRefresh({ ...createOfflineTransport(), publish: (state) => {
       publishOfflineUpdate(state);
       root.dataset.offlineCache = state.cache ? "ready" : state.phase === "checking" ? "preparing" : "unavailable";
       root.dataset.offlineConnection = state.connection;
@@ -52,7 +53,7 @@ export function OfflineBootstrap() {
           window.removeEventListener("pageshow", restore);
         };
       },
-    });
+    }));
   }, []);
   return null;
 }

@@ -9,6 +9,7 @@ import { adjacentDays, archiveWindowDays, dayLinkRel, emptyArchiveIsMissing } fr
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { isDocumentRequest, PublicReadUnavailableError } from '../src/server/seo/read-status.ts';
 import { fullAccess } from './helpers/full-access.ts';
+import { liveDetail } from './helpers/live-refresh-fixtures.mjs';
 
 const today = parseReportingDate('2026-10-26'), at = parseUtcInstant('2026-10-26T09:00:00Z');
 const day = (value) => ({ startDate: parseReportingDate(value), dayCount: 1 });
@@ -183,4 +184,50 @@ test('a failed revision-history read keeps the inline history retry on an indexa
   assert.equal(rendered.result.data.fixture.fixtureId, id); assert.equal(rendered.historyResult.error, 'unavailable');
   assert.equal(rendered.historyQuery, `limit=20&revision=${revision}`);
   assert.equal((await page.generateMetadata(props({ fixtureId: id, slug }, { revision }))).alternates.canonical, `https://goalhint.com${match.route.path}`);
+});
+
+test('a slow optional insight read cannot hold the primary match page or metadata', async () => {
+  let finishInsights, reads = 0, rendered;
+  const pending = new Promise(resolve => { finishInsights = resolve; });
+  const page = createMatchDetailRoute(async () => match, indexing, async () => {
+    reads++;
+    await pending;
+    throw new MatchFeedError('unavailable');
+  }, fullAccess, async () => null, fullDocument);
+  const rendering = page.Page(props({ fixtureId: id, slug })).then(element => { rendered = element; return element; });
+  await new Promise(setImmediate);
+  assert.ok(rendered, 'Primary content must return while insights are still pending.');
+  const projection = view(rendered, 'MatchDetailPage');
+  assert.equal(projection.result.data.fixture.fixtureId, id);
+  assert.ok(projection.previewPromise instanceof Promise);
+  assert.equal(reads, 1);
+  assert.equal((await page.generateMetadata(props({ fixtureId: id, slug }))).alternates.canonical, `https://goalhint.com${match.route.path}`);
+  assert.equal(reads, 1, 'Metadata must not start an optional insights read.');
+  finishInsights();
+  assert.equal(await projection.previewPromise, null, 'A failed preview preserves the primary view and section retries.');
+  await rendering;
+});
+
+test('the detail price lookup overlaps the primary read and still follows viewer entitlement', async () => {
+  const current = liveDetail();
+  let finishRead, offered = 0;
+  const pending = new Promise(resolve => { finishRead = resolve; });
+  const offer = { priceUgx: 1000, durationDays: 7 };
+  const route = { fixtureId: current.fixture.fixtureId, slug: current.route.slug };
+  const page = createMatchDetailRoute(async () => { await pending; return current; }, indexing, noInsights,
+    async () => ({ tier: 'free', signedIn: false, mode: 'on' }), async () => { offered++; return offer; }, fullDocument);
+  const rendering = page.Page(props(route));
+  await new Promise(setImmediate);
+  assert.equal(offered, 1, 'Public pricing must begin before the primary database read completes.');
+  finishRead();
+  const projection = view(await rendering, 'MatchDetailPage');
+  assert.deepEqual(projection.offer, offer);
+  assert.equal(projection.result.data.access.tier, 'free');
+  await projection.previewPromise;
+
+  const full = createMatchDetailRoute(async () => current, indexing, noInsights, fullAccess,
+    async () => { throw new Error('Full access must not query the public offer.'); }, fullDocument);
+  const fullProjection = view(await full.Page(props(route)), 'MatchDetailPage');
+  assert.equal(fullProjection.offer, null);
+  await fullProjection.previewPromise;
 });

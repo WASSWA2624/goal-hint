@@ -44,7 +44,7 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       ? await loadMatchDetailPage(id, { now: () => current.instant }, read, new URLSearchParams(query), resolveAccess) : current.result;
     return { ...current, historyResult, query };
   });
-  async function resolve({ params, searchParams }: Props, withPreview = false) {
+  async function resolve({ params, searchParams }: Props) {
     const route = await params;
     let id, query, viewQuery;
     try {
@@ -54,11 +54,11 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       viewQuery = matchDetailPageParameters(input).toString();
     }
     catch (error) { if (error instanceof MatchFeedError) notFound(); throw error; }
-    const [loaded, preview] = await Promise.all([load(id, query), withPreview ? loadPreview(id) : null]);
+    const loaded = await load(id, query);
     if (loaded.result.error === "not-found" || loaded.historyResult.error === "not-found") notFound();
     // Only the canonical page's own read: revision-history variants keep their inline retry.
     if (loaded.result.error === "unavailable" && !query && policy().index && await document()) throw new PublicReadUnavailableError();
-    return { ...loaded, preview, route, viewQuery };
+    return { ...loaded, route, viewQuery };
   }
   return {
     async generateMetadata(props: Props) {
@@ -66,16 +66,20 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       return matchDetailMetadata(result, route.locale, query !== "", policy(), (await contentAccess(resolveAccess)).mode);
     },
     async Page(props: Props) {
-      const { result, historyResult, query, today, route, preview, viewQuery } = await resolve(props, true);
+      // The public price and match projection are independent once access is known.
+      const offerPromise = contentAccess(resolveAccess).then((access) => access.tier === "free" ? readOffer() : null).catch(() => null);
+      const { result, historyResult, query, today, route, viewQuery } = await resolve(props);
       if (result.data && (route.slug !== result.data.route.slug || route.fixtureId !== result.data.route.fixtureId)) {
         permanentRedirect(`${result.data.route.path}${viewQuery ? `?${viewQuery}` : ""}${query ? "#revision-history" : ""}`);
       }
-      const access = await contentAccess(resolveAccess);
-      const offer = access.tier === "free" ? await readOffer() : null;
+      // Section summaries stream into the existing client view without holding its primary content.
+      const previewPromise = result.data ? loadPreview(result.data.route.fixtureId) : undefined;
+      const offer = await offerPromise;
       return <>
         {result.data && !query && <script type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeStructuredData(matchStructuredData(result.data, route.locale)) }} />}
-        <MatchDetailPage showAccount offer={offer} result={result} today={today} locale={route.locale} preview={preview}
+        <MatchDetailPage showAccount offer={offer} result={result} today={today} locale={route.locale}
+          {...(previewPromise ? { previewPromise } : {})}
           historyResult={historyResult} historyQuery={query}
           retryHref={`/en/matches/${encodeURIComponent(route.fixtureId)}/${encodeURIComponent(route.slug)}`} />
       </>;

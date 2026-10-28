@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, use, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { MatchDetails } from "@/components/match/details/match-details";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
@@ -18,13 +18,24 @@ import { detailApi } from "@/state/detail-api";
 import { useLiveRefresh } from "./use-live-refresh";
 
 type LiveDetailProps = { initial: MatchDetailResponse; today: ReportingDate; locale: string; children?: ReactNode;
-  preview?: InsightsPreview | null; historyRequested?: boolean; showAccount?: boolean; offer?: SubscriptionOffer | null };
+  preview?: InsightsPreview | null; previewPromise?: Promise<InsightsPreview | null>;
+  historyRequested?: boolean; showAccount?: boolean; offer?: SubscriptionOffer | null };
+
+/** Only this invisible boundary waits for optional summaries; the interactive match view stays mounted. */
+function DeferredPreview({ promise, resolve }: { promise: Promise<InsightsPreview | null>; resolve: (preview: InsightsPreview | null) => void }) {
+  const preview = use(promise);
+  useEffect(() => { resolve(preview); }, [preview, resolve]);
+  return null;
+}
 
 /** Everything the page shows: the read clock and sync time change on every poll without changing the view. */
 const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf: 0, fixture: { ...detail.fixture, syncedAt: 0 } });
 
-function LiveDetail({ initial, today, locale, children, preview = null, historyRequested = false, showAccount = false, offer = null }: LiveDetailProps) {
+function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, historyRequested = false, showAccount = false, offer = null }: LiveDetailProps) {
   const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf);
+  const [deferredPreview, setDeferredPreview] = useState<{ promise: Promise<InsightsPreview | null> | undefined; value: InsightsPreview | null } | null>(null);
+  const resolvePreview = useCallback((value: InsightsPreview | null) => setDeferredPreview({ promise: previewPromise, value }), [previewPromise]);
+  const preview = deferredPreview && deferredPreview.promise === previewPromise ? deferredPreview.value : initialPreview;
   // The newest accepted response (for staleness checks); `data` changes only when something visible does.
   const accepted = useRef(data), request = useRef<AbortController | null>(null), mounted = useRef(false);
   const dispatch = useDetailDispatch(), router = useRouter();
@@ -66,7 +77,10 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
     refresh, rollover: () => router.refresh() });
   const sections = preview ? gateInsights(preview, data.access, isPlayedFinalStatus(data.fixture.status)).sections : null;
   const currentPreview = preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
-  return <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} historyRequested={historyRequested} />;
+  return <>
+    <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} historyRequested={historyRequested} />
+    {previewPromise && <Suspense fallback={null}><DeferredPreview promise={previewPromise} resolve={resolvePreview} /></Suspense>}
+  </>;
 }
 
 /** One explicit server projection initializes a fresh per-page refresh store. */

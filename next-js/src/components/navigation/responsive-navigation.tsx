@@ -105,14 +105,15 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
     <List ref={list}>
       {visible.map(({ key, href, label, tab, icon, tone }) => {
         const Icon = icons[icon];
-        return <li key={key}><Primary href={href} prefetch={false} $tone={tone} data-nav-key={key}
+        // Only Slips has a loading boundary that is safe to prefetch before query/status validation.
+        return <li key={key}><Primary href={href} prefetch={key === "slips" ? null : false} $tone={tone} data-nav-key={key}
           aria-current={current === key ? "page" : undefined}><Icon /><span>{mobile ? tab : label}</span></Primary></li>;
       })}
       {overflow.length > 0 && <li data-nav-more>
         <MoreMenu $mobile={mobile} current={overflowCurrent} label={<><MoreIcon /><span>{moreLabel}</span></>}>
           <MoreList $mobile={mobile}>{overflow.map(({ key, href, label, icon }) => {
             const Icon = icons[icon];
-            return <li key={key}><TextLink href={href} prefetch={false} data-nav-key={key}
+            return <li key={key}><TextLink href={href} prefetch={key === "slips" ? null : false} data-nav-key={key}
               aria-current={current === key ? "page" : undefined}><Icon /><span>{label}</span></TextLink></li>;
           })}</MoreList>
         </MoreMenu>

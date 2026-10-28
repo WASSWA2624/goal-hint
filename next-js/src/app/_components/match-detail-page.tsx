@@ -12,13 +12,15 @@ import type { DetailPageResult } from "@/server/matches/detail-page";
 import { createMessages } from "@/i18n/messages";
 import { PublicShell } from "./public-shell";
 
-export function MatchDetailPage({ result, today, locale = "en", retryHref, historyResult = result, historyQuery = "", preview = null, showAccount = false, offer = null }: {
+export function MatchDetailPage({ result, today, locale = "en", retryHref, historyResult = result, historyQuery = "", preview = null, previewPromise, showAccount = false, offer = null }: {
   result: DetailPageResult; today: ReportingDate; locale?: string; retryHref: string;
-  historyResult?: DetailPageResult; historyQuery?: string; preview?: InsightsPreview | null; showAccount?: boolean; offer?: SubscriptionOffer | null;
+  historyResult?: DetailPageResult; historyQuery?: string; preview?: InsightsPreview | null; previewPromise?: Promise<InsightsPreview | null>;
+  showAccount?: boolean; offer?: SubscriptionOffer | null;
 }) {
   const messages = createMessages(locale);
   return <PublicShell showAccount={showAccount} locale={locale} today={today} app={result.data !== null} current="today">
-    {result.data ? <LiveMatchDetail showAccount={showAccount} offer={offer} initial={result.data} today={today} locale={locale} preview={preview} historyRequested={historyQuery !== ""}>
+    {result.data ? <LiveMatchDetail showAccount={showAccount} offer={offer} initial={result.data} today={today} locale={locale} preview={preview}
+      {...(previewPromise ? { previewPromise } : {})} historyRequested={historyQuery !== ""}>
       <RevisionHistory current={result.data} result={historyResult} query={historyQuery} locale={locale} open />
     </LiveMatchDetail> : <Stack>
       <PageHeading>{messages.text("detail.unavailableTitle")}</PageHeading>
