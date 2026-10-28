@@ -1,5 +1,14 @@
 # Slip builder
 
+The builder generates slips for immediate use from the selected limits. It shows
+the criteria and generated slips on every screen size, without Save actions,
+saved-slip history or win/loss performance summaries. Opening or submitting the
+builder does not read saved history or persist generated slips, including for
+signed-in members. Each generated slip retains its odds, probability and match
+count summary.
+On narrow phones its summary uses two columns so the values and selection count
+remain readable without clipping.
+
 `/en/slips` uses the Balanced slip builder. Each slip keeps its total odds,
 average forecast probability and selection count in its title. Its selections
 use the same `MatchCard` and `MatchCardList` as Matches, Live and Results, including
@@ -39,7 +48,7 @@ presentation and the three compact triggers.
 A validation error exposes its invalid optional group; essential target errors
 stay beside the visible controls. Draft values remain editable and retain their
 accessible error association. The layout does not change the domain criteria,
-stored-data generation rules, navigation, or generated and completed slip UI.
+stored-data generation rules, navigation, or generated slip presentation.
 
 ## Criteria and submission
 
@@ -247,7 +256,11 @@ provider requests, changes no forecasts, places no bets, requires subscriber ent
 persists no saved slips. Existing match detail links remain available in each
 table row.
 
-## Original forecast binding and saved history
+## Original forecast binding and separate saved-slip services
+
+The builder does not offer saving or completed history. The existing saved-slip
+services retain their original validation and snapshot contract for other
+consumers and any future save workflow.
 
 Each generated selection retains the original cycle, prediction-set ID and
 publication timestamp from the stored feed. Slip identities also include this
@@ -301,6 +314,8 @@ real server-rendered controls, the three dialog groups and their inline
 no-JavaScript fallback, blank Any defaults, retained custom numeric bounds, and
 unique form-associated inputs. It also checks result states, native GET builds, invalid criteria,
 navigation overflow, summaries inside slip titles and one row per selection.
+Builder cases also verify that history, performance summaries and Save actions
+are absent, including when a signed-in member generates slips.
 Selection rows render the shared match-card board, preserve a manually selected
 alternative's probability and price, and keep an unobserved fixture status
 unknown. `tests/slip-card.test.mjs` also verifies immutable original values,

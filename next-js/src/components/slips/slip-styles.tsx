@@ -185,6 +185,11 @@ export const SlipSummary = styled.dl`
     && dd a { color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; }
     && dd a:hover { color: ${({ theme }) => theme.color.brandHover}; }
   }
+  @media (max-width: 25rem) {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    > div:nth-child(odd) { border-inline-start: 0; }
+    > div:nth-child(n + 3) { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  }
   ${media.desktop} { font-size: 0.75rem; }
 `;
 export const SlipProbabilityNote = styled.p`

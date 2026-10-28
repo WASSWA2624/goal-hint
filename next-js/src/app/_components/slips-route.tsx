@@ -1,30 +1,25 @@
 import "server-only";
 
-import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
+import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelection } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
-import { isAnyKickoffTime } from "@/domain/kickoff-time";
 import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
 import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
 import { createMessages } from "@/i18n/messages";
 import { approvedSlipJointModel, boundJointSlipModel } from "@/server/slips/joint-model";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
-import { readSavedSlipHistory } from "@/server/slips/saved-slips";
-import type { SavedSlipHistory, SavedSlipHistoryQuery, SavedSlipView } from "@/domain/saved-slips";
-import { SlipHistory } from "@/components/slips/slip-history";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { pageMetadata } from "@/server/seo/metadata";
 import { getShellInstant, PublicShell } from "./public-shell";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
-type HistoryReader = (query: SavedSlipHistoryQuery) => Promise<SavedSlipHistory | readonly SavedSlipView[] | null>;
 
 /** Anonymous, read-only GET builds. Invalid drafts remain editable without reading the stored feed.
  * `jointModel` only decides whether whole-slip limits are offered; the reader applies its own bound model. */
 export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShellInstant,
-  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess, history = readSavedSlipHistory as HistoryReader,
+  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess,
   jointModel = boundJointSlipModel } = {}) {
   return {
     async generateMetadata({ params }: Props) {
@@ -67,15 +62,9 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       catch { /* An unavailable estimator offers no whole-slip limits. */ }
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}`;
-      const savedHistory = error ? null : await history(criteria);
-      const historyData = savedHistory && "records" in savedHistory ? savedHistory : null;
-      const savedRecords = savedHistory && "records" in savedHistory ? savedHistory.records : savedHistory;
-      const messages = createMessages(locale);
-      const period = `${messages.reportingDateSpan(parseReportingDate(criteria.dateFrom), parseReportingDate(criteria.dateTo))}${criteria.timeFrom && !isAnyKickoffTime({ from: criteria.timeFrom, to: criteria.timeTo }) ? ` · ${criteria.timeFrom}–${criteria.timeTo}` : ""} · EAT`;
       return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
         <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
           error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates} {...(initialMarkets ? { initialMarkets } : {})} />
-        <SlipHistory slips={savedRecords} locale={locale} statistics={historyData?.statistics ?? null} period={period} />
       </PublicShell>;
     },
   };

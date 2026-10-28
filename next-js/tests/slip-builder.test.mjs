@@ -292,6 +292,26 @@ test('Automatic can use an outcome below the top forecast when only its own odds
   assert.equal(fixture.forecast.markets[0].market.selection, 'home-win');
 });
 
+test('Automatic applies the requested limits independently of the feed recommendation', () => {
+  const base = record('recommended', '3.00', 0.6);
+  const selected = (family, selection, probability) => ({ status: 'selected', selected: {
+    family, selection, probability, source: 'ai', period: marketRules.period, line: null,
+  } });
+  const recommendations = [selected('match-result', 'home-win', 0.6),
+    selected('double-chance', 'home-or-draw', 0.8), { status: 'no-qualified-recommendation', selected: null }];
+  for (const recommendation of recommendations) {
+    const fixture = matchFeedRecordSchema.parse({ ...base, forecast: { ...base.forecast, recommendation } });
+    fixture.selectionPrices = [...fixture.prices, { ...fixture.prices[0], selection: 'away-win', price: '1.70' }];
+    const original = structuredClone(fixture);
+    const result = buildSlips(criteria({ oddsMin: 150, oddsMax: 200, probMin: 10, probMax: 30, teamsMax: 1 }), [fixture], asOf);
+    assert.equal(result.slips.length, 1, recommendation.status);
+    assert.equal(result.slips[0].selections[0].selection, 'away-win');
+    assert.equal(result.slips[0].selections[0].probability, 0.2);
+    assert.equal(result.slips[0].totalOdds, '1.70');
+    assert.deepEqual(fixture, original);
+  }
+});
+
 test('manual Home win uses its own probability and price when Away win is the published top pick', () => {
   const base = record('base');
   const snapshot = validateMarketSnapshot({ 'match-result': { source: 'ai', period: marketRules.period,

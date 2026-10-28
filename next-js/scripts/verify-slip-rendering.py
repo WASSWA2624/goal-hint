@@ -132,6 +132,12 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
     document = Document(response.text).root
     assert len(document.nodes("h1")) == 1, f"{path}: one page heading"
     assert len(document.nodes("main")) == 1, f"{path}: one main landmark"
+    assert not document.nodes(attr="data-performance-summary"), f"{path}: generation has no historical or outcome performance summary"
+    assert not document.nodes(attr="data-slip-history"), f"{path}: generation does not render completed saved slips"
+    assert not any(node.attrs.get("id") == "completed-slips" for node in document.nodes()), f"{path}: no completed-slips section"
+    assert not any(node.text.strip() in {"Save slip for tracking", "Saving…", "Slip saved"} for node in document.nodes("button")), f"{path}: no saving actions, including for signed-in members"
+    assert all(node.attrs.get("method", "get").lower() == "get" for node in document.nodes("form")), f"{path}: builder forms are read-only GET requests"
+    assert "Saved slip performance" not in document.text and "Completed slips" not in document.text, f"{path}: no saved history content at any viewport"
     criteria_groups(document, path, error_group)
     inputs = document.nodes("input")
     for kind in ["date", "time"]:
@@ -233,6 +239,27 @@ def verify_custom_numeric_bounds(document, expected):
                 assert Decimal(fields[name]) == Decimal(expected[name]), f"Custom {name}: expected {expected[name]}, found {fields[name]}"
 
 
+def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):
+    fixture_ids = []
+    for slip in document.nodes(attr="data-slip-id"):
+        rows = slip.nodes("li", "data-slip-selection")
+        assert len(rows) == selections, "Generated slips honor the exact requested matches per slip"
+        exact_total = Decimal(1)
+        for row in rows:
+            fixture_ids.append(row.attrs["data-slip-selection"])
+            price = Decimal(row.nodes(attr="data-card-odds")[0].text)
+            probabilities = [node.text.strip() for node in row.nodes(attr="data-pick-value")
+                if re.fullmatch(r"\d+(?:\.\d+)?%", node.text.strip())]
+            assert len(probabilities) == 1, "Every generated selection exposes its own forecast probability"
+            probability = Decimal(probabilities[0].rstrip("%"))
+            assert Decimal(odds_min) <= price <= Decimal(odds_max), "Every selected original price honors the individual odds bounds"
+            assert Decimal(prob_min) <= probability <= Decimal(prob_max), "Every selected forecast honors the individual probability bounds"
+            exact_total *= price
+        assert Decimal(total_min) <= exact_total <= Decimal(total_max), "Every slip's exact odds product honors both total bounds"
+    if not reuse:
+        assert len(fixture_ids) == len(set(fixture_ids)), "Match reuse stays disabled across the entire generated batch"
+
+
 def verify(origin, directory):
     snapshots = request(origin, "/snapshot-cards")
     assert snapshots.status == 200
@@ -323,7 +350,26 @@ def verify(origin, directory):
     row = selected.nodes("li", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
     assert row.nodes(attr="data-card-odds")[0].text == "2.00" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
-    print("Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, 12 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
+    # Signed-in requests traverse the real route and stored service without offering a save action.
+    member_overrides = {"slips": "2", "teamsMin": "2", "teamsMax": "2"}
+    member_query = [(name, member_overrides.get(name, value)) for name, value in query if name != "reuse"] + [("reuse", "0")]
+    member = inspect(origin, "/member?" + urlencode(member_query), directory, "route-member-build", "generated", 2)
+    verify_generated_limits(member, total_min="3", total_max="6", odds_min="1.25", odds_max="2.60",
+        prob_min="70", prob_max="100", selections=2, reuse=False)
+    tighter = {"slips": "1", "totalMax": "4", "oddsMax": "2", "probMin": "85"}
+    regenerated_query = [(name, tighter.get(name, value)) for name, value in member_query]
+    regenerated = inspect(origin, "/member?" + urlencode(regenerated_query), directory, "route-member-regenerated", "generated", 1)
+    verify_generated_limits(regenerated, total_min="3", total_max="4", odds_min="1.25", odds_max="2",
+        prob_min="85", prob_max="100", selections=2, reuse=False)
+    exact = {"slips": "1", "totalMin": "1.70", "totalMax": "1.70", "oddsMin": "1.70", "oddsMax": "1.70",
+        "probMin": "91", "probMax": "91", "teamsMin": "1", "teamsMax": "1"}
+    exact_query = [(name, exact.get(name, value)) for name, value in member_query if name != "markets"] + [("markets", "match-result")]
+    exact_build = inspect(origin, "/member?" + urlencode(exact_query), directory, "route-member-exact-bounds", "generated", 1, selections_per_slip=1)
+    verify_generated_limits(exact_build, total_min="1.70", total_max="1.70", odds_min="1.70", odds_max="1.70",
+        prob_min="91", prob_max="91", selections=1, reuse=False)
+    impossible = [(name, "92" if name == "probMin" else "100" if name == "probMax" else value) for name, value in exact_query]
+    inspect(origin, "/member?" + urlencode(impossible), directory, "route-member-no-qualifying", "no-qualifying", 0)
+    print("Slip rendering verification passed: generation-only for anonymous and signed-in viewers, balanced dialogs, blank Any bounds, native GET builds/cutoff/manual alternatives, regeneration and exact generation limits.", flush=True)
 
 
 def main():

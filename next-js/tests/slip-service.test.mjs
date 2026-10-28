@@ -285,6 +285,34 @@ test('manual alternatives use the own published outcome probability and suppleme
   assert.ok(automatic.data.slips[0].selections.every(value => value.selection === 'away-win'));
 });
 
+test('stored generation meets all custom limits when the recommended pick does not qualify', async () => {
+  const records = ['fixture-1', 'fixture-2', 'fixture-3', 'fixture-4'].map(id => {
+    const value = alternativeRecord(id);
+    return { ...value, forecast: { ...value.forecast, recommendation: { status: 'selected', selected: {
+      family: 'match-result', selection: 'away-win', probability: 0.7, source: 'ai', period: marketRules.period, line: null,
+    } } } };
+  });
+  const original = structuredClone(records);
+  let consumes = 0;
+  const result = await service(async parameters => ({ feed: page(parameters, records),
+    selectionPrices: Object.fromEntries(records.map(value => [value.fixtureId, alternativePrices()])) }),
+  { consume: async () => { consumes++; } }).query(criteria({ markets: ['match-result'],
+    oddsMin: 150, oddsMax: 250, probMin: 10, probMax: 30, totalMin: 400, totalMax: 400,
+    teamsMin: 2, teamsMax: 2, slips: 2, reuse: false }));
+  assert.equal(result.state, 'generated');
+  assert.equal(result.data.slips.length, 2);
+  assert.equal(consumes, 1);
+  const selections = result.data.slips.flatMap(slip => {
+    assert.equal(slip.selections.length, 2);
+    assert.equal(slip.totalOdds, '4.00');
+    return slip.selections;
+  });
+  assert.equal(new Set(selections.map(selection => selection.fixtureId)).size, 4);
+  assert.ok(selections.every(selection => selection.family === 'match-result' && selection.selection === 'home-win'
+    && selection.odds === '2.00' && selection.probability === 0.2));
+  assert.deepEqual(records, original);
+});
+
 test('supplementary price-pool drift or a future observation rejects the entire build', async () => {
   const records = [alternativeRecord('fixture-1'), alternativeRecord('fixture-2')];
   for (const kind of ['drift', 'future']) {
