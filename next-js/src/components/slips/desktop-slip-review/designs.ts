@@ -1,15 +1,15 @@
-/** Desktop candidates keep stable IDs while sharing the original slip disclosure and snapshot fields. */
+/** Every one-line candidate shares the approved header; only match-row presentation differs. */
 export const desktopSlipDesigns = [
-  { id: "balanced-ledger", name: "Balanced ledger", description: "A light header with evenly spaced facts and a wide fixture column." },
-  { id: "metric-columns", name: "Metric columns", description: "Aligned metric cells make the same values easy to scan across a list of slips." },
-  { id: "odds-dock", name: "Odds dock", description: "A distinct total-odds block and a stronger price column give the numbers a clear anchor." },
-  { id: "prediction-focus", name: "Prediction focus", description: "A compact market panel separates the selected outcome from the fixture and price." },
-  { id: "probability-focus", name: "Probability focus", description: "The average and individual probabilities share a clear visual emphasis." },
-  { id: "ticket-gutter", name: "Ticket gutter", description: "A slim numbered gutter connects each selection to the slip while facts stay inline." },
-  { id: "banded-register", name: "Banded register", description: "Alternating flat rows and a quiet metadata line keep longer slips easy to follow." },
-  { id: "club-centre", name: "Club centre", description: "A centred fixture column and evenly divided metrics give each row a balanced rhythm." },
-  { id: "rail-divider", name: "Rail divider", description: "Thin vertical rules separate fixture, prediction and numeric columns without extra boxes." },
-  { id: "minimal-line", name: "Minimal line", description: "Fine horizontal rules and tighter spacing create the smallest visual footprint." },
+  { id: "balanced-ledger", name: "Balanced ledger", description: "A continuous match line with balanced space for every field." },
+  { id: "inline-columns", name: "Inline columns", description: "Aligned cells and fine dividers make the same facts easy to compare." },
+  { id: "fixture-priority", name: "Fixture priority", description: "More room for the two team names, with a quiet fixture divider." },
+  { id: "market-panel", name: "Market panel", description: "A compact market panel highlights the prediction beside the fixture." },
+  { id: "odds-anchor", name: "Odds anchor", description: "A restrained price block anchors the odds without stretching the row." },
+  { id: "probability-anchor", name: "Probability anchor", description: "A narrow accent rail makes each match probability easy to scan." },
+  { id: "country-rail", name: "Country rail", description: "More space for country and league information before the teams." },
+  { id: "alternating-lines", name: "Alternating lines", description: "Alternating flat backgrounds help follow longer slips at a compact height." },
+  { id: "subtle-dividers", name: "Subtle dividers", description: "Quiet separators group competition, fixture and prediction information." },
+  { id: "minimal-line", name: "Minimal line", description: "The tightest spacing and light numerical emphasis keep the line unobtrusive." },
 ] as const;
 
 export type DesktopSlipVariant = typeof desktopSlipDesigns[number]["id"];

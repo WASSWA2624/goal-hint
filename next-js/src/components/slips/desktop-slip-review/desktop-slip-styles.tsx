@@ -2,142 +2,108 @@
 
 import styled from "styled-components";
 
-/** Scoped candidates only: production and mobile slip styling never receive these overrides. */
+/** Review-only rows; every candidate retains the approved Balanced ledger header. */
 export const DesktopSlipLayout = styled.div`
   min-inline-size: 0;
 
   &&& [data-slip-summary] {
     grid-template-columns: minmax(13rem, 1fr) minmax(8.25rem, auto) minmax(7.5rem, auto) minmax(12rem, auto);
-    grid-template-areas: "identity odds count average";
-    grid-template-rows: 1fr;
-    min-block-size: 44px; block-size: 44px;
+    grid-template-areas: "identity odds count average"; grid-template-rows: 1fr;
+    min-block-size: 2.25rem; block-size: 2.25rem;
     column-gap: 24px; row-gap: 0; padding: 0 36px 0 12px;
     white-space: nowrap; font-size: 0.75rem; line-height: 1.25;
+    background: ${({ theme }) => theme.color.surface};
   }
-  &&& [data-summary-identity] { flex-wrap: nowrap; align-items: center; gap: 9px; white-space: nowrap; font-size: 0.875rem; }
+  &&& [data-summary-identity] { flex-wrap: nowrap; align-items: center; gap: 9px; padding-inline-start: 2px; white-space: nowrap; font-size: 0.875rem; }
   &&& [data-rank] { font-size: 0.75rem; }
   &&& [data-summary-fact] { flex-wrap: nowrap; flex-direction: row; align-items: baseline; gap: 6px; }
   &&& [data-summary-fact] strong { font-size: 0.875rem; }
-  &&& [data-summary-odds], &&& [data-summary-count], &&& [data-summary-average] { justify-self: end; }
+  &&& [data-summary-odds] { justify-self: start; }
+  &&& [data-summary-count], &&& [data-summary-average] { justify-self: end; }
   &&& [data-summary-average] [data-fact-label] { max-inline-size: none; }
 
-  &&& [data-fixture-id] {
-    position: relative; display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.46fr) 6.25rem 9.75rem;
-    grid-template-areas: "meta meta kickoff kickoff" "teams pick odds probability";
-    grid-template-rows: 1rem 1.25rem;
-    align-items: center; column-gap: 12px; row-gap: 3px;
-    padding: 6px 12px; min-block-size: 51px;
-    font-size: 0.75rem; line-height: 1.25; overflow-wrap: normal;
-    --desktop-result-room: 0px;
+  [data-desktop-row] {
+    --desktop-columns: 3.5rem 5.1rem minmax(5.5rem, 1fr) minmax(3.75rem, 0.65fr) minmax(8rem, 2fr) minmax(6.5rem, 0.95fr) 4.2rem 4.8rem;
+    position: relative; display: grid; grid-template-columns: var(--desktop-columns);
+    grid-template-rows: minmax(1.25rem, auto); align-items: center; column-gap: 8px;
+    min-inline-size: 0; min-block-size: 2.25rem; padding: 4px 12px;
+    color: ${({ theme }) => theme.color.text}; font-size: 0.75rem; line-height: 1.25rem;
+    white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums;
   }
-  &&& [data-fixture-id]:has([data-result]) { --desktop-result-room: 6rem; }
-  &&& [data-meta] { flex-wrap: nowrap; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.75rem; line-height: 1rem; }
-  &&& [data-competition] { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-  &&& [data-competition] img, &&& [data-competition] svg { flex: none; inline-size: 0.75rem; block-size: 0.75rem; object-fit: contain; }
-  &&& [data-kickoff] { flex-wrap: nowrap; gap: 8px; justify-content: flex-end; align-items: center; padding-inline-end: var(--desktop-result-room); white-space: nowrap; font-size: 0.75rem; line-height: 1rem; }
-  &&& [data-teams] { flex-wrap: nowrap; align-items: center; gap: 7px; white-space: nowrap; font-size: 0.84375rem; line-height: 1.25rem; }
-  &&& [data-home], &&& [data-away] { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-  &&& [data-versus] { font-size: 0.75rem; }
-  &&& [data-team-logo] { --gh-logo-size: 0.8125rem; --gh-logo-font: 0.4375rem; --gh-logo-radius: 0; }
-  &&& [data-competition] [data-team-logo] { --gh-logo-size: 0.75rem; }
-  &&& [data-pick] { flex-wrap: nowrap; align-items: center; gap: 7px; white-space: nowrap; }
-  &&& [data-market-label], &&& [data-number-label] { font-size: 0.75rem; line-height: 1.25rem; }
-  &&& [data-pick-label] { font-size: 0.84375rem; line-height: 1.25rem; }
-  &&& [data-leg-odds], &&& [data-leg-probability] { flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
-  &&& [data-leg-odds] strong, &&& [data-leg-probability] strong { font-size: 0.84375rem; line-height: 1.25rem; }
-  &&& [data-result] { position: absolute; inset-block-start: 6px; inset-inline-end: 12px; align-items: center; gap: 5px; font-size: 0.75rem; line-height: 1rem; white-space: nowrap; }
-  &&& [data-saved-score] { font-variant-numeric: tabular-nums; }
-
-  &[data-desktop-design="balanced-ledger"] {
-    &&& [data-slip-summary] { background: ${({ theme }) => theme.color.surface}; }
-    &&& [data-summary-identity] { padding-inline-start: 2px; }
-    &&& [data-fixture-id] { column-gap: 16px; }
-    &&& [data-summary-odds] { justify-self: start; }
+  [data-desktop-row]:has([data-row-result]) { grid-template-columns: var(--desktop-columns) max-content; }
+  [data-desktop-row] > * { min-inline-size: 0; }
+  [data-row-date], [data-row-time], [data-row-league], [data-row-country] { color: ${({ theme }) => theme.color.mutedText}; }
+  [data-row-league], [data-row-country], [data-row-market], [data-row-odds], [data-row-probability], [data-row-result] {
+    display: flex; align-items: center; min-inline-size: 0; gap: 4px;
   }
-
-  &[data-desktop-design="metric-columns"] {
-    &&& [data-slip-summary] { grid-template-columns: minmax(13rem, 1fr) 10rem 9rem 14rem; column-gap: 0; padding-inline-end: 36px; }
-    &&& [data-summary-odds], &&& [data-summary-count], &&& [data-summary-average] {
-      align-self: stretch; justify-self: stretch; display: flex; justify-content: center; align-items: center;
-      border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline: 12px;
-    }
-    &&& [data-fixture-id] { grid-template-columns: minmax(0, 1fr) 13.5rem 7rem 10rem; column-gap: 0; }
-    &&& [data-pick], &&& [data-leg-odds], &&& [data-leg-probability] { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 12px; }
-    &&& [data-pick] { justify-content: center; }
-    &&& [data-leg-odds], &&& [data-leg-probability] { justify-content: center; }
+  [data-row-teams] {
+    display: flex; align-items: center; justify-content: flex-end;
+    min-inline-size: 0; gap: 5px; margin: 0; font-size: 0.8125rem; line-height: 1.25rem;
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
+  [data-home], [data-away] { display: flex; flex: 0 1 auto; align-items: center; min-inline-size: 0; max-inline-size: calc(50% - 0.75rem); gap: 4px; }
+  [data-home] { justify-content: flex-end; }
+  [data-home] [data-ellipsis-text] { text-align: end; }
+  [data-versus] { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  [data-truncation] { position: relative; display: inline-flex; flex: 1 1 auto; min-inline-size: 0; max-inline-size: 100%; }
+  [data-ellipsis-text] { display: block; min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  [data-truncation]:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  [data-team-logo] { --gh-logo-size: 0.8125rem; --gh-logo-font: 0.4375rem; --gh-logo-radius: 0; flex: none; }
+  [data-row-league] [data-team-logo] { --gh-logo-size: 0.75rem; }
+  [data-country-flag] { flex: none; inline-size: 1.125rem; block-size: 0.75rem; object-fit: contain; }
+  [data-row-market] { gap: 5px; }
+  [data-row-market] > strong { color: ${({ theme }) => theme.color.link}; font-size: 0.8125rem; }
+  [data-desktop-row] [data-market-label], [data-desktop-row] [data-number-label] { color: ${({ theme }) => theme.color.mutedText}; }
+  [data-row-odds], [data-row-probability] { justify-content: flex-end; }
+  [data-row-odds] strong, [data-row-probability] strong { font-size: 0.8125rem; }
+  [data-row-result] { gap: 4px; justify-content: flex-end; font-size: 0.75rem; }
+  [data-desktop-row][data-outcome="correct"] [data-row-result] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
+  [data-desktop-row][data-outcome="incorrect"] [data-row-result] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+  [data-desktop-row][data-outcome="void"] [data-row-result] { color: ${({ theme }) => theme.color.outcome.void.text}; }
 
-  &[data-desktop-design="odds-dock"] {
-    &&& [data-slip-summary] { grid-template-columns: minmax(13rem, 1fr) 9rem 8rem 12rem; column-gap: 20px; }
-    &&& [data-summary-odds] { justify-self: stretch; align-self: stretch; justify-content: center; background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; }
-    &&& [data-summary-odds] strong { font-size: 1rem; }
-    &&& [data-fixture-id] { grid-template-columns: minmax(0, 1fr) 12.5rem 6.25rem 9rem; }
-    &&& [data-leg-odds] { align-self: stretch; border-inline-start: 2px solid ${({ theme }) => theme.color.border}; padding-inline-start: 10px; }
-    &&& [data-leg-odds] strong { font-size: 0.9375rem; }
-    &&& [data-kickoff] { justify-content: flex-start; }
+  &[data-desktop-design="inline-columns"] {
+    [data-desktop-row] { column-gap: 0; --desktop-columns: 4rem 5.5rem minmax(5.5rem, 1fr) minmax(3.75rem, 0.7fr) minmax(8rem, 2fr) minmax(6.5rem, 1fr) 4.6rem 5rem; }
+    [data-desktop-row] > :not(:first-child) { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline: 6px; }
+    [data-row-odds], [data-row-probability] { justify-content: center; }
   }
-
-  &[data-desktop-design="prediction-focus"] {
-    &&& [data-slip-summary] { grid-template-columns: minmax(13rem, 1fr) 8rem 8rem 13rem; }
-    &&& [data-summary-identity] { color: ${({ theme }) => theme.color.link}; }
-    &&& [data-fixture-id] { grid-template-columns: minmax(0, 1fr) 13.5rem 6rem 9rem; column-gap: 15px; }
-    &&& [data-pick] { justify-content: space-between; padding-inline: 8px; background: ${({ theme }) => theme.color.brandSoft}; }
-    &&& [data-pick-label] { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-    &&& [data-meta] { color: ${({ theme }) => theme.color.text}; }
+  &[data-desktop-design="fixture-priority"] {
+    [data-desktop-row] { --desktop-columns: 3.5rem 5rem minmax(4.75rem, 0.8fr) minmax(3.25rem, 0.5fr) minmax(9rem, 2.7fr) minmax(6rem, 0.9fr) 4.2rem 4.8rem; }
+    [data-row-teams] { border-inline: 2px solid ${({ theme }) => theme.color.border}; padding-inline: 7px; }
   }
-
-  &[data-desktop-design="probability-focus"] {
-    &&& [data-slip-summary] { border-inline-start: 3px solid ${({ theme }) => theme.color.brand}; grid-template-columns: minmax(13rem, 1fr) 8rem 8rem 13rem; }
-    &&& [data-summary-average] strong { color: ${({ theme }) => theme.color.link}; font-size: 1rem; }
-    &&& [data-fixture-id] { grid-template-columns: minmax(0, 1fr) 12rem 6rem 10rem; }
-    &&& [data-leg-probability] { align-self: stretch; border-inline-start: 2px solid ${({ theme }) => theme.color.border}; padding-inline-start: 9px; }
-    &&& [data-leg-probability] strong { color: ${({ theme }) => theme.color.link}; font-size: 0.9375rem; }
-    &&& [data-kickoff] { justify-content: flex-start; }
+  &[data-desktop-design="market-panel"] {
+    [data-desktop-row] { --desktop-columns: 3.5rem 5rem minmax(5rem, 0.9fr) minmax(3.5rem, 0.6fr) minmax(8rem, 1.9fr) minmax(7rem, 1.1fr) 4.2rem 4.8rem; min-block-size: 2.375rem; }
+    [data-row-market] { align-self: stretch; justify-content: center; padding-inline: 5px; background: ${({ theme }) => theme.color.brandSoft}; }
   }
-
-  &[data-desktop-design="ticket-gutter"] {
-    &&& [data-slip-summary] { border-inline-start: 4px solid ${({ theme }) => theme.color.brand}; padding-inline-start: 13px; }
-    &&& [data-fixture-id] { padding-inline-start: 38px; grid-template-columns: minmax(0, 1fr) 12rem 6rem 9rem; }
-    &&& [data-leg-number] { display: grid; place-items: center; position: absolute; inset-inline-start: 0; inset-block: 0; inline-size: 27px; color: ${({ theme }) => theme.color.mutedText}; border-inline-end: 1px dashed ${({ theme }) => theme.color.border}; font-variant-numeric: tabular-nums; }
-    &&& [data-summary-identity] { padding-inline-start: 17px; }
-    &&& [data-kickoff] { justify-content: flex-start; }
+  &[data-desktop-design="odds-anchor"] {
+    [data-desktop-row] { --desktop-columns: 3.5rem 5rem minmax(5rem, 1fr) minmax(3.5rem, 0.6fr) minmax(8rem, 2fr) minmax(6.5rem, 0.95fr) 4.5rem 4.8rem; }
+    [data-row-odds] { align-self: stretch; padding-inline: 5px; background: ${({ theme }) => theme.color.surfaceMuted}; border-inline-start: 2px solid ${({ theme }) => theme.color.border}; }
+    [data-row-odds] strong { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   }
-
-  &[data-desktop-design="banded-register"] {
-    &&& [data-slip-summary] { background: ${({ theme }) => theme.color.surface}; border-block-end-color: ${({ theme }) => theme.color.controlBorder}; }
-    &&& li:nth-child(even) [data-fixture-id] { background: ${({ theme }) => theme.color.cardHeader}; }
-    &&& li + li { border-block-start-color: transparent; }
-    &&& [data-fixture-id] { padding-block: 5px; row-gap: 2px; min-block-size: 48px; grid-template-columns: minmax(0, 1fr) 12rem 6rem 9rem; }
-    &&& [data-result] { inset-block-start: 5px; }
-    &&& [data-meta] { font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  &[data-desktop-design="probability-anchor"] {
+    [data-row-probability] { align-self: stretch; border-inline-start: 2px solid ${({ theme }) => theme.color.brand}; padding-inline-start: 6px; }
+    [data-row-probability] strong { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   }
-
-  &[data-desktop-design="club-centre"] {
-    &&& [data-slip-summary] { grid-template-columns: minmax(13rem, 1fr) 10rem 9rem 13rem; column-gap: 12px; }
-    &&& [data-summary-odds], &&& [data-summary-count], &&& [data-summary-average] { justify-self: center; }
-    &&& [data-fixture-id] { grid-template-columns: minmax(0, 1fr) 12rem 6rem 9rem; }
-    &&& [data-teams] { justify-content: center; }
-    &&& [data-meta] { justify-content: center; }
-    &&& [data-pick] { justify-content: center; }
-    &&& [data-leg-odds], &&& [data-leg-probability] { justify-content: center; }
+  &[data-desktop-design="country-rail"] {
+    [data-desktop-row] { --desktop-columns: 3.5rem 5rem minmax(5rem, 1fr) minmax(4.5rem, 0.95fr) minmax(8rem, 1.9fr) minmax(6rem, 0.85fr) 4.2rem 4.8rem; }
+    [data-row-country] { border-inline-end: 1px solid ${({ theme }) => theme.color.border}; padding-inline-end: 6px; }
+    [data-row-league] { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   }
-
-  &[data-desktop-design="rail-divider"] {
-    &&& [data-slip-summary] { column-gap: 16px; background: ${({ theme }) => theme.color.surface}; }
-    &&& [data-summary-odds], &&& [data-summary-count], &&& [data-summary-average] { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 16px; }
-    &&& [data-fixture-id] { grid-template-columns: minmax(0, 1fr) 12.75rem 6.5rem 9.75rem; column-gap: 12px; }
-    &&& [data-pick], &&& [data-leg-odds], &&& [data-leg-probability] { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 12px; }
-    &&& [data-meta] { padding-inline-start: 3px; }
+  &[data-desktop-design="alternating-lines"] {
+    li:nth-child(even) [data-desktop-row] { background: ${({ theme }) => theme.color.cardHeader}; }
+    li + li { border-block-start-color: transparent; }
+    [data-desktop-row] { min-block-size: 2.125rem; padding-block: 3px; }
   }
-
+  &[data-desktop-design="subtle-dividers"] {
+    [data-row-country], [data-row-market], [data-row-odds] { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 6px; }
+    [data-desktop-row] { --desktop-columns: 3.5rem 5rem minmax(5rem, 1fr) minmax(4rem, 0.65fr) minmax(8rem, 2fr) minmax(6.5rem, 1fr) 4.5rem 4.8rem; }
+  }
   &[data-desktop-design="minimal-line"] {
-    &&& [data-compact-slip] { border-inline: 0; }
-    &&& [data-slip-summary] { background: ${({ theme }) => theme.color.surface}; column-gap: 20px; padding-inline-start: 8px; }
-    &&& [data-summary-fact] { flex-direction: row-reverse; gap: 5px; }
-    &&& [data-fixture-id] { padding: 4px 8px; row-gap: 0; min-block-size: 44px; grid-template-columns: minmax(0, 1fr) 12rem 6rem 9rem; }
-    &&& [data-leg-odds], &&& [data-leg-probability] { flex-direction: row-reverse; justify-content: flex-start; gap: 5px; }
-    &&& [data-result] { inset-block-start: 4px; inset-inline-end: 8px; }
-    &&& [data-meta] { font-size: 0.75rem; }
+    [data-desktop-row] { min-block-size: 2rem; padding: 3px 10px; column-gap: 6px; }
+    [data-row-odds] strong, [data-row-probability] strong { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  }
+
+  @media (pointer: coarse) {
+    &&& [data-slip-summary] { min-block-size: 44px; block-size: max(44px, 2.25rem); }
+    [data-desktop-row] { min-block-size: 44px; }
   }
 `;

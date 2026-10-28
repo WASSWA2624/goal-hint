@@ -3,7 +3,6 @@
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
 import { darkTheme, lightTheme } from "@/styles/theme";
-import { compactSlipScenarios, type CompactSlipScenario } from "./compact-slip-preview-data";
 import { desktopSlipPreview } from "./desktop-slip-preview-data";
 import { desktopSlipDesigns, type DesktopSlipVariant } from "./desktop-slip-review/designs";
 import { DesktopSlipSample } from "./desktop-slip-review/desktop-slip-sample";
@@ -34,8 +33,6 @@ const Toolbar = styled.div`
   button, select { min-block-size: 44px; padding: 8px 10px; cursor: pointer; border: 1px solid ${({ theme }) => theme.color.controlBorder}; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; }
   button + button { border-inline-start: 0; }
   button[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border-color: ${({ theme }) => theme.color.brand}; }
-  label[data-rank-control] { display: flex; align-items: center; gap: 7px; min-block-size: 44px; font-size: 0.75rem; cursor: pointer; }
-  input { inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
   @media (max-width: 50rem) { position: static; }
 `;
 const Gallery = styled.div`
@@ -54,8 +51,8 @@ const ScrollArea = styled.div`
   background: ${({ theme }) => theme.color.surfaceMuted};
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
-const Canvas = styled.div<{ $width: number }>`
-  inline-size: ${({ $width }) => $width}px; min-inline-size: 60rem; max-inline-size: none;
+const Canvas = styled.div`
+  inline-size: 100%; min-inline-size: 60rem; max-inline-size: none;
   display: grid; gap: 7px; padding: 12px; margin-inline: auto;
   > [data-canvas-context] { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block-end: 5px; }
   > [data-canvas-context] strong { font-size: 0.8125rem; }
@@ -72,19 +69,16 @@ const Footer = styled.p`
 /** Only the review canvas uses desktop layout wrappers; live and mobile displays remain unchanged. */
 export function DesktopSlipGallery({ locale }: { locale: string }) {
   const [focused, setFocused] = useState<DesktopSlipVariant | "all">("all");
-  const [scenario, setScenario] = useState<CompactSlipScenario>("standard");
   const [context, setContext] = useState<"best" | "builder">("best");
   const [mode, setMode] = useState<"light" | "dark">("light");
-  const [width, setWidth] = useState(1120);
-  const [showRank, setShowRank] = useState(true);
-  const sample = desktopSlipPreview(scenario);
+  const sample = desktopSlipPreview();
   const options = focused === "all" ? desktopSlipDesigns : desktopSlipDesigns.filter((design) => design.id === focused);
   return <ThemeProvider theme={mode === "dark" ? darkTheme : lightTheme}>
     <Review data-desktop-slip-gallery>
       <Intro>
         <p data-eyebrow>Goal Hint · Desktop design review</p>
-        <h1>Compact desktop slips</h1>
-        <p>Ten options with a single-row slip header and two rows per match. Compare collapsed and expanded states, then choose a design number. Click any slip header to toggle it.</p>
+        <h1>Single-line desktop slips</h1>
+        <p>Ten match-row variants with the same slimmer design 01 header. Each row reads from date and time through league, country, teams, market, odds and probability. Compare collapsed and expanded states, then choose a design number.</p>
         <p>These are desktop canvases at actual size. On a smaller window, scroll within a sample to see its full width.</p>
       </Intro>
       <Toolbar aria-label="Desktop preview controls">
@@ -96,13 +90,6 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
           <option value="all">Compare all 10</option>
           {desktopSlipDesigns.map((design, index) => <option key={design.id} value={design.id}>{String(index + 1).padStart(2, "0")} · {design.name}</option>)}
         </select></label>
-        <label><span>Sample</span><select value={scenario} onChange={(event) => setScenario(event.target.value as CompactSlipScenario)}>
-          {compactSlipScenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </select></label>
-        <label><span>Canvas width</span><select value={width} onChange={(event) => setWidth(Number(event.target.value))}>
-          {[960, 1120, 1360].map((value) => <option key={value} value={value}>{value}px</option>)}
-        </select></label>
-        <label data-rank-control><input type="checkbox" checked={showRank} onChange={(event) => setShowRank(event.target.checked)} />Show rank</label>
         <fieldset><legend>Appearance</legend><div>
           <button type="button" aria-pressed={mode === "light"} onClick={() => setMode("light")}>Light</button>
           <button type="button" aria-pressed={mode === "dark"} onClick={() => setMode("dark")}>Dark</button>
@@ -117,18 +104,18 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
               <button type="button" onClick={() => setFocused(focused === "all" ? design.id : "all")} aria-label={focused === "all" ? `Inspect ${design.name}` : "Compare all 10 designs"}>{focused === "all" ? "Inspect" : "All 10"}</button>
             </header>
             <ScrollArea tabIndex={0} role="region" aria-label={`${design.name} desktop canvas`} data-desktop-scroll>
-              <Canvas $width={width} data-desktop-canvas key={`${scenario}-${context}-${design.id}`}>
-                <div data-canvas-context><strong>{context === "best" ? "Best slips" : "Slip builder"}</strong><span>Sample · {sample.slip.selections.length} selections · {width}px canvas</span></div>
+              <Canvas data-desktop-canvas key={`${context}-${design.id}`}>
+                <div data-canvas-context><strong>{context === "best" ? "Best slips" : "Slip builder"}</strong><span>Sample · {sample.slip.selections.length} selections</span></div>
                 <p>Collapsed by default</p>
-                <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} showRank={showRank} />
+                <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} />
                 <p>Expanded example</p>
-                <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} showRank={showRank} initiallyOpen />
+                <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} initiallyOpen />
               </Canvas>
             </ScrollArea>
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative fixtures, picks and generic crests for design review. Average match probability is the mean of the individual selections, not the chance that every selection wins. The current mobile and live desktop displays stay in place until a desktop option is chosen. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
+      <Footer>Illustrative fixtures, picks and generic crests for design review. Hover or focus a shortened name to read its full text; Escape closes the tooltip. Average match probability is the mean of the individual selections, not the chance that every selection wins. The current mobile and live desktop displays stay in place until a desktop option is chosen. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }

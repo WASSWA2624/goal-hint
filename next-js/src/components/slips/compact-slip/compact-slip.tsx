@@ -12,15 +12,10 @@ import { predictionDescription, predictionLabel } from "@/domain/prediction-labe
 import type { SavedSlipView } from "@/domain/saved-slips";
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
 import { slipSelectionCard } from "@/domain/slip-card";
-import { createMessages, type Messages } from "@/i18n/messages";
+import { createMessages } from "@/i18n/messages";
+import { formatSlipProbability } from "../slip-format";
 import type { CompactSlipVariant } from "./designs";
 import { CompactCard, MatchRow } from "./compact-slip-styles";
-
-function probabilityLabel(value: number, messages: Messages): string {
-  if (value > 0 && Math.round(value * 1000) === 0) return messages.text("probability.compact.less-than-one");
-  if (value < 1 && Math.round(value * 1000) === 1000) return messages.text("probability.compact.more-than-ninety-nine");
-  return messages.number(value, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
 
 function SelectionRow({ selection, position, locale, result, analysisLinks, showLogos }: {
   selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
@@ -58,7 +53,7 @@ function SelectionRow({ selection, position, locale, result, analysisLinks, show
         <VisuallyHidden>{description}</VisuallyHidden>
       </span>
       <span data-leg-odds id={`${id}-odds`}><span data-number-label>{messages.text("slips.odds")}</span><strong>{selection.odds}</strong></span>
-      <span data-leg-probability id={`${id}-probability`}><span data-number-label>{messages.text("slips.probability")}</span><strong>{probabilityLabel(selection.probability, messages)}</strong></span>
+      <span data-leg-probability id={`${id}-probability`}><span data-number-label>{messages.text("slips.probability")}</span><strong>{formatSlipProbability(selection.probability, messages)}</strong></span>
       {result && <span data-result id={`${id}-result`}>
         <span data-outcome-label>{outcomeLabel}</span>
         {fixture.score && <span data-saved-score title={messages.text("match.regulationScoreNote")}><VisuallyHidden>{messages.text("match.regulationScoreNote")}: </VisuallyHidden>{messages.number(fixture.score.home)}–{messages.number(fixture.score.away)}</span>}
@@ -84,7 +79,7 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
         <span data-summary-odds data-summary-fact><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{totalOdds}</strong></span>
         <span data-summary-average data-summary-fact title={messages.text("slips.averageHint")}>
           <span data-fact-label aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}: </VisuallyHidden>
-          <strong>{probabilityLabel(averageProbability, messages)}</strong></span>
+          <strong>{formatSlipProbability(averageProbability, messages)}</strong></span>
         <span data-summary-count><span aria-hidden="true">{messages.plural("slips.selections", selectionCount)}</span>
           <VisuallyHidden>{messages.text("slips.selectionCount")}: {messages.number(selectionCount)}</VisuallyHidden></span>
         {collapsible && <span data-toggle-chevron aria-hidden="true" />}
