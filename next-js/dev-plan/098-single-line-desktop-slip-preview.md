@@ -19,6 +19,8 @@
 - Keep every variant's header identical and vary only match-row presentation.
 - Simplify the preview controls to context, design navigation and appearance;
   include a mix of short and long names in the sample records.
+- Build the review in its own ignored folder so application builds cannot
+  replace the running preview's manifests or assets.
 - Retain private configurations, stashes and detached worktrees.
 
 ## Verification
@@ -40,3 +42,7 @@
 - Separate mobile-preview work appeared during this task and is preserved;
   only the desktop review and equivalent shared probability formatter extraction
   belong to this change.
+- An application rebuild replaced a manifest used by the first background
+  preview. The isolated review build and its production browser smoke test now
+  pass independently, including all ten options, 36px headers and focus tooltips.
+  The review remains on port 3120 without analytics or offline startup.

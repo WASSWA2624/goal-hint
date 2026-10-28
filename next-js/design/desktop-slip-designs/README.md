@@ -43,11 +43,17 @@ layout. The mobile and live desktop layouts remain unchanged until the owner
 selects a desktop design for integration. No providers or private slip APIs are
 called by these samples.
 
-To start the application directly from `next-js/`:
+To keep reviews available while the main application is being built, run an
+isolated review from `next-js/`:
 
 ```powershell
-node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3000
+python scripts/preview-slip-designs.py --serve --port 3120
 ```
+
+This builds into ignored `.tmp/slip-design-review/` and serves both review routes
+without account, analytics or offline startup. Subsequent application builds do
+not overwrite its files. Use `--reuse` to serve the last review build, or omit
+that flag to include source changes. No private environment files are copied.
 
 Use an existing running server when available. Layout screenshots and browser
 check scripts are generated in ignored `output/playwright/desktop-slips/` and
