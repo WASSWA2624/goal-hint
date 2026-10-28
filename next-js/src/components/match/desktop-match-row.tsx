@@ -55,14 +55,20 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
   const title = `${home} ${m.text("match.versus")} ${away}`;
   const league = competition.name?.trim() || m.text("match.competitionUnknown"), country = countryDisplayName(competition.country) || "—";
   const flag = offline ? null : countryFlagAsset(competition.country);
+  const detailsHref = offline ? undefined : analysisHref;
   const iso = kickoffAt === null ? undefined : toUtcIsoString(kickoffAt);
   const scoreText = score ? `${m.number(score.home)}-${m.number(score.away)}` : status === "live" || final ? "–" : "VS";
   const scoreDescription = suppliedScoreDescription ?? (score ? m.text("match.scoreline", {
     label: m.text(status === "live" ? "match.liveScore" : "match.regulationScoreNote"), home, away,
     homeScore: m.number(score.home), awayScore: m.number(score.away),
   }) : status === "live" ? m.text("match.scoreUnknown") : final ? m.text("match.finalScoreUnknown") : undefined);
+  const scoreTitle = score && status !== "live" ? suppliedScoreDescription ?? m.text("match.regulationScoreNote") : undefined;
+  const clockTitle = regulationOnly ? m.text("match.regulationScoreNote") : clockText && clock ? m.text(`match.clock.${clock.phase}`) : undefined;
+  const kickoffTitle = kickoffAt === null ? undefined : m.reportingInstant(kickoffAt);
+  const analysisTitle = [...new Set([m.text("match.analysisLabel", { home, away }), kickoffTitle, scoreTitle, clockTitle,
+    marketDescription, m.text(`match.status.${status}`)].filter(Boolean))].join(" · ");
   const scoreContent = <span data-score id={`${id}-score`} aria-label={scoreDescription} data-saved-score={savedScore && score ? "" : undefined}
-    title={score && status !== "live" ? suppliedScoreDescription ?? m.text("match.regulationScoreNote") : undefined}>{scoreText}</span>;
+    title={scoreTitle}>{scoreText}</span>;
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   const descriptionIds = ["date", "time", "country", "league", "score", "clock", "market", "odds", "probability", "status", ...(details ? ["details"] : [])]
     .map((name) => `${id}-${name}`).join(" ");
@@ -70,26 +76,30 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     data-fixture-id={preview ? undefined : fixtureId} data-market={marketFamily} data-outcome={outcome} data-pick-state={pickState}
     data-status={status} data-match-state={matchState} role="group" tabIndex={-1} aria-labelledby={`${id}-teams`} aria-describedby={descriptionIds}>
     {kickoffAt === null ? <span data-row-date data-kickoff-unknown id={`${id}-date`}>{m.text("match.kickoffUnknown")}</span>
-      : <time data-row-date id={`${id}-date`} dateTime={iso} title={m.reportingInstant(kickoffAt)}>{m.shortKickoffDate(kickoffAt)}</time>}
+      : <time data-row-date id={`${id}-date`} dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt)}</time>}
     {kickoffAt === null ? <span data-row-time id={`${id}-time`} hidden>—</span>
       : <time data-row-time id={`${id}-time`} dateTime={iso}>{m.reportingTime(kickoffAt)} {m.timeZone(kickoffAt)}</time>}
-    <span data-row-country id={`${id}-country`}>{flag && <Image data-country-flag src={flag} alt="" width={18} height={12} loading="lazy" unoptimized />}<TruncatedText text={country} /></span>
-    <span data-row-league id={`${id}-league`}><TeamLogo name={league} url={offline ? undefined : competition.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText text={league} /></span>
+    <span data-row-country id={`${id}-country`}>{flag && <Image data-country-flag src={flag} alt="" width={18} height={12} loading="lazy" unoptimized />}<TruncatedText text={country} href={detailsHref} /></span>
+    <span data-row-league id={`${id}-league`}><TeamLogo name={league} url={offline ? undefined : competition.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText text={league} href={detailsHref} /></span>
     <Heading data-row-teams id={`${id}-teams`} aria-label={titleNote ? `${title}, ${titleNote}` : title}>
       {position !== undefined && <VisuallyHidden data-row-number>{m.number(position)}. </VisuallyHidden>}
-      <span data-home><TruncatedText text={home} /><TeamLogo name={home} url={offline ? undefined : homeTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /></span>
-      <span data-centre>{!offline && analysisHref ? <Link data-row-analysis data-match-analysis-link href={analysisHref} prefetch={false}
-        title={m.text("match.analysisLabel", { home, away })} aria-label={m.text("match.analysisLabel", { home, away })}>{scoreContent}</Link> : scoreContent}
+      <span data-home><TruncatedText text={home} href={detailsHref} /><TeamLogo name={home} url={offline ? undefined : homeTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /></span>
+      <span data-centre>{scoreContent}
         <span data-clock id={`${id}-clock`} aria-hidden={!clockText || undefined}
-          title={regulationOnly ? m.text("match.regulationScoreNote") : clockText && clock ? m.text(`match.clock.${clock.phase}`) : undefined}>
+          title={clockTitle}>
           {clockText}{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
         </span></span>
-      <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText text={away} /></span>
+      <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText text={away} href={detailsHref} /></span>
     </Heading>
     <span data-row-market id={`${id}-market`} title={marketDescription}>{market}</span>
     <span data-row-odds id={`${id}-odds`}><span data-number-label data-row-number-label>{m.text("slips.odds")}</span><strong>{odds}</strong></span>
     <span data-row-probability id={`${id}-probability`}><span data-number-label data-row-number-label aria-hidden="true">Prob.</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong></span>
     <span data-row-status id={`${id}-status`}>{statusContent ?? <><span data-match-label title={m.text(`match.status.${status}`)}>{matchLabel}</span><span data-outcome-label>{outcomeLabel}</span></>}</span>
     {details && <div data-row-details id={`${id}-details`}>{details}</div>}
+    {detailsHref && <Link data-row-analysis data-match-analysis-link href={detailsHref} prefetch={false}
+      aria-label={m.text("match.analysisLabel", { home, away })} aria-describedby={descriptionIds}
+      title={analysisTitle}>
+      <VisuallyHidden>{m.text("match.analysisLabel", { home, away })}</VisuallyHidden>
+    </Link>}
   </div>;
 }

@@ -2,14 +2,21 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
+import Link from "@/components/navigation/navigation-link";
 
-const TextControl = styled.button`
+const textControlStyles = css`
   display: block; min-inline-size: 0; max-inline-size: 100%; padding: 0; margin: 0;
   border: 0; background: none; color: inherit; font: inherit; line-height: inherit; text-align: start;
   cursor: default;
   &[tabindex="0"] { cursor: help; }
   > [data-ellipsis-text] { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+`;
+const TextControl = styled.button`${textControlStyles}`;
+const TextLink = styled(Link)`
+  ${textControlStyles}
+  text-decoration: none;
+  && { cursor: pointer; }
 `;
 
 const Tooltip = styled.span`
@@ -20,7 +27,7 @@ const Tooltip = styled.span`
 `;
 
 function FullTextTooltip({ id, text, anchor, onEnter, onLeave }: {
-  id: string; text: string; anchor: RefObject<HTMLButtonElement | null>; onEnter: () => void; onLeave: () => void;
+  id: string; text: string; anchor: RefObject<HTMLElement | null>; onEnter: () => void; onLeave: () => void;
 }) {
   const tip = useRef<HTMLSpanElement>(null);
   const [position, setPosition] = useState({ left: 8, top: 8 });
@@ -36,8 +43,8 @@ function FullTextTooltip({ id, text, anchor, onEnter, onLeave }: {
 }
 
 /** Only clipped names enter the tab order; their full text stays in the DOM and is visible on focus or hover. */
-export function TruncatedText({ text }: { text: string }) {
-  const trigger = useRef<HTMLButtonElement>(null), label = useRef<HTMLSpanElement>(null), id = useId();
+export function TruncatedText({ text, href }: { text: string; href?: string | undefined }) {
+  const trigger = useRef<HTMLButtonElement | HTMLAnchorElement>(null), label = useRef<HTMLSpanElement>(null), id = useId();
   const hovered = useRef(false), tooltipHovered = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [truncated, setTruncated] = useState(false), [open, setOpen] = useState(false);
   const cancelClose = () => { if (timer.current !== null) { clearTimeout(timer.current); timer.current = null; } };
@@ -64,7 +71,7 @@ export function TruncatedText({ text }: { text: string }) {
     const observer = new ResizeObserver(measure);
     observer.observe(element); measure();
     return () => { observer.disconnect(); if (timer.current !== null) clearTimeout(timer.current); };
-  }, [text]);
+  }, [text, href]);
   useEffect(() => {
     if (!open) return;
     const dismiss = () => setOpen(false);
@@ -74,12 +81,17 @@ export function TruncatedText({ text }: { text: string }) {
     window.addEventListener("resize", dismiss);
     return () => { document.removeEventListener("keydown", key); document.removeEventListener("scroll", dismiss, true); window.removeEventListener("resize", dismiss); };
   }, [open]);
+  const controlProps = {
+    "data-truncation": "", "data-full-text": text, title: "", tabIndex: truncated ? 0 : -1,
+    "aria-label": text, "aria-describedby": open ? id : undefined, onFocus: show, onBlur: scheduleClose,
+    onMouseEnter: () => { hovered.current = true; show(); },
+    onMouseLeave: () => { hovered.current = false; scheduleClose(); },
+  };
+  const content = <span ref={label} data-ellipsis-text title="">{text}</span>;
   return <>
-    <TextControl ref={trigger} type="button" data-truncation data-full-text={text} title="" tabIndex={truncated ? 0 : -1}
-      aria-label={text} aria-describedby={open ? id : undefined} onFocus={show} onBlur={scheduleClose}
-      onMouseEnter={() => { hovered.current = true; show(); }} onMouseLeave={() => { hovered.current = false; scheduleClose(); }} onClick={show}>
-      <span ref={label} data-ellipsis-text title="">{text}</span>
-    </TextControl>
+    {href ? <TextLink {...controlProps} ref={(element) => { trigger.current = element; }} href={href} prefetch={false}
+      data-match-link-alias>{content}</TextLink>
+      : <TextControl {...controlProps} ref={(element) => { trigger.current = element; }} type="button" onClick={show}>{content}</TextControl>}
     {open && <FullTextTooltip id={id} text={text} anchor={trigger}
       onEnter={() => { tooltipHovered.current = true; cancelClose(); }} onLeave={() => { tooltipHovered.current = false; scheduleClose(); }} />}
   </>;

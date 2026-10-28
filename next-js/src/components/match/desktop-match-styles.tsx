@@ -13,6 +13,11 @@ export const desktopMatchBaseStyles = css`
     white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums;
   }
   [data-desktop-row] > * { min-inline-size: 0; }
+  [data-desktop-row]:has(> [data-row-analysis]) { cursor: pointer; }
+  [data-desktop-row] :is(a:not([data-row-analysis]), button, input, select, textarea) { position: relative; z-index: 2; }
+  @media (hover: hover) {
+    [data-desktop-row]:has(> [data-row-analysis]):hover { background: ${({ theme }) => theme.color.rowHover}; }
+  }
   [data-desktop-row]:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
   [data-row-time] { white-space: normal; overflow-wrap: anywhere; }
   [data-row-date], [data-row-time], [data-row-league], [data-row-country] { color: ${({ theme }) => theme.color.mutedText}; }
@@ -134,15 +139,11 @@ export const alignedLedgerStyles = css`
   [data-outcome-label] { color: var(--review-outcome-text); font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 
   [data-row-analysis] {
-    position: absolute; inset-inline-start: 50%; inset-block-start: 50%; transform: translate(-50%, -50%);
-    display: inline-flex; align-items: center; justify-content: center;
-    min-inline-size: 24px; min-block-size: 24px; color: inherit; font: inherit; text-decoration: none;
-    &:hover { text-decoration: underline; }
-    &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 1px; }
+    position: absolute; inset: 0; z-index: 1; color: inherit; text-decoration: none;
+    &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
   }
   [data-clock] { pointer-events: none; }
   @media (pointer: coarse) {
     [data-desktop-row] { min-block-size: 44px; }
-    [data-row-analysis] { min-inline-size: 44px; min-block-size: 44px; }
   }
 `;

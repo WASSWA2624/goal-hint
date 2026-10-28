@@ -87,13 +87,17 @@ targets. No separate desktop `#` column is introduced: one-based feed positions
 remain available in accessible text, and the existing results toolbar keeps the
 visible match range/count.
 
-Team, country and league names remain on one line. A clipped value exposes its
-complete text through the shared tooltip instead of discarding it. The score/VS
-analysis link uses `matchHref`, the canonical fixture ID and supplied slug, with
-prefetch disabled. It remains separate from name tooltip controls. Heading
-levels and the similar-result title note remain intact. The group describes its
-date, time, competition, score, market, odds, probability and status; missing
-kickoff or score never receives an invented time or value.
+The complete row opens the corresponding match details through a native analysis
+link using `matchHref`, the canonical fixture ID and supplied slug, with prefetch
+disabled. Its contextual accessible name identifies both teams. Team, country
+and league names remain on one line; their native link aliases share that
+destination while preserving the complete-text tooltip on hover and focus.
+Only clipped aliases add a keyboard stop. The primary row link remains the
+keyboard destination for the whole match, supports standard modified-click and
+new-tab behavior, and receives restored focus after returning from details.
+Heading levels and the similar-result title note remain intact. The group
+describes its date, time, competition, score, market, odds, probability and
+status; missing kickoff or score never receives an invented time or value.
 
 ### Phone and tablet: Clean ledger (below 64rem)
 
@@ -112,8 +116,9 @@ The existing compact three-row cards remain consistent with slip selections:
 
 The single-column native list retains 6px card spacing, square themed frames,
 no card shadow and offscreen `content-visibility` optimization. Cards reflow at
-narrow effective widths or enlarged text without clipping. The phone analysis
-link remains a full-card target with the contextual accessible team names.
+narrow effective widths or enlarged text without clipping. The phone/tablet
+analysis link remains a full-card target with the contextual accessible team
+names and native keyboard and new-tab behavior.
 
 ## Time, images and offline behavior
 
@@ -132,9 +137,11 @@ preloads competing with the page's own font, CSS and scripts.
 
 `offline` retains the anonymous saved-view boundary: no forecasts, external
 image requests, live claim or match-detail action. The shared desktop row
-receives only the saved presentation and no analysis link. Existing generic
-prediction labels, goal lines, hidden score/outcome descriptions, theme contrast
-and missing-data semantics remain unchanged.
+receives only the saved presentation and no analysis link or metadata link
+aliases. Callers that disable analysis links retain the same non-navigable
+presentation. Existing generic prediction labels, goal lines, hidden
+score/outcome descriptions, theme contrast and missing-data semantics remain
+unchanged.
 
 ## Versioned public data
 

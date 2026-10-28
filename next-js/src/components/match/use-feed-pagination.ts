@@ -106,7 +106,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const frame = requestAnimationFrame(() => {
       const article = target.fixtureId ? root.current?.querySelector<HTMLElement>(`[data-fixture-id="${CSS.escape(target.fixtureId)}"]`) : null;
       const focus = target.retry ? root.current?.querySelector<HTMLElement>("[data-pagination-retry]")
-        : target.checkpoint ? article?.querySelector<HTMLElement>("a") ?? root.current : article ?? root.current;
+        : target.checkpoint ? article?.querySelector<HTMLElement>("[data-match-analysis-link]") ?? article?.querySelector<HTMLElement>("a") ?? root.current
+        : article ?? root.current;
       focus?.focus({ preventScroll: true });
       if (target.checkpoint) window.scrollTo({ top: target.checkpoint.scrollY, behavior: "instant" });
       save();
