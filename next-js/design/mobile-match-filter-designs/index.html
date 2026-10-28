@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Goal Hint · Mobile filter design review</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="gallery.css" />
+    <script type="module" src="gallery.js"></script>
+  </head>
+  <body>
+    <header class="review-header">
+      <a class="wordmark" href="./" aria-label="Goal Hint mobile design review"
+        >Goal<span>Hint</span
+        ><span class="wordmark-divider" aria-hidden="true"></span
+        ><small>Design review</small></a
+      >
+      <span class="scope-label"
+        ><span class="scope-dot" aria-hidden="true"></span>Mobile · 10
+        concepts</span
+      >
+    </header>
+    <div class="review-layout">
+      <aside class="concept-sidebar" aria-label="Choose a design">
+        <div class="sidebar-heading">
+          <span class="eyebrow">The collection</span
+          ><span class="collection-count">01—10</span>
+        </div>
+        <nav
+          id="concept-nav"
+          class="concept-nav"
+          aria-label="Mobile filter concepts"
+        ></nav>
+        <div class="shortlist-panel">
+          <div class="shortlist-heading">
+            <span class="eyebrow">Your shortlist</span
+            ><span id="shortlist-count" class="shortlist-count">0</span>
+          </div>
+          <div id="shortlist-list" class="shortlist-list"></div>
+          <button id="clear-shortlist" class="text-button" type="button" hidden>
+            Clear shortlist
+          </button>
+        </div>
+        <p class="sidebar-note">
+          Explore the layouts, try the controls, and keep the ones you like.
+        </p>
+      </aside>
+      <main class="review-main" id="main">
+        <div class="review-intro">
+          <div>
+            <p class="eyebrow">Matches / mobile filters</p>
+            <h1>Less chrome. More matches.</h1>
+            <p class="intro-copy">
+              Ten ways to simplify search and filtering, in the style of your
+              match cards.
+            </p>
+          </div>
+          <span class="prototype-label">Interactive prototypes</span>
+        </div>
+        <div class="review-toolbar" aria-label="Preview settings">
+          <div class="view-switch" role="group" aria-label="Comparison view">
+            <button type="button" data-mode="focus" aria-pressed="true">
+              Focus</button
+            ><button type="button" data-mode="all" aria-pressed="false">
+              All ten
+            </button>
+          </div>
+          <label class="width-control"
+            >Phone width<select id="phone-width">
+              <option value="320">320 px</option>
+              <option value="360">360 px</option>
+              <option value="390" selected>390 px</option>
+              <option value="430">430 px</option>
+            </select></label
+          >
+          <div class="theme-switch" role="group" aria-label="Phone appearance">
+            <button
+              type="button"
+              data-theme="light"
+              aria-pressed="true"
+              title="Light appearance"
+            >
+              Light</button
+            ><button
+              type="button"
+              data-theme="dark"
+              aria-pressed="false"
+              title="Dark appearance"
+            >
+              Dark
+            </button>
+          </div>
+          <button type="button" id="reset-demo" class="reset-demo">
+            Reset demos
+          </button>
+        </div>
+        <div class="preview-status">
+          <span id="view-caption">01 / 10 · Compact stack</span
+          ><span>Sample matches · Production screen unchanged</span>
+        </div>
+        <div id="focus-view" class="focus-view">
+          <div class="focus-stage">
+            <div class="stage-ruler" aria-hidden="true">
+              <span></span><span id="ruler-width">390 px</span><span></span>
+            </div>
+            <div id="focus-phone" class="phone-frame"></div>
+            <a
+              id="open-phone"
+              class="open-phone"
+              href="sample.html?concept=1&amp;theme=light"
+              target="_blank"
+              rel="noopener"
+              >Open phone view <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <aside class="design-notes" aria-label="About this concept">
+            <p class="eyebrow" id="note-number">Concept 01</p>
+            <h2 id="note-name">Compact stack</h2>
+            <p id="note-summary" class="note-summary"></p>
+            <div id="measured-height" class="measured-height" hidden></div>
+            <button
+              type="button"
+              id="shortlist-toggle"
+              class="shortlist-toggle"
+              aria-pressed="false"
+            >
+              <span aria-hidden="true">☆</span
+              ><span>Shortlist this design</span>
+            </button>
+            <div class="note-detail">
+              <h3>Why it works</h3>
+              <p id="note-benefit"></p>
+            </div>
+            <div class="note-detail">
+              <h3>The tradeoff</h3>
+              <p id="note-tradeoff"></p>
+            </div>
+            <div class="note-detail try-it">
+              <h3>Try it</h3>
+              <p id="note-hint"></p>
+            </div>
+            <div class="concept-pagination">
+              <button
+                id="previous-concept"
+                type="button"
+                aria-label="Previous concept"
+              >
+                ← Previous</button
+              ><button
+                id="next-concept"
+                type="button"
+                aria-label="Next concept"
+              >
+                Next →
+              </button>
+            </div>
+          </aside>
+        </div>
+        <div id="all-view" class="all-view" hidden></div>
+        <footer class="review-footer">
+          <span>Same match cards. Different ways to find your match.</span
+          ><span>Choose a concept before implementation.</span>
+        </footer>
+      </main>
+    </div>
+    <div
+      id="announcement"
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+    ></div>
+  </body>
+</html>
