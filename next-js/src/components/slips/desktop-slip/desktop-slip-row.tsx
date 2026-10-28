@@ -52,7 +52,7 @@ function FullTextTooltip({ id, text, anchor, onEnter, onLeave }: {
 }
 
 /** Only clipped names enter the tab order; their full text stays in the DOM and is visible on focus or hover. */
-function TruncatedText({ text }: { text: string }) {
+export function TruncatedText({ text }: { text: string }) {
   const trigger = useRef<HTMLButtonElement>(null), label = useRef<HTMLSpanElement>(null), id = useId();
   const hovered = useRef(false), tooltipHovered = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [truncated, setTruncated] = useState(false), [open, setOpen] = useState(false);

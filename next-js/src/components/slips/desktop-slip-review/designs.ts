@@ -1,15 +1,15 @@
-/** Every one-line candidate shares the approved header; only match-row presentation differs. */
+/** Desktop-only status concepts share the approved header, field order and fixed team anchors. */
 export const desktopSlipDesigns = [
-  { id: "balanced-ledger", name: "Balanced ledger", description: "A continuous match line with balanced space for every field." },
-  { id: "inline-columns", name: "Inline columns", description: "Aligned cells and fine dividers make the same facts easy to compare." },
-  { id: "fixture-priority", name: "Fixture priority", description: "More room for the two team names, with a quiet fixture divider." },
-  { id: "market-panel", name: "Market panel", description: "A compact market panel highlights the prediction beside the fixture." },
-  { id: "odds-anchor", name: "Odds anchor", description: "A restrained price block anchors the odds without stretching the row." },
-  { id: "probability-anchor", name: "Probability anchor", description: "A narrow accent rail makes each match probability easy to scan." },
-  { id: "country-rail", name: "Country rail", description: "More space for country and league information before the teams." },
-  { id: "alternating-lines", name: "Alternating lines", description: "Alternating flat backgrounds help follow longer slips at a compact height." },
-  { id: "subtle-dividers", name: "Subtle dividers", description: "Quiet separators group competition, fixture and prediction information." },
-  { id: "minimal-line", name: "Minimal line", description: "The tightest spacing and light numerical emphasis keep the line unobtrusive." },
+  { id: "aligned-ledger", name: "Aligned ledger", description: "Quiet dividers, a clock above the score, and a simple status label." },
+  { id: "score-box", name: "Score box", description: "A small square score panel keeps the result prominent between aligned crests." },
+  { id: "inline-clock", name: "Inline clock", description: "Elapsed time sits beside a fixed score anchor, leaving the match line open." },
+  { id: "status-rail", name: "Status rail", description: "A narrow outcome-coloured rail marks the equal-width final status cells." },
+  { id: "split-status", name: "Split status", description: "Match state and selection outcome occupy two clear, equal status slots." },
+  { id: "quiet-bands", name: "Quiet bands", description: "Alternating flat rows help follow long slips without adding vertical space." },
+  { id: "live-highlight", name: "Live highlight", description: "Live scores and clocks receive a restrained accent; completed results stay calm." },
+  { id: "match-bracket", name: "Match bracket", description: "Fine brackets frame the fixed score column between the two aligned team crests." },
+  { id: "outcome-block", name: "Outcome block", description: "A compact, flat colour block makes pending, won and lost selections easy to scan." },
+  { id: "fine-grid", name: "Fine grid", description: "Light column rules give every match the same precise, compact reading rhythm." },
 ] as const;
 
 export type DesktopSlipVariant = typeof desktopSlipDesigns[number]["id"];

@@ -3,7 +3,7 @@ import { DesktopSlipGallery } from "@/components/slips/desktop-slip-gallery";
 
 export const metadata: Metadata = {
   title: "Desktop slip designs | Goal Hint",
-  description: "Compare ten single-line desktop slip samples in collapsed and expanded states.",
+  description: "Compare ten compact desktop slip concepts with aligned teams, scores, match progress and selection outcomes.",
   robots: { index: false, follow: false },
 };
 

@@ -52,13 +52,15 @@ const ScrollArea = styled.div`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
 const Canvas = styled.div`
-  inline-size: 100%; min-inline-size: 60rem; max-inline-size: none;
-  display: grid; gap: 7px; padding: 12px; margin-inline: auto;
-  > [data-canvas-context] { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block-end: 5px; }
+  inline-size: 100%; min-inline-size: 64rem; max-inline-size: none;
+  display: grid; gap: 8px; padding: 10px; margin-inline: auto;
+  > [data-canvas-context] { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   > [data-canvas-context] strong { font-size: 0.8125rem; }
   > [data-canvas-context] span { font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; }
-  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
-  > p:not(:first-of-type) { margin-block-start: 5px; }
+  > [data-preview-guide] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.5; }
+`;
+const SlipGroup = styled.div`
+  display: grid; gap: 3px; min-inline-size: 0;
 `;
 const Footer = styled.p`
   max-inline-size: 88rem; margin: 28px auto 0; padding-block-start: 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
@@ -66,7 +68,7 @@ const Footer = styled.p`
   a { color: ${({ theme }) => theme.color.link}; }
 `;
 
-/** Review candidates reuse the production desktop rows within an isolated comparison canvas. */
+/** Status and score concepts remain isolated from the selected production and mobile displays. */
 export function DesktopSlipGallery({ locale }: { locale: string }) {
   const [focused, setFocused] = useState<DesktopSlipVariant | "all">("all");
   const [context, setContext] = useState<"best" | "builder">("best");
@@ -77,8 +79,8 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
     <Review data-desktop-slip-gallery>
       <Intro>
         <p data-eyebrow>Goal Hint · Desktop design review</p>
-        <h1>Single-line desktop slips</h1>
-        <p>Ten match-row variants with the same slimmer design 01 header. Each row reads from date and time through league, country, teams, market, odds and probability. Design 09, Subtle dividers, is now used on desktop with centred team-name pairs.</p>
+        <h1>Desktop slips · scores and status</h1>
+        <p>Ten new concepts with tighter slip spacing, fixed country and league columns, and teams aligned around a shared score or VS. Compare compact ways to show match progress and selection outcomes.</p>
         <p>These are desktop canvases at actual size. On a smaller window, scroll within a sample to see its full width.</p>
       </Intro>
       <Toolbar aria-label="Desktop preview controls">
@@ -106,16 +108,18 @@ export function DesktopSlipGallery({ locale }: { locale: string }) {
             <ScrollArea tabIndex={0} role="region" aria-label={`${design.name} desktop canvas`} data-desktop-scroll>
               <Canvas data-desktop-canvas key={`${context}-${design.id}`}>
                 <div data-canvas-context><strong>{context === "best" ? "Best slips" : "Slip builder"}</strong><span>Sample · {sample.slip.selections.length} selections</span></div>
-                <p>Collapsed by default</p>
-                <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} />
-                <p>Expanded example</p>
-                <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} initiallyOpen />
+                <p data-preview-guide>Two collapsed slips and one expanded example · Upcoming, live, half-time, won and lost selections</p>
+                <SlipGroup data-preview-slip-group>
+                  <DesktopSlipSample {...sample} index={0} locale={locale} variant={design.id} showRank={context === "best"} />
+                  <DesktopSlipSample {...sample} index={1} locale={locale} variant={design.id} showRank={context === "best"} />
+                  <DesktopSlipSample {...sample} index={2} locale={locale} variant={design.id} showRank={context === "best"} initiallyOpen />
+                </SlipGroup>
               </Canvas>
             </ScrollArea>
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative fixtures, picks and generic crests for design review. Hover or focus a shortened name to read its full text; Escape closes the tooltip. Average match probability is the mean of the individual selections, not the chance that every selection wins. Desktop Best slips and slip builder use design 09, Subtle dividers. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
+      <Footer>Preview only: fixtures, scores, clocks and outcomes are illustrative. These concepts do not change the current desktop implementation or the mobile layout. Hover or focus a shortened name for its full text; Escape closes the tooltip. Average match probability is the mean of the selections. <a href={`/${locale}/slips/designs`}>View the mobile samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }

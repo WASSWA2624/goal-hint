@@ -1,69 +1,63 @@
-# Single-line desktop slip layout review
+# Desktop slip score and status review
 
-Open `/en/slips/designs/desktop` on the running application, for example
-<http://127.0.0.1:3000/en/slips/designs/desktop>. The route uses illustrative
-records and local generic crests and is marked `noindex, nofollow`.
+Open `/en/slips/designs/desktop` on the running application, or the isolated
+review at <http://127.0.0.1:3120/en/slips/designs/desktop>. The route is marked
+`noindex, nofollow`.
+
+These ten new concepts are previews for selection. The current production
+Subtle dividers layout and mobile presentation remain unchanged.
 
 | Option | Layout |
 | --- | --- |
-| 01 | Balanced ledger |
-| 02 | Inline columns |
-| 03 | Fixture priority |
-| 04 | Market panel |
-| 05 | Odds anchor |
-| 06 | Probability anchor |
-| 07 | Country rail |
-| 08 | Alternating lines |
-| 09 | Subtle dividers |
-| 10 | Minimal line |
+| 01 | Aligned ledger |
+| 02 | Score box |
+| 03 | Inline clock |
+| 04 | Status rail |
+| 05 | Split status |
+| 06 | Quiet bands |
+| 07 | Live highlight |
+| 08 | Match bracket |
+| 09 | Outcome block |
+| 10 | Fine grid |
 
-Every option has one initially collapsed native disclosure and one expanded
-example. All ten reuse the approved Balanced ledger header, with its height
-reduced from 44px to 36px (44px for coarse pointers). Its color, typography,
-horizontal spacing, field order and alignment stay the same.
+All options retain the approved 36px native slip header (44px for coarse
+pointers). Each canvas shows two collapsed slips and one expanded slip with
+only 3px between them. The Best slips context includes rank; builder context
+omits it. Controls switch context, light/dark appearance and the inspected design.
 
-Each match is one horizontal line: short date such as **28 Oct**, 24-hour time
-and EAT, league/logo, country/flag, teams, market/prediction, individual odds and
-probability. The home crest follows its name immediately before **vs**; the away
-crest precedes its name. Long league/country/team labels use ellipsis. Hover or
-keyboard focus reveals full text; Escape dismisses the tooltip. Local sample
-crests and bundled country flags have text-height footprints.
+Each match reads **28-Oct**, **18:00 EAT**, country/flag, league/logo, teams and
+score/VS, market/prediction, odds, probability and final status. Date and time
+have a 4px column gap without a separator. The first separator follows time,
+before country. Country, league and status tracks have fixed widths of 5.75rem,
+7.25rem and 7rem respectively; country and league names truncate with ellipsis.
 
-Use **Inspect** or the design selector to compare one option. The only other
-controls switch Best slips/Slip builder and Light/Dark. Sample records include
-short and long names so truncation is visible without extra controls. Canvases
-fit the review surface down to a 960px minimum and scroll locally in smaller
-windows; enlarged text scales that minimum width.
+The teams use equal name tracks around a fixed score track. Home crests follow
+the home name and away crests precede the away name. Both crests and every
+VS/score align across rows, regardless of name length. Hover or keyboard focus
+reveals shortened names; Escape dismisses the tooltip. Flags and generic crests
+have text-height footprints.
 
-Desktop production slips now use **09 — Subtle dividers**, with centred
-intrinsic team-name pairs. Long names still shrink and ellipsize. The native
-desktop disclosure starts collapsed in Best slips, builder results and history;
-locked summaries share the same header and relevant access action. The existing
-64rem responsive hook selects one row implementation and preserves the selected
-phone layout. A desktop-only pending rule prevents an expanded-content flash
-before hydration; JavaScript-disabled browsers retain the server fallback.
+Five explicit illustrative states demonstrate upcoming/VS, live/1-0/30′,
+half-time/1-1/HT, finished/2-1/Won and finished/0-1/Lost. Match progress and
+selection outcome remain distinct. Clocks sit above or beside the score without
+adding another match row; fine-pointer rows stay 36px tall. All status cells
+have equal widths. Header odds and average probability are computed from the
+five sample selections.
 
-Production and preview share the desktop snapshot row, tooltip, base geometry
-and selected divider CSS. Production **vs** links open canonical match analysis
-without nesting links around full-name controls. Samples remain synthetic and
-non-navigating; no providers or private slip APIs are called by them.
+Samples do not request providers, live results or private slip APIs. Production
+snapshot rows and settlement behavior are unchanged. Only the existing tooltip
+component is exported for reuse by the review. The 64rem minimum desktop canvas
+scrolls locally in narrower windows.
 
-To keep reviews available while the main application is being built, run an
-isolated review from `next-js/`:
+To build and serve an isolated review from `next-js/`:
 
 ```powershell
 python scripts/preview-slip-designs.py --serve --port 3120
 ```
 
-This builds into ignored `.tmp/slip-design-review/` and serves both review routes
-without account, analytics or offline startup. Subsequent application builds do
-not overwrite its files. Use `--reuse` to serve the last review build, or omit
-that flag to include source changes. No private environment files are copied.
-
-Use an existing running server when available. Layout screenshots and browser
-check scripts are generated in ignored `output/playwright/desktop-slips/` and
-`.tmp/` directories rather than committed.
-
-Verify production snapshot rendering and locked-summary privacy with
-`python scripts/verify-desktop-slip-rendering.py`. Its isolated routes and
-browser checks are described in `tests/helpers/rendering/desktop-slips/README.md`.
+Use an existing running server when available. The script builds into ignored
+`.tmp/slip-design-review/` and serves both review routes without account,
+analytics or offline startup. Application builds do not overwrite its files.
+Use `--reuse` to serve its last build; omit that flag to include source changes.
+No private environment files are copied. Layout screenshots and geometry check
+scripts live in ignored `output/playwright/desktop-slips/` and `.tmp/` folders.
