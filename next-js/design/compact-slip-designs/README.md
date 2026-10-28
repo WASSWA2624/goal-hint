@@ -52,9 +52,11 @@ theme tokens across the ten candidates. `MobileSlipLayout` scopes presentation
 changes to the review. The samples use generic local crests and bundled country
 flags, without contacting providers for images.
 
-These are review candidates. Applying a selected design across production match
-and slip displays remains pending the owner's choice. Average match probability
-in the summary is the mean of the individual selection probabilities.
+Clean ledger (01) is the selected production layout. Best slips, generated
+slips, published slips and saved history use its shared row; mobile/tablet match
+feeds reuse its geometry and compact labels while retaining scores and access
+states. The remaining options stay available for comparison. Average match
+probability in the summary is the mean of the individual selection probabilities.
 
 Layout screenshots are generated in ignored `output/playwright/mobile-slips/`,
 with browser check scripts in `.tmp/`, rather than committed.

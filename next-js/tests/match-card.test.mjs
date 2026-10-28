@@ -4,6 +4,7 @@ import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
 import { cardResultStatus, hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
 import { mergeFixtureObservation } from "../src/domain/fixture-reconciliation.ts";
+import { compactLeagueName, compactMarketName, compactTeamName } from "../src/domain/compact-fixture-label.ts";
 import { marketRules, marketSelections, validateMarketGroup } from "../src/domain/markets.ts";
 import { isSafeRemoteImageUrl } from "../src/domain/remote-image.ts";
 import { createMessages } from "../src/i18n/messages.ts";
@@ -175,6 +176,39 @@ test("compact kickoff parts use the EAT reporting zone regardless of the visitor
   assert.equal(messages.reportingDay(Date.UTC(2026, 9, 16, 21, 30)), "Sat, Oct 17");
 });
 
+test("Clean ledger dates and AM/PM clocks agree across midnight, noon and an explicit display zone", () => {
+  const messages = createMessages();
+  for (const [instant, date, time] of [
+    [Date.UTC(2026, 9, 28, 6), "28-Oct", "9:00 AM"],
+    [Date.UTC(2026, 9, 28, 9), "28-Oct", "12:00 PM"],
+    [Date.UTC(2026, 9, 28, 18), "28-Oct", "9:00 PM"],
+    [Date.UTC(2026, 9, 28, 21), "29-Oct", "12:00 AM"],
+    [Date.UTC(2026, 9, 28, 21, 30), "29-Oct", "12:30 AM"],
+  ]) {
+    assert.equal(messages.shortKickoffDate(instant), date);
+    assert.equal(messages.shortKickoffTime(instant), time);
+    assert.match(messages.reportingInstant(instant), /EAT$/u);
+  }
+  const visitor = createMessages("en", undefined, "America/New_York");
+  const instant = Date.UTC(2026, 9, 28, 21, 30);
+  assert.equal(visitor.shortKickoffDate(instant), "28-Oct");
+  assert.equal(visitor.shortKickoffTime(instant), "5:30 PM");
+});
+
+test("shared compact labels use familiar names and preserve unknown names without inventing provider codes", () => {
+  assert.equal(compactTeamName("Wolverhampton Wanderers"), "Wolves");
+  assert.equal(compactTeamName("Brighton & Hove Albion"), "Brighton");
+  assert.equal(compactTeamName("Inter Milan"), "Inter");
+  assert.equal(compactTeamName("Borussia Mönchengladbach"), "M'gladbach");
+  assert.equal(compactLeagueName("English Premier League"), "EPL");
+  assert.equal(compactLeagueName("UEFA Champions League"), "UCL");
+  for (const name of ["Unknown United", "皇家马德里", "toString", "__proto__", "A Very Long Football Club Name"]) {
+    assert.equal(compactTeamName(` ${name} `), name);
+    assert.equal(compactLeagueName(` ${name} `), name);
+  }
+  assert.deepEqual(Object.keys(marketSelections).map(compactMarketName), ["1X2", "DC", "O/U", "BTTS"]);
+});
+
 test("every family and selection has a full generic prediction label", () => {
   const messages = createMessages();
   for (const [family, selections] of Object.entries(marketSelections)) {
@@ -196,12 +230,13 @@ test("every no-pick reason has visitor text for the card's hidden label", () => 
   }
 });
 
-test("cards show full team names, never abbreviations or provider team codes", async () => {
-  // Owner decision: the phone card's teams line and the table both render the full name (on tiles a long name wraps
-  // onto a second line; only beyond two lines is it clamped with an ellipsis and a full-name tooltip).
+test("compact mobile team labels retain complete accessible names and desktop names", async () => {
   const source = await cardSource;
-  assert.doesNotMatch(source, /domain\/team-name|[tT]eamAbbreviations?\b|validTeamCode|[Tt]eam\.code\b|shortTeamName|teamDisplayCandidates/u);
-  assert.match(source, /<TeamName data-team-name=""[^>]*>\{name\}<\/TeamName>/u);
+  assert.doesNotMatch(source, /validTeamCode|[Tt]eam\.code\b/u);
+  assert.match(source, /data-standing=\{standing \?\? undefined\} aria-label=\{name\}/u);
+  assert.match(source, /<TeamName data-team-name="" title=\{name\}>/u);
+  assert.match(source, /data-mobile-only data-ledger-name>\{compactTeamName\(name\)\}/u);
+  assert.match(source, /data-desktop-only>\{name\}<\/span>/u);
 });
 
 /** One styled component's template from the card source, and the part of it inside its `${tile} {` block. */
@@ -213,53 +248,45 @@ async function styledBlock(name) {
   return { all: match[1], tile: match[1].slice(tileStart) };
 }
 
-test("the phone tile puts one fixed-width result tag beside the meta line, outside the desktop pick subgrid", async () => {
+test("Clean ledger cards share the slip identity layout and retain separate settlement and desktop columns", async () => {
+  const source = await cardSource;
   const card = (await styledBlock("Card")).tile.split("${table}")[0];
-  assert.match(card, /grid-template-areas: "meta result" "teams teams" "pick pick";/u);
+  assert.match(source, /data-mobile-design="clean-ledger"/u);
+  assert.match(card, /\$\{cleanLedgerIdentityStyles\}/u);
+  assert.match(source, /<Meta data-ledger-meta>/u);
+  assert.match(source, /<Teams data-ledger-teams>/u);
+  assert.ok(source.indexOf("<Meta data-ledger-meta>") < source.indexOf("<Teams data-ledger-teams>"));
   const result = await styledBlock("Result");
-  assert.match(result.tile.split("${table}")[0], /grid-area: result;/u);
-  // Owner decision (2026-10-25): Upcoming, Pending, Win, Loss and Void tags all share one width on phones.
-  assert.match(result.tile.split("${table}")[0], /inline-size: 5\.25rem;/u);
-  assert.doesNotMatch(result.tile.split("${table}")[0], /min-inline-size/u);
-  // Bright verdict colours apply on both layouts; Upcoming has its own pale tag.
   assert.match(result.all, /theme\.color\.verdict\[/u);
-  assert.match(result.all, /&\[data-result-badge="upcoming"\] \{\s*color: \$\{\(\{ theme \}\) => theme\.color\.verdict\.upcoming\.text\}/u);
-  assert.match(result.tile, /&\[data-result-badge="unavailable"\] \{ display: none; \}/u);
-  // The table keeps the result in its own column, after market, pick, odds and probability.
   assert.match(result.tile, /\$\{table\} \{\s*grid-column: 11;\s*grid-row: 2;/u);
   assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 4;/u);
-  assert.match(await cardSource, /<\/Pick>\s*<Result aria-hidden="true"/u);
+  assert.match(source, /<\/Pick>\s*<Result aria-hidden="true"/u);
 });
 
-test("the phone pick panel shows the market icon, market over pick, and the odds and chance in a box", async () => {
-  // Owner decision (2026-10-25): design 09 "Pick Panel" replaces the one-line pick.
+test("Clean ledger keeps market, compact pick, odds and probability in one mobile facts row", async () => {
+  const source = await cardSource;
   const pick = (await styledBlock("Pick")).tile.split("${table}")[0];
-  assert.match(pick, /grid-template-areas: "glyph market numbers" "glyph pick numbers";/u);
-  // Locked picks use the same compact panel without a second subscription row.
-  assert.doesNotMatch(pick, /"hint hint hint"/u);
-  assert.match((await styledBlock("CardGlyph")).tile, /grid-area: glyph;/u);
-  assert.match((await styledBlock("MarketName")).tile, /grid-area: market;/u);
-  assert.match((await styledBlock("PickShort")).tile, /grid-area: pick;/u);
-  assert.match((await styledBlock("GatedPick")).tile, /grid-area: pick;/u);
-  assert.match((await styledBlock("PickNumbers")).tile, /grid-area: numbers;/u);
-  assert.doesNotMatch(await cardSource, /SubscribeHint/u);
-  // The market and pick shorten with an ellipsis, so the numbers box always stays whole.
-  for (const name of ["MarketName", "PickShort"]) assert.match((await styledBlock(name)).tile, /\$\{ellipsis\}/u);
-  // The numbers box replaces the desktop probability cell on phones.
-  assert.match((await styledBlock("Probability")).tile, /\$\{tile\} \{ display: none; \}/u);
+  assert.match(pick, /grid-template-areas: "market pick odds probability";/u);
+  assert.match(source, /compactMarketName\(shownFamily\)/u);
+  assert.match(source, /predictionLabel\(messages, selection\)/u);
+  assert.doesNotMatch(source, /PickNumbers|CardGlyph|SubscribeHint/u);
+  assert.match((await styledBlock("Odds")).tile, /grid-area: odds;/u);
+  assert.match((await styledBlock("Probability")).tile, /grid-area: probability;/u);
+  // Access messages remain available without restoring the old boxed panel.
   const messages = createMessages();
-  assert.deepEqual(["match.likely", "match.chance", "details.odds", "paywall.locked", "paywall.unlockPrediction"].map((key) => messages.text(key)),
-    ["likely", "chance", "Odds", "Locked", "Unlock prediction"]);
+  assert.deepEqual(["details.odds", "paywall.locked", "paywall.unlockPrediction"].map((key) => messages.text(key)),
+    ["Odds", "Locked", "Unlock prediction"]);
   assert.equal(messages.text("paywall.unlockPredictionPrice", { price: "1,000" }), "Unlock for UGX 1,000");
 });
 
-test("enlarged text wraps the phone kickoff under the league instead of under the result tag", async () => {
+test("Clean ledger kickoff precedes league metadata and uses the shared date and AM/PM clock", async () => {
   const source = await cardSource;
-  assert.match((await styledBlock("Card")).tile, /container: match-card \/ inline-size;/u);
-  assert.match(source, /const narrowTile = "@container match-card \(max-width: 18rem\)";/u);
-  // A long league shortens first; on a narrow tile the kickoff wraps under it and the dot between them is dropped.
-  assert.match((await styledBlock("Meta")).tile, /\$\{narrowTile\} \{ flex-wrap: wrap; \}/u);
-  assert.match((await styledBlock("MetaDot")).tile, /\$\{narrowTile\} \{ display: none; \}/u);
+  const metadata = source.slice(source.indexOf("<Meta data-ledger-meta>"), source.indexOf("</Meta>"));
+  assert.ok(metadata.indexOf("<CardKickoff ") < metadata.indexOf("<League "));
+  assert.match(source, /messages\.shortKickoffDate\(kickoff\)/u);
+  assert.match(source, /messages\.shortKickoffTime\(kickoff\)/u);
+  assert.match(source, /title=\{messages\.reportingInstant\(kickoff\)\}/u);
+  assert.match(source, /compactLeagueName\(competition\)/u);
 });
 
 test("long team names stay on one line with full-name tooltip and accessible labels", async () => {
@@ -280,5 +307,7 @@ test("hovering any ellipsized text shows its full value, even under the full-car
   assert.match(source, /event\.pointerType === "touch"/u);
   assert.match(layout, /<TruncationTooltips \/>/u);
   // The country label keeps its full name as the title behind its one-line short form.
-  assert.match(await cardSource, /<CountryName data-country-name title=\{countryName \|\| undefined\}>\{countryShortName\(country\) \|\| "–"\}<\/CountryName>/u);
+  assert.match(await cardSource, /<CountryName data-country-name title=\{countryName \|\| undefined\}>/u);
+  assert.match(await cardSource, /data-mobile-only>\{countryCode\(country\) \|\| "–"\}<\/span>/u);
+  assert.match(await cardSource, /data-desktop-only>\{countryShortName\(country\) \|\| "–"\}<\/span>/u);
 });

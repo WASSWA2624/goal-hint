@@ -2,50 +2,9 @@
 
 import styled from "styled-components";
 
-/** Preview-scoped rules preserve the approved disclosure and the three-row hierarchy in every option. */
+/** Candidates vary only presentation around the shared production Clean ledger row. */
 export const MobileSlipLayout = styled.div`
   min-inline-size: 0;
-  [data-slip-summary] {
-    padding-block: 4px; row-gap: 2px; min-block-size: 44px;
-  }
-  [data-mobile-row] {
-    display: grid; gap: 4px; padding: 6px 8px; min-inline-size: 0;
-    color: ${({ theme }) => theme.color.text}; font-size: 0.75rem; line-height: 1.25;
-  }
-  [data-mobile-meta] {
-    display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px;
-    color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 1.3;
-  }
-  [data-mobile-kickoff], [data-mobile-competition], [data-mobile-league], [data-mobile-country] {
-    display: flex; align-items: center; gap: 4px; min-inline-size: 0;
-  }
-  [data-mobile-kickoff] { gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  [data-mobile-competition] { justify-content: flex-end; gap: 7px; }
-  [data-mobile-league] { --gh-logo-size: 0.625rem; --gh-logo-font: 0.45rem; }
-  [data-mobile-country] { flex-shrink: 0; }
-  [data-country-flag] { flex: none; inline-size: 1.5em; block-size: 1em; object-fit: contain; }
-  [data-short-name] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  [data-mobile-teams] {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center;
-    gap: 6px; min-inline-size: 0; margin: 0; font-size: 0.8125rem; line-height: 1.3; font-weight: 700;
-    --gh-logo-size: 0.8125rem; --gh-logo-font: 0.5rem;
-  }
-  [data-home], [data-away] { display: flex; align-items: center; gap: 4px; min-inline-size: 0; }
-  [data-home] { justify-content: flex-end; }
-  [data-mobile-versus] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 600; }
-  [data-mobile-facts] {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: baseline; gap: 8px;
-    min-inline-size: 0; font-variant-numeric: tabular-nums;
-  }
-  [data-mobile-field] { display: flex; align-items: baseline; gap: 4px; min-inline-size: 0; white-space: nowrap; }
-  [data-field-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
-  [data-field-value] { font-size: 0.75rem; }
-  [data-mobile-field="prediction"] strong { color: ${({ theme }) => theme.color.link}; }
-  [data-mobile-result] { display: flex; justify-content: flex-end; gap: 6px; font-size: 0.625rem; font-weight: 700; }
-  [data-outcome="correct"] [data-mobile-result] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
-  [data-outcome="incorrect"] [data-mobile-result] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
-  [data-outcome="void"] [data-mobile-result] { color: ${({ theme }) => theme.color.outcome.void.text}; }
-
   &[data-mobile-design="fixture-rule"] {
     [data-mobile-teams] { border-block-end: 1px solid ${({ theme }) => theme.color.border}; padding-block-end: 4px; }
     [data-mobile-facts] { padding-block-start: 1px; }

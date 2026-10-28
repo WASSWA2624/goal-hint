@@ -55,6 +55,32 @@ class Document(HTMLParser):
         self.stack[-1].children.append(text)
 
 
+def verify_clean_ledger_selection(card, path):
+    """The selected three-row identity and facts order must survive every slip context."""
+    meta = card.nodes(attr="data-ledger-meta")
+    teams = card.nodes("h4", "data-teams")
+    facts = card.nodes(attr="data-ledger-facts")
+    assert len(meta) == len(teams) == len(facts) == 1, f"{path}: one metadata, match and prediction row"
+    descendants = card.nodes()
+    assert descendants.index(meta[0]) < descendants.index(teams[0]) < descendants.index(facts[0]), f"{path}: metadata precedes teams and prediction facts"
+    kickoff = meta[0].nodes("time", "data-kickoff")
+    competition = meta[0].nodes(attr="data-competition")
+    country = meta[0].nodes(attr="data-country")
+    assert len(kickoff) == len(competition) == len(country) == 1, f"{path}: top row retains date/time, league and country"
+    metadata = meta[0].nodes()
+    assert metadata.index(kickoff[0]) < metadata.index(competition[0]) < metadata.index(country[0]), f"{path}: date/time lead league and country"
+    assert re.search(r"\b\d{1,2}-[A-Z][a-z]{2}\s*\d{1,2}:\d{2}\s+(?:AM|PM)\b", kickoff[0].text), f"{path}: compact day-month and time with AM/PM"
+    assert kickoff[0].attrs.get("datetime", "").endswith("Z"), f"{path}: kickoff retains its machine-readable UTC instant"
+    assert "EAT" in kickoff[0].text + kickoff[0].attrs.get("title", ""), f"{path}: kickoff identifies the reporting timezone"
+    versus = teams[0].nodes(attr="data-versus")
+    assert len(versus) == 1 and versus[0].text == "VS", f"{path}: concise match separator"
+    fields = [facts[0].nodes(attr=attribute) for attribute in ("data-market-label", "data-pick-label", "data-leg-odds", "data-leg-probability")]
+    assert all(len(field) == 1 for field in fields), f"{path}: market, prediction, odds and probability are distinct"
+    facts_order = facts[0].nodes()
+    positions = [facts_order.index(field[0]) for field in fields]
+    assert positions == sorted(positions), f"{path}: prediction facts preserve the requested reading order"
+
+
 SCENARIOS = {
     "generated": ("generated", 3), "idle": ("idle", 0), "no-qualifying": ("no-qualifying", 0),
     "no-combinations": ("no-combinations", 0), "odds-unavailable": ("odds-unavailable", 0),
@@ -161,7 +187,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
     if expected_slips:
         assert len(rows) == expected_slips * selections_per_slip, f"{path}: one row per selection"
         for slip in slips:
-            assert slip.attrs.get("data-compact-slip") == "inline-ledger", f"{path}: chosen compact design serves generated slips"
+            assert slip.attrs.get("data-compact-slip") == "clean-ledger", f"{path}: chosen Clean ledger design serves generated slips"
             headers = slip.nodes("header", "data-slip-summary")
             assert len(headers) == 1 and len(headers[0].nodes("h3")) == 1, f"{path}: static compact slip title header"
             summary = headers[0].text
@@ -178,6 +204,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             cards = row.nodes("a", "data-fixture-id")
             assert len(cards) == 1 and cards[0].attrs["data-fixture-id"] == row.attrs["data-slip-selection"], f"{path}: compact analysis row retains fixture identity"
             card = cards[0]
+            verify_clean_ledger_selection(card, path)
             assert card.attrs["href"].startswith("/en/matches/"), f"{path}: original fixture remains linked to analysis"
             labels = card.nodes(attr="data-pick-label")
             assert len(labels) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one compact prediction outcome"
@@ -187,7 +214,6 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             assert len(card.nodes("h4")) == 1, f"{path}: match heading follows its slip heading"
             assert len(card.nodes(attr="data-home")) == len(card.nodes(attr="data-away")) == 1, f"{path}: both full team names remain available"
             assert card.nodes(attr="data-competition") and card.nodes(attr="data-country") and card.nodes("time", "data-kickoff"), f"{path}: competition, country and kickoff remain visible"
-            assert "EAT" in card.nodes("time", "data-kickoff")[0].text, f"{path}: kickoff retains the reporting timezone"
             assert card.nodes(attr="data-market-label"), f"{path}: compact outcome retains its market context"
             assert card.attrs.get("data-status") == "unknown" and card.attrs.get("data-match-state") == "snapshot", f"{path}: original snapshots never invent a live or final fixture status"
             assert card.attrs["data-outcome"] == "pending" and not card.nodes(attr="data-saved-score"), f"{path}: an original selection without a saved result invents no outcome or score"
@@ -277,6 +303,7 @@ def verify_best_slips(origin, directory):
         document = Document(response.text).root
         disclosures = document.nodes("details", "data-slip-disclosure")
         assert len(disclosures) == count, f"Best Slips {scenario}: renders all {count} slips"
+        assert all(node.attrs["data-compact-slip"] == "clean-ledger" for node in document.nodes(attr="data-compact-slip")), f"Best Slips {scenario}: selected Clean ledger disclosure serves every viewer"
         averages = []
         for index, disclosure in enumerate(disclosures):
             assert "open" not in disclosure.attrs, f"Best Slips {scenario}: slip {index + 1} starts collapsed before hydration"
@@ -309,6 +336,8 @@ def verify_best_slips(origin, directory):
                 assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"homeTeam\"|\"awayTeam\"|\"forecast\"", response.text), "Locked HTML and flight data contain no private slip details"
             else:
                 assert len(contents[0].nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
+                for selection in contents[0].nodes("a", "data-fixture-id"):
+                    verify_clean_ledger_selection(selection, f"Best Slips {scenario}")
         assert averages == sorted(averages), "Displayed means do not reorder the existing joint-probability ranking"
         statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status"]
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
@@ -336,6 +365,7 @@ def verify(origin, directory):
     print("PASS saved snapshot cards: original alternative, price/probability, regulation score/outcome, gated/redacted/offline display boundaries.", flush=True)
     compact = Document(snapshots.text).root.nodes(attr="data-compact-snapshot")[0]
     compact_row = compact.nodes("a", "data-fixture-id")[0]
+    verify_clean_ledger_selection(compact_row, "Compact saved selection")
     assert compact_row.attrs["data-fixture-id"] == "snapshot-compact-authorized", "Compact saved rows retain original fixture identity"
     assert compact_row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73", "Compact saved rows retain the original alternative price"
     assert compact_row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Compact saved rows retain original probability precision"

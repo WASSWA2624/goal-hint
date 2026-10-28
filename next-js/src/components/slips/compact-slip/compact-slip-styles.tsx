@@ -36,6 +36,7 @@ export const MatchRow = styled.div`
 export const CompactCard = styled.article`
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0;
+  container: compact-slip / inline-size;
   details { min-inline-size: 0; }
   [data-slip-summary] {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: 44px;
@@ -62,6 +63,17 @@ export const CompactCard = styled.article`
   ul { list-style: none; display: grid; margin: 0; padding: 0; min-inline-size: 0; }
   li { min-inline-size: 0; }
   li + li { border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
+
+  &[data-compact-slip="clean-ledger"] [data-slip-summary] { padding-block: 4px; row-gap: 2px; }
+  @container compact-slip (max-width: 12rem) {
+    &[data-compact-slip="clean-ledger"] [data-slip-summary] {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "identity" "count" "odds" "average";
+      row-gap: 4px;
+    }
+    &[data-compact-slip="clean-ledger"] [data-summary-count],
+    &[data-compact-slip="clean-ledger"] [data-summary-average] { justify-self: start; }
+  }
 
   /* 01: one broad fixture line followed by compact supporting rows. */
   &[data-compact-slip="inline-ledger"] {

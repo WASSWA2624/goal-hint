@@ -19,6 +19,7 @@ def verify(origin, directory):
     by_id = {fixture_id: article for _, fixture_id, article in articles}
     assert 0 <= html.find("data-styled=") < html.find("<main")
     for tag, _, article in articles:
+        match(r'data-mobile-design="clean-ledger"', tag)
         no_match(r'\baria-describedby=', tag)
         no_match(r'<(?:ul|ol)\b|\bid="[^"]*-notes"|\baria-describedby="[^"]*-notes', article)
         no_match("Update delayed|Limited news coverage|Partial coverage|Prediction update in progress|"
@@ -27,6 +28,8 @@ def verify(origin, directory):
         positions = [article.find(item) for item in order]
         assert all(position >= 0 and (index == 0 or position > positions[index - 1])
             for index, position in enumerate(positions)), "Card reading order"
+        header = re.search(r"<header\b[^>]*>([\s\S]*?)</header>", article).group(1)
+        assert header.find("data-kickoff") < header.find("data-ledger-competition"), "Compact kickoff precedes the league and country"
         match(r'<svg[^>]*aria-hidden="true"[^>]*focusable="false"', article)
         assert len(re.findall(r"<a\b", article)) == 1, "One keyboard destination per card"
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
@@ -53,18 +56,20 @@ def verify(origin, directory):
             attributes, parts = kickoff[0]
             match(r'\bdatetime="2026-10-09T09:00:00\.000Z"', attributes, flags=re.IGNORECASE)
             match(r'\btitle="Oct 9, 2026, 12:00 EAT"', attributes)
-            match(r'data-kickoff-date[^>]*>Fri, Oct 9</span>', parts)
-            match(r'data-kickoff-time[^>]*>12:00', parts)
+            match(r'data-kickoff-date[^>]*><span data-mobile-only[^>]*>9-Oct</span><span data-desktop-only[^>]*>Fri, Oct 9</span>', parts)
+            match(r'data-kickoff-time[^>]*><span data-mobile-only[^>]*>12:00 PM</span><span data-desktop-only[^>]*>12:00', parts)
             match(r'data-kickoff-zone[^>]*>\s*EAT</span>', parts)
         if 'data-prediction="none"' in article:
-            no_match(r"data-pick-odds=|data-probability-meter=", article)
+            no_match(r"data-pick-odds=|data-pick-price=|data-probability-meter=", article)
         else:
             assert article.count('data-pick-odds=""') <= 1, "An available price appears once after the shown prediction"
             assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
-            no_match(r"Odds", re.search(r"<header\b[^>]*>([\s\S]*?)</header>", article).group(1))
+            no_match(r"Odds", header)
             picks = re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article)
             assert len(picks) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", picks[0]), "One compact prediction outcome per card"
             match(r'data-pick-selection=""[^>]*title="[^\"]+"', article)
+        assert len(re.findall(r'\bdata-card-odds=', article)) == 1, "One price cell serves both phone and desktop layouts"
+        no_match(r'data-pick-price=""[^>]*>@', article)
         no_match(r"\(—\)", article)
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
@@ -87,15 +92,16 @@ def verify(origin, directory):
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
     match(r'data-pick-selection=""[^>]*>1</span>', by_id["card-correct"])
-    match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
+    match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-card-odds[^>]*>1\.85</span>', by_id["card-correct"])
-    match(r'data-pick-price=""[^>]*>@ 1\.85</span>', by_id["card-correct"])
-    assert by_id["card-correct"].count('data-pick-price=""') == 1, "The tile shows the shown pick's price once"
+    match(r'data-card-odds="[^"]*"[^>]*data-pick-price=""[^>]*>1\.85</span>', by_id["card-correct"])
+    assert by_id["card-correct"].count('data-pick-price=""') == 1, "One shared cell shows the original selected price"
     match(r'data-card-odds[^>]*>—</span>', by_id["card-incorrect"])
     match(r'data-pick-price=""[^>]*>—</span>', by_id["card-incorrect"])
-    match(r'data-mobile-only=""[^>]*>likely</span>', by_id["card-correct"])
-    no_match(r">likely</span>", by_id["card-unavailable"])
+    no_match(r'data-caption=|>likely</span>', visible)
+    for caption in ["Mkt", "Pick", "Odds", "Prob."]:
+        match(rf'content:"{re.escape(caption)}"', html)
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
@@ -103,7 +109,7 @@ def verify(origin, directory):
     match("Odds: Unavailable", by_id["card-incorrect"])
     match(r'data-pick-selection=""[^>]*>U 2\.5</span>', by_id["card-long"])
     match(r'data-pick-selection=""[^>]*>No</span>', by_id["card-limited"])
-    match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*>Bosnia &amp; Herz\.</span>',
+    match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*><span data-mobile-only[^>]*>BIH</span><span data-desktop-only[^>]*>Bosnia &amp; Herz\.</span>',
           by_id["card-long"])
     match(r'data-card-odds[^>]*>9999\.99</span>', by_id["card-long"])
     match(r'<article[^>]*data-fixture-id="card-any"[^>]*data-market="double-chance"', visible)
@@ -141,7 +147,7 @@ def verify(origin, directory):
             no_match(r'(?<![\w-])src=', tag)
         else:
             match('loading="eager"', tag)
-    print(f"Match card SSR verification passed: {len(articles)} labeled examples, every outcome/source, live minute, coherent probability and direct remote image markup.")
+    print(f"Match card SSR verification passed: {len(articles)} Clean ledger examples, compact kickoff/market labels, one shared price cell, every outcome/source, live minute, coherent probability and direct remote image markup.")
 
 
 def main():

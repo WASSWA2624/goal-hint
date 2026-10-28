@@ -12,4 +12,4 @@ export const compactSlipDesigns = [
   { id: "paired-lines", name: "Paired lines", description: "Fixture and price share the first line; competition, prediction and probability form the following lines." },
 ] as const;
 
-export type CompactSlipVariant = typeof compactSlipDesigns[number]["id"];
+export type CompactSlipVariant = typeof compactSlipDesigns[number]["id"] | "clean-ledger";

@@ -8,7 +8,7 @@ import { slipsMessages } from "./messages/slips.ts";
 const catalog = { ...en, ...predictionMessages, ...slipsMessages };
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
-  days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
+  days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; shortTimes: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
   spans: Intl.DateTimeFormat; months: Intl.DateTimeFormat; zones: Intl.DateTimeFormat };
 // Immutable formatters are shared by locale and display zone; no visitor records are cached.
 const formattersByLocale = new Map<string, Formatters>();
@@ -27,6 +27,7 @@ function formatters(language: string, timeZone: string): Formatters {
     days: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone: publicPolicy.reportingTimeZone }),
     instantDays: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone }),
     times: new Intl.DateTimeFormat(language, { ...instantOptions, hour: "2-digit", minute: "2-digit" }),
+    shortTimes: new Intl.DateTimeFormat(language, { timeZone, calendar: "gregory", hour: "numeric", minute: "2-digit", hourCycle: "h12" }),
     mediumDates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "short", month: "short", day: "numeric" }),
     spans: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "short", day: "numeric" }),
     months: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "long", year: "numeric" }),
@@ -85,7 +86,7 @@ export function createMessages(locale?: string, translations?: Partial<MessageCa
 }
 
 function buildMessages(language: string, translations: Partial<MessageCatalog>, timeZone: string) {
-  const { numbers, plurals, dates, instants, days, instantDays, times, mediumDates, spans, months, zones } = formatters(language, timeZone);
+  const { numbers, plurals, dates, instants, days, instantDays, times, shortTimes, mediumDates, spans, months, zones } = formatters(language, timeZone);
   const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
     : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
 
@@ -141,6 +142,18 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     },
     reportingTime(value: UtcInstant): string {
       return times.format(displayInstant(value));
+    },
+    /** Day first with a short month, using the same display zone as the kickoff clock. */
+    shortKickoffDate(value: UtcInstant): string {
+      const parts = instantDays.formatToParts(displayInstant(value));
+      const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
+      return `${part("day")}-${part("month")}`;
+    },
+    /** Compact 12-hour kickoff, with an explicit uppercase AM/PM frame. */
+    shortKickoffTime(value: UtcInstant): string {
+      const parts = shortTimes.formatToParts(displayInstant(value));
+      const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
+      return `${part("hour")}:${part("minute")} ${part("dayPeriod").toUpperCase()}`;
     },
     /** The zone label at this instant, including its daylight-saving offset. */
     timeZone(value: UtcInstant): string {

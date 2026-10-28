@@ -61,8 +61,8 @@ const List = styled.ul`
   ${media.belowDesktop} {
     /* Keep framed cards separate and every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
-    gap: 10px;
-    > li { content-visibility: auto; contain-intrinsic-block-size: auto 140px; }
+    gap: 6px;
+    > li { content-visibility: auto; contain-intrinsic-block-size: auto 84px; }
     > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.phoneCardFrame.radius}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 

@@ -16,6 +16,7 @@ import { createMessages } from "@/i18n/messages";
 import { formatSlipProbability } from "../slip-format";
 import type { CompactSlipVariant } from "./designs";
 import { CompactCard, MatchRow } from "./compact-slip-styles";
+import { CleanLedgerSelection } from "./clean-ledger-selection";
 
 function SelectionRow({ selection, position, locale, result, analysisLinks, showLogos }: {
   selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
@@ -67,7 +68,7 @@ function SelectionRow({ selection, position, locale, result, analysisLinks, show
 }
 
 /** Aggregate-only previews and complete slips share exactly the same compact header and disclosure. */
-export function CompactSlipDisclosure({ totalOdds, averageProbability, selectionCount, index, locale, variant = "inline-ledger",
+export function CompactSlipDisclosure({ totalOdds, averageProbability, selectionCount, index, locale, variant = "clean-ledger",
   initiallyOpen = false, collapsible = true, showRank = true, slipId, headingId, children }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
   variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string; children: ReactNode;
@@ -97,15 +98,18 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
 }
 
 /** Original selection snapshots are reused by Best slips, generated slips and completed history. */
-export function CompactSlip({ slip, index, locale, variant = "inline-ledger", initiallyOpen = false, results, analysisLinks = true, collapsible = true, showLogos = false, showRank = true }: {
+export function CompactSlip({ slip, index, locale, variant = "clean-ledger", initiallyOpen = false, results, analysisLinks = true, collapsible = true, showLogos = false, showRank = true }: {
   slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"]; analysisLinks?: boolean; collapsible?: boolean; showLogos?: boolean; showRank?: boolean;
 }) {
   const headingId = useId();
   return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length}
     index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId}>
       <ul aria-labelledby={headingId}>
-        {slip.selections.map((selection, selectionIndex) => <SelectionRow key={selection.fixtureId} selection={selection}
-          position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} showLogos={showLogos} result={results?.find((item) => item.fixtureId === selection.fixtureId)} />)}
+        {slip.selections.map((selection, selectionIndex) => {
+          const result = results?.find((item) => item.fixtureId === selection.fixtureId);
+          return variant === "clean-ledger" ? <CleanLedgerSelection key={selection.fixtureId} selection={selection} locale={locale} analysisLinks={analysisLinks} {...(result ? { result } : {})} />
+            : <SelectionRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} showLogos={showLogos} result={result} />;
+        })}
       </ul>
   </CompactSlipDisclosure>;
 }
