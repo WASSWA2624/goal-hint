@@ -132,10 +132,9 @@ CRITERIA_GROUP_FIELDS = {
     "markets": [],
 }
 
-NUMERIC_RANGE_LIMITS = {
-    "totalMin": "1.01", "totalMax": "100000", "teamsMin": "1", "teamsMax": "8",
-    "oddsMin": "1.01", "oddsMax": "1000", "probMin": "0", "probMax": "100",
-    "totalProbMin": "0", "totalProbMax": "100",
+NUMERIC_RANGE_DEFAULTS = {
+    "totalMin": "0.01", "totalMax": "", "teamsMin": "1", "teamsMax": "",
+    "oddsMin": "0.01", "oddsMax": "", "probMin": "", "probMax": "100",
 }
 
 
@@ -173,10 +172,14 @@ def criteria_groups(document, path, error_group=None):
     assert len(markets) == 1 and markets[0] in by_name["markets"].nodes(), f"{path}: market toggles and outcomes share their own dialog"
     targets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "targets"]
     assert len(targets) == 1 and all(targets[0] not in group.nodes() for group in groups), f"{path}: essential slip targets always stay visible"
+    toolbars = document.nodes(attr="data-slip-builder-toolbar")
+    assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
+    toolbar = toolbars[0]
     for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: one enabled essential target {name}"
         assert all(controls[0] not in group.nodes() for group in groups), f"{path}: essential {name} remains outside dialogs"
+        assert controls[0] in toolbar.nodes("input"), f"{path}: essential {name} belongs to the settings toolbar"
     inputs = document.nodes("input")
     reuse = [node for node in inputs if node.attrs.get("name") == "reuse"]
     choices = [node for node in markets[0].nodes("input")
@@ -261,7 +264,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
 
 
 def native_inputs(document):
-    """Successful GET controls, including the title's form-associated slip count."""
+    """Successful GET controls, retaining support for explicit form association."""
     form = next(node for node in document.nodes("form") if node.attrs.get("action") == "/en/slips")
     descendants = form.nodes("input")
     form_id = form.attrs.get("id")
@@ -280,30 +283,59 @@ def native_inputs(document):
 
 def verify_defaults(document):
     fields = dict(native_inputs(document))
-    assert fields["slips"] == "3", "SSR default requests three slips"
-    for name in NUMERIC_RANGE_LIMITS:
+    assert fields["slips"] == "5", "SSR default requests five slips"
+    for name, value in NUMERIC_RANGE_DEFAULTS.items():
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
-        if name.startswith("totalProb"):
-            assert not controls, "Unqualified default form does not offer combined-estimate fields"
-            continue
-        assert len(controls) == 1 and fields[name] == "", f"Default {name}: blank means any supported bound"
+        assert len(controls) == 1 and fields[name] == value, f"Default {name}: expected {value!r}, found {fields.get(name)!r}"
         assert controls[0].attrs.get("placeholder") == "Any", f"Default {name}: blank numeric range displays Any"
-    assert fields["dateFrom"] == "2026-10-13" and fields["dateTo"] == "2026-11-12", "SSR defaults use the fixture's reporting date and inclusive 31-day range"
+        if name in ("totalMin", "totalMax", "oddsMin", "oddsMax", "teamsMin", "teamsMax"):
+            assert "max" not in controls[0].attrs, f"{name}: optional maximum does not impose an unrelated price or search cap"
+    assert not any(node.attrs.get("name", "").startswith("totalProb") for node in document.nodes("input")), "Unqualified default form does not offer combined-estimate fields"
+    assert fields["dateFrom"] == fields["dateTo"] == "2026-10-13", "SSR defaults use today for both dates"
     assert fields["timeFrom"] == "00:00" and fields["timeTo"] == "23:59", "SSR defaults explicitly select all-day kickoff times"
     assert fields["reuse"] == "0", "SSR default leaves match reuse off"
-    assert len([name for name, _ in native_inputs(document) if name == "slips"]) == 1, "The title count remains part of native GET submission"
+    assert len([name for name, _ in native_inputs(document) if name == "slips"]) == 1, "The toolbar count remains part of native GET submission"
     quantity = next(node for node in document.nodes("input") if node.attrs.get("name") == "slips")
     assert quantity.attrs.get("max") == "100", "The native quantity control supports up to 100 slips"
 
 
 def verify_custom_numeric_bounds(document, expected):
     fields = dict(native_inputs(document))
-    for name, limit in NUMERIC_RANGE_LIMITS.items():
-        if name in expected:
-            if Decimal(expected[name]) == Decimal(limit):
-                assert fields[name] == "", f"Unrestricted {name}: explicit supported boundary displays Any"
-            else:
-                assert Decimal(fields[name]) == Decimal(expected[name]), f"Custom {name}: expected {expected[name]}, found {fields[name]}"
+    for name in [*NUMERIC_RANGE_DEFAULTS, "totalProbMin", "totalProbMax"]:
+        if name not in expected or expected[name] == "":
+            continue
+        if fields.get(name) == "" and name in ("probMin", "totalProbMin") and Decimal(expected[name]) == 0:
+            continue
+        assert Decimal(fields[name]) == Decimal(expected[name]), f"Custom {name}: expected {expected[name]}, found {fields[name]}"
+
+
+def verify_builder_access(origin, directory):
+    for viewer, label, destination in [
+        ("guest", "Sign in", "/en/account"),
+        ("member", "Subscribe", "/en/subscribe"),
+        ("subscriber", "Build slips", None),
+    ]:
+        path = f"/access/{viewer}"
+        response = request(origin, path)
+        assert response.status == 200, f"{path}: HTTP 200"
+        (directory / f"access-{viewer}.html").write_text(response.text, encoding="utf-8")
+        document = Document(response.text).root
+        criteria_groups(document, path)
+        verify_defaults(document)
+        actions = document.nodes(attr="data-criteria-actions")
+        assert len(actions) == 1, f"{path}: one toolbar action group"
+        if destination:
+            links = [node for node in actions[0].nodes("a") if node.text.strip() == label]
+            assert len(links) == 1, f"{path}: exact {label} action"
+            target = urlsplit(links[0].attrs["href"])
+            assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
+            if viewer == "guest":
+                assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Sign in rather than registration"
+            assert not any(node.attrs.get("type") == "submit" for node in actions[0].nodes("button")), f"{path}: access-restricted toolbar cannot submit a build"
+        else:
+            submit = [node for node in actions[0].nodes("button") if node.attrs.get("type") == "submit"]
+            assert len(submit) == 1 and submit[0].text.strip() == label, f"{path}: eligible members build slips"
+    print("PASS Slip Builder access actions: Sign in/login, Subscribe and Build slips.", flush=True)
 
 
 def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):
@@ -421,9 +453,10 @@ def verify(origin, directory):
                 for node in document.nodes(attr="data-slip-summary")), "Qualified custom slips show the mean while retaining joint ranking context separately"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
     verify_defaults(idle)
-    explicit_defaults = [(name, NUMERIC_RANGE_LIMITS.get(name, value)) for name, value in native_inputs(idle) if name != "build"]
+    explicit_defaults = [(name, "0" if name == "probMin" else value) for name, value in native_inputs(idle) if name != "build"]
     canonical = inspect(origin, "/en/slips?" + urlencode(explicit_defaults), directory, "route-default-bounds", "idle", 0)
     verify_defaults(canonical)
+    verify_builder_access(origin, directory)
     query = [
         ("dateFrom", "2026-10-13"), ("dateTo", "2026-10-19"), ("timeFrom", ""), ("timeTo", ""),
         ("markets", "match-result"), ("markets", "total-goals"), ("markets", "both-teams-to-score"),

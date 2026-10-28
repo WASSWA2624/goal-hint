@@ -30,13 +30,14 @@ function criteria(overrides = {}) {
 }
 const fixtureIds = (slip) => slip.selections.map((selection) => selection.fixtureId).sort();
 
-test('the full slip-count range parses and round-trips while selection counts remain bounded', () => {
+test('the full slip-count range and positive selection counts parse without an arbitrary match maximum', () => {
   for (const slips of [1, 10, 11, 99, 100]) {
     const parsed = parseSlipCriteria({ slips: String(slips) }, today);
     assert.equal(parsed.slips, slips);
     assert.equal(parseSlipCriteria(serializeSlipCriteria(parsed), today).slips, slips);
   }
-  assert.throws(() => parseSlipCriteria({ teamsMax: '100' }, today), SlipCriteriaError);
+  assert.equal(parseSlipCriteria({ teamsMax: '100' }, today).teamsMax, 100);
+  assert.equal(parseSlipCriteria({ teamsMin: '9', teamsMax: '' }, today).teamsMin, 9);
 });
 // Synthetic evidence only; no production qualification follows from these tests.
 const jointModel = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
@@ -102,9 +103,9 @@ test('generated slip identity retains the exact source cycle/revision/probabilit
 
 test('Any defaults and canonical native GET criteria round trip', () => {
   const defaults = defaultSlipCriteria(today);
-  assert.deepEqual(defaults, { dateFrom: today, dateTo: '2026-11-12', timeFrom: '', timeTo: '',
-    markets: ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'], totalMin: 101, totalMax: 10_000_000, oddsMin: 101, oddsMax: 100_000,
-    probMin: 0, probMax: 100, teamsMin: 1, teamsMax: 8, slips: 3, reuse: false });
+  assert.deepEqual(defaults, { dateFrom: today, dateTo: today, timeFrom: '', timeTo: '',
+    markets: ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'], totalMin: 1, oddsMin: 1,
+    probMin: 0, probMax: 100, teamsMin: 1, slips: 5, reuse: false });
   assert.deepEqual(parseSlipCriteria({}, today), defaults);
   assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(defaults), today), defaults);
   const repeated = parseSlipCriteria(new URLSearchParams('build=1&markets=total-goals&markets=match-result&reuse=0&reuse=1'), today);
@@ -129,17 +130,83 @@ test('omitting reuse builds separate slips while an explicit opt-in still allows
   assert.ok(new Set(repeated).size < repeated.length);
 });
 
-test('independent blank odds bounds mean the supported lower or upper bound', () => {
+test('independent blank minimums use the valid floor and blank maximums impose no upper filter', () => {
   const parsed = parseSlipCriteria({ totalMin: '', oddsMax: '' }, today);
-  assert.equal(parsed.totalMin, 101); assert.equal(parsed.totalMax, 10_000_000);
-  assert.equal(parsed.oddsMin, 101); assert.equal(parsed.oddsMax, 100_000);
-  assert.equal(parseSlipCriteria({ totalMax: '' }, today).totalMax, 10_000_000);
-  assert.equal(parseSlipCriteria({ oddsMin: '' }, today).oddsMin, 101);
+  assert.equal(parsed.totalMin, 1); assert.equal(parsed.totalMax, undefined);
+  assert.equal(parsed.oddsMin, 1); assert.equal(parsed.oddsMax, undefined);
+  assert.equal(parseSlipCriteria({ totalMax: '' }, today).totalMax, undefined);
+  assert.equal(parseSlipCriteria({ oddsMin: '' }, today).oddsMin, 1);
+  const serialized = serializeSlipCriteria(parsed);
+  for (const field of ['totalMax', 'oddsMax', 'teamsMax']) assert.equal(serialized.get(field), '');
+});
+
+test('explicit criteria above the old odds caps round trip with exact safe-integer precision', () => {
+  const parsed = parseSlipCriteria({ totalMin: '100000.01', totalMax: '90071992547409.91', oddsMin: '1000.01', oddsMax: '2000.25' }, today);
+  assert.equal(parsed.totalMin, 10_000_001);
+  assert.equal(parsed.totalMax, Number.MAX_SAFE_INTEGER);
+  assert.equal(parsed.oddsMin, 100_001);
+  assert.equal(parsed.oddsMax, 200_025);
+  assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(parsed), today), parsed);
+});
+
+test('Any maximum permits nine-match slips and prices/totals beyond the old filter caps', () => {
+  const parsed = parseSlipCriteria({ teamsMin: '9', slips: '1' }, today);
+  const records = Array.from({ length: 9 }, (_, index) => record('nine-' + index, '2000.00'));
+  const result = buildSlips(parsed, records, asOf);
+  assert.equal(result.slips.length, 1);
+  assert.equal(result.slips[0].selections.length, 9);
+  assert.equal(result.slips[0].totalOdds, String(2000n ** 9n) + '.00');
+  assert.equal(result.searchLimited, false);
+  assert.equal(buildSlips({ ...parsed, oddsMax: 100_000 }, records, asOf).slips.length, 0);
+  assert.equal(buildSlips({ ...parsed, totalMax: 10_000_000 }, records, asOf).slips.length, 0);
+});
+
+test('a permissive criteria floor never makes invalid bookmaker prices eligible', () => {
+  for (const price of ['0.01', '0.50', '1.00']) {
+    const source = record('invalid-price');
+    const result = buildSlips(defaultSlipCriteria(today), [{ ...source, prices: [{ ...source.prices[0], price }] }], asOf);
+    assert.equal(result.qualifyingMatches, 0);
+    assert.equal(result.slips.length, 0);
+  }
+});
+
+test('unrestricted match lengths remain bounded by available candidates and disclose truncated searches', () => {
+  const records = Array.from({ length: slipBuilderRules.maximumCandidates + 1 }, (_, index) => record('bounded-' + index));
+  const result = buildSlips(parseSlipCriteria({ teamsMin: String(records.length), slips: '1' }, today), records, asOf);
+  assert.equal(result.slips.length, 0);
+  assert.equal(result.qualifyingMatches, records.length);
+  assert.equal(result.searchLimited, true);
+  const impossible = buildSlips(parseSlipCriteria({ teamsMin: '9007199254740991', slips: '1' }, today), [records[0]], asOf);
+  assert.equal(impossible.slips.length, 0);
+  assert.equal(impossible.searchLimited, false);
+});
+
+test('long reused requests respect aggregate retained-leg and response hydration budgets', () => {
+  const records = Array.from({ length: 240 }, (_, index) => record('long-' + index));
+  const input = parseSlipCriteria({ teamsMin: '239', teamsMax: '239', slips: '100', reuse: '1' }, today);
+  let estimates = 0;
+  const result = jointSlipBuilder({ ...jointModel, estimate: () => { estimates++; return 0.65; } })(input, records, asOf);
+  assert.ok(result.slips.length > 0 && result.slips.length < 100);
+  assert.ok(result.slips.every((slip) => slip.selections.length === 239));
+  assert.ok(result.slips.reduce((count, slip) => count + slip.selections.length, 0) <= slipBuilderRules.maximumRetainedSelections);
+  assert.ok(estimates > 0 && estimates < 240, 'weighted work stops before enumerating every long combination');
+  assert.equal(result.searchLimited, true);
+});
+
+test('aggregate retained-leg capacity bounds mixed search results before response hydration', () => {
+  const records = Array.from({ length: 260 }, (_, index) => record('retained-' + index));
+  const input = parseSlipCriteria({ teamsMin: '200', teamsMax: '200', slips: '100', reuse: '1' }, today);
+  let estimates = 0;
+  const result = jointSlipBuilder({ ...jointModel, estimate: () => { estimates++; return 0.65; } })(input, records, asOf);
+  assert.ok(result.slips.length > 0 && result.slips.length < 100);
+  assert.ok(estimates > result.slips.length, 'the heap discards examined combinations that exceed its aggregate capacity');
+  assert.ok(result.slips.reduce((count, slip) => count + slip.selections.length, 0) <= slipBuilderRules.maximumRetainedSelections);
+  assert.equal(result.searchLimited, true);
 });
 
 test('blank Any dates, probabilities and selection counts resolve to supported bounds', () => {
   assert.deepEqual(parseSlipCriteria({ dateFrom: '', dateTo: '', probMin: '', probMax: '', teamsMin: '', teamsMax: '' }, today), defaultSlipCriteria(today));
-  assert.equal(parseSlipCriteria({ dateFrom: '2026-10-20', dateTo: '' }, today).dateTo, '2026-11-19');
+  assert.equal(parseSlipCriteria({ dateFrom: '2026-10-20', dateTo: '' }, today).dateTo, '2026-10-20');
   const onlyUpper = parseSlipCriteria({ dateFrom: '', dateTo: '2026-10-20' }, today);
   assert.equal(onlyUpper.dateFrom, today); assert.equal(onlyUpper.dateTo, '2026-10-20');
   assert.throws(() => parseSlipCriteria({ dateFrom: '', dateTo: '2026-11-13' }, today), (error) => error.code === 'invalid-date-range');
@@ -231,12 +298,13 @@ for (const [parameters, code] of [
   [{ timeTo: '10:00' }, 'invalid-time-range'], [{ timeFrom: '18:00', timeTo: '08:00' }, 'invalid-time-range'],
   [{ timeFrom: '24:00', timeTo: '24:00' }, 'invalid-time-range'], [{ markets: '' }, 'invalid-market'],
   [{ markets: 'corners' }, 'invalid-market'], [{ build: '1' }, 'invalid-market'],
-  [{ oddsMin: '1.00' }, 'invalid-odds-range'], [{ totalMax: '100000.01' }, 'invalid-odds-range'],
-  [{ oddsMax: '1000.01' }, 'invalid-odds-range'], [{ oddsMin: '1000.01' }, 'invalid-odds-range'],
-  [{ totalMin: '100000.01' }, 'invalid-odds-range'], [{ oddsMin: '1e2' }, 'invalid-odds-range'],
+  [{ oddsMin: '0' }, 'invalid-odds-range'], [{ totalMax: '0' }, 'invalid-odds-range'],
+  [{ oddsMax: '90071992547409.92' }, 'invalid-odds-range'], [{ oddsMin: '90071992547409.92' }, 'invalid-odds-range'],
+  [{ totalMin: '90071992547409.92' }, 'invalid-odds-range'], [{ oddsMin: '1e2' }, 'invalid-odds-range'],
   [{ totalMin: '3.001' }, 'invalid-odds-range'], [{ probMin: '100.01' }, 'invalid-probability-range'],
   [{ probMin: '80', probMax: '69.99' }, 'invalid-probability-range'], [{ teamsMin: '5', teamsMax: '4' }, 'invalid-selection-range'],
-  [{ teamsMax: '9' }, 'invalid-selection-range'], [{ slips: '101' }, 'invalid-slip-count'],
+  [{ teamsMax: '0' }, 'invalid-selection-range'], [{ teamsMin: '0' }, 'invalid-selection-range'],
+  [{ teamsMax: '9007199254740992' }, 'invalid-selection-range'], [{ slips: '101' }, 'invalid-slip-count'],
   [{ slips: '1000' }, 'invalid-slip-count'], [{ slips: '010' }, 'invalid-slip-count'],
   [{ slips: '0' }, 'invalid-slip-count'], [{ reuse: 'yes' }, 'invalid-query'],
   [{ build: '0' }, 'invalid-query'], [{ locale: 'en' }, 'invalid-query'],

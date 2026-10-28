@@ -14,7 +14,7 @@ import { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount } from "../members/access-codes.ts";
 import type { MemberIdentity } from "../members/member-sessions.ts";
 import { takeMemberLimit } from "../members/rate-limit.ts";
-import { bindSlipForecasts, readSlipForecastResults } from "./slip-forecast.ts";
+import { bindSlipForecasts, readSlipForecastResults, slipForecastReadRules } from "./slip-forecast.ts";
 
 export function createSavedSlips(database: DatabaseRuntime, config: Pick<AnalyticsConfig, "key">, now = Date.now,
   { resolveResults = readSlipForecastResults }: { resolveResults?: typeof readSlipForecastResults } = {}) {
@@ -92,7 +92,7 @@ export function createSavedSlips(database: DatabaseRuntime, config: Pick<Analyti
       return database.transaction(async (tx) => {
         const asOf = now(), records: SavedSlipView[] = [];
         const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0 };
-        const batchSize = 100;
+        const batchSize = Math.min(100, Math.floor(slipForecastReadRules.maximumSelections / slipBuilderRules.maximumSelections));
         type Row = { id: string; createdAt: Date; snapshotJson: unknown };
         let cursor: Pick<Row, "id" | "createdAt"> | null = null;
         // Keyset batches bound forecast hydration while the repeatable-read snapshot keeps counts coherent.

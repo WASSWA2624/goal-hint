@@ -28,7 +28,7 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
         </>}
         {index === 0 && showRank && <VisuallyHidden> · {m.text("slips.topRanked")}</VisuallyHidden>}
       </h3>
-      <span data-header-field="odds" title={m.text("slips.totalOdds")}>
+      <span data-header-field="odds" title={`${m.text("slips.totalOdds")}: ${totalOdds}`}>
         <span data-header-label aria-hidden="true">{m.text(variant ? "slips.odds" : "slips.totalOdds")}</span>
         <VisuallyHidden>{m.text("slips.totalOdds")}: </VisuallyHidden><strong>{totalOdds}</strong>
       </span>

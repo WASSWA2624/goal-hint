@@ -1,19 +1,21 @@
-import { addReportingDays, calendarRules, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "./calendar.ts";
+import { calendarRules, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "./calendar.ts";
 import { formatProbabilityValue, parseProbabilityValue, probabilityFraction, type FeedParameters } from "./feed-query.ts";
 import { kickoffTimeWindows, validKickoffTime } from "./kickoff-time.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
 import { isMarketFamily, isMarketSelection, marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
-import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
+import { formatOddsHundredths, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import type { SlipForecastReference } from "./slip-forecast-reference.ts";
 export type { SlipForecastReference } from "./slip-forecast-reference.ts";
 
-/** Limits apply equally to native GET forms, browser validation and the bounded server search. */
+const maximumCandidates = 800;
+/** Criteria precision and operational search budgets are independent of bookmaker quote validation. */
 export const slipBuilderRules = Object.freeze({
-  maximumDays: 31, maximumSelections: 8, maximumSlips: 100,
-  minimumOddsHundredths: oddsRules.minimumHundredths, maximumOddsHundredths: oddsRules.maximumHundredths,
-  maximumTotalOddsHundredths: 10_000_000,
-  maximumCandidates: 800, maximumSearchNodes: 100_000, maximumCombinations: 2_000, maximumBatchNodes: 100_000,
+  maximumDays: 31, maximumSelections: maximumCandidates, maximumSlips: 100,
+  minimumOddsHundredths: 1, maximumOddsHundredths: Number.MAX_SAFE_INTEGER,
+  maximumTotalOddsHundredths: Number.MAX_SAFE_INTEGER,
+  maximumCandidates, maximumSearchNodes: 100_000, maximumSearchWork: 100_000,
+  maximumCombinations: 2_000, maximumRetainedSelections: 16_000, maximumBatchNodes: 100_000,
 });
 
 export type SlipCriteria = Readonly<{
@@ -23,11 +25,11 @@ export type SlipCriteria = Readonly<{
   markets: readonly MarketFamily[];
   /** Missing family means Automatic; explicit choices use their own published probabilities and prices. */
   outcomes?: Readonly<Partial<Record<MarketFamily, readonly MarketSelection[]>>>;
-  /** Inclusive decimal odds bounds, represented in hundredths. */
-  totalMin: number; totalMax: number; oddsMin: number; oddsMax: number;
+  /** Inclusive decimal odds bounds in hundredths; an omitted maximum means unrestricted. */
+  totalMin: number; totalMax?: number; oddsMin: number; oddsMax?: number;
   /** Optional whole-slip probability percentage bounds require a qualified joint estimator. */
   totalProbMin?: number; totalProbMax?: number;
-  probMin: number; probMax: number; teamsMin: number; teamsMax: number; slips: number; reuse: boolean;
+  probMin: number; probMax: number; teamsMin: number; teamsMax?: number; slips: number; reuse: boolean;
 }>;
 export const slipInputFields = ["dateFrom", "dateTo", "timeFrom", "timeTo", "totalMin", "totalMax", "oddsMin", "oddsMax",
   "probMin", "probMax", "totalProbMin", "totalProbMax", "teamsMin", "teamsMax", "slips"] as const;
@@ -72,10 +74,9 @@ function fail(field: keyof SlipCriteria | "query", code: SlipCriteriaErrorCode):
 
 export function defaultSlipCriteria(today: string): SlipCriteria {
   const from = parseReportingDate(today);
-  return { dateFrom: from, dateTo: addReportingDays(from, 30), timeFrom: "", timeTo: "", markets: [...publicPolicy.markets],
-    totalMin: slipBuilderRules.minimumOddsHundredths, totalMax: slipBuilderRules.maximumTotalOddsHundredths,
-    oddsMin: slipBuilderRules.minimumOddsHundredths, oddsMax: slipBuilderRules.maximumOddsHundredths, probMin: 0, probMax: 100,
-    teamsMin: 1, teamsMax: slipBuilderRules.maximumSelections, slips: 3, reuse: false };
+  return { dateFrom: from, dateTo: from, timeFrom: "", timeTo: "", markets: [...publicPolicy.markets],
+    totalMin: slipBuilderRules.minimumOddsHundredths, oddsMin: slipBuilderRules.minimumOddsHundredths,
+    probMin: 0, probMax: 100, teamsMin: 1, slips: 5, reuse: false };
 }
 const outcomeKeys = new Map(publicPolicy.markets.map((family) => [`picks.${family}`, family]));
 const keys = new Set(["dateFrom", "dateTo", "timeFrom", "timeTo", "markets", "totalMin", "totalMax", "oddsMin", "oddsMax",
@@ -126,28 +127,26 @@ function parameters(input: FeedParameters): Map<string, string> {
   if (result.has("build") && result.get("build") !== "1") fail("query", "invalid-query");
   return result;
 }
-function oddsBound(value: string | undefined, fallback: number, blank: number, field: keyof SlipCriteria, maximum: number): number {
-  if (value === undefined) return fallback;
-  if (value === "") return blank;
-  const match = /^(0|[1-9]\d{0,5})(?:\.(\d{1,2}))?$/u.exec(value);
+function oddsBound(value: string, field: keyof SlipCriteria): number {
+  const match = /^(0|[1-9]\d{0,13})(?:\.(\d{1,2}))?$/u.exec(value);
   if (!match) fail(field, "invalid-odds-range");
-  const result = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
-  return result >= slipBuilderRules.minimumOddsHundredths && result <= maximum ? result : fail(field, "invalid-odds-range");
+  const result = BigInt(match[1]!) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
+  return result >= BigInt(slipBuilderRules.minimumOddsHundredths) && result <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(result) : fail(field, "invalid-odds-range");
 }
 function integer(value: string | undefined, fallback: number, maximum: number, field: keyof SlipCriteria): number {
   const code = field === "slips" ? "invalid-slip-count" : "invalid-selection-range";
   if (value === undefined || value === "" && field !== "slips") return fallback;
-  if (!/^[1-9]\d{0,2}$/u.test(value)) fail(field, code);
+  if (!/^[1-9]\d{0,15}$/u.test(value)) fail(field, code);
   const result = Number(value);
-  return result <= maximum ? result : fail(field, code);
+  return Number.isSafeInteger(result) && result <= maximum ? result : fail(field, code);
 }
 
 export function parseSlipCriteria(input: FeedParameters, today: string): SlipCriteria {
   const defaults = defaultSlipCriteria(today), values = parameters(input), get = (key: string) => values.get(key);
   const dateFrom = get("dateFrom") || defaults.dateFrom;
-  let dateTo = get("dateTo") || defaults.dateTo;
+  const dateTo = get("dateTo") || dateFrom;
   try {
-    if (!get("dateTo")) dateTo = addReportingDays(parseReportingDate(dateFrom), 30);
     validateReportingDateRange(dateFrom, dateTo, slipBuilderRules.maximumDays);
   }
   catch { fail("dateFrom", "invalid-date-range"); }
@@ -169,27 +168,27 @@ export function parseSlipCriteria(input: FeedParameters, today: string): SlipCri
     if (!markets.includes(family)) continue;
     outcomes[family] = marketSelections[family].filter((selection) => choices.includes(selection));
   }
-  const totalMin = oddsBound(get("totalMin"), defaults.totalMin, slipBuilderRules.minimumOddsHundredths, "totalMin", slipBuilderRules.maximumTotalOddsHundredths);
-  const totalMax = oddsBound(get("totalMax"), defaults.totalMax, slipBuilderRules.maximumTotalOddsHundredths, "totalMax", slipBuilderRules.maximumTotalOddsHundredths);
-  const oddsMin = oddsBound(get("oddsMin"), defaults.oddsMin, slipBuilderRules.minimumOddsHundredths, "oddsMin", slipBuilderRules.maximumOddsHundredths);
-  const oddsMax = oddsBound(get("oddsMax"), defaults.oddsMax, slipBuilderRules.maximumOddsHundredths, "oddsMax", slipBuilderRules.maximumOddsHundredths);
-  if (totalMin > totalMax) fail("totalMin", "invalid-odds-range");
-  if (oddsMin > oddsMax) fail("oddsMin", "invalid-odds-range");
+  const totalMin = get("totalMin") ? oddsBound(get("totalMin")!, "totalMin") : defaults.totalMin;
+  const totalMax = get("totalMax") ? oddsBound(get("totalMax")!, "totalMax") : undefined;
+  const oddsMin = get("oddsMin") ? oddsBound(get("oddsMin")!, "oddsMin") : defaults.oddsMin;
+  const oddsMax = get("oddsMax") ? oddsBound(get("oddsMax")!, "oddsMax") : undefined;
+  if (totalMax !== undefined && totalMin > totalMax) fail("totalMin", "invalid-odds-range");
+  if (oddsMax !== undefined && oddsMin > oddsMax) fail("oddsMin", "invalid-odds-range");
   const probMin = !get("probMin") ? defaults.probMin : parseProbabilityValue(get("probMin")!);
   const probMax = !get("probMax") ? defaults.probMax : parseProbabilityValue(get("probMax")!);
   if (probMin === null || probMax === null || probMin > probMax) fail("probMin", "invalid-probability-range");
   const totalProbMin = get("totalProbMin") ? parseProbabilityValue(get("totalProbMin")!) : undefined;
   const totalProbMax = get("totalProbMax") ? parseProbabilityValue(get("totalProbMax")!) : undefined;
   if (totalProbMin === null || totalProbMax === null || (totalProbMin ?? 0) > (totalProbMax ?? 100)) fail("totalProbMin", "invalid-probability-range");
-  const teamsMin = integer(get("teamsMin"), defaults.teamsMin, slipBuilderRules.maximumSelections, "teamsMin");
-  const teamsMax = integer(get("teamsMax"), defaults.teamsMax, slipBuilderRules.maximumSelections, "teamsMax");
-  if (teamsMin > teamsMax) fail("teamsMin", "invalid-selection-range");
+  const teamsMin = integer(get("teamsMin"), defaults.teamsMin, Number.MAX_SAFE_INTEGER, "teamsMin");
+  const teamsMax = get("teamsMax") ? integer(get("teamsMax"), 1, Number.MAX_SAFE_INTEGER, "teamsMax") : undefined;
+  if (teamsMax !== undefined && teamsMin > teamsMax) fail("teamsMin", "invalid-selection-range");
   const slips = integer(get("slips"), defaults.slips, slipBuilderRules.maximumSlips, "slips"), reuseValue = get("reuse") ?? (defaults.reuse ? "1" : "0");
   if (reuseValue !== "0" && reuseValue !== "1") fail("reuse", "invalid-query");
   return { dateFrom, dateTo, timeFrom, timeTo, markets, ...(Object.keys(outcomes).length > 0 ? { outcomes } : {}),
-    totalMin, totalMax, oddsMin, oddsMax, probMin, probMax,
+    totalMin, ...(totalMax !== undefined ? { totalMax } : {}), oddsMin, ...(oddsMax !== undefined ? { oddsMax } : {}), probMin, probMax,
     ...(totalProbMin !== undefined ? { totalProbMin } : {}), ...(totalProbMax !== undefined ? { totalProbMax } : {}),
-    teamsMin, teamsMax, slips, reuse: reuseValue === "1" };
+    teamsMin, ...(teamsMax !== undefined ? { teamsMax } : {}), slips, reuse: reuseValue === "1" };
 }
 
 /** Canonical, complete criteria so a native GET form and an interactive form share one URL. */
@@ -214,14 +213,19 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
     }
   }
   for (const field of ["totalMin", "totalMax", "oddsMin", "oddsMax"] as const) {
+    if (criteria[field] === undefined && field.endsWith("Max")) { result.set(field, ""); continue; }
     if (!Number.isSafeInteger(criteria[field])) fail(field, "invalid-odds-range");
-    result.set(field, formatOddsHundredths(criteria[field]));
+    result.set(field, formatOddsHundredths(criteria[field]!));
   }
   for (const field of ["probMin", "probMax"] as const) result.set(field, formatProbabilityValue(criteria[field]));
   for (const field of ["totalProbMin", "totalProbMax"] as const) {
     if (criteria[field] !== undefined) result.set(field, formatProbabilityValue(criteria[field]));
   }
-  for (const field of ["teamsMin", "teamsMax", "slips"] as const) result.set(field, String(criteria[field]));
+  for (const field of ["teamsMin", "teamsMax", "slips"] as const) {
+    if (criteria[field] === undefined && field === "teamsMax") { result.set(field, ""); continue; }
+    if (!Number.isSafeInteger(criteria[field]) || criteria[field]! < 1) fail(field, field === "slips" ? "invalid-slip-count" : "invalid-selection-range");
+    result.set(field, String(criteria[field]));
+  }
   if (typeof criteria.reuse !== "boolean") fail("reuse", "invalid-query");
   result.set("reuse", criteria.reuse ? "1" : "0");
   parseSlipCriteria(result, criteria.dateFrom);
@@ -231,6 +235,11 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
 type Candidate = { selection: SlipSelection; scaledOdds: bigint; key: string };
 type Combination = { slip: BuiltSlip; product: bigint; denominator: bigint; key: string };
 const SCALE = 10_000n;
+/** Compare canonical two-place slip totals without Number rounding or overflow. */
+export function compareSlipTotalOdds(left: string, right: string): number {
+  const first = BigInt(left.replace(".", "")), second = BigInt(right.replace(".", ""));
+  return first < second ? -1 : first > second ? 1 : 0;
+}
 export function hasJointProbabilityBounds(criteria: SlipCriteria): boolean {
   return (criteria.totalProbMin ?? 0) > 0 || (criteria.totalProbMax ?? 100) < 100;
 }
@@ -240,10 +249,11 @@ function compareCandidates(left: Candidate, right: Candidate): number {
     || (left.scaledOdds > right.scaledOdds ? -1 : left.scaledOdds < right.scaledOdds ? 1 : 0) || compareText(left.key, right.key);
 }
 function compareCombinations(left: Combination, right: Combination): number {
+  const first = left.slip.selections.length - right.slip.selections.length
+    || right.slip.averageProbability - left.slip.averageProbability;
+  if (first) return first;
   const oddsDifference = left.product * right.denominator - right.product * left.denominator;
-  return left.slip.selections.length - right.slip.selections.length
-    || right.slip.averageProbability - left.slip.averageProbability
-    || (oddsDifference > 0n ? -1 : oddsDifference < 0n ? 1 : 0) || compareText(left.key, right.key);
+  return (oddsDifference > 0n ? -1 : oddsDifference < 0n ? 1 : 0) || compareText(left.key, right.key);
 }
 function totalText(product: bigint, denominator: bigint): string {
   const hundredths = (product * 200n + denominator) / (denominator * 2n);
@@ -257,25 +267,46 @@ function combination(selected: readonly Candidate[], product: bigint): Combinati
     oddsBasis: selections[0]!.oddsBasis, averageProbability: selections.reduce((sum, item) => sum + item.probability, 0) / selections.length } };
 }
 
-type CompletionBounds = Readonly<{ minimum: readonly (readonly (bigint | undefined)[])[];
-  maximum: readonly (readonly (bigint | undefined)[])[] }>;
-/** Exact suffix price bounds, independent of probability order. Ignoring fixture conflicts only widens the bounds. */
-function completionBounds(candidates: readonly Candidate[], maximumSelections: number): CompletionBounds {
-  const minimum: (bigint | undefined)[][] = Array.from({ length: candidates.length + 1 }, () => [1n]);
-  const maximum: (bigint | undefined)[][] = Array.from({ length: candidates.length + 1 }, () => [1n]);
-  for (let index = candidates.length - 1; index >= 0; index--) {
-    for (let count = 1; count <= maximumSelections; count++) {
-      const skippedMinimum = minimum[index + 1]![count], priorMinimum = minimum[index + 1]![count - 1];
-      const skippedMaximum = maximum[index + 1]![count], priorMaximum = maximum[index + 1]![count - 1];
-      const includedMinimum = priorMinimum === undefined ? undefined : priorMinimum * candidates[index]!.scaledOdds;
-      const includedMaximum = priorMaximum === undefined ? undefined : priorMaximum * candidates[index]!.scaledOdds;
-      minimum[index]![count] = skippedMinimum === undefined ? includedMinimum : includedMinimum === undefined
-        ? skippedMinimum : skippedMinimum < includedMinimum ? skippedMinimum : includedMinimum;
-      maximum[index]![count] = skippedMaximum === undefined ? includedMaximum : includedMaximum === undefined
-        ? skippedMaximum : skippedMaximum > includedMaximum ? skippedMaximum : includedMaximum;
-    }
+type CompletionBounds = Readonly<{ minimum: (start: number, count: number) => bigint | undefined;
+  maximum: (start: number, count: number) => bigint | undefined }>;
+type PriceNode = Readonly<{ count: number; product: bigint; left?: PriceNode | undefined; right?: PriceNode | undefined }>;
+/**
+ * Persistent suffix price multisets give exact cheapest/dearest k-product bounds in O(log n).
+ * Sharing unchanged branches avoids an O(n × maximum slip length) matrix of large BigInts.
+ * Ignoring fixture conflicts only widens the bounds, so pruning remains conservative.
+ */
+function completionBounds(candidates: readonly Candidate[]): CompletionBounds {
+  const prices = [...new Set(candidates.map((candidate) => candidate.scaledOdds))]
+    .sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+  const positions = new Map(prices.map((price, index) => [price, index]));
+  const suffixes: (PriceNode | undefined)[] = Array(candidates.length + 1);
+  function insert(node: PriceNode | undefined, low: number, high: number, position: number, price: bigint): PriceNode {
+    if (low === high) return { count: (node?.count ?? 0) + 1, product: (node?.product ?? 1n) * price };
+    const middle = Math.floor((low + high) / 2);
+    const left = position <= middle ? insert(node?.left, low, middle, position, price) : node?.left;
+    const right = position > middle ? insert(node?.right, middle + 1, high, position, price) : node?.right;
+    return { count: (left?.count ?? 0) + (right?.count ?? 0), product: (left?.product ?? 1n) * (right?.product ?? 1n), left, right };
   }
-  return { minimum, maximum };
+  for (let index = candidates.length - 1; index >= 0; index--) {
+    const price = candidates[index]!.scaledOdds;
+    suffixes[index] = insert(suffixes[index + 1], 0, prices.length - 1, positions.get(price)!, price);
+  }
+  function bound(start: number, count: number, greatest: boolean): bigint | undefined {
+    if (count === 0) return 1n;
+    const root = suffixes[start];
+    if (!root || root.count < count) return undefined;
+    function take(node: PriceNode, low: number, high: number, count: number): bigint {
+      if (count === node.count) return node.product;
+      if (low === high) return prices[low]! ** BigInt(count);
+      const middle = Math.floor((low + high) / 2), first = greatest ? node.right : node.left, second = greatest ? node.left : node.right;
+      if (count <= (first?.count ?? 0)) return greatest
+        ? take(first!, middle + 1, high, count) : take(first!, low, middle, count);
+      const remaining = count - (first?.count ?? 0);
+      return (first?.product ?? 1n) * (greatest ? take(second!, low, middle, remaining) : take(second!, middle + 1, high, remaining));
+    }
+    return take(root, 0, prices.length - 1, count);
+  }
+  return { minimum: (start, count) => bound(start, count, false), maximum: (start, count) => bound(start, count, true) };
 }
 
 /** Exact compatible-batch search: maximize the requested count, then compare ordered slip ranks lexicographically.
@@ -339,7 +370,8 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
         const odds = price && price.basis === "bookmaker" && price.retrievedAt <= asOf && (price.providerUpdatedAt === null || price.providerUpdatedAt <= asOf)
           ? parseDecimalOdds(price.price) : null;
         if (!price || !odds) { missingOdds = true; continue; }
-        if (odds.scaled < BigInt(criteria.oddsMin) * 100n || odds.scaled > BigInt(criteria.oddsMax) * 100n) continue;
+        if (odds.scaled < BigInt(criteria.oddsMin) * 100n
+          || criteria.oddsMax !== undefined && odds.scaled > BigInt(criteria.oddsMax) * 100n) continue;
         const reference: SlipForecastReference = { cycleId: record.cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt };
         const key = `${record.fixtureId}:${market.family}:${selection}:${probability}:${price.price}`
           + `:${reference.cycleId}:${reference.revisionId}:${reference.publishedAt}`;
@@ -356,14 +388,16 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   if (candidates.length > slipBuilderRules.maximumCandidates) { candidates.length = slipBuilderRules.maximumCandidates; searchLimited = true; }
   const retained: Combination[] = [], diversified: Combination[] = [], diversifiedFixtures = new Set<string>();
   const compare = ranking ? (left: Combination, right: Combination) => ranking.compare(left.slip, right.slip) : compareCombinations;
-  let searchNodes = 0, exhausted = false;
-  const maximumSelections = Math.min(criteria.teamsMax, qualifying.size), bounds = completionBounds(candidates, maximumSelections);
+  let searchNodes = 0, searchWork = 0, exhausted = false, retainedSelections = 0;
+  const availableFixtures = new Set(candidates.map((candidate) => candidate.selection.fixtureId)).size;
+  const maximumSelections = Math.min(criteria.teamsMax ?? availableFixtures, availableFixtures), bounds = completionBounds(candidates);
   const denominators = Array.from({ length: maximumSelections + 1 }, (_, count) => SCALE ** BigInt(count));
   const minimumProducts = denominators.map((denominator) => BigInt(criteria.totalMin) * denominator);
-  const maximumProducts = denominators.map((denominator) => BigInt(criteria.totalMax) * denominator);
+  const maximumProducts = criteria.totalMax === undefined ? null : denominators.map((denominator) => BigInt(criteria.totalMax!) * denominator);
   const candidateIndexes = new Map(candidates.map((candidate, index) => [candidate, index]));
   // At most one quarter of the existing node budget seeds disjoint slips before broad ranked enumeration.
   const diversificationBudget = Math.floor(slipBuilderRules.maximumSearchNodes / 4), seedResults = new Map<string, boolean>();
+  const diversificationWork = Math.floor(slipBuilderRules.maximumSearchWork / 4);
   let diversificationLimited = false;
   const selected: Candidate[] = [], fixtures = new Set<string>();
   function retain(value: Combination): boolean {
@@ -379,33 +413,35 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       && value.slip.selections.every((item) => !diversifiedFixtures.has(item.fixtureId))) {
       diversified.push(value); value.slip.selections.forEach((item) => diversifiedFixtures.add(item.fixtureId));
     }
-    // Max-heap keeps the worst retained slip at the root, bounding both memory and insertion work.
-    if (retained.length < slipBuilderRules.maximumCombinations) {
-      let index = retained.push(value) - 1;
-      while (index > 0) {
-        const parent = Math.floor((index - 1) / 2);
-        if (compare(retained[index]!, retained[parent]!) <= 0) break;
-        [retained[index], retained[parent]] = [retained[parent]!, retained[index]!]; index = parent;
-      }
-      return true;
+    // The worst-ranked root can be discarded until both combination and aggregate-leg budgets fit.
+    // The disjoint reserve contains at most maximumCandidates further legs, keeping final payloads bounded.
+    retainedSelections += value.slip.selections.length;
+    let index = retained.push(value) - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compare(retained[index]!, retained[parent]!) <= 0) break;
+      [retained[index], retained[parent]] = [retained[parent]!, retained[index]!]; index = parent;
     }
-    searchLimited = true;
-    if (compare(value, retained[0]!) >= 0) return true;
-    retained[0] = value;
-    let index = 0;
-    while (index * 2 + 1 < retained.length) {
-      let worse = index * 2 + 1;
-      if (worse + 1 < retained.length && compare(retained[worse + 1]!, retained[worse]!) > 0) worse++;
-      if (compare(retained[worse]!, retained[index]!) <= 0) break;
-      [retained[index], retained[worse]] = [retained[worse]!, retained[index]!]; index = worse;
+    while (retained.length > slipBuilderRules.maximumCombinations || retainedSelections > slipBuilderRules.maximumRetainedSelections) {
+      searchLimited = true;
+      retainedSelections -= retained[0]!.slip.selections.length;
+      const last = retained.pop()!;
+      if (!retained.length) break;
+      retained[0] = last; index = 0;
+      while (index * 2 + 1 < retained.length) {
+        let worse = index * 2 + 1;
+        if (worse + 1 < retained.length && compare(retained[worse + 1]!, retained[worse]!) > 0) worse++;
+        if (compare(retained[worse]!, retained[index]!) <= 0) break;
+        [retained[index], retained[worse]] = [retained[worse]!, retained[index]!]; index = worse;
+      }
     }
     return true;
   }
   function enumerate(pool: readonly Candidate[], prices: CompletionBounds, start: number, target: number, product: bigint,
     diversifying = false): boolean {
-    const remaining = target - selected.length, minimum = prices.minimum[start]?.[remaining], maximum = prices.maximum[start]?.[remaining];
+    const remaining = target - selected.length, minimum = prices.minimum(start, remaining), maximum = prices.maximum(start, remaining);
     if (minimum === undefined || maximum === undefined || product * maximum * 100n < minimumProducts[target]!
-      || product * minimum * 100n > maximumProducts[target]!) return false;
+      || maximumProducts !== null && product * minimum * 100n > maximumProducts[target]!) return false;
     if (selected.length === target) {
       // Compact candidate indexes keep the bounded seed memo small and prevent duplicate model estimates.
       const seedKey = !criteria.reuse ? selected.map((candidate) => candidateIndexes.get(candidate)!).join(",") : "";
@@ -415,14 +451,19 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       return accepted;
     }
     for (let index = start; index < pool.length && !exhausted; index++) {
-      if (diversifying && searchNodes >= diversificationBudget) {
+      // Preserve the former <=8-leg node allowance while charging longer paths for materialization work.
+      const weight = Math.max(1, Math.ceil(target / 8));
+      if (diversifying && (searchNodes >= diversificationBudget || searchWork + weight > diversificationWork)) {
         diversificationLimited = true; searchLimited = true; break;
       }
-      if (++searchNodes > slipBuilderRules.maximumSearchNodes) { exhausted = true; searchLimited = true; break; }
+      if (searchNodes >= slipBuilderRules.maximumSearchNodes || searchWork + weight > slipBuilderRules.maximumSearchWork) {
+        exhausted = true; searchLimited = true; break;
+      }
+      searchNodes++; searchWork += weight;
       const candidate = pool[index]!;
       if (fixtures.has(candidate.selection.fixtureId) || selected.length > 0 && candidate.selection.oddsBasis !== selected[0]!.selection.oddsBasis) continue;
       const nextProduct = product * candidate.scaledOdds, denominator = SCALE ** BigInt(selected.length + 1);
-      if (nextProduct * 100n > BigInt(criteria.totalMax) * denominator) continue;
+      if (criteria.totalMax !== undefined && nextProduct * 100n > BigInt(criteria.totalMax) * denominator) continue;
       selected.push(candidate); fixtures.add(candidate.selection.fixtureId);
       const accepted = enumerate(pool, prices, index + 1, target, nextProduct, diversifying);
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
@@ -441,7 +482,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
     for (let count = criteria.teamsMin; count <= maximumSelections && diversified.length < criteria.slips && !diversificationLimited; count++) {
       while (diversified.length < criteria.slips && !diversificationLimited) {
         const available = candidates.filter((candidate) => !diversifiedFixtures.has(candidate.selection.fixtureId));
-        if (!enumerate(available, completionBounds(available, count), 0, count, 1n, true)) break;
+        if (!enumerate(available, completionBounds(available), 0, count, 1n, true)) break;
       }
     }
   }

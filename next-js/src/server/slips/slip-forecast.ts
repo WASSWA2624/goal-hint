@@ -16,8 +16,9 @@ import { cycleEligibilityFor, storedSettlementRevision } from "../settlement/set
 
 type Tx = Prisma.TransactionClient;
 export const slipForecastReadRules = Object.freeze({
-  maximumSelections: slipBuilderRules.maximumDays * slipBuilderRules.maximumSlips * slipBuilderRules.maximumSelections,
-  batchSize: 100, prefetchThreshold: slipBuilderRules.maximumSelections,
+  // Preserve independent hydration budgets when a custom slip contains more than eight matches.
+  maximumSelections: slipBuilderRules.maximumDays * slipBuilderRules.maximumCandidates,
+  batchSize: 100, prefetchThreshold: 8,
 });
 const fixtureSelect = { id: true, status: true, activeCycleId: true, kickoff: true, homeTeamId: true, awayTeamId: true,
   regulationHome: true, regulationAway: true, regulationVerifiedAt: true, regulationEvidenceRef: true,

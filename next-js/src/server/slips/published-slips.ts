@@ -86,8 +86,10 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const rounded = (product * 200n + denominator) / (2n * denominator);
         const criteria = bestSlipCriteria(input.day);
         const average = snapshot.selections.reduce((value, selection) => value + selection.probability, 0) / snapshot.selections.length;
-        if (quoted !== rounded || product * 100n < BigInt(criteria.totalMin) * denominator || product * 100n > BigInt(criteria.totalMax) * denominator ||
-          Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2) fail("invalid-input");
+        if (snapshot.selections.length < criteria.teamsMin || criteria.teamsMax !== undefined && snapshot.selections.length > criteria.teamsMax
+          || quoted !== rounded || product * 100n < BigInt(criteria.totalMin) * denominator
+          || criteria.totalMax !== undefined && product * 100n > BigInt(criteria.totalMax) * denominator
+          || Math.abs(average - snapshot.averageProbability) > Number.EPSILON * snapshot.selections.length * 2) fail("invalid-input");
         for (const selection of snapshot.selections) {
           if (ids.has(selection.fixtureId) || getReportingDate(utcInstantFromEpochMilliseconds(selection.kickoffAt)) !== input.day) fail("invalid-input");
           ids.add(selection.fixtureId);

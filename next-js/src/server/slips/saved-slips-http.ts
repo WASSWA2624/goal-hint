@@ -2,6 +2,7 @@ import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { modelIndependentSlip, parseSlipCriteria } from "../../domain/slip-builder.ts";
+import { savedSlipSnapshotRules } from "../../domain/saved-slips.ts";
 import { getAnalyticsServices } from "../analytics/analytics-http.ts";
 import { isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices } from "../members/member-http.ts";
@@ -24,13 +25,14 @@ export function createSaveSlipHandler({ members = getMemberServices, services = 
       let body: unknown;
       try {
         if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) return json({ error: "invalid-request" }, 400);
-        const bytes = await readLimitedBody(request, 8192, { deadlineMs: 15_000 });
+        const bytes = await readLimitedBody(request, savedSlipSnapshotRules.maximumSaveRequestBytes, { deadlineMs: 15_000 });
         if (!bytes) return json({ error: "invalid-request" }, 400);
         body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
       } catch { return json({ error: "invalid-request" }, 400); }
       if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).sort().join() !== "criteria,slipId") return json({ error: "invalid-request" }, 400);
       const { criteria: query, slipId } = body as Record<string, unknown>;
-      if (typeof query !== "string" || query.length > 2048 || typeof slipId !== "string" || slipId.length > 4096) return json({ error: "invalid-request" }, 400);
+      if (typeof query !== "string" || query.length > 2048 || typeof slipId !== "string"
+        || slipId.length > savedSlipSnapshotRules.maximumIdentityLength) return json({ error: "invalid-request" }, 400);
       let criteria;
       try { criteria = parseSlipCriteria(new URLSearchParams(query), getReportingDate(utcInstantFromEpochMilliseconds(now()))); }
       catch { return json({ error: "invalid-request" }, 400); }

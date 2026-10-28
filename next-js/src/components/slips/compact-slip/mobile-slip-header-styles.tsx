@@ -80,6 +80,10 @@ export const MobileHeaderRow = styled.summary`
       padding: 4px 2px;
     }
     [data-header-field] strong { font-size: 0.875rem; }
+    [data-header-field="odds"] strong {
+      min-inline-size: 0; max-inline-size: 100%; overflow: hidden;
+      text-overflow: ellipsis; flex-shrink: 1;
+    }
     [data-header-label] { order: -1; font-size: 0.75rem; }
     &[data-large-odds] [data-header-field="odds"] [data-header-label] { display: inline; }
     &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.875rem; }

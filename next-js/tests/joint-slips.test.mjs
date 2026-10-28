@@ -4,12 +4,29 @@ import { matchFeedRecordSchema } from '../src/domain/match-feed.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { jointSlipBuilder, jointSlipProbability, jointSlipRanking } from '../src/domain/joint-slip-model.ts';
 import { buildSlips, defaultSlipCriteria, slipBuilderRules } from '../src/domain/slip-builder.ts';
+import { compareBestSlips } from '../src/domain/best-slips.ts';
 
 const today = '2026-10-13', asOf = Date.parse('2026-10-13T07:00:00Z'), kickoffAt = Date.parse('2026-10-13T15:00:00Z');
 // Synthetic test evidence only: these models are never bound to a production service.
 const synthetic = { calibrationReference: 'synthetic-test-calibration', correlationReference: 'synthetic-test-joint-outcomes',
   validFrom: asOf - 1000, validUntil: asOf + 60_000 };
 const model = { ...synthetic, estimate: (selections) => Math.min(...selections.map((item) => item.probability)) - 0.05 * (selections.length - 1) };
+
+test('equal-probability price ranking compares exact large totals without overflow or cent loss', () => {
+  const reference = { ...synthetic, estimate: () => 0.8 };
+  const selections = [{ probability: 0.8 }];
+  const { ranking } = jointSlipRanking(reference);
+  for (const [lower, higher] of [
+    ['9'.repeat(400) + '.99', '1' + '0'.repeat(401) + '.00'],
+    ['9007199254740992.01', '9007199254740992.02'],
+  ]) {
+    const low = { id: 'a-low', selections, totalOdds: lower, averageProbability: 0.8, estimatedProbability: 0.8 };
+    const high = { ...low, id: 'z-high', totalOdds: higher };
+    assert.ok(ranking.compare(high, low) < 0);
+    assert.ok(ranking.compare(low, high) > 0);
+    assert.ok(compareBestSlips(high, low) < 0);
+  }
+});
 function record(id, odds = '2.00', probability = 0.8, offset = 0) {
   const snapshot = validateMarketSnapshot({
     'match-result': { source: 'ai', period: marketRules.period,

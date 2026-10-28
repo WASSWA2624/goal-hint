@@ -1,4 +1,5 @@
-import { defaultSlipCriteria, buildSlips, type BuiltSlip, type SlipCriteria } from "./slip-builder.ts";
+import { defaultSlipCriteria, buildSlips, compareSlipTotalOdds, type BuiltSlip, type SlipCriteria } from "./slip-builder.ts";
+import { oddsRules } from "./odds.ts";
 import { jointSlipBuilder, type JointSlipModel } from "./joint-slip-model.ts";
 export { jointSlipProbability, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
 import type { ReportingDate } from "./calendar.ts";
@@ -11,7 +12,7 @@ export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 5
 export type BestSlip = BuiltSlip & Readonly<{ estimatedProbability: number }>;
 export function compareBestSlips(left: BestSlip, right: BestSlip): number {
   return right.estimatedProbability - left.estimatedProbability || left.selections.length - right.selections.length
-    || Number(right.totalOdds) - Number(left.totalOdds) || left.id.localeCompare(right.id);
+    || compareSlipTotalOdds(right.totalOdds, left.totalOdds) || left.id.localeCompare(right.id);
 }
 export type BestSlipSummary = Readonly<{
   rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;
@@ -26,7 +27,7 @@ export type BestSlipsResult = Readonly<{
 
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {
   return { ...defaultSlipCriteria(today), dateTo: today, totalMin: target.minimumTotal, totalMax: target.maximumTotal,
-    slips: target.count, reuse: false };
+    oddsMin: oddsRules.minimumHundredths, oddsMax: oddsRules.maximumHundredths, teamsMax: 8, slips: target.count, reuse: false };
 }
 
 export function bestSlipBuilder(model: JointSlipModel) {

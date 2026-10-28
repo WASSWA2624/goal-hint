@@ -12,6 +12,12 @@ export { slipOutcome } from "./slip-outcome.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 
 const record = storedMatchFeedRecordSchema.shape;
+/** At most one selection per retained candidate; source quotes have at most four whole digits. */
+export const savedSlipSnapshotRules = Object.freeze({
+  maximumIdentityLength: slipBuilderRules.maximumSelections * 256,
+  maximumTotalOddsDigits: slipBuilderRules.maximumSelections * 4,
+  maximumSaveRequestBytes: slipBuilderRules.maximumSelections * 256 + 4096,
+});
 const selection = z.strictObject({
   fixtureId: z.uuid(), kickoffAt: z.number().int().positive(), homeTeam: record.homeTeam, awayTeam: record.awayTeam,
   competition: record.competition, family: marketFamilySchema, selection: z.string().max(64),
@@ -22,8 +28,8 @@ const selection = z.strictObject({
 
 /** Only server-generated snapshots are persisted. No member identity is part of a public saved slip. */
 export const savedSlipSnapshotSchema = z.strictObject({
-  id: z.string().min(1).max(4096), selections: z.array(selection).min(1).max(slipBuilderRules.maximumSelections),
-  totalOdds: z.string().regex(/^\d{1,6}\.\d{2}$/u), oddsBasis: z.enum(["bookmaker", "median"]),
+  id: z.string().min(1).max(savedSlipSnapshotRules.maximumIdentityLength), selections: z.array(selection).min(1).max(slipBuilderRules.maximumSelections),
+  totalOdds: z.string().max(savedSlipSnapshotRules.maximumTotalOddsDigits + 3).regex(/^\d+\.\d{2}$/u), oddsBasis: z.enum(["bookmaker", "median"]),
   averageProbability: z.number().min(0).max(1),
 }).refine((value) => new Set(value.selections.map((item) => item.fixtureId)).size === value.selections.length,
   "A fixture can appear only once in a slip.");

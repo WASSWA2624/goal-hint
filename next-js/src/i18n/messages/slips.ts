@@ -1,4 +1,8 @@
 export const slipsMessages = {
+  "slips.signIn": "Sign in",
+  "slips.today": "Today",
+  "slips.autoShort": "Auto",
+  "slips.toolbar.kickoff": "Date & time",
   "slips.header.matches": "Matches",
   "slips.header.matchCount": { one: "{count} match", other: "{count} matches" },
   "slips.header.probabilityShort": "Prob.",

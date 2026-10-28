@@ -1,4 +1,4 @@
-import { buildSlips, type BuiltSlip, type SlipRanking, type SlipSelection } from "./slip-builder.ts";
+import { buildSlips, compareSlipTotalOdds, type BuiltSlip, type SlipRanking, type SlipSelection } from "./slip-builder.ts";
 
 /** Server bindings must independently verify calibration/correlation evidence; references alone are not approval. */
 export type JointSlipModel = Readonly<{
@@ -36,7 +36,7 @@ export function jointSlipRanking(model: JointSlipModel) {
   const ranking: SlipRanking = {
     probability, accepts: (slip) => probability(slip) !== null,
     compare: (left, right) => probability(right)! - probability(left)! || left.selections.length - right.selections.length
-      || Number(right.totalOdds) - Number(left.totalOdds) || left.id.localeCompare(right.id),
+      || compareSlipTotalOdds(right.totalOdds, left.totalOdds) || left.id.localeCompare(right.id),
   };
   return { ranking, probability, unestimated: () => unestimated };
 }

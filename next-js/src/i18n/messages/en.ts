@@ -562,7 +562,7 @@ export const en = {
   "slips.error.invalid-pick": "Choose Automatic or valid results for each selected market.",
   "slips.error.invalid-odds-range": "Enter valid decimal odds limits, with the minimum at or below the maximum.",
   "slips.error.invalid-probability-range": "Enter probabilities from 0% to 100%, with the minimum at or below the maximum.",
-  "slips.error.invalid-selection-range": "Choose 1–8 selections, with the minimum at or below the maximum.",
+  "slips.error.invalid-selection-range": "Choose whole-number match limits of at least 1, with the minimum at or below the maximum.",
   "slips.error.invalid-slip-count": "Choose between 1 and 10 slips.",
   "history.readClock": "Revision and cycle labels reflect this history read. Use latest history to see newer publications; the main forecast updates separately.",
   "feed.status.all": "All match statuses",

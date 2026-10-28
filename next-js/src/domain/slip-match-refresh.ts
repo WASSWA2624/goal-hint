@@ -8,7 +8,7 @@ import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { SlipMatchState } from "./slip-match-state.ts";
 
 export const slipMatchRefreshRules = Object.freeze({
-  intervalMs: 20_000, maximumSelections: slipBuilderRules.maximumSlips * slipBuilderRules.maximumSelections,
+  intervalMs: 20_000, maximumSelections: slipBuilderRules.maximumCandidates,
   maximumRequestBytes: 1_048_576, requestDeadlineMs: 10_000, requestsPerMinute: 12,
 });
 

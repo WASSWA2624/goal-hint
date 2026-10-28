@@ -81,7 +81,7 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
   const summary = <>
         <h3 data-summary-identity id={headingId ?? `${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
           {index === 0 && showRank && <span data-rank>{messages.text("slips.topRanked")}</span>}</h3>
-        <span data-summary-odds data-summary-fact><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{totalOdds}</strong></span>
+        <span data-summary-odds data-summary-fact title={`${messages.text("slips.totalOdds")}: ${totalOdds}`}><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{totalOdds}</strong></span>
         <span data-summary-average data-summary-fact title={messages.text("slips.averageHint")}>
           <span data-fact-label aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}: </VisuallyHidden>
           <strong>{formatSlipProbability(averageProbability, messages)}</strong></span>

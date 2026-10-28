@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { savedSlipOutcome, savedSlipView, savedSlipSnapshotSchema } from '../src/domain/saved-slips.ts';
+import { savedSlipOutcome, savedSlipView, savedSlipSnapshotSchema, savedSlipSnapshotRules } from '../src/domain/saved-slips.ts';
 import { defaultSlipCriteria, modelIndependentSlip, serializeSlipCriteria } from '../src/domain/slip-builder.ts';
 import { createSavedSlips } from '../src/server/slips/saved-slips.ts';
 import { createSaveSlipHandler } from '../src/server/slips/saved-slips-http.ts';
+import { slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 
@@ -13,6 +14,17 @@ const slip = { id: 'server-generated-selection', selections: [{ fixtureId: id, k
   family: 'match-result', selection: 'home-win', probability: 0.7, odds: '2.00', oddsBasis: 'bookmaker' }],
   totalOdds: '2.00', oddsBasis: 'bookmaker', averageProbability: 0.7 };
 const result = { fixtureId: id, status: 'finished-regulation', regulationVerified: true, regulationHome: 2, regulationAway: 1 };
+
+test('saved snapshots preserve long slips and exact uncapped totals within independent storage bounds', () => {
+  const long = { ...slip, id: 'source:'.repeat(1000),
+    selections: Array.from({ length: 9 }, (_, index) => ({ ...slip.selections[0],
+      fixtureId: '10000000-0000-4000-8000-' + String(index + 1).padStart(12, '0'), odds: '2000.00' })),
+    totalOdds: String(2000n ** 9n) + '.00' };
+  assert.deepEqual(savedSlipSnapshotSchema.parse(JSON.parse(JSON.stringify(long))), long);
+  assert.equal(savedSlipSnapshotSchema.safeParse({ ...long, id: 'x'.repeat(savedSlipSnapshotRules.maximumIdentityLength + 1) }).success, false);
+  assert.equal(savedSlipSnapshotSchema.safeParse({ ...long, totalOdds: '1'.repeat(savedSlipSnapshotRules.maximumTotalOddsDigits + 1) + '.00' }).success, false);
+  assert.equal(savedSlipSnapshotSchema.safeParse({ ...long, selections: long.selections.map((selection) => ({ ...selection, odds: '0.50' })) }).success, false);
+});
 
 test('completed saved slips expose original odds and picks without account identity, adjudicated from verified regulation scores', () => {
   assert.ok(savedSlipSnapshotSchema.safeParse(slip).success);
@@ -127,8 +139,12 @@ test('selected saved-slip performance covers the complete cohort while only rece
     createdAt: new Date(now - index), snapshotJson: { ...slip, selections: [{ ...slip.selections[0],
       fixtureId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}` }] } }));
   const queries = [], projections = [];
-  let reads = 0;
-  const tx = { async $queryRaw(query) { queries.push(query); return reads++ === 0 ? rows.slice(0, 100) : rows.slice(100); } };
+  let offset = 0;
+  const tx = { async $queryRaw(query) {
+    queries.push(query);
+    const batch = rows.slice(offset, offset + query.values.at(-1)); offset += batch.length;
+    return batch;
+  } };
   const service = createSavedSlips({ transaction: async read => read(tx) }, { key: () => 'key' }, () => now, {
     async resolveResults(_tx, selections, asOf) {
       projections.push(selections.length); assert.equal(asOf, now);
@@ -142,11 +158,11 @@ test('selected saved-slip performance covers the complete cohort while only rece
   const history = await service.history({ dateFrom: today, dateTo: today, timeFrom: '13:00', timeTo: '14:00' });
   assert.deepEqual(history.statistics, { total: 125, won: 30, lost: 30, pending: 35, void: 30 });
   assert.equal(history.records.length, 20); assert.equal(history.records[0].id, rows[0].id);
-  assert.deepEqual(projections, [100, 25]);
+  assert.deepEqual(projections, [31, 31, 31, 31, 1]);
   assert.match(queries[0].sql, /0 = \(SELECT COUNT\(\*\).*JSON_TABLE.*NOT COALESCE/s);
   assert.ok(queries[0].values.includes(Date.parse(`${today}T10:00:00Z`)), 'kickoff range uses reporting-zone wall time');
   assert.ok(queries[0].values.includes(Date.parse(`${today}T11:01:00Z`)), 'end minute is inclusive');
-  assert.ok(queries[1].values.includes(rows[99].id), 'subsequent batch uses the prior keyset cursor');
+  assert.ok(queries[1].values.includes(rows[30].id), 'subsequent batch uses the prior keyset cursor');
   assert.doesNotMatch(JSON.stringify(history), /accountId|tokenHash/);
 });
 
@@ -166,4 +182,29 @@ test('save endpoint requires same-origin authenticated subscription and accepts 
   const changed = await createSaveSlipHandler(options)(request());
   assert.equal(changed.status, 409); assert.equal(builds, 1);
   assert.match(changed.headers.get('cache-control'), /no-store/u);
+});
+
+test('saved history batches long snapshots within the existing forecast hydration budget', async () => {
+  const selections = Array.from({ length: 800 }, (_, index) => ({ ...slip.selections[0],
+    fixtureId: '10000000-0000-4000-8000-' + String(index).padStart(12, '0') }));
+  const rows = Array.from({ length: 32 }, (_, index) => ({ id: 'long-' + index,
+    createdAt: new Date(now - index), snapshotJson: { ...slip, selections } }));
+  let offset = 0;
+  const sizes = [];
+  const tx = { async $queryRaw(query) {
+    const batch = rows.slice(offset, offset + query.values.at(-1)); offset += batch.length;
+    return batch;
+  } };
+  const service = createSavedSlips({ transaction: async read => read(tx) }, { key: () => 'key' }, () => now, {
+    async resolveResults(_tx, values) {
+      assert.ok(values.length <= slipForecastReadRules.maximumSelections);
+      sizes.push(values.length);
+      return [];
+    },
+  });
+  const history = await service.history({ dateFrom: today, dateTo: today, timeFrom: '', timeTo: '' });
+  assert.deepEqual(sizes, [24_800, 800]);
+  assert.equal(history.statistics.total, 32);
+  assert.equal(history.statistics.pending, 32);
+  assert.deepEqual(history.records, []);
 });

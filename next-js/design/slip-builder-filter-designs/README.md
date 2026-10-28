@@ -2,18 +2,20 @@
 
 Ten interactive concepts for reviewing the upper settings section of the
 **Slip Builder** page. Each concept shows its desktop and mobile layouts
-side by side so the user can select a design before production implementation.
+side by side. The user selected sample 1, **Compact toolbar**, for desktop and
+mobile, with popup dialogs for the hidden forms and chrome matching the Matches
+search/filter section. Production implementation is tracked in
+[`122-compact-slip-builder-toolbar.md`](../../dev-plan/122-compact-slip-builder-toolbar.md).
 
 The samples follow the existing Matches filters and slip cards: compact
 typography, quiet dividers, flat selections, shared controls, and square edges.
-Only the isolated review gallery and its documentation are included in this
-change.
+The gallery remains an illustrative design reference with local preview state.
 
 ## Concepts
 
 | No. | Concept | Arrangement |
 | --- | --- | --- |
-| 01 | Compact toolbar | Essential slip settings followed by compact refinement controls. |
+| 01 | Compact toolbar — selected | Essential slip settings followed by compact refinement controls. |
 | 02 | Visible field grid | All settings remain visible in aligned groups. |
 | 03 | Range ledger | Settings use aligned minimum and maximum columns. |
 | 04 | Editable summary cells | Current values appear in cells that open their editors. |
@@ -51,9 +53,9 @@ access or navigate to authentication or payment flows.
 
 Controls edit local preview state. The gallery does not generate real slips,
 query matches, call the backend, or modify the production Slip Builder.
-The requested 0.01 odds floor and unrestricted optional maxima differ from
-existing production constraints; those contracts require reconciliation when
-the selected design is implemented.
+The selected design's runtime defaults, blank-bound semantics, and popup behavior
+are tracked separately in plan 122. Gallery interactions do not exercise the
+production criteria parser or generation service.
 
 The preview represents the default estimator-disabled configuration. It does
 not include the optional combined-probability mode.
@@ -132,6 +134,5 @@ The in-conversation view continues to use host navigation.
 Browser automation blocks `file:` URLs, so direct file opening has not been
 automated. The HTTP checks exercised the exact file without an iframe or host helper.
 
-These samples are a design review stage. No production build, backend
-verification, or production redesign is claimed; implementation awaits the
-user's concept selection.
+The verification above covers the illustrative samples. Production verification
+for the selected Compact toolbar is recorded separately in plan 122.

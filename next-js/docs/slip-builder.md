@@ -26,15 +26,17 @@ preserves each original selection's kickoff, teams, pick, probability and price;
 it never substitutes the current top pick or constructs missing forecast groups.
 Saved leg outcomes and regulation scores are displayed only when supplied.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
-navigation. Controls use the shared themed components with a subtle 2px corner radius;
-connected result-table edges remain square.
+navigation. Controls use shared themed components. The builder settings use the
+selected square Compact toolbar treatment, consistent with Matches filters.
 
 ## Responsive criteria layout
 
-Number of slips sits beside the title. Total odds per slip and Matches per slip stay
-visible, followed by one row of Odds & probability, Match Date & Time and Markets buttons on both
-desktop and mobile. Detailed criteria open in native modal dialogs instead of
-expanding the form. Inputs and dialogs use the shared `theme.border.radius` token.
+The selected Compact toolbar keeps Number of slips, Total odds per slip, and
+Matches per slip visible in the settings section. Odds & probability, Match Date
+& Time, and Markets buttons open the hidden forms in native popup dialogs on
+desktop and mobile. Reset and the primary action remain in the compact toolbar.
+The settings reuse the Matches search/filter chrome: flat surfaces, quiet borders,
+compact labels, and square controls, with usable touch targets on phones.
 
 The buttons show counts for their current settings. Odds & probability counts custom
 individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date
@@ -55,8 +57,9 @@ presentation and the three compact triggers.
 
 A validation error exposes its invalid optional group; essential target errors
 stay beside the visible controls. Draft values remain editable and retain their
-accessible error association. The layout does not change the domain criteria,
-stored-data generation rules, navigation, or generated slip presentation.
+accessible error association. The defaults and blank numeric bounds below apply
+equally to native GET submission and enhanced navigation. Generated slips retain
+their existing presentation.
 
 ## Criteria and submission
 
@@ -65,30 +68,35 @@ browser-safe `src/domain/slip-builder.ts` contract:
 
 | Criteria | Supported values | Default |
 | --- | --- | --- |
-| Kickoff date range | Inclusive reporting dates, up to 31 days | Today through 30 days later |
+| Kickoff date range | Inclusive reporting dates, up to 31 days | Today through today |
 | Kickoff time range | Inclusive daily minutes in Africa/Kampala (EAT) | 00:00–23:59, all day |
 | Markets | One or more match result, double chance, total goals or both teams to score | All four |
 | Market outcomes | Automatic or one or more supported results within each selected family | Any (Automatic) |
-| Total odds | Inclusive minimum and maximum, 1.01–100,000.00 | Blank (Any supported odds) |
-| Individual selection odds | Inclusive minimum and maximum, 1.01–1,000.00 | Blank (Any supported odds) |
-| Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank (Any supported probability) |
+| Total odds | Inclusive minimum from 0.01; optional maximum | 0.01–Any |
+| Individual selection odds | Inclusive minimum from 0.01; optional maximum | 0.01–Any |
+| Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank minimum; maximum 100% |
 | Combined probability | Optional `totalProbMin` / `totalProbMax`, inclusive percentage bounds, 0–100; requires a verified joint model | Blank (no joint filter) |
-| Selection count | Minimum and maximum of 1–8 matches per slip | Blank (Any supported count) |
-| Number of slips | 1–100 | 3 |
+| Selection count | Whole match counts, minimum 1; optional maximum | 1–Any |
+| Number of slips | 1–100 | 5 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
 
-The numeric range fields start blank and display Any as their placeholder.
-Explicit supported lower or upper bounds in a criteria URL also display Any;
-custom limits retain their numeric values.
-Reset restores those blank Any bounds, today's 31-day date range,
-00:00–23:59, all markets with Automatic outcomes, three requested slips and
-disabled match reuse, including after loading a criteria query. Blank date-from
-still means today; blank date-to
-means 30 days after the chosen date-from. An explicit single date bound is
-accepted when the resulting range is valid and no longer than 31 days.
+Total and individual minimum odds display 0.01, minimum matches displays 1, and
+maximum probability displays 100. The other numeric bounds start blank; maximum
+placeholders display Any. Custom criteria retain their supplied values.
+Reset restores these defaults, today's from/to dates, 00:00–23:59, all markets
+with Automatic outcomes, five requested slips, and disabled match reuse,
+including after loading a criteria query.
 
-Blank minimum or maximum odds, probability and selection-count fields independently
-mean the corresponding supported lower or upper limit. A partially supplied, reversed or malformed time
+Blank numeric minima use the valid floor: 0.01 odds, 1 match, or 0% probability.
+Blank maxima mean Any rather than a requested numeric ceiling. A 0.01 odds
+criterion does not change the approved bookmaker-price validation contract.
+The pure criteria contract omits unrestricted total-odds, individual-odds, and
+match-count maxima; canonical GET serialization preserves them as blank fields.
+Explicit odds bounds use exact two-decimal hundredths within the safe-integer
+range, and explicit match counts use positive safe integers. Match counts above
+eight are accepted. Blank from-date uses today; blank to-date uses the chosen
+from-date, retaining the 31-day limit for explicit ranges.
+A partially supplied, reversed or malformed time
 range is invalid; equal endpoints select one minute. The time range applies on
 every day in the date range, including all seconds of the final minute. It does
 not represent an overnight range. Date and time calculations use the reporting
@@ -105,6 +113,11 @@ selected market is invalid. The native hidden `reuse=0` followed by the checked
 `reuse=1` pair means reuse is enabled. Canonical serialization uses one `reuse`
 value and markets in public-policy order. Invalid input receives a specific
 criteria error rather than generating with silently corrected ranges.
+
+When subscriber access is required, the primary action shows Sign in for a
+signed-out viewer and opens the login form with the Slip Builder return path.
+Signed-in viewers without the required subscription see Subscribe; eligible
+viewers see Build slips. Sign up remains reachable from the account screen.
 
 The optional `outcomes` mapping stores explicit arrays per market family. Missing
 families mean Automatic. Native fields `picks.<family>` accept `auto` alone or a
@@ -157,6 +170,8 @@ combination products and range comparisons use `BigInt`. Total constraints are
 checked before rounding. For example, `1.01 × 1.99 = 2.0099` exceeds a 2.00
 maximum and is below a 2.01 minimum, even though its displayed total is 2.01.
 Only the displayed total is rounded half-up to two decimal places.
+Very large displayed totals use ellipsis within the compact header; the full
+original value remains available in the header title and accessible text.
 
 The shared slip summary multiplies the selected, unrounded forecast probabilities
 to show an independence-based combined estimate. Forecasts of 80% and 90% give
@@ -237,15 +252,27 @@ instead of a partially mixed result. Matches entering the cutoff while the read
 finishes are excluded before generation.
 
 The pure engine retains at most 800 qualifying selection candidates, ordered by
-probability, odds and canonical identifiers. Combination enumeration has a
-100,000-node budget, with at most one quarter used to seed disjoint slips. Safe
-suffix price bounds skip lengths that cannot meet the total-odds range. A bounded
-heap retains at most 2,000 combinations, plus up to 100 disjoint reserve slips;
-compatible batch selection has a 100,000-node budget per selection-count stage. The maximum
-slip length and count also bound the returned output. Reaching a database,
+probability, odds and canonical identifiers. Any leaves the requested filter
+unrestricted; the retained candidates and distinct fixtures still bound the
+physical slip length. Combination enumeration has a 100,000-node budget, with at
+most one quarter used to seed disjoint slips. Persistent suffix price multisets
+provide exact cheapest/dearest completion products, skipping lengths that cannot
+meet the total-odds range without constructing a large price-bound matrix.
+Ignoring fixture conflicts widens these pruning bounds conservatively.
+A bounded heap retains at most 2,000 combinations and 16,000 aggregate selection
+references. A disjoint reserve contributes at most 800 further selections, so
+retained/output candidates remain within 16,800 selections. A separate
+100,000-unit work budget charges each examined node by at least one unit, or
+the target match count divided by eight and rounded up for longer slips. Seeding
+uses at most one quarter of the node and work budgets. Compatible batch selection
+has a 100,000-node budget per selection-count stage. The requested slip count
+remains at most 100. Reaching a database,
 candidate, enumeration, retention or batch bound sets `searchLimited`. Limited
 results are ranked among the explored candidates and do not claim global
 optimality or that all possible qualifying slips were found.
+
+The daily Best Slips criteria retain their previous eight-match and odds bounds;
+the custom builder's Any defaults do not change that publication policy.
 
 The page distinguishes generated slips, no qualifying selections, no valid
 combinations, odds unavailable, combined model unavailable, data unavailable and rate limiting. It reports
@@ -269,8 +296,18 @@ table row.
 ## Original forecast binding and separate saved-slip services
 
 The builder does not offer saving or completed history. The existing saved-slip
-services retain their original validation and snapshot contract for other
-consumers and any future save workflow.
+services retain their source validation and immutable snapshot semantics for
+other consumers and any future save workflow.
+
+Saved snapshot size checks accommodate longer custom slips and their exact total
+odds while retaining independent finite identity, selection, and request-size
+bounds. Observation refresh remains limited to 800 unique selection watches, and
+forecast-result hydration retains its separate 24,800-selection work budget.
+Saved quotes retain their original two-place, four-whole-digit format; snapshot
+totals allow up to 3,200 whole digits. Saved-history hydration uses 31-row keyset
+batches so even maximum-length snapshots remain within the independent read
+budget. Exact decimal comparisons preserve ranking when total odds exceed
+floating-point precision or range.
 
 Each generated selection retains the original cycle, prediction-set ID and
 publication timestamp from the stored feed. Slip identities also include this
@@ -321,7 +358,8 @@ server is available.
 
 `npm run test:slips:rendering` builds the isolated Next.js fixture and verifies
 real server-rendered controls, the three dialog groups and their inline
-no-JavaScript fallback, blank Any defaults, retained custom numeric bounds, and
+no-JavaScript fallback, the explicit minimum/default values and blank Any maxima,
+retained custom numeric bounds, and
 unique form-associated inputs. It also checks result states, native GET builds, invalid criteria,
 navigation overflow, summaries inside slip titles and one row per selection.
 Builder cases also verify that history, performance summaries and Save actions
@@ -331,3 +369,7 @@ alternative's probability and price, and keep an unobserved fixture status
 unknown. `tests/slip-card.test.mjs` also verifies immutable original values,
 saved regulation scores, supplied outcomes and probability boundary labels.
 Its `--serve` option keeps the fixture available for browser inspection.
+
+The selected Compact toolbar's implementation checks and the four independently
+confirmed full-suite baseline failures are recorded in
+[`122-compact-slip-builder-toolbar.md`](../dev-plan/122-compact-slip-builder-toolbar.md).

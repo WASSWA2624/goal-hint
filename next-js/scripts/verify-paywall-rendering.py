@@ -142,6 +142,18 @@ def main():
                     checks += 2
                 slips = request(server.origin, "/en/slips?build=1", headers=headers)
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)
+                builder = document(slips.text).root
+                actions = builder.nodes(attr="data-criteria-actions")
+                signed_in = viewer not in {"anonymous", "off", "evicted"}
+                label = "Subscribe" if signed_in else "Sign in"
+                assert len(actions) == 1, (viewer, "one Slip Builder action group")
+                links = [node for node in actions[0].nodes("a") if node.text.strip() == label]
+                assert len(links) == 1, (viewer, "Slip Builder access action")
+                destination = urlsplit(links[0].attrs["href"])
+                assert destination.path == ("/en/subscribe" if signed_in else "/en/account"), (viewer, "Slip Builder access destination")
+                assert parse_qs(destination.query).get("return") == ["/en/slips"], (viewer, "Slip Builder return destination")
+                if not signed_in:
+                    assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open sign in")
                 checks += 1
             for path, extra in [("/en", {}), ("/en?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:
                 response = request(server.origin, path, headers={**headers, **extra})

@@ -14,40 +14,9 @@ import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
 import { searchFilterOptions } from "@/domain/filter-option-search";
 import { media, type AccentName } from "@/styles/theme";
+import { controlFeedback, filterButtonColors, filterControlColors, focusRing } from "@/components/ui/filter-chrome";
 
-export const focusRing = css`
-  &:focus-visible {
-    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: 2px;
-  }
-`;
-
-/** Scoped feed colors: blend the panel into the page while keeping fields distinct. */
-export const filterPanelColors = css`
-  --filter-panel-background: color-mix(in srgb, ${({ theme }) => theme.color.surfaceMuted} 55%, ${({ theme }) => theme.color.page});
-  --filter-field-background: color-mix(in srgb, ${({ theme }) => theme.color.surface} 20%, ${({ theme }) => theme.color.page});
-  --filter-field-border: color-mix(in srgb, ${({ theme }) => theme.color.controlBorder} 97%, ${({ theme }) => theme.color.surfaceMuted});
-`;
-
-/** Reusable fields inherit the feed palette only inside a themed filter panel. */
-export const filterControlColors = css`
-  background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
-  border-color: var(--filter-field-border, ${({ theme }) => theme.color.controlBorder});
-`;
-
-/** Labeled filter actions keep the light palette and use quieter dark outlines. */
-export const filterButtonColors = css`
-  background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
-  border-color: ${({ theme }) => theme.mode === "dark" ? theme.color.buttonBorder
-    : `var(--filter-field-border, ${theme.color.buttonBorder})`};
-`;
-
-/** Shared feedback for compact themed controls, without changing their dimensions. */
-export const controlFeedback = css`
-  transition: border-color 120ms ease, background-color 120ms ease;
-  ${media.hover} { &:hover:not([aria-pressed="true"]):not([aria-expanded="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
-  &:focus-within { border-color: ${({ theme }) => theme.color.brand}; }
-`;
+export { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "@/components/ui/filter-chrome";
 
 /** Plain left clicks are handled in the browser; modified clicks keep native link behaviour. */
 export function plainClick(event: MouseEvent, action: () => void) {

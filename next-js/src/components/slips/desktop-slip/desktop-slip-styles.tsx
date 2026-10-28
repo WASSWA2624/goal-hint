@@ -21,7 +21,8 @@ export const DesktopSlipBase = styled.div`
   &&& [data-rank] { font-size: 0.75rem; }
   &&& [data-summary-fact] { flex-wrap: nowrap; flex-direction: row; align-items: baseline; gap: 6px; }
   &&& [data-summary-fact] strong { font-size: 0.875rem; }
-  &&& [data-summary-odds] { justify-self: start; }
+  &&& [data-summary-odds] { justify-self: start; min-inline-size: 0; max-inline-size: 14rem; }
+  &&& [data-summary-odds] strong { min-inline-size: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
   &&& [data-summary-count], &&& [data-summary-average] { justify-self: end; }
   &&& [data-summary-average] [data-fact-label] { max-inline-size: none; }
 

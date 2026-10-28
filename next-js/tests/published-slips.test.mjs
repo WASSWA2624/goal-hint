@@ -89,6 +89,15 @@ test('publication assigns probability order before sealing snapshot ranks', asyn
   assert.deepEqual((await f.store.day(today)).slips.map(view => view.estimatedProbability), [0.8, 0.7, 0.65]);
 });
 
+test('larger custom-slip storage limits do not widen the daily publication match limit', async () => {
+  const f = fixture(), source = slip();
+  const nine = { ...source, totalOdds: '5.16', selections: Array.from({ length: 9 }, (_, index) => ({
+    ...source.selections[0], fixtureId: fixtureId(index + 1), odds: '1.20',
+  })) };
+  await assert.rejects(() => f.publish({ slips: [nine] }));
+  assert.equal(f.parents.length, 0);
+});
+
 test('first qualified publication preserves quotes, model evidence and original references; retries never replace it', async () => {
   const f = fixture();
   assert.equal(await f.publish(), 'published');
