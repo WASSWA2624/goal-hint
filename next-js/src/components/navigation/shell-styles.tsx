@@ -5,7 +5,7 @@ import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
-import { compactHeaderBrand, compactHeaderSurface } from "@/components/ui/header-controls";
+import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
@@ -83,9 +83,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
 `;
 
 export const HeaderContent = styled(Container)`
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  ${compactHeaderRow}
   min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
   padding-inline: 8px;
   ${desktop} { flex-wrap: nowrap; gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 20px; }
@@ -94,7 +92,9 @@ export const HeaderContent = styled(Container)`
 
 export const HeaderActions = styled.div`
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   margin-inline-start: auto;
 `;
 
@@ -116,7 +116,7 @@ export const DesktopNav = styled.nav`
   display: none;
   flex: 1 1 0;
   max-inline-size: 100%;
-  min-inline-size: 0;
+  min-inline-size: min(6rem, 100%);
   align-self: stretch;
   ${desktop} { display: flex; }
 `;

@@ -42,7 +42,17 @@ test("mobile navigation moves destinations into More instead of squeezing three 
   }
   assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 239.75 }), 3);
   assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 239.74 }), 2);
-  assert.equal(fitNavigationItems({ ...dimensions, equalColumns: false, availableWidth: 120 }), 3);
+  assert.equal(fitNavigationItems({ ...dimensions, equalColumns: false, availableWidth: 120 }), 1);
+});
+
+test("enlarged desktop links can all move into More without forcing three overflowing destinations", () => {
+  const dimensions = { widths: [200, 180, 150, 170, 160], moreWidth: 120, activeMoreWidth: 140, gap: 8 };
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 674 }), 3);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 430 }), 1);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 320 }), 0);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 328 }), 1);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 328, currentIndex: 4 }), 0);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 140, currentIndex: 4 }), 0);
 });
 
 test("mobile navigation reserves bold More width only when the current destination overflows", () => {

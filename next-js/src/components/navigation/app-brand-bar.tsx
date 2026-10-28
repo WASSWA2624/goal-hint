@@ -3,7 +3,7 @@
 import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { HeaderBrand } from "@/components/ui/brand";
-import { compactHeaderBrand, compactHeaderSurface } from "@/components/ui/header-controls";
+import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { homeHref } from "@/domain/navigation";
@@ -21,11 +21,8 @@ const Group = styled.div`
 `;
 const Bar = styled.div`
   position: relative;
-  display: flex;
-  align-items: center;
+  ${compactHeaderRow}
   justify-content: space-between;
-  gap: 6px;
-  min-inline-size: 0;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   padding-inline: 8px;
   ${compactHeaderSurface}

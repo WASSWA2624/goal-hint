@@ -5,6 +5,7 @@ import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
 import { HomeLink } from "@/components/navigation/shell-styles";
+import { compactHeaderRow } from "@/components/ui/header-controls";
 import {
   CardIcon, ChartIcon, ChevronDownIcon, GridIcon, KeyIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
@@ -90,14 +91,15 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
 
 /** Full-width brand bar content, so the wordmark lines up with the section sidebar. */
 export const AdminHeaderContent = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  ${compactHeaderRow}
   inline-size: 100%;
   min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
   padding-inline: 12px 8px;
   ${media.belowDesktop} {
-    > ${HomeLink} { flex-shrink: 1; img { max-inline-size: 100%; block-size: auto; } }
+    > ${HomeLink} {
+      flex: 1 1 0; min-inline-size: min(6rem, 100%);
+      img { max-inline-size: 100%; block-size: auto; }
+    }
   }
   ${media.desktop} { gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 24px 20px; }
 `;

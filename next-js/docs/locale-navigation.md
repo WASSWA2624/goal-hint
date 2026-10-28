@@ -109,9 +109,10 @@ All match status filters, including old Live and Results links, select Matches
 as the current navigation destination. Historical archive URLs continue to
 render that same shared feed.
 After hydration, each bar measures its available width and the actual label,
-icon and control sizes to show as many ordered destinations as fit. Overflow
-keeps at least three primary destinations plus More; when all destinations fit,
-all appear directly. Resizing and completed font loads update the fit. Every
+icon and control sizes to show as many ordered destinations as fit. Desktop
+shows at most five primary destinations and reserves room for More. Either bar
+can move every destination into More when enlarged text leaves too little room
+for a primary link. Resizing and completed font loads update the fit. Every
 overflow item pairs its label with an appropriate decorative stroke icon, and
 More uses three vertical dots on both layouts.
 
@@ -126,6 +127,12 @@ outside-click dismissal and focus restoration enhance the hydrated menu.
 Overflow destinations mark both their menu link and the visible More trigger as
 current, so a collapsed menu still identifies the active section. App pages
 continue to own their branded phone header.
+
+At enlarged text sizes, shared phone header rows and account actions wrap within
+the available width while preserving the text, branding and controls. The
+match-detail Back/Home actions use the same wrapping row. Normal-size headers
+remain on one row wherever their contents fit. This reflow changes navigation
+only; slip headers and match rows retain their selected layouts.
 
 All current locale pages inherit `noindex, follow`. The [032 feed](match-feed-page.md)
 renders stored fixtures, predictions, coverage and run progress, with truthful

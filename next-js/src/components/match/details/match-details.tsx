@@ -5,7 +5,7 @@ import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { HeaderBrand } from "@/components/ui/brand";
-import { compactHeaderBrand, compactHeaderSurface } from "@/components/ui/header-controls";
+import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
@@ -57,9 +57,7 @@ const PhoneSubscriptionStatus = styled(SubscriptionStatusBar)`
  */
 const PhoneBar = styled.div`
   position: relative;
-  display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
-  align-items: center;
+  ${compactHeaderRow}
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: -10px;
@@ -73,6 +71,8 @@ const PhoneBar = styled.div`
 `;
 const PhoneHome = styled(Link)`
   ${compactHeaderBrand}
+  flex: 1 1 0;
+  min-inline-size: min(6rem, 100%);
   justify-self: start;
   max-inline-size: 100%;
   img { max-inline-size: 100%; block-size: auto; }

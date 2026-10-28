@@ -107,7 +107,10 @@ const HeadButton = styled.button`
   > span[data-icon] { display: inline-grid; flex: none; place-items: center; inline-size: 1.25rem; block-size: 1.25rem; color: ${({ theme }) => theme.color.brand}; font-size: 1.125rem; }
   > span[data-title] { flex: none; min-inline-size: 0; font-size: ${size("emphasis")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.15; white-space: nowrap; }
   > small { min-inline-size: 0; margin-inline-start: auto; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; text-align: end; white-space: nowrap; text-overflow: ellipsis; }
-  @container details-card (max-width: 16rem) { > small { display: none; } }
+  @container details-card (max-width: 16rem) {
+    > span[data-title] { flex-shrink: 1; white-space: normal; }
+    > small { display: none; }
+  }
   > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.9375rem; transform: rotate(90deg); transition: transform 160ms ease; }
   > small + svg:last-child { margin-inline-start: 0; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(-90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }

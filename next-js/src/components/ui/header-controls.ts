@@ -8,6 +8,15 @@ export const compactHeaderSurface = css`
   border-block-end: 1px solid ${({ theme }) => theme.header.border};
 `;
 
+/** Keep enlarged controls readable by allowing the header to grow onto another row. */
+export const compactHeaderRow = css`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+`;
+
 /** Compact desktop controls keep comfortable, non-overlapping phone touch targets. */
 export const compactHeaderControl = css`
   display: inline-flex;

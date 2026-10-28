@@ -19,8 +19,13 @@ import { getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessio
 
 const Actions = styled.div`
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   align-items: center;
+  justify-content: flex-end;
+  margin-inline-start: auto;
   gap: 4px;
   ${media.desktop} { gap: 6px; }
 `;
@@ -65,8 +70,9 @@ const Popup = styled.div`
   inset-block-start: calc(100% + 6px);
   inset-inline-end: 0;
   z-index: 40;
-  inline-size: min(15rem, calc(100vw - 16px));
-  max-block-size: calc(100dvh - 5rem);
+  /* Leave room for page gutters/scrollbars and two wrapped rows of header controls. */
+  inline-size: min(15rem, calc(100vw - 32px));
+  max-block-size: calc(100dvh - 5.5rem - 24px);
   overflow-y: auto;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};

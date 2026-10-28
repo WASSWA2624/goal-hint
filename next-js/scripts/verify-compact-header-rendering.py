@@ -26,29 +26,49 @@ export default function Layout({ children }: { children: ReactNode }) {
 
 def verify(server, directory):
     for surface in ("public", "app", "admin", "detail"):
-        response = request(server.origin, "/" + surface)
-        assert response.status == 200, f"{surface}: header fixture must render successfully."
-        assert response.headers.get("set-cookie") is None, f"{surface}: ordinary page requests must not set a session."
-        (directory / f"{surface}.html").write_text(response.text, encoding="utf-8")
-        visible = visible_html(response.text)
-        for pattern in [f'data-compact-header-fixture="{surface}"', "data-app-header", "data-account-actions", "data-theme-toggle",
-                        "data-header-brand", r'goal-hint-header-primary\.svg', 'name="robots" content="noindex, nofollow"']:
-            match(pattern, visible, f"{surface}: expected {pattern}")
-        assert 0 <= response.text.find("data-styled=") < response.text.find("<header"), f"{surface}: header styles must arrive before content."
-        if surface == "admin":
-            match("data-admin-payments-link", visible)
-        else:
-            match(r'href="/en/account\?view=login"', visible)
-            match(r'href="/en/account\?view=register"', visible)
+        for scale in (100, 200):
+            path = "/" + surface + ("?textScale=200" if scale == 200 else "")
+            context = f"{surface}, {scale}% text"
+            response = request(server.origin, path)
+            assert response.status == 200, f"{context}: header fixture must render successfully."
+            assert response.headers.get("set-cookie") is None, f"{context}: ordinary page requests must not set a session."
+            suffix = "-text-200" if scale == 200 else ""
+            (directory / f"{surface}{suffix}.html").write_text(response.text, encoding="utf-8")
+            visible = visible_html(response.text)
+            for pattern in [f'data-compact-header-fixture="{surface}"', "data-app-header", "data-account-actions", "data-theme-toggle",
+                            "data-header-brand", r'goal-hint-header-primary\.svg', 'name="robots" content="noindex, nofollow"',
+                            'data-responsive-navigation="desktop"', 'data-responsive-navigation="mobile"', "data-nav-more"]:
+                match(pattern, visible, f"{context}: expected {pattern}")
+            match(rf'<style data-fixture-text-scale="{scale}">', response.text, f"{context}: reproducible fixture text scale")
+            if scale == 200:
+                match(r":root\s*\{\s*font-size:\s*200%;\s*\}", response.text, f"{context}: text doubles without changing viewport dimensions")
+            assert 0 <= response.text.find("data-styled=") < response.text.find("<header"), f"{context}: header styles must arrive before content."
+            if surface == "admin":
+                match("data-admin-payments-link", visible)
+            else:
+                match(r'href="/en/account\?view=login"', visible)
+                match(r'href="/en/account\?view=register"', visible)
     session = request(server.origin, "/api/account/session")
     assert session.status == 200 and json.loads(session.text) == {"phone": None, "administrator": False, "subscription": None}
     payments = request(server.origin, "/api/admin/payments?count=1")
     assert payments.status == 200 and json.loads(payments.text)["pendingCount"] == 3
+    for state in ("guest", "member", "admin"):
+        headers = {"Cookie": f"header-fixture-state={state}; header-fixture-pending=103"}
+        session = request(server.origin, "/api/account/session", headers=headers)
+        assert session.status == 200 and json.loads(session.text) == {
+            "phone": "256700000000" if state == "member" else None,
+            "administrator": state == "admin", "subscription": None,
+        }, f"{state}: synthetic session supports hydrated header acceptance"
+        assert session.headers.get("set-cookie") is None, f"{state}: reading a synthetic session is read-only"
+        payments = request(server.origin, "/api/admin/payments?count=1", headers=headers)
+        assert payments.status == 200 and json.loads(payments.text)["pendingCount"] == 103, f"{state}: capped payment badge fixture remains available"
     for asset in ("primary", "inverse"):
         assert request(server.origin, f"/brand/goal-hint-header-{asset}.svg").status == 200
     write_json(directory / "verification.json", {"surfaces": ["public", "app", "admin", "detail"], "sharedHeaders": True,
-        "serverStyles": True, "anonymousSession": True, "syntheticPaymentCount": 3})
-    print("Compact header SSR passed: public/app/admin/detail real shells, new branding, server styles and isolated session APIs.", flush=True)
+        "serverStyles": True, "anonymousSession": True, "syntheticPaymentCount": 3,
+        "textScales": [100, 200], "syntheticSessions": ["guest", "member", "admin"],
+        "browserWidths": [320, 360, 390, 768, 1024, 1440], "browserGeometryVerified": False})
+    print("Compact header SSR passed: public/app/admin/detail at 100% and 200% text, both navigation menus, server styles and isolated guest/member/admin session APIs. Browser geometry requires separate acceptance.", flush=True)
 
 
 def main():
@@ -66,6 +86,7 @@ def main():
         verify(server, directory)
         print(f"Fixture artifacts: {directory}", flush=True)
         print(f"Compact header browser URL: {server.origin}/app", flush=True)
+        print(f"200% text browser URL: {server.origin}/app?textScale=200", flush=True)
         if args.serve:
             server.serve()
 
