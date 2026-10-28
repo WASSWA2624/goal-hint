@@ -8,11 +8,14 @@ dialog resets and responsive lifecycles. Run them through Playwright CLI's
 
 The feed uses labeled native fields and editable drafts; URLs and stored server
 projections remain authoritative. At desktop widths (64rem and above), the
-Crisp Outline controls put search, match status and period selectors on the first
-row, with no visible page title or Period prefix. Five optional-filter buttons
-occupy the next horizontal row, followed by one action row ordered Predictions
-only, Sort by, Reset, Apply filters. Compact fields, neutral
-borders, compact icons and a single blue Apply action follow the existing themed controls.
+approved Compact toolbar puts search, match status, period and sorting on the
+first row, with no visible page title or selector prefixes. The second row
+contains five optional-filter buttons, Predictions only, a quiet Reset action
+and the primary Apply filters action. Square 32px controls, 12px labels,
+compact icons, 8px panel padding and 6px gaps match the predicted-match rows.
+Controls wrap when enlarged text or longer labels need more room; coarse
+pointers retain targets of at least 44px. The existing popup fields keep their
+previous sizes and behavior.
 The optional sections are Match Date & Time, Leagues, Countries, Markets, and
 Limits, in that order. Each opens its own modal dialog; detailed fields and
 duplicate default-summary chips do not occupy the desktop section.
@@ -30,8 +33,9 @@ relative preset remains current across midnight; explicit date selections stay u
 Desktop search, period, sort, Picks only and optional-filter edits remain
 unsubmitted until Enter in the search field or Apply filters submits the complete
 draft. The desktop Period dropdown offers Last 30 days, Last 7 days, Last 3 days,
-Yesterday, Today, Tomorrow and Custom dates, in that order. Each Last range includes
-today. Custom dates opens Match Date & Time immediately. Last 7 days, Last 3 days
+Yesterday, Today, Tomorrow, Next 3 days, Next 7 days, Next 30 days and Custom
+dates, in that order. Each Last range includes today. Custom dates opens Match
+Date & Time immediately. Last 7 days, Last 3 days
 and Yesterday use named relative query presets (`when=last-7-days`,
 `when=last-3-days`, `when=yesterday`) so their bounds remain relative across midnight.
 Existing shared future-date query presets remain supported.
@@ -188,10 +192,12 @@ list remain removable. Probability uses the same directly editable
 minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable
 explanation.
 
-On desktop, Picks only, Sort by, Reset and Apply filters share one horizontal
-row, in that order. The Sort by control shows its current draft choice and opens
-the four-option menu; the main Apply action submits it with the rest of the draft.
-The primary Reset restores and applies the complete filter defaults immediately.
+On desktop, Sort by sits at the end of the first toolbar row and retains its
+accessible label. It shows the current draft choice and opens the four-option
+menu; the main Apply action submits it with the rest of the draft. Predictions
+only follows the five dialog buttons on the second row, with Reset and Apply
+filters aligned at the end. Reset restores and applies the complete filter
+defaults immediately.
 On phones the row below the day strip holds the
 applied match count, the Sort menu and Advanced filters; the sort label shortens
 before the row would wrap. Mobile sorting retains its immediate navigation behavior.
@@ -209,9 +215,9 @@ search, leagues, countries, time, probability, odds, picks and ordering, selects
 the last 30 days through today, all supported markets and kickoff descending order (Latest first),
 and resets page to one. Predictions only returns to the available page default,
 rather than always being cleared. The time fields show 00:00–23:59 without restricting kickoff times.
-It retains the browsing zone, status entry and page size. The button labels are
+It restores All match statuses and retains the browsing zone and page size. The button labels are
 Reset filters and Apply filters, each in two rows on mobile; desktop uses Reset
-and Apply filters on its single action row.
+and Apply filters at the end of the second toolbar row.
 Advanced filters uses the same two-line label treatment on mobile, with both words visible.
 An empty-result message appears with the results. The sort menu includes
 both kickoff directions and both probability directions, without a separate
@@ -236,8 +242,8 @@ retains its existing refresh behavior. No browser provider/AI calls or polling
 are added by the controls.
 
 On phones and tablets the feed's brand bar contains the home logo and theme
-control. Desktop puts search beside the period selector without a visible page
-title or selector prefix, with the theme control at the far right of the shell
+control. Desktop puts search beside match status, period and sorting without a
+visible page title or selector prefix, with the theme control at the far right of the shell
 header; feed pages
 omit the shell search so there is one body search bar on every device. The
 mobile Advanced filters button has a visible label, `aria-haspopup="dialog"`,

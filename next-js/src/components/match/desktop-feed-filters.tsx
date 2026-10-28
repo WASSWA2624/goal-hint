@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { CalendarIcon, ChevronDownIcon, FilterIcon, GlobeIcon, GridIcon, ResetIcon, SlidersIcon, TrophyIcon, type IconProps } from "@/components/ui/icons";
+import { CalendarIcon, ChevronDownIcon, ChevronRightIcon, GlobeIcon, GridIcon, ResetIcon, SlidersIcon, TrophyIcon, type IconProps } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -199,8 +199,8 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       else setIssue({ section: null, message: messages.text("feed.invalidQuery") });
     }}>
     <VisuallyHidden as="h1">{feedHeading(query, today, messages)}</VisuallyHidden>
-    <SearchRow>
-      <FeedSearchInput name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
+    <SearchRow data-desktop-filter-search>
+      <FeedSearchInput compact name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
         placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
         submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
         onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
@@ -213,24 +213,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       }} /></PeriodField>
       <PeriodField><FeedPeriodSelect name="when" locale={query.locale} value={period} disabled={draft.query.status === "live"}
         title={draft.query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={changePeriod} /></PeriodField>
-    </SearchRow>
-    <OptionsRow>{sections.map((section) => {
-      const Icon = sectionIcons[section];
-      return <SectionButton key={section} type="button" data-filter-section={section} data-active={modified[section]}
-        aria-haspopup="dialog" aria-controls={`${prefix}-${section}`} aria-expanded={active === section}
-        aria-describedby={`${prefix}-${section}-summary`} disabled={section === "dates" && draft.query.status === "live"}
-        title={section === "dates" && draft.query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onClick={() => open(section)}>
-        <Icon /><span data-section-label>{titles[section]}</span>{counts[section] > 0 && <Count aria-hidden="true">{messages.number(counts[section])}</Count>}<ChevronDownIcon />
-      </SectionButton>;
-    })}</OptionsRow>
-    {sections.map((section) => <VisuallyHidden id={`${prefix}-${section}-summary`} key={section}>
-      {section === "dates" || section === "limits" ? messages.plural("feed.filters.configuredCount", counts[section])
-        : messages.text("feed.filters.selectedCount", { count: messages.number(counts[section]) })}
-    </VisuallyHidden>)}
-    <ActionRow data-desktop-filter-actions>
-      <div data-picks><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={subscriberOnly && draft.query.status !== "finished"}
-        onChange={(checked) => setDraft((current) => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} /></div>
-      <SortField><span>{messages.text("feed.sort.label")} ·</span><select name="sort" aria-label={messages.text("feed.sort.label")}
+      <SortField><VisuallyHidden>{messages.text("feed.sort.label")}</VisuallyHidden><select name="sort" aria-label={messages.text("feed.sort.label")}
         value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={(event) => {
           const selected = feedSortOptions.find((sort) => `${sort.by}-${sort.direction}` === event.target.value);
           if (selected) setDraft((current) => ({ ...current, query: { ...current.query, sort: selected } }));
@@ -239,9 +222,29 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
           {messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`)}
         </option>)}
       </select></SortField>
-      <ActionButton type="reset" variant="quiet" aria-label={messages.text("feed.filters.clear")}><ResetIcon />{messages.text("feed.filters.reset")}</ActionButton>
-      <ActionButton type="submit" disabled={!complete}><FilterIcon />{messages.text("feed.filters.applyPlain")}</ActionButton>
-    </ActionRow>
+    </SearchRow>
+    <OptionsRow data-desktop-filter-options>{sections.map((section) => {
+      const Icon = sectionIcons[section];
+      return <SectionButton key={section} type="button" data-filter-section={section} data-active={modified[section]}
+        aria-haspopup="dialog" aria-controls={`${prefix}-${section}`} aria-expanded={active === section}
+        aria-describedby={`${prefix}-${section}-summary`} disabled={section === "dates" && draft.query.status === "live"}
+        title={section === "dates" && draft.query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onClick={() => open(section)}>
+        <Icon /><span data-section-label>{titles[section]}</span>{counts[section] > 0 && <Count aria-hidden="true">{messages.number(counts[section])}</Count>}<ChevronDownIcon />
+      </SectionButton>;
+    })}
+      <ActionRow data-desktop-filter-actions>
+        <div data-picks><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={subscriberOnly && draft.query.status !== "finished"}
+          onChange={(checked) => setDraft((current) => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} /></div>
+        <div data-filter-submit-actions>
+          <ActionButton type="reset" variant="quiet" aria-label={messages.text("feed.filters.clear")}><ResetIcon />{messages.text("feed.filters.reset")}</ActionButton>
+          <ActionButton type="submit" disabled={!complete}>{messages.text("feed.filters.applyPlain")}<ChevronRightIcon /></ActionButton>
+        </div>
+      </ActionRow>
+    </OptionsRow>
+    {sections.map((section) => <VisuallyHidden id={`${prefix}-${section}-summary`} key={section}>
+      {section === "dates" || section === "limits" ? messages.plural("feed.filters.configuredCount", counts[section])
+        : messages.text("feed.filters.selectedCount", { count: messages.number(counts[section]) })}
+    </VisuallyHidden>)}
     {error(null)}
     {sections.map((section) => <CriteriaDialog key={section} id={`${prefix}-${section}`} title={titles[section]} open={active === section}
       onCancel={cancel} onApply={() => save(section)} onReset={() => localReset(section)} resetLabel={messages.text("feed.filters.reset")}

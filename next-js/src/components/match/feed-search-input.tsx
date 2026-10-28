@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentPropsWithRef } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
 import { controlFeedback, filterControlColors } from "./filter-parts";
@@ -10,9 +10,10 @@ type FeedSearchInputProps = Omit<ComponentPropsWithRef<"input">, "type" | "aria-
   label: string;
   submitLabel: string;
   submitDisabled?: boolean;
+  compact?: boolean;
 };
 
-const Field = styled.div`
+const Field = styled.div<{ $compact?: boolean }>`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   min-inline-size: 0;
@@ -26,6 +27,30 @@ const Field = styled.div`
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
     outline-offset: 2px;
   }
+  ${({ $compact }) => $compact && css`
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 6px;
+    min-block-size: 2rem;
+    padding-inline-start: 8px;
+    border-radius: 0;
+    background: ${({ theme }) => theme.color.surface};
+    > svg { flex: none; font-size: 0.875rem; color: ${({ theme }) => theme.color.mutedText}; }
+    > input, > button { min-block-size: calc(2rem - 2px); font-size: 0.75rem; }
+    > input { padding: 4px 0; }
+    > button {
+      align-self: stretch;
+      padding-inline: 9px;
+      color: ${({ theme }) => theme.color.text};
+      background: ${({ theme }) => theme.color.surfaceMuted};
+      font-weight: ${({ theme }) => theme.typography.weight.medium};
+    }
+    @media (pointer: coarse) {
+      min-block-size: 44px;
+      > input, > button { min-block-size: 44px; }
+      > input { font-size: 1rem; }
+    }
+  `}
 `;
 
 const Input = styled.input`
@@ -72,11 +97,12 @@ const Submit = styled.button`
 `;
 
 /** A single search field with an inset action; its parent form owns submission. */
-export function FeedSearchInput({ label, submitLabel, submitDisabled, ...props }: FeedSearchInputProps) {
-  return <Field data-feed-search>
+export function FeedSearchInput({ label, submitLabel, submitDisabled, compact = false, ...props }: FeedSearchInputProps) {
+  return <Field data-feed-search $compact={compact}>
+    {compact && <SearchIcon aria-hidden="true" />}
     <Input {...props} type="search" aria-label={label} />
     <Submit type="submit" disabled={props.disabled || submitDisabled}>
-      <SearchIcon aria-hidden="true" />{submitLabel}
+      {!compact && <SearchIcon aria-hidden="true" />}{submitLabel}
     </Submit>
   </Field>;
 }

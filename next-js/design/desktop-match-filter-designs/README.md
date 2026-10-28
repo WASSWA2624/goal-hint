@@ -1,12 +1,15 @@
 # Desktop match filter design samples
 
-Ten interactive desktop concepts for choosing a compact replacement for the
-Matches filter panel. The production interface is unchanged; implementation
-follows the user's design selection.
+Ten interactive desktop concepts for comparing compact Matches filter layouts.
+The user selected sample 1, **Compact toolbar**, for the production desktop
+filters. Its implementation is tracked in
+[`114-compact-desktop-matches-toolbar.md`](../../dev-plan/114-compact-desktop-matches-toolbar.md),
+including the completed rendering and interaction checks. The gallery remains
+an illustrative design reference.
 
 ## Concepts
 
-1. **Compact toolbar** — two compact rows with every filter within reach.
+1. **Compact toolbar — selected** — two compact rows with every filter within reach.
 2. **Status tabs** — visible match statuses above the remaining controls.
 3. **Filter cells** — aligned labeled cells with readable current values.
 4. **Quick dates** — direct access to common date ranges.

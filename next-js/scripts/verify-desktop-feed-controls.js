@@ -34,21 +34,67 @@ async function verifyDesktopFeedControls(page) {
     await page.setViewportSize({ width, height: 900 });
     const geometry = await form.evaluate((element) => {
       const controls = Array.from(element.querySelectorAll("[data-filter-section]"));
-      const boxes = controls.map((control) => control.getBoundingClientRect());
-      const row = element.querySelector("[data-desktop-filter-actions]");
-      const actions = Array.from(row.children), actionBoxes = actions.map((child) => child.getBoundingClientRect());
+      const searchRow = element.querySelector("[data-desktop-filter-search]");
+      const optionsRow = element.querySelector("[data-desktop-filter-options]");
+      const actionRow = element.querySelector("[data-desktop-filter-actions]");
+      if (!searchRow || !optionsRow || !actionRow) return { missingRows: true };
+      const fields = Array.from(searchRow.children);
+      const submit = actionRow.querySelector("[data-filter-submit-actions]");
+      const buttons = submit ? Array.from(submit.children) : [];
+      const picks = actionRow.querySelector("[data-picks]");
+      const bounds = (nodes) => nodes.map((node) => node.getBoundingClientRect());
+      const sameRow = (nodes) => {
+        const boxes = bounds(nodes);
+        return boxes.length > 0 && boxes.every((box) => Math.abs(box.y + box.height / 2 - boxes[0].y - boxes[0].height / 2) < 1);
+      };
+      const secondRow = [...controls, ...(picks ? [picks] : []), ...buttons];
+      const compactControls = [...fields, ...controls, ...buttons];
+      const visible = (node) => { const box = node.getBoundingClientRect(); return box.width > 0 && box.height > 0; };
+      const interactive = Array.from(element.querySelectorAll("[data-desktop-filter-search] input, [data-desktop-filter-search] button, [data-desktop-filter-search] select, [data-desktop-filter-options] input, [data-desktop-filter-options] button, [data-desktop-filter-options] select")).filter(visible);
+      const boxes = bounds(interactive);
+      const noOverlap = boxes.every((box, index) => boxes.slice(index + 1).every((other) =>
+        Math.min(box.right, other.right) - Math.max(box.left, other.left) <= 1
+        || Math.min(box.bottom, other.bottom) - Math.max(box.top, other.top) <= 1));
+      const rowStyle = getComputedStyle(optionsRow), rowChildren = Array.from(optionsRow.children);
+      const available = optionsRow.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight);
+      const inlineWidth = bounds(rowChildren).reduce((total, box) => total + box.width, 0)
+        + (parseFloat(rowStyle.columnGap) || 0) * Math.max(0, rowChildren.length - 1);
+      const shouldFitSecondRow = inlineWidth <= available + 1;
+      const fieldSelectors = ["[data-feed-search]", '[name="status"]', '[name="when"]', '[name="sort"]'];
+      const orderedFields = fields.length === fieldSelectors.length && fields.every((field, index) =>
+        field.matches(fieldSelectors[index]) || field.querySelector(fieldSelectors[index]) !== null);
+      const finePointer = !matchMedia("(pointer: coarse)").matches;
       return {
+        missingRows: false,
         sections: controls.map((control) => control.getAttribute("data-filter-section")),
-        oneFilterRow: boxes.every((box) => Math.abs(box.y - boxes[0].y) < 1 && Math.abs(box.height - boxes[0].height) < 1),
-        orderedActions: actions.length === 4 && actions[0].hasAttribute("data-picks") && actions[1].querySelector('[name="sort"]') !== null
-          && actions[2].getAttribute("type") === "reset" && actions[3].getAttribute("type") === "submit",
-        oneActionRow: actionBoxes.every((box) => Math.abs(box.y + box.height / 2 - actionBoxes[0].y - actionBoxes[0].height / 2) < 1),
-        fits: document.documentElement.scrollWidth <= innerWidth && controls.every((control) => control.scrollWidth <= control.clientWidth),
+        orderedFields,
+        oneSearchRow: sameRow(fields),
+        orderedOptions: rowChildren.length === controls.length + 1 && controls.every((control, index) => rowChildren[index] === control)
+          && rowChildren[rowChildren.length - 1] === actionRow,
+        orderedActions: actionRow.children.length === 2 && actionRow.firstElementChild === picks
+          && actionRow.lastElementChild === submit && buttons.length === 2
+          && buttons[0].getAttribute("type") === "reset" && buttons[1].getAttribute("type") === "submit",
+        oneOptionsRowWhenItFits: !shouldFitSecondRow || sameRow(secondRow),
+        fits: document.documentElement.scrollWidth <= innerWidth && [...controls, ...buttons].every((control) => control.scrollWidth <= control.clientWidth + 1)
+          && controls.every((control) => { const label = control.querySelector("[data-section-label]"); return label && label.scrollWidth <= label.clientWidth + 1; }),
+        noOverlap,
+        compact: compactControls.every((control) => { const height = control.getBoundingClientRect().height; return finePointer ? Math.abs(height - 32) <= 1 : height >= 44; }),
+        square: [element, ...compactControls].every((control) => {
+          const style = getComputedStyle(control);
+          return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomLeftRadius, style.borderBottomRightRadius].every((radius) => parseFloat(radius) === 0);
+        }),
+        compactPanelWhenItFits: !shouldFitSecondRow || element.getBoundingClientRect().height <= (finePointer ? 100 : 128),
       };
     });
+    require(!geometry.missingRows, "The desktop filters must expose the two Compact toolbar rows.");
     require(JSON.stringify(geometry.sections) === JSON.stringify(sections), "The five filter controls must retain the approved order.");
-    require(geometry.oneFilterRow && geometry.fits, `The five filter controls must fit one row at ${width}px.`);
-    require(geometry.orderedActions && geometry.oneActionRow, `Picks only, Sort by, Reset and Apply must share one row at ${width}px.`);
+    require(geometry.orderedFields && geometry.oneSearchRow, `Search, status, period and sorting must share the first row at ${width}px.`);
+    require(geometry.orderedOptions && geometry.orderedActions && geometry.oneOptionsRowWhenItFits, `The five filters, Predictions only, Reset and Apply must share the second row when space allows at ${width}px.`);
+    require(geometry.fits && geometry.noOverlap, `Toolbar controls and labels must fit without overlap or clipping at ${width}px.`);
+    require(geometry.compact && geometry.square && geometry.compactPanelWhenItFits, `The toolbar must retain square 32px controls and its compact two-row height at ${width}px.`);
+    const checkbox = form.locator('[data-picks] input[type="checkbox"]');
+    await checkbox.focus();
+    require(await checkbox.evaluate((input) => input === document.activeElement), "Predictions only must remain keyboard focusable in the compact toolbar.");
   };
   for (const width of [1024, 1440]) await assertDesktopLayout(width);
   require(await count("markets") === "4" && await count("limits") === null, "Only Markets has a count by default: all four selected markets.");
