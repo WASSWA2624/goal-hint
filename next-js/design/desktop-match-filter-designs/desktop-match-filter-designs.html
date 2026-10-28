@@ -1,0 +1,447 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  #gh-filter-designs .gh-stage { min-block-size: 690px; }
+  #gh-filter-designs .gh-product {
+    --gh-page: light-dark(#F0F3F8, #03111F);
+    --gh-surface: light-dark(#FFFFFF, #081B2C);
+    --gh-muted-surface: light-dark(#E8EDF5, #0D253B);
+    --gh-text: light-dark(#15243B, #F4F7FF);
+    --gh-muted: light-dark(#53647C, #A8CBEF);
+    --gh-border: light-dark(#D9E1ED, #263D50);
+    --gh-input: light-dark(#718099, #58728C);
+    --gh-brand: light-dark(#2457C5, #00B9F2);
+    --gh-soft: light-dark(#E3ECFF, #073052);
+    --gh-action: light-dark(#2457C5, #0066F5);
+    --gh-on-action: #FFFFFF;
+    --gh-good: light-dark(#007754, #70DEA4);
+    --gh-warn: light-dark(#8B5700, #F6C453);
+    --gh-bad: light-dark(#9C2328, #FF9C9C);
+    --gh-control-height: 32px;
+    color-scheme: light dark;
+    color: var(--gh-text); background: var(--gh-page);
+    font: 400 12px/1.5 Manrope, Arial, sans-serif;
+    min-block-size: 660px; inline-size: 100%; text-align: start;
+  }
+  #gh-filter-designs .gh-product *, #gh-filter-designs .gh-product *::before, #gh-filter-designs .gh-product *::after { box-sizing: border-box; }
+  #gh-filter-designs .gh-product [hidden] { display: none !important; }
+  #gh-filter-designs .gh-product button, #gh-filter-designs .gh-product input, #gh-filter-designs .gh-product select { font: inherit; border-radius: 0; }
+  #gh-filter-designs .gh-product button { color: inherit; }
+  #gh-filter-designs .gh-product input, #gh-filter-designs .gh-product select { color: var(--gh-text); background: var(--gh-surface); accent-color: var(--gh-brand); }
+  #gh-filter-designs .gh-product :is(button, input, select, summary):focus-visible { outline: 2px solid var(--gh-brand); outline-offset: 2px; }
+  #gh-filter-designs .gh-product :is(button, select):disabled { color: var(--gh-muted); background: var(--gh-muted-surface); cursor: not-allowed; }
+  #gh-filter-designs .gh-header { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; min-block-size: 48px; padding: 8px 16px; border-block-end: 1px solid var(--gh-border); background: var(--gh-surface); }
+  #gh-filter-designs .gh-brand { font-size: 18px; font-weight: 800; letter-spacing: -.6px; white-space: nowrap; }
+  #gh-filter-designs .gh-brand em { font-style: normal; color: var(--gh-brand); }
+  #gh-filter-designs .gh-nav { display: flex; align-items: center; gap: 22px; font-size: 13px; color: var(--gh-muted); }
+  #gh-filter-designs .gh-nav strong { color: var(--gh-brand); font-weight: 700; }
+  #gh-filter-designs .gh-main { padding: 16px; }
+  #gh-filter-designs .gh-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-block-end: 10px; }
+  #gh-filter-designs .gh-heading h2 { font: 700 16px/1.4 Manrope, Arial, sans-serif; margin: 0; }
+  #gh-filter-designs .gh-preview-label { color: var(--gh-muted); font-size: 11px; }
+  #gh-filter-designs .gh-panel { border: 1px solid var(--gh-border); background: var(--gh-surface); padding: 8px; display: grid; gap: 7px; margin: 0; min-inline-size: 0; }
+  #gh-filter-designs .gh-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-inline-size: 0; }
+  #gh-filter-designs .gh-grow { flex: 1 1 auto; }
+  #gh-filter-designs .gh-divider { inline-size: 1px; block-size: 20px; background: var(--gh-border); margin-inline: 3px; }
+  #gh-filter-designs .gh-search { flex: 1 1 210px; display: flex; align-items: center; min-inline-size: 160px; block-size: var(--gh-control-height); border: 1px solid var(--gh-input); background: var(--gh-surface); padding-inline-start: 8px; gap: 6px; }
+  #gh-filter-designs .gh-search input { border: 0; outline-offset: -2px; min-inline-size: 0; inline-size: 100%; padding: 4px 0; block-size: 100%; }
+  #gh-filter-designs .gh-search input::placeholder { color: var(--gh-muted); opacity: 1; }
+  #gh-filter-designs .gh-search button { border: 0; border-inline-start: 1px solid var(--gh-border); background: var(--gh-muted-surface); block-size: 100%; padding-inline: 9px; font-weight: 600; }
+  #gh-filter-designs .gh-control, #gh-filter-designs .gh-select {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-block-size: var(--gh-control-height); max-inline-size: 100%; padding: 4px 9px;
+    border: 1px solid var(--gh-border); color: var(--gh-text); background: var(--gh-surface);
+    white-space: nowrap; text-decoration: none; font-weight: 500;
+  }
+  #gh-filter-designs .gh-select { border-color: var(--gh-input); padding-inline: 8px 24px; min-inline-size: 0; }
+  #gh-filter-designs .gh-field { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+  #gh-filter-designs .gh-field > span { color: var(--gh-muted); white-space: nowrap; }
+  #gh-filter-designs .gh-control:hover:enabled { background: var(--gh-soft); }
+  #gh-filter-designs .gh-control[data-active="true"] { border-color: var(--gh-brand); background: var(--gh-soft); color: var(--gh-brand); }
+  #gh-filter-designs .gh-primary { color: var(--gh-on-action) !important; background: var(--gh-action) !important; border-color: var(--gh-action); font-weight: 700; }
+  #gh-filter-designs .gh-quiet { border-color: transparent; background: transparent; color: var(--gh-muted); }
+  #gh-filter-designs .gh-control .gh-count { min-inline-size: 16px; padding-inline: 3px; background: var(--gh-soft); color: var(--gh-brand); font-size: 11px; font-variant-numeric: tabular-nums; }
+  #gh-filter-designs .gh-control .gh-value { color: var(--gh-muted); font-size: 11px; }
+  #gh-filter-designs .gh-control[data-active="true"] .gh-value { color: var(--gh-brand); }
+  #gh-filter-designs .gh-check { display: inline-flex; align-items: center; gap: 6px; min-block-size: var(--gh-control-height); white-space: nowrap; font-weight: 500; }
+  #gh-filter-designs .gh-check input { margin: 0; inline-size: 14px; block-size: 14px; }
+  #gh-filter-designs .gh-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-inline-start: auto; }
+  #gh-filter-designs .gh-product :is(svg, [data-lucide]) { flex: none; inline-size: 14px; block-size: 14px; }
+  #gh-filter-designs .gh-segments { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
+  #gh-filter-designs .gh-segments .gh-control { border-inline-end-width: 0; }
+  #gh-filter-designs .gh-segments .gh-control:last-child { border-inline-end-width: 1px; }
+  #gh-filter-designs .gh-status-tabs { gap: 2px; }
+  #gh-filter-designs .gh-status-tabs .gh-control { border: 0; border-block-end: 2px solid transparent; background: transparent; padding-inline: 12px; }
+  #gh-filter-designs .gh-status-tabs .gh-control[data-active="true"] { border-block-end-color: var(--gh-brand); color: var(--gh-brand); }
+  #gh-filter-designs .gh-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  #gh-filter-designs .gh-cell { align-items: flex-start; flex-direction: column; gap: 1px; min-block-size: 48px; border: 0; border-inline-end: 1px solid var(--gh-border); padding: 4px 10px; white-space: normal; text-align: start; }
+  #gh-filter-designs .gh-cell:last-child { border-inline-end: 0; }
+  #gh-filter-designs .gh-cell > span:first-child { display: flex; align-items: center; gap: 5px; }
+  #gh-filter-designs .gh-cell .gh-value { font-size: 12px; color: var(--gh-text); }
+  #gh-filter-designs .gh-underlined { border: 0; border-block-end: 1px solid var(--gh-border); padding-inline: 4px; background: transparent; }
+  #gh-filter-designs .gh-ledger { gap: 0; padding: 0; }
+  #gh-filter-designs .gh-ledger > .gh-row { padding: 6px 10px; }
+  #gh-filter-designs .gh-ledger > .gh-row + .gh-row { border-block-start: 1px solid var(--gh-border); }
+  #gh-filter-designs .gh-ledger .gh-search { border: 0; padding-inline-start: 0; }
+  #gh-filter-designs .gh-ledger .gh-search button { background: transparent; color: var(--gh-brand); }
+  #gh-filter-designs .gh-details { border-block-start: 1px solid var(--gh-border); margin-block-start: 1px; }
+  #gh-filter-designs .gh-details > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-block-size: 30px; padding-block-start: 4px; color: var(--gh-brand); font-weight: 600; }
+  #gh-filter-designs .gh-details > summary::marker { content: ""; }
+  #gh-filter-designs .gh-details > summary > small { color: var(--gh-muted); font-size: 11px; font-weight: 400; }
+  #gh-filter-designs .gh-details[open] > summary { margin-block-end: 5px; }
+  #gh-filter-designs .gh-rail-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 10px; align-items: start; }
+  #gh-filter-designs .gh-rail { gap: 8px; }
+  #gh-filter-designs .gh-rail > :is(.gh-control, .gh-field, .gh-search, .gh-select), #gh-filter-designs .gh-rail .gh-field > select { inline-size: 100%; }
+  #gh-filter-designs .gh-rail .gh-control { justify-content: flex-start; }
+  #gh-filter-designs .gh-rail .gh-control > :last-child { margin-inline-start: auto; }
+  #gh-filter-designs .gh-rail .gh-field { flex-wrap: wrap; gap: 3px; }
+  #gh-filter-designs .gh-rail .gh-search { min-inline-size: 0; }
+  #gh-filter-designs .gh-rail .gh-actions { margin-inline-start: 0; }
+  #gh-filter-designs .gh-rail .gh-actions > .gh-primary { flex: 1; }
+  #gh-filter-designs .gh-group-tabs { border-block-end: 1px solid var(--gh-border); padding-block-end: 4px; }
+  #gh-filter-designs .gh-group-content { min-block-size: 38px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  #gh-filter-designs .gh-group-content > small { color: var(--gh-muted); font-size: 11px; }
+  #gh-filter-designs .gh-split { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.25fr); gap: 10px; padding: 0; }
+  #gh-filter-designs .gh-split > .gh-split-side { padding: 8px; display: grid; gap: 6px; align-content: start; }
+  #gh-filter-designs .gh-split > .gh-split-side + .gh-split-side { border-inline-start: 1px solid var(--gh-border); }
+  #gh-filter-designs .gh-split .gh-search { inline-size: 100%; }
+  #gh-filter-designs .gh-split-footer { grid-column: 1/-1; padding: 6px 8px; border-block-start: 1px solid var(--gh-border); }
+  #gh-filter-designs .gh-inline-probability { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  #gh-filter-designs .gh-inline-probability legend { float: left; margin-inline-end: 6px; color: var(--gh-muted); }
+  #gh-filter-designs .gh-inline-probability { padding: 0; margin: 0; border: 0; }
+  #gh-filter-designs .gh-inline-probability label { display: inline-flex; align-items: center; gap: 4px; }
+  #gh-filter-designs .gh-inline-probability input { inline-size: 56px; min-block-size: var(--gh-control-height); padding: 4px 6px; border: 1px solid var(--gh-input); }
+  #gh-filter-designs .gh-results { min-inline-size: 0; }
+  #gh-filter-designs .gh-results-line { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; min-block-size: 34px; color: var(--gh-muted); font-size: 11px; }
+  #gh-filter-designs .gh-dirty { color: var(--gh-warn); }
+  #gh-filter-designs .gh-board { border: 1px solid var(--gh-border); background: var(--gh-surface); }
+  #gh-filter-designs .gh-match { display: grid; grid-template-columns: 43px 70px 77px 92px minmax(170px, 1fr) 80px 55px 60px 65px; gap: 4px; align-items: center; padding: 4px 10px; min-block-size: 36px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #gh-filter-designs .gh-match + .gh-match { border-block-start: 1px solid var(--gh-border); }
+  #gh-filter-designs .gh-match > * { min-inline-size: 0; }
+  #gh-filter-designs .gh-meta { color: var(--gh-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #gh-filter-designs .gh-country, #gh-filter-designs .gh-pick, #gh-filter-designs .gh-odds, #gh-filter-designs .gh-outcome { border-inline-start: 1px solid var(--gh-border); padding-inline-start: 6px; }
+  #gh-filter-designs .gh-teams { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); gap: 4px; align-items: center; font-size: 13px; font-weight: 700; }
+  #gh-filter-designs .gh-teams > span:first-child { text-align: end; }
+  #gh-filter-designs .gh-teams > span:nth-child(2) { text-align: center; font-size: 11px; color: var(--gh-muted); }
+  #gh-filter-designs .gh-team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #gh-filter-designs .gh-pick { color: var(--gh-brand); font-size: 13px; font-weight: 700; white-space: nowrap; }
+  #gh-filter-designs .gh-number { text-align: end; white-space: nowrap; }
+  #gh-filter-designs .gh-number small { font-size: 11px; color: var(--gh-muted); margin-inline-end: 3px; }
+  #gh-filter-designs .gh-number strong { font-size: 13px; }
+  #gh-filter-designs .gh-outcome { display: grid; text-align: center; line-height: 13px; font-size: 11px; }
+  #gh-filter-designs .gh-outcome small { color: var(--gh-muted); font-size: 10px; }
+  #gh-filter-designs .gh-outcome strong { font-weight: 600; color: var(--gh-warn); }
+  #gh-filter-designs .gh-outcome[data-outcome="Won"] strong { color: var(--gh-good); }
+  #gh-filter-designs .gh-outcome[data-outcome="Lost"] strong { color: var(--gh-bad); }
+  #gh-filter-designs .gh-rail-layout .gh-match { grid-template-columns: 43px 65px minmax(55px,.6fr) minmax(60px,.7fr) minmax(130px,1.5fr) 70px 55px 65px 65px; padding-inline: 6px; }
+  #gh-filter-designs .gh-empty { padding: 24px 12px; color: var(--gh-muted); text-align: center; }
+  #gh-filter-designs .gh-error { color: var(--gh-bad); margin: 0; font-size: 12px; }
+  #gh-filter-designs .gh-dialog { position: fixed; inset: 0; inline-size: min(440px, calc(100% - 24px)); max-inline-size: 100%; max-block-size: calc(100% - 32px); overflow: auto; margin: auto; padding: 0; border: 1px solid var(--gh-input); border-radius: 0; color: var(--gh-text); background: var(--gh-surface); font: inherit; }
+  #gh-filter-designs .gh-dialog::backdrop { background: rgb(0 8 20 / 65%); }
+  #gh-filter-designs .gh-dialog:not([open]) { display: none; }
+  #gh-filter-designs .gh-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-block-end: 1px solid var(--gh-border); }
+  #gh-filter-designs .gh-dialog-head h3 { margin: 0; font: 700 14px/1.5 Manrope, Arial, sans-serif; }
+  #gh-filter-designs .gh-dialog-body { padding: 12px; display: grid; gap: 10px; }
+  #gh-filter-designs .gh-dialog-body > p { margin: 0; color: var(--gh-muted); }
+  #gh-filter-designs .gh-dialog-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  #gh-filter-designs .gh-dialog-field { display: grid; gap: 4px; min-inline-size: 0; }
+  #gh-filter-designs .gh-dialog-field input, #gh-filter-designs .gh-dialog-field select { inline-size: 100%; min-inline-size: 0; min-block-size: 34px; border: 1px solid var(--gh-input); padding: 5px 7px; }
+  #gh-filter-designs .gh-dialog-field input:disabled { color: var(--gh-muted); background: var(--gh-muted-surface); }
+  #gh-filter-designs .gh-dialog-body fieldset { margin: 0; padding: 0; border: 0; }
+  #gh-filter-designs .gh-dialog-body legend { font-weight: 700; padding: 0; margin-block-end: 6px; }
+  #gh-filter-designs .gh-dialog-options { display: grid; gap: 2px; }
+  #gh-filter-designs .gh-dialog-options .gh-check { min-block-size: 30px; }
+  #gh-filter-designs .gh-dialog-footer { padding: 8px 12px; border-block-start: 1px solid var(--gh-border); display: flex; flex-wrap: wrap; gap: 6px; }
+  #gh-filter-designs .gh-sr { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  @media (max-width: 1000px) {
+    #gh-filter-designs .gh-match { grid-template-columns: 43px 65px 63px 75px minmax(140px, 1fr) 65px 48px 56px 60px; padding-inline: 6px; }
+    #gh-filter-designs .gh-rail-layout .gh-match { grid-template-columns: 43px 65px 55px minmax(130px,1fr) 70px 65px 65px; }
+    #gh-filter-designs .gh-rail-layout .gh-match > .gh-league, #gh-filter-designs .gh-rail-layout .gh-match > .gh-odds { display: none; }
+  }
+  @media (max-width: 780px) {
+    #gh-filter-designs .gh-stage { min-block-size: 900px; }
+    #gh-filter-designs .gh-product { min-block-size: 870px; }
+    #gh-filter-designs .gh-main { padding: 10px; }
+    #gh-filter-designs .gh-match { grid-template-columns: 43px 65px minmax(160px,1fr) 65px 56px 60px; }
+    #gh-filter-designs .gh-match > :is(.gh-country,.gh-league,.gh-odds) { display: none; }
+    #gh-filter-designs .gh-cells { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+    #gh-filter-designs .gh-cell { border: 1px solid var(--gh-border); }
+    #gh-filter-designs .gh-split { grid-template-columns: 1fr; gap: 0; }
+    #gh-filter-designs .gh-split > .gh-split-side + .gh-split-side { border-inline-start: 0; border-block-start: 1px solid var(--gh-border); }
+    #gh-filter-designs .gh-rail-layout { grid-template-columns: 1fr; }
+    #gh-filter-designs .gh-rail { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    #gh-filter-designs .gh-rail .gh-search { grid-column: 1/-1; }
+    #gh-filter-designs .gh-rail .gh-actions { grid-column: span 2; }
+    #gh-filter-designs .gh-rail-layout .gh-match { grid-template-columns: 43px 65px minmax(160px,1fr) 65px 56px 60px; }
+  }
+  @media (max-width: 520px) {
+    #gh-filter-designs .gh-stage { min-block-size: 1130px; }
+    #gh-filter-designs .gh-product { min-block-size: 1100px; }
+    #gh-filter-designs .gh-header { gap: 12px; padding-inline: 10px; }
+    #gh-filter-designs .gh-nav { gap: 12px; font-size: 11px; }
+    #gh-filter-designs .gh-search { flex-basis: 100%; }
+    #gh-filter-designs .gh-field { flex: 1 1 120px; }
+    #gh-filter-designs .gh-field > select { inline-size: 100%; }
+    #gh-filter-designs .gh-field > span { display: none; }
+    #gh-filter-designs .gh-match, #gh-filter-designs .gh-rail-layout .gh-match { grid-template-columns: minmax(0,1fr) 56px 50px; gap: 6px; padding: 8px; }
+    #gh-filter-designs .gh-match > :is(.gh-date,.gh-time,.gh-outcome) { display: none; }
+    #gh-filter-designs .gh-teams { grid-template-columns: minmax(0,1fr); gap: 0; font-size: 12px; }
+    #gh-filter-designs .gh-teams > span:first-child { text-align: start; }
+    #gh-filter-designs .gh-teams > span:nth-child(2) { display: none; }
+    #gh-filter-designs .gh-cells { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    #gh-filter-designs .gh-rail { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    #gh-filter-designs .gh-actions { margin-inline-start: 0; }
+    #gh-filter-designs .gh-dialog-grid { grid-template-columns: 1fr; }
+    #gh-filter-designs .gh-results-line { align-items: flex-start; }
+  }
+  @media (pointer: coarse) {
+    #gh-filter-designs .gh-product { --gh-control-height: 44px !important; }
+    #gh-filter-designs .gh-product :is(.gh-control,.gh-select,.gh-check) { min-block-size: 44px; }
+    #gh-filter-designs .gh-product input:not([type="checkbox"]) { font-size: 16px; }
+  }
+</style>
+<div id="gh-filter-designs" class="viz-carousel" aria-label="Desktop match filter designs">
+  <section class="gh-stage" data-variant="Compact toolbar" aria-label="Compact toolbar"></section>
+  <section class="gh-stage" data-variant="Status tabs" aria-label="Status tabs" hidden></section>
+  <section class="gh-stage" data-variant="Filter cells" aria-label="Filter cells" hidden></section>
+  <section class="gh-stage" data-variant="Quick dates" aria-label="Quick dates" hidden></section>
+  <section class="gh-stage" data-variant="Quiet ledger" aria-label="Quiet ledger" hidden></section>
+  <section class="gh-stage" data-variant="Expandable toolbar" aria-label="Expandable toolbar" hidden></section>
+  <section class="gh-stage" data-variant="Filter rail" aria-label="Filter rail" hidden></section>
+  <section class="gh-stage" data-variant="Tabbed groups" aria-label="Tabbed groups" hidden></section>
+  <section class="gh-stage" data-variant="Split toolbar" aria-label="Split toolbar" hidden></section>
+  <section class="gh-stage" data-variant="Inline probability" aria-label="Inline probability" hidden></section>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('gh-filter-designs');
+  const today = '2026-10-28';
+  const allMarkets = ['Match result', 'Double chance', 'Total goals (2.5)', 'Both teams to score'];
+  const countries = ['England', 'Spain', 'Italy', 'Germany', 'France'];
+  const leagues = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'];
+  const periods = ['Last 30 days', 'Last 7 days', 'Last 3 days', 'Yesterday', 'Today', 'Tomorrow', 'Next 3 days', 'Next 7 days', 'Next 30 days', 'Custom dates'];
+  const statuses = ['All', 'Upcoming', 'Live', 'Completed'];
+  const sorts = ['Highest chance', 'Lowest chance', 'Earliest first', 'Latest first'];
+  const sections = { dates: ['Match Date & Time', 'calendar-days'], leagues: ['Leagues', 'trophy'], countries: ['Countries', 'globe-2'], markets: ['Markets', 'grid-2x2'], limits: ['Limits', 'sliders-horizontal'] };
+  const defaults = () => ({ search: '', status: 'All', period: 'Last 30 days', sort: 'Latest first', only: true, from: '2026-09-29', to: today, timeFrom: '00:00', timeTo: '23:59', zone: 'Africa/Kampala', leagues: [], countries: [], markets: [...allMarkets], min: '', max: '' });
+  const matches = [
+    { date: today, time: '21:45', country: 'Italy', league: 'Serie A', home: 'Inter', away: 'Roma', pick: '1 Home', family: allMarkets[0], probability: 76, status: 'Upcoming', score: 'VS', outcome: 'Pending' },
+    { date: today, time: '20:00', country: 'England', league: 'Premier League', home: 'Arsenal', away: 'Chelsea', pick: '1X', family: allMarkets[1], probability: 82, status: 'Live', score: '1–0', outcome: 'Pending' },
+    { date: today, time: '19:30', country: 'Spain', league: 'La Liga', home: 'Barcelona', away: 'Sevilla', pick: 'O2.5', family: allMarkets[2], probability: 74, status: 'Completed', score: '3–1', outcome: 'Won' },
+    { date: '2026-10-27', time: '22:00', country: 'Germany', league: 'Bundesliga', home: 'Bayern', away: 'Dortmund', pick: 'Yes', family: allMarkets[3], probability: 71, status: 'Completed', score: '2–2', outcome: 'Won' },
+    { date: '2026-10-26', time: '20:00', country: 'France', league: 'Ligue 1', home: 'Lyon', away: 'Monaco', pick: '1 Home', family: allMarkets[0], probability: 67, status: 'Completed', score: '0–1', outcome: 'Lost' },
+    { date: '2026-10-24', time: '18:00', country: 'England', league: 'Premier League', home: 'Liverpool', away: 'Everton', pick: '1 Home', family: allMarkets[0], probability: 79, status: 'Completed', score: '2–0', outcome: 'Won' },
+    { date: today, time: '18:00', country: 'Italy', league: 'Serie A', home: 'Torino', away: 'Parma', pick: '—', family: null, probability: null, status: 'Upcoming', score: 'VS', outcome: 'Unavailable' },
+    { date: '2026-10-29', time: '21:00', country: 'Spain', league: 'La Liga', home: 'Valencia', away: 'Villarreal', pick: 'X2', family: allMarkets[1], probability: 73, status: 'Upcoming', score: 'VS', outcome: 'Pending' }
+  ];
+  const clone = value => structuredClone(value);
+  const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+  const option = (value, selected) => `<option${value === selected ? ' selected' : ''}>${escape(value)}</option>`;
+  const control = (label, attrs = '', classes = '') => `<button type="button" class="gh-control cursor-interaction ${classes}" ${attrs}>${label}</button>`;
+  const contexts = [];
+  const isValidState = s => s && typeof s.search === 'string' && statuses.includes(s.status) && periods.includes(s.period) && sorts.includes(s.sort) && ['leagues','countries','markets'].every(k => Array.isArray(s[k])) && typeof s.only === 'boolean';
+  const saved = globalThis.openai?.widgetState?.privateContent?.concepts ?? {};
+  const persist = () => {
+    if (!globalThis.openai?.setWidgetState) return;
+    const concepts = Object.fromEntries(contexts.map(c => [c.name, { draft: c.draft, applied: c.applied }]));
+    globalThis.openai.setWidgetState({ modelContent: { preview: 'Desktop match filter design samples', sampleData: true }, privateContent: { concepts } }).catch(() => {});
+  };
+  function search(c) {
+    return `<label class="gh-search">${icon('search')}<span class="gh-sr">Search matches</span><input type="search" name="search" maxlength="120" placeholder="Team or league" value="${escape(c.draft.search)}"><button type="button" data-action="apply" class="cursor-interaction" aria-label="Search matches">Search</button></label>`;
+  }
+  function select(c, key, values, label, showLabel = false) {
+    return `<label class="gh-field"><span${showLabel ? '' : ' class="gh-sr"'}>${label}</span><select class="gh-select cursor-interaction" name="${key}" ${key === 'period' && c.draft.status === 'Live' ? 'disabled' : ''} aria-label="${label}"${key === 'period' && c.draft.status === 'Live' ? ' data-tooltip="Live matches always use Today"' : ''}>${values.map(v => option(v, c.draft[key])).join('')}</select></label>`;
+  }
+  const status = c => select(c, 'status', statuses, 'Match status');
+  const period = c => select(c, 'period', periods, 'Time period');
+  const sort = (c, label = false) => select(c, 'sort', sorts, 'Sort by', label);
+  const only = c => `<label class="gh-check cursor-interaction"><input type="checkbox" name="only"${c.draft.only ? ' checked' : ''}>Predictions only</label>`;
+  const actions = () => `<div class="gh-actions"><button class="gh-control gh-quiet cursor-interaction" type="button" data-action="reset">${icon('rotate-ccw')}Reset</button><button class="gh-control gh-primary cursor-interaction" type="button" data-action="apply">Apply filters${icon('arrow-right')}</button></div>`;
+  function summary(c, key) {
+    const s = c.draft;
+    if (key === 'dates') return s.period === 'Custom dates' ? `${s.from.slice(5)} – ${s.to.slice(5)}` : s.period;
+    if (key === 'leagues') return s.leagues.length ? s.leagues.length === 1 ? s.leagues[0] : `${s.leagues.length} selected` : 'All leagues';
+    if (key === 'countries') return s.countries.length ? s.countries.length === 1 ? s.countries[0] : `${s.countries.length} selected` : 'All countries';
+    if (key === 'markets') return s.markets.length === 4 ? 'All 4 markets' : s.markets.length === 1 ? s.markets[0] : `${s.markets.length} selected`;
+    return s.min !== '' || s.max !== '' ? `${s.min || '0'}–${s.max || '100'}%` : 'Probability · Any';
+  }
+  function trigger(c, key, style = '') {
+    const [label, glyph] = sections[key];
+    const count = ['leagues','countries'].includes(key) ? c.draft[key].length : key === 'markets' ? c.draft.markets.length : key === 'limits' ? Number(c.draft.min !== '') + Number(c.draft.max !== '') : 0;
+    const active = key === 'dates' ? c.draft.period !== 'Last 30 days' || c.draft.timeFrom !== '00:00' || c.draft.timeTo !== '23:59' : key === 'markets' ? count !== 4 : count > 0;
+    const value = summary(c, key);
+    const text = style === 'gh-cell' ? `<span>${icon(glyph)}${label}</span><span class="gh-value">${escape(value)}</span>` : `${icon(glyph)}<span>${label}</span>${count ? `<span class="gh-count">${count}</span>` : ''}${icon('chevron-down')}`;
+    return control(text, `data-open="${key}" data-active="${active}" aria-haspopup="dialog" aria-controls="${c.id}-dialog" aria-expanded="false" aria-label="${label}: ${escape(value)}" ${key === 'dates' && c.draft.status === 'Live' ? 'disabled data-tooltip="Live matches always use Today and all kickoff times"' : ''}`, style);
+  }
+  const filters = (c, style = '') => Object.keys(sections).map(k => trigger(c,k,style)).join('');
+  function presets(c, values = ['Yesterday','Today','Tomorrow']) {
+    return `<div class="gh-segments" role="group" aria-label="Quick time periods">${values.map(v => control(v, `data-period="${v}" aria-pressed="${c.draft.period === v}" data-active="${c.draft.period === v}"${c.draft.status === 'Live' ? ' disabled' : ''}`)).join('')}</div>`;
+  }
+  function statusTabs(c) {
+    return `<div class="gh-row gh-status-tabs" role="group" aria-label="Match status">${statuses.map(v => control(v === 'All' ? 'All matches' : v, `data-status="${v}" aria-pressed="${c.draft.status === v}" data-active="${c.draft.status === v}"`)).join('')}</div>`;
+  }
+  const row = content => `<div class="gh-row">${content}</div>`;
+  function panelContent(c) {
+    switch(c.index) {
+      case 0: return row(search(c)+status(c)+period(c)+sort(c)) + row(filters(c)+only(c)+actions());
+      case 1: return row(statusTabs(c)+'<span class="gh-grow"></span>'+search(c)) + row(period(c)+filters(c)) + row(only(c)+'<span class="gh-grow"></span>'+sort(c,true)+actions());
+      case 2: return row(search(c)+status(c)+period(c)+sort(c)) + `<div class="gh-cells">${filters(c,'gh-cell')}</div>` + row(only(c)+actions());
+      case 3: return row(search(c)+status(c)+sort(c)) + row(icon('calendar-days')+'<span>Period</span>'+presets(c,['Last 7 days','Yesterday','Today','Tomorrow','Next 7 days'])+period(c)) + row(filters(c)+only(c)+actions());
+      case 4: return row(search(c)+status(c)+period(c)+sort(c)) + row(Object.keys(sections).map(k=>trigger(c,k,'gh-underlined')).join('')+only(c)+actions());
+      case 5: return row(search(c)+status(c)+period(c)) + row(sort(c,true)+only(c)+actions()) + `<details class="gh-details"><summary class="cursor-interaction">${icon('sliders-horizontal')}More filters <small>Date & time · Leagues · Countries · Markets · Limits</small>${icon('chevron-down')}</summary>${row(filters(c))}</details>`;
+      case 6: return search(c)+status(c)+period(c)+filters(c,'gh-cell')+sort(c,true)+only(c)+actions();
+      case 7: return row(search(c)+status(c)+period(c)) + `<div class="gh-row gh-status-tabs gh-group-tabs" role="group" aria-label="Filter groups">${[['dates','Date & time'],['competitions','Leagues & countries'],['prediction','Markets & limits']].map(([k,label]) => control(label, `data-group="${k}" data-active="${c.group === k}" aria-pressed="${c.group === k}"`)).join('')}</div><div class="gh-group-content">${c.group === 'dates' ? presets(c)+trigger(c,'dates') : c.group === 'competitions' ? trigger(c,'leagues')+trigger(c,'countries')+'<small>Choose competitions and countries</small>' : trigger(c,'markets')+trigger(c,'limits')+'<small>Choose prediction markets and probability</small>'}</div>` + row(only(c)+'<span class="gh-grow"></span>'+sort(c,true)+actions());
+      case 8: return `<div class="gh-split-side">${search(c)}${row(status(c)+period(c))}${row(sort(c,true))}</div><div class="gh-split-side">${row(trigger(c,'dates')+trigger(c,'leagues')+trigger(c,'countries'))}${row(trigger(c,'markets')+trigger(c,'limits'))}</div><div class="gh-row gh-split-footer">${only(c)+actions()}</div>`;
+      case 9: return row(search(c)+status(c)+period(c)+sort(c)) + row(trigger(c,'dates')+trigger(c,'leagues')+trigger(c,'countries')+trigger(c,'markets')+trigger(c,'limits')) + row(`<fieldset class="gh-inline-probability"><legend>Probability %</legend><label>Min<input name="min" inputmode="decimal" aria-label="Minimum probability" placeholder="Any" value="${escape(c.draft.min)}"></label><span>–</span><label>Max<input name="max" inputmode="decimal" aria-label="Maximum probability" placeholder="Any" value="${escape(c.draft.max)}"></label></fieldset><span class="gh-divider"></span>${only(c)+actions()}`);
+      default: return '';
+    }
+  }
+  function renderPanel(c) {
+    const expanded = c.panel.querySelector('details')?.open ?? false;
+    const focused = c.panel.contains(document.activeElement) ? document.activeElement : null;
+    const focusName = focused?.getAttribute('name');
+    const focusData = ['open','status','period','group','action'].find(key=>focused?.dataset[key] !== undefined);
+    const focusKey = focusData ? [`data-${focusData}`,focused.dataset[focusData]] : null;
+    c.panel.innerHTML = panelContent(c);
+    const details = c.panel.querySelector('details');
+    if (details) details.open = expanded;
+    if (focusName) c.panel.querySelector(`[name="${focusName}"]`)?.focus();
+    else if (focusKey) [...c.panel.querySelectorAll(`[${focusKey[0]}]`)].find(e=>e.getAttribute(focusKey[0])===focusKey[1])?.focus();
+    globalThis.lucide?.createIcons({ attrs: { width: 14, height: 14 } });
+    updateDirty(c);
+  }
+  function updateDirty(c) {
+    const dirty = JSON.stringify(c.draft) !== JSON.stringify(c.applied);
+    c.notice.textContent = dirty ? 'Unapplied changes' : 'Filters applied';
+    c.notice.classList.toggle('gh-dirty',dirty);
+  }
+  function validity(s) {
+    if (s.min !== '' && (!/^\d+(\.\d+)?$/.test(s.min) || +s.min > 100) || s.max !== '' && (!/^\d+(\.\d+)?$/.test(s.max) || +s.max > 100) || +(s.min || 0) > +(s.max || 100)) return 'Enter a probability between 0 and 100, with Min no greater than Max.';
+    const days = (Date.parse(s.to)-Date.parse(s.from))/86400000;
+    if (!Number.isFinite(days) || days < 0 || days > 365) return 'Choose an inclusive date range of up to 366 days.';
+    if (s.timeFrom > s.timeTo) return 'From time must be before To time.';
+    if (!s.markets.length) return 'Keep at least one market selected.';
+    return '';
+  }
+  const shifted = offset => new Date(Date.parse(today+'T12:00:00Z') + offset*86400000).toISOString().slice(0,10);
+  function setPeriod(c,value) {
+    if (value === 'Custom dates') { openDialog(c,'dates'); return; }
+    const offsets = { 'Last 30 days': [-29,0], 'Last 7 days': [-6,0], 'Last 3 days': [-2,0], Yesterday: [-1,-1], Today: [0,0], Tomorrow: [1,1], 'Next 3 days': [0,2], 'Next 7 days': [0,6], 'Next 30 days': [0,29] };
+    c.draft.period = value;
+    [c.draft.from,c.draft.to] = offsets[value].map(shifted);
+  }
+  function setStatus(c,value) {
+    c.draft.status = value;
+    const future = { 'Last 30 days': 'Next 30 days', 'Last 7 days': 'Next 7 days', 'Last 3 days': 'Next 3 days', Yesterday: 'Today' };
+    const past = Object.fromEntries(Object.entries(future).map(([a,b])=>[b,a]));
+    past.Today = 'Today'; past.Tomorrow = 'Today';
+    if (value === 'Live') { setPeriod(c,'Today'); c.draft.timeFrom = '00:00'; c.draft.timeTo = '23:59'; }
+    if (value === 'Upcoming' && future[c.draft.period]) setPeriod(c,future[c.draft.period]);
+    if (value === 'Completed' && past[c.draft.period]) setPeriod(c,past[c.draft.period]);
+  }
+  function renderResults(c) {
+    const s = c.applied, q = s.search.toLocaleLowerCase().trim();
+    const zone = s.zone === 'UTC' ? 'UTC' : 'EAT';
+    const localized = zone === 'UTC' ? matches.map(m=>{const iso=new Date(`${m.date}T${m.time}:00+03:00`).toISOString();return {...m,date:iso.slice(0,10),time:iso.slice(11,16)};}) : matches;
+    const result = localized.filter(m => (s.status === 'All' || m.status === s.status) && m.date >= s.from && m.date <= s.to && m.time >= s.timeFrom && m.time <= s.timeTo && (!s.only || m.probability !== null) && (!q || `${m.home} ${m.away} ${m.league} ${m.country}`.toLocaleLowerCase().includes(q)) && (!s.countries.length || s.countries.includes(m.country)) && (!s.leagues.length || s.leagues.includes(m.league)) && (m.family === null || s.markets.includes(m.family)) && (s.min === '' || m.probability !== null && m.probability >= +s.min) && (s.max === '' || m.probability !== null && m.probability <= +s.max));
+    result.sort((a,b) => s.sort === 'Highest chance' ? (b.probability ?? -1)-(a.probability ?? -1) : s.sort === 'Lowest chance' ? (a.probability ?? 101)-(b.probability ?? 101) : (s.sort === 'Latest first' ? -1 : 1)*`${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    c.count.textContent = `${result.length} sample ${result.length === 1 ? 'match' : 'matches'} · ${s.period} · ${zone}`;
+    c.board.innerHTML = result.length ? result.map(m => `<div class="gh-match" role="listitem" aria-label="${escape(`${m.home} versus ${m.away}, ${m.date}, ${m.time} ${zone}, ${m.country}, ${m.league}, ${m.pick}, ${m.probability ?? 'no'} percent probability, ${m.status}, ${m.outcome}`)}"><span class="gh-meta gh-date">${m.date.slice(8)}-Oct</span><span class="gh-meta gh-time">${m.time} ${zone}</span><span class="gh-meta gh-country" data-tooltip="${m.country}">${m.country}</span><span class="gh-meta gh-league" data-tooltip="${m.league}">${m.league}</span><div class="gh-teams"><span class="gh-team-name">${m.home}</span><span>${m.score}</span><span class="gh-team-name">${m.away}</span></div><span class="gh-pick" data-tooltip="${m.family ?? 'No prediction'}">${m.pick}</span><span class="gh-number gh-odds"><small>Odds</small>—</span><span class="gh-number"><small>Prob.</small><strong>${m.probability === null ? '—' : m.probability+'%'}</strong></span><span class="gh-outcome" data-outcome="${m.outcome}"><small>${m.status === 'Completed' ? 'Finished' : m.status}</small><strong>${m.outcome}</strong></span></div>`).join('') : '<div class="gh-empty">No sample matches match these filters. Adjust the filters or Reset.</div>';
+    updateDirty(c);
+  }
+  function apply(c) {
+    const error = validity(c.draft);
+    c.error.textContent = error;
+    c.error.hidden = !error;
+    if (error) { c.error.focus(); return; }
+    c.applied = clone(c.draft); renderResults(c); persist();
+  }
+  function dialogFields(c) {
+    const s = c.edit;
+    const field = (label,name,type='text',value=s[name],extra='') => `<label class="gh-dialog-field"><span>${label}</span><input type="${type}" name="${name}" value="${escape(value)}" ${extra}></label>`;
+    if (c.active === 'dates') return `<div class="gh-dialog-grid">${field('From date','from','date')}${field('To date','to','date')}${field('From time','timeFrom','time')}${field('To time','timeTo','time')}</div><label class="gh-dialog-field"><span>Timezone</span><select name="zone"><option>Africa/Kampala</option><option${s.zone === 'UTC' ? ' selected' : ''}>UTC</option></select></label>`;
+    if (c.active === 'limits') return `<fieldset><legend>Probability %</legend><div class="gh-dialog-grid">${field('Min','min','text',s.min,'inputmode="decimal" placeholder="Any"')}${field('Max','max','text',s.max,'inputmode="decimal" placeholder="Any"')}</div></fieldset><fieldset disabled><legend>Odds unavailable</legend><div class="gh-dialog-grid">${field('Min odds','oddsMin','text','','disabled placeholder="Any"')}${field('Max odds','oddsMax','text','','disabled placeholder="Any"')}</div></fieldset>`;
+    const key = c.active, options = key === 'markets' ? allMarkets : key === 'countries' ? countries : leagues;
+    return `${key !== 'markets' ? `<label class="gh-dialog-field"><span>Find ${key}</span><input type="search" name="optionSearch" placeholder="Find ${key}" autocomplete="off"></label><label class="gh-check cursor-interaction"><input type="checkbox" data-all="${key}"${!s[key].length ? ' checked' : ''}>All ${key}</label>` : '<p>Keep at least one market selected.</p>'}<div class="gh-dialog-options">${options.map(v => `<label class="gh-check cursor-interaction" data-option="${escape(v.toLowerCase())}"><input type="checkbox" name="${key}" value="${escape(v)}"${s[key].includes(v) ? ' checked' : ''}>${escape(v)}</label>`).join('')}</div><p class="gh-options-empty" hidden>No matching options.</p>`;
+  }
+  function openDialog(c,key) {
+    c.active = key; c.lastSection = key; c.edit = clone(c.draft);
+    c.dialog.querySelector('h3').textContent = sections[key][0];
+    c.dialog.querySelector('.gh-dialog-body').innerHTML = dialogFields(c);
+    c.dialogError.hidden = true;
+    c.returnFocus = c.panel.querySelector(`[data-open="${key}"]`) ?? c.panel.querySelector('[name="period"]');
+    c.returnFocus?.setAttribute('aria-expanded','true');
+    c.dialog.showModal();
+  }
+  function closeDialog(c) {
+    c.dialog.close(); c.returnFocus?.setAttribute('aria-expanded','false'); c.returnFocus?.focus(); c.active = null;
+  }
+  const copySection = (target,source,key) => {
+    const keys = key === 'dates' ? ['from','to','timeFrom','timeTo','zone','period'] : key === 'limits' ? ['min','max'] : [key];
+    keys.forEach(k=>{target[k]=clone(source[k]);});
+  };
+  function saveDialog(c) {
+    const candidate = clone(c.draft);
+    copySection(candidate,c.edit,c.active);
+    const error = validity(candidate);
+    if (error) { c.dialogError.textContent = error; c.dialogError.hidden = false; c.dialogError.focus(); return; }
+    c.draft = candidate;
+    closeDialog(c); renderPanel(c);
+    c.panel.querySelector(`[data-open="${c.lastSection}"]`)?.focus();
+    persist();
+  }
+  function mount(stage,index) {
+    const name = stage.dataset.variant, id = `gh-concept-${index}`;
+    const stored = saved[name];
+    const c = { name,id,index,group:'dates',draft:isValidState(stored?.draft) ? {...defaults(),...stored.draft} : defaults(), applied:isValidState(stored?.applied) ? {...defaults(),...stored.applied} : defaults() };
+    stage.innerHTML = `<div class="gh-product" aria-label="${name} desktop preview"><header class="gh-header"><span class="gh-brand">Goal <em>Hint</em></span><nav class="gh-nav" aria-label="Application context"><strong>Matches</strong><span>Best slips</span><span>Performance</span></nav></header><main class="gh-main"><div class="gh-heading"><h2>Matches</h2><span class="gh-preview-label">Design preview · Illustrative data</span></div><div class="${index === 6 ? 'gh-rail-layout' : ''}"><div role="form" class="gh-panel ${index === 4 ? 'gh-ledger' : index === 6 ? 'gh-rail' : index === 8 ? 'gh-split' : ''}" aria-label="Match filters"></div><div class="gh-results"><div class="gh-results-line"><span class="gh-result-count" aria-live="polite"></span><span class="gh-notice" aria-live="polite"></span></div><p class="gh-error" role="alert" tabindex="-1" hidden></p><div class="gh-board" role="list" aria-label="Illustrative predicted matches"></div></div></div><dialog class="gh-dialog" id="${id}-dialog" aria-labelledby="${id}-dialog-heading"><div><div class="gh-dialog-head"><h3 id="${id}-dialog-heading"></h3>${control(icon('x'),'data-dialog-action="cancel" aria-label="Close filter dialog"','gh-quiet')}</div><div class="gh-dialog-body"></div><p class="gh-error gh-dialog-error" role="alert" tabindex="-1" hidden></p><div class="gh-dialog-footer">${control('Reset','data-dialog-action="reset"','gh-quiet')}<span class="gh-grow"></span>${control('Cancel','data-dialog-action="cancel"')}${control('Done','data-dialog-action="done"','gh-primary')}</div></div></dialog></main></div>`;
+    c.product = stage.querySelector('.gh-product'); c.panel = stage.querySelector('.gh-panel'); c.board = stage.querySelector('.gh-board'); c.count = stage.querySelector('.gh-result-count'); c.notice = stage.querySelector('.gh-notice'); c.error = stage.querySelector('.gh-results > .gh-error'); c.dialog = stage.querySelector('dialog'); c.dialogError = c.dialog.querySelector('.gh-dialog-error');
+    contexts.push(c); renderPanel(c); renderResults(c);
+    c.panel.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.matches('input')){event.preventDefault();apply(c);}});
+    c.panel.addEventListener('click',event=>{
+      const button = event.target.closest('button'); if (!button) return;
+      if (button.dataset.action === 'apply') apply(c);
+      if (button.dataset.action === 'reset') {const zone=c.draft.zone;c.draft={...defaults(),zone};c.applied=clone(c.draft);c.error.hidden=true;renderPanel(c);renderResults(c);persist();}
+      if (button.dataset.open) { c.lastSection=button.dataset.open;openDialog(c,button.dataset.open); }
+      if (button.dataset.period) { setPeriod(c,button.dataset.period);renderPanel(c);persist(); }
+      if (button.dataset.status) { setStatus(c,button.dataset.status);renderPanel(c);persist(); }
+      if (button.dataset.group) { c.group=button.dataset.group;renderPanel(c);c.panel.querySelector(`[data-group="${c.group}"]`)?.focus(); }
+    });
+    c.panel.addEventListener('input',event=>{
+      const {name,value,type,checked}=event.target;
+      if (['search','min','max','only'].includes(name)) {c.draft[name]=type==='checkbox'?checked:value;updateDirty(c);}
+    });
+    c.panel.addEventListener('change',event=>{
+      const {name,value}=event.target;
+      if (name==='status') setStatus(c,value);
+      else if (name==='period') { if(value==='Custom dates'){openDialog(c,'dates');event.target.value=c.draft.period;return;}setPeriod(c,value); }
+      else if(name==='sort') c.draft.sort=value;
+      if(['status','period','sort'].includes(name)) renderPanel(c);
+      persist();
+    });
+    c.dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog(c);});
+    c.dialog.addEventListener('click',event=>{
+      const action=event.target.closest('[data-dialog-action]')?.dataset.dialogAction;
+      if(action==='cancel')closeDialog(c);
+      if(action==='done')saveDialog(c);
+      if(action==='reset'){ const fresh=defaults();if(c.active==='dates'&&c.draft.status==='Upcoming'){fresh.period='Next 30 days';fresh.from=today;fresh.to=shifted(29);}copySection(c.edit,fresh,c.active);c.dialog.querySelector('.gh-dialog-body').innerHTML=dialogFields(c);c.dialogError.hidden=true; }
+      if(event.target===c.dialog){ const b=c.dialog.getBoundingClientRect();if(event.clientX<b.left||event.clientX>b.right||event.clientY<b.top||event.clientY>b.bottom)closeDialog(c); }
+    });
+    c.dialog.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.matches('input')){event.preventDefault();if(event.target.name!=='optionSearch')saveDialog(c);}});
+    c.dialog.addEventListener('input',event=>{
+      const input=event.target;
+      if(input.name==='optionSearch'){let visible=0;c.dialog.querySelectorAll('[data-option]').forEach(item=>{item.hidden=!item.dataset.option.includes(input.value.toLowerCase());if(!item.hidden)visible++;});c.dialog.querySelector('.gh-options-empty').hidden=visible>0;return;}
+      if(input.dataset.all){c.edit[c.active]=[];c.dialog.querySelectorAll('[data-option] input').forEach(box=>{box.checked=false;});input.checked=true;return;}
+      if(input.type==='checkbox'){ const list=c.edit[c.active];if(!input.checked&&c.active==='markets'&&list.length===1){input.checked=true;return;}c.edit[c.active]=input.checked?[...new Set([...list,input.value])]:list.filter(v=>v!==input.value);const all=c.dialog.querySelector('[data-all]');if(all)all.checked=c.edit[c.active].length===0; }
+      else if(input.name in c.edit){c.edit[input.name]=input.value;if(['from','to'].includes(input.name))c.edit.period='Custom dates';if(input.name==='timeFrom'&&!input.value)c.edit.timeFrom='00:00';if(input.name==='timeTo'&&!input.value)c.edit.timeTo='23:59';}
+    });
+    if(globalThis.Tweak){const settings={height:32};const tweak=new Tweak({container:c.product,onChange:()=>c.product.style.setProperty('--gh-control-height',settings.height+'px')});tweak.addSlider(settings,'height',{label:'Control height',min:28,max:36,step:2,unit:'px'});}
+  }
+  root.querySelectorAll('[data-variant]').forEach(mount);
+  globalThis.addEventListener('openai:set_globals',event=>{
+    const values=event.detail?.globals?.widgetState?.privateContent?.concepts;
+    if(!values)return;
+    contexts.forEach(c=>{const s=values[c.name];if(isValidState(s?.draft)&&isValidState(s?.applied)&&(JSON.stringify(c.draft)!==JSON.stringify(s.draft)||JSON.stringify(c.applied)!==JSON.stringify(s.applied))){c.draft={...defaults(),...s.draft};c.applied={...defaults(),...s.applied};renderPanel(c);renderResults(c);}});
+  });
+})();
+</script>
