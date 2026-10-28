@@ -1,33 +1,36 @@
 # Mobile match filter and search previews
 
 Ten independent, interactive mobile concepts for comparing a smaller Matches
-search and filter section before choosing a production design. No concept is
-selected, and the production Matches screen is unchanged by these previews.
+search and filter section. The user selected **01, Compact stack**, for the
+production mobile layout. Its implementation is tracked in
+[`116-compact-mobile-matches-filters.md`](../../dev-plan/116-compact-mobile-matches-filters.md).
+The gallery remains an illustrative comparison reference; its sample data and
+interactions are independent of the production screen.
 
-## Review findings
+## Findings before the redesign
 
-The current phone layout in
-[`feed-filters.tsx`](../../src/components/match/feed-filters.tsx) stacks four
+The former phone layout in
+[`feed-filters.tsx`](../../src/components/match/feed-filters.tsx) stacked four
 rows: search, status and period dropdowns, a day strip with Calendar, and
-Sort/Reset/Advanced filters. Each row is at least 44px high, with 6px gaps:
+Sort/Reset/Advanced filters. Each row was at least 44px high, with 6px gaps:
 approximately **194px before the active summary, result count, and surrounding
 spacing**. This is a minimum inferred from the source styles, rather than a
 measurement of every possible screen state.
 
-Dates have three editing entry points: the Period dropdown, the strip's
+Dates had three editing entry points: the Period dropdown, the strip's
 Calendar editor in [`feed-dates.tsx`](../../src/components/match/feed-dates.tsx),
 and date fields inside Advanced filters. Custom dates in the Period dropdown
-opens that advanced sheet. The applied summary in
-[`feed-controls.tsx`](../../src/components/match/feed-controls.tsx) repeats the
-date range again when other filters or search are active. These represent the
-same date selection, even though they are separate UI controls.
+opened that advanced sheet. The applied summary in
+[`feed-controls.tsx`](../../src/components/match/feed-controls.tsx) repeated the
+date range again when other filters or search were active. These represented the
+same date selection through separate UI controls.
 
-The existing interaction rules also vary: status, periods, days, and sorting
-apply immediately; search submits; advanced fields wait for Apply. The existing
-sheet already supports focus containment, Escape/backdrop dismissal, focus
-restoration, background scroll locking, and safe-area spacing. A future
-implementation should preserve those behaviors and provide clear draft and
-applied states.
+The former interaction rules also varied: status, periods, days, and sorting
+applied immediately; search submitted; advanced fields waited for Apply. The
+sheet already supported focus containment, Escape/backdrop dismissal, focus
+restoration, background scroll locking, and safe-area spacing. The selected
+implementation preserves those behaviors and gives dates a separate draft
+editor while moving sorting into Advanced filters.
 
 The production default is Last 30 days with Latest first, all market families,
 and unrestricted kickoff time/probability. Predictions only depends on access
@@ -44,7 +47,7 @@ point rather than repeating date fields in another advanced editor.
 
 | No. | Concept         | Arrangement and tradeoff                                                                                                                                  |
 | --- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 01  | Compact stack   | Search row, then Date/Status/Filters. Familiar visible controls with a clear two-row hierarchy.                                                           |
+| 01  | Compact stack — selected | Search row, then Date/Status/Filters. Familiar visible controls with a clear two-row hierarchy.                                                    |
 | 02  | Search first    | One search row includes date scope and a filter icon; status lives in the scope sheet. Prioritizes search with fewer persistent controls.                 |
 | 03  | Status tabs     | All/Live/Upcoming/Finished remain visible above a date, search, and filters row. Makes status changes easy to discover.                                   |
 | 04  | Day navigator   | Previous/Today/Next is the single date owner, paired with a search/filter row. Suits frequent single-day browsing.                                        |
@@ -57,8 +60,8 @@ point rather than repeating date fields in another advanced editor.
 
 As review judgment, **01** is a useful starting point for familiar controls,
 **04/05** for date-heavy browsing, and **06/08** for minimum resting chrome.
-These are comparison suggestions, not an implementation decision. The user
-chooses the concept to implement after reviewing the gallery.
+These remain useful comparison notes. The user's implementation choice is
+**01, Compact stack**, for mobile only; desktop retains its existing toolbar.
 
 ## Comparing the previews
 

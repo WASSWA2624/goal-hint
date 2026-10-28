@@ -11,9 +11,10 @@ type FeedSearchInputProps = Omit<ComponentPropsWithRef<"input">, "type" | "aria-
   submitLabel: string;
   submitDisabled?: boolean;
   compact?: boolean;
+  mobile?: boolean;
 };
 
-const Field = styled.div<{ $compact?: boolean }>`
+const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   min-inline-size: 0;
@@ -49,6 +50,24 @@ const Field = styled.div<{ $compact?: boolean }>`
       min-block-size: 44px;
       > input, > button { min-block-size: 44px; }
       > input { font-size: 1rem; }
+    }
+  `}
+  ${({ $mobile }) => $mobile && css`
+    ${media.belowDesktop} {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      border-radius: 0;
+      background: ${({ theme }) => theme.color.surface};
+      > input, > button { min-block-size: 44px; }
+      > input { padding: 6px 8px 6px 0; }
+      > input::placeholder { font-size: 0.75rem; }
+      > button {
+        min-inline-size: 44px;
+        padding: 0;
+        border: 0;
+        color: ${({ theme }) => theme.color.mutedText};
+      }
+      > button > svg { font-size: 0.9375rem; }
     }
   `}
 `;
@@ -97,12 +116,15 @@ const Submit = styled.button`
 `;
 
 /** A single search field with an inset action; its parent form owns submission. */
-export function FeedSearchInput({ label, submitLabel, submitDisabled, compact = false, ...props }: FeedSearchInputProps) {
-  return <Field data-feed-search $compact={compact}>
-    {compact && <SearchIcon aria-hidden="true" />}
-    <Input {...props} type="search" aria-label={label} />
-    <Submit type="submit" disabled={props.disabled || submitDisabled}>
-      {!compact && <SearchIcon aria-hidden="true" />}{submitLabel}
-    </Submit>
+export function FeedSearchInput({ label, submitLabel, submitDisabled, compact = false, mobile = false, ...props }: FeedSearchInputProps) {
+  const input = <Input {...props} type="search" aria-label={label} enterKeyHint={mobile ? "search" : props.enterKeyHint} />;
+  const submit = <Submit type="submit" disabled={props.disabled || submitDisabled}
+    aria-label={mobile ? submitLabel : undefined} title={mobile ? submitLabel : undefined}>
+    {(mobile || !compact) && <SearchIcon aria-hidden="true" />}{!mobile && submitLabel}
+  </Submit>;
+  return <Field data-feed-search $compact={compact} $mobile={mobile}>
+    {mobile ? submit : compact && <SearchIcon aria-hidden="true" />}
+    {input}
+    {!mobile && submit}
   </Field>;
 }

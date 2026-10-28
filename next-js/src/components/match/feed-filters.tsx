@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { useClientReady } from "@/components/ui/use-client-ready";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -11,7 +12,7 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, selectFeedDates, selectFeedStatus } from "@/domain/feed-controls";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  canonicalMarkets, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates,
+  canonicalMarkets, defaultPagePicks, defaultSortDirection, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates,
   serializeFeedQuery, type FeedQuery, type ProbabilityRange,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -27,6 +28,7 @@ import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker, DayStrip } from "./feed-dates";
+import { MobileFeedDateFilter } from "./mobile-feed-date-filter";
 import { ChipText, CompactSelect, controlFeedback, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
 import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
 
@@ -60,7 +62,10 @@ const Panel = styled.form`
   display: grid;
   gap: 4px;
   min-inline-size: 0;
-  ${media.belowDesktop} { gap: 6px; padding-inline: 6px; }
+  ${media.belowDesktop} {
+    gap: 6px; padding-inline: 6px;
+    &[data-mobile-compact-filters] { gap: 4px; padding-inline: 0; }
+  }
 `;
 const QueryChoices = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;
@@ -71,6 +76,18 @@ const QueryChoices = styled.div`
     font: inherit; font-size: 0.8125rem;
     ${focusRing}
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
+  }
+`;
+/** The approved Compact stack: one search row, then date/status and a single filter action. */
+const CompactToolbar = styled(QueryChoices)`
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+  align-items: stretch;
+  gap: 4px;
+  > select {
+    padding-inline: 8px 4px;
+    border-radius: 0;
+    font-size: 0.75rem;
+    font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
@@ -111,7 +128,7 @@ const PhoneSort = styled(CompactSelect)`
   @container (max-width: 18rem) { padding-inline-start: 8px; }
 `;
 /** Opens the filter sheet; the badge counts applied filters. */
-const FilterToggle = styled.button`
+const FilterToggle = styled.button<{ $compact?: boolean }>`
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -149,6 +166,25 @@ const FilterToggle = styled.button`
     min-inline-size: 2.75rem;
     padding-inline: 6px;
   }
+  ${({ $compact }) => $compact && css`
+    position: relative;
+    inline-size: 44px;
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    padding: 0;
+    border-color: ${({ theme }) => theme.color.controlBorder};
+    border-radius: 0;
+    > svg { font-size: 1rem; }
+    > b {
+      position: absolute;
+      inset-block-start: 2px;
+      inset-inline-end: 2px;
+      min-inline-size: 14px;
+      padding: 0 2px;
+      font-size: 0.5625rem;
+      line-height: 14px;
+    }
+  `}
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
 
@@ -556,8 +592,15 @@ export function FeedFilters(props: FeedFiltersProps) {
   return <FilterFields key={`${feedQueryHref(props.query, props.today)}:${range.startDate}:${range.endDate}`} {...props} />;
 }
 function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onOpenChange, controls, subscriberOnly = false }: FeedFiltersProps) {
+  const compactPhone = useClientReady();
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
-  useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
+  const storedQuery = useAppSelector((state) => state.feed.query);
+  const storedHref = feedQueryHref(storedQuery, today), appliedHref = feedQueryHref(query, today);
+  // The provider already owns the initial query. Only a real navigation needs synchronization;
+  // settle it before interaction so a pending mount effect cannot overwrite the first edit.
+  useLayoutEffect(() => {
+    if (storedHref !== appliedHref) dispatch(queryApplied(query));
+  }, [appliedHref, dispatch, query, storedHref]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
   const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
   const filterToggle = useRef<HTMLButtonElement>(null), sheet = useRef<HTMLDivElement>(null);
@@ -671,10 +714,19 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   const probabilityFields = <ProbabilityRangeInputs disabled={false} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
-  const count = panelFilterCount(query), filtersLabel = messages.text("feed.filters.toggle");
+  const count = panelFilterCount(query) + (compactPhone
+    ? Number(query.picks !== defaultPagePicks(query.status, subscriberOnly))
+      + Number(query.sort.by !== "kickoff" || query.sort.direction !== defaultSortDirection.kickoff)
+    : 0);
+  const filtersLabel = messages.text("feed.filters.toggle");
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
   const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  return <Panel id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
+  const filterAction = <FilterToggle ref={filterToggle} $compact={compactPhone} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={panelId}
+    aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel}
+    title={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel} onClick={() => onOpenChange(true)}>
+    <SlidersIcon />{!compactPhone && <FilterActionLabel label={filtersLabel} />}{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
+  </FilterToggle>;
+  return <Panel id={formId} data-mobile-compact-filters={compactPhone || undefined} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
     if (event.key === "Escape" && open && !event.defaultPrevented) { event.preventDefault(); closeSheet(); }
   }} onReset={(event) => {
     event.preventDefault();
@@ -691,37 +743,40 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     apply(applyFeedDraft(completeDraft, today));
   }}>
     {[...new URLSearchParams(parameters)].filter(([name]) => name !== "status").map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-    <FeedSearchInput name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
+    <FeedSearchInput mobile={compactPhone} name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
       placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
       submitLabel={messages.text("feed.search.submit")}
       onChange={(event) => edit({ ...draft, search: event.target.value })} />
-    <QueryChoices data-phone-query-filters>
+    {compactPhone ? <CompactToolbar data-phone-query-filters>
+      <MobileFeedDateFilter query={query} today={today} onApply={onApply} />
       <FeedStatusSelect name="status" locale={query.locale} value={query.status} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
-      <FeedPeriodSelect name="period" locale={query.locale} value={feedDatePresets.some((preset) => preset === query.dates.kind) ? query.dates.kind : "custom"}
-        disabled={query.status === "live"} title={query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={(period) => {
-          if (period === "custom") { onOpenChange(true); return; }
-          const kind = feedDatePresets.find((preset) => preset === period);
-          if (kind) apply(selectFeedDates(query, { kind }, today));
-        }} />
-    </QueryChoices>
-    {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
-    <PhoneToolbar data-phone-filter-toolbar>
-      <SortField>
-        <SortIcon />
-        <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
-          const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
-          if (sort) onApply({ ...query, sort, page: 1 });
-        }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
-      </SortField>
-      <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
-        <FilterActionLabel label={messages.text("feed.filters.clear")} />
-      </PhoneClear>
-      <FilterToggle ref={filterToggle} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={panelId}
-        aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel}
-        onClick={() => onOpenChange(true)}>
-        <SlidersIcon /><FilterActionLabel label={filtersLabel} />{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
-      </FilterToggle>
-    </PhoneToolbar>
+      {filterAction}
+    </CompactToolbar> : <>
+      {/* Preserve the native GET interface before hydration and without JavaScript. */}
+      <QueryChoices data-phone-query-filters>
+        <FeedStatusSelect name="status" locale={query.locale} value={query.status} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
+        <FeedPeriodSelect name="period" locale={query.locale} value={feedDatePresets.some((preset) => preset === query.dates.kind) ? query.dates.kind : "custom"}
+          disabled={query.status === "live"} title={query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={(period) => {
+            if (period === "custom") { onOpenChange(true); return; }
+            const kind = feedDatePresets.find((preset) => preset === period);
+            if (kind) apply(selectFeedDates(query, { kind }, today));
+          }} />
+      </QueryChoices>
+      {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
+      <PhoneToolbar data-phone-filter-toolbar>
+        <SortField>
+          <SortIcon />
+          <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
+            const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
+            if (sort) onApply({ ...query, sort, page: 1 });
+          }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
+        </SortField>
+        <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
+          <FilterActionLabel label={messages.text("feed.filters.clear")} />
+        </PhoneClear>
+        {filterAction}
+      </PhoneToolbar>
+    </>}
     {open && <SheetScrim aria-hidden="true" onClick={closeSheet} />}
     <FilterFieldsGroup ref={sheet} id={panelId} $open={open} onKeyDown={(event) => { if (open) keepFocusInSheet(event); }} tabIndex={open ? -1 : undefined}
       role={open ? "dialog" : undefined} aria-modal={open || undefined} aria-labelledby={open ? titleId : undefined}>
@@ -732,6 +787,15 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         </SheetClose>
       </SheetHeader>
       <SheetBody>
+        {compactPhone && <PhoneSection>
+          <SectionLabel as="label" htmlFor={`${panelId}-sort`}>{messages.text("feed.sort.label")}</SectionLabel>
+          <SortField><SortIcon />
+            <PhoneSort id={`${panelId}-sort`} aria-label={messages.text("feed.sort.label")} value={`${draft.sort.by}-${draft.sort.direction}`} onChange={(event) => {
+              const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
+              if (sort) edit({ ...draft, sort, page: 1 });
+            }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.${sort.by}-${sort.direction}`) }))} />
+          </SortField>
+        </PhoneSection>}
         <PhoneSection>
           <SectionLabel>{messages.text("feed.date.zone", { zone: query.zone ?? publicPolicy.reportingTimeZone })}</SectionLabel>
           <MarketToggles>
@@ -744,7 +808,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
           </MarketToggles>
         </PhoneSection>
         {query.status === "live" && <FeedNote>{messages.text("feed.filters.liveToday")}</FeedNote>}
-        <DateRangePicker query={query} today={today} {...dateInputs} disabled={query.status === "live"} onChange={(from, to) => setDateInputs({ from, to })} />
+        {!compactPhone && <DateRangePicker query={query} today={today} {...dateInputs} disabled={query.status === "live"} onChange={(from, to) => setDateInputs({ from, to })} />}
         <FeedTimeFilter query={query} {...timeInputs} disabled={query.status === "live"} onChange={(from, to) => setTimeInputs({ from, to })} />
         <PhoneSection role="group" aria-labelledby={marketsId}>
           <SectionLabel><span id={marketsId}>{messages.text("feed.filters.markets")}</span>
@@ -800,6 +864,6 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         <FeedFilterActions formId={formId} locale={query.locale} status={{ valid: draftValid, changed }} />
       </SheetFooter>
     </FilterFieldsGroup>
-    {controls}
+    {!compactPhone && controls}
   </Panel>;
 }

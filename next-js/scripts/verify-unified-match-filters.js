@@ -24,25 +24,48 @@ async function verifyUnifiedMatchFilters(page) {
     const controls = width >= 1024 ? form : phone;
     await controls.waitFor();
     if (width < 1024) {
-      // Phone controls also render for the native fallback. Exercise a sheet
-      // before testing the enhanced immediate-apply selectors.
+      // Wait for the Compact stack enhancement; the native SSR form retains
+      // its period select until hydration replaces it with the date editor.
+      await page.locator("[data-mobile-compact-filters]").waitFor();
       await page.getByRole("button", { name: /^Advanced filters/ }).click();
       await page.getByRole("dialog").waitFor();
       await page.getByRole("button", { name: "Close advanced filters", exact: true }).click();
     }
     const status = controls.locator("[data-feed-status]"), period = controls.locator("[data-feed-period]");
+    const date = controls.locator("[data-mobile-date-filter]");
     const apply = async () => { if (width >= 1024) await form.getByRole("button", { name: "Apply filters", exact: true }).click(); };
-    assert(await period.locator("option").count() === 10, "All past, present, future and custom periods are available");
+    if (width >= 1024) assert(await period.locator("option").count() === 10, "All past, present, future and custom periods are available");
+    else {
+      await date.click();
+      const editor = page.locator("[data-mobile-date-editor]");
+      await editor.waitFor({ state: "visible" });
+      for (const label of ["Last 30 days", "Last 7 days", "Last 3 days", "Yesterday", "Today", "Tomorrow", "Next 3 days", "Next 7 days", "Next 30 days"]) {
+        assert(await editor.getByRole("button", { name: label, exact: true }).isVisible(), `Mobile dates retain the ${label} preset`);
+      }
+      assert(await editor.locator('input[type="date"]').count() === 2, "The single mobile date editor retains custom ranges");
+      await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+      assert(await period.count() === 0, "Enhanced mobile dates have no duplicated period dropdown");
+    }
     for (const value of ["live", "finished", "scheduled", "all"]) {
       await status.selectOption(value); await apply(); await wait(value, "today");
       await controls.waitFor();
-      assert(await status.inputValue() === value && await period.inputValue() === "today", "Status, date controls and URL agree");
-      assert(await period.isDisabled() === (value === "live"), "Only Live locks the date period");
+      assert(await status.inputValue() === value, "Status controls and URL agree");
+      if (width >= 1024) assert(await period.inputValue() === "today", "Desktop period and URL agree");
+      else assert((await date.textContent()).includes("Today"), "Mobile date trigger and URL agree");
+      assert(await (width >= 1024 ? period : date).isDisabled() === (value === "live"), "Only Live locks dates to Today");
       checks.push({ width, status: value, period: "today", rows: await checkRows(value) });
     }
     for (const value of ["next-3-days", "next-7-days", "next-30-days"]) {
-      await period.selectOption(value); await apply(); await wait("all", value); await controls.waitFor();
-      assert(await period.inputValue() === value, "Future period stays synchronized after reading stored results");
+      const label = { "next-3-days": "Next 3 days", "next-7-days": "Next 7 days", "next-30-days": "Next 30 days" }[value];
+      if (width >= 1024) { await period.selectOption(value); await apply(); }
+      else {
+        await date.click();
+        const editor = page.locator("[data-mobile-date-editor]");
+        await editor.getByRole("button", { name: label, exact: true }).click();
+        await editor.getByRole("button", { name: "Apply dates", exact: true }).click();
+      }
+      await wait("all", value); await controls.waitFor();
+      assert(width >= 1024 ? await period.inputValue() === value : (await date.textContent()).includes(label), "Future period stays synchronized after reading stored results");
       assert(await checkRows("all") > 0, "Future ranges show genuine captured fixtures");
       checks.push({ width, status: "all", period: value });
     }
