@@ -43,7 +43,7 @@
 - Preserve unrelated uncommitted work, existing stashes, and linked worktrees.
   Commit only the intended sample and documentation files.
 
-## Verification
+## Original preview verification
 
 - Passed: JavaScript syntax for the single inline script, approximately 45KB.
 - Passed: all 300 layout cases across ten concepts, both themes,
@@ -57,10 +57,8 @@
   a Tweak binding test shim. No runtime exceptions during interaction checks.
 - Visually reviewed: Compact toolbar and Side-tab editor screenshots. Corrected
   cramped Side-tab editor fields; revised layout checks passed.
-- Host limitation: the standalone wrapper has no Tweak helper. Account-state
-  and width controls are optional host controls available through the
-  in-conversation preview when supported. Their actual host integration
-  depends on host support.
+- Original host controls were checked with a Tweak binding shim; actual
+  in-conversation integration depends on host support.
 - Passed: inline editor focus entry, trigger association, Escape dismissal,
   focus restoration, and whitespace checks.
 - Passed: all 100 expanded/editor/tab layout states at 320px and 1056px host
@@ -68,3 +66,29 @@
 - Exhaustive keyboard accessibility has not been audited.
 - Scope: isolated design samples. Production build and backend verification
   are outside this review stage; production implementation awaits selection.
+
+## Standalone navigation follow-up — 2026-10-29
+
+- The user opened the existing HTML file directly in Chrome. Only the first
+  sample was accessible because the original fragment relied on host-supplied
+  carousel navigation.
+- Add a toolbar only when the fragment is the top-level page. Include
+  Previous/Next, a numbered native sample picker, Show all 10, and account,
+  mobile-width, and appearance controls.
+- Toggle existing sections without replacing their DOM so local edits survive
+  navigation. Keep the in-conversation host carousel unchanged.
+- Update the README to lead with opening or refreshing the same HTML file;
+  provide a simple local HTTP server as an alternative.
+- Passed: all ten numbered selections, Previous/Next endpoint behavior,
+  Show all 10/Show one, and preserved edited inputs during navigation.
+- Passed: all three account states update all 20 action labels; 390px mobile
+  width applies; light/dark selection and the UTF-8 title display correctly.
+- Passed: all 100 standalone layout cases across ten concepts, both themes,
+  and 320/390/768/1024/1440px host widths, without horizontal overflow.
+- Passed: JavaScript syntax and whitespace checks. No runtime exceptions
+  occurred during the standalone checks.
+- The top-level HTTP page had both Tweak and `window.openai` undefined.
+- Passed: the embedded host had no standalone toolbar, and native carousel Next
+  switched from Compact toolbar to Visible field grid without duplicate navigation.
+- Automated browser tools block `file:` URLs, so direct file opening has not
+  been automated. HTTP checks exercise the exact file rather than a wrapper.

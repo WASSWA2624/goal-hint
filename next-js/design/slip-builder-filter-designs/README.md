@@ -60,23 +60,33 @@ not include the optional combined-probability mode.
 
 ## Local preview
 
-The editable source is `slip-builder-filter-designs.html`, an HTML fragment
-for the in-conversation preview. To serve it in the standalone preview wrapper,
-run from PowerShell with Python available:
+Open `slip-builder-filter-designs.html` directly in Chrome, or refresh the
+existing tab. Its top toolbar provides **Previous**, **Next**, a numbered sample
+picker, and **Show all 10**. Account state, mobile width, and appearance controls
+are available in the same toolbar. Switching samples preserves local edits.
+
+To serve the exact file over local HTTP instead, run:
+
+~~~powershell
+python -m http.server 8356 --bind 127.0.0.1 --directory "D:/coding/apps/nextjs/goal-hint/next-js/design/slip-builder-filter-designs"
+~~~
+
+Then open `http://127.0.0.1:8356/slip-builder-filter-designs.html`.
+
+The in-conversation preview retains the host's carousel and optional design
+controls. For comparison with that rendering, the chat preview wrapper can
+also serve the fragment:
 
 ```powershell
 python "C:\Users\WASSWA WILSON\.codex\plugins\cache\openai-bundled\visualize\1.0.57\skills\visualize\scripts\render.py" "D:\coding\apps\nextjs\goal-hint\next-js\design\slip-builder-filter-designs\slip-builder-filter-designs.html" --serve
 ```
 
-Open the local URL printed by the command. The wrapper location is specific
+Open the local URL printed by that command. The wrapper location is specific
 to this workstation and may change when the installed skill version changes.
 
-The standalone wrapper does not provide the host's Tweak helper. Host controls
-for account state and preview width are optional and can be used through the
-in-conversation preview when supported. Their bindings were checked with a test
-shim; actual host integration depends on host support.
+## Original preview verification
 
-## Verification
+These checks were completed before the standalone navigation follow-up.
 
 - JavaScript syntax passed for the single inline script, approximately 45KB.
 - All 300 layout cases passed: ten concepts, light/dark appearance, 320/340/390px
@@ -98,6 +108,29 @@ shim; actual host integration depends on host support.
 Inline editors passed focus entry, trigger association, Escape dismissal, and
 focus restoration checks. Exhaustive keyboard accessibility has not been audited.
 Whitespace checks passed.
+
+## Standalone navigation follow-up
+
+The original fragment relied on host-supplied navigation, which left only the
+first sample accessible when opened directly in Chrome. A top-level browser
+fallback now supplies its own gallery toolbar and local preview controls.
+The in-conversation view continues to use host navigation.
+
+- Passed: all ten numbered selections, Previous/Next endpoint behavior,
+  Show all 10/Show one, and preservation of edited inputs during navigation.
+- Passed: all three account states update all 20 action labels; 390px mobile
+  width applies; light/dark selection and the UTF-8 page title display correctly.
+- Passed: 100 standalone layout cases across all ten concepts, both themes,
+  and 320/390/768/1024/1440px host widths, with no horizontal overflow.
+- No runtime exceptions occurred. JavaScript syntax and whitespace checks passed.
+- The exact file was tested as a top-level HTTP page with both Tweak and
+  `window.openai` undefined.
+- Embedded-host verification passed: the standalone toolbar was absent inside
+  the frame, and native carousel Next switched from Compact toolbar to Visible
+  field grid without duplicate navigation.
+
+Browser automation blocks `file:` URLs, so direct file opening has not been
+automated. The HTTP checks exercised the exact file without an iframe or host helper.
 
 These samples are a design review stage. No production build, backend
 verification, or production redesign is claimed; implementation awaits the

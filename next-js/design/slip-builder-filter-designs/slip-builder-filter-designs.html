@@ -1,3 +1,6 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&display=swap">
 <style>
   #gh-builder-samples {
@@ -176,12 +179,29 @@
   #gh-builder-samples .sb-phone .sb-ledger td, #gh-builder-samples .sb-phone .sb-ledger th { padding-inline: 3px; }
   #gh-builder-samples .sb-phone .sb-market { grid-template-columns: minmax(0, 1fr) 105px; }
   #gh-builder-samples .sb-phone .sb-side-editor .sb-market { grid-template-columns: minmax(0, 1fr); }
+  #gh-builder-samples .sb-gallery-nav {
+    position: sticky; inset-block-start: 0; z-index: 10; display: grid; gap: 9px;
+    padding: 12px; margin-block-end: 14px; background: var(--sb-surface);
+    border: 1px solid var(--sb-line);
+  }
+  #gh-builder-samples .sb-gallery-heading { font-size: 16px; font-weight: 500; margin: 0; }
+  #gh-builder-samples .sb-gallery-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+  #gh-builder-samples .sb-gallery-controls .sb-field { flex: 1 1 150px; max-inline-size: 260px; }
+  #gh-builder-samples .sb-gallery-controls .sb-sample-picker { flex-basis: 250px; max-inline-size: 360px; }
+  #gh-builder-samples .sb-gallery-controls select { block-size: 40px; font-size: 14px; }
+  #gh-builder-samples .sb-gallery-controls button { min-block-size: 40px; }
+  #gh-builder-samples .sb-gallery-controls button:disabled { opacity: .45; }
+  #gh-builder-samples .sb-gallery-status { align-self: center; color: var(--sb-muted); font-size: 12px; }
+  #gh-builder-samples[data-standalone] .sb-stage { min-block-size: 0; }
+  #gh-builder-samples[data-standalone] button, #gh-builder-samples[data-standalone] select,
+  #gh-builder-samples[data-standalone] summary { cursor: pointer; }
   @media (max-width: 890px) {
     #gh-builder-samples .sb-pair { grid-template-columns: minmax(0, 1fr); }
     #gh-builder-samples .sb-frame:last-child { inline-size: min(100%, var(--sb-phone-width)); justify-self: center; }
     #gh-builder-samples .sb-stage { min-block-size: 1500px; }
   }
   @media (max-width: 560px) {
+    #gh-builder-samples .sb-gallery-nav { position: static; }
     #gh-builder-samples .sb-desktop .sb-essentials { grid-template-columns: minmax(0, 1fr); }
     #gh-builder-samples .sb-desktop .sb-dates, #gh-builder-samples .sb-desktop .sb-market-list { grid-template-columns: minmax(0, 1fr); }
     #gh-builder-samples .sb-desktop .sb-two { grid-template-columns: minmax(0, 1fr); }
@@ -192,6 +212,10 @@
   }
   @media (max-width: 380px) {
     #gh-builder-samples .sb-phone .sb-essentials { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (any-pointer: coarse) {
+    #gh-builder-samples .sb-gallery-controls button,
+    #gh-builder-samples .sb-gallery-controls select { min-block-size: 44px; }
   }
 </style>
 <div id="gh-builder-samples">
@@ -409,6 +433,55 @@
     root.querySelectorAll('[data-action="build"]').forEach((button) => { button.textContent = actionLabel(); });
     requestAnimationFrame(measure);
   }
+  function standaloneGallery() {
+    if (window.self !== window.top) return;
+    root.setAttribute("data-standalone", "");
+    root.style.colorScheme = "light dark";
+    document.title = "Slip Builder · 10 design samples";
+    const navigation = document.createElement("nav");
+    navigation.className = "sb-gallery-nav";
+    navigation.setAttribute("aria-label", "Design sample controls");
+    navigation.innerHTML = '<h1 class="sb-gallery-heading">Slip Builder · 10 design samples</h1>' +
+      '<div class="sb-gallery-controls"><button type="button" class="sb-button" data-gallery="previous">Previous</button>' +
+      '<label class="sb-field sb-sample-picker"><span>Design sample</span><select data-gallery="sample">' +
+      concepts.map(([name], index) => '<option value="' + index + '">' + String(index + 1).padStart(2, "0") + ' · ' + name + '</option>').join("") +
+      '</select></label><button type="button" class="sb-button" data-gallery="next">Next</button>' +
+      '<button type="button" class="sb-button" data-gallery="all" aria-pressed="false">Show all 10</button>' +
+      '<span class="sb-gallery-status" data-gallery="status" aria-live="polite"></span></div>' +
+      '<div class="sb-gallery-controls"><label class="sb-field"><span>Account state</span><select data-gallery="access">' +
+      ['Subscriber', 'Signed out', 'No subscription'].map((value) => '<option>' + value + '</option>').join("") +
+      '</select></label><label class="sb-field"><span>Mobile width</span><select data-gallery="width">' +
+      [320, 340, 360, 390, 430].map((value) => '<option value="' + value + '"' + (value === settings.phoneWidth ? ' selected' : '') + '>' + value + ' px</option>').join("") +
+      '</select></label><label class="sb-field"><span>Appearance</span><select data-gallery="theme">' +
+      '<option value="light dark">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div>';
+    root.prepend(navigation);
+    const control = (name) => navigation.querySelector('[data-gallery="' + name + '"]');
+    let selected = 0;
+    let showAll = false;
+    function show(index) {
+      selected = Math.max(0, Math.min(stages.length - 1, index));
+      stages.forEach((stage, position) => { stage.hidden = !showAll && position !== selected; });
+      control("sample").value = String(selected);
+      control("previous").disabled = showAll || selected === 0;
+      control("next").disabled = showAll || selected === stages.length - 1;
+      control("all").textContent = showAll ? "Show one" : "Show all 10";
+      control("all").setAttribute("aria-pressed", String(showAll));
+      control("status").textContent = showAll ? "Showing all 10 samples" : (selected + 1) + " of " + stages.length;
+      requestAnimationFrame(measure);
+    }
+    control("previous").addEventListener("click", () => show(selected - 1));
+    control("next").addEventListener("click", () => show(selected + 1));
+    control("sample").addEventListener("change", () => {
+      showAll = false;
+      show(Number(control("sample").value));
+    });
+    control("all").addEventListener("click", () => { showAll = !showAll; show(selected); });
+    control("access").value = settings.access;
+    control("access").addEventListener("change", () => { settings.access = control("access").value; appearance(); });
+    control("width").addEventListener("change", () => { settings.phoneWidth = Number(control("width").value); appearance(); });
+    control("theme").addEventListener("change", () => { root.style.colorScheme = control("theme").value; });
+    show(0);
+  }
   function restore(saved) {
     const value = saved && saved.privateContent;
     if (!value) return;
@@ -547,6 +620,7 @@
   new ResizeObserver(measure).observe(root);
   new MutationObserver(() => requestAnimationFrame(measure)).observe(root.querySelector(".viz-carousel"), { attributes: true, attributeFilter: ["hidden"], subtree: true });
   appearance();
+  standaloneGallery();
   if (globalThis.Tweak) {
     const tweak = new Tweak({ container: root, onChange: () => { appearance(); save(); } });
     tweak.addSelect(settings, "access", { label: "Account state", options: ["Subscriber", "Signed out", "No subscription"] });
