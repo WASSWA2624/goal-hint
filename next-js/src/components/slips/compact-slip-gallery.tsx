@@ -68,6 +68,7 @@ const Samples = styled.div`
 const Footer = styled.p`
   max-inline-size: 78rem; margin: 28px auto 0; padding-block-start: 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
   color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.7;
+  a { color: ${({ theme }) => theme.color.link}; }
 `;
 
 /** Review-only gallery: the same slip component serves both sample contexts. */
@@ -129,7 +130,7 @@ export function CompactSlipGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative data for layout review; these are sample fixtures and picks. All designs show total odds, average match probability and selection count. Average match probability is the mean of the individual selections, not the chance that every selection wins. Design 01, Inline ledger, is used for Best slips and the slip builder.</Footer>
+      <Footer>Illustrative data for layout review; these are sample fixtures and picks. All designs show total odds, average match probability and selection count. Average match probability is the mean of the individual selections, not the chance that every selection wins. Design 01, Inline ledger, is used for Best slips and the slip builder. <a href={`/${locale}/slips/designs/desktop`}>Compare desktop samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }

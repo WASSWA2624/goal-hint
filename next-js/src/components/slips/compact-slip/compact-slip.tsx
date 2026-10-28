@@ -2,6 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import Link from "@/components/navigation/navigation-link";
+import { TeamLogo } from "@/components/match/team-logo";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { snapshotCardPrediction } from "@/domain/match-card";
@@ -21,8 +22,8 @@ function probabilityLabel(value: number, messages: Messages): string {
   return messages.number(value, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
-function SelectionRow({ selection, position, locale, result, analysisLinks }: {
-  selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean;
+function SelectionRow({ selection, position, locale, result, analysisLinks, showLogos }: {
+  selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
 }) {
   const messages = createMessages(locale), id = useId();
   const { fixture, snapshotPick } = slipSelectionCard(selection, result);
@@ -40,9 +41,13 @@ function SelectionRow({ selection, position, locale, result, analysisLinks }: {
     "data-status": fixture.status, "data-match-state": "snapshot" };
   const content = <>
       <span data-leg-number aria-hidden="true">{messages.number(position)}</span>
-      <h4 data-teams id={`${id}-teams`}><span data-home data-team-side="home">{home}</span><span data-versus>vs</span><span data-away data-team-side="away">{away}</span></h4>
+      <h4 data-teams id={`${id}-teams`}>
+        <span data-home data-team-side="home">{showLogos && <TeamLogo name={home} url={selection.homeTeam.logoUrl ?? undefined} eager={false} size={14} />}{home}</span>
+        <span data-versus>vs</span>
+        <span data-away data-team-side="away">{showLogos && <TeamLogo name={away} url={selection.awayTeam.logoUrl ?? undefined} eager={false} size={14} />}{away}</span>
+      </h4>
       <span data-meta id={`${id}-meta`}>
-        <span data-competition>{selection.competition.name || messages.text("match.competitionUnknown")}</span>
+        <span data-competition>{showLogos && <TeamLogo name={selection.competition.name} url={selection.competition.logoUrl ?? undefined} eager={false} size={14} />}{selection.competition.name || messages.text("match.competitionUnknown")}</span>
         {selection.competition.country && <span data-country>{selection.competition.country}</span>}
       </span>
       <time data-kickoff id={`${id}-kickoff`} dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)}>
@@ -68,14 +73,14 @@ function SelectionRow({ selection, position, locale, result, analysisLinks }: {
 
 /** Aggregate-only previews and complete slips share exactly the same compact header and disclosure. */
 export function CompactSlipDisclosure({ totalOdds, averageProbability, selectionCount, index, locale, variant = "inline-ledger",
-  initiallyOpen = false, collapsible = true, slipId, headingId, children }: {
+  initiallyOpen = false, collapsible = true, showRank = true, slipId, headingId, children }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
-  variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; slipId?: string; headingId?: string; children: ReactNode;
+  variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string; children: ReactNode;
 }) {
   const messages = createMessages(locale), id = useId();
   const summary = <>
         <h3 data-summary-identity id={headingId ?? `${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
-          {index === 0 && <span data-rank>{messages.text("slips.topRanked")}</span>}</h3>
+          {index === 0 && showRank && <span data-rank>{messages.text("slips.topRanked")}</span>}</h3>
         <span data-summary-odds data-summary-fact><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{totalOdds}</strong></span>
         <span data-summary-average data-summary-fact title={messages.text("slips.averageHint")}>
           <span data-fact-label aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}: </VisuallyHidden>
@@ -97,15 +102,15 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
 }
 
 /** Original selection snapshots are reused by Best slips, generated slips and completed history. */
-export function CompactSlip({ slip, index, locale, variant = "inline-ledger", initiallyOpen = false, results, analysisLinks = true, collapsible = true }: {
-  slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"]; analysisLinks?: boolean; collapsible?: boolean;
+export function CompactSlip({ slip, index, locale, variant = "inline-ledger", initiallyOpen = false, results, analysisLinks = true, collapsible = true, showLogos = false, showRank = true }: {
+  slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"]; analysisLinks?: boolean; collapsible?: boolean; showLogos?: boolean; showRank?: boolean;
 }) {
   const headingId = useId();
   return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length}
-    index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} slipId={slip.id} headingId={headingId}>
+    index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId}>
       <ul aria-labelledby={headingId}>
         {slip.selections.map((selection, selectionIndex) => <SelectionRow key={selection.fixtureId} selection={selection}
-          position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} result={results?.find((item) => item.fixtureId === selection.fixtureId)} />)}
+          position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} showLogos={showLogos} result={results?.find((item) => item.fixtureId === selection.fixtureId)} />)}
       </ul>
   </CompactSlipDisclosure>;
 }
