@@ -17,6 +17,8 @@ def verify(origin, directory):
     articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
     assert len(articles) == 13
     by_id = {fixture_id: article for _, fixture_id, article in articles}
+    assert len(by_id) == len(articles), "Responsive rendering must not duplicate fixture identities in server HTML."
+    no_match("data-match-table-header", visible, "Matches no longer renders the former desktop-only column labels.")
     assert 0 <= html.find("data-styled=") < html.find("<main")
     for tag, _, article in articles:
         match(r'data-mobile-design="clean-ledger"', tag)
@@ -147,7 +149,7 @@ def verify(origin, directory):
             no_match(r'(?<![\w-])src=', tag)
         else:
             match('loading="eager"', tag)
-    print(f"Match card SSR verification passed: {len(articles)} Clean ledger examples, compact kickoff/market labels, one shared price cell, every outcome/source, live minute, coherent probability and direct remote image markup.")
+    print(f"Match card SSR verification passed: {len(articles)} single-copy Clean ledger fallbacks for the shared responsive match renderer, compact kickoff/market labels, exact selected prices, every outcome/source, live minute and no former desktop column header.")
 
 
 def main():
@@ -156,7 +158,7 @@ def main():
     write_json(directory / "app/examples.json", service("rendering-fixtures")["cardExamples"])
     shutil.copyfile(ROOT / "tests/fixtures/match-card/preview.tsx", directory / "app/preview.tsx")
     print(f"Building match card fixture: {directory}", flush=True)
-    build_fixture(directory)
+    build_fixture(directory, timeout=300)
     with Server(directory) as server:
         verify(server.origin, directory)
         print(f"Fixture artifacts: {directory}", flush=True)

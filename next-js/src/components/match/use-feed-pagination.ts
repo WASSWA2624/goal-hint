@@ -43,7 +43,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   const save = useCallback(() => {
     if (!entryId.current || !restored.current) return;
     const current = viewRef.current, active = document.activeElement;
-    const article = active instanceof Element ? active.closest("article[data-fixture-id]") : null;
+    const article = active instanceof Element ? active.closest("[data-fixture-id]") : null;
     saveFeedCheckpoint({ entryId: entryId.current, queryKey, href, firstPage: current.firstPage, lastPage: current.lastPage,
       scrollY: Math.max(0, Math.min(window.scrollY, 10_000_000)), focusFixtureId: article?.getAttribute("data-fixture-id") ?? null,
       paginationVersion: current.data.paginationVersion, savedAt: Date.now() });
@@ -104,7 +104,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     if (!target) return;
     focusTarget.current = null;
     const frame = requestAnimationFrame(() => {
-      const article = target.fixtureId ? root.current?.querySelector<HTMLElement>(`article[data-fixture-id="${CSS.escape(target.fixtureId)}"]`) : null;
+      const article = target.fixtureId ? root.current?.querySelector<HTMLElement>(`[data-fixture-id="${CSS.escape(target.fixtureId)}"]`) : null;
       const focus = target.retry ? root.current?.querySelector<HTMLElement>("[data-pagination-retry]")
         : target.checkpoint ? article?.querySelector<HTMLElement>("a") ?? root.current : article ?? root.current;
       focus?.focus({ preventScroll: true });

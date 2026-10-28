@@ -120,12 +120,14 @@ def verify_feed(origin, directory, scenarios):
         picks_filters = re.findall(r'<label\b[^>]*>(<input\b[^>]*type="checkbox"[^>]*>)Predictions only</label>', visible)
         assert len(picks_filters) == 2 and all('disabled' not in field for field in picks_filters)
         articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
+        no_match("data-match-table-header", visible, name + ": shared match presentation replaces the former column header")
         data = scenario["result"].get("data")
         if data and data["state"] not in ("ready", "insufficient-data"):
             heading = match(r'<h2\b[^>]*>' + re.escape(empty_titles[data["state"]]) + r'</h2>', visible)
             assert visible.index(submit_buttons[0]) < heading.start(), name + ": filter actions before empty state"
         records = data["records"] if data else []
         assert [article[1] for article in articles] == [record["fixtureId"] for record in records]
+        assert len({article[1] for article in articles}) == len(articles), name + ": one server-rendered instance per fixture"
         for (tag, _, article), record in zip(articles, records):
             no_match(r'\baria-describedby=', tag)
             no_match(r'<(?:ul|ol)\b|\bid="[^"]*-notes"|\baria-describedby="[^"]*-notes', article)
@@ -136,7 +138,9 @@ def verify_feed(origin, directory, scenarios):
             match("prediction: |prediction unavailable", article)
             for pick in re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article):
                 assert pick in PREDICTION_LABELS.values(), name + ": generic full-word prediction"
-            no_match(r'>(?:1X2|DC|BTTS|O/U 2\.5)</span>', article)
+            # Market-family abbreviations are legitimate labels in the shared Clean ledger facts row;
+            # they must never stand in for the actual selected prediction.
+            no_match(r'data-pick-selection=""[^>]*>(?:1X2|DC|BTTS|O/U 2\.5)</span>', article)
             assert len(re.findall(r"<a\b", article)) == 1
             if record["kickoffAt"] is not None:
                 assert iso(record["kickoffAt"]) in article

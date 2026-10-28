@@ -16,16 +16,22 @@ export function CardPreview({ examples, boundary, equal }: {
 }) {
   const [family, setFamily] = useState<MarketFamily>("match-result");
   const [recovered, setRecovered] = useState(false);
+  const [finish, setFinish] = useState<"finished-extra-time" | "finished-penalties" | null>(null);
   return <Stack $gap="lg">
     <Inline>
       <Button id="change-family" onClick={() => setFamily(family === "match-result" ? "total-goals" : "match-result")}>Change first example market</Button>
       <Button id="recover-logo" onClick={() => setRecovered(true)}>Replace failed example logo URL</Button>
+      <Button id="show-extra-time" aria-pressed={finish === "finished-extra-time"} onClick={() => setFinish("finished-extra-time")}>Show regulation score after extra time</Button>
+      <Button id="show-penalties" aria-pressed={finish === "finished-penalties"} onClick={() => setFinish("finished-penalties")}>Show regulation score after penalties</Button>
     </Inline>
     <MatchCardList id="example-cards">
       {examples.map(({ label, fixture, selectedFamily }, index) => {
-        const displayed = recovered && fixture.fixtureId === "card-broken" ? {
+        const recoveredFixture = recovered && fixture.fixtureId === "card-broken" ? {
           ...fixture, dataVersion: "10", homeTeam: { ...fixture.homeTeam, logoUrl: "https://static.match-card.test/recovered.svg" },
         } : fixture;
+        const displayed: FixtureSnapshot = index === 0 && finish ? {
+          ...recoveredFixture, status: finish, scorePeriod: "regulation", dataVersion: finish === "finished-extra-time" ? "11" : "12",
+        } : recoveredFixture;
         return <li key={fixture.fixtureId}><Stack $gap="sm">
           <MutedText>{label}</MutedText>
           <MatchCard fixture={displayed} analysisSlug="example-home-v-example-away"

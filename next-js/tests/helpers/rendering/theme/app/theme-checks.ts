@@ -56,7 +56,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     const amount = lightness(getComputedStyle(header).backgroundColor);
     assert(dark ? amount < 0.25 : amount > 0.85, `${theme.mode} header must follow its theme's neutral surface`);
   }
-  const matchSurfaces = phone ? "#theme-matches [data-fixture-id]" : "#theme-matches [data-match-board], #theme-matches ul > li:nth-child(even)";
+  const matchSurfaces = phone ? "#theme-matches [data-fixture-id]" : "#theme-matches [data-match-board]";
   for (const element of document.querySelectorAll(`${matchSurfaces}, #theme-slips [data-slip-id], #theme-member-step`)) {
     const amount = lightness(getComputedStyle(element).backgroundColor);
     assert(dark ? amount < 0.4 : amount > 0.7, `${theme.mode} card/member step must not retain the opposite theme's fill`);
@@ -73,16 +73,17 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     check("#theme-slips [data-slip-summary]", theme.color.surface);
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {
-    // Desktop articles are transparent so the board and alternating row supply their surfaces.
+    // Matches and slips use the same aligned match-row treatment, without the former table header or stripes.
     check("#theme-matches [data-match-board]", theme.color.surface);
-    check("#theme-matches [data-match-board] > ul > li:nth-child(even)", theme.color.cardHeader);
-    check("#theme-matches [data-match-table-header]", theme.gradient.tableHeader);
-    check("#theme-slips [data-match-table-header]", theme.gradient.tableHeader);
-    for (const tableHeader of document.querySelectorAll("#theme-slips [data-match-table-header], #theme-matches [data-match-table-header]")) {
-      const style = getComputedStyle(tableHeader);
-      assert(style.backgroundImage === "none", "Desktop table header must use the theme's flat surface");
-      assert(dark ? lightness(style.backgroundColor) < 0.25 : lightness(style.backgroundColor) > 0.85,
-        "Desktop table header must follow the active neutral theme");
+    const matchRows = [...document.querySelectorAll("#theme-matches [data-desktop-row]")].filter(visible);
+    const fixtures = [...document.querySelectorAll("#theme-matches [data-fixture-id]")].filter(visible);
+    assert(matchRows.length > 0 && matchRows.length === fixtures.length, "Each desktop fixture uses the shared match row");
+    assert(!document.querySelector("#theme-matches [data-match-table-header]"), "The former desktop match column header is absent");
+    for (const row of matchRows) {
+      assert(getComputedStyle(row).display === "grid", "Desktop match rows retain aligned fields");
+      assert(!!row.querySelector("[data-row-teams] [data-home]") && !!row.querySelector("[data-row-teams] [data-away]"),
+        "Shared desktop rows retain both team identities");
+      assert(!!row.querySelector("[data-match-analysis-link]"), "The score or VS keeps canonical match analysis navigation");
     }
   }
   if ([...document.querySelectorAll("[data-nav-more] details[open] ul")].some(visible)) {

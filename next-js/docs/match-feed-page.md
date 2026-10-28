@@ -97,9 +97,16 @@ invalid or incompatible dates/queries return the existing 404 shell.
 The page uses the shared light or dark shell, controls, feedback and match cards.
 Light mode uses the Porcelain Blue page background with white cards and
 header/navigation chrome; dark mode uses navy surfaces with light text. Phone
-match/slip frames and connected table/row edges remain square. Other controls use the shared
+match/slip frames and Aligned ledger row edges remain square. Other controls use the shared
 `theme.border.radius` token.
-Cards form one column below 64rem and an aligned table above it. Every feed logo
+Matches reuse Clean ledger cards below 64rem and the same Aligned ledger rows as
+betting slips and the slip builder at desktop widths. `MatchCardList` provides
+one `useDesktopLayout` subscription through `MatchCardLayoutContext`; individual
+cards do not add their own media subscription. Server HTML and initial hydration
+retain the original card fallback, then the list selects its shared desktop
+renderer. Each fixture has one active presentation, without hidden duplicate
+mobile and desktop records. The old decorative table heading and alternating
+row stripes are removed. Every feed logo
 is lazy with reserved dimensions and initials fallbacks; an eager logo would be
 hoisted as a third-party image preload competing with the page's own font, CSS
 and scripts.
@@ -195,7 +202,7 @@ there is no separate reverse-order button. Reset returns to the last 30 days,
 the available Predictions only default and default ordering while retaining the
 browsing zone, status and page size.
 
-Desktop retains the shell logo and table layout, with its theme control at the
+Desktop retains the shell logo and shared Aligned ledger matches, with its theme control at the
 far right of the shell header. Its top filter row contains search and an unlabeled
 period selector. Feed pages
 omit the shell search and use the same body search bar,
@@ -209,16 +216,28 @@ applies ordering immediately from the applied query. Sort, Clear and Apply
 align to the right below the fields, with the applied summary chips at the far
 left of that same row.
 
-Mobile cards use the shared pick-panel presentation: metadata and a fixed-width
-result tag, mirrored teams around the score, then a market-tinted panel with
-the market icon, full-word pick, exact available odds and estimated chance.
-The card, numbers box, logo fallbacks and locked/missing-pick regions all follow
-the selected theme. White light-mode surfaces and navy dark-mode surfaces use
-square edges, themed borders and no card shadow. Win, Loss and Pending keep
-green, red and amber semantic tones; dark-mode tags use dark tinted fills and
-light text. Desktop retains its aligned table and Result column with themed
-headings. Missing predictions retain an explicit no-prediction reason, also
-available in the card's accessible description.
+Phones and tablets keep the shared Clean ledger presentation: kickoff and
+competition metadata, mirrored teams around VS/the supplied score, then one
+inline row of market, pick, exact available odds and estimated probability.
+Desktop uses the reusable `DesktopMatchRow` and its shared row styles, also
+used by `DesktopSlipRow`. Its nine cells show date, time, country, league,
+teams/score/clock, prediction, odds, probability and match/outcome status.
+Names retain full-value tooltips; the centre score/VS links to the same canonical
+analysis page. There is no separate decorative column header or striping.
+
+The feed continues to project its real `FixtureSnapshot` through `MatchCard`;
+it does not manufacture slip selections or forecasts. Eligible-market ranking,
+exact-pick pricing, public locked probability, access messaging and missing-pick
+reasons remain unchanged. Slip adapters separately preserve their original
+stored selections while sharing presentation. Offline cards continue to omit
+predictions, external media, live claims and analysis navigation.
+
+All cards/rows and logo fallbacks follow the selected theme, with square edges,
+themed borders and no card shadow. Match progress and Win, Loss, Pending or Void
+outcomes stay distinct and use their existing semantic colors. Missing
+predictions retain an explicit no-prediction reason in accessible text. Filters,
+exact/similar search grouping, continuous numbering, pagination, retained results,
+live refresh and match-detail Back navigation retain the existing data path.
 
 The distinct bottom navigation bar is 42px tall before the device safe-area
 inset. It follows the selected title-bar mode, white in light mode and navy in

@@ -1,9 +1,10 @@
 # Shared match-card presentation
 
-Prompt [018](../dev-plan/018-match-card.md) supplies reusable presentation for
-the later feed and detail pages. Components receive visitor-facing props; they
-do not fetch providers, start polling, access Redux or persist data. Examples
-exist only in tests and isolated acceptance apps.
+Matches, betting slips and the slip builder share the approved Clean ledger
+presentation on phones/tablets and Aligned ledger rows on desktop. Presentation
+components receive visitor-facing facts; they do not fetch providers, settle
+predictions, start polling, access Redux or persist data. Examples remain in
+tests and isolated acceptance applications.
 
 ## Components and composition
 
@@ -11,178 +12,129 @@ Import directly from the owning module under `@/components/match`:
 
 | Module | Public contract |
 | --- | --- |
-| `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, required canonical `analysisSlug`, optional `selectedFamily` (default `match-result`), locale, heading level 2–4 (default 2), `eagerLogos` (default false) and an optional one-based `position` for the desktop `#` column. Memoized: `sameCardFixture` (domain `match-card`) treats an equal-version record as unchanged unless a field `mergeFixtureObservation` refreshes differs; `markets` compares by content and every other prop by identity. Team names, codes and logos (and the competition's logo) are not compared: a catalog change bumps the version of every fixture that renders it. The competition's `countryFlagUrl` is compared by value, because a flag change alone does not bump the version. |
-| `team-logo` | `TeamLogo`: shared by cards and match details, with a team name, optional image URL and explicit eager/lazy loading. Containers size it with `--gh-logo-size` (default 32px) and may place it by its `data-team-logo` attribute. Initials remain visible when a logo is missing or fails. |
-| `probability-label` | `ProbabilityLabel`, `ProbabilityLabelProps`: a complete `AcceptedMarket`, optional selection within that market, and locale. Displays an estimated probability using domain group rounding. |
-| `outcome-badge` | `OutcomeBadge`, `OutcomeBadgeProps`: one canonical settlement outcome status and locale. Explicit text plus the shared decorative icon; no live-region announcements for static cards. |
-| `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children and an optional locale. One column of tiles below `lg` (64rem) and an aligned table with a themed decorative column header from `lg`. Source order remains visual and keyboard order. |
-| `match-icons` | Decorative inline SVG icons (`aria-hidden`, not focusable). |
-| Domain `prediction-label` | `predictionLabel` supplies generic full-word outcomes to cards, details, history, slips and metadata. `predictionRuleLabel` formats extended market rules without participant-name substitution or lost goal lines. |
+| `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, canonical `analysisSlug`, optional eligible `markets`/`selectedFamily`, locale, heading level 2–4, lazy/eager logos, one-based `position`, access state and original `snapshotPick`. It owns the existing authorized pick/gating projection and chooses the list's responsive presentation. |
+| `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children, optional locale and row-number maximum. It owns one `useDesktopLayout` subscription and provides the result through `MatchCardLayoutContext` to every card. |
+| `match-card-layout` | The shared layout context defaults to the original card presentation during server rendering and hydration. A standalone `MatchCard` also keeps that fallback. No per-card media subscription is needed. |
+| `desktop-match-row` | `DesktopMatchRow`: the shared desktop renderer for feed fixtures and slip selections. Inputs are supplied teams/competition, kickoff, score, match status/clock and already-authorized market, odds, probability and outcome. It selects no forecast and fabricates no missing facts. |
+| `desktop-match-styles` | `desktopMatchBaseStyles` and `alignedLedgerStyles`: one row geometry reused by `MatchCardList`, production desktop slips and their approved design review. |
+| `truncated-text` | Full desktop names remain in the DOM. Only clipped text becomes a keyboard-accessible tooltip trigger; focus, hover and Escape retain access to the full value. |
+| `clean-ledger-styles` | Shared phone/tablet identity geometry used by match cards and slip selections: kickoff/competition, mirrored teams, and compact inline facts. |
+| `team-logo` | Shared team/league image treatment, reserved dimensions and initials fallback. Its container controls size through `--gh-logo-size`; missing or failed media retains the supplied name. |
+| Domain `prediction-label` | Generic full-word prediction wording and extended market-rule descriptions, without participant-name substitution or lost goal lines. |
 
-Best Slips, custom builds, saved-slip history and published-slip performance use
-these same card and list components. Their `snapshotPick` input retains the
-original selected outcome, single probability and price. `slipSelectionCard`
-adapts the stored facts without constructing a complete forecast distribution
-or substituting the current best pick. A saved regulation score and settlement
-are shown only when supplied; missing live phases and fixture statuses stay
-unknown. Existing feed forecasts and subscriber gates keep their normal path.
+`DesktopSlipRow` remains the slip-specific adapter. `slipSelectionCard` and
+`snapshotCardPrediction` preserve the original stored names, kickoff, selected
+outcome, probability, price and publication. Separately supplied match-state
+observations can update the score/clock/result without replacing that original
+selection. Feed fixtures are passed directly through the existing `MatchCard`
+projection; they are never converted into artificial slip selections or a
+manufactured forecast distribution.
 
-Desktop presentation retains its compact table composition:
+The responsive switch follows the existing `SlipTable` pattern: server HTML
+contains one original card for each fixture. After hydration, the list selects
+Aligned ledger at 64rem and above; phones and tablets retain Clean ledger below
+that boundary. A fixture is never duplicated into hidden mobile and desktop
+copies. Source order remains list, visual and keyboard order. Memoized cards
+continue to use `sameCardFixture`; unchanged observations and header/filter
+state do not redraw their content unnecessarily.
 
-When multiple market families are eligible, `bestCardFamily` uses the shared
-`bestPublishedFamily` ranking: highest unrounded win probability, then the
-higher available fresh price for the exact published family and selection.
-Remaining ties use policy order. Selection, probability, odds and result always
-come from that one shown published pick; an unrelated family cannot fill a
-missing field.
+## Authorized forecast and state presentation
 
-1. Upper track: the row number (`#`) aligns with the country flag and full
-   country name. The Date & Time column shows the kickoff date here. While the
-   match is live, the provider's elapsed minute (`67′`, `90+4′`) or live phase
-   (`HT`, `Break`, `Penalties`…) with a glowing red dot fills the Result column
-   in place of the Pending tag. When the match ends, `FT`, `AET*` or `Pens*`
-   occupies the status slot above the score and the Result column returns to
-   the verdict. The asterisk identifies a regulation-only score and has
-   explanatory tooltip and accessible text. Postponed, canceled, abandoned
-   and awarded fixtures retain their actual status; scheduled fixtures have
-   no elapsed-minute or final-status chip.
-2. Lower track: the league logo and name, both team names and logos, score
-   (or scheduled `VS`), market, prediction, probability and result share one
-   vertical alignment. The local 24-hour kickoff time and its zone sit beside
-   the date in the Date & Time column, on its second line. One semantic
-   `time` element retains the date and time, a full UTC ISO `datetime` and a
-   title with the full instant and displayed zone.
-3. Pick: the market family, full-word generic selection, available exact-pick
-   price, estimated probability and result each stay in their existing
-   columns. Square family-tinted tags and bordered prediction values retain
-   the existing colour theme. The Result column shows Upcoming for every
-   scheduled match, even when no prediction is available. Live and completed
-   matches retain their actual prediction result: Win, Loss, Pending, Void or
-   an unavailable dash. Missing probabilities never appear as 0%.
+When several market families are eligible, `bestCardFamily` selects the highest
+ranked eligible published pick using the shared ranking/recommendation rules.
+Its probability, exact-family selection, price and settlement stay bound to that
+one pick. Missing prices remain unavailable; another family's price never fills
+the cell. `markets`, `selectedFamily` and the existing default-family policy
+retain their normal behavior.
 
-Source, provisional status and publication time move to the pill tooltip; sync
-time stays on the detail page. On desktop each card becomes one table row
-using `match-columns.ts` tracks and CSS subgrid: #, date, league, home, score,
-away, market, prediction, probability, result and a chevron. Column headers and
-rows share the same eleven grid tracks at compact and wide desktop sizes.
-The desktop column header stays below the sticky app menu while the board
-scrolls. Its offset shares the app header's content-height and border tokens.
-The number track uses the largest displayed row number, capped at the formatted
-width of 9,999. Row numbers up to that value never wrap; larger numbers may wrap
-within the same capped track. The desktop results heading is 16px and stays on
-the left, with its match count aligned to the right.
+A card locks only when an unfinished fixture has a published eligible forecast
+that the viewer cannot access. It shows the authorized public probability when
+supplied, no selected outcome or price, and the existing unlock/subscribe copy.
+A fixture with no published eligible prediction remains visible with its actual
+`noPickReason`; `forecast: null` does not become a fabricated locked prediction.
+Gated and ordinary cards retain canonical match-detail navigation. The match
+page owns its panels' authorization and the existing feed access banner stays
+separate.
 
-### Phone and tablet tile (below 64rem)
+The renderer reuses `selectedCardPrediction`, `selectedCardPrice` and
+`cardResultStatus`; it does not add settlement rules. Scheduled fixtures show
+Upcoming and VS without inventing a score. Running clocks use supplied phases,
+minutes and stoppage time; paused phases retain their phase label. Finished,
+postponed, canceled, abandoned and awarded fixtures keep their stored status.
+Win, Loss, Pending, Void and unavailable outcomes stay distinct from the match
+score and progress.
 
-The mobile card ("Pick Panel") has three rows on one grid
-(`"meta result" "teams teams" "pick pick"`) and grows naturally with its content:
+### Desktop: shared Aligned ledger (64rem and above)
 
-1. **Meta and verdict.** One quiet muted line: country flag, one-line ellipsized
-   league name, `·`, then the kickoff date and 24-hour time with its zone. An
-   upcoming match's clock is bold; other states keep it muted. When enlarged
-   text leaves the line narrower than the kickoff needs (the card is a
-   `match-card` inline-size container; below 18rem), the league takes the
-   first line and the kickoff moves to a second one instead of running under
-   the tag. The result tag
-   sits beside the metadata at a shared 5.25rem width. Tags use the active
-   `theme.color.verdict` palette: vivid fills with dark text in light mode,
-   dark tinted fills with readable light text in dark mode. Win is green with a
-   check, Loss red with a cross, Pending and Upcoming amber, and Void neutral.
-   Labels remain explicit words; an unavailable result
-   shows no tag. The desktop Result column uses the same colours, and every
-   badge fills the column so all results share one width.
-2. **Teams.** Home name and crest, the centre column, away crest and name, with
-   each crest beside the centre. The centre shows `vs` (scheduled or halted) or
-   the bold score (all red while live, the losing side muted once final), with the state
-   beneath it: `FT`, `AET*`/`Pens*`, or a halted status such as Postponed in grey.
-   While live, the side ahead has the bold name and the corner tag shows the live
-   minute with a glowing red dot (`67′`, `90+4′`, or the phase) instead of Pending.
-3. **Pick panel.** A family-tinted panel under the teams contains the market
-   glyph, the market caption over a full-word pick (`Home win`, `Over 2.5`,
-   `Not both teams to score`), and a surface-colored numbers box pairing the
-   exact available price (`@ 1.85`) with estimated chance (`54%`). Market and
-   pick shorten first; at narrow effective widths the numbers take their own
-   row. Locked picks use a neutral dashed panel with their public chance and
-   unlock copy. A missing pick reads `No prediction · Too early` or its supplied
-   reason. The decorative meter and desktop price remain hidden on the tile.
+The former eleven-track match table, decorative column heading and alternating
+row striping are replaced by the same nine-cell composition as betting slips
+and the slip builder:
 
-All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Desktop keeps both date and kickoff clock in the Date & Time column; elapsed time and FT share the separate status slot above the score. An unknown kickoff retains its localized date-column fallback without inventing a clock or `datetime`. Phone date/time composition stays unchanged. Within the existing desktop league column, the country sits above the league name and logo on one line: a long recognized name (over 13 characters) uses a familiar short form from `countryShortName` (Dominican Rep., Bosnia & Herz., N. Ireland, UAE…), anything still too wide ends in an ellipsis, and the full name stays in its title. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the row number with the country and align the league logo/name, both team names/logos, score, market, prediction, probability and result on the lower track, with the country on its single line. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
+1. Kickoff date.
+2. Kickoff time and display zone.
+3. Country flag and full country name.
+4. League crest and name.
+5. Mirrored home/away names and crests around the score or VS, with the supplied
+   live/final phase above the centre.
+6. Market family and authorized prediction, or the locked/no-prediction content.
+7. Exact available odds.
+8. Estimated probability, including only explicitly public chance on a lock.
+9. Match progress and the independent prediction outcome.
 
-Tiles use 12px side padding and 10px list gaps. The list defers offscreen layout
-with `content-visibility` and a remembered intrinsic height. `theme.phoneCardFrame`
-supplies the shared square edges, themed border and no shadow. Match cards,
-slip cards, number boxes, logo fallbacks and locked/missing regions all use the
-active theme: white surfaces in light mode and dark navy surfaces in dark mode.
-Slip headers, summary strips and individual legs follow the same rule.
-Long names ellipsize on one line. Captions, metric values and the inline price
-stay on one line, with bounded ellipsis only at unusually narrow effective
-widths or enlarged text. Full semantic descriptions remain accessible. Text
-uses rem units and card/cell heights are never fixed.
+The shared grid uses square edges, quiet dividers, compact row padding and the
+active light/dark palette. Coarse pointers retain 44px effective row/analysis
+targets. No separate desktop `#` column is introduced: one-based feed positions
+remain available in accessible text, and the existing results toolbar keeps the
+visible match range/count.
 
-The result uses explicit text: Upcoming for scheduled matches, green Win,
-red Loss, amber Pending and neutral Void. Upcoming uses the pending colour
-tone and remains visible on desktop and mobile, including a scheduled match
-without a pick. Other missing predictions retain their no-pick presentation
-and unavailable result. The full missing-prediction reason is in
-accessible text. Only supplied, correctly bound final settlements can show
-Win/Loss; live score changes never settle a pending prediction. Scheduled
-matches show VS without an invented score. Running clocks include available
-`stoppageMinutes`; paused phases retain their phase label. Postponed, canceled,
-abandoned, awarded and paused live states retain their actual labels.
+Team, country and league names remain on one line. A clipped value exposes its
+complete text through the shared tooltip instead of discarding it. The score/VS
+analysis link uses `matchHref`, the canonical fixture ID and supplied slug, with
+prefetch disabled. It remains separate from name tooltip controls. Heading
+levels and the similar-result title note remain intact. The group describes its
+date, time, competition, score, market, odds, probability and status; missing
+kickoff or score never receives an invented time or value.
 
-Local MIT-licensed SVG flags in `public/flags` resolve recognized football countries, including England, Scotland, Wales and Northern Ireland, and work without a remote image request. A safe supplied provider flag is a secondary fallback. Unknown countries never borrow another country's flag from a derived abbreviation; international fixtures retain a globe. League/team images keep the existing URL safety and loading fallback behavior.
+### Phone and tablet: Clean ledger (below 64rem)
 
-The same full-card link, canonical navigation, hidden full team names and
-score/outcome descriptions remain accessible. Cards render no warning strip,
-notice list or notice-related `aria-describedby` reference on any screen.
-Public odds for the selected pick appear beside the
-prediction (bracketed on desktop, `@ price` on the tile) and remain in its tooltip and accessible text. No unrelated or
-missing price fills that line. Long team names ellipsize with full names in
-the heading/link and a hover tooltip; league names truncate first. Any ellipsized text in the app shows its full value on mouse hover: `TruncationTooltips` (root layout) finds the cut-off text under the pointer, beneath the full-card link too, and puts its own title or rendered text on the hovered element, leaving page-set titles alone and ignoring touch.
+The existing compact three-row cards remain consistent with slip selections:
 
-Browser acceptance covers 320, 360, 390 and 430px, 200% root text, long names, scheduled/live/final states, local flags, three visible rows with the corner result tag and no page/card horizontal overflow. Date controls stack at narrow effective container widths to preserve readable labels with enlarged text.
+1. Kickoff date and AM/PM clock precede the league crest/short label and country
+   flag/code. Full competition and country names remain available to assistive
+   technology and in labels/tooltips.
+2. The home name/crest and away crest/name mirror around VS or the supplied
+   score. Long names use the shared compact labels while retaining complete
+   accessible names. Match progress and independent outcomes keep their existing
+   presentation.
+3. Market, selected prediction, exact available odds and estimated probability
+   share one inline facts row. Gated and missing predictions keep the same
+   authorization rules and explicit explanations as desktop.
 
-**Team codes.** Fixture snapshot teams still carry an optional provider `code`
-(`fixture-snapshot.ts`; the feed and detail read publishes
-`validTeamCode(FootballTeam.code)`), stored by the spare-quota team-code import
-([football catalog](football-catalog.md#team-codes-spare-quota-import)). Cards
-do not display it, following the owner's decision for full names.
+The single-column native list retains 6px card spacing, square themed frames,
+no card shadow and offscreen `content-visibility` optimization. Cards reflow at
+narrow effective widths or enlarged text without clipping. The phone analysis
+link remains a full-card target with the contextual accessible team names.
 
-Use the existing root style provider. Phone panels and the desktop table use
-the active `theme.color.market` palette: emerald for match result, violet for
-double chance, blue for total goals and orange for BTTS. Glyph solids and
-their `theme.color.onBrand` marks switch together; light-mode white marks and
-dark-mode dark marks keep contrast on the corresponding solid. Family text
-keeps at least 4.5:1 contrast on the themed soft tint and content surface.
-`tests/market-colors.test.mjs` checks solids, gradient stops and text pairs in
-both themes. The match-detail phone logo uses adaptive branding on the themed
-header, and lineup pitches pair themed emerald stripes/text with surface-colored
-player markers. Long names and words wrap inside bounded
-grid tracks. The analysis link uses `matchHref`, canonical fixture identity and
-the supplied slug, with prefetch disabled. It covers the whole card, so the
-entire card or row is the click target. The eventual detail route owns identity
-lookup and slug canonicalization.
+## Time, images and offline behavior
 
-Every viewer gets that same canonical link, locked cards included, so crawlers
-and free viewers reach each match page; its locked panels carry the sign-up and
-subscribe links, and the feed banner keeps its own. A card locks (Locked
-prediction, public chance, subscribe line) only over a published forecast the
-viewer cannot see, in a family the market filter allows. An unfinished fixture
-without one shows the same no-prediction reason subscribers read (`forecast:
-null` and the gated `families` already say so in the free payload), and the
-match page's verdict, markets and analysis follow the same rule; revision
-history stays locked. `tests/seo-card-links.test.mjs` server-renders these
-cards and sections, and `scripts/verify-production-paywall.py` checks each
-anonymous feed card on the same rule.
+Date/time display uses the shared `Messages` formatters. Feed kickoff formatting
+adopts the device display zone after hydration with a stable EAT server fallback;
+slips retain their reporting-zone default. UTC instants, EAT reporting cohorts,
+forecast publication and stored snapshot values are never rewritten by visual
+formatting. An unknown kickoff keeps its localized fallback without an invented
+clock or `datetime`.
 
-The article's accessible heading names both teams and can match the page's
-heading hierarchy. Reading order is competition/kickoff, Home, match state,
-Away, selected market prediction with estimated probability and outcome,
-then View analysis. Decorative visual text (score digits,
-`VS`, short picks, percent, column headers) is `aria-hidden`; hidden text
-announces the score line, live phase and minute, and prediction in full. Each
-card has one keyboard destination, with a contextual accessible link name and
-shared visible focus. Missing scores are announced as unavailable.
+Local MIT-licensed flags in `public/flags` resolve recognized football countries,
+including England, Scotland, Wales and Northern Ireland. Provider media keeps
+the existing safe-URL, lazy loading and fallback policy; unknown countries never
+borrow another country's flag. Feed logos remain lazy to avoid third-party
+preloads competing with the page's own font, CSS and scripts.
+
+`offline` retains the anonymous saved-view boundary: no forecasts, external
+image requests, live claim or match-detail action. The shared desktop row
+receives only the saved presentation and no analysis link. Existing generic
+prediction labels, goal lines, hidden score/outcome descriptions, theme contrast
+and missing-data semantics remain unchanged.
 
 ## Versioned public data
 

@@ -3,8 +3,10 @@
 import type { ComponentPropsWithRef } from "react";
 import styled, { css } from "styled-components";
 import { createMessages } from "@/i18n/messages";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
-import { matchTableColumns, matchTableGap } from "./match-columns";
+import { alignedLedgerStyles, desktopMatchBaseStyles } from "./desktop-match-styles";
+import { MatchCardLayoutContext } from "./match-card-layout";
 
 export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & {
   locale?: string; rowNumberMaximum?: number;
@@ -15,36 +17,12 @@ const Board = styled.div<{ $indexLength: number }>`
   /* Root-relative tracks stay identical across bold header digits and regular row digits. */
   ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(1.5rem, calc(${$indexLength} * 0.5rem + 2px));`}
   ${media.desktop} {
+    ${desktopMatchBaseStyles}
+    ${alignedLedgerStyles}
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 0;
     box-shadow: none;
-  }
-`;
-/** Decorative column labels; every row repeats its meaning in accessible text. */
-const Columns = styled.div`
-  display: none;
-  ${media.desktop} {
-    position: sticky;
-    inset-block-start: var(--app-header-height, 3rem);
-    z-index: 10;
-    display: grid;
-    grid-template-columns: ${matchTableColumns.compact};
-    column-gap: ${matchTableGap};
-    padding: 12px 16px;
-    color: ${({ theme }) => theme.header.text};
-    background: ${({ theme }) => theme.gradient.tableHeader};
-    font-size: 0.8125rem;
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    line-height: ${({ theme }) => theme.typography.lineHeight.heading};
-    > span:nth-child(4) { text-align: end; }
-    > span:nth-child(5) { text-align: center; }
-    [data-full] { display: none; }
-  }
-  ${media.wide} {
-    grid-template-columns: ${matchTableColumns.full};
-    [data-short] { display: none; }
-    [data-full] { display: inline; }
   }
 `;
 const List = styled.ul`
@@ -69,8 +47,6 @@ const List = styled.ul`
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     > li + li { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
-    /* A divider row does not shift the stripes of the match rows after it. */
-    > li:nth-child(even of :not([data-list-divider])) { background: ${({ theme }) => theme.color.cardHeader}; }
   }
 `;
 const Divider = styled.li`
@@ -95,21 +71,13 @@ export function MatchListDivider({ title, note }: { title: string; note?: string
   return <Divider data-list-divider=""><h2>{title}</h2>{note && <p>{note}</p>}</Divider>;
 }
 
-/** Cards below 64rem, an aligned match table above it. Source order is also visual and keyboard order. */
+/** Shared Clean ledger cards below 64rem and the slip/builder's Aligned ledger rows above it. */
 export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardListProps) {
+  const desktop = useDesktopLayout();
   const messages = createMessages(locale);
   const indexLabel = rowNumberMaximum !== undefined && Number.isSafeInteger(rowNumberMaximum) && rowNumberMaximum > 0
     ? messages.number(Math.min(rowNumberMaximum, 9_999)) : "";
-  return <Board $indexLength={indexLabel.length} data-match-board>
-    <Columns aria-hidden="true" data-match-table-header>
-      <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.dateTime")}</span>
-      <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
-      <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>
-      <span>{messages.text("match.columns.market")}</span><span>{messages.text("match.columns.prediction")}</span>
-      <span>{messages.text("details.odds")}</span>
-      <span><span data-short>{messages.text("match.columns.probabilityShort")}</span><span data-full>{messages.text("match.columns.probability")}</span></span>
-      <span>{messages.text("match.columns.result")}</span><span />
-    </Columns>
+  return <MatchCardLayoutContext.Provider value={desktop}><Board $indexLength={indexLabel.length} data-match-board>
     <List role="list" {...props} />
-  </Board>;
+  </Board></MatchCardLayoutContext.Provider>;
 }

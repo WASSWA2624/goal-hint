@@ -4,7 +4,7 @@ import { SubscriberIcon } from "@/components/ui/icons";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
 
 import Link from "@/components/navigation/navigation-link";
-import { memo, useId, useState, type ReactNode } from "react";
+import { memo, useContext, useId, useState, type ComponentProps, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode, countryDisplayName, countryShortName } from "@/domain/country-code";
@@ -29,6 +29,8 @@ import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 import { providerImageSource } from "@/components/ui/provider-image";
 import { OutcomeBadge, ProbabilityBar } from "./prediction-presentation";
+import { DesktopMatchRow } from "./desktop-match-row";
+import { MatchCardLayoutContext } from "./match-card-layout";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -768,11 +770,18 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
     data-outcome={prediction?.status ?? "unavailable"} title={details ?? reason ?? undefined}>{children}</Prediction>;
 }
 
+/** Only the desktop presentation subscribes to the device timezone, just as CardKickoff does on phones. */
+function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
+  const messages = useMessages(props.locale);
+  return <DesktopMatchRow {...props} messages={messages} />;
+}
+
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position, titleNote, startingPriceUgx, offline = false, snapshotPick }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
+  const desktop = useContext(MatchCardLayoutContext);
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
@@ -804,6 +813,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
   const selection = prediction?.item.market.selection;
   const final = hasFinalScoreStatus(fixture.status);
+  const regulationOnly = final && fixture.status !== "finished-regulation" && fixture.scorePeriod === "regulation";
   const showScore = fixture.score !== null && (fixture.status === "live" || final);
   // Only a decided final score names a winner; a 90-minute score shown for an extra-time or penalties finish does not.
   const decided = showScore && final && !(fixture.scorePeriod === "regulation" && fixture.status !== "finished-regulation");
@@ -814,6 +824,44 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const missing = gated || prediction ? null : noPickReason(fixture);
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
+  if (desktop) {
+    const marketDescription = offline ? "Predictions are unavailable in the saved view."
+      : gated ? messages.text("paywall.card")
+      : selection ? `${family}: ${predictionDescription(messages, selection)}` : reason ?? undefined;
+    const publication = prediction && [prediction.item.market.source ? messages.text(`market.source.${prediction.item.market.source}`) : null,
+      prediction.provisional ? messages.text("match.provisional") : null,
+      prediction.publishedAt !== null ? `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}` : null].filter(Boolean).join(" · ");
+    return <DesktopCard fixtureId={fixture.fixtureId} locale={locale} kickoffAt={fixture.kickoffAt}
+      homeTeam={{ name: fixture.homeTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.homeTeam.logoUrl) ? fixture.homeTeam.logoUrl : null }}
+      awayTeam={{ name: fixture.awayTeam.name, logoUrl: isSafeRemoteImageUrl(fixture.awayTeam.logoUrl) ? fixture.awayTeam.logoUrl : null }}
+      competition={{ name: fixture.competition.name, country: fixture.competition.country,
+        logoUrl: isSafeRemoteImageUrl(fixture.competition.logoUrl) ? fixture.competition.logoUrl : null }}
+      status={fixture.status} score={showScore || snapshotPick ? fixture.score : null} liveClock={offline ? null : fixture.liveClock ?? null}
+      regulationOnly={regulationOnly}
+      {...(fixture.score && (showScore || snapshotPick) ? { scoreDescription: messages.text("match.scoreline", {
+        label: messages.text(snapshotPick || regulationOnly ? "match.regulationScoreNote" : final ? "match.finalScore" : "match.liveScore"),
+        home, away, homeScore: messages.number(fixture.score.home), awayScore: messages.number(fixture.score.away),
+      }) } : {})}
+      outcome={offline ? "unavailable" : outcome} headingLevel={headingLevel} pickState={pickState}
+      {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
+      {...(!offline ? { analysisHref: matchHref(fixture.fixtureId, analysisSlug, locale) } : {})}
+      {...(snapshotPick && fixture.score ? { matchState: "snapshot", savedScore: true } : {})}
+      offline={offline} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
+      {...(marketDescription ? { marketDescription } : {})}
+      market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.locked")}</span></> : <>
+        <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>
+        <strong data-pick-label data-no-pick={missing ?? undefined} title={publication || undefined}>
+          {selection ? <span data-pick-selection>{predictionLabel(messages, selection)}</span> : messages.text("match.noPick")}
+        </strong>
+      </>}
+      odds={<span data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</span>}
+      probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
+      {...(offline ? { statusContent: <span data-match-label>Saved</span> } : !prediction && fixture.status !== "live"
+        ? { statusContent: <><span data-match-label>{messages.text(`match.status.${fixture.status}`)}</span><span data-outcome-label>{resultLabel}</span></> } : {})}
+      details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
+        : gated ? <SubscriberNotice locale={locale} kind="card" /> : !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
+    />;
+  }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
     data-status={fixture.status} data-mobile-design="clean-ledger">
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
