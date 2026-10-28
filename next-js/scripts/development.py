@@ -74,7 +74,13 @@ def demo_environment(url: str, source=None):
     return env
 
 
-def run_checked(args, env, timeout=300):
+def demo_preparation_summary(output):
+    coverage = json.loads(output.rstrip().splitlines()[-1])
+    return (f"Demo ready: {coverage['fixtures']:,} fixtures, {coverage['days']:,} days, "
+            f"at least {coverage['minimumPerDay']:,}/day.")
+
+
+def run_checked(args, env, timeout=300, *, status=None, summarize=None):
     # Native Windows pipes may default to cp1252 while Node emits UTF-8 progress.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -83,11 +89,35 @@ def run_checked(args, env, timeout=300):
     timer = threading.Timer(timeout, child.kill)
     timer.daemon = True
     timer.start()
+    captured = []
+    interactive = bool(status and sys.stdout.isatty())
+
+    def clear_status():
+        if interactive:
+            print("\r" + " " * len(status) + "\r", end="", flush=True)
+
     try:
+        if interactive:
+            print(status, end="", flush=True)
         for line in child.stdout:
-            print(line, end="", flush=True)
+            if status:
+                captured.append(line)
+            else:
+                print(line, end="", flush=True)
         if child.wait():
             raise CommandError("Development demo preparation failed; see the command diagnostics above.")
+        if status:
+            message = summarize("".join(captured)) if summarize else status
+            clear_status()
+            print(message, flush=True)
+    except KeyboardInterrupt:
+        clear_status()
+        raise
+    except BaseException:
+        clear_status()
+        if status:
+            print("".join(captured), end="", flush=True)
+        raise
     finally:
         timer.cancel()
         if child.poll() is None:
@@ -206,7 +236,9 @@ def main():
         env["GOAL_HINT_COMPETITION_IDS"] = catalog.stdout.strip()
         print("Applying the normal application migrations to the owned demo database…", flush=True)
         run_checked([str(ROOT / "node_modules/prisma/build/index.js"), "migrate", "deploy"], env)
-        run_checked(["--conditions=react-server", "src/server/demo/seed-command.ts", "full" if full else "bootstrap"], env, timeout=21600 if full else 7200)
+        run_checked(["--conditions=react-server", "src/server/demo/seed-command.ts", "full" if full else "bootstrap"], env,
+                    timeout=21600 if full else 7200, status="Preparing demo match details, slips and reports…",
+                    summarize=demo_preparation_summary)
         if verify_only:
             env["DEMO_DATABASE_INTEGRATION"] = "1"
             run_checked(["--conditions=react-server", "--test", "--test-concurrency=1", "tests/demo-persistence.integration.mjs",
@@ -214,7 +246,6 @@ def main():
             return 0
         if prepare_only:
             return 0
-        print("Development demo ready. The normal app uses synthetic API-Football data; Ctrl+C preserves the demo database.", flush=True)
         return run_web(args, env, port)
 
 

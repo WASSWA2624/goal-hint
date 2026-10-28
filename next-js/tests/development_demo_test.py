@@ -1,5 +1,6 @@
 """The demo isolates providers/database while retaining configured administrator auth."""
 import importlib.util
+from contextlib import redirect_stdout
 import io
 from pathlib import Path
 import sys
@@ -82,6 +83,42 @@ class DemoEnvironmentTests(unittest.TestCase):
     def test_npm_runtime_wins_over_an_unrelated_machine_runtime(self):
         with patch.dict(MODULE.os.environ, {"npm_node_execpath": "project-node", "NODE_BINARY": "other-tool-node"}):
             self.assertEqual(MODULE.development_node_binary(), "project-node")
+
+
+class DevelopmentPreparationOutputTests(unittest.TestCase):
+    def test_seed_progress_and_coverage_become_one_ready_message(self):
+        class Terminal(io.StringIO):
+            def isatty(self):
+                return True
+
+        progress = "Demo match details ready: 2026-10-28.\n" * 60
+        progress += "Demo published and saved slips ready: 2026-10-28.\n" * 30
+        progress += '{"days":334,"fixtures":187040,"minimumPerDay":560}\n'
+        for output in (io.StringIO(), Terminal()):
+            with self.subTest(terminal=output.isatty()):
+                child = MagicMock()
+                child.stdout = io.StringIO(progress)
+                child.wait.return_value = child.poll.return_value = 0
+                with patch.object(MODULE.subprocess, "Popen", return_value=child), \
+                        patch.object(MODULE.threading, "Timer"), redirect_stdout(output):
+                    MODULE.run_checked([], {}, status="Preparing demo…", summarize=MODULE.demo_preparation_summary)
+                rendered = output.getvalue()
+                self.assertTrue(rendered.endswith("Demo ready: 187,040 fixtures, 334 days, at least 560/day.\n"))
+                self.assertEqual(rendered.count("\n"), 1)
+                self.assertNotIn("Demo match details ready", rendered)
+                self.assertNotIn('"minimumPerDay"', rendered)
+
+    def test_failed_preparation_replays_its_diagnostics_without_a_ready_message(self):
+        child = MagicMock()
+        child.stdout = io.StringIO("Preparing match details\nDatabase validation failed\n")
+        child.wait.return_value = child.poll.return_value = 1
+        output = io.StringIO()
+        with patch.object(MODULE.subprocess, "Popen", return_value=child), \
+                patch.object(MODULE.threading, "Timer"), redirect_stdout(output):
+            with self.assertRaises(MODULE.CommandError):
+                MODULE.run_checked([], {}, status="Preparing demo…", summarize=MODULE.demo_preparation_summary)
+        self.assertIn("Database validation failed", output.getvalue())
+        self.assertNotIn("Demo ready", output.getvalue())
 
 
 class DevelopmentRestartTests(unittest.TestCase):

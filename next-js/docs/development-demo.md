@@ -15,8 +15,10 @@ npm run dev -- --hostname 0.0.0.0 --port 3000
 The launcher applies the ordinary migrations and prepares the football catalog,
 all fixture dates, and rich records for the default pages: today through the next
 30 days for the slip builder, plus the preceding 29 days for performance/history.
-First preparation takes substantial time; progress is printed before the web
-server reports ready. This also prepares original-publication prices and 30 days
+First preparation takes substantial time; one status line is replaced by a
+verified coverage summary before the web server reports ready. Redirected logs
+contain just that summary; failures retain their detailed diagnostics.
+This also prepares original-publication prices and 30 days
 of editorial/saved slip examples for the default history page. Later starts reuse
 the stored records. Startup also warms the default monthly performance view;
 this full validated aggregation can take several minutes. Development performance
