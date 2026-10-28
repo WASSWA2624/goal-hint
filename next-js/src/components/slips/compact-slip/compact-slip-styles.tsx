@@ -38,7 +38,7 @@ export const CompactCard = styled.article`
   border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0;
   container: compact-slip / inline-size;
   details { min-inline-size: 0; }
-  [data-slip-summary] {
+  [data-slip-summary]:not([data-mobile-slip-header]) {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: 44px;
     grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "identity identity count" "odds average average";
     gap: 4px 10px; padding: 8px 27px 8px 9px; cursor: pointer; list-style: none; font-size: 0.6875rem; line-height: 1.3;
@@ -47,7 +47,7 @@ export const CompactCard = styled.article`
     &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
     > * { min-inline-size: 0; }
   }
-  header[data-slip-summary] { cursor: default; padding-inline-end: 9px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+  header[data-slip-summary]:not([data-mobile-slip-header]) { cursor: default; padding-inline-end: 9px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
   [data-summary-identity] { grid-area: identity; display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 7px; }
   h3 { margin: 0; font-size: 0.875rem; line-height: 1.2; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   [data-rank] { color: ${({ theme }) => theme.color.link}; font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
@@ -64,9 +64,9 @@ export const CompactCard = styled.article`
   li { min-inline-size: 0; }
   li + li { border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
 
-  &[data-compact-slip="clean-ledger"] [data-slip-summary] { padding-block: 4px; row-gap: 2px; }
+  &[data-compact-slip="clean-ledger"] [data-slip-summary]:not([data-mobile-slip-header]) { padding-block: 4px; row-gap: 2px; }
   @container compact-slip (max-width: 12rem) {
-    &[data-compact-slip="clean-ledger"] [data-slip-summary] {
+    &[data-compact-slip="clean-ledger"] [data-slip-summary]:not([data-mobile-slip-header]) {
       grid-template-columns: minmax(0, 1fr);
       grid-template-areas: "identity" "count" "odds" "average";
       row-gap: 4px;

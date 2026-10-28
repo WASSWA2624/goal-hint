@@ -55,6 +55,33 @@ class Document(HTMLParser):
         self.stack[-1].children.append(text)
 
 
+def verify_mobile_header(header, path, selection_count=None):
+    """The shared mobile header retains each fact and the mean's full meaning."""
+    assert "data-mobile-slip-header" in header.attrs and "data-header-summary" in header.attrs, f"{path}: shared mobile slip header"
+    identity = header.nodes("h3", "data-header-identity")
+    assert len(identity) == 1 and re.search(r"\bSlip \d+\b", identity[0].text), f"{path}: slip number remains the heading"
+    metrics = header.nodes(attr="data-header-field")
+    fields = {node.attrs["data-header-field"]: node for node in metrics}
+    assert len(metrics) == 3 and set(fields) == {"odds", "probability", "count"}, f"{path}: distinct odds, probability and match count"
+    assert all(len(field.nodes("strong")) == 1 for field in metrics), f"{path}: one original value per header metric"
+    assert [node.attrs["data-header-field"] for node in metrics] == ["odds", "probability", "count"], f"{path}: header facts retain their compact reading order"
+    assert [node.text for node in fields["odds"].nodes(attr="data-header-label")] == ["Odds"], f"{path}: concise odds label"
+    assert [node.text for node in fields["probability"].nodes(attr="data-label-full")] == ["Probability"], f"{path}: probability replaces the average label"
+    assert [node.text for node in fields["probability"].nodes(attr="data-label-compact")] == ["Prob."], f"{path}: narrow headers retain a clear probability abbreviation"
+    assert [node.text for node in fields["count"].nodes(attr="data-header-label")] == ["Matches"], f"{path}: match count uses the requested Matches label"
+    if selection_count is not None:
+        assert fields["count"].nodes("strong")[0].text == str(selection_count), f"{path}: original match count remains visible"
+    statuses = header.nodes(attr="data-header-status")
+    status_labels = {"pending": "Pending", "won": "Won", "lost": "Lost", "void": "Void"}
+    assert len(statuses) == 1 and statuses[0].text == status_labels.get(header.attrs.get("data-header-outcome")), f"{path}: full status word agrees with the original outcome"
+    assert len(statuses[0].nodes(attr="data-status-full")) == 1, f"{path}: statuses keep their full word at every width"
+    descriptions = [node for node in header.nodes() if node.attrs.get("id") == header.attrs.get("aria-describedby")]
+    assert len(descriptions) == 1 and "hidden" in descriptions[0].attrs, f"{path}: header retains its accessible probability description"
+    assert "Average match probability" in descriptions[0].text and "not the chance that every selection wins" in descriptions[0].text, f"{path}: probability remains explicitly the mean rather than joint winning probability"
+    assert "Win probability" not in header.text and "Combined" not in header.text, f"{path}: header never presents a whole-slip win estimate"
+    return fields
+
+
 def verify_clean_ledger_selection(card, path):
     """The selected three-row identity and facts order must survive every slip context."""
     meta = card.nodes(attr="data-ledger-meta")
@@ -190,12 +217,9 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             assert slip.attrs.get("data-compact-slip") == "clean-ledger", f"{path}: chosen Clean ledger design serves generated slips"
             headers = slip.nodes("header", "data-slip-summary")
             assert len(headers) == 1 and len(headers[0].nodes("h3")) == 1, f"{path}: static compact slip title header"
+            verify_mobile_header(headers[0], path, selections_per_slip)
             summary = headers[0].text
             assert "%" in summary and re.search(r"\d+\.\d{2}", summary), f"{path}: title odds and average probability"
-            count_labels = headers[0].nodes(attr="data-summary-count")[0].nodes("span")
-            assert any(re.fullmatch(rf"{selections_per_slip}\s+selections?", label.text) for label in count_labels), f"{path}: selection count in title summary"
-            assert len(headers[0].nodes(attr="data-summary-average")) == 1 and "Average match probability" in summary, f"{path}: summary identifies the mean"
-            assert "Win probability" not in summary and "Combined" not in summary, f"{path}: summary replaces whole-slip winning probability"
             assert len(slip.nodes("a", "data-fixture-id")) == selections_per_slip, f"{path}: one compact analysis link per original selection"
             assert not slip.nodes("table"), f"{path}: no duplicate selection table"
         for row in rows:
@@ -313,10 +337,10 @@ def verify_best_slips(origin, directory):
             assert not any(toggle.nodes(tag) for tag in ["a", "button", "input"]), "Header toggles have no competing interactive descendants"
             assert not any(toggle.nodes(tag) for tag in ["dl", "div", "fieldset"]), "Native summaries contain valid phrasing and heading content"
             assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
-            assert "Total odds" in toggle.text and "Average match probability" in toggle.text, "Collapsed headers retain odds and mean probability context"
-            assert "Win probability" not in toggle.text and "Combined" not in toggle.text, "Winning probability is replaced by the average"
-            assert toggle.nodes(attr="data-summary-odds")[0].nodes("strong")[0].text == "3.06", "Every viewer sees the original whole-slip odds"
-            average = Decimal(toggle.nodes(attr="data-summary-average")[0].nodes("strong")[0].text.rstrip("%"))
+            fields = verify_mobile_header(toggle, f"Best Slips {scenario}, slip {index + 1}", 2)
+            assert "Total odds" in fields["odds"].text, "Collapsed headers retain the full accessible odds label"
+            assert fields["odds"].nodes("strong")[0].text == "3.06", "Every viewer sees the original whole-slip odds"
+            average = Decimal(fields["probability"].nodes("strong")[0].text.rstrip("%"))
             assert average == Decimal("80") + Decimal(index) / 10, "Every viewer sees the original mean, distinct from the joint win estimate"
             averages.append(average)
             contents = disclosure.nodes(attr="data-slip-content")
@@ -364,6 +388,9 @@ def verify(origin, directory):
         assert not card.nodes(attr="data-outcome") or all(node.attrs["data-outcome"] == "unavailable" for node in card.nodes(attr="data-outcome")), f"{name}: saved settlement is hidden"
     print("PASS saved snapshot cards: original alternative, price/probability, regulation score/outcome, gated/redacted/offline display boundaries.", flush=True)
     compact = Document(snapshots.text).root.nodes(attr="data-compact-snapshot")[0]
+    compact_headers = compact.nodes(attr="data-mobile-slip-header")
+    assert len(compact_headers) == 1, "Compact saved slips share the selected mobile header"
+    verify_mobile_header(compact_headers[0], "Compact saved slip", 1)
     compact_row = compact.nodes("a", "data-fixture-id")[0]
     verify_clean_ledger_selection(compact_row, "Compact saved selection")
     assert compact_row.attrs["data-fixture-id"] == "snapshot-compact-authorized", "Compact saved rows retain original fixture identity"

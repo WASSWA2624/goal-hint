@@ -13,6 +13,7 @@ const Review = styled.main`
   button, select { font: inherit; border-radius: 0; }
   button, select, a { outline-offset: 3px; }
   button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; }
+  @media (max-width: 22rem) { padding-inline: 6px; }
 `;
 const Intro = styled.header`
   display: grid; gap: 8px; max-inline-size: 100rem; margin-inline: auto;
@@ -65,6 +66,7 @@ const Samples = styled.div`
   display: grid; gap: 10px; padding: 6px;
   > div { min-inline-size: 0; display: grid; gap: 5px; }
   p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  @media (max-width: 22rem) { padding-inline: 1px; }
 `;
 const Footer = styled.p`
   max-inline-size: 100rem; margin: 28px auto 0; padding-block-start: 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
@@ -89,7 +91,7 @@ export function MobileSlipHeaderGallery({ locale }: { locale: string }) {
       <Intro>
         <p data-eyebrow>Goal Hint · Mobile header review</p>
         <h1>Ten tighter Vertical rules headers.</h1>
-        <p>Compare Slip, Odds, Probability, Matches and Status on one row in 28–34px headers. Fixed column widths keep the separators aligned, and every status uses the same width. Expanded examples use the unchanged Clean ledger match rows. Tap a slip header to open or close it.</p>
+        <p>09 Minimal rules is now the mobile header, with a little more horizontal padding around its text. Compare Slip, Odds, Probability, Matches and Status on one row in 28–34px headers. Fixed columns keep the separators aligned, and every status uses the same width. Expanded examples use the unchanged Clean ledger match rows. Tap a slip header to open or close it.</p>
         <Toolbar aria-label="Mobile header preview controls">
           <label><span>Design</span><select value={focused} onChange={(event) => setFocused(event.target.value as MobileSlipHeaderVariant | "all")}>
             <option value="all">Compare all 10</option>
@@ -130,7 +132,7 @@ export function MobileSlipHeaderGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative fixtures, generic crests and predictions for layout review. Choose from these ten Vertical rules samples before the revised header is applied. Probability remains the mean of the individual match probabilities; its calculation is unchanged. <a href={`/${locale}/slips/designs`}>View the approved match layout</a> · <a href={`/${locale}/slips/designs/desktop`}>Desktop samples</a>.</Footer>
+      <Footer>Illustrative fixtures, generic crests and predictions for layout review. 09 Minimal rules is applied to mobile slips. Probability remains the mean of the individual match probabilities; its calculation is unchanged. <a href={`/${locale}/slips/designs`}>View the approved match layout</a> · <a href={`/${locale}/slips/designs/desktop`}>Desktop samples</a>.</Footer>
     </Review>
   </ThemeProvider>;
 }

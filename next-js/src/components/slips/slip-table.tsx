@@ -25,5 +25,5 @@ export function SlipTable({ slip, index, locale, results, matchStates, collapsib
   if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} {...(results ? { results } : {})}
     {...(matchStates ? { matchStates } : {})} />;
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" collapsible={collapsible}
-    {...(results ? { results } : {})} /></PhoneSlipFallback>;
+    {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})} /></PhoneSlipFallback>;
 }

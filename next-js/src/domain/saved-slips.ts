@@ -7,6 +7,8 @@ import { slipBuilderRules, type BuiltSlip, type SlipCriteria, type SlipForecastR
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 import type { SlipMatchProgress } from "./slip-match-state.ts";
+import { slipOutcome } from "./slip-outcome.ts";
+export { slipOutcome } from "./slip-outcome.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 
 const record = storedMatchFeedRecordSchema.shape;
@@ -66,12 +68,6 @@ export function savedSlipView(id: string, savedAt: string, snapshot: unknown, re
 /** Aggregate outcomes can establish a loss before every leg completes, without releasing active selections. */
 export function savedSlipOutcome(slip: BuiltSlip, results: readonly SavedSlipResult[]): SavedSlipView["outcome"] {
   return slipOutcome(savedSlipLegResults(slip, results));
-}
-
-function slipOutcome(legs: readonly (SavedSlipView["results"][number] | null)[]): SavedSlipView["outcome"] {
-  return legs.some((leg) => leg?.outcome === "incorrect") ? "lost"
-    : legs.some((leg) => leg === null || leg.outcome === "pending") ? "pending"
-      : legs.some((leg) => leg?.outcome === "void") ? "void" : "won";
 }
 
 function savedSlipLegResults(slip: BuiltSlip, results: readonly SavedSlipResult[]) {

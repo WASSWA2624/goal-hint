@@ -1,8 +1,9 @@
 # Revised Vertical rules mobile slip headers
 
 Open `/en/slips/designs/headers`. These ten revised candidates build on the
-selected Vertical rules direction. The final production header awaits a choice;
-the approved Clean ledger match rows stay unchanged.
+selected Vertical rules direction. **09 Minimal rules is the production mobile
+header**, with slightly more horizontal padding around all header text. The
+approved Clean ledger match rows stay unchanged.
 
 | Option | Header | Height |
 | --- | --- | --- |
@@ -20,9 +21,10 @@ the approved Clean ledger match rows stay unchanged.
 Every candidate has one horizontal row: slip number, total odds, Probability,
 Matches and status. All ten share the same column grid and one-pixel vertical
 rules. At the default text size, slip/odds/matches/status/chevron tracks occupy
-40/60/52/48/8px; Probability receives the remaining width. The entire status cell
-stays 48px wide for Pending, Won, Lost and Void. Separators do not move when
-numbers or statuses change. Vertical padding is zero.
+44/64/58/50/8px; Probability receives the remaining width, with a 74px minimum.
+The entire status cell stays 50px wide for Pending, Won, Lost and Void. Separators do not move when
+numbers or statuses change. Vertical padding is zero. Metric/status cells use
+3px horizontal padding and the slip identity uses 2px.
 
 Narrow frames use Prob. for Probability. Matches and full status words remain
 visible. Larger odds keep their complete figures with the label available in
@@ -35,6 +37,8 @@ appearance. Scenarios show coherent Pending/Won/Lost/Void records, eight matches
 Slip 100 with larger odds and long team names. Extra status-only headers compare
 the other outcomes without attaching incorrect results to expanded match rows.
 All expanded examples call the unmodified production `CleanLedgerSelection`.
+The review and production mobile slips share `MobileSlipHeader`; only the
+comparison's variant styles differ. Desktop headers retain their selected layout.
 
 To serve a stable local review independently of application rebuilds:
 
