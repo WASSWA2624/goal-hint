@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
-import { Inline, Stack } from "@/components/ui/layout";
-import { matchesHref, slipsHref } from "@/domain/navigation";
+import { Stack } from "@/components/ui/layout";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { matchesHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
 import { bestSlipsRules, type BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaPanel, Note, SlipCard, SlipHeading, SlipStack, SlipSummary, SlipTitle } from "./slip-styles";
+import { CriteriaPanel, Note, SlipCard, SlipStack, SlipSummary, SlipTitle } from "./slip-styles";
 import { SlipTable } from "./slip-table";
 
 export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
@@ -24,10 +25,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
   const complete = result.slips.length >= bestSlipsRules.count;
   return <SlipStack>
     <AppBrandBar locale={locale} />
-    <Inline><SlipHeading>{m.text("bestSlips.title")}</SlipHeading><Note>{m.reportingDateMedium(result.day)} · EAT</Note></Inline>
-    <Note>{m.text("bestSlips.description")}</Note>
-    <Inline><TextLink href={matchesHref(locale)} prefetch={false}>{m.text("navigation.matches")}</TextLink>
-      <TextLink href={slipsHref(locale)} prefetch={false}>{m.text("navigation.slips")}</TextLink></Inline>
+    <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
     {result.statistics && <PerformanceSummary counts={result.statistics} locale={locale} kind="slips" period={`${m.reportingDateMedium(result.day)} · EAT`} />}
     {result.slips.length === 0 ? <CriteriaPanel role="status"><Stack $gap="sm">
       <h2>{m.text("bestSlips.emptyTitle")}</h2>
