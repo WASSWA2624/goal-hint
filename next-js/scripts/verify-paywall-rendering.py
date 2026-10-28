@@ -10,8 +10,9 @@ from lib.runtime import main_guard
 
 SENTINELS = r"SENTINEL-|(?<![\d.])7\.73(?!\d)"
 VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "test", "off"]
-PUBLIC_SLIP_FIELDS = {"rank", "matchCount", "totalOdds", "estimatedProbability"}
-PRIVATE_SLIP_VALUES = SENTINELS + r"|0\.6173|61\.7%|home-win|averageProbability|10000000-0000-4000-8000-000000000001"
+PUBLIC_SLIP_FIELDS = {"rank", "matchCount", "totalOdds", "estimatedProbability", "averageProbability"}
+# The public mean differs from each private leg, retaining strict per-match leak detection.
+PRIVATE_SLIP_VALUES = SENTINELS + r"|0\.6173|61\.7%|0\.7027|70\.3%|home-win|under-2\.5|10000000-0000-4000-8000-00000000000[12]"
 
 
 def verify_private_routes(origin):
@@ -144,22 +145,25 @@ def main():
                 if not full:
                     assert not re.search(PRIVATE_SLIP_VALUES, response.text), (viewer, path, "Best Slips private selections or per-match values leaked")
                 if extra:
-                    assert all(value in response.text for value in ["totalOdds", "5.00", "estimatedProbability", "0.3456"]), (viewer, "public aggregate facts survive flight transport")
+                    assert all(value in response.text for value in ["totalOdds", "10.98", "estimatedProbability", "0.3456", "averageProbability", "0.66"]), (viewer, "public aggregate facts survive flight transport")
                 if path == "/api/best-slips":
                     view = json.loads(response.text)["slips"][0]
                     assert set(view) == PUBLIC_SLIP_FIELDS | ({"slip"} if full else set())
                     assert view["estimatedProbability"] == 0.3456
-                    assert view["totalOdds"] == "5.00"
+                    assert view["averageProbability"] == 0.66
+                    assert view["matchCount"] == 2
+                    assert view["totalOdds"] == "10.98"
                 elif not extra:
                     assert "Best Slips" in response.text and 'href="/en/matches"' in response.text
                     assert ('data-slip-selection=' in response.text) == full
                     markup = document(response.text).root
                     toggles = markup.nodes("summary", "data-slip-toggle")
-                    assert len(toggles) == 1 and "5.00" in toggles[0].text and "34.6%" in toggles[0].text, (viewer, "original aggregate header")
+                    assert len(toggles) == 1 and "10.98" in toggles[0].text and "66.0%" in toggles[0].text, (viewer, "original mean aggregate header")
+                    assert "Win probability" not in toggles[0].text and "34.6%" not in toggles[0].text, (viewer, "compact summaries omit the joint estimate")
                     assert not any(toggles[0].nodes(tag) for tag in ["a", "button"]), (viewer, "whole header remains a toggle")
+                    assert 'Average match probability' in toggles[0].text
                     if full:
-                        assert 'Win probability' in response.text and '34.6%' in response.text
-                        assert 'Average match probability' in response.text and '61.7%' in response.text
+                        assert '61.7%' in response.text and '70.3%' in response.text, (viewer, "entitled original match probabilities")
                     else:
                         signed_in = viewer not in {"anonymous", "off", "evicted"}
                         expected_cta = "Subscribe" if signed_in else "Log in to access"
@@ -188,9 +192,10 @@ def main():
                     body = markup.nodes(attr="data-slip-content")[0]
                     assert body.text.strip() == expected_cta, (viewer, "access action follows the second access check")
                     toggle = markup.nodes("summary", "data-slip-toggle")[0]
-                    assert "5.00" in toggle.text and "34.6%" in toggle.text, "Fresh access checks retain the same public aggregate facts"
+                    assert "10.98" in toggle.text and "66.0%" in toggle.text, "Fresh access checks retain the same public mean aggregate facts"
+                    assert "34.6%" not in toggle.text, "Fresh access uses the selected compact summary"
                 else:
-                    assert all(value in response.text for value in ["totalOdds", "5.00", "estimatedProbability", "0.3456"]), "Fresh access retains public flight aggregates"
+                    assert all(value in response.text for value in ["totalOdds", "10.98", "estimatedProbability", "0.3456", "averageProbability", "0.66"]), "Fresh access retains public flight aggregates"
                 checks += 1
             print(f"PASS fresh access during read: {viewer} uses {expected_cta} without private slip data.", flush=True)
         slip_checks["verify_best_slips"](server.origin, directory)

@@ -116,12 +116,18 @@ test('joint marginal bounds allow decimal rounding noise while rejecting materia
   assert.equal(jointSlipProbability({ ...model, estimate: () => 0.8 + 1e-10 }, boundary), null);
 });
 
-test('public projection reveals original total odds and joint probability while withholding match selections and identifiers', () => {
+test('public projection shares the original arithmetic mean separately from ranking probability without match data', () => {
   const slips = generate().slips, publicView = bestSlipViews(slips, false);
-  assert.deepEqual(Object.keys(publicView[0]), ['rank', 'matchCount', 'totalOdds', 'estimatedProbability']);
+  assert.deepEqual(Object.keys(publicView[0]), ['rank', 'matchCount', 'totalOdds', 'estimatedProbability', 'averageProbability']);
   assert.equal(publicView[0].totalOdds, slips[0].totalOdds);
   assert.equal(publicView[0].estimatedProbability, slips[0].estimatedProbability);
-  assert.doesNotMatch(JSON.stringify(publicView), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|averageProbability|oddsBasis/);
+  for (const [index, summary] of publicView.entries()) {
+    const slip = slips[index], mean = slip.selections.reduce((sum, selection) => sum + selection.probability, 0) / slip.selections.length;
+    assert.equal(summary.averageProbability, slip.averageProbability);
+    assert.ok(Math.abs(summary.averageProbability - mean) <= Number.EPSILON * slip.selections.length);
+    assert.notEqual(summary.averageProbability, summary.estimatedProbability);
+  }
+  assert.doesNotMatch(JSON.stringify(publicView), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|oddsBasis/);
   assert.equal(bestSlipViews(slips, true)[0].slip, slips[0]);
   const gated = gateBestSlips({ day: today, state: 'generated', slips: bestSlipViews(slips, true), searchLimited: false, partialCoverage: false }, free);
   assert.deepEqual(gated.slips, publicView);
@@ -184,10 +190,12 @@ test('API rechecks access after generation, strips expired selections, and disab
   assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
   assert.equal(response.headers.get('set-cookie'), null);
   const payload = await response.json();
-  assert.deepEqual(Object.keys(payload.slips[0]), ['rank', 'matchCount', 'totalOdds', 'estimatedProbability']);
+  assert.deepEqual(Object.keys(payload.slips[0]), ['rank', 'matchCount', 'totalOdds', 'estimatedProbability', 'averageProbability']);
   assert.equal(payload.slips[0].totalOdds, '4.84');
   assert.equal(payload.slips[0].estimatedProbability, generate().slips[0].estimatedProbability);
-  assert.doesNotMatch(JSON.stringify(payload), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|averageProbability|oddsBasis/);
+  assert.equal(payload.slips[0].averageProbability, generate().slips[0].averageProbability);
+  assert.notEqual(payload.slips[0].averageProbability, payload.slips[0].estimatedProbability);
+  assert.doesNotMatch(JSON.stringify(payload), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|oddsBasis/);
 });
 
 test('anonymous API visitors receive the same ranked original aggregates without match data', async () => {

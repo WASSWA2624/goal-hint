@@ -100,7 +100,7 @@ test('first qualified publication preserves quotes, model evidence and original 
   const day = await f.store.day(today);
   assert.equal(day.slips[0].slip.totalOdds, '5.00');
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
-  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7 }]);
+  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
   assert.deepEqual(gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' }).slips, publicViews);
   assert.doesNotMatch(JSON.stringify(publicViews), /original-1|home-win|selections|cycleId|revisionId|fixtureId/);
 });

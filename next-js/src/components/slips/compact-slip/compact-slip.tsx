@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import Link from "@/components/navigation/navigation-link";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
@@ -36,10 +36,11 @@ function SelectionRow({ selection, position, locale, result, analysisLinks }: {
   const kickoff = fixture.kickoffAt!;
   const rowProps = { "aria-labelledby": `${id}-${analysisLinks ? "analysis" : "teams"}`,
     "aria-describedby": `${id}-meta ${id}-kickoff ${id}-pick ${id}-odds ${id}-probability${result ? ` ${id}-result` : ""}`,
-    "data-fixture-id": selection.fixtureId, "data-market": selection.family, "data-outcome": prediction.status };
+    "data-fixture-id": selection.fixtureId, "data-market": selection.family, "data-outcome": prediction.status,
+    "data-status": fixture.status, "data-match-state": "snapshot" };
   const content = <>
       <span data-leg-number aria-hidden="true">{messages.number(position)}</span>
-      <h4 data-teams id={`${id}-teams`}><span data-home>{home}</span><span data-versus>vs</span><span data-away>{away}</span></h4>
+      <h4 data-teams id={`${id}-teams`}><span data-home data-team-side="home">{home}</span><span data-versus>vs</span><span data-away data-team-side="away">{away}</span></h4>
       <span data-meta id={`${id}-meta`}>
         <span data-competition>{selection.competition.name || messages.text("match.competitionUnknown")}</span>
         {selection.competition.country && <span data-country>{selection.competition.country}</span>}
@@ -48,7 +49,7 @@ function SelectionRow({ selection, position, locale, result, analysisLinks }: {
         <span data-date>{messages.reportingDay(kickoff)}</span><span data-clock>{messages.reportingTime(kickoff)} EAT</span>
       </time>
       <span data-pick id={`${id}-pick`} title={`${family}: ${description}${selection.forecast ? ` · ${messages.text("match.published")}: ${messages.reportingInstant(utcInstantFromEpochMilliseconds(selection.forecast.publishedAt))}` : ""}`}>
-        <span data-market-label>{family}</span><strong data-pick-label aria-hidden="true">{predictionLabel(messages, selection.selection)}</strong>
+        <span data-market-label>{family}</span><strong data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionLabel(messages, selection.selection)}</strong>
         <VisuallyHidden>{description}</VisuallyHidden>
       </span>
       <span data-leg-odds id={`${id}-odds`}><span data-number-label>{messages.text("slips.odds")}</span><strong>{selection.odds}</strong></span>
@@ -59,35 +60,52 @@ function SelectionRow({ selection, position, locale, result, analysisLinks }: {
       </span>}
       {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
   </>;
-  return <li data-compact-selection={selection.fixtureId}>
-    {analysisLinks ? <MatchRow as={Link} href={matchHref(selection.fixtureId, canonicalMatchSlug(home, away), locale)} prefetch={false} {...rowProps}>{content}</MatchRow>
+  return <li data-compact-selection={selection.fixtureId} data-slip-selection={selection.fixtureId}>
+    {analysisLinks ? <MatchRow as={Link} href={matchHref(selection.fixtureId, canonicalMatchSlug(selection.homeTeam.name, selection.awayTeam.name), locale)} prefetch={false} {...rowProps}>{content}</MatchRow>
       : <MatchRow {...rowProps}>{content}</MatchRow>}
   </li>;
 }
 
-/** The same snapshot-based display can serve Best slips and generated slips without changing either data contract. */
-export function CompactSlip({ slip, index, locale, variant, initiallyOpen = false, results, analysisLinks = true }: {
-  slip: BuiltSlip; index: number; locale: string; variant: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"]; analysisLinks?: boolean;
+/** Aggregate-only previews and complete slips share exactly the same compact header and disclosure. */
+export function CompactSlipDisclosure({ totalOdds, averageProbability, selectionCount, index, locale, variant = "inline-ledger",
+  initiallyOpen = false, collapsible = true, slipId, headingId, children }: {
+  totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
+  variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; slipId?: string; headingId?: string; children: ReactNode;
 }) {
   const messages = createMessages(locale), id = useId();
-  return <CompactCard data-compact-slip={variant} data-slip-id={slip.id}>
-    <details open={initiallyOpen}>
-      <summary aria-describedby={`${id}-average-note`}>
-        <h3 data-summary-identity id={`${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
+  const summary = <>
+        <h3 data-summary-identity id={headingId ?? `${id}-heading`}><span>{messages.text("slips.slipTitle", { number: messages.number(index + 1) })}</span>
           {index === 0 && <span data-rank>{messages.text("slips.topRanked")}</span>}</h3>
-        <span data-summary-odds data-summary-fact><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{slip.totalOdds}</strong></span>
+        <span data-summary-odds data-summary-fact><span data-fact-label>{messages.text("slips.totalOdds")}</span><strong>{totalOdds}</strong></span>
         <span data-summary-average data-summary-fact title={messages.text("slips.averageHint")}>
           <span data-fact-label aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}: </VisuallyHidden>
-          <strong>{probabilityLabel(slip.averageProbability, messages)}</strong></span>
-        <span data-summary-count><span aria-hidden="true">{messages.plural("slips.selections", slip.selections.length)}</span>
-          <VisuallyHidden>{messages.text("slips.selectionCount")}: {messages.number(slip.selections.length)}</VisuallyHidden></span>
-        <span data-toggle-chevron aria-hidden="true" />
-        <VisuallyHidden id={`${id}-average-note`}>{messages.text("slips.averageHint")}</VisuallyHidden>
-      </summary>
-      <ul aria-labelledby={`${id}-heading`}>
+          <strong>{probabilityLabel(averageProbability, messages)}</strong></span>
+        <span data-summary-count><span aria-hidden="true">{messages.plural("slips.selections", selectionCount)}</span>
+          <VisuallyHidden>{messages.text("slips.selectionCount")}: {messages.number(selectionCount)}</VisuallyHidden></span>
+        {collapsible && <span data-toggle-chevron aria-hidden="true" />}
+  </>;
+  return <CompactCard data-compact-slip={variant} data-slip-id={slipId}>
+    <VisuallyHidden id={`${id}-average-note`}>{messages.text("slips.averageHint")}</VisuallyHidden>
+    {collapsible ? <details data-slip-disclosure open={initiallyOpen}>
+      <summary data-slip-toggle data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</summary>
+      <div data-slip-content>{children}</div>
+    </details> : <>
+      <header data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</header>
+      <div data-slip-content>{children}</div>
+    </>}
+  </CompactCard>;
+}
+
+/** Original selection snapshots are reused by Best slips, generated slips and completed history. */
+export function CompactSlip({ slip, index, locale, variant = "inline-ledger", initiallyOpen = false, results, analysisLinks = true, collapsible = true }: {
+  slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"]; analysisLinks?: boolean; collapsible?: boolean;
+}) {
+  const headingId = useId();
+  return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length}
+    index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} slipId={slip.id} headingId={headingId}>
+      <ul aria-labelledby={headingId}>
         {slip.selections.map((selection, selectionIndex) => <SelectionRow key={selection.fixtureId} selection={selection}
           position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} result={results?.find((item) => item.fixtureId === selection.fixtureId)} />)}
       </ul>
-    </details>
-  </CompactCard>;
+  </CompactSlipDisclosure>;
 }

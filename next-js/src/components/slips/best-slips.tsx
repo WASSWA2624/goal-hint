@@ -13,8 +13,7 @@ import { subscriberHref } from "@/domain/subscriber-navigation";
 import type { BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipStack } from "./slip-styles";
-import { SlipDisclosure } from "./slip-disclosure";
-import { SlipSummaryFacts } from "./slip-summary-facts";
+import { CompactSlipDisclosure } from "./compact-slip/compact-slip";
 import { SlipTable } from "./slip-table";
 
 export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
@@ -48,17 +47,14 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
     </Stack></CriteriaPanel> : <>
       {(result.searchLimited || result.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
       {result.slips.map((view) => view.slip ? <SlipTable key={view.slip.id} index={view.rank - 1} locale={locale}
-        slip={view.slip} estimatedProbability={view.slip.estimatedProbability} collapsible /> : <SlipDisclosure key={view.rank} locale={locale} summary={<>
-        <h3>{m.text("slips.slipTitle", { number: m.number(view.rank) })}</h3>
-        {view.rank === 1 && <span data-slip-rank>{m.text("slips.topRanked")}</span>}
-        <SlipSummaryFacts locale={locale} totalOdds={view.totalOdds} probability={view.estimatedProbability} selectionCount={view.matchCount} />
-        </>}>
+        slip={view.slip} collapsible /> : <CompactSlipDisclosure key={view.rank} locale={locale} index={view.rank - 1}
+          totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}>
         <CriteriaPanel>
           <ButtonLink href={subscriberHref(signedIn, "/en", "login")} prefetch={false}>
             {m.text(signedIn ? "subscribe.title" : "bestSlips.loginToAccess")}
           </ButtonLink>
         </CriteriaPanel>
-      </SlipDisclosure>)}
+      </CompactSlipDisclosure>)}
     </>}
     <Note>{m.text("bestSlips.disclaimer")}</Note>
   </SlipStack>;

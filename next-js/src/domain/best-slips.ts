@@ -12,7 +12,9 @@ export function compareBestSlips(left: BestSlip, right: BestSlip): number {
   return right.estimatedProbability - left.estimatedProbability || left.selections.length - right.selections.length
     || Number(right.totalOdds) - Number(left.totalOdds) || left.id.localeCompare(right.id);
 }
-export type BestSlipSummary = Readonly<{ rank: number; totalOdds: string; estimatedProbability: number; matchCount: number }>;
+export type BestSlipSummary = Readonly<{
+  rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;
+}>;
 export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
@@ -34,8 +36,9 @@ export function bestSlipBuilder(model: JointSlipModel) {
   }) satisfies typeof buildSlips;
 }
 
-/** Public aggregate allowlist: internal slip IDs and match selections require entitlement. */
+/** Public aggregate allowlist: the displayed arithmetic mean is distinct from the joint estimate used for ranking. */
 export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean): readonly BestSlipView[] {
   return [...slips].sort(compareBestSlips).map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
-    totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, ...(entitled ? { slip } : {}) }));
+    totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, averageProbability: slip.averageProbability,
+    ...(entitled ? { slip } : {}) }));
 }

@@ -36,9 +36,9 @@ prediction formatting and theme tokens across ten scoped layouts. It accepts a
 saved results. Actual match-analysis links are enabled by default; the gallery
 passes `analysisLinks={false}` for synthetic rows.
 
-The existing home and slip-builder displays remain as they are pending selection
-of a design. Integration should happen through their shared `SlipTable`. Public
-Best slips currently expose estimated winning probability rather than average
-match probability; integration must deliberately update that summary projection
-and its allowlist tests while retaining subscriber-only match selections and
-the existing access actions.
+Design 01, Inline ledger, is now used by the home and slip-builder displays
+through their shared `SlipTable`, including saved and published history. Locked
+Best slips reuse its aggregate header and native disclosure. The public summary
+explicitly allows average match probability; individual matches remain subject
+to entitlement. Whole-slip estimates remain available to ranking and existing
+API consumers but are omitted from the displayed slip summary.

@@ -161,30 +161,36 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
     if expected_slips:
         assert len(rows) == expected_slips * selections_per_slip, f"{path}: one row per selection"
         for slip in slips:
-            headers = [header for header in slip.nodes("header") if header.nodes("h3")]
-            assert len(headers) == 1 and len(headers[0].nodes("h3")) == 1, f"{path}: slip title header"
-            assert len(headers[0].nodes(attr="data-slip-summary")) == 1, f"{path}: summary inside slip title header"
-            summary = headers[0].nodes(attr="data-slip-summary")[0].text
+            assert slip.attrs.get("data-compact-slip") == "inline-ledger", f"{path}: chosen compact design serves generated slips"
+            headers = slip.nodes("header", "data-slip-summary")
+            assert len(headers) == 1 and len(headers[0].nodes("h3")) == 1, f"{path}: static compact slip title header"
+            summary = headers[0].text
             assert "%" in summary and re.search(r"\d+\.\d{2}", summary), f"{path}: title odds and average probability"
-            assert re.search(rf"{selections_per_slip}\s+selections?\b", summary), f"{path}: selection count in title summary"
-            assert len(slip.nodes(attr="data-match-board")) == 1, f"{path}: shared responsive match board"
-            assert len(slip.nodes("article", "data-fixture-id")) == selections_per_slip, f"{path}: shared match card for every original selection"
-            assert not slip.nodes("table"), f"{path}: no duplicate slip-only match table"
+            count_labels = headers[0].nodes(attr="data-summary-count")[0].nodes("span")
+            assert any(re.fullmatch(rf"{selections_per_slip}\s+selections?", label.text) for label in count_labels), f"{path}: selection count in title summary"
+            assert len(headers[0].nodes(attr="data-summary-average")) == 1 and "Average match probability" in summary, f"{path}: summary identifies the mean"
+            assert "Win probability" not in summary and "Combined" not in summary, f"{path}: summary replaces whole-slip winning probability"
+            assert len(slip.nodes("a", "data-fixture-id")) == selections_per_slip, f"{path}: one compact analysis link per original selection"
+            assert not slip.nodes("table"), f"{path}: no duplicate selection table"
         for row in rows:
             assert "Synthetic" in row.text and "%" in row.text, f"{path}: real synthetic selection details"
             assert re.search(r"\d+\.\d{2}", row.text), f"{path}: selection price"
-            cards = row.nodes("article", "data-fixture-id")
-            assert len(cards) == 1 and cards[0].attrs["data-fixture-id"] == row.attrs["data-slip-selection"], f"{path}: shared card retains fixture identity"
+            cards = row.nodes("a", "data-fixture-id")
+            assert len(cards) == 1 and cards[0].attrs["data-fixture-id"] == row.attrs["data-slip-selection"], f"{path}: compact analysis row retains fixture identity"
             card = cards[0]
-            labels = card.nodes(attr="data-pick-selection")
+            assert card.attrs["href"].startswith("/en/matches/"), f"{path}: original fixture remains linked to analysis"
+            labels = card.nodes(attr="data-pick-label")
             assert len(labels) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one compact prediction outcome"
             assert labels[0].attrs.get("title") and labels[0].attrs["title"] != labels[0].text, f"{path}: compact outcomes retain their full meaning"
-            prices = card.nodes(attr="data-card-odds")
-            assert len(prices) == 1 and re.fullmatch(r"\d+\.\d{2}", prices[0].text), f"{path}: original selected price uses the shared odds column"
+            prices = card.nodes(attr="data-leg-odds")
+            assert len(prices) == 1 and re.fullmatch(r"\d+\.\d{2}", prices[0].nodes("strong")[0].text), f"{path}: original selected price remains visible"
             assert len(card.nodes("h4")) == 1, f"{path}: match heading follows its slip heading"
-            assert {node.attrs["data-team-side"] for node in row.nodes(attr="data-team-side")} == {"home", "away"}, f"{path}: both team names retain separate mobile lines"
-            assert card.attrs["data-status"] == "unknown", f"{path}: no invented live or final fixture status"
-            assert [node.attrs["data-result-badge"] for node in card.nodes(attr="data-result-badge")] == ["pending"], f"{path}: an original selection without a saved result stays pending"
+            assert len(card.nodes(attr="data-home")) == len(card.nodes(attr="data-away")) == 1, f"{path}: both full team names remain available"
+            assert card.nodes(attr="data-competition") and card.nodes(attr="data-country") and card.nodes("time", "data-kickoff"), f"{path}: competition, country and kickoff remain visible"
+            assert "EAT" in card.nodes("time", "data-kickoff")[0].text, f"{path}: kickoff retains the reporting timezone"
+            assert card.nodes(attr="data-market-label"), f"{path}: compact outcome retains its market context"
+            assert card.attrs.get("data-status") == "unknown" and card.attrs.get("data-match-state") == "snapshot", f"{path}: original snapshots never invent a live or final fixture status"
+            assert card.attrs["data-outcome"] == "pending" and not card.nodes(attr="data-saved-score"), f"{path}: an original selection without a saved result invents no outcome or score"
         assert "Average match probability" in document.text, f"{path}: average is identified correctly"
         assert "not the chance that every selection wins" in document.text, f"{path}: mean is distinguished from joint probability"
     else:
@@ -249,8 +255,8 @@ def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_ma
         exact_total = Decimal(1)
         for row in rows:
             fixture_ids.append(row.attrs["data-slip-selection"])
-            price = Decimal(row.nodes(attr="data-card-odds")[0].text)
-            probabilities = [node.text.strip() for node in row.nodes(attr="data-pick-value")
+            price = Decimal(row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text)
+            probabilities = [node.text.strip() for parent in row.nodes(attr="data-leg-probability") for node in parent.nodes("strong")
                 if re.fullmatch(r"\d+(?:\.\d+)?%", node.text.strip())]
             assert len(probabilities) == 1, "Every generated selection exposes its own forecast probability"
             probability = Decimal(probabilities[0].rstrip("%"))
@@ -271,7 +277,7 @@ def verify_best_slips(origin, directory):
         document = Document(response.text).root
         disclosures = document.nodes("details", "data-slip-disclosure")
         assert len(disclosures) == count, f"Best Slips {scenario}: renders all {count} slips"
-        probabilities = []
+        averages = []
         for index, disclosure in enumerate(disclosures):
             assert "open" not in disclosure.attrs, f"Best Slips {scenario}: slip {index + 1} starts collapsed before hydration"
             toggles = disclosure.nodes("summary", "data-slip-toggle")
@@ -280,13 +286,12 @@ def verify_best_slips(origin, directory):
             assert not any(toggle.nodes(tag) for tag in ["a", "button", "input"]), "Header toggles have no competing interactive descendants"
             assert not any(toggle.nodes(tag) for tag in ["dl", "div", "fieldset"]), "Native summaries contain valid phrasing and heading content"
             assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
-            assert "Total odds" in toggle.text and "Win probability" in toggle.text, "Collapsed headers retain odds and probability context"
-            facts = {fact.nodes(attr="data-slip-fact-label")[0].text: fact.nodes(attr="data-slip-fact-value")[0].text
-                     for fact in toggle.nodes(attr="data-slip-fact")}
-            assert facts["Total odds"] == "3.06", "Every viewer sees the original whole-slip odds"
-            probability = Decimal(facts["Win probability"].rstrip("%"))
-            assert probability == Decimal("75") - Decimal(index) / 10, "Every viewer sees the original whole-slip win estimate"
-            probabilities.append(probability)
+            assert "Total odds" in toggle.text and "Average match probability" in toggle.text, "Collapsed headers retain odds and mean probability context"
+            assert "Win probability" not in toggle.text and "Combined" not in toggle.text, "Winning probability is replaced by the average"
+            assert toggle.nodes(attr="data-summary-odds")[0].nodes("strong")[0].text == "3.06", "Every viewer sees the original whole-slip odds"
+            average = Decimal(toggle.nodes(attr="data-summary-average")[0].nodes("strong")[0].text.rstrip("%"))
+            assert average == Decimal("80") + Decimal(index) / 10, "Every viewer sees the original mean, distinct from the joint win estimate"
+            averages.append(average)
             contents = disclosure.nodes(attr="data-slip-content")
             assert len(contents) == 1, "Every toggle owns one expandable content region"
             if locked:
@@ -301,10 +306,10 @@ def verify_best_slips(origin, directory):
                 else:
                     assert destination.path == "/en/account" and parse_qs(destination.query).get("view", ["login"]) == ["login"], "Guests go directly to login"
                 assert "Synthetic" not in document.text and not document.nodes(attr="data-slip-id"), "Public results contain no slip identity or synthetic picks"
-                assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"averageProbability\"", response.text), "Locked HTML and flight data contain no private slip details"
+                assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"homeTeam\"|\"awayTeam\"|\"forecast\"", response.text), "Locked HTML and flight data contain no private slip details"
             else:
                 assert len(contents[0].nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
-        assert probabilities == sorted(probabilities, reverse=True), "Best Slips display highest win probability first"
+        assert averages == sorted(averages), "Displayed means do not reorder the existing joint-probability ranking"
         statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status"]
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
         assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"
@@ -329,6 +334,16 @@ def verify(origin, directory):
         assert "7.73" not in card.text and "23.5%" not in card.text, f"{name}: no saved premium values in rendered text"
         assert not card.nodes(attr="data-outcome") or all(node.attrs["data-outcome"] == "unavailable" for node in card.nodes(attr="data-outcome")), f"{name}: saved settlement is hidden"
     print("PASS saved snapshot cards: original alternative, price/probability, regulation score/outcome, gated/redacted/offline display boundaries.", flush=True)
+    compact = Document(snapshots.text).root.nodes(attr="data-compact-snapshot")[0]
+    compact_row = compact.nodes("a", "data-fixture-id")[0]
+    assert compact_row.attrs["data-fixture-id"] == "snapshot-compact-authorized", "Compact saved rows retain original fixture identity"
+    assert compact_row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73", "Compact saved rows retain the original alternative price"
+    assert compact_row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Compact saved rows retain original probability precision"
+    assert compact_row.nodes(attr="data-pick-label")[0].text == "1", "Compact saved rows retain the original selected alternative"
+    assert compact_row.attrs["data-outcome"] == "incorrect" and "Loss" in compact_row.nodes(attr="data-result")[0].text, "Compact saved rows retain supplied settlement"
+    assert compact_row.attrs.get("data-status") == "unknown" and compact_row.attrs.get("data-match-state") == "snapshot", "Compact saved settlements never invent current fixture state"
+    assert "Score after 90 minutes: 2–1" in compact_row.nodes(attr="data-saved-score")[0].text, "Compact saved regulation scores keep their own explicit meaning"
+    print("PASS compact saved slip: original alternative, price/probability and supplied regulation score/outcome.", flush=True)
     for scenario, (state, count) in SCENARIOS.items():
         document = inspect(origin, f"/cases/{scenario}", directory, scenario, state, count,
             selections_per_slip=1 if scenario == "manual-home-win" else 2)
@@ -336,8 +351,8 @@ def verify(origin, directory):
             assert "search reached its limit" in document.text and "Fixture coverage is incomplete" in document.text, "Source and search limits remain visible"
         if scenario == "joint-generated":
             assert "Highest estimated combined probability first" in document.text, "Qualified custom ranking is described separately"
-            assert all("Win probability" in node.text and "Average match probability" in node.text
-                for node in document.nodes(attr="data-slip-summary")), "Every qualified custom slip exposes the combined estimate beside the mean"
+            assert all("Win probability" not in node.text and "Average match probability" in node.text
+                for node in document.nodes(attr="data-slip-summary")), "Qualified custom slips show the mean while retaining joint ranking context separately"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
     verify_defaults(idle)
     explicit_defaults = [(name, NUMERIC_RANGE_LIMITS.get(name, value)) for name, value in native_inputs(idle) if name != "build"]
@@ -358,7 +373,7 @@ def verify(origin, directory):
     assert "Highest estimated combined probability first" in qualified.text, "Real route and stored service apply the verified synthetic binding"
     for field in ("totalProbMin", "totalProbMax"):
         assert any(node.attrs.get("name") == field for node in qualified.nodes("input")), "Qualified route offers combined estimate bounds"
-    assert all("Win probability" in node.text for node in qualified.nodes(attr="data-slip-summary")), "Real route retains the separate combined estimate"
+    assert all("Win probability" not in node.text and "Average match probability" in node.text for node in qualified.nodes(attr="data-slip-summary")), "Real route uses the compact mean summary"
     verify_custom_numeric_bounds(generated, dict(query))
     initial_groups = criteria_groups(generated, "/en/slips?build=1")
     for group, changes in [
@@ -402,7 +417,7 @@ def verify(origin, directory):
     selected = inspect(origin, "/en/slips?" + urlencode(manual), directory, "route-native-manual", "generated", 1, selections_per_slip=1)
     row = selected.nodes("li", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
-    assert row.nodes(attr="data-card-odds")[0].text == "2.00" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
+    assert row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "2.00" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
     # Signed-in requests traverse the real route and stored service without offering a save action.
     member_overrides = {"slips": "2", "teamsMin": "2", "teamsMax": "2"}
     member_query = [(name, member_overrides.get(name, value)) for name, value in query if name != "reuse"] + [("reuse", "0")]

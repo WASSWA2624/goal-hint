@@ -5,15 +5,15 @@ the criteria and generated slips on every screen size, without Save actions,
 saved-slip history or win/loss performance summaries. Opening or submitting the
 builder does not read saved history or persist generated slips, including for
 signed-in members. Each generated slip retains its odds, probability and match
-count summary.
-On narrow phones its summary uses two columns so the values and selection count
-remain readable without clipping.
+count summary. The selected Inline ledger design keeps the identity/count and
+odds/average on two compact lines, with wrapping at narrow widths.
 
 `/en/slips` uses the Balanced slip builder. Each slip keeps its total odds,
 average forecast probability and selection count in its title. Its selections
-use the same `MatchCard` and `MatchCardList` as Matches, including
-their phone tiles and desktop columns. Best Slips, completed saved slips and
-published performance slips reuse that presentation too. A browser-safe adapter
+use the shared compact slip selection rows, including visible full team names,
+competition/country, kickoff in EAT, market/pick, odds and individual probability.
+Best slips, completed saved slips and published performance slips reuse that
+presentation too. A browser-safe adapter
 preserves each original selection's kickoff, teams, pick, probability and price;
 it never substitutes the current top pick or constructs missing forecast groups.
 Saved leg outcomes and regulation scores are displayed only when supplied.

@@ -37,7 +37,7 @@ export const CompactCard = styled.article`
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0;
   details { min-inline-size: 0; }
-  summary {
+  [data-slip-summary] {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: 44px;
     grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "identity identity count" "odds average average";
     gap: 4px 10px; padding: 8px 27px 8px 9px; cursor: pointer; list-style: none; font-size: 0.6875rem; line-height: 1.3;
@@ -46,6 +46,7 @@ export const CompactCard = styled.article`
     &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
     > * { min-inline-size: 0; }
   }
+  header[data-slip-summary] { cursor: default; padding-inline-end: 9px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
   [data-summary-identity] { grid-area: identity; display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 7px; }
   h3 { margin: 0; font-size: 0.875rem; line-height: 1.2; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   [data-rank] { color: ${({ theme }) => theme.color.link}; font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }

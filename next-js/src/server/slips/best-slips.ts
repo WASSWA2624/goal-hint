@@ -11,7 +11,7 @@ import { createPublishedSlips } from "./published-slips.ts";
 
 export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
   return { ...result, slips: result.slips.map((view) => ({ rank: view.rank, matchCount: view.matchCount,
-    totalOdds: view.totalOdds, estimatedProbability: view.estimatedProbability,
+    totalOdds: view.totalOdds, estimatedProbability: view.estimatedProbability, averageProbability: view.averageProbability,
     ...(access.tier === "full" && view.slip ? { slip: view.slip } : {}) })) };
 }
 

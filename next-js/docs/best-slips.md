@@ -2,8 +2,8 @@
 
 `/en` is Best Slips; `/en/matches` preserves the match feed and `/en/slips` keeps
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
-previews show the rank, match count, total odds and estimated whole-slip win
-probability to every visitor. Match identities, selections and individual
+previews use the selected Inline ledger layout and show the rank, match count,
+total odds and average match probability to every visitor. Match identities, selections and individual
 prices/probabilities require entitlement. Both the initial DTO and the final
 entitlement recheck use that allowlist.
 
@@ -17,8 +17,9 @@ Matches sort by individual probability. The editable custom builder retains its
 optional match-reuse control. Scarce cohorts produce fewer valid slips. Coverage
 and search limits remain disclosed when reached.
 
-Entitled summaries show total odds, estimated whole-slip probability, arithmetic
-average match probability and selection count separately. Average match
+Public and entitled summaries share total odds, arithmetic average match
+probability and selection count. The whole-slip estimate remains in the API for
+compatibility and ranking, while the UI displays the average only. Average match
 probability remains a description of the individual forecasts, not a joint
 probability estimate.
 
@@ -32,7 +33,7 @@ see the actual matches. There is no repeated subscriber-only explanatory text.
 Native expansion works before hydration.
 Custom builder results and completed-slip history retain their expanded layout.
 
-Match cards and prediction columns use shared compact outcome definitions:
+Compact selection rows and prediction columns use shared outcome definitions:
 `1`/`X`/`2`, `1X`/`X2`/`12`, `O`/`U` with the actual line, and `Yes`/`No`
 for boolean markets. Full descriptions accompany the codes, and a touch-accessible
 Prediction key explains the core outcomes. Stored keys and settlement rules
@@ -68,4 +69,4 @@ prices and save timestamp. See `docs/daily-slip-publications.md`.
 `tests/best-slips.test.mjs` verifies diversification, scarcity, whole-slip ranking,
 model qualification and both access gates. `scripts/verify-paywall-rendering.py`
 checks raw HTML, React flight responses and APIs across viewer states, including
-hidden active probabilities and separate mean/joint summaries for subscribers.
+hidden per-match probabilities and the explicitly public mean in compact summaries.

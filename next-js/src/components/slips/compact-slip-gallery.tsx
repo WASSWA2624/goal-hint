@@ -129,7 +129,7 @@ export function CompactSlipGallery({ locale }: { locale: string }) {
           </Option>;
         })}
       </Gallery>
-      <Footer>Illustrative data for layout review; these are sample fixtures and picks. All designs show total odds, average match probability and selection count. Average match probability is the mean of the individual selections, not the chance that every selection wins. The current Best slips and slip builder screens keep their existing design until an option is chosen.</Footer>
+      <Footer>Illustrative data for layout review; these are sample fixtures and picks. All designs show total odds, average match probability and selection count. Average match probability is the mean of the individual selections, not the chance that every selection wins. Design 01, Inline ledger, is used for Best slips and the slip builder.</Footer>
     </Review>
   </ThemeProvider>;
 }
