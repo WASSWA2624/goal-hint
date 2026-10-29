@@ -11,7 +11,7 @@ export const slipsMessages = {
   "slips.toolbar.actions": "Actions",
   "slips.totalSlips": "Total slips",
   "slips.mobile.totalOdds": "Total odds",
-  "slips.mobile.matches": "Matches / slip",
+  "slips.mobile.matches": "Matches per slip",
   "slips.mobile.limits": "Odds & prob.",
   "slips.mobile.manual": "{count} manual",
   "slips.mobile.access.signIn": "Sign in above to continue. An active subscription is required to build slips.",

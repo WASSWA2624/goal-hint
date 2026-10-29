@@ -79,6 +79,12 @@ aggregate limiter before cache lookup.
 
 ## Navigation and presentation
 
+Below the desktop breakpoint, the search, date/status and Advanced controls use
+compact 36px faces. Advanced and date sheets use tighter padding, 8px body gaps
+and compact action rows; probability entries are centered. Native filter state,
+date presets, validation, Apply/Cancel/Reset and URLs retain the same behavior.
+Desktop filter presentation is unchanged.
+
 Desktop quick date presets use ordinary links with prefetch disabled and retain
 their existing date-navigation behavior. The body search bar is shared across
 every screen size. Phones and tablets use an Advanced filters button to reveal the fields;

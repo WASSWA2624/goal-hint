@@ -96,6 +96,11 @@ Pages supply the current location before hydration. `aria-current`, text
 underlines and brand styling make it visible without relying on color alone.
 The native fragment skip link moves keyboard focus to the main landmark.
 
+Mobile bottom navigation uses 48px targets, 20px icons and 11px labels, retaining
+the active indicator and safe-area inset. The shell exports its mobile tab height
+through a CSS custom property so dashboard clearance, footer spacing and More
+menu placement stay aligned with the bar. Desktop navigation is unchanged.
+
 Client styling stays in `src/components/navigation/shell-styles.tsx` and the
 existing `ui/` primitives. One root style provider/registry, named first-party
 logo, light tokens, the shared subtle 2px corner radius and logical spacing are reused.

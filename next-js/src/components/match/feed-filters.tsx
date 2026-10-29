@@ -77,6 +77,7 @@ const QueryChoices = styled.div`
     ${focusRing}
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   }
+  ${media.belowDesktop} { > select { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; } }
 `;
 /** The approved Compact stack: one search row, then date/status and a single filter action. */
 const CompactToolbar = styled(QueryChoices)`
@@ -89,6 +90,7 @@ const CompactToolbar = styled(QueryChoices)`
     font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
+  ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; }
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
 const PhoneToolbar = styled.div`
@@ -126,6 +128,7 @@ const PhoneSort = styled(CompactSelect)`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > svg { inset-inline-end: 7px; }
   @container (max-width: 18rem) { padding-inline-start: 8px; }
+  ${media.belowDesktop} { min-block-size: 36px; padding-block: 2px; font-size: 0.75rem; }
 `;
 /** Opens the filter sheet; the badge counts applied filters. */
 const FilterToggle = styled.button<{ $compact?: boolean }>`
@@ -185,6 +188,10 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
       line-height: 14px;
     }
   `}
+  ${media.belowDesktop} {
+    min-block-size: 36px; padding-block: 4px; font-size: 0.75rem;
+    ${({ $compact }) => $compact && css`inline-size: 36px; min-inline-size: 36px; padding: 0;`}
+  }
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
 
@@ -199,6 +206,15 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
   ${media.belowDesktop} {
     ${sheetFrame}
     display: ${({ $open }) => $open ? "flex" : "none"};
+    && ${SheetHeader} { padding: 2px 2px 2px 10px; }
+    && ${SheetHeader} > h2 { font-size: 0.875rem; }
+    && ${SheetHeader} > button { inline-size: 36px; block-size: 36px; padding: 0; }
+    && button { min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
+    && select { min-block-size: 36px; padding-block: 4px; }
+    && input:not([type="checkbox"]) { min-block-size: 36px; padding-block: 2px; }
+    && input[inputmode="decimal"] { text-align: center; }
+    && [role="group"] li > label { min-block-size: 36px; font-size: 0.75rem; }
+    && [data-filter-actions] br { display: none; }
   }
   ${desktop} {
     position: relative;
@@ -222,9 +238,9 @@ const SheetBody = styled.div`
     flex: 1 1 auto;
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 8px;
     min-block-size: 0;
-    padding: 10px 14px 12px;
+    padding: 8px 10px;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -235,7 +251,7 @@ const SheetFooter = styled.div`
     display: grid;
     flex: none;
     gap: 4px;
-    padding: 8px 14px;
+    padding: 6px 10px;
     background: ${({ theme }) => theme.color.surface};
     border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   }
@@ -529,6 +545,7 @@ const PhoneClear = styled(OutlineButton)`
   min-inline-size: 2.75rem;
   min-block-size: 2.75rem;
   padding-inline: 6px;
+  ${media.belowDesktop} { min-inline-size: 36px; min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
 `;
 const FilterActions = styled.div`
   display: flex;

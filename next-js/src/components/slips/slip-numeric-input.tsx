@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import styled from "styled-components";
 import { Field, FieldLabel, FieldMessage, InputControl, useFieldAccessibility, type TextInputProps } from "@/components/ui/controls";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
 import { formatSlipMatchCount, guardSlipNumber, normalizeSlipMatchCount, slipNumericRule, stepSlipNumber,
   type SlipNumberGuardResult, type SlipNumericField } from "@/domain/slip-input-guards";
 
@@ -11,9 +12,25 @@ const subscribe = () => () => {};
 const clientSnapshot = () => true;
 const serverSnapshot = () => false;
 
-const NumericField = styled(Field)`position: relative;`;
+const NumericField = styled(Field)`
+  position: relative;
+  &&[data-slip-floating-field="true"] {
+    gap: 0;
+    > label {
+      position: absolute; inset-block-start: 0; inset-inline-start: 6px; z-index: 1;
+      max-inline-size: calc(100% - 12px); margin: 0; padding-inline: 3px;
+      transform: translateY(-50%); font-size: 0.625rem; line-height: 1;
+      white-space: nowrap; background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
+      cursor: text;
+    }
+    > input:not([type="hidden"]) { background: var(--filter-field-background, ${({ theme }) => theme.color.surface}); }
+    &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
+  }
+`;
 const NumericControl = styled(InputControl)`
-  @media (pointer: fine) { &&[data-slip-number-enhanced="true"] { padding-inline-end: 17px; } }
+  text-align: center;
+  @media (pointer: fine) { &&[data-slip-number-enhanced="true"] { padding-inline: 17px; } }
+  ${media.belowDesktop} { &&[data-slip-number-enhanced="true"] { padding-inline: 3px; } }
 `;
 const Stepper = styled.span`
   display: none; position: absolute; inset-inline-end: 1px; inset-block-end: 1px;
@@ -22,6 +39,7 @@ const Stepper = styled.span`
     display: flex; flex-direction: column;
     ${NumericField}:hover > &, ${NumericField}:focus-within > & { opacity: 1; }
   }
+  ${media.belowDesktop} { display: none; }
 `;
 const StepButton = styled.button`
   display: flex; align-items: center; justify-content: center; flex: 1; min-block-size: 0;
@@ -168,7 +186,7 @@ export function SlipNumericInput({ field: name, value, locale, onValueChange, on
     if (pair) { setPairWarning(true); setWarning(pair); }
     else { setPairWarning(false); setWarning(null); }
   }
-  return <NumericField data-slip-numeric-container={name}>
+  return <NumericField data-slip-numeric-container={name} data-slip-floating-field={name !== "slips" || undefined}>
     <FieldLabel htmlFor={accessibility.id}>{label}</FieldLabel>
     <NumericControl {...props} ref={input} id={accessibility.id} data-slip-numeric-field={name} data-slip-number-enhanced={enhanced}
       type={enhanced ? "text" : "number"} name={enhanced ? undefined : props.name}

@@ -66,7 +66,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $dashb
   }
   ${({ $app }) => !$app && anchorClearance}
   ${({ $dashboard }) => $dashboard && css`
-    padding-block: 0 calc(4.5rem + env(safe-area-inset-bottom));
+    padding-block: 0 calc(var(--app-mobile-tab-height, 3rem) + 1rem + env(safe-area-inset-bottom));
     ${media.desktop} { padding-block: 0 24px; }
   `}
 `;

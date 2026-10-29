@@ -176,6 +176,17 @@ def criteria_groups(document, path, error_group=None):
     toolbars = document.nodes(attr="data-slip-builder-toolbar")
     assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
     toolbar = toolbars[0]
+    floating_fields = [node for node in toolbar.nodes(attr="data-slip-floating-field") if node.attrs["data-slip-floating-field"] == "true"]
+    numeric_inputs = toolbar.nodes("input", "data-slip-numeric-field")
+    for control in numeric_inputs:
+        name = control.attrs["data-slip-numeric-field"]
+        if name == "slips":
+            continue
+        containers = [node for node in floating_fields if control in node.nodes("input")]
+        assert len(containers) == 1, f"{path}: {name} uses one reusable floating-label field"
+        labels = containers[0].nodes("label")
+        assert len(labels) == 1 and labels[0].attrs.get("for") == control.attrs.get("id"), f"{path}: {name} retains its associated accessible floating label"
+        assert labels[0].text.strip() == ("Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
     toolbar_groups = toolbar.nodes(attr="data-toolbar-group")
     assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "limits", "kickoff", "markets", "actions"], f"{path}: controls retain their titled category order"
     for group in toolbar_groups:

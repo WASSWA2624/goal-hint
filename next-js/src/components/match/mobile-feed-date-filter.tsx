@@ -44,12 +44,17 @@ const Trigger = styled.button`
   &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; }
   ${controlFeedback}
   ${focusRing}
+  ${media.belowDesktop} { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; }
 `;
 
 const Frame = styled.div`
   ${sheetFrame}
   display: flex;
   > ${SheetHeader} { padding-inline-start: 10px; }
+  ${media.belowDesktop} {
+    && ${SheetHeader} > h2 { font-size: 0.875rem; }
+    && ${SheetHeader} > button { inline-size: 36px; block-size: 36px; }
+  }
   ${media.desktop} { display: none; }
 `;
 const Body = styled.div`
@@ -60,6 +65,10 @@ const Body = styled.div`
   overflow-y: auto;
   overscroll-behavior: contain;
   [data-range="dates"] input { min-block-size: 44px; }
+  ${media.belowDesktop} {
+    gap: 8px; padding: 8px 10px;
+    [data-range="dates"] input { min-block-size: 36px; padding-block: 2px; }
+  }
 `;
 const Presets = styled.fieldset`
   display: grid;
@@ -88,6 +97,7 @@ const Preset = styled.button`
   &[aria-pressed="true"] { color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; }
   ${controlFeedback}
   ${focusRing}
+  ${media.belowDesktop} { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; }
 `;
 const Footer = styled.div`
   display: grid;
@@ -105,6 +115,10 @@ const Footer = styled.div`
   }
   > button:last-child { color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; border-color: ${({ theme }) => theme.color.brand}; }
   > button:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; border-color: ${({ theme }) => theme.color.border}; cursor: not-allowed; }
+  ${media.belowDesktop} {
+    padding: 6px 10px;
+    > button { min-block-size: 36px; padding: 4px 8px; font-size: 0.75rem; }
+  }
 `;
 
 /** One phone date owner; presets and custom endpoints remain a local draft until Apply. */

@@ -10,7 +10,7 @@ import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dis
 import { media, type AccentName } from "@/styles/theme";
 
 const desktop = media.desktop;
-const mobileTabHeight = "3.5rem";
+const mobileTabHeight = "3rem";
 const focusRing = css`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -26,6 +26,7 @@ const headerFocus = css`
 `;
 
 export const ShellFrame = styled.div`
+  --app-mobile-tab-height: ${mobileTabHeight};
   --app-header-height: 3rem;
   --app-header-border-width: 1px;
   --app-header-content-height: calc(var(--app-header-height) - var(--app-header-border-width));
@@ -181,16 +182,16 @@ const tabLink = css`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   min-block-size: ${mobileTabHeight};
-  padding: 6px 8px;
+  padding: 4px 6px;
   color: ${({ theme }) => theme.header.mutedText};
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   line-height: 1.25;
   text-align: center;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
-  > svg { flex: none; font-size: 1.5rem; }
+  > svg { flex: none; font-size: 1.25rem; }
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.header.accent};
@@ -316,7 +317,7 @@ export const TabList = styled.ul`
   padding: 0;
   list-style: none;
 `;
-/** Generous phone targets keep primary destinations and More easy to tap. */
+/** Compact phone targets keep primary destinations and More easy to tap. */
 export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
 
 /** Footer clearance matches the phone tab targets, border and safe area. */

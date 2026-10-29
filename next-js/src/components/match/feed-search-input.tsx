@@ -56,13 +56,14 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
     ${media.belowDesktop} {
       grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
+      min-block-size: 36px;
       border-radius: 0;
       background: ${({ theme }) => theme.color.surface};
-      > input, > button { min-block-size: 44px; }
-      > input { padding: 6px 8px 6px 0; }
+      > input, > button { min-block-size: 34px; }
+      > input { padding: 2px 6px 2px 0; }
       > input::placeholder { font-size: 0.75rem; }
       > button {
-        min-inline-size: 44px;
+        min-inline-size: 36px;
         padding: 0;
         border: 0;
         color: ${({ theme }) => theme.color.mutedText};

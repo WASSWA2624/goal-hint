@@ -102,9 +102,9 @@ export const BuilderPanel = styled(CriteriaPanel)`
       font-size: 0.625rem; line-height: 1.25; white-space: nowrap;
     }
     && [data-slip-target-groups] { gap: 6px; }
-    && [data-slip-target-groups] > fieldset > legend { margin-block-end: 2px; }
+    && [data-slip-target-groups] > fieldset > legend { margin-block-end: 8px; }
     && [data-slip-builder-essentials] [data-slip-numeric-field] {
-      block-size: 36px; min-block-size: 36px; padding-block: 2px; font-size: 1rem;
+      block-size: 36px; min-block-size: 36px; padding-block: 2px; font-size: 0.875rem;
     }
     && [data-slip-builder-options] { gap: 4px; padding-block-start: 4px; }
     && [data-slip-criteria-options] { grid-template-columns: 1.15fr 1.1fr 0.9fr; gap: 4px; }
@@ -127,11 +127,16 @@ export const BuilderPanel = styled(CriteriaPanel)`
     && [data-criteria-dialog] input:not([type="checkbox"]):not([type="hidden"]) {
       min-block-size: 36px; padding-block: 2px; font-size: 1rem;
     }
+    &&& [data-criteria-dialog] input[data-slip-numeric-field] { font-size: 0.875rem; }
+    && [data-criteria-dialog] fieldset > legend { margin-block-end: 8px; }
     && [data-kickoff-fields] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     && [data-criteria-dialog] > footer button { min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
     ${media.tablet} {
       && [data-slip-criteria-options] { flex: 1 1 18rem; }
       && [data-criteria-actions] { flex: 0 0 auto; margin-inline-start: auto; }
+    }
+    @supports (-webkit-touch-callout: none) {
+      && [data-slip-numeric-field] { font-size: 0.875rem !important; }
     }
   }
 `;
@@ -262,13 +267,13 @@ export const LimitGroups = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
   @media (max-width: 22.5rem) { grid-template-columns: minmax(0, 1fr); }
   > fieldset { padding: 0; margin: 0; border: 0; min-inline-size: 0; }
-  > fieldset > legend { padding: 0; margin-block-end: 4px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > fieldset > legend { padding: 0; margin-block-end: 8px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > fieldset[data-joint-limit] { grid-column: 1 / -1; }
   > fieldset[data-joint-limit] > ${Note} { margin-block-start: 4px; }
 `;
 export const TargetGroups = styled(LimitGroups)`
   grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 8px;
-  > fieldset > legend { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; margin-block-end: 3px; }
+  > fieldset > legend { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; margin-block-end: 8px; }
   ${Fields} { gap: 4px; }
   ${Fields} > div > input {
     padding-inline: 3px; border-radius: 0;
@@ -311,7 +316,7 @@ export const Actions = styled.div`
   display: flex; flex: 1 0 auto; flex-wrap: wrap; align-items: center;
   justify-content: flex-end; gap: 4px; margin-inline-start: auto;
   ${media.desktop} {
-    flex: none; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 8px;
+    flex: 1 0 auto; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 8px;
     ${desktopGroupDivider}
   }
 `;
@@ -330,10 +335,10 @@ export const BuildLink = styled(ButtonLink)`
   ${mobileBuildAction}
 `;
 export const ClearLink = styled(ButtonLink)`
-  && { ${toolbarAction} }
+  && { ${toolbarAction} flex: 1 1 auto; }
   ${media.desktop} { && { ${filterButtonColors} } }
   ${media.belowDesktop} {
-    && { flex: none; inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; white-space: nowrap; ${filterButtonColors} }
+    && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; white-space: nowrap; ${filterButtonColors} }
   }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;

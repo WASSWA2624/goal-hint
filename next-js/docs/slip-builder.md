@@ -51,15 +51,23 @@ Custom summaries wrap within their row rather than overflowing the page.
 The page heading remains available to assistive technology but takes no visible
 space on desktop or mobile.
 
+Range controls use associated floating Min/Max labels on the field border on
+both layouts. The labels remain visible with entered values and blank Any
+placeholders, reclaiming the former sub-label row. Numeric values are centered;
+desktop mouse steppers reserve equal side padding so values remain centered.
+
 Below 1024px, the mobile toolbar uses 36px controls with compact padding and
-10–11px labels, retaining readable 16px numeric text. Total slips, Total odds
-and Matches / slip remain visible together; three short dialog buttons share
+10–11px labels, with 14px numeric text. Total slips, Total odds
+and Matches per slip remain visible together; three short dialog buttons share
 the next row, followed by Reset and the fixed 208px action. The compact summary
 shows date, time, selected market count and Auto/manual outcomes. Longer custom
 summaries wrap. At tablet widths below desktop, popup buttons and actions share
 one row. Dialog controls also use compact mobile spacing, with date/time
-fields in two columns. These mobile-only rules are scoped to the builder; the
-desktop layout and shared Best Slips/history spacing remain unchanged.
+fields in two columns. Reset grows into available action-row space while the
+account action retains its fixed dimensions. Date/time controls retain their
+native editing size. Mobile steppers use the existing keyboard increment rules;
+desktop mouse steppers remain available. These rules are scoped to the builder;
+shared Best Slips/history spacing is unchanged.
 
 The buttons show counts for their current settings. Odds & probability counts custom
 individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date

@@ -183,17 +183,17 @@ def verify_status_routes(origin):
     redirects = [
         ({"date": "2026-10-01", "status": "live", "timeFrom": "08:00", "timeTo": "10:00", "tz": "Africa/Kampala",
           "q": "Club", "league": "league-a", "page": "3"}, "/en/matches",
-         {"when": "today", "tz": "Africa/Kampala", "q": "Club", "league": "league-a", "status": "live", "picks": "only"}),
+         {"when": "today", "tz": "Africa/Kampala", "q": "Club", "league": "league-a", "status": "live", "picks": "only", "sort": "probability"}),
         ({"date": "2026-10-01", "status": "scheduled"}, "/en/matches",
-         {"when": "next-30-days", "status": "scheduled", "picks": "only"}),
-        ({"when": "tomorrow", "status": "finished"}, "/en/matches", {"status": "finished", "picks": "only"}),
-        ({"period": "next-7-days", "date": "2026-10-01"}, "/en/matches", {"when": "next-7-days", "picks": "only"}),
+         {"when": "next-30-days", "status": "scheduled", "picks": "only", "sort": "probability"}),
+        ({"when": "tomorrow", "status": "finished"}, "/en/matches", {"status": "finished", "picks": "only", "sort": "probability", "when": "last-30-days"}),
+        ({"period": "next-7-days", "date": "2026-10-01"}, "/en/matches", {"when": "next-7-days", "picks": "only", "sort": "probability"}),
         ({"period": "next-3-days", "from": "2026-10-01", "to": "2026-10-04", "q": "Club"}, "/en/matches",
-         {"when": "next-3-days", "q": "Club", "picks": "only"}),
+         {"when": "next-3-days", "q": "Club", "picks": "only", "sort": "probability"}),
         ({"period": "custom", "date": "2026-10-01", "country": "Spain"}, "/en/predictions/2026-10-01",
-         {"country": "Spain", "picks": "only"}),
+         {"country": "Spain", "picks": "only", "sort": "probability"}),
         ({"period": "next-30-days", "status": "live", "timeFrom": "08:00", "timeTo": "10:00", "tz": "Africa/Kampala"}, "/en/matches",
-         {"when": "today", "tz": "Africa/Kampala", "status": "live", "picks": "only"}),
+         {"when": "today", "tz": "Africa/Kampala", "status": "live", "picks": "only", "sort": "probability"}),
     ]
     for parameters, path, expected in redirects:
         response = request(origin, "/route-status?" + urlencode(parameters))
@@ -211,8 +211,8 @@ def verify_status_routes(origin):
         response = request(origin, "/route-status?" + urlencode(parameters))
         assert response.status == 404, f"Malformed status/date/period values must fail before reading: {parameters}"
     archives = [
-        ({"status": "live"}, "/en/matches", {"when": "today", "status": "live", "picks": "only"}),
-        ({"period": "next-7-days"}, "/en/matches", {"when": "next-7-days", "picks": "only"}),
+        ({"status": "live"}, "/en/matches", {"when": "today", "status": "live", "picks": "only", "sort": "kickoff"}),
+        ({"period": "next-7-days"}, "/en/matches", {"when": "next-7-days", "picks": "only", "sort": "kickoff"}),
         ({"period": "custom", "status": "finished"}, "/en/predictions/2026-10-01", {"status": "finished", "picks": "only"}),
         ({"period": "custom", "to": "2026-10-04"}, "/en/predictions/2026-10-01", {"to": "2026-10-04", "picks": "only"}),
     ]
