@@ -14,11 +14,16 @@ import { paymentNotificationNotice } from "@/domain/payment-notification";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
 import { ActionButton, adminControl, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
-import { Drawer, FactList, Panel, RowMeta, RowTitle, TextAction } from "./desk-styles";
+import { Drawer, FactList, Panel, RowTitle, TextAction } from "./desk-styles";
 import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordHead, RecordItem,
   RecordItemMeta, RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordScroll, RecordWorkspace } from "./record-workspace";
 import { refreshPendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
+import { FloatingField } from "./floating-field";
+import { NetworkChoice } from "./network-choice";
+
+type CodeRequest = typeof postAdmin;
+type CodeActionOptions = Readonly<{ request: CodeRequest; localOnly: true }>;
 /** Keep the access decision visible alongside the separate payment notification outcome. */
 export function grantNotice(body: AdminReply["body"]): string | null {
   const credit = typeof body.creditAddedUgx === "number" && typeof body.balanceUgx === "number"
@@ -29,7 +34,7 @@ export function grantNotice(body: AdminReply["body"]): string | null {
   const grant = n ? line : `${line}. Devices already unlocked keep access; the member's next sign-in unlocks one.`;
   return [grant, credit, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
 }
-export function useCodeAction(onChanged?: () => Promise<void>) {
+export function useCodeAction(onChanged?: () => Promise<void>, options?: CodeActionOptions) {
   const router = useRouter(), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [notice, setNotice] = useState(""), [duplicateId, setDuplicateId] = useState<string | null>(null);
   const inFlight = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -41,7 +46,7 @@ export function useCodeAction(onChanged?: () => Promise<void>) {
     inFlight.current = true;
     setBusy(true); setMessage(""); setNotice(""); setDuplicateId(null);
     try {
-      const reply = await postAdmin(path, body);
+      const reply = await (options?.request ?? postAdmin)(path, body);
       if (reply.ok) {
         setNotice(grantNotice(reply.body) ?? [done, paymentNotificationNotice(reply.body.notification)].filter(Boolean).join(" · "));
         // Apply local selection/URL changes before revalidation so they cannot interrupt its router action.
@@ -51,9 +56,9 @@ export function useCodeAction(onChanged?: () => Promise<void>) {
             try { await onChanged(); }
             catch { setMessage("The change was saved, but the latest data could not be loaded. Refresh to update this screen."); }
           }
-          if (path.startsWith("/api/admin/payments/")) void refreshPendingPayments(true);
+          if (!options?.localOnly && path.startsWith("/api/admin/payments/")) void refreshPendingPayments(true);
           // Invalidate server-seeded history entries while retaining the current view if revalidation fails.
-          refreshAdmin();
+          if (!options?.localOnly) refreshAdmin();
         }
       }
       else {
@@ -64,7 +69,7 @@ export function useCodeAction(onChanged?: () => Promise<void>) {
       return reply;
     } finally { inFlight.current = false; setBusy(false); }
   }
-  return { busy: busy || refreshing, message, notice, duplicateId, send };
+  return { busy: busy || refreshing, message, notice, duplicateId, send, localOnly: options?.localOnly ?? false };
 }
 export type CodeAction = ReturnType<typeof useCodeAction>;
 /** The last action's outcome; a duplicate transaction ID links the earlier payment. */
@@ -80,27 +85,32 @@ export function PlanField({ plans, value, allowCustom = true, onValueChange, dis
  * recovery (`withoutTransaction`). Custom days only counts when the plan is "Custom days", so it is disabled otherwise.
  */
 export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "", compact = false, fixedPhone = false, withoutTransaction = false, onStart, onSaved, formId, externalActions = false }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; amount?: number; note?: string; compact?: boolean; fixedPhone?: boolean; withoutTransaction?: boolean; onStart?: () => void; onSaved?: () => void; formId?: string; externalActions?: boolean }) {
+  const reasonId = useId();
   const [selectedPlan, setSelectedPlan] = useState(plans[0]?.id ?? "");
   async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const planId = String(f.get("planId") ?? ""), network = String(f.get("network") ?? ""), transactionId = String(f.get("transactionId") ?? "").trim();
     if (action.busy) return;
     onStart?.();
     const reply = await action.send("/api/admin/codes", { action: "manual", phone: f.get("phone"), note: f.get("note"), amount: Number(f.get("amount")), ...(planId ? { planId } : { days: Number(f.get("days")) }), ...(network ? { network } : {}), ...(transactionId ? { transactionId } : {}) });
     if (reply.ok) onSaved?.(); }
-  return <form id={formId} method="post" action="/api/admin/codes" onSubmit={submit} data-analytics-ignore><FormStack>
-    {fixedPhone ? <input type="hidden" name="phone" value={phone} /> : <PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} lookup required disabled={action.busy} />}
-    <PlanField plans={plans} disabled={action.busy} onValueChange={setSelectedPlan} />
-    <FieldPair>
+  return <form id={formId} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={submit} data-analytics-ignore data-manual-code-form><FormStack data-code-form-stack>
+    <GrantSection data-grant-section="account">
+      {fixedPhone ? <input type="hidden" name="phone" value={phone} /> : <PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} lookup required disabled={action.busy} />}
+      <PlanField plans={plans} disabled={action.busy} onValueChange={setSelectedPlan} />
+    </GrantSection>
+    <FieldPair data-grant-section="terms">
       <FieldBlock><span>Custom days <NoWrap>(1–366)</NoWrap></span><input name="days" type="number" inputMode="numeric" min={1} max={366} defaultValue={1} required disabled={action.busy || selectedPlan !== ""} /></FieldBlock>
       <FieldBlock><span>Amount received <NoWrap>(UGX)</NoWrap></span><input name="amount" type="number" inputMode="numeric" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>
     </FieldPair>
-    <FieldBlock>Required note<textarea name="note" maxLength={200} defaultValue={note} required rows={2} disabled={action.busy} /></FieldBlock>
-    {!withoutTransaction && <PlainDrawer><summary>Payment details · optional<ChevronDownIcon /></summary>
-      <FieldPair><FieldBlock>Network<select name="network" disabled={action.busy}><option value="">None</option><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></FieldBlock>
-        <FieldBlock>Transaction ID<input name="transactionId" maxLength={40} autoComplete="off" disabled={action.busy} /></FieldBlock></FieldPair></PlainDrawer>}
-    {!compact && <Hint as="p">Signed-in devices unlock at once; others unlock when the member signs in.</Hint>}
+    <GrantSection data-grant-section="reason"><FieldBlock>Reason for granting access (required)<textarea name="note" maxLength={200} defaultValue={note} placeholder="For example, offline payment or complimentary access" required rows={2} disabled={action.busy} aria-describedby={reasonId} /></FieldBlock>
+      <Hint id={reasonId}>A short reason for the access record. Maximum 200 characters.</Hint></GrantSection>
+    {!withoutTransaction && <PlainDrawer data-grant-payment><summary>Payment details · optional<ChevronDownIcon /></summary>
+      <GrantSection><NetworkChoice disabled={action.busy} />
+        <FieldBlock>Transaction ID<input name="transactionId" maxLength={40} autoComplete="off" placeholder="Enter the payment reference" disabled={action.busy} /></FieldBlock></GrantSection></PlainDrawer>}
+    {!compact && <Hint as="p" data-grant-hint>Signed-in devices unlock at once; others unlock when the member signs in.</Hint>}
     {!externalActions && <GrantButton type="submit" $variant="primary" $inline={fixedPhone} disabled={action.busy}>Grant access manually</GrantButton>}</FormStack></form>;
 }
 const NoWrap = styled.span`white-space: nowrap;`;
+const GrantSection = styled.div`display: grid; gap: 12px; min-inline-size: 0;`;
 /** Two fields side by side at every width; inputs line up when one label wraps. */
 const FieldPair = styled.div`
   display: grid;
@@ -140,7 +150,7 @@ export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; acti
   const locked = action.busy || code.status === "revoked";
   function cancel() { setConfirming(false); revokeTrigger.current?.focus(); }
   return <CodeTools ref={tools} tabIndex={-1} role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
-    <ExtendForm method="post" action="/api/admin/codes" onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
+    <ExtendForm method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
       <ExtendField>Extend by<input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} />days</ExtendField>
       <ActionButton type="submit" disabled={locked}>Extend</ActionButton>
     </ExtendForm>
@@ -204,19 +214,22 @@ const RevokeConfirmation = styled.div`
 `;
 
 const codeTone = (status: OwnerCode["status"]) => status === "active" ? "good" : status === "queued" ? "warning" : "muted";
+const codeStatusLabel = { all: "All", active: "Active", queued: "Queued", expired: "Expired", revoked: "Revoked" } as const;
+export type CodesPreview = Readonly<{ variant: string; initialView: "grant" | "details"; request: CodeRequest }>;
 /** Access records use the shared desktop workspace; mobile keeps inline controls and its grant drawer. */
-export function CodesEditor({ initialCodes, plans }: { initialCodes: readonly OwnerCode[]; plans: readonly SubscriptionPlanView[] }) {
-  const router = useRouter(), desktop = useDesktopLayout(), id = useId(), [grantOpen, setGrantOpen] = useState(false);
+export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: readonly OwnerCode[]; plans: readonly SubscriptionPlanView[]; preview?: CodesPreview }) {
+  const router = useRouter(), desktop = useDesktopLayout(), id = useId(), [grantOpen, setGrantOpen] = useState(preview?.initialView === "grant");
   const [selectedId, setSelectedId] = useState(initialCodes[0]?.id ?? "");
   const [found, setFound] = useState<readonly OwnerCode[] | null>(null), [status, setStatus] = useState("all"), [search, setSearch] = useState("");
   const appliedSearch = useRef({ search: "", status: "all" });
+  const request = preview?.request ?? postAdmin;
   const action = useCodeAction(async () => {
     if (!appliedSearch.current.search && appliedSearch.current.status === "all") { setFound(null); return; }
-    const reply = await postAdmin("/api/admin/codes", { action: "search", ...appliedSearch.current });
-    if (reply.status === 401 || reply.status === 403 && reply.body.error === "forbidden") router.refresh();
+    const reply = await request("/api/admin/codes", { action: "search", ...appliedSearch.current });
+    if (!preview && (reply.status === 401 || reply.status === 403 && reply.body.error === "forbidden")) router.refresh();
     if (!reply.ok || !Array.isArray(reply.body.codes)) throw new Error("Code refresh failed");
     setFound(reply.body.codes as OwnerCode[]);
-  });
+  }, preview ? { request, localOnly: true } : undefined);
   const codes = (found ?? initialCodes).filter(c => status === "all" || c.status === status);
   const selected = codes.find(code => code.id === selectedId) ?? codes[0];
   const grantId = `${id}-manual-grant`;
@@ -230,29 +243,27 @@ export function CodesEditor({ initialCodes, plans }: { initialCodes: readonly Ow
     setSelectedId(code.id); setGrantOpen(false);
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-codes-detail-scroll]")?.scrollTo({ top: 0 }));
   }
-  return <Codes data-codes-workspace data-analytics-ignore>
+  return <Codes data-codes-workspace data-code-variant={preview?.variant} data-analytics-ignore>
     <RecordHead><h1>Codes</h1><HeaderEnd><ActionButton type="button" disabled={action.busy} onClick={() => setGrantOpen(true)}><PlusIcon />Grant access manually</ActionButton></HeaderEnd></RecordHead>
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
     <CodeList aria-label="Code directory">
       <RecordListTools>
-        <SearchForm method="post" action="/api/admin/codes" onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
-          <FieldBlock>Phone or reference<input value={search} onChange={e => setSearch(e.target.value)} maxLength={40} autoComplete="off" disabled={action.busy} /></FieldBlock>
-          <FieldBlock>Status<select value={status} disabled={action.busy} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{["all", "active", "queued", "expired", "revoked"].map(value => <option key={value}>{value}</option>)}</select></FieldBlock>
+        <SearchForm method={preview ? "get" : "post"} action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
+          <FloatingField label="Phone or reference"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Enter phone number or code" maxLength={40} autoComplete="off" disabled={action.busy} /></FloatingField>
+          <FloatingField label="Status"><select value={status} disabled={action.busy} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{Object.entries(codeStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FloatingField>
           <ActionButton type="submit" disabled={action.busy}><SearchIcon />Search</ActionButton>
         </SearchForm>
       </RecordListTools>
       <RecordListScroll aria-label="Codes" tabIndex={0} data-codes-list-scroll>
         {codes.length === 0 ? <li><RecordEmpty>No matching codes.</RecordEmpty></li> : codes.map(code => {
-          const live = code.status === "active" || code.status === "queued";
           return desktop ? <li key={code.id}><RecordItem aria-current={!grantOpen && selected?.id === code.id ? "true" : undefined} aria-controls={`${id}-detail`} disabled={action.busy} onClick={() => select(code)} data-code-row={code.id}>
-            <RecordItemTitle>{code.reference}</RecordItemTitle><Badge $tone={codeTone(code.status)}>{code.status}</Badge>
-            <RecordItemMeta>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"}</RecordItemMeta><RecordItemMeta>{code.planName}</RecordItemMeta>
-            <CodePeriod>{live ? `${code.daysLeft} day${code.daysLeft === 1 ? "" : "s"} left · ` : ""}{formatPeriodEnd(new Date(code.endsAt))}</CodePeriod>
-          </RecordItem></li> : <CodeRow key={code.id} id={`${id}-${code.id}`} tabIndex={-1}>
-            <RowTitle>{code.reference}<Badge $tone={codeTone(code.status)}>{code.status}</Badge></RowTitle>
-            <CodeLine><Link href={`/admin/subscribers?accountId=${code.accountId}`} prefetch={false}>{code.phone ? formatPhone(code.phone) : "Erased account"}</Link> · {code.planName}{live && ` · ${code.daysLeft} day${code.daysLeft === 1 ? "" : "s"} left`}</CodeLine>
-            <RowMeta>{formatPeriodEnd(new Date(code.startsAt))} – {formatPeriodEnd(new Date(code.endsAt))}</RowMeta>
-            {code.status !== "revoked" && <CodeActions code={code} action={action} onRevoked={() => document.getElementById(`${id}-${code.id}`)?.focus()} />}
+            <RecordItemTitle>{code.reference}</RecordItemTitle><Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge>
+            <RecordItemMeta>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"}</RecordItemMeta>
+          </RecordItem></li> : <CodeRow key={code.id} id={`${id}-${code.id}`} data-code-row={code.id} tabIndex={-1}>
+            <RowTitle>{code.reference}<Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge></RowTitle>
+            <CodeLine>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"}</CodeLine>
+            <MobileCodeDetails open={preview?.initialView === "details" && selected?.id === code.id} data-mobile-code-details><summary>View details<ChevronDownIcon /></summary><CodeFacts code={code} preview={!!preview} />
+              {code.status !== "revoked" && <CodeActions code={code} action={action} onRevoked={() => document.getElementById(`${id}-${code.id}`)?.focus()} />}</MobileCodeDetails>
           </CodeRow>;
         })}
       </RecordListScroll>
@@ -269,14 +280,8 @@ export function CodesEditor({ initialCodes, plans }: { initialCodes: readonly Ow
             </GrantDrawer>
           </GrantPanel>
           {desktop && !grantOpen && (selected ? <>
-            <RecordDetailHead><h2>{selected.reference}</h2><Badge $tone={codeTone(selected.status)}>{selected.status}</Badge></RecordDetailHead>
-            <RecordBody><Panel><Facts>
-              <div><dt>Subscriber</dt><dd><Link href={`/admin/subscribers?accountId=${selected.accountId}`} prefetch={false}>{selected.phone ? `+${formatPhone(selected.phone)}` : "Erased account"}</Link></dd></div>
-              <div><dt>Plan</dt><dd>{selected.planName}</dd></div>
-              <div><dt>Starts</dt><dd>{formatPeriodEnd(new Date(selected.startsAt))}</dd></div>
-              <div><dt>Ends</dt><dd>{formatPeriodEnd(new Date(selected.endsAt))}</dd></div>
-              <div><dt>Days left</dt><dd>{selected.daysLeft}</dd></div>
-            </Facts></Panel><Hint>Revoke ends a period at once; devices stay unlocked only while another period is live.</Hint></RecordBody>
+            <RecordDetailHead><h2>{selected.reference}</h2><Badge $tone={codeTone(selected.status)}>{codeStatusLabel[selected.status]}</Badge></RecordDetailHead>
+            <RecordBody><Panel><CodeFacts code={selected} preview={!!preview} /></Panel><Hint>Revoke ends a period at once; devices stay unlocked only while another period is live.</Hint></RecordBody>
           </> : <RecordEmpty><h2>Select an access record</h2><p>Find a record or grant access manually.</p></RecordEmpty>)}
         </RecordScroll>
         {desktop && (grantOpen ? <RecordFooter><ActionButton type="button" disabled={action.busy} onClick={() => setGrantOpen(false)}>Cancel</ActionButton><ActionButton type="submit" form={grantId} $variant="primary" disabled={action.busy}>Grant access manually</ActionButton></RecordFooter>
@@ -285,13 +290,28 @@ export function CodesEditor({ initialCodes, plans }: { initialCodes: readonly Ow
     </CodeDetails>
   </Codes>;
 }
-const Codes = styled(RecordWorkspace)``;
+function CodeFacts({ code, preview }: { code: OwnerCode; preview: boolean }) {
+  const phone = code.phone ? `+${formatPhone(code.phone)}` : "Erased account";
+  return <Facts data-code-facts>
+    <div><dt>Subscriber</dt><dd>{preview ? phone : <Link href={`/admin/subscribers?accountId=${code.accountId}`} prefetch={false}>{phone}</Link>}</dd></div>
+    <div><dt>Plan</dt><dd>{code.planName}</dd></div>
+    <div><dt>Starts</dt><dd>{formatPeriodEnd(new Date(code.startsAt))}</dd></div>
+    <div><dt>Ends</dt><dd>{formatPeriodEnd(new Date(code.endsAt))}</dd></div>
+    <div><dt>Days left</dt><dd>{code.daysLeft}</dd></div>
+  </Facts>;
+}
+const Codes = styled(RecordWorkspace)`
+  ${RecordHead} > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
+`;
 const HeaderEnd = styled.div`margin-inline-start: auto; ${media.belowDesktop} { display: none; }`;
 const CodeList = styled(RecordList)`${media.belowDesktop} { order: 2; }`;
 const CodeDetails = styled(RecordDetails)`${media.belowDesktop} { order: 1; }`;
-const CodePeriod = styled(RecordItemMeta)`grid-column: 1 / -1;`;
 const GrantPanel = styled.div`min-inline-size: 0; &[hidden] { display: none; } ${media.belowDesktop} { background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 2px; }`;
 const Facts = styled(FactList)`padding: 12px;`;
+const MobileCodeDetails = styled(PlainDrawer)`
+  > summary { min-block-size: 44px; }
+  > [data-record-actions] { margin-block-start: 12px; }
+`;
 const SearchForm = styled.form`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; min-inline-size: 0;
   > :first-child { grid-column: 1 / -1; }
