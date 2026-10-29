@@ -26,7 +26,7 @@ import { SlipTable } from "./slip-table";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { SlipInputWarning, SlipNumericInput } from "./slip-numeric-input";
-import { AccessLink, AccessNotice, ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
+import { AccessNotice, ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
   Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
@@ -39,14 +39,14 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
-/** CSS selects the desktop copy without changing the existing mobile action or its size. */
+/** Responsive copies keep the action's existing desktop structure and stable dimensions. */
 function SlipBuildActionLabel({ locale, restricted, signedIn, pending = false }: {
   locale: string; restricted: boolean; signedIn: boolean; pending?: boolean;
 }) {
   const messages = createMessages(locale);
   const build = messages.text(pending ? "slips.building" : "slips.build");
   return <BuildActionLabel>
-    <span data-action-label="mobile">{restricted ? messages.text(signedIn ? "subscribe.title" : "slips.signIn") : build}</span>
+    <span data-action-label="mobile">{restricted ? messages.text(signedIn ? "slips.subscribeToBuild" : "slips.signInToBuild") : build}</span>
     <span data-action-label="desktop">{restricted ? messages.text(signedIn ? "slips.subscribeToBuild" : "slips.signInToBuild") : build}</span>
   </BuildActionLabel>;
 }
@@ -320,10 +320,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
   const accessRequired = <AccessNotice headingLevel={3} title={messages.text("paywall.slips")} description={<SlipStatusCopy
-    mobile={messages.text("paywall.slipsDescription")} desktop={messages.text(signedIn ? "slips.access.subscribe" : "slips.access.signIn")} />}
-    action={<AccessLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
-      <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />
-    </AccessLink>} />;
+    mobile={messages.text(signedIn ? "slips.mobile.access.subscribe" : "slips.mobile.access.signIn")}
+    desktop={messages.text(signedIn ? "slips.access.subscribe" : "slips.access.signIn")} />} />;
 
   return <SlipStack data-slip-builder-page aria-busy={pending}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
@@ -335,13 +333,13 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
         <input type="hidden" name="build" value="1" />
         <BuilderEssentials data-slip-builder-essentials>
-        <div data-slip-count data-toolbar-group="slips">{field("slips", <><span data-slip-count-label="mobile">{messages.text("slips.countShort")}</span><span data-slip-count-label="desktop">{messages.text("slips.totalSlips")}</span></>, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</div>
+        <div data-slip-count data-toolbar-group="slips">{field("slips", <><span data-slip-count-label="mobile">{messages.text("slips.totalSlips")}</span><span data-slip-count-label="desktop">{messages.text("slips.totalSlips")}</span></>, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</div>
         <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups data-slip-target-groups>
-          <fieldset data-toolbar-group="total"><legend>{messages.text("slips.totalOddsRange")}</legend><Fields>
+          <fieldset data-toolbar-group="total"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.totalOdds")}</span><span data-slip-label="desktop">{messages.text("slips.totalOddsRange")}</span></legend><Fields>
             {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMin") })}
             {field("totalMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMax") })}
           </Fields></fieldset>
-          <fieldset data-toolbar-group="matches"><legend>{messages.text("slips.selectionsRange")}</legend><Fields>
+          <fieldset data-toolbar-group="matches"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.matches")}</span><span data-slip-label="desktop">{messages.text("slips.selectionsRange")}</span></legend><Fields>
             {field("teamsMin", messages.text("slips.minimum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMin") })}
             {field("teamsMax", messages.text("slips.maximum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMax") })}
           </Fields></fieldset>
@@ -416,11 +414,11 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
             return <CriteriaOption key={group} data-criteria-option={group} data-toolbar-group={group}>
             <CriteriaTitle data-criteria-title>{title}</CriteriaTitle>
             <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger={group}
-            aria-label={desktop ? `${title}: ${desktopLabel}` : undefined}
+            aria-label={desktop ? `${title}: ${desktopLabel}` : title}
             data-edited={edited(group)} aria-haspopup="dialog" aria-controls={`${prefix}-${group}`} aria-expanded={activeGroup === group}
             aria-describedby={`${prefix}-${group}-summary`} aria-invalid={({ limits: invalidLimits, kickoff: invalidKickoff, markets: invalidMarkets })[group] || undefined}
             disabled={pending} onClick={() => openDialog(group)}>
-            <span data-criteria-label><span data-criteria-view="mobile">{title}</span><span data-criteria-view="desktop">{desktopLabel}</span></span>
+            <span data-criteria-label><span data-criteria-view="mobile">{group === "limits" ? messages.text("slips.mobile.limits") : title}</span><span data-criteria-view="desktop">{desktopLabel}</span></span>
             {group === "markets" && !edited(group) ? <span data-criteria-value data-criteria-view="mobile">{messages.text("slips.autoShort")}</span>
               : criteriaCounts[group] > 0 && <>
                 <small data-criteria-count aria-hidden="true">{messages.number(criteriaCounts[group])}</small>
@@ -443,7 +441,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         </Actions>
         </BuilderOptions>
         <CriteriaSummary data-slip-criteria-summary>
-          <span data-slip-summary-layout="mobile">{dateSummary()} · {timeSummary} · {marketsSummary}</span>
+          <span data-slip-summary-layout="mobile">{dateSummary()} · {timeSummary} · {messages.plural("slips.marketCount", selectedMarkets.length)} · {manualMarkets
+            ? messages.text("slips.mobile.manual", { count: messages.number(manualMarkets) }) : messages.text("slips.autoShort")}</span>
           <span data-slip-summary-layout="desktop">
             <span><strong>{messages.text("slips.summary.dateLabel")}:</strong> {dateSummary()}</span>
             <span><strong>{messages.text("slips.summary.timeLabel")}:</strong> {timeSummary}</span>
@@ -470,7 +469,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={emptyState ? messages.text(`slips.state.${emptyState}.description`) : <SlipStatusCopy
-          mobile={messages.text("slips.idle")} desktop={messages.text("slips.access.ready")} />} />}
+          mobile={messages.text("slips.mobile.access.ready")} desktop={messages.text("slips.access.ready")} />} />}
       {result?.searchLimited && <Note>{messages.text("slips.limited")}</Note>}
       {result?.partialCoverage && <Note>{messages.text("slips.partial")}</Note>}
       {generated && data.slips.length < criteria.slips && !result.searchLimited && <Note>{messages.text("slips.fewer")}</Note>}

@@ -24,6 +24,15 @@ const desktopBuildAction = css`
     @media (pointer: coarse) { && { block-size: 44px; min-block-size: 44px; } }
   }
 `;
+const mobileBuildAction = css`
+  ${media.belowDesktop} {
+    && {
+      flex: none; inline-size: 13rem; min-inline-size: 13rem;
+      block-size: 36px; min-block-size: 36px; padding: 4px 8px;
+      font-size: 0.75rem; line-height: 1.3; white-space: nowrap;
+    }
+  }
+`;
 const desktopGroupDivider = css`
   padding-inline-start: 10px;
   border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
@@ -40,9 +49,12 @@ export const BuildActionLabel = styled.span`
     > [data-action-label="desktop"] { display: inline; }
   }
 `;
-export const AccessLink = styled(ButtonLink)`${desktopBuildAction}`;
 export const AccessNotice = styled(EmptyState)`
-  ${media.desktop} { > div:last-child { display: none; } }
+  ${media.belowDesktop} {
+    padding: 8px;
+    > h3 { font-size: 0.8125rem; line-height: 1.3; }
+    > div { font-size: 0.75rem; line-height: 1.4; }
+  }
 `;
 export const StatusCopy = styled.span`
   > [data-slip-access-message="desktop"] { display: none; }
@@ -52,7 +64,11 @@ export const StatusCopy = styled.span`
   }
 `;
 
-export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; &[data-slip-builder-page] { gap: 6px; } }`;
+export const SlipStack = styled(Stack)`
+  gap: 10px;
+  ${media.belowDesktop} { &[data-slip-builder-page] { gap: 6px; } }
+  ${media.desktop} { gap: 12px; &[data-slip-builder-page] { gap: 6px; } }
+`;
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
 export const SlipList = styled.div<{ $phoneGap?: number }>`
   display: grid; min-inline-size: 0; gap: ${({ $phoneGap = 10 }) => $phoneGap}px;
@@ -73,10 +89,59 @@ export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
   && { padding: 8px; border-radius: 0; }
   [data-criteria-dialog] { background: var(--filter-panel-background); }
+  [data-slip-label="mobile"] { display: none; }
+  ${media.belowDesktop} {
+    && { padding: 6px; }
+    [data-slip-label="desktop"] { display: none; }
+    [data-slip-label="mobile"] { display: inline; }
+    && [data-slip-builder-essentials] { grid-template-columns: 3.5rem minmax(0, 1fr); gap: 6px; }
+    && [data-slip-count] { align-self: stretch; }
+    && [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
+    && [data-slip-count] label, && [data-criteria-field="targets"] label,
+    && [data-slip-target-groups] > fieldset > legend {
+      font-size: 0.625rem; line-height: 1.25; white-space: nowrap;
+    }
+    && [data-slip-target-groups] { gap: 6px; }
+    && [data-slip-target-groups] > fieldset > legend { margin-block-end: 2px; }
+    && [data-slip-builder-essentials] [data-slip-numeric-field] {
+      block-size: 36px; min-block-size: 36px; padding-block: 2px; font-size: 1rem;
+    }
+    && [data-slip-builder-options] { gap: 4px; padding-block-start: 4px; }
+    && [data-slip-criteria-options] { grid-template-columns: 1.15fr 1.1fr 0.9fr; gap: 4px; }
+    && [data-criteria-trigger] {
+      min-block-size: 36px; padding: 3px; gap: 2px; font-size: 0.6875rem; line-height: 1.2;
+    }
+    &&& [data-criteria-label] { white-space: nowrap; }
+    &&& [data-criteria-value] { display: none; }
+    && [data-criteria-trigger] > svg { font-size: 0.625rem; }
+    &&& [data-criteria-count] {
+      min-inline-size: 0.8125rem; block-size: 0.8125rem; padding-inline: 2px; font-size: 0.5625rem;
+    }
+    && [data-criteria-actions] { flex: 1 0 100%; margin-inline-start: 0; }
+    && [data-slip-criteria-summary] { font-size: 0.625rem; line-height: 1.35; }
+    && [data-criteria-dialog] > header, && [data-criteria-dialog] > footer { padding: 8px 10px; }
+    && [data-criteria-dialog] > header > h2 { font-size: 0.875rem; }
+    && [data-criteria-dialog] > header button { min-block-size: 36px; min-inline-size: 36px; }
+    && [data-criteria-dialog] > div { padding: 10px; }
+    && [data-criteria-dialog] label[for] { font-size: 0.6875rem; line-height: 1.25; }
+    && [data-criteria-dialog] input:not([type="checkbox"]):not([type="hidden"]) {
+      min-block-size: 36px; padding-block: 2px; font-size: 1rem;
+    }
+    && [data-kickoff-fields] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    && [data-criteria-dialog] > footer button { min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
+    ${media.tablet} {
+      && [data-slip-criteria-options] { flex: 1 1 18rem; }
+      && [data-criteria-actions] { flex: 0 0 auto; margin-inline-start: auto; }
+    }
+  }
 `;
 export const BuilderHeader = styled.div`
   display: flex; align-items: center; justify-content: space-between; gap: 12px; min-inline-size: 0;
   > h1 { font-size: 1.1875rem; }
+  ${media.belowDesktop} {
+    position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
   ${media.desktop} {
     position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
@@ -257,14 +322,19 @@ export const ActionControls = styled.div`
 export const BuildButton = styled(Button)`
   && { ${toolbarAction} }
   ${desktopBuildAction}
+  ${mobileBuildAction}
 `;
 export const BuildLink = styled(ButtonLink)`
   && { ${toolbarAction} }
   ${desktopBuildAction}
+  ${mobileBuildAction}
 `;
 export const ClearLink = styled(ButtonLink)`
   && { ${toolbarAction} }
   ${media.desktop} { && { ${filterButtonColors} } }
+  ${media.belowDesktop} {
+    && { flex: none; inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; white-space: nowrap; ${filterButtonColors} }
+  }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;
 export const Results = styled.section`

@@ -48,8 +48,18 @@ range fields use equal widths accommodating five-digit values and decimal odds.
 These are display widths; validation and generation limits remain shared across
 devices. The next row labels the current Date, Time, Markets and Selection.
 Custom summaries wrap within their row rather than overflowing the page.
-The desktop page heading remains available to assistive technology but takes
-no visible space. Mobile retains its heading and original control layout.
+The page heading remains available to assistive technology but takes no visible
+space on desktop or mobile.
+
+Below 1024px, the mobile toolbar uses 36px controls with compact padding and
+10–11px labels, retaining readable 16px numeric text. Total slips, Total odds
+and Matches / slip remain visible together; three short dialog buttons share
+the next row, followed by Reset and the fixed 208px action. The compact summary
+shows date, time, selected market count and Auto/manual outcomes. Longer custom
+summaries wrap. At tablet widths below desktop, popup buttons and actions share
+one row. Dialog controls also use compact mobile spacing, with date/time
+fields in two columns. These mobile-only rules are scoped to the builder; the
+desktop layout and shared Best Slips/history spacing remain unchanged.
 
 The buttons show counts for their current settings. Odds & probability counts custom
 individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date
@@ -85,8 +95,8 @@ Native dates retain calendar selection with valid supported years, an ordered
 date window of at most 31 days and valid ordered minute-resolution times.
 Incomplete date segments remain editable; field warnings and the existing
 shared parser prevent invalid windows being applied. The dialog triggers use
-right-facing chevrons. The desktop gap below the toolbar is reduced to 6px;
-the mobile layout, compact label and spacing remain unchanged.
+right-facing chevrons. Both layouts use a 6px gap below the toolbar. Input
+guards, comma formatting, blank Any bounds and criteria defaults are shared.
 
 A validation error exposes its invalid optional group; essential target errors
 stay beside the visible controls. Draft values remain editable and retain their
@@ -147,19 +157,18 @@ selected market is invalid. The native hidden `reuse=0` followed by the checked
 value and markets in public-policy order. Invalid input receives a specific
 criteria error rather than generating with silently corrected ranges.
 
-When subscriber access is required, the primary action shows Sign in for a
-signed-out viewer and opens the login form with the Slip Builder return path.
-Signed-in viewers without the required subscription see Subscribe; eligible
-viewers see Build slips. Sign up remains reachable from the account screen.
-On desktop the locked toolbar and subscriber notice use the more explicit
-Sign in to build slips / Subscribe to build slips labels. Their actions share
-the same fixed 208px by 32px size (44px high for coarse pointers), including
-Build slips and its pending label, so changing access status does not resize
-the button. Desktop shows the action only in the toolbar. The notice explains
+When subscriber access is required, the primary action shows Sign in to build
+slips for a signed-out viewer and opens the login form with the Slip Builder
+return path. Signed-in viewers without the required subscription see Subscribe
+to build slips; eligible viewers see Build slips. Sign up remains reachable
+from the account screen. Desktop actions retain their fixed 208px by 32px size
+(44px high for coarse pointers); mobile actions use 208px by 36px, including
+the pending label, so changing access status does not resize the button.
+Both layouts show the action only in the toolbar. The notice explains
 that guests must sign in and need an active subscription; signed-in viewers
 without access are directed to the subscription action above. Eligible viewers
-see ready-to-build guidance or their generated results. Mobile retains its
-existing layout, short action labels, secondary action, description and sizing.
+see ready-to-build guidance or their generated results. Mobile uses a concise
+version of the same account-aware guidance without a duplicate lower action.
 
 The optional `outcomes` mapping stores explicit arrays per market family. Missing
 families mean Automatic. Native fields `picks.<family>` accept `auto` alone or a
