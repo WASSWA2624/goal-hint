@@ -14,7 +14,7 @@ import { ActionButton, CheckField, DangerButton, FieldBlock, FieldRow, FormStack
 import { ManualCodeForm, type CodeAction } from "./code-tools";
 import { DrawerNote, FactList, TextAction, ZoneLabel } from "./desk-styles";
 import { NetworkChip, networkLabel } from "./network-chip";
-import { CompactAmountSummary, CompactReviewScroll, CompactReviewSummary } from "./payment-compact-styles";
+import { CompactAmountSummary, CompactReviewScroll } from "./payment-compact-styles";
 import { ApprovalForm, BigAmount, CheckList, CopyRow, DecisionBar, DecisionPanel, DecisionZone, ExpectedZone, NetworkValue, PaymentBadge, PaymentWarnings,
   ProofActions, ProofFrame, ProofImage, ProofToggle, ProofZone, RecoveryStack, RejectDrawer, RejectToggle, ReviewCard, ReviewHead, ReviewMeta, ReviewZones, ShieldMark,
   ZoneDrawer } from "./payment-styles";
@@ -89,11 +89,6 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
       <ReviewMeta data-review-meta>{p.reference} · {formatPeriodEnd(new Date(p.submittedAt))}</ReviewMeta>
       <TextAction as={Link} data-review-link href={`/admin/subscribers?accountId=${encodeURIComponent(p.accountId)}`} prefetch={false}><UserIcon />View subscriber</TextAction>
     </ReviewHead>
-    <CompactReviewSummary $tone={warnings.length ? "warning" : checks.length && allClear ? "good" : "neutral"}>
-      {warnings.length ? <AlertIcon /> : <ShieldIcon />}<div><strong>{warnings.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"} to review` : pending ? "Ready for manual review" : "Reviewed payment"}</strong>
-        <small>{warnings.length ? "Review the warnings below before confirming the received transfer." : checks.length ? "Review the checks and confirm the received transfer." : "Confirm the received transfer against the report."}</small></div>
-      <span data-payment-summary-count>{checks.length} check{checks.length === 1 ? "" : "s"}</span>
-    </CompactReviewSummary>
     <CompactAmountSummary>
       <div><small>{typeof receivedAmount === "number" ? "Amount received" : "Amount reported"}</small><strong>{formatUgx(receivedAmount ?? p.amount)}</strong>
         {p.purpose !== "topup" && (receivedAmount ?? p.amount) !== price && <small>Package price: {formatUgx(price)}</small>}</div>

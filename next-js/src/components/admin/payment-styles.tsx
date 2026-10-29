@@ -27,7 +27,7 @@ export const PaymentLayout = styled.div`
   min-inline-size: 0;
   > * { min-inline-size: 0; }
   ${media.desktop} {
-    grid-template-columns: clamp(19rem, 29vw, 22.8125rem) minmax(0, 1fr);
+    grid-template-columns: clamp(22rem, 30vw, 26rem) minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     min-block-size: 0;
     gap: 0;
@@ -48,12 +48,12 @@ export const PaymentHead = styled(DeskHead)<{ $reviewing: boolean }>`
   position: relative;
   ${media.desktop} {
     grid-column: 1 / -1;
-    min-block-size: 56px;
-    padding: 8px 20px;
+    min-block-size: 48px;
+    padding: 4px 12px;
     border-block-end: ${hairline};
     background: ${({ theme }) => theme.color.surface};
     > h1 { ${visuallyHidden} }
-    button, nav { border-radius: 0; }
+    button, nav { border-radius: 2px; }
   }
   ${media.belowDesktop} {
     gap: 12px;
@@ -124,8 +124,8 @@ export const QueueBar = styled(Toolbar)`
   ${media.belowDesktop} { gap: 8px; padding: 0; border: 0; > :first-child { flex-basis: 100%; max-inline-size: none; } }
   ${media.desktop} {
     display: grid;
-    gap: 8px;
-    padding: 14px 14px 10px;
+    gap: 4px;
+    padding: 6px 10px 4px;
     > :first-child { max-inline-size: none; }
   }
 `;
@@ -135,7 +135,7 @@ export const QueueFilters = styled.div`
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     label { min-inline-size: 0; }
     label > span { ${visuallyHidden} }
-    select { ${adminControl} min-block-size: 30px; padding: 2px 18px 2px 0; border: 0; border-radius: 0; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
+    select { ${adminControl} min-block-size: 28px; padding: 2px 18px 2px 0; border: 0; border-radius: 2px; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
   }
 `;
 export const SearchField = styled.div`
@@ -145,7 +145,7 @@ export const SearchField = styled.div`
   > input { ${adminControl} padding-inline-start: 38px; }
   > input::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   > label { ${visuallyHidden} }
-  ${media.desktop} { > input { font-size: 0.8125rem; border-radius: 0; } }
+  ${media.desktop} { > input { min-block-size: 34px; padding-block: 4px; font-size: 0.8125rem; border-radius: 2px; } }
 `;
 export const QueueSummary = styled.p`
   display: flex;
@@ -158,7 +158,7 @@ export const QueueSummary = styled.p`
   > span + span::before { content: "·"; margin-inline-end: 6px; }
   > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   ${media.belowDesktop} { margin-block-start: -4px; }
-  ${media.desktop} { grid-row: 3; padding: 8px 14px; border-block-start: ${hairline}; font-size: 0.6875rem; background: ${({ theme }) => theme.color.surfaceMuted}; }
+  ${media.desktop} { grid-row: 3; padding: 5px 10px; border-block-start: ${hairline}; font-size: 0.6875rem; background: ${({ theme }) => theme.color.surfaceMuted}; }
 `;
 
 export const TicketTray = styled.ol<{ $opened: boolean }>`
@@ -204,9 +204,11 @@ export const Ticket = styled.button`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 1px; }
   ${media.hover} { &:hover:not(:disabled):not([aria-current="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
   ${media.desktop} {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    gap: 4px 10px;
-    padding: 12px 14px;
+    grid-template-columns: 30px minmax(0, 1fr) auto auto;
+    align-items: center;
+    min-block-size: 54px;
+    gap: 3px 8px;
+    padding: 8px 10px;
     border: 0; border-block-end: ${hairline}; border-radius: 0;
     font-size: 0.8125rem;
     &[aria-current="true"] { box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
@@ -215,17 +217,17 @@ export const Ticket = styled.button`
 export const TicketProvider = styled.span`
   display: none;
   ${media.desktop} {
-    display: grid; place-items: center; grid-column: 1; grid-row: 1 / span 3; align-self: start; min-block-size: 32px;
-    [data-payment-logo="mtn"] { inline-size: 44px; block-size: 24px; }
-    [data-payment-logo="airtel"] { inline-size: 26px; block-size: 26px; }
+    display: grid; place-items: center; grid-column: 1; grid-row: 1 / span 2; align-self: center; min-block-size: 28px;
+    [data-payment-logo="mtn"] { inline-size: 30px; block-size: 18px; }
+    [data-payment-logo="airtel"] { inline-size: 23px; block-size: 23px; }
   }
 `;
 export const TicketPhone = styled.span`
-  ${media.desktop} { grid-column: 2; grid-row: 2; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${media.desktop} { grid-column: 3; grid-row: 1; white-space: nowrap; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
 export const TicketPlan = styled.span`
   ${media.belowDesktop} { > [data-ticket-duration] { display: none; } }
-  ${media.desktop} { grid-column: 3; grid-row: 2; text-align: end; font-size: 0.6875rem; overflow-wrap: anywhere; }
+  ${media.desktop} { grid-column: 2 / -1; grid-row: 2; justify-self: end; max-inline-size: calc(100% - 9rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; font-size: 0.6875rem; }
 `;
 export const TicketRef = styled.span`
   display: flex;
@@ -234,14 +236,14 @@ export const TicketRef = styled.span`
   min-inline-size: 0;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   overflow-wrap: anywhere;
-  ${media.desktop} { grid-column: 2; grid-row: 1; font-size: 0.75rem; > [data-ticket-inline-network] { display: none; } }
+  ${media.desktop} { display: block; grid-column: 2; grid-row: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; > [data-ticket-inline-network] { display: none; } }
 `;
 export const TicketAmount = styled.span`
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   font-variant-numeric: tabular-nums;
   text-align: end;
   white-space: nowrap;
-  ${media.desktop} { grid-column: 3; grid-row: 1; font-size: 0.75rem; }
+  ${media.desktop} { grid-column: 4; grid-row: 1; font-size: 0.75rem; }
 `;
 export const TicketMeta = styled.span`
   min-inline-size: 0;
@@ -255,7 +257,7 @@ export const TicketTime = styled(TicketMeta)`
   text-align: end;
   white-space: nowrap;
   ${media.belowDesktop} { > [data-ticket-timezone] { display: none; } }
-  ${media.desktop} { display: block; grid-column: 2 / -1; grid-row: 3; text-align: start; font-size: 0.6875rem; }
+  ${media.desktop} { display: block; grid-column: 2 / -1; grid-row: 2; justify-self: start; text-align: start; font-size: 0.6875rem; }
 `;
 export const TicketWarn = styled.span`
   grid-column: 1 / -1;
@@ -358,7 +360,7 @@ export const Stepper = styled.div`
     ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
   }
   > span { padding: 0 2px; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  ${media.desktop} { > button { inline-size: 40px; block-size: 40px; } > span { padding-inline: 4px; } }
+  ${media.desktop} { border-radius: 2px; > button { inline-size: 28px; block-size: 28px; border-radius: 2px; } > span { padding-inline: 4px; font-size: 0.75rem; } }
 `;
 export const ReviewMeta = styled.span`
   color: ${({ theme }) => theme.color.mutedText};

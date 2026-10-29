@@ -371,10 +371,14 @@ def payments_rendering(origin):
             match(r'href="/admin/payments\?tab=pending"', badge)
             match(r'id="payment-search"', html)
             match("Refresh queue", html)
+            no_match(r'data-payment-summary-count|Ready for manual review|Review the checks and confirm the received transfer', html,
+                     "The removed review-summary banner must not reappear.")
             expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
             assert re.findall(r'data-payment-row="([^"]+)"', html) == expected, tab
             rows = re.findall(r'<button\b[^>]*data-payment-row="[^"]+"[^>]*>([\s\S]*?)</button>', html)
             for row in rows:
+                for field in ["ref", "phone", "amount", "time", "plan"]:
+                    assert len(re.findall(rf'\bdata-ticket-{field}(?:="[^"]*")?(?=[\s>])', row)) == 1, f"Queue row has one {field} field."
                 row_text = unescape(re.sub(r'<[^>]+>', " ", row))
                 match(r'\+\d|Payer not provided', row_text, "Queue rows identify the payer or a missing payer.")
                 match(r'UGX\s+[\d,]+', row_text)
@@ -426,6 +430,7 @@ def payments_queue_rendering(origin):
         match(r'data-layout="compact"', editor)
         assert html.count("data-payment-queue-scroll") == 1
         assert html.count("data-payment-review-scroll") == 1
+        no_match(r'data-payment-summary-count|Ready for manual review', html)
         rows = re.findall(r'data-payment-row="([^"]+)"', html)
         assert len(rows) == 30 and len(set(rows)) == 30
         assert len(re.findall(r'data-payment-review="([^"]+)"', html)) == 1

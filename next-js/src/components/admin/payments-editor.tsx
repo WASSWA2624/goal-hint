@@ -12,6 +12,7 @@ import { NetworkChip } from "./network-chip";
 import { paymentWarnings, PaymentReview, type PaymentRecovery } from "./payment-review";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
+import { paymentSortOptions, sortPayments, type PaymentSort } from "./payment-order";
 import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueuePanel, QueueSummary, RefreshSquare, ReviewBack, ReviewNav, ReviewSection,
   SearchField, StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketPhone, TicketPlan, TicketProvider, TicketRef, TicketTime, TicketTray, TicketWarn } from "./payment-styles";
 
@@ -41,7 +42,7 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverDesktopSnapshot);
   const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(queue.payments[0]?.id ?? "");
-  const [provider, setProvider] = useState("all"), [sort, setSort] = useState("queue");
+  const [provider, setProvider] = useState("all"), [sort, setSort] = useState<PaymentSort>("queue");
   const [detailOpen, setDetailOpen] = useState(false), [completed, setCompleted] = useState<readonly string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
   const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(false);
@@ -49,11 +50,10 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   const refreshFocus = useRef<HTMLButtonElement | null>(null);
   const lastHash = useRef<string | null>(null);
   const query = searchText(search);
-  const payments = queue.payments.filter(payment => !(completed.includes(payment.id) && ["pending", "superseded"].includes(payment.status))
+  const payments = sortPayments(queue.payments.filter(payment => !(completed.includes(payment.id) && ["pending", "superseded"].includes(payment.status))
     && (!desktop || provider === "all" || (payment.final?.network || payment.network) === provider) && (!query || searchText([
     payment.reference, payment.accountPhone ?? "", payment.payerPhone ?? "", payment.transactionId, payment.final?.transactionId ?? "", payment.planName,
-  ].join(" ")).includes(query))).sort((a, b) => !desktop || sort === "queue" ? 0 : sort === "amount"
-    ? (b.final?.amount ?? b.amount) - (a.final?.amount ?? a.amount) : sort === "oldest" ? a.submittedAt.localeCompare(b.submittedAt) : b.submittedAt.localeCompare(a.submittedAt));
+  ].join(" ")).includes(query))), desktop ? sort : "queue");
   const selected = payments.find(payment => payment.id === selectedId) ?? payments[0];
   const selectedKey = selected?.id, index = selected ? payments.indexOf(selected) : -1;
   const reviewing = detailOpen && !!selected;
@@ -166,20 +166,20 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
             onChange={event => setSearch(event.target.value)} /></SearchField>
         <QueueFilters>
           <label><span>Payment provider</span><select aria-label="Payment provider" value={provider} disabled={action.busy} onChange={event => setProvider(event.target.value)}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></label>
-          <label><span>Sort payments</span><select aria-label="Sort payments" value={sort} disabled={action.busy} onChange={event => setSort(event.target.value)}><option value="queue">Queue order</option><option value="oldest">Oldest first</option><option value="newest">Newest first</option><option value="amount">Highest amount</option></select></label>
+          <label><span>Sort payments</span><select aria-label="Sort payments" value={sort} disabled={action.busy} onChange={event => setSort(event.target.value as PaymentSort)}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         </QueueFilters>
       </QueueBar>
-      <QueueSummary><span data-payment-count>{payments.length} {tab === "pending" ? "waiting" : payments.length === 1 ? "report" : "reports"}</span><span>Up to 100</span><span>{desktop && sort !== "queue" ? sort === "amount" ? "Highest amount" : sort === "oldest" ? "Oldest first" : "Newest first" : tab === "pending" ? "Oldest first" : "Newest first"}</span>
+      <QueueSummary><span data-payment-count>{payments.length} {tab === "pending" ? "waiting" : payments.length === 1 ? "report" : "reports"}</span><span>Up to 100</span><span>{desktop && sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
         {queueChanged && <span role="status" data-payment-queue-updated>Queue updated</span>}</QueueSummary>
       {payments.length ? <TicketTray $opened={opened} data-payment-queue-scroll tabIndex={0} aria-label="Payment list">{payments.map(payment => {
         const warnings = paymentWarnings(payment).length, network = payment.final?.network || payment.network;
         return <li key={payment.id}><Ticket type="button" aria-current={selected?.id === payment.id ? "true" : undefined} aria-controls="payment-review"
           disabled={action.busy} onClick={() => select(payment)} data-payment-row={payment.id}>
           <TicketProvider><NetworkChip network={network} labelled /></TicketProvider>
-          <TicketRef>{payment.reference}<span data-ticket-inline-network><NetworkChip network={network} labelled /></span></TicketRef>
-          <TicketAmount>{formatUgx(payment.final?.amount ?? payment.amount)}</TicketAmount>
-          <TicketMeta><TicketPhone>{payment.payerPhone ? phoneLabel(payment.payerPhone) : "Payer not provided"}</TicketPhone><span data-ticket-separator> · </span><TicketPlan>{payment.purpose === "topup" ? "Credit top-up" : payment.planName}<span data-ticket-duration>{payment.purpose !== "topup" && payment.durationDays !== null ? ` · ${formatPlanLength(payment.durationDays)}` : ""}</span></TicketPlan></TicketMeta>
-          <TicketTime>{ticketTime(payment.submittedAt)}<span data-ticket-timezone> EAT</span></TicketTime>
+          <TicketRef data-ticket-ref title={payment.reference}>{payment.reference}<span data-ticket-inline-network><NetworkChip network={network} labelled /></span></TicketRef>
+          <TicketAmount data-ticket-amount>{formatUgx(payment.final?.amount ?? payment.amount)}</TicketAmount>
+          <TicketMeta><TicketPhone data-ticket-phone>{payment.payerPhone ? phoneLabel(payment.payerPhone) : "Payer not provided"}</TicketPhone><span data-ticket-separator> · </span><TicketPlan data-ticket-plan title={payment.purpose === "topup" ? "Credit top-up" : `${payment.planName}${payment.durationDays !== null ? ` · ${formatPlanLength(payment.durationDays)}` : ""}`}>{payment.purpose === "topup" ? "Credit top-up" : payment.planName}<span data-ticket-duration>{payment.purpose !== "topup" && payment.durationDays !== null ? ` · ${formatPlanLength(payment.durationDays)}` : ""}</span></TicketPlan></TicketMeta>
+          <TicketTime data-ticket-time>{ticketTime(payment.submittedAt)}<span data-ticket-timezone> EAT</span></TicketTime>
           {warnings > 0 && <TicketWarn><AlertIcon />{warnings} warning{warnings === 1 ? "" : "s"}</TicketWarn>}
         </Ticket></li>;
       })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{search || desktop && provider !== "all" ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</strong>

@@ -5,6 +5,13 @@ queue heading removed. Search and filters sit directly above the payment list.
 The other nine concepts remain available for comparison. The live screen uses
 the existing payment services and real evidence; this gallery uses sample data.
 
+The live desktop layout has since been compacted into two-line payment rows,
+with expanded sorting and a shared sidebar that collapses or resizes by dragging
+its divider. The sidebar also supports arrow keys, Home/End, Enter to reset,
+and a reset button beside the Admin caption. Its width/collapse preferences
+persist only in the browser. The redundant manual-review summary is removed;
+actual warnings and checks remain in the selected payment.
+
 Open `/admin-payment-layouts/index.html` on the running application. The local
 review is at <http://localhost:3000/admin-payment-layouts/index.html>.
 The HTML carries `noindex, nofollow` metadata.

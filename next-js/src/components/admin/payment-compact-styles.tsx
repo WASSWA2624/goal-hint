@@ -20,33 +20,6 @@ export const CompactReviewScroll = styled.div`
   }
 `;
 
-type SummaryTone = "good" | "warning" | "neutral";
-
-/** A concise summary of the real report checks, above the payment amount. */
-export const CompactReviewSummary = styled.div<{ $tone?: SummaryTone }>`
-  display: none;
-  ${media.desktop} {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-inline-size: 0;
-    margin: 16px 20px 0;
-    padding: 12px 14px;
-    border-inline-start: 2px solid currentColor;
-    ${({ theme, $tone = "neutral" }) => {
-      const tone = $tone === "good" ? theme.color.outcome.correct
-        : $tone === "warning" ? theme.color.outcome.pending
-          : { text: theme.color.link, background: theme.color.brandSoft };
-      return css`color: ${tone.text}; background: ${tone.background};`;
-    }}
-    > svg { flex: none; font-size: 1.125rem; }
-    > div, > span { display: grid; gap: 3px; min-inline-size: 0; }
-    strong { font-size: 0.8125rem; line-height: 1.4; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-    small { font-size: 0.75rem; line-height: 1.5; }
-    > [data-payment-summary-count] { margin-inline-start: auto; font-size: 0.75rem; text-align: end; }
-  }
-`;
-
 /** Reported/received money remains distinct from the package price when they differ. */
 export const CompactAmountSummary = styled.div`
   display: none;
@@ -55,13 +28,13 @@ export const CompactAmountSummary = styled.div`
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px 16px;
-    margin: 0 20px 16px;
-    padding: 18px 0 16px;
+    margin: 0 12px 12px;
+    padding: 12px 0 10px;
     border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     min-inline-size: 0;
     > div { display: grid; gap: 4px; min-inline-size: 0; }
     > div:nth-child(2) { text-align: end; }
-    strong { color: ${({ theme }) => theme.color.text}; font-size: 1.75rem; line-height: 1.2; font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    strong { color: ${({ theme }) => theme.color.text}; font-size: 1.5rem; line-height: 1.2; font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
     small, > span { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.5; }
     [data-payment-package] { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     > [data-payment-submitted] { grid-column: 1 / -1; font-variant-numeric: tabular-nums; }
@@ -81,30 +54,30 @@ export const desktopCompactReview = css`
     border-radius: 0;
     background: ${({ theme }) => theme.color.surfaceMuted};
 
-    input, select, textarea, button, details, summary, img, [role="group"], [data-review-badge], [data-payment-zone] > div { border-radius: 0; }
+    input, select, textarea, button, details, summary, img, [role="group"], [data-review-badge], [data-payment-zone] > div { border-radius: 2px; }
     [data-payment-head] {
-      gap: 6px 12px;
-      min-block-size: 78px;
-      padding: 16px 20px;
+      gap: 4px 10px;
+      min-block-size: 44px;
+      padding: 6px 12px;
       border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
       background: ${({ theme }) => theme.color.surface};
-      > h2 { font-size: 1.1875rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+      > h2 { font-size: 1.0625rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
       > [data-review-meta] { font-size: 0.75rem; }
-      > [data-review-link] { font-size: 0.75rem; }
+      > [data-review-link] { min-block-size: 28px; padding-block: 2px; font-size: 0.75rem; }
     }
 
     [data-payment-zones] {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;
-      gap: 14px;
-      padding: 0 20px 20px;
+      gap: 12px;
+      padding: 0 12px 12px;
       min-inline-size: 0;
       > [data-payment-zone] {
         min-inline-size: 0;
-        padding: 14px;
+        padding: 12px;
         border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-        border-radius: 0;
+        border-radius: 2px;
         background: ${({ theme }) => theme.color.surface};
       }
       > [data-payment-zone="decision"] { grid-column: 1; grid-row: 1; display: grid; gap: 14px; align-content: start; }
@@ -133,11 +106,11 @@ export const desktopCompactReview = css`
       position: static;
       min-inline-size: 0;
       margin: 0;
-      padding: 12px 20px;
+      padding: 6px 12px;
       border: 0;
       border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
       background: ${({ theme }) => theme.color.surface};
-      > button { flex: 0 1 auto; min-inline-size: 0; min-block-size: 40px; padding-inline: 14px; font-size: 0.8125rem; }
+      > button { flex: 0 1 auto; min-inline-size: 0; min-block-size: 32px; padding: 4px 10px; font-size: 0.8125rem; }
       > [data-reject-toggle] { display: inline-flex; }
       > [data-reject-submit] { display: none; }
       > [data-payment-footer-summary] { min-inline-size: 0; margin-inline-end: auto; overflow-wrap: anywhere; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
