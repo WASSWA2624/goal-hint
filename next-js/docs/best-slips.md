@@ -76,13 +76,24 @@ so it cannot replace a user's page change.
 
 ## Desktop date and result filters
 
-The selected Compact selectors design adds one toolbar above the desktop slip
-list: Slip date, All slips/Won/Lost/Pending, and Reset. It uses the shared Matches
-filter palette, 32px square controls, and the existing custom-range dialog.
-Phones and tablets keep their original daily presentation.
+The desktop filter section has one toolbar with two distinct segmented toggle
+groups: dates and All slips/Won/Lost/Pending. Reset stays on the same row as a
+separate outlined icon action. The applied-filter summary sits below it.
+The section uses the shared Matches palette, square controls, quiet horizontal
+edges, and no vertical panel borders. Date selection uses a solid brand fill;
+result selection uses neutral, green, red, or amber, with matching resting
+tints. Filled selected states and `aria-pressed` distinguish the choices.
+Fine-pointer toggles are 28px high inside compact group frames; coarse pointers
+retain 44px targets. Phones and tablets keep their original daily presentation.
 
-Dates select the slip's publication day in EAT. Today, Yesterday, Tomorrow,
-Last 3/7/30 days, Next 7/30 days, All dates, and Custom range are available.
+Dates select the slip's publication day in EAT. Buttons appear in this order:
+Last 30 days, Last 7 days, Last 3 days, Yesterday, Today, Tomorrow, Next 3 days,
+Next 7 days, Next 30 days, and Custom range. The custom-range popup retains its
+existing controls; its current dates remain editable in the summary row.
+Below 1280px, day ranges use short labels such as Last 30d to keep both groups
+and Reset together. Full labels remain the accessible button names and hover
+titles. Date controls can scroll horizontally only if their container becomes
+too narrow; result controls and Reset remain visible.
 Past periods include today; future periods start tomorrow. Custom bounds are
 inclusive and limited to 366 days. Reset restores Today and All slips. Dates
 and outcomes combine; editing or canceling dates preserves the result choice.
@@ -94,8 +105,10 @@ Filters and page controls use local state; switching to mobile shows the daily
 server result. Superseded requests are aborted and ignored. Read failures show
 retry feedback instead of stale slips or an empty-result claim.
 
-Explicit ranges have exact result counts and 20 slips per page. All dates scans
-at most 31 publications per request and uses an original-day/rank cursor to
+Explicit ranges have exact result counts and 20 slips per page. The API retains
+the All dates option for compatibility, although it is no longer in the date
+button row. All dates scans at most 31 publications per request and uses an
+original-day/rank cursor to
 continue without dropping remaining slips from a publication. Its summary
 states the dates examined and the number shown rather than claiming an
 all-history total. A scan with no matching outcomes still offers continuation

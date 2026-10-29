@@ -1,7 +1,7 @@
 import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "./calendar.ts";
 import { bestSlipsRules } from "./best-slips.ts";
 
-export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next7", "next30", "all", "custom"] as const;
+export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next3", "next7", "next30", "all", "custom"] as const;
 export const bestSlipsStatuses = ["all", "won", "lost", "pending"] as const;
 export type BestSlipsPeriod = typeof bestSlipsPeriods[number];
 export type BestSlipsStatus = typeof bestSlipsStatuses[number];
@@ -42,7 +42,7 @@ export function resolveBestSlipsDates(query: BestSlipsQuery, today: ReportingDat
   if (query.period === "last3" || query.period === "last7" || query.period === "last30") {
     return { from: addReportingDays(day, 1 - Number(query.period.slice(4))), to: day };
   }
-  if (query.period === "next7" || query.period === "next30") {
+  if (query.period === "next3" || query.period === "next7" || query.period === "next30") {
     return { from: addReportingDays(day, 1), to: addReportingDays(day, Number(query.period.slice(4))) };
   }
   return fail("invalid-query");

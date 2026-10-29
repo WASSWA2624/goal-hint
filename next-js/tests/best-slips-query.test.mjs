@@ -8,7 +8,7 @@ test('slip presets resolve inclusive EAT publication dates across month and year
   const expected = {
     today: ['2026-10-29', '2026-10-29'], yesterday: ['2026-10-28', '2026-10-28'], tomorrow: ['2026-10-30', '2026-10-30'],
     last3: ['2026-10-27', '2026-10-29'], last7: ['2026-10-23', '2026-10-29'], last30: ['2026-09-30', '2026-10-29'],
-    next7: ['2026-10-30', '2026-11-05'], next30: ['2026-10-30', '2026-11-28'], all: [null, null],
+    next3: ['2026-10-30', '2026-11-01'], next7: ['2026-10-30', '2026-11-05'], next30: ['2026-10-30', '2026-11-28'], all: [null, null],
   };
   assert.deepEqual(parseBestSlipsQuery({}, today), defaultBestSlipsQuery());
   for (const [period, [from, to]] of Object.entries(expected)) {
@@ -16,6 +16,12 @@ test('slip presets resolve inclusive EAT publication dates across month and year
   }
   assert.deepEqual(resolveBestSlipsDates({ ...defaultBestSlipsQuery(), period: 'last3' }, parseReportingDate('2027-01-01')),
     { from: '2026-12-30', to: '2027-01-01' });
+  for (const [day, from, to] of [['2026-12-31', '2027-01-01', '2027-01-03'], ['2028-02-28', '2028-02-29', '2028-03-02']]) {
+    assert.deepEqual(resolveBestSlipsDates({ ...defaultBestSlipsQuery(), period: 'next3' }, parseReportingDate(day)), { from, to });
+  }
+  const nextThree = parseBestSlipsQuery(new URLSearchParams('period=next3&status=won&page=2'), today);
+  assert.deepEqual(nextThree, { period: 'next3', status: 'won', page: 2 });
+  assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(nextThree), today), nextThree);
 });
 
 test('custom ranges accept same-day and a full leap year, while serialization retains both filters and pagination', () => {
