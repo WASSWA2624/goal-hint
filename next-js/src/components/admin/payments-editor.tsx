@@ -148,7 +148,7 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
     {stepper}
   </ReviewNav>;
 
-  return <PaymentLayout data-payments-editor data-layout="compact" data-analytics-ignore>
+  return <PaymentLayout data-payments-editor data-layout="balanced" data-analytics-ignore>
     <PaymentHead $reviewing={reviewing}>
       <h1>Payments</h1>
       <StatusTabs as="nav" aria-label="Payment status">{Object.entries(tabLabels).map(([value, label]) => <Link key={value} href={`/admin/payments?tab=${value}`}

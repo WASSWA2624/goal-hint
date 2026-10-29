@@ -146,14 +146,24 @@ test("owner checks flag duplicate proof and payer differences without treating a
   assert.equal(paymentChecks(base).filter(c=>c.tone==="warning").length,0);
   const all = paymentChecks({...base,received:1000,approved:"PAAAA",pending:"PBBBB",image:"PCCCC",payerAccount:true,payerDiffers:true});
   assert.equal(all.filter(c=>c.tone==="warning").length,6);
+  assert.deepEqual(all[0], { tone: "warning", text: "UGX 1,000 received is below the UGX 5,000 price", summary: "Received amount is below the package price" });
   assert.equal(paymentChecks({...base,payerDiffers:true})[5].tone,"info");
   for (const companion of [{image:"PCCCC"},{payerAccount:true}]) assert.equal(paymentChecks({...base,payerDiffers:true,...companion})[5].tone,"warning");
   const unverified = paymentChecks({ ...base, received: null, transactionId: false });
-  assert.match(unverified[0].text, /Check your wallet/);
+  assert.deepEqual(unverified[0], { tone: "info", text: "Check your wallet SMS shows UGX 5,000 received", summary: "Confirm the received transfer in your wallet SMS" });
   assert.match(unverified[1].text, /No transaction ID/);
   // The screenshot's amount is the last line: absent without a screenshot, a prompt when unread, a warning when short.
   assert.equal(paymentChecks(base).length, paymentChecks({ ...base, screenshotAmount: 5000 }).length - 1);
-  assert.deepEqual(paymentChecks({ ...base, screenshotAmount: 5000 }).at(-1), { tone: "good", text: "Screenshot shows UGX 5,000" });
-  assert.deepEqual(paymentChecks({ ...base, screenshotAmount: 1000 }).at(-1), { tone: "warning", text: "Screenshot shows UGX 1,000, below the UGX 5,000 price" });
+  assert.deepEqual(paymentChecks({ ...base, screenshotAmount: 5000 }).at(-1), { tone: "good", text: "Screenshot shows UGX 5,000", summary: "Screenshot amount covers the reported package price" });
+  assert.deepEqual(paymentChecks({ ...base, screenshotAmount: 1000 }).at(-1), { tone: "warning", text: "Screenshot shows UGX 1,000, below the UGX 5,000 price", summary: "Screenshot amount is below the reported package price" });
   assert.equal(paymentChecks({ ...base, screenshotAmount: null }).at(-1).tone, "info");
+  const excess = paymentChecks({ ...base, screenshotAmount: 6000 });
+  assert.deepEqual(excess.at(-1), { tone: "info", text: "UGX 1,000 above the price becomes credit if you record UGX 6,000 received", summary: "Any confirmed excess becomes account credit" });
+  assert.equal(excess.at(-2).tone, "good", "The screenshot hint remains before the conditional credit hint.");
+  assert.equal(excess.at(-2).text, "Screenshot shows UGX 6,000");
+  assert.ok(excess.filter(check => check.summary).every(check => !/\d/u.test(check.summary)), "Desktop summaries avoid repeating the payment figures.");
+  const topUp = paymentChecks({ ...base, purpose: "topup", received: 1000, screenshotAmount: 1000 });
+  assert.equal(topUp[0].summary, "Received amount is below the reported top-up");
+  assert.equal(topUp.at(-2).summary, "Screenshot amount is below the reported top-up");
+  assert.equal(paymentChecks({ ...base, purpose: "topup", screenshotAmount: 5000 }).at(-2).summary, "Screenshot amount covers the reported top-up");
 });

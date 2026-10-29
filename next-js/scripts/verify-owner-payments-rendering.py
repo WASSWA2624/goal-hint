@@ -404,13 +404,32 @@ def payments_api(origin):
         decide("01", {"action": "reject", "reason": "unreadable", "text": "", "deleteImage": True}, 200)
         assert fixture_json(origin, screenshot)[0] == 404
         assert fixture_json(origin, "/api/admin/payments/" + payment("00"), decision, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
-        for suffix in ["00", "02"]:
-            decide(suffix, {"action": "reject", "reason": "not-received", "text": "", "deleteImage": False}, 200)
+        decide("00", {"action": "reject", "reason": "not-received", "text": "", "deleteImage": False}, 200)
+        missing_id = visible_html(request(origin, "/admin/payments").text)
+        payment_transaction_rendering(missing_id, editable=True, empty=True)
+        decide("02", {"action": "reject", "reason": "not-received", "text": "", "deleteImage": False}, 200)
         empty = visible_html(request(origin, "/admin/payments").text)
         match(r'data-payment-empty', empty)
-        no_match(r'data-payment-row=|data-payment-approval', empty)
+        no_match(r'data-payment-row=|data-payment-approval|aria-label="Copy transaction ID"', empty)
     finally:
         fixture_json(origin, endpoint, {"scenario": "baseline"})
+
+
+def payment_transaction_rendering(html, *, editable, empty=False):
+    """One explicit copy action accompanies the selected transaction without submitting its form."""
+    buttons = re.findall(r'<button\b(?=[^>]*aria-label="Copy transaction ID")[^>]*>', html)
+    assert len(buttons) == 1, "The selected payment has one transaction-copy button."
+    match(r'\btype="button"', buttons[0], "Copying a transaction must not submit a payment decision.")
+    if empty:
+        match(r'\bdisabled(?:=""|\s|>)', buttons[0], "A missing transaction ID cannot be copied.")
+    else:
+        no_match(r'\bdisabled(?:=""|\s|>)', buttons[0], "A reported or confirmed transaction can be copied.")
+    inputs = re.findall(r'<input\b(?=[^>]*name="transactionId")[^>]*>', html)
+    assert len(inputs) <= 1, "The selected transaction has no duplicate inputs."
+    if editable:
+        assert len(inputs) == 1, "A reviewable report has one editable transaction ID."
+        if empty:
+            match(r'\bvalue=""', inputs[0], "A legacy missing ID remains empty until entered.")
 
 
 def payments_rendering(origin):
@@ -448,6 +467,7 @@ def payments_rendering(origin):
                 no_match(r'Expected|No screenshot', row)
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
             assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
+            payment_transaction_rendering(html, editable=tab in ["pending", "superseded", "invalid"])
             if tab == "superseded":
                 match("AIR2026102301", html, "The replaced report's review prefills its reported transaction ID.")
             if tab in ["pending", "invalid"]:
@@ -484,7 +504,7 @@ def payments_queue_rendering(origin):
         html = visible_html(response.text)
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
         editor = match(r'<div\b(?=[^>]*data-payments-editor)[^>]*>', html).group(0)
-        match(r'data-layout="compact"', editor)
+        match(r'data-layout="balanced"', editor)
         assert html.count("data-payment-queue-scroll") == 1
         assert html.count("data-payment-review-scroll") == 1
         no_match(r'data-payment-summary-count|Ready for manual review', html)

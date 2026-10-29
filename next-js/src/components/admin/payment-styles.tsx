@@ -4,7 +4,7 @@ import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { ActionButton, adminControl } from "./admin-form";
 import { DeskHeadEnd, Drawer, EmptyPanel, panelRadius, Segmented, TextAction, visuallyHidden } from "./desk-styles";
-import { desktopCompactReview } from "./payment-compact-styles";
+import { desktopBalancedReview } from "./payment-balanced-styles";
 import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
 
 /**
@@ -22,7 +22,9 @@ const focusRing = css`
 const desktopOnly = css`${media.belowDesktop} { display: none; }`;
 const phoneOnly = css`${media.desktop} { display: none; }`;
 
-export const PaymentLayout = styled(RecordWorkspace)``;
+export const PaymentLayout = styled(RecordWorkspace)`
+  ${media.desktop} { grid-template-columns: clamp(17.5rem, 24vw, 20.625rem) minmax(0, 1fr); }
+`;
 export const PaymentUnavailable = styled.section`
   display: grid;
   align-content: start;
@@ -123,8 +125,10 @@ export const Ticket = styled(RecordItem)`
     &[aria-current="true"] { border-color: ${({ theme }) => theme.color.link}; }
   }
   ${media.desktop} {
-    grid-template-columns: 30px minmax(0, 1fr) auto auto;
-    align-items: center;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 4px 10px;
+    padding: 12px;
   }
 `;
 export const TicketProvider = styled.span`
@@ -136,11 +140,11 @@ export const TicketProvider = styled.span`
   }
 `;
 export const TicketPhone = styled.span`
-  ${media.desktop} { grid-column: 3; grid-row: 1; white-space: nowrap; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${media.desktop} { grid-column: 2; grid-row: 2; white-space: nowrap; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
 export const TicketPlan = styled.span`
   ${media.belowDesktop} { > [data-ticket-duration] { display: none; } }
-  ${media.desktop} { grid-column: 2 / -1; grid-row: 2; justify-self: end; max-inline-size: calc(100% - 9rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; font-size: 0.6875rem; }
+  ${media.desktop} { grid-column: 3; grid-row: 2; justify-self: end; max-inline-size: 7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; font-size: 0.6875rem; > [data-ticket-duration] { display: none; } }
 `;
 export const TicketRef = styled.span`
   display: flex;
@@ -156,7 +160,7 @@ export const TicketAmount = styled.span`
   font-variant-numeric: tabular-nums;
   text-align: end;
   white-space: nowrap;
-  ${media.desktop} { grid-column: 4; grid-row: 1; font-size: 0.75rem; }
+  ${media.desktop} { grid-column: 3; grid-row: 1; font-size: 0.75rem; }
 `;
 export const TicketMeta = styled.span`
   min-inline-size: 0;
@@ -170,7 +174,7 @@ export const TicketTime = styled(TicketMeta)`
   text-align: end;
   white-space: nowrap;
   ${media.belowDesktop} { > [data-ticket-timezone] { display: none; } }
-  ${media.desktop} { display: block; grid-column: 2 / -1; grid-row: 2; justify-self: start; text-align: start; font-size: 0.6875rem; }
+  ${media.desktop} { display: block; grid-column: 2 / -1; grid-row: 3; justify-self: start; text-align: start; font-size: 0.6875rem; }
 `;
 export const TicketWarn = styled.span`
   grid-column: 1 / -1;
@@ -182,7 +186,7 @@ export const TicketWarn = styled.span`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > svg { flex: none; font-size: 0.875rem; }
-  ${media.desktop} { grid-column: 2 / -1; font-size: 0.6875rem; margin: 0; }
+  ${media.desktop} { grid-column: 2 / -1; grid-row: 4; font-size: 0.6875rem; margin: 0; }
 `;
 export const QueueEmpty = styled(EmptyPanel)`
   ${media.belowDesktop} { ${panelLook} }
@@ -200,7 +204,7 @@ export const ReviewSection = styled(RecordDetails)<{ $reviewing: boolean }>`
 export const ReviewCard = styled(RecordCard)`
   dl > div { padding-block: 8px; }
   dd { font-size: ${({ theme }) => theme.typography.scale.body}; }
-  ${desktopCompactReview}
+  ${desktopBalancedReview}
 `;
 export const ReviewHead = styled(RecordDetailHead)`
   display: flex;

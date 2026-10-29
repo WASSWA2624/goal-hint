@@ -4,11 +4,11 @@ Open `/admin-payment-layouts/index.html` on the running application to compare
 ten revised Payments designs. The local review is at
 <http://localhost:3000/admin-payment-layouts/index.html>. Links ending in `#01`
 through `#10` open a specific design. This gallery replaces the earlier studies;
-it does not apply a content redesign to the live admin screen.
+**01 / Balanced review** is now applied to the live admin Payments screen.
 
 Use the numbered strip, previous/next layout buttons, or **All 10 layouts** to
 compare the options. **Shortlist** saves favorite numbers in this browser.
-Choose a number for the next production implementation.
+The other concepts remain available for future comparison.
 
 | Number | Concept | Arrangement |
 | --- | --- | --- |
@@ -50,10 +50,14 @@ No private records are loaded and no payment APIs are called. The page is marked
 `noindex, nofollow` and supports desktop windows at least 1024px wide. Mobile
 visitors see a desktop preview notice.
 
-The live Payments screen retains its current compact content layout while a
-replacement is selected. Its desktop navigator is moved beside Refresh queue
-and queue logos align with their references. Mobile queue/review navigation and
-payment business logic are unchanged.
+The live Payments screen uses Balanced review: canonical editable payment fields,
+subscriber context, and open checks on the left; the actual uploaded evidence
+on the right. Provider and package controls remain visible. The transaction ID
+has a one-click copy button that copies the current edited or historical
+value and confirms success. There is no repeated desktop amount banner or footer
+total. The desktop navigator remains beside Refresh queue and provider artwork
+aligns with references. Mobile queue/review navigation and payment services
+retain their existing behavior.
 
 ## Source and local serving
 
