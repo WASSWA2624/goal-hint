@@ -8,7 +8,7 @@ import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
-import { runFromRow, storedCycle, storedCycleDisplay, storedRevision } from "../predictions/history-read.ts";
+import { runFromRow, storedCycles, storedCycleDisplay, storedRevision, storedRevisions } from "../predictions/history-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { storedFixtureOddsGroups } from "../odds/odds-read.ts";
@@ -66,28 +66,35 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           if (evidence) permissionDeadline = Math.min(permissionDeadline, ...evidence.snapshot.sources
             .filter((source) => source.reuse.retainUntil >= asOf).map((source) => source.reuse.retainUntil + 1));
           const snapshot = revision && display ? await publicDetailSnapshot(tx, revision, display.cycle, currentRevisionId, evidence!.snapshot, asOf, options.cache) : null;
-          const latestRevision = await tx.predictionSet.findFirst({ where: { fixtureId: id }, orderBy: { fixtureRevision: "desc" }, select: { fixtureRevision: true } });
-          const latestCycle = await tx.predictionCycle.findFirst({ where: { fixtureId: id }, orderBy: { ordinal: "desc" }, select: { ordinal: true } });
+          const latestRevision = query.revisionAnchor === null ? await tx.predictionSet.findFirst({ where: { fixtureId: id }, orderBy: { fixtureRevision: "desc" }, select: { fixtureRevision: true } }) : null;
+          const latestCycle = query.cycleAnchor === null ? await tx.predictionCycle.findFirst({ where: { fixtureId: id }, orderBy: { ordinal: "desc" }, select: { ordinal: true } }) : null;
           const anchors = { revision: query.revisionAnchor ?? latestRevision?.fixtureRevision ?? 0, cycle: query.cycleAnchor ?? latestCycle?.ordinal ?? 0 };
           const rows = await tx.predictionSet.findMany({ where: { fixtureId: id, fixtureRevision: { lte: anchors.revision ?? 0, ...(query.revisionBefore ? { lt: query.revisionBefore } : {}) } },
             orderBy: { fixtureRevision: "desc" }, take: query.limit + 1, select: { id: true } });
           const cycles = await tx.predictionCycle.findMany({ where: { fixtureId: id, ordinal: { lte: anchors.cycle ?? 0, ...(query.cycleBefore ? { lt: query.cycleBefore } : {}) } },
             orderBy: { ordinal: "desc" }, take: query.limit + 1, select: { id: true } });
-          const revisions = [], cycleHistory = [], cycleCache = new Map<string, NonNullable<typeof display>["cycle"]>();
-          if (display) cycleCache.set(display.cycle.id, display.cycle);
-          const cycleFor = async (cycleId: string) => {
-            if (!cycleCache.has(cycleId)) cycleCache.set(cycleId, (await storedCycle(tx, cycleId))!);
-            return cycleCache.get(cycleId)!;
+          const revisionRows = rows.slice(0, query.limit), revisionCache = new Map(revision ? [[revision.id, revision]] : []);
+          for (const [key, entry] of await storedRevisions(tx, revisionRows.filter((row) => !revisionCache.has(row.id)).map((row) => row.id))) revisionCache.set(key, entry);
+          const published = revisionRows.map((row) => {
+            const entry = revisionCache.get(row.id);
+            if (!entry || entry.fixtureId !== id) throw new MatchFeedError("unavailable");
+            return entry;
+          });
+          const cycleCache = new Map(display ? [[display.cycle.id, display.cycle]] : []);
+          const historyCycleIds = [...new Set([...published.map((entry) => entry.cycleId), ...cycles.slice(0, query.limit).map((row) => row.id)])];
+          for (const [key, cycle] of await storedCycles(tx, historyCycleIds.filter((cycleId) => !cycleCache.has(cycleId)))) cycleCache.set(key, cycle);
+          const cycleFor = (cycleId: string) => {
+            const cycle = cycleCache.get(cycleId);
+            if (!cycle || cycle.fixtureId !== id) throw new MatchFeedError("unavailable");
+            return cycle;
           };
-          const published = [];
-          for (const row of rows.slice(0, query.limit)) published.push((await storedRevision(tx, row.id))!);
           const runs = await tx.dailyRun.findMany({ where: { id: { in: [...new Set(published.map((entry) => entry.runId))] } },
             select: { id: true, sequence: true, eatDate: true, createdAt: true } });
           const runDates = new Map(runs.map((row) => { const run = runFromRow(row); return [run.id, run.eatDate]; }));
-          for (const entry of published) revisions.push({ ...publicDetailRevision(entry), runDate: runDates.get(entry.runId),
+          const revisions = published.map((entry) => ({ ...publicDetailRevision(entry), runDate: runDates.get(entry.runId),
             sources: [...new Set(Object.values(entry.candidate.markets).flatMap((market) => market.available ? [market.market.source] : []))],
-            cycle: publicDetailCycle(await cycleFor(entry.cycleId)) });
-          for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle(await cycleFor(row.id)));
+            cycle: publicDetailCycle(cycleFor(entry.cycleId)) }));
+          const cycleHistory = cycles.slice(0, query.limit).map((row) => publicDetailCycle(cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
           const response = storedMatchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,

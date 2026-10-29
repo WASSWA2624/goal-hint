@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
-import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate } from "../../domain/calendar.ts";
+import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate, type ReportingDateRange } from "../../domain/calendar.ts";
 import { feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
@@ -38,10 +38,18 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
     ? { kind: "date", date: dates.startDate } : { kind: "range", from: dates.startDate, to: dates.endDate } }, today)}`;
 }
 
+/** Lists and deferred counts must describe the same committed cohort. */
+export async function storedFeedPaginationVersion(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
+  sourceRange: ReportingDateRange, competitionIds: readonly number[]): Promise<string> {
+  const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
+  return evidenceFingerprint({ contract: "feed-pagination-v4", query: feedQueryKey(query, today),
+    scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
+}
+
 /** `providerOdds` defaults to publicPolicy.features.providerOdds (off until odds display rights are recorded);
  * isolated tests may enable it to exercise the odds filter and prices. */
 export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache;
-  providerOdds?: boolean; includePerformance?: boolean; summary?: boolean }>) {
+  providerOdds?: boolean; includePerformance?: boolean }>) {
   const parsedIds = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
   if (!parsedIds.success || new Set(parsedIds.data).size !== parsedIds.data.length) throw new MatchFeedError("unavailable");
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
@@ -61,9 +69,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const read = () => database.transaction(async (tx) => {
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
-        const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v4", query: feedQueryKey(query, today),
-          scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
+        const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale);
         const sql = feedSql(query, range, competitionIds, providerOdds, search);
         // Start with the indexed date cohort. Choosing the competition/season
@@ -112,7 +118,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
         if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
         return freezeEvidence(response);
-      }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: options.summary === true ? 90_000 : 30_000 });
+      }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
         query: { ...query, projection: 16, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),

@@ -5,7 +5,8 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeRequirements, paywallModes, parseSettingsChanges,
   type CopyFormat, type EditableSettingField, type ModeFacts, type ModeRequirement, type PaywallMode, type ProtectedSettingField,
   identitySettingFields, type ShortcutField, type SubscriptionIdentity, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
-import { parseSupportContacts, supportContactsOf } from "../../domain/support-contacts.ts";
+import { supportContactsOf } from "../../domain/support-contacts.ts";
+import { parseSupportContacts } from "../../domain/support-contacts-input.ts";
 import { defaultMessageTemplates, parseMessageTemplates } from "../../domain/message-templates.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { auditTextErrors, writeOwnerAudit } from "../admin/audit.ts";

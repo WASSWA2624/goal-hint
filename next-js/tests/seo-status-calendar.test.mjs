@@ -249,3 +249,24 @@ test('the detail price lookup overlaps the primary read and still follows viewer
   assert.equal(fullProjection.offer, null);
   await fullProjection.previewPromise;
 });
+
+test('feed pricing overlaps fixture loading and skips full-access viewers', async () => {
+  let finishRead, offered = 0;
+  const pending = new Promise(resolve => { finishRead = resolve; });
+  const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
+    resolveAccess: async () => ({ tier: 'free', signedIn: false, mode: 'free' }),
+    readOffer: async () => { offered++; return { priceUgx: 1000, durationDays: 7 }; },
+    read: async () => { await pending; throw new MatchFeedError('rate-limited'); } });
+  const rendering = page.Page(props({}));
+  await new Promise(setImmediate);
+  assert.equal(offered, 1, 'Pricing must start while the fixture read is still pending.');
+  finishRead();
+  const projection = view(await rendering, 'MatchFeedPage');
+  assert.equal(projection.startingPriceUgx, 1000);
+  assert.equal(projection.result.error, 'rate-limited', 'The existing inline retry remains available.');
+
+  const full = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
+    resolveAccess: fullAccess, read: unavailable,
+    readOffer: async () => { throw new Error('Full access must not load pricing.'); } });
+  assert.equal(view(await full.Page(props({})), 'MatchFeedPage').startingPriceUgx, null);
+});

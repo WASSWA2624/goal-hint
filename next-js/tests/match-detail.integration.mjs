@@ -277,12 +277,13 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
         versions: await tx.footballFixture.findMany({ orderBy: { id: 'asc' }, select: { id: true, dataVersion: true } }),
         limit: await tx.publicSearchLimit.findMany() }));
       const before = await counts(), fetch = globalThis.fetch; let outbound = 0, writes = 0;
-      const database = { transaction: (operation, options) => p.a.transaction((tx) => operation(new Proxy(tx, {
+      const readOnly = (tx) => new Proxy(tx, {
         get(target, key) {
           if (key === '$executeRaw' || key === '$executeRawUnsafe' || key === '$queryRawUnsafe') return () => { writes++; throw new Error('Unexpected write'); };
           const value = Reflect.get(target, key);
           if (key === '$queryRaw') return (strings, ...values) => {
-            if (!/^\s*SELECT\b/iu.test(strings.join(' '))) { writes++; throw new Error('Unexpected non-SELECT query'); }
+            const parts = Array.isArray(strings) ? strings : strings.strings;
+            if (!Array.isArray(parts) || !/^\s*SELECT\b/iu.test(parts.join(' '))) { writes++; throw new Error('Unexpected non-SELECT query'); }
             return value.call(target, strings, ...values);
           };
           return value && typeof value === 'object' ? new Proxy(value, { get(model, method) {
@@ -290,7 +291,11 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
             return Reflect.get(model, method);
           } }) : value;
         },
-      })), options) };
+      });
+      const database = {
+        transaction: (operation, options) => p.a.transaction((tx) => operation(readOnly(tx)), options),
+        query: (operation) => p.a.query((tx) => operation(readOnly(tx))),
+      };
       const reader = createMatchDetailService({ database, clock: { now: () => readAt } });
       globalThis.fetch = async () => { outbound++; throw new Error('Unexpected network'); };
       try {

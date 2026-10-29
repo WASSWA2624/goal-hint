@@ -27,9 +27,13 @@ export function SlipMatchRefreshProvider({ slips, initialStates = [], enabled, o
   slips: readonly BuiltSlip[]; initialStates?: readonly SlipMatchState[]; enabled: boolean;
   onAccessRevoked?: () => void; accessFallback?: ReactNode; children: ReactNode;
 }) {
-  const watches = [...uniqueSlipMatchWatches(slips.flatMap((slip) => slip.selections))]
-    .sort((left, right) => slipMatchSelectionKey(left).localeCompare(slipMatchSelectionKey(right)));
-  const body = JSON.stringify({ selections: watches });
+  const body = useMemo(() => {
+    const watches = [...uniqueSlipMatchWatches(slips.flatMap((slip) => slip.selections))]
+      .map((watch) => ({ watch, key: slipMatchSelectionKey(watch) }))
+      .sort((left, right) => left.key.localeCompare(right.key))
+      .map(({ watch }) => watch);
+    return JSON.stringify({ selections: watches });
+  }, [slips]);
   const store = useMemo(() => observationStore(body), [body]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const revoked = useRef(onAccessRevoked);

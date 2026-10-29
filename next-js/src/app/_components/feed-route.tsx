@@ -78,8 +78,10 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       return feedMetadata(query, today, result, policy());
     },
     async Page(props: Props) {
+      // Public pricing and the fixture projection can load together after access resolves.
+      const offerPromise = contentAccess(resolveAccess).then((access) => access.tier === "free" ? readOffer() : null).catch(() => null);
       const { query, today, result, access, discovery } = await resolve(props);
-      const offer = access.tier === "free" ? await readOffer() : null;
+      const offer = await offerPromise;
       const messages = createMessages(query.locale);
       const structured = !discovery.eligible ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
         { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);

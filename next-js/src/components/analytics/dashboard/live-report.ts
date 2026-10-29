@@ -1,4 +1,5 @@
 import type { LiveReport } from "../../../domain/analytics.ts";
+import { startRequestDeadline } from "../../../domain/request-deadline.ts";
 
 /** The three live displays share one private poll without rerendering the report charts and tables. */
 let report: LiveReport | null = null;
@@ -23,6 +24,7 @@ export function refreshLiveReport(): Promise<void> {
   if (pending) return pending;
   const version = generation;
   const requestController = new AbortController();
+  const clearDeadline = startRequestDeadline(requestController);
   controller = requestController;
   const current = () => version === generation && !requestController.signal.aborted && listeners.size > 0;
   const request = Promise.resolve().then(async () => {
@@ -43,6 +45,7 @@ export function refreshLiveReport(): Promise<void> {
       if (current()) publish(body);
     } catch { /* Keep the last confirmed live values through a temporary network failure. */ }
     finally {
+      clearDeadline();
       if (pending === request) { pending = null; controller = null; }
     }
   });

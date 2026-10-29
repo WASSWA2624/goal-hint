@@ -35,16 +35,20 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     if (resolved.sessions) {
       try {
         member = await resolved.sessions.verify((await cookies()).get(memberCookieName(resolved.config.production))?.value);
-        if (member && !member.blocked && !member.administrator) {
-          subscription = await resolved.codes?.subscriptionStatus(member) ?? null;
-          if (!subscription) unavailable = true;
-        }
-        if (settings && settings.paywallMode !== "off" && !(member && !member.blocked && member.administrator)) {
-          offers = (await plans()).filter((plan) => plan.active);
-          if (member && !member.blocked) {
-            view = await resolved.payments?.view(member) ?? null;
-          }
-        }
+        const subscriptionMember = member && !member.blocked && !member.administrator ? member : null;
+        const salesOpen = settings && settings.paywallMode !== "off" && !(member && !member.blocked && member.administrator);
+        // These stored reads are independent once identity is verified. Settle all three before
+        // rendering, retaining a known subscription even when pricing or payment history fails.
+        const [status, availablePlans, payment] = await Promise.allSettled([
+          subscriptionMember ? resolved.codes?.subscriptionStatus(subscriptionMember) ?? null : null,
+          salesOpen ? plans() : [],
+          salesOpen && member && !member.blocked ? resolved.payments?.view(member) ?? null : null,
+        ]);
+        subscription = status.status === "fulfilled" ? status.value : null;
+        offers = availablePlans.status === "fulfilled" ? availablePlans.value.filter((plan) => plan.active) : [];
+        view = payment.status === "fulfilled" ? payment.value : null;
+        if (status.status === "rejected" || availablePlans.status === "rejected" || payment.status === "rejected"
+          || subscriptionMember && !subscription) unavailable = true;
       } catch { unavailable = true; }
     }
     const activeUntil = subscription?.activeUntil ?? null;

@@ -1,6 +1,7 @@
 "use client";
 
 import type { BuiltSlip } from "@/domain/slip-builder";
+import { memo } from "react";
 import type { SavedSlipView } from "@/domain/saved-slips";
 import type { SlipMatchState } from "@/domain/slip-match-state";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
@@ -18,7 +19,7 @@ const PhoneSlipFallback = styled.div`
 `;
 
 /** One responsive slip renderer preserves the selected phone and desktop presentations. */
-export function SlipTable({ slip, index, locale, results, matchStates }: {
+export const SlipTable = memo(function SlipTable({ slip, index, locale, results, matchStates }: {
   slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[];
 }) {
   const desktop = useDesktopLayout();
@@ -26,4 +27,4 @@ export function SlipTable({ slip, index, locale, results, matchStates }: {
     {...(matchStates ? { matchStates } : {})} />;
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger"
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})} /></PhoneSlipFallback>;
-}
+});

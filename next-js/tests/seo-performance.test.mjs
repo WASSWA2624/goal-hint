@@ -99,7 +99,7 @@ test("the root layout, public shell and public pages ship no phone library, coun
 });
 
 test("phone fields still load the phone library where they render", () => {
-  for (const path of ["src/components/members/account-auth-form.tsx", "src/components/members/subscribe-controls.tsx", "src/components/admin/subscriber-directory.tsx"]) {
+  for (const path of ["src/components/members/account-auth-form.tsx", "src/components/members/subscribe-controls.tsx", "src/components/admin/subscriber-detail.tsx"]) {
     const graph = clientGraph([path]);
     for (const name of ["src/components/ui/phone-input.tsx", "src/domain/phone-mobile.ts", "libphonenumber-js/mobile", "iso-3166"]) assert.ok(graph.has(name), `${path}: ${name}`);
   }

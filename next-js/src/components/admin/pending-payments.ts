@@ -1,3 +1,5 @@
+import { startRequestDeadline } from "../../domain/request-deadline.ts";
+
 /** Private count shared by admin headers and the queue. No browser storage or public HTML. */
 let count: number | null = null;
 let pending: Promise<void> | null = null;
@@ -31,6 +33,7 @@ export function refreshPendingPayments(force = false): Promise<void> {
   if (pending) return pending;
   const version = generation;
   const requestController = new AbortController();
+  const clearDeadline = startRequestDeadline(requestController);
   controller = requestController;
   const request = Promise.resolve().then(async () => {
     try {
@@ -44,6 +47,7 @@ export function refreshPendingPayments(force = false): Promise<void> {
       if (version === generation && listeners.size && body && typeof body === "object" && "pendingCount" in body && validCount(body.pendingCount)) publish(body.pendingCount);
     } catch { /* Keep the last confirmed count through a temporary network failure. */ }
     finally {
+      clearDeadline();
       if (pending === request) { pending = null; controller = null; }
     }
   });

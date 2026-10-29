@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSupportContacts, supportContactsOf } from "../src/domain/support-contacts.ts";
+import { supportContactsOf } from "../src/domain/support-contacts.ts";
+import { parseSupportContacts } from "../src/domain/support-contacts-input.ts";
 import { copiedPaymentPhone } from "../src/domain/copied-payment-phone.ts";
 import { publicSubscriptionSettings, publicSupportContactSettings } from "../src/domain/public-subscription-settings.ts";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";

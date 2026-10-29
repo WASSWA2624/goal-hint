@@ -1,28 +1,33 @@
 import "server-only";
 
 import { feedPerformanceReplySchema } from "../../domain/feed-performance-summary.ts";
-import { createMatchFeedHandler } from "./feed-http.ts";
+import { matchFeedRequestParameters } from "./feed-http.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { privateMatchHeaders, publicMatchFailure } from "./public-http.ts";
 import { readPublicMatchFeedSummary } from "./public-feed.ts";
-import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { usesSubscriberFeedOracle } from "../../domain/paywall.ts";
 import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { parseMatchFeedQuery } from "./feed-service.ts";
+import { contentAccess } from "../members/gated-reads.ts";
 
-/** The ordinary feed boundary owns query validation and entitlement checks. */
-export function createMatchFeedSummaryHandler(source: Parameters<typeof createMatchFeedHandler>[0],
-  clock?: Parameters<typeof createMatchFeedHandler>[1], resolveAccess = viewerAccessFromRequest) {
-  const read = createMatchFeedHandler(source, clock, resolveAccess);
+type SummaryReader = (...args: Parameters<typeof readPublicMatchFeedSummary>) => Promise<Pick<StoredMatchFeedResponse, "performance" | "paginationVersion" | "asOf">>;
+
+/** Uses the feed's strict request parser and entitlement rules without building a full list response. */
+export function createMatchFeedSummaryHandler(source: SummaryReader,
+  clock: Clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) }, resolveAccess = viewerAccessFromRequest) {
   return async (request: Request): Promise<Response> => {
-    const response = await read(request);
-    if (!response.ok) return response;
     try {
-      const data = await response.json();
+      const { parameters } = matchFeedRequestParameters(request), asOf = clock.now();
+      const initialAccess = await contentAccess(() => resolveAccess(request));
+      const initialQuery = parseMatchFeedQuery(parameters, getReportingDate(asOf), { asOf,
+        ...(initialAccess.tier === "free" ? { providerOdds: true } : {}) });
+      if (initialAccess.tier === "free" && usesSubscriberFeedOracle(initialQuery)) throw new MatchFeedError("subscription-required");
+      const data = await source(parameters, {}, { now: () => asOf });
       if (!data.performance) throw new MatchFeedError("unavailable");
       // A long audit must not retain an expired viewer's private filter access.
-      const access = await resolveAccess(request), parameters = new URL(request.url).searchParams;
-      parameters.delete("leagues");
+      const access = await resolveAccess(request);
       const at = utcInstantFromEpochMilliseconds(data.asOf);
       const query = parseMatchFeedQuery(parameters, getReportingDate(at), { asOf: at, providerOdds: true });
       if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");

@@ -1,5 +1,6 @@
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { SubscriptionSummary } from "@/domain/subscription-summary";
+import { startRequestDeadline } from "../../domain/request-deadline.ts";
 
 /** Client-only account state. Public page HTML and browser storage never contain it. */
 let phone: string | null = null;
@@ -62,9 +63,10 @@ function scheduleRefresh() {
 export function refreshMemberSession(): Promise<void> {
   if (pending) return pending;
   pending = Promise.resolve().then(async () => {
+    const controller = new AbortController(), clearDeadline = startRequestDeadline(controller);
     try {
       const response = await fetch("/api/account/session", {
-        cache: "no-store", credentials: "same-origin", headers: { Accept: "application/json" },
+        cache: "no-store", credentials: "same-origin", headers: { Accept: "application/json" }, signal: controller.signal,
       });
       if (!response.ok) return;
       const session: unknown = await response.json();
@@ -86,7 +88,7 @@ export function refreshMemberSession(): Promise<void> {
       subscription = nextSubscription;
       publish();
     } catch { /* A temporary network failure preserves the last confirmed identity. */ }
-    finally { pending = null; scheduleRefresh(); }
+    finally { clearDeadline(); pending = null; scheduleRefresh(); }
   });
   return pending;
 }

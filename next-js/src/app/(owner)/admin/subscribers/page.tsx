@@ -17,10 +17,11 @@ export default async function AdminSubscribersPage({ searchParams }: { searchPar
   const params = await searchParams, db = page.services.database;
   const id = uuid(params.accountId) ? params.accountId : null;
   const query = parseSubscriberDirectoryQuery(Object.fromEntries(["search", "status", "access", "plan", "recent"].map(key => [key, params[key] ?? emptySubscriberDirectoryQuery[key as keyof typeof emptySubscriberDirectoryQuery]]))) ?? emptySubscriberDirectoryQuery;
-  const data = db ? await Promise.all([readSubscriberDirectory(db, query), plansServiceFor(db).list()]).then(async ([accounts, plans]) => {
-    const selectedId = id ?? accounts[0]?.id;
-    return { accounts, plans, detail: selectedId ? await createSubscribers(db).detail(selectedId).catch(() => null) : null };
-  }).catch(() => null) : null;
+  const accounts = db ? readSubscriberDirectory(db, query) : null;
+  const detail = db && accounts ? (id ? Promise.resolve(id) : accounts.then((rows) => rows[0]?.id))
+    .then((selectedId) => selectedId ? createSubscribers(db).detail(selectedId) : null).catch(() => null) : null;
+  const data = db && accounts ? await Promise.all([accounts, plansServiceFor(db).list(), detail])
+    .then(([accounts, plans, detail]) => ({ accounts, plans, detail })).catch(() => null) : null;
   return data ? <SubscribersEditor accounts={data.accounts} detail={data.detail} plans={data.plans} initialQuery={query} selectedExplicitly={!!id} />
     : <><DeskHead><h1>Subscribers</h1></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>;
 }

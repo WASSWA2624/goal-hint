@@ -1,6 +1,7 @@
 import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
-import { parseSupportContacts, supportContactsOf, type SupportContact } from "./support-contacts.ts";
+import { supportContactsOf, type SupportContact } from "./support-contacts.ts";
+import { parseSupportContacts } from "./support-contacts-input.ts";
 import { defaultMessageTemplates, parseMessageTemplates, type MessageTemplateSettings } from "./message-templates.ts";
 
 /**

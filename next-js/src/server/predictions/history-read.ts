@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "../generated/prisma/client.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -49,6 +49,20 @@ export async function storedCycle(transaction: HistoryTransaction, id: string): 
   const schedule = await transaction.predictionSchedule.findUnique({ where: { cycleId_version: { cycleId: id, version: row.scheduleVersion } } });
   return cycleFromRows(row, schedule);
 }
+
+/** Bounded history hydration retains the same schedule checks as single-cycle reads. */
+export async function storedCycles(transaction: HistoryTransaction, ids: readonly string[]): Promise<Map<string, StoredCycle>> {
+  const uniqueIds = [...new Set(ids)], cycles = new Map<string, StoredCycle>();
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    const rows = await transaction.predictionCycle.findMany({ where: { id: { in: uniqueIds.slice(offset, offset + 100) } } });
+    if (!rows.length) continue;
+    const schedules = await transaction.predictionSchedule.findMany({ where: {
+      OR: rows.map((row) => ({ cycleId: row.id, version: row.scheduleVersion })) } });
+    const scheduleMap = new Map(schedules.map((row) => [`${row.cycleId}:${row.version}`, row]));
+    for (const row of rows) cycles.set(row.id, cycleFromRows(row, scheduleMap.get(`${row.id}:${row.scheduleVersion}`) ?? null));
+  }
+  return cycles;
+}
 export function cycleFromRows(row: HistoryRow, schedule: HistoryRow | null): StoredCycle {
   try {
     const value = parseStoredCycle({ ...row, kickoffAt: historyTime(row.kickoffAt), cutoffAt: historyTime(row.cutoffAt),
@@ -68,6 +82,26 @@ export async function storedRevision(transaction: HistoryTransaction, id: string
   const markets = await transaction.$queryRaw<HistoryRow[]>`SELECT *,
     integrity = SHA2(CAST(payloadJson AS CHAR), 256) AS validIntegrity FROM MarketPrediction WHERE setId = ${id}`;
   return revisionFromRows(row, markets);
+}
+
+/** Two sealed-row reads per bounded batch instead of two round trips per revision. */
+export async function storedRevisions(transaction: HistoryTransaction, ids: readonly string[]): Promise<Map<string, StoredRevision>> {
+  const uniqueIds = [...new Set(ids)], revisions = new Map<string, StoredRevision>();
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    const batch = uniqueIds.slice(offset, offset + 100);
+    const rows = await transaction.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *,
+      integrity=SHA2(CONCAT(id,':',requestHash,':',CAST(candidateJson AS CHAR)),256) AS validIntegrity
+      FROM PredictionSet WHERE id IN (${Prisma.join(batch)})`);
+    const markets = await transaction.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *,
+      integrity=SHA2(CAST(payloadJson AS CHAR),256) AS validIntegrity FROM MarketPrediction WHERE setId IN (${Prisma.join(batch)})`);
+    const byRevision = new Map<string, HistoryRow[]>();
+    for (const row of markets) {
+      const key = String(row.setId), members = byRevision.get(key) ?? [];
+      members.push(row); byRevision.set(key, members);
+    }
+    for (const row of rows) revisions.set(String(row.id), revisionFromRows(row, byRevision.get(String(row.id)) ?? []));
+  }
+  return revisions;
 }
 export function revisionFromRows(row: HistoryRow, markets: HistoryRow[]): StoredRevision {
   try {
