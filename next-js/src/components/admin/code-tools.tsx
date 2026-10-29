@@ -70,7 +70,11 @@ export function useCodeAction(onChanged?: () => Promise<void>, options?: CodeAct
       return reply;
     } finally { inFlight.current = false; setBusy(false); }
   }
-  return { busy: busy || refreshing, message, notice, duplicateId, send, localOnly: options?.localOnly ?? false };
+  function clearFeedback() {
+    if (inFlight.current) return;
+    setMessage(""); setNotice(""); setDuplicateId(null);
+  }
+  return { busy: busy || refreshing, message, notice, duplicateId, send, clearFeedback, localOnly: options?.localOnly ?? false };
 }
 export type CodeAction = ReturnType<typeof useCodeAction>;
 /** The last action's outcome; a duplicate transaction ID links the earlier payment. */

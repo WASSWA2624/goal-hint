@@ -29,6 +29,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
   const [draft, setDraft] = useState<PhoneDraft>(() => ({ ...splitPhoneValue(value ?? defaultValue), value: value ?? defaultValue }));
   const [touched, setTouched] = useState(false), [pasteError, setPasteError] = useState<string | null>(null);
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState<CountryMenuPosition>({ left: 8, top: 8, width: 300, maxHeight: 360 });
   const frame = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null), countrySearch = useRef<HTMLInputElement>(null);
   const control = useRef<HTMLInputElement>(null), messages = createMessages();
@@ -66,6 +67,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
   }
   function showCountries() {
     if (inactive) return;
+    setPortalRoot(frame.current?.closest("dialog") ?? document.body);
     locateMenu(); setQuery(""); setOpen(true);
   }
   function closeCountries(restoreFocus = false) {
@@ -143,7 +145,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
     </PhoneControl>
     {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
     {field.hasError && <FieldMessage id={field.errorId} $error>{shownError}</FieldMessage>}
-    {open && !inactive && createPortal(<CountryMenu ref={menu} id={menuId} role="dialog" aria-label={messages.text("phone.country")}
+    {open && !inactive && portalRoot && createPortal(<CountryMenu ref={menu} id={menuId} role="dialog" aria-label={messages.text("phone.country")}
       style={position} onKeyDown={menuKey} data-phone-country-picker data-analytics-ignore
       onBlur={event => { if (event.relatedTarget instanceof Node && !menu.current?.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) closeCountries(); }}>
       <CountrySearchLabel htmlFor={searchId}>{messages.text("phone.countrySearchLabel")}</CountrySearchLabel>
@@ -158,7 +160,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
         {!options.length && <CountryEmpty>{messages.text("phone.noCountries")}</CountryEmpty>}
       </CountryResults>
       <CountrySearchLabel as="span" role="status">{options.length} {messages.text("phone.countries")}</CountrySearchLabel>
-    </CountryMenu>, document.body)}
+    </CountryMenu>, portalRoot)}
   </Field>;
 }
 
