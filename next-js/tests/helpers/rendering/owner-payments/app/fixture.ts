@@ -24,7 +24,7 @@ export const fixturePaymentPlans = [fixturePlan,
 type FixturePlan = typeof fixturePlan;
 export type FixtureAccount = { id: string; phone: string | null; blockedAt: Date | null; blockedReason: string | null;
   ownerNote: string | null; erasedAt: Date | null; lastSignInAt: Date; trialRequestedAt: Date | null;
-  trialDismissedAt: Date | null; passwordResetRequestedAt: Date | null };
+  trialDismissedAt: Date | null };
 export type FixtureCode = { id: string; accountId: string; reference: string; planName: string; durationDays: number;
   extensionDays: number; startsAt: Date; endsAt: Date; revokedAt: Date | null; source: string; createdAt: Date; paymentSubmissionId?: string };
 type FixtureDevice = { accountId: string; createdAt: Date; lastSeenAt: Date; expiresAt: Date; unlocked: boolean };
@@ -72,8 +72,8 @@ function initialAudits(codeId: string): FixtureAudit[] {
 function initialState(): FixtureState {
   const primary: FixtureAccount = { id: accountId, phone: "256700000101", blockedAt: null, blockedReason: null,
     ownerNote: "Synthetic owner note", erasedAt: null, lastSignInAt: new Date("2026-10-23T09:42:00Z"),
-    trialRequestedAt: null, trialDismissedAt: null, passwordResetRequestedAt: at };
-  const other = { ...primary, passwordResetRequestedAt: null, ownerNote: null };
+    trialRequestedAt: null, trialDismissedAt: null };
+  const other = { ...primary, ownerNote: null };
   const codes: FixtureCode[] = [{ id: "00000000-0000-4000-8000-000000000300", accountId, reference: "CODE",
     planName: "Weekly", durationDays: 7, extensionDays: 0, startsAt: at, endsAt: end, revokedAt: null, source: "payment", createdAt: at }];
   return structuredClone({ accounts: [primary,
@@ -151,7 +151,7 @@ export function fixtureAccountForPhone(phone: string): FixtureAccount {
   const state = fixtureState(), existing = state.accounts.find(row => row.phone === phone);
   if (existing) return existing;
   const account: FixtureAccount = { id: randomUUID(), phone, blockedAt: null, blockedReason: null, ownerNote: null,
-    erasedAt: null, lastSignInAt: new Date(), trialRequestedAt: null, trialDismissedAt: null, passwordResetRequestedAt: null };
+    erasedAt: null, lastSignInAt: new Date(), trialRequestedAt: null, trialDismissedAt: null };
   state.accounts.push(account);return account;
 }
 export function grantFixtureAccess(account: FixtureAccount, days: number, source = "manual", planName = "Weekly", paymentSubmissionId?: string) {
@@ -193,7 +193,7 @@ export function fixtureSnapshot() {
     audits: state.audits.map(row => ({ accountId: row.accountId, action: row.action })), plans: state.plans.map(plan => plan.id) };
 }
 
-type AccountQuery = { where?: { phone?: string | { in?: string[] }; passwordResetRequestedAt?: unknown } };
+type AccountQuery = { where?: { phone?: string | { in?: string[] } } };
 type OwnedQuery = { where?: { accountId?: string; codeEnteredAt?: unknown } };
 type PaymentWhere = { accountId?: string; status?: string | { in: string[] }; claimedTxnKey?: { in: string[] };
   approvedTxnKey?: { in: string[] }; imageSha256?: { in: string[] }; OR?: PaymentWhere[] };
@@ -280,7 +280,6 @@ function createClient(emptySubscribers: boolean) {
       findMany: async (query: AccountQuery | SubscriberDirectoryFixtureQuery = {}) => {
         if ("select" in query && query.select?.codes) return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
         const where = query.where as AccountQuery["where"];
-        if (where?.passwordResetRequestedAt) return state.accounts.filter(row => row.passwordResetRequestedAt && !row.blockedAt && !row.erasedAt && row.phone);
         const rows = emptySubscribers ? [] : [...state.accounts].sort((a, b) => +b.lastSignInAt - +a.lastSignInAt);
         if (typeof where?.phone === "string") return rows.filter(row => row.phone === where.phone);
         const phones = where?.phone?.in;

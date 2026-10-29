@@ -3,7 +3,6 @@ import { AnalyticsDashboard } from "@/components/analytics/dashboard/analytics-d
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { adminPageGate } from "@/server/admin/admin-http";
-import { AdminFrame } from "@/app/_components/admin-frame";
 
 export const metadata: Metadata = {
   title: "Analytics · Goal Hint",
@@ -16,9 +15,7 @@ const currentReportingDate = () => getReportingDate(utcInstantFromEpochMilliseco
 export default async function AnalyticsPage() {
   const page = await adminPageGate();
   if (page.owner) {
-    return <AdminFrame database={page.services.database}>
-      <AnalyticsDashboard today={currentReportingDate()} />
-    </AdminFrame>;
+    return <AnalyticsDashboard today={currentReportingDate()} />;
   }
   redirectToAccountLogin();
 }

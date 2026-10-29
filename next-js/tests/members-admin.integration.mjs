@@ -116,7 +116,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
 test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, async t => {
  const f=await paidDatabase();t.after(()=>f.close());const{database:db,config,root}=f;
  const at=new Date("2026-10-23T10:00:00Z"),now=()=>+at,hash=value=>createHash("sha256").update(value).digest("hex");
- const members=createSubscribers(db,now,()=>false,config),planId=randomUUID();let reference=0;
+ const members=createSubscribers(db,now,config),planId=randomUUID();let reference=0;
  await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Shared weekly plan",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:at,updatedAt:at}}));
  await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",updatedAt:at,updatedBy:"owner"}}));
  // The paid-access harness has no football catalog. This minimal shared fixture installs the real saved-slip child
@@ -124,7 +124,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
  await root.query("CREATE TABLE FootballFixture (id CHAR(36) NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin");
  const fixtureId=randomUUID();await root.query("INSERT INTO FootballFixture (id) VALUES (?)",[fixtureId]);
  await root.query((await readFile(new URL("../prisma/migrations/20261021110000_saved_slips/migration.sql",import.meta.url),"utf8")).split(";")[1]);
- async function account(phone,extra={}) {return db.query(tx=>tx.memberAccount.create({data:{id:randomUUID(),phone,passwordHash:"synthetic-password-hash",phoneVerifiedAt:at,passwordChangedAt:at,temporaryPasswordHash:"synthetic-temporary-hash",temporaryPasswordExpiresAt:new Date(+at+HOUR),ownerNote:"Synthetic private note",createdAt:at,lastSignInAt:at,...extra}}));}
+ async function account(phone,extra={}) {return db.query(tx=>tx.memberAccount.create({data:{id:randomUUID(),phone,passwordHash:"synthetic-password-hash",phoneVerifiedAt:at,passwordChangedAt:at,ownerNote:"Synthetic private note",createdAt:at,lastSignInAt:at,...extra}}));}
  async function payment(who,extra={}) {const id=randomUUID();return db.query(tx=>tx.paymentSubmission.create({data:{id,reference:String(++reference).padStart(4,"0"),source:"report",accountId:who.id,planId,planName:"Shared weekly plan",durationDays:7,priceUgx:5000,payerPhone:who.phone,claimedNetwork:"mtn",claimedTxnRef:`SYNTHETIC${reference}`,claimedTxnKey:`SYNTHETIC${reference}`,claimedAmountUgx:5000,status:"pending",submittedAt:at,rejectText:"Synthetic private payment text",...extra}}));}
  async function code(who,extra={}) {return db.query(tx=>tx.accessCode.create({data:{id:randomUUID(),accountId:who.id,codeSalt:new Uint8Array(16).fill(reference+1),codeHash:hash(randomUUID()),reference:String(++reference).padStart(4,"0"),source:"manual",planId,planName:"Shared weekly plan",durationDays:7,priceUgx:5000,amountReceivedUgx:5000,createdAt:at,createdBy:"owner",activatedAt:at,startsAt:at,endsAt:new Date(+at+7*DAY),note:"Synthetic private code note",...extra}}));}
  async function verification(who,phone=who.phone) {return db.query(tx=>tx.memberVerification.create({data:{id:randomUUID(),accountId:who.id,phone,purpose:"register",channel:"sms",bindingHash:hash(randomUUID()),codeHash:hash(randomUUID()),createdAt:at,expiresAt:new Date(+at+HOUR)}}));}
@@ -199,7 +199,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   await audit({accountId:erased.id,targetId:erased.id,action:"member_erased"});
   assert.equal((await members.action(erased.id,"delete",undefined,"owner")).status,"saved");
   assert.equal(await db.query(tx=>tx.memberAccount.findUnique({where:{id:erased.id}})),null);assert.equal(await db.query(tx=>tx.paymentSubmission.findUnique({where:{id:erasedPayment.id}})),null);assert.equal(await db.query(tx=>tx.accessCode.findUnique({where:{id:erasedCode.id}})),null);
-  const administrator=await account("256700004005");assert.equal((await createSubscribers(db,now,()=>true,config).action(administrator.id,"delete",undefined,"owner")).status,"saved");assert.equal(await db.query(tx=>tx.memberAccount.findUnique({where:{id:administrator.id}})),null);
+  const administrator=await account("256700004005");assert.equal((await createSubscribers(db,now,config).action(administrator.id,"delete",undefined,"owner")).status,"saved");assert.equal(await db.query(tx=>tx.memberAccount.findUnique({where:{id:administrator.id}})),null);
  });
  await t.test("a missing account is refused without leaving records",async()=>{
   const before=await snapshot();assert.equal((await members.action(randomUUID(),"delete",undefined,"owner")).status,"refused");assert.deepEqual(await snapshot(),before);

@@ -40,7 +40,6 @@ test("isolated demo populates protected owner screens through normal services an
   assert.deepEqual(await counts(), before, "restarting does not duplicate visits or financial records");
   const subscribers = createSubscribers(database), overview = await subscribers.overview();
   assert.ok(overview.pending > 0); assert.ok(overview.active > 0); assert.ok(overview.monthRevenue > 0);
-  assert.ok((await subscribers.passwordResetRequests()).length > 0);
   const detail = await subscribers.detail(ids[1]);
   assert.ok(detail?.wallet.length); assert.ok(detail?.submissions.length); assert.ok(detail?.codes.length);
   const review = createPaymentReview(database);

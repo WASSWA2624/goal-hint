@@ -9,7 +9,6 @@ import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberAuthHandler } from "../src/server/members/member-auth-http.ts";
 import { createMemberSessions, issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, parseMemberAdminPhones, verifyMemberAdminCredential } from "../src/server/members/member-admin.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
 
 const phone = "256700000001", replacement = "256700000002", password = "correct horse 47";
@@ -56,7 +55,7 @@ function fixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
     };
   }
   const settings = { ...defaultSubscriptionSettings, trialDays, updatedAt: new Date(time), updatedBy: "synthetic-owner" };
-  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null, passwordResetRequestedAt: null, blockedAt: null, erasedAt: null }),
+  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, blockedAt: null, erasedAt: null }),
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
     paymentSubmission: { async findMany() { return []; } },
@@ -240,9 +239,9 @@ test("administrator password logins also allow only the latest device", async ()
 });
 
 test("forgot password sends to a registered number and gives unknown/admin numbers the same generic response", async () => {
-  const f = fixture(), account = await f.account();
+  const f = fixture(); await f.account();
   const result = await f.service.requestPasswordReset(phone, address, "sms");
-  assert.equal(result.status, "requested"); assert.ok(f.accounts.get(account.id).passwordResetRequestedAt);
+  assert.equal(result.status, "requested");
   assert.deepEqual(await f.service.requestPasswordReset(replacement, address, "whatsapp"), result);
   assert.equal(f.messages.length, 1);
   assert.equal(f.messages[0].phone, phone); assert.equal(f.messages[0].channel, "sms"); assert.equal(f.messages[0].purpose, "password-reset");
@@ -254,49 +253,27 @@ test("forgot password sends to a registered number and gives unknown/admin numbe
   assert.equal((await f.service.login(phone, password, "198.51.100.1")).status, "authenticated", "A request alone does not change the password");
 });
 
-async function temporary(f) {
-  const account = await f.account(), owner = createSubscribers(f.database, f.now, input => f.adminPhones.has(input));
-  const result = await owner.temporaryPassword({ id: account.id }, "owner");
-  assert.equal(result.status, "reset"); assert.equal(Date.parse(result.expiresAt) - f.now(), passwordRecoveryRules.temporaryMs);
-  assert.equal(f.accounts.get(account.id).passwordHash, null);
-  assert.notEqual(f.accounts.get(account.id).temporaryPasswordHash, result.temporaryPassword);
-  assert.ok(await verifyPassword(result.temporaryPassword, f.accounts.get(account.id).temporaryPasswordHash));
-  assert.ok(!JSON.stringify(f.sent).includes(result.temporaryPassword));
-  return { account, result };
-}
-
-test("temporary password is single-use and grants only a reset cookie until a new password is saved", async () => {
-  const f = fixture(), { result } = await temporary(f);
-  assert.equal((await f.service.login(phone, password, "198.51.100.1")).status, "unauthorized");
-  const attempts = await Promise.all([f.service.login(phone, result.temporaryPassword, "198.51.100.1"), f.service.login(phone, result.temporaryPassword, "198.51.100.2")]);
-  assert.deepEqual(attempts.map(r => r.status).sort(), ["authenticated", "unauthorized"]);
-  const login = attempts.find(r => r.status === "authenticated"); assert.equal(login.requiresPasswordChange, true);
-  assert.equal(await f.sessionService.verify(login.token), null);
-  assert.equal((await f.service.passwordResetSession(login.token)).phone, phone);
-  const changed = await f.service.resetPassword("replacement secret", login.token, "198.51.100.1");
-  assert.equal(changed.status, "authenticated"); assert.equal((await f.sessionService.verify(changed.token)).phone, phone);
-  assert.equal(await f.service.passwordResetSession(login.token), null);
-  assert.equal((await f.service.resetPassword("another secret", login.token, "198.51.100.1")).status, "unauthorized");
-  assert.equal((await f.service.login(phone, "replacement secret", "198.51.100.1")).status, "authenticated");
+test("self-service reset authorization expires at its exact deadline", async () => {
+  const f = fixture(); await f.account();
+  await f.service.requestPasswordReset(phone, address, "sms");
+  const authorized = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
+  assert.equal(authorized.requiresPasswordChange, true);
+  f.advance(passwordRecoveryRules.resetSessionMs);
+  assert.equal(await f.service.passwordResetSession(authorized.token), null);
+  assert.equal((await f.service.resetPassword("replacement secret", authorized.token, address)).status, "unauthorized");
 });
 
-test("temporary password and reset authorization expire at their exact deadline", async () => {
-  const f = fixture(), { result } = await temporary(f);
-  f.advance(passwordRecoveryRules.temporaryMs);
-  assert.equal((await f.service.login(phone, result.temporaryPassword, "198.51.100.1")).status, "unauthorized");
-  const second = fixture(), issued = await temporary(second);
-  const login = await second.service.login(phone, issued.result.temporaryPassword, "198.51.100.1");
-  second.advance(passwordRecoveryRules.resetSessionMs);
-  assert.equal(await second.service.passwordResetSession(login.token), null);
-  assert.equal((await second.service.resetPassword("replacement secret", login.token, "198.51.100.1")).status, "unauthorized");
-});
-
-test("reissuing a temporary password invalidates the old one", async () => {
-  const f = fixture(), { account, result } = await temporary(f);
-  const next = await createSubscribers(f.database, f.now, () => false).temporaryPassword({ id: account.id }, "owner");
-  assert.equal(next.status, "reset"); assert.notEqual(next.temporaryPassword, result.temporaryPassword);
-  assert.equal((await f.service.login(phone, result.temporaryPassword, "198.51.100.1")).status, "unauthorized");
-  assert.equal((await f.service.login(phone, next.temporaryPassword, "198.51.100.1")).requiresPasswordChange, true);
+test("registered accounts marked for recovery reject login and retain verified self-service recovery", async () => {
+  const f = fixture(); await f.account({ passwordHash: "!self-service-recovery-required" });
+  assert.equal((await f.service.login(phone, password, address)).status, "unauthorized");
+  assert.equal((await f.service.requestPasswordReset(phone, address, "sms")).status, "requested");
+  assert.equal(f.messages.length, 1);
+  const authorized = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
+  assert.equal(authorized.requiresPasswordChange, true);
+  const saved = await f.service.resetPassword("restored member password", authorized.token, address);
+  assert.equal(saved.status, "authenticated");
+  assert.ok(await f.sessionService.verify(saved.token));
+  assert.equal((await f.service.login(phone, "restored member password", address)).status, "authenticated");
 });
 
 test("normal password changes check the current password and rotate the current device", async () => {
@@ -601,7 +578,7 @@ test("password changes are limited across profile and code recovery for exactly 
   const first = await f.service.changePassword("first new password", password, binding);
   let active = { member: await f.sessionService.verify(first.token), token: first.token };
   const second = await f.service.changePassword("second new password", "first new password", active);
-  assert.equal(second.status, "busy"); assert.match(second.message, /admin/iu);
+  assert.equal(second.status, "busy"); assert.match(second.message, /24 hours/iu);
   await f.service.requestPasswordReset(phone, address, "sms");
   const reset = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
   assert.equal((await f.service.resetPassword("second new password", reset.token, address)).status, "busy");
@@ -611,19 +588,6 @@ test("password changes are limited across profile and code recovery for exactly 
   assert.equal((await f.service.changePassword("second new password", "first new password", active)).status, "busy");
   f.advance(1);
   assert.equal((await f.service.changePassword("second new password", "first new password", active)).status, "authenticated");
-});
-
-test("administrator assistance can recover a member within the daily password-change limit", async () => {
-  const f = fixture(), binding = await f.authenticate();
-  const first = await f.service.changePassword("first new password", password, binding);
-  await f.service.requestPasswordReset(phone, address, "sms"); const code = f.messages.at(-1).code;
-  const assisted = await createSubscribers(f.database, f.now, () => false).temporaryPassword({ id: first.accountId }, "owner");
-  assert.equal(assisted.status, "reset");
-  assert.equal((await f.service.verifyPasswordReset(phone, code, address)).status, "unauthorized");
-  const temporary = await f.service.login(phone, assisted.temporaryPassword, address);
-  assert.equal(temporary.requiresPasswordChange, true);
-  const saved = await f.service.resetPassword("assisted password", temporary.token, address);
-  assert.equal(saved.status, "authenticated"); assert.ok(await f.sessionService.verify(saved.token));
 });
 
 const authRequest = (action, body, token, headers = {}) => new Request(`https://goal.test/api/account/${action}`, { method: "POST",
@@ -783,8 +747,9 @@ test("HTTP delivery failure returns a generic 503 without provider errors or a c
 });
 
 test("recovery cannot reset administrator environment credentials and requires same-origin HTTP", async () => {
-  const f = fixture({ admins: [phone] }), account = await f.account();
-  assert.equal((await createSubscribers(f.database, f.now, () => true).temporaryPassword({ id: account.id }, "owner")).status, "refused");
+  const f = fixture({ admins: [phone] }); await f.account();
+  assert.equal((await f.service.requestPasswordReset(phone, address, "sms")).status, "requested");
+  assert.equal(f.messages.length, 0);
   const response = await createMemberAuthHandler("forgot", async () => { assert.fail("Cross-site requests cannot reach storage"); })(
     new Request("https://goal.test/api/account/forgot", { method: "POST", headers: { Origin: "https://evil.test", "Content-Type": "application/json" }, body: JSON.stringify({ phone }) }));
   assert.equal(response.status, 403);

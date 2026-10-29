@@ -1,5 +1,7 @@
 # 139 · Shared admin record workspaces
 
+> Historical plan: its admin password-request and temporary-password workflow was retired by [144](144-remove-admin-password-requests.md). Current self-service recovery and password changes are documented in [member-authentication.md](../docs/member-authentication.md).
+
 ## Scope
 
 Apply the approved desktop list/detail workspace to Payments, Codes,

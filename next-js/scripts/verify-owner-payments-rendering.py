@@ -33,8 +33,8 @@ def fixture_json(origin, path, body=None, method=None, headers=None):
 
 
 def subscriber_directory(origin):
-    verifier = run_path(str(ROOT / "scripts/verify-subscriber-directory-rendering.py"), run_name="subscriber_acceptance")
-    verifier["verify"](origin)
+    run_path(str(ROOT / "scripts/verify-subscriber-directory-rendering.py"),
+        run_name="subscriber_directory_acceptance")["verify"](origin)
 
 
 def subscriber_mutations(origin):
@@ -61,11 +61,10 @@ def subscriber_mutations(origin):
         assert account(snapshot())["status"] == "blocked" and account(snapshot())["devices"] == 0
         action({"action": "unblock", "value": "Verified synthetic caller"})
         assert account(snapshot())["status"] == "open"
-        action({"action": "temporary-password", "confirmed": False}, 400)
         fixture_json(origin, state_path, {})
-        reset = action({"action": "temporary-password", "confirmed": True})
-        assert reset["status"] == "reset" and reset["sessionsDeleted"] == 2 and reset["expiresAt"]
-        assert reset["temporaryPassword"] not in json.dumps(snapshot()), "The temporary password exists only in its one reply."
+        for confirmed in [False, True]:
+            action({"action": "temporary-password", "confirmed": confirmed}, 400)
+        assert snapshot() == baseline, "Retired password actions cannot change accounts or sessions."
         fixture_json(origin, state_path, {})
         action({"action": "sign-out-all"})
         assert account(snapshot())["devices"] == 0
@@ -278,12 +277,11 @@ def plans_api(origin):
 
 def record_workspaces_rendering(origin):
     """Shared desktop geometry is identified server-side; panes are checked after browser hydration."""
-    # Password requests preserves its existing mobile markup during server rendering.
     for path in ["/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/plans", "/admin/audit"]:
         html = visible_html(request(origin, path).text)
         assert len(re.findall(r'data-record-workspace=', html)) == 1, path
     sidebar = match(r'<(?:nav|aside)\b(?=[^>]*data-admin-sidebar)[^>]*>([\s\S]*?)</(?:nav|aside)>', visible_html(request(origin, "/admin/payments").text)).group(1)
-    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-resets", "/admin/plans", "/admin/audit", "/admin/settings", "/admin/forecasts", "/analytics"]
+    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/plans", "/admin/audit", "/admin/settings", "/admin/forecasts", "/analytics"]
     assert re.findall(r'href="([^"]+)"', sidebar) == expected
 
 
@@ -489,12 +487,13 @@ def overview_notices(origin):
 
 def owner_navigation(origin):
     """All owner routes share regular navigation and preserve the production private gate."""
-    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-resets",
+    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers",
         "/admin/plans", "/admin/settings", "/admin/audit", "/analytics"]
     for path in routes:
         response = request(origin, path)
         assert response.status == 200, (path, response.status)
         html = visible_html(response.text)
+        no_match(r"Password requests|/admin/password-resets|Set temporary password", html)
         assert html.count('href="#main-content"') == 1, f"{path}: one shared shell"
         assert len(re.findall(r"<main(?:\s|>)", html)) == 1, path
         # Settings has separate desktop and mobile headings; browser checks assert one is visible.
@@ -508,6 +507,7 @@ def owner_navigation(origin):
             match(rf'href="{re.escape(destination)}"', html, f"{path}: owner destination {destination}")
         signed_out = request(origin, path, headers={"Cookie": ""})
         assert signed_out.status == 307 and "/en/account" in signed_out.headers.get("Location", ""), path
+    assert request(origin, "/admin/password-resets").status == 404, "The retired password-request page is removed."
     for path in ["/api/analytics/report?from=2026-10-19&to=2026-10-25", "/api/analytics/live"]:
         status, report = fixture_json(origin, path)
         assert status == 200 and report["generatedAt"]
@@ -534,7 +534,7 @@ def main():
         record_workspaces_rendering(server.origin)
         overview_notices(server.origin)
         subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Save note","Delete or erase"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)
@@ -568,7 +568,7 @@ def main():
         payments_rendering(server.origin)
         payments_queue_rendering(server.origin)
         payments_api(server.origin)
-        print("PASS all nine owner routes and regular navigation; six shared record workspaces; subscriber actions, Plans create/edit/order/activation, Settings saves/modes, read-only audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
+        print("PASS all eight owner routes and regular navigation; five shared record workspaces; removed admin password workflow; subscriber actions, Plans create/edit/order/activation, Settings saves/modes, read-only audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
             print(f"Synthetic administrator browser entry: {server.origin}/api/fixture/session", flush=True)
             print(f"Settings browser entry: {server.origin}/api/fixture/session?page=settings&scenario=writable", flush=True)

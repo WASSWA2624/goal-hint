@@ -11,7 +11,6 @@ import { getShellDate } from "@/app/_components/shell-time";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { AdminHeaderContent, AdminMark, AdminWorkspace } from "./admin-workspace";
-import { AdminPageProvider } from "./admin-page-state";
 
 /**
  * The owner layout keeps its header and section navigation mounted across admin and analytics routes.
@@ -21,7 +20,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
   const messages = createMessages("en");
   const destinations = [...navigationDestinations(await getShellDate(), "en"), dashboardDestination(messages.text("navigation.dashboard"))];
   return (
-    <AdminPageProvider passwordRequests={props.passwordRequests ?? null}><ShellFrame data-admin-shell>
+    <ShellFrame data-admin-shell>
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header>
         <AdminHeaderContent>
@@ -40,6 +39,6 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
       <TabBar aria-label={messages.text("navigation.tabs")}>
         <ResponsiveNavigation mobile destinations={destinations} current="dashboard" moreLabel={messages.text("navigation.more")} />
       </TabBar>
-    </ShellFrame></AdminPageProvider>
+    </ShellFrame>
   );
 }

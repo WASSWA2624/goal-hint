@@ -23,7 +23,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     page.services.database ? createPaymentNoticeAdmin(page.services.database).attention().catch(() => null) : null,
   ]);
   return (
-    <AdminFrame database={page.services.database} {...(value ? { pendingCount: value.pending } : {})}>
+    <AdminFrame {...(value ? { pendingCount: value.pending } : {})}>
       <DeskHead><DeskTitle><h1>Overview</h1></DeskTitle></DeskHead>
       {value ? <OverviewReport value={value} payments={payments} notices={notices} now={renderedAt()} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
     </AdminFrame>

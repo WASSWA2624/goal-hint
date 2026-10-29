@@ -122,13 +122,6 @@ export const QuickActions = styled.div`
     > button:first-child { grid-column: auto; }
   }
 `;
-export const ActionHint = styled.p`
-  margin-block-start: -6px;
-  padding: 0 14px 14px;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  ${media.desktop} { padding-inline: 18px; }
-`;
 /** The action panel's heading takes focus when it opens; it is not a control, so it shows no ring. */
 export const ActionPanel = styled(Panel)`
   h2[tabindex="-1"]:focus { outline: none; }

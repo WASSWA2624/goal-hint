@@ -25,7 +25,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
     plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
   const resolvedTab = data?.tab ?? tab;
-  return <AdminFrame database={page.services.database} {...(data ? { pendingCount: data.pendingCount } : {})}>{invalidTarget || data?.targetFound === false
+  return <AdminFrame {...(data ? { pendingCount: data.pendingCount } : {})}>{invalidTarget || data?.targetFound === false
     ? <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">This payment is unavailable. It may have been removed.</Notice></PaymentUnavailable>
     : data ? <PaymentsEditor key={paymentId ?? ""} queue={data} tab={resolvedTab} plans={plans} {...(paymentId ? { initialPaymentId: paymentId } : {})} />
       : <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">Member storage is unavailable.</Notice></PaymentUnavailable>}</AdminFrame>;

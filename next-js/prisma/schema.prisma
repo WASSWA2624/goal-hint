@@ -1670,9 +1670,6 @@ model MemberAccount {
   phoneVerifiedAt  DateTime?           @db.DateTime(3)
   whatsappNotificationsAt DateTime?    @db.DateTime(3)
   passwordChangedAt DateTime?          @db.DateTime(3)
-  temporaryPasswordHash String?        @db.VarChar(255)
-  temporaryPasswordExpiresAt DateTime? @db.DateTime(3)
-  passwordResetRequestedAt DateTime?   @db.DateTime(3)
   createdAt        DateTime            @db.DateTime(3)
   lastSignInAt     DateTime            @db.DateTime(3)
   blockedAt        DateTime?           @db.DateTime(3)
@@ -1695,7 +1692,6 @@ model MemberAccount {
   autoRenewPlan    SubscriptionPlan?   @relation("AutoRenewPlan", fields: [autoRenewPlanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   paymentNotifications PaymentNotificationOutbox[]
 
-  @@index([passwordResetRequestedAt])
   @@index([autoRenew])
   @@index([autoRenewPlanId])
 }

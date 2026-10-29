@@ -29,7 +29,7 @@ Pasting accepts only a complete six-digit ASCII code after trimming surrounding 
 3. A valid code is consumed atomically and grants a reset-only cookie for 15 minutes. The user chooses a new password. This cookie cannot access member or administrator content.
 4. Saving the password invalidates outstanding codes and all existing sessions, and issues a new member cookie.
 
-Profile password changes and password recovery share a rolling 24-hour limit: a member can save a new password only once during that period. The restriction is checked under the account lock, including concurrent requests. Members can contact the administrator for further assistance. Recovery requests remain visible under Admin → Password requests. After manually checking identity, an admin can issue a single-use temporary password that expires in 15 minutes and resets the password-change restriction. It invalidates existing passwords, codes, and sessions; logging in with it grants the same reset-only cookie. Temporary passwords are displayed once privately and never placed in audit records.
+Profile password changes and password recovery share a rolling 24-hour limit: a member can save a new password only once during that period. The restriction is checked under the account lock, including concurrent requests. Members manage their passwords through Forgot password or the signed-in Change password form. Recovery does not create an admin request, and administrators cannot issue member passwords or bypass this restriction.
 
 Production and development delivery setup, country/channel coverage and server-only API credentials are described in [yoola-messaging.md](yoola-messaging.md). Development uses real delivery with configured credentials; automated tests inject synthetic delivery.
 
@@ -62,6 +62,8 @@ All writes require same-origin requests. Responses are private and not cached; c
 `/api/account/sign-in` remains a password-login alias.
 
 ## Database rollout
+
+Deploy `20261029120000_remove_admin_password_requests` with the admin password-workflow removal. It removes the obsolete request timestamp, temporary-password hash/expiry, and queue index. Accounts affected by an unfinished legacy admin reset retain verified-code recovery eligibility through an intentionally unusable password marker; ordinary password hashes, reset-only sessions, verification codes, and historical audit events are preserved. Coordinate migration and application rollout; previous releases still reference the removed columns.
 
 Deploy `20261023090000_member_message_verification` through the existing database deployment workflow before the new code. The migration adds `MemberAccount.phoneVerifiedAt` and `passwordChangedAt`, and restores `MemberVerification` for request/code tracking with a delivery channel. Existing account numbers are grandfathered as verified; new registrations and phone changes require delivery verification. Historical retired challenges are invalidated. Update column-scoped grants for the added account fields, and ensure SELECT/INSERT/UPDATE/DELETE on `MemberVerification` as shown in [manual-account-grants.sql](deployment/manual-account-grants.sql). Schema generation does not apply the migration to any application database.
 

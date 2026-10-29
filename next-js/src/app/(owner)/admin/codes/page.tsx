@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AdminFrame } from "@/app/_components/admin-frame";
 import { CodesEditor } from "@/components/admin/code-tools";
 import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
@@ -15,7 +14,6 @@ export default async function AdminCodesPage({ searchParams }: { searchParams: P
   const [data, plans] = db ? await Promise.all([
     createPaymentReview(db).codes().catch(() => null), plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
-  return <AdminFrame database={page.services.database}>
-    {data ? <CodesEditor initialCodes={data} plans={plans} /> : <div><DeskHead><DeskTitle><h1>Codes</h1></DeskTitle></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></div>}
-  </AdminFrame>;
+  return data ? <CodesEditor initialCodes={data} plans={plans} />
+    : <div><DeskHead><DeskTitle><h1>Codes</h1></DeskTitle></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></div>;
 }

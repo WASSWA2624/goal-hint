@@ -234,7 +234,7 @@ test("saved slips persist privately, settle only completed fixtures and erase un
 
   await t.test("account erasure cascades through fixture links without child DELETE privileges", async () => {
     assert.equal(await database.query(tx => tx.savedSlipFixture.count()), 5);
-    assert.equal((await createSubscribers(database, now, () => false).action(member.accountId, "erase", undefined, "synthetic-owner")).status, "saved");
+    assert.equal((await createSubscribers(database, now).action(member.accountId, "erase", undefined, "synthetic-owner")).status, "saved");
     assert.equal(await database.query(tx => tx.savedSlip.count()), 0);
     assert.equal(await database.query(tx => tx.savedSlipFixture.count()), 0);
     assert.deepEqual(await service.completed(), []);

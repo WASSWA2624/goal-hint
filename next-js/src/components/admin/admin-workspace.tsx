@@ -7,31 +7,28 @@ import Link from "@/components/navigation/navigation-link";
 import { HomeLink } from "@/components/navigation/shell-styles";
 import { compactHeaderRow } from "@/components/ui/header-controls";
 import {
-  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GridIcon, KeyIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
+  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GridIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
-import { usePasswordRequestCount } from "./admin-page-state";
 import { watchPendingPaymentTitle } from "./pending-title";
 import { adminSidebarSize, clampSidebarWidth, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
 
 const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
-  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, "password-resets": KeyIcon,
+  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon,
   plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, forecasts: ChartIcon, analytics: ChartIcon,
 };
 
-function SectionLinks({ current, passwordRequests, onNavigate, collapsed = false }: { current: AdminSection; passwordRequests: number | null; onNavigate?: () => void; collapsed?: boolean }) {
+function SectionLinks({ current, onNavigate, collapsed = false }: { current: AdminSection; onNavigate?: () => void; collapsed?: boolean }) {
   return <ul>
     {adminSections.map(({ key, href, label }) => {
       const Icon = sectionIcons[key];
-      const count = key === "password-resets" && passwordRequests ? passwordRequests : 0;
       return <li key={key} data-separated={key === "settings" || key === "analytics" || undefined}>
-        <SectionLink href={href} prefetch={false} title={label} aria-label={collapsed ? `${label}${count ? `, ${count} waiting` : ""}` : undefined}
+        <SectionLink href={href} prefetch={false} title={label} aria-label={collapsed ? label : undefined}
           aria-current={key === current ? "page" : undefined} {...(onNavigate ? { onClick: onNavigate } : {})}>
           <Icon /><span data-sidebar-label>{label}</span>
-          {count > 0 && <Count data-sidebar-count aria-label={`${count} waiting`}>{count > 99 ? "99+" : count}</Count>}
         </SectionLink>
       </li>;
     })}
@@ -39,7 +36,7 @@ function SectionLinks({ current, passwordRequests, onNavigate, collapsed = false
 }
 
 /** Phones and tablets: the current section names the menu; the list opens below it and closes on a choice, Escape or a tap outside. */
-function SectionMenu({ current, passwordRequests }: { current: AdminSection; passwordRequests: number | null }) {
+function SectionMenu({ current }: { current: AdminSection }) {
   const root = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
   const dismiss = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
@@ -55,7 +52,7 @@ function SectionMenu({ current, passwordRequests }: { current: AdminSection; pas
       <ListIcon /><small>Section</small><strong>{label}</strong><ChevronDownIcon />
     </summary>
     <MenuPopup aria-label="Admin sections">
-      <SectionLinks current={current} passwordRequests={passwordRequests} onNavigate={dismiss} />
+      <SectionLinks current={current} onNavigate={dismiss} />
     </MenuPopup>
   </MenuBar>;
 }
@@ -65,12 +62,11 @@ function SectionMenu({ current, passwordRequests }: { current: AdminSection; pas
  * keeps the live pending-payments count in its tab title.
  */
 export function AdminWorkspace({ current: initialSection, children, pendingCount }: {
-  current?: AdminSection; children: ReactNode; pendingCount?: number; passwordRequests?: number | null;
+  current?: AdminSection; children: ReactNode; pendingCount?: number;
 }) {
   const pathname = usePathname();
   const current = adminSections.find(section => section.href === pathname)?.key ?? initialSection ?? "overview";
   const recordWorkspace = isRecordAdminSection(current);
-  const { count: passwordRequests } = usePasswordRequestCount();
   const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, () => pendingCount ?? null);
   const sidebarSnapshot = useSyncExternalStore(subscribeSidebarPreference, getSidebarSnapshot, getServerSidebarSnapshot);
   const [collapsedValue, widthValue, maximumValue] = sidebarSnapshot.split(":").map(Number);
@@ -103,7 +99,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
               onClick={() => setSidebarPreference({ collapsed: !collapsed })}>{collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}</SidebarButton>
           </SidebarControls>
         </SidebarHead>
-        <SectionLinks current={current} passwordRequests={passwordRequests} collapsed={collapsed} />
+        <SectionLinks current={current} collapsed={collapsed} />
       </Sidebar>
       <SidebarResize hidden={collapsed} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
         aria-label="Resize admin sidebar" aria-orientation="vertical" aria-controls="admin-sidebar"
@@ -129,7 +125,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
           if (width === null) return;
           event.preventDefault(); setSidebarPreference({ width: clampSidebarWidth(width, sidebarMaximum) });
         }} />
-      <SectionMenu current={current} passwordRequests={passwordRequests} />
+      <SectionMenu current={current} />
       <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace}>
         <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace}>{children}</Column>
       </Main>
@@ -198,7 +194,6 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
       padding-inline: 6px;
       [data-sidebar-label], [data-sidebar-caption] { display: none; }
       a { position: relative; justify-content: center; padding-inline: 0; }
-      [data-sidebar-count] { position: absolute; inset-block-start: 1px; inset-inline-end: 1px; min-inline-size: 14px; block-size: 14px; padding-inline: 2px; font-size: 9px; }
     }
   }
 `;
@@ -257,20 +252,6 @@ const SectionLink = styled(Link)`
   ${media.hover} { &:hover:not([aria-current="page"]) { background: ${({ theme }) => theme.color.rowHover}; } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
   ${media.desktop} { min-block-size: 40px; }
-`;
-const Count = styled.span`
-  display: inline-grid;
-  place-items: center;
-  min-inline-size: 20px;
-  block-size: 20px;
-  margin-inline-start: auto;
-  padding: 0 6px;
-  border-radius: ${({ theme }) => theme.border.radius};
-  color: ${({ theme }) => theme.color.outcome.pending.text};
-  background: ${({ theme }) => theme.color.outcome.pending.background};
-  font-size: ${({ theme }) => theme.typography.scale.caption};
-  font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: 1;
 `;
 const MenuBar = styled.details`
   position: relative;

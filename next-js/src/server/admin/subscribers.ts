@@ -1,16 +1,12 @@
 import "server-only";
 import { auditDateBounds, type AuditFilters } from "../../domain/admin-audit.ts";
-import { randomInt } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow, OwnerPaymentSummary } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { formatPaymentReference } from "../../domain/payment.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
-import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { lockMemberAccount, type CodeFailure, type CodeOutcome } from "../members/access-codes.ts";
-import { isMemberAdminPhone } from "../members/member-admin.ts";
-import { passwordRecoveryRules } from "../members/password-recovery.ts";
+import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
 import { decide } from "../members/settings.ts";
 import { appendWalletEntry, lockedCredit, walletHistory } from "../members/wallet.ts";
 import { createPaymentReview } from "./payment-review.ts";
@@ -24,12 +20,7 @@ export function revenueBounds(now: number) {
   const week = addReportingDays(today, -(weekday + 6) % 7), month = parseReportingDate(today.slice(0, 7) + "-01");
   return { week: new Date(getReportingDayBounds(week).startInclusive), month: new Date(getReportingDayBounds(month).startInclusive) };
 }
-/** Read out on a phone call and typed on a phone: lower case, without i, l, o, 0 or 1. */
-export const temporaryPasswordRules = Object.freeze({ alphabet: "abcdefghjkmnpqrstuvwxyz23456789", length: 10 });
-export const generateTemporaryPassword = () => Array.from({ length: temporaryPasswordRules.length },
-  () => temporaryPasswordRules.alphabet[randomInt(temporaryPasswordRules.alphabet.length)]).join("");
-export type TemporaryPasswordOutcome = Readonly<{ status: "reset"; accountId: string; temporaryPassword: string; expiresAt: string; created: boolean; sessionsDeleted: number }> | CodeFailure;
-export function createSubscribers(database: DatabaseRuntime, now = Date.now, adminPhone = isMemberAdminPhone, config?: Pick<AnalyticsConfig, "key">) {
+export function createSubscribers(database: DatabaseRuntime, now = Date.now, config?: Pick<AnalyticsConfig, "key">) {
   return {
     async pendingPayments(): Promise<readonly OwnerPaymentSummary[]> {
       return database.query(async tx => (await tx.paymentSubmission.findMany({ where: { status: "pending" },
@@ -37,11 +28,6 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
         select: { id: true, reference: true, claimedNetwork: true, claimedAmountUgx: true, submittedAt: true } }))
         .map(row => ({ id: row.id, reference: formatPaymentReference(row.reference), network: row.claimedNetwork,
           amount: row.claimedAmountUgx, submittedAt: row.submittedAt.toISOString() })));
-    },
-    async passwordResetRequests(): Promise<readonly Readonly<{ id: string; phone: string; requestedAt: string }>[]> {
-      return database.query(async tx => (await tx.memberAccount.findMany({ where: { passwordResetRequestedAt: { not: null }, blockedAt: null, erasedAt: null, phone: { not: null } },
-        orderBy: { passwordResetRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, passwordResetRequestedAt: true } }))
-        .filter(row => row.phone && !adminPhone(row.phone)).map(row => ({ id: row.id, phone: row.phone!, requestedAt: row.passwordResetRequestedAt!.toISOString() })));
     },
     async overview(): Promise<OwnerOverview> {
       const at = new Date(now()), bounds = revenueBounds(+at);
@@ -135,8 +121,8 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
               const entry = await appendWalletEntry(tx, id, { kind: "adjustment", amountUgx: -credit, actor: "admin", at, note: "Forfeited when the account was erased" });
               await writeOwnerAudit(tx, { at, actor, action: "credit_forfeited", accountId: id, targetType: "member", targetId: id, details: { amountUgx: credit, walletEntryId: entry.id } });
             }
-            await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null,
-              passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null, ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
+            await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null,
+              ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
             await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });
@@ -148,25 +134,6 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
           "auto-renew-off": "auto_renew_changed" }[action] as "member_note_changed" | "member_signed_out_all" | "member_blocked" | "member_unblocked" | "member_erased" | "auto_renew_changed";
         await writeOwnerAudit(tx, { at, actor, action: auditAction, accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted: deleted, ...(action === "note" ? { length: (value as string).length } : {}), ...(["block", "unblock"].includes(action) ? { reason: value } : {}) } });
         return { status: "saved" };
-      });
-    },
-    /** The admin reads a random single-use password out once. Only its hash survives, for 15 minutes;
-     * every existing device signs out, and the member must choose a new password before authenticating. */
-    async temporaryPassword(target: Readonly<{ id: string }> | Readonly<{ phone: string }>, actor: string): Promise<TemporaryPasswordOutcome> {
-      if ("phone" in target) return { status: "refused", message: "Administrator credentials are configured in the environment. Search for the member's account first." };
-      const temporaryPassword = generateTemporaryPassword(), temporaryPasswordHash = await hashPassword(temporaryPassword);
-      return decide<TemporaryPasswordOutcome>(database, async (tx, rollback) => {
-        const at = new Date(now()), id = target.id, expiresAt = new Date(+at + passwordRecoveryRules.temporaryMs);
-        const account = await lockMemberAccount(tx, id);
-        if (!account?.phone || account.erasedAt) return rollback({ status: "refused", message: "This account is unavailable." });
-        if (adminPhone(account.phone)) return rollback({ status: "refused", message: "Administrator passwords are managed in the environment." });
-        if (account.blockedAt) return rollback({ status: "refused", message: "Unblock this account before setting a password." });
-        await tx.memberAccount.update({ where: { id }, data: { passwordHash: null, temporaryPasswordHash, temporaryPasswordExpiresAt: expiresAt,
-          passwordResetRequestedAt: null, passwordChangedAt: null } });
-        await tx.memberVerification.updateMany({ where: { accountId: id, consumedAt: null }, data: { consumedAt: at } });
-        const sessionsDeleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
-        await writeOwnerAudit(tx, { at, actor, action: "password_reset", accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted, created: false, expiresAt: expiresAt.toISOString() } });
-        return { status: "reset", accountId: id, temporaryPassword, expiresAt: expiresAt.toISOString(), created: false, sessionsDeleted };
       });
     },
     async audit(action = "", dates: Pick<AuditFilters, "period" | "startDate" | "endDate"> = {}): Promise<readonly OwnerAuditRow[]> {

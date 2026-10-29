@@ -14,7 +14,6 @@ Cover the shared header, dashboard entry point, admin workspace, and all existin
 - Payments: `/admin/payments`
 - Codes: `/admin/codes`
 - Subscribers: `/admin/subscribers`
-- Password requests: `/admin/password-resets`
 - Plans: `/admin/plans`
 - Settings: `/admin/settings`
 - Audit: `/admin/audit`
@@ -63,7 +62,7 @@ Keep the persistent application header, admin navigation, and unaffected interfa
 
 - Use the existing framework navigation for internal routes. Remove avoidable document reloads and unintended native form navigations from ordinary authenticated flows.
 - Keep shared layouts and providers at appropriate persistent boundaries so routine navigation does not unnecessarily reconstruct the entire workspace. Make any necessary internal changes without altering the rendered design.
-- Prevent unrelated data updates from resetting components through unstable keys, effects, or avoidable state replacement. Retain intentional resets, such as selecting a different record or clearing sensitive temporary credentials.
+- Prevent unrelated data updates from resetting components through unstable keys, effects, or avoidable state replacement. Retain intentional resets, such as selecting a different record or dismissing an account action.
 - For saves and other mutations, update the affected record, list, totals, badges, or report using authoritative results or narrowly scoped revalidation. Keep related counts and dependent views consistent.
 - Assess broad route refreshes individually. Retain them where needed for correctness and scope them where feasible. Do not replace them with stale local values or optimistic success messages that can disagree with the server.
 - Keep already loaded, authorized content visible during routine background refreshes. Localize existing pending, success, and error feedback to the affected control or region instead of blanking the whole screen.

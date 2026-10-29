@@ -22,7 +22,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
   const now = () => clock, renewals = [];
   const notifications = { ...silentPaymentNotifications, async renewed(renewal) { renewals.push(renewal); return "sent"; } };
   const codes = createAccessCodes({ database: db, config, now, notifications }), sessions = createMemberSessions({ database: db, config, now });
-  const payments = createPayments({ database: db, config, now, environment: null }), subscribers = createSubscribers(db, now, () => false, config);
+  const payments = createPayments({ database: db, config, now, environment: null }), subscribers = createSubscribers(db, now, config);
   const daily = randomUUID(), weekly = randomUUID();
   await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST", airtelNumber: "256700000902",
     airtelName: "TEST AIRTEL", updatedAt: new Date(clock), updatedBy: "test" } }));

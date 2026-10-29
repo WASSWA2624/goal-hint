@@ -317,7 +317,7 @@ export const en = {
   "account.continueReset": "Verify code and continue",
   "account.contactSupport": "Contact support",
   "account.support": "Account support",
-  "account.passwordChangeLimit": "You can change your password once every {hours} hours. Contact the admin if you need further help.",
+  "account.passwordChangeLimit": "You can change your password once every {hours} hours. Try again after the limit resets.",
   "account.newPhoneVerification": "Verify the new number by SMS or WhatsApp before signing in again.",
   "account.newHere": "New to GoalHint?",
   "account.alreadyRegistered": "Already have an account?",

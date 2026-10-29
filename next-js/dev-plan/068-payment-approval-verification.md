@@ -1,5 +1,7 @@
 # 068 Payment-approval verification (no one-time codes)
 
+> Historical plan: its admin password-request and temporary-password workflow was retired by [144](144-remove-admin-password-requests.md). Current self-service recovery and password changes are documented in [member-authentication.md](../docs/member-authentication.md).
+
 **Feature:** Replace WhatsApp/SMS one-time codes and typed access codes with one flow: pay to the listed mobile money
 number, upload the screenshot, confirm, wait for the owner's manual approval (with a Call admin button), and get access
 automatically on the account's signed-in devices.

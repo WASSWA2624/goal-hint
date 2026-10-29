@@ -1,12 +1,12 @@
 # Shared admin record workspace
 
-Desktop Payments, Codes, Subscribers, Password requests, Plans, and Audit use
+Desktop Payments, Codes, Subscribers, Plans, and Audit use
 the components in `src/components/admin/record-workspace.tsx`. Edit that module
 to change their shared layout, scrolling, toolbar spacing, headers, row surfaces,
 or action-footer presentation. Screen files supply their own record fields,
 selection state, forms, permissions, and operations.
 
-The menu keeps Overview first, followed by the six record workflows beginning
+The menu keeps Overview first, followed by the five record workflows beginning
 with Payments. Settings and Forecast sources follow that group. Analytics stays
 last in its own separated section. `admin-navigation.ts` declares which pages
 use the fixed record viewport; their shared shell preserves sidebar resizing
@@ -34,17 +34,15 @@ Payments extends these common components for its provider/reference rows and
 payment-specific review zones. Codes retains real manual-grant, extend, and
 revoke operations. Plans retains saved-name/price/duration snapshots and reorder
 behavior. Subscribers retains account tabs, access/credit tools, restrictions,
-and guarded removal. Password requests retains phone verification and one-time
-password handling. Audit is read-only and uses existing related-record links;
+and guarded removal. Members manage their passwords through the account's own
+recovery and change-password flows. Audit is read-only and uses existing related-record links;
 CSV export still covers the full filtered loaded window.
 
 ## Responsive and state behavior
 
 The fixed two-pane layout starts at 64rem. Mobile keeps the existing inline
-Codes/Plans forms, subscriber directory/back navigation, per-request password
-panels, and Audit disclosures. Responsive branches mount one set of forms and
-preserve parent-owned drafts or credentials. One-time passwords remain in memory
-only and clear on Done, selection changes, or navigation.
+Codes/Plans forms, subscriber directory/back navigation, and Audit disclosures.
+Responsive branches mount one set of forms and preserve parent-owned drafts.
 
 Overview, Settings, Forecast sources, and Analytics keep their existing layout
 categories. Storage-unavailable responses remain readable within the shared
@@ -54,7 +52,7 @@ and persistence are not delegated to layout components.
 Run `python scripts/verify-owner-payments-rendering.py --serve` from `next-js/`
 for the production acceptance fixture. Its printed synthetic entry establishes
 only the fixture session. Test mutations there rather than against business
-storage. The fixture includes a long payment queue, account/password workflows,
+storage. The fixture includes a long payment queue, subscriber account workflows,
 stateful plans, Audit filtering/export, and all approved menu destinations.
 
 ## Balanced compact Subscribers

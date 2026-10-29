@@ -48,7 +48,6 @@ export async function seedDemoWorkspace(database: DatabaseRuntime, nowMs = Date.
           passwordChangedAt: createdAt, createdAt, lastSignInAt: new Date(nowMs - index * 1_800_000),
           ownerNote: `Synthetic development member ${index + 1}`, blockedAt: index % 19 === 0 ? at : null,
           blockedReason: index % 19 === 0 ? "Synthetic blocked-account example" : null,
-          passwordResetRequestedAt: index % 13 === 0 ? new Date(nowMs - (index + 1) * 60_000) : null,
           trialRequestedAt: index % 11 === 0 ? at : null } });
         const status = (["pending", "approved", "approved", "rejected", "superseded", "reversed"] as const)[index % 6]!;
         const approved = status === "approved" || status === "reversed", network = index % 2 === 0 ? "mtn" : "airtel";

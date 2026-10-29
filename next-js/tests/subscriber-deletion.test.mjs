@@ -24,6 +24,19 @@ const context = (database, body, target) => ({
   services: { database, config: { production: false } }, owner: { username: "owner" }, request: request(body, {}, target),
 });
 
+test("retired administrator password actions cannot reach subscriber storage", async () => {
+  const { database, calls } = unavailableDatabase();
+  const { POST } = createSubscriberHandlers();
+  for (const target of [url, "http://localhost:3000/api/admin/subscribers"]) {
+    for (const confirmed of [false, true]) {
+      const response = await POST(context(database, { action: "temporary-password", phone: "256700000101", confirmed }, target));
+      assert.equal(response.status, 400);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+  }
+  assert.deepEqual(calls, { queries: 0, transactions: 0 });
+});
+
 test("permanent deletion requires a literal confirmation before touching subscriber storage", async () => {
   const { database, calls } = unavailableDatabase();
   const { POST } = createSubscriberHandlers();

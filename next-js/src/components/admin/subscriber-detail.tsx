@@ -13,25 +13,24 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
 import { media } from "@/styles/theme";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { ChevronDownIcon, GiftIcon, Icon, KeyIcon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
+import { ChevronDownIcon, GiftIcon, Icon, ShieldIcon, SignOutIcon, TrashIcon, type IconProps } from "@/components/ui/icons";
 import { ActionButton, Badge, DangerButton, FieldBlock, FieldRow } from "./admin-form";
 import { ActionNotices, CodeActions, ManualCodeForm, type CodeAction } from "./code-tools";
 import { Drawer, MetaLine, Panel, PanelHead, RowList, RowMeta, RowTitle, TextAction, ZoneLabel } from "./desk-styles";
-import { PasswordReset, TemporaryPassword, type Revealed } from "./subscriber-credentials";
 import { SubscriberReviewDialog } from "./subscriber-review-dialog";
 import { RecordBody, RecordCard, RecordFooter, RecordScroll } from "./record-workspace";
-import { AccountStats, AccountTop, ActionBody, ActionPanel, ActionHint, Badges, BlockedNote, CompactForm, DetailTabs, DrawerPanel, History, Mono, MutedText,
+import { AccountStats, AccountTop, ActionBody, ActionPanel, Badges, BlockedNote, CompactForm, DetailTabs, DrawerPanel, History, Mono, MutedText,
   NoteFooter, PlainDrawer, QuickActions, RecordRow, SensitiveOptions, SpreadRow, TabBody } from "./subscriber-styles";
 
 const SwapIcon = (props: IconProps) => <Icon {...props}><path d="M7 7h12l-3-3M17 17H5l3 3" /></Icon>;
 const BanIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="8" /><path d="m6.5 6.5 11 11" /></Icon>;
 
-type AccountAction = "grant" | "number" | "password" | "block" | "devices";
+type AccountAction = "grant" | "number" | "block" | "devices";
 type Removal = "delete" | "erase";
 type Tab = "overview" | "access" | "payments" | "credit" | "devices";
 const tabs: readonly Tab[] = ["overview", "access", "payments", "credit", "devices"];
 const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", credit: "Credit", devices: "Devices" };
-const actionTitles: Record<AccountAction, string> = { grant: "Grant access", number: "Change number", password: "Reset password",
+const actionTitles: Record<AccountAction, string> = { grant: "Grant access", number: "Change number",
   block: "Account restriction", devices: `${authLabels.signOut} all devices` };
 const codeTones = { active: "good", queued: "warning" } as const;
 const paymentTones = { approved: "good", pending: "warning" } as const;
@@ -40,9 +39,9 @@ const paymentTones = { approved: "good", pending: "warning" } as const;
  * One account: who it is, its numbers once, the account actions, then tabs for the records. Destructive removal waits in
  * the last drawer; every action panel returns focus to the control that opened it.
  */
-export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, revealed = null, onDismissReveal, back, presentation, network }: {
-  account: OwnerSubscriber; plans: readonly SubscriptionPlanView[]; action: CodeAction; onDeleted: () => void; onReveal?: (value: Revealed) => void;
-  revealed?: Revealed | null; onDismissReveal?: () => void; back?: ReactNode;
+export function SubscriberDetail({ account, plans, action, onDeleted, back, presentation, network }: {
+  account: OwnerSubscriber; plans: readonly SubscriptionPlanView[]; action: CodeAction; onDeleted: () => void;
+  back?: ReactNode;
   presentation?: "compact-dialog"; network?: MobileNetwork | null;
 }) {
   const desktop = useDesktopLayout();
@@ -64,11 +63,11 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, 
     setRemoval(null); setRemovalConfirmed(false); requestAnimationFrame(() => removalSummary.current?.focus());
   }
   function chooseRemoval(value: Removal | null) {
-    if (value) { onDismissReveal?.(); setActive(null); setCreditOpen(false); }
+    if (value) { setActive(null); setCreditOpen(false); }
     setRemovalConfirmed(false); setRemoval(value);
   }
   function chooseCredit(open: boolean) {
-    if (open) { onDismissReveal?.(); setActive(null); setRemoval(null); setRemovalConfirmed(false); }
+    if (open) { setActive(null); setRemoval(null); setRemovalConfirmed(false); }
     setCreditOpen(open);
   }
   async function signOutDevices() {
@@ -84,7 +83,6 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, 
   function task(value: AccountAction, label: string, icon: ReactNode, disabled = false) {
     return <ActionButton id={`${id}-action-${value}`} type="button" disabled={action.busy || disabled} aria-expanded={active === value} aria-controls={!dialogMode || active === value ? `${id}-action-panel` : undefined} aria-haspopup={dialogMode ? "dialog" : undefined}
       {...value === "grant" ? { $variant: "primary" as const } : {}} onClick={() => {
-        onDismissReveal?.();
         if (dialogMode) action.clearFeedback();
         if (active === value) closeAction();
         else { setRemoval(null); setRemovalConfirmed(false); setCreditOpen(false); setActive(value); }
@@ -92,8 +90,6 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, 
   }
   const actionFields = <>
     {active === "grant" && <ManualCodeForm formId={`${id}-form-grant`} externalActions={externalActionControls} plans={plans} action={action} phone={account.phone ?? ""} compact fixedPhone onSaved={closeAction} />}
-    {!dialogMode && active === "password" && <><MutedText>Every device signs out. The temporary password works once and expires in 15 minutes.</MutedText>
-          <PasswordReset formId={`${id}-form-password`} externalActions={externalActionControls} path={path} action={action} reveal={value => { onReveal?.({ ...value, phone: account.phone }); setActive(null); }} /></>}
     {active === "number" && <ChangeNumber formId={`${id}-form-number`} externalActions={externalActionControls} path={path} action={action} onSaved={closeAction} />}
     {active === "block" && <CompactForm id={`${id}-form-block`} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : path} onSubmit={async event => {
       event.preventDefault(); if (action.busy) return;
@@ -104,18 +100,16 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, 
       {!externalActionControls && <ActionButton type="submit" $variant="primary" disabled={action.busy}>{account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</CompactForm>}
     {active === "devices" && <><MutedText>The member will need to {authLabels.signIn.toLowerCase()} again on every device.</MutedText>{!externalActionControls && <div><ActionButton type="button" disabled={action.busy} onClick={() => void signOutDevices()}>{actionTitles.devices}</ActionButton></div>}</>}
   </>;
-  const footer = !dialogMode && revealed ? <ActionButton type="button" onClick={onDismissReveal}>Done</ActionButton>
-    : removal ? <><ActionButton type="button" disabled={action.busy} onClick={closeRemoval}>Cancel</ActionButton><DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{removal === "delete" ? "Permanently delete account" : "Erase personal data"}</DangerButton></>
+  const footer = removal ? <><ActionButton type="button" disabled={action.busy} onClick={closeRemoval}>Cancel</ActionButton><DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{removal === "delete" ? "Permanently delete account" : "Erase personal data"}</DangerButton></>
       : active ? <><ActionButton type="button" disabled={action.busy} onClick={closeAction}>Cancel</ActionButton>{active === "devices"
         ? <ActionButton type="button" disabled={action.busy} onClick={() => void signOutDevices()}>{actionTitles.devices}</ActionButton>
-        : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy}>{active === "grant" ? "Grant access manually" : active === "password" ? "Set temporary password" : active === "number" ? "Change number and move access" : account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</>
+        : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy}>{active === "grant" ? "Grant access manually" : active === "number" ? "Change number and move access" : account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</>
         : !erased && tab === "overview" ? <ActionButton type="submit" form={`${id}-note`} disabled={action.busy || !noteDirty}>Save note</ActionButton>
           : !erased && tab === "credit" && creditOpen ? <><ActionButton type="button" disabled={action.busy} onClick={() => setCreditOpen(false)}>Cancel</ActionButton><ActionButton type="submit" form={`${id}-credit`} $variant="primary" disabled={action.busy || !creditReady}>Save correction</ActionButton></> : null;
   return <DetailCard $compact={dialogMode} data-subscriber-detail={account.id} data-subscriber-presentation={presentation}>
     <RecordScroll>
     {back}
     <RecordBody>
-    {revealed && !dialogMode && <TemporaryPassword key={revealed.password} value={revealed} done={() => onDismissReveal?.()} externalActions={desktop} />}
     <Panel aria-label="Subscriber account" data-subscriber-summary>
       <AccountTop>
         <div>
@@ -131,11 +125,9 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, 
       {!erased && <QuickActions role="group" aria-label="Account actions" data-subscriber-actions>
         {task("grant", "Grant access", <GiftIcon />)}
         {task("number", "Change number", <SwapIcon />)}
-        {!dialogMode && task("password", "Reset password", <KeyIcon />, !!account.blockedAt)}
         {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
         {task("devices", `${authLabels.signOut} devices`, <SignOutIcon />)}
       </QuickActions>}
-      {!dialogMode && !erased && account.blockedAt && <ActionHint>Unblock this account to reset its password.</ActionHint>}
     </Panel>
     {active && !dialogMode && <ActionPanel id={`${id}-action-panel`} role="region" aria-labelledby={`${id}-action-title`} data-subscriber-action-panel={active}
       onKeyDown={event => { if (event.key === "Escape" && !action.busy && !event.defaultPrevented) { event.preventDefault(); closeAction(); } }}>
@@ -194,7 +186,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal, 
     </DrawerPanel>
     </RecordBody>
     </RecordScroll>
-    {desktop && footer && !dialogMode && <RecordFooter data-subscriber-footer-action={revealed ? "done" : removal ?? active ?? tab}><span data-record-summary>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</span>{footer}</RecordFooter>}
+    {desktop && footer && !dialogMode && <RecordFooter data-subscriber-footer-action={removal ?? active ?? tab}><span data-record-summary>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</span>{footer}</RecordFooter>}
     {dialogMode && active && <SubscriberReviewDialog id={`${id}-action-panel`} open title={active === "block" ? account.blockedAt ? "Unblock account" : "Block account" : actionTitles[active]} busy={action.busy} onClose={closeAction} footer={footer}>
       <div data-subscriber-action-dialog={active}>{action.message && <ActionNotices action={action} />}{actionFields}</div>
     </SubscriberReviewDialog>}

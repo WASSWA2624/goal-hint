@@ -3,9 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { hashPassword } from "../src/server/analytics/analytics-password.ts";
-import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { createViewerAccess } from "../src/server/members/viewer-access.ts";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
@@ -15,7 +13,7 @@ import { silentPaymentNotifications } from "./helpers/payment-notification-fixtu
 
 const phone = "256700001001", password = "correct horse 47", address = "198.51.100.8", DAY = 86_400_000;
 
-test("channel verification, recovery limits and administrator assistance persist on isolated MySQL", { timeout: 180_000 }, async t => {
+test("channel verification and self-service recovery limits persist on isolated MySQL", { timeout: 180_000 }, async t => {
   let f;
   try { f = await paidDatabase(); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
@@ -27,7 +25,6 @@ test("channel verification, recovery limits and administrator assistance persist
   const restart = () => createMemberAuth({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash: () => adminHash, delivery });
   const auth = restart();
   const sessions = createMemberSessions({ database: f.database, config: f.config, now, adminPhone, adminPasswordHash: () => adminHash });
-  const owner = createSubscribers(f.database, now, adminPhone);
   const registered = await auth.register(phone, password, { member: null }, address);
   assert.equal(registered.status, "authenticated"); assert.equal(registered.requiresVerification, true);
   assert.equal(await sessions.verify(registered.token), null); assert.deepEqual(await auth.verificationSession(registered.token), { phone });
@@ -46,7 +43,6 @@ test("channel verification, recovery limits and administrator assistance persist
   const logged = await auth.login(phone, password, address);
   assert.equal(logged.status, "authenticated"); assert.equal(await sessions.verify(verified.token), null);
   assert.equal((await auth.requestPasswordReset(phone, address, "sms")).status, "requested");
-  assert.equal((await owner.passwordResetRequests())[0].id, member.accountId);
   const resetCode = messages.at(-1).code;
   const claims = await Promise.all([auth.verifyPasswordReset(phone, resetCode, address), auth.verifyPasswordReset(phone, resetCode, address)]);
   assert.deepEqual(claims.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
@@ -59,23 +55,12 @@ test("channel verification, recovery limits and administrator assistance persist
   assert.equal(await sessions.verify(verified.token), null);
   assert.equal((await auth.resetPassword("another password", recovery.token, address)).status, "unauthorized");
   const limited = await auth.changePassword("another password", "self service password", { member: await sessions.verify(saved.token) });
-  assert.equal(limited.status, "busy"); assert.match(limited.message, /admin/iu);
-  const reset = await owner.temporaryPassword({ id: member.accountId }, "synthetic-owner");
-  assert.equal(reset.status, "reset"); assert.ok(reset.sessionsDeleted >= 1);
-  assert.equal(await sessions.verify(saved.token), null);
-  assert.equal((await owner.passwordResetRequests()).length, 0);
-  const account = await f.database.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: member.accountId } }));
-  assert.equal(account.passwordHash, null); assert.notEqual(account.temporaryPasswordHash, reset.temporaryPassword);
-  const attempts = await Promise.all([auth.login(phone, reset.temporaryPassword, address), auth.login(phone, reset.temporaryPassword, address)]);
-  assert.deepEqual(attempts.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
-  const temporary = attempts.find(result => result.status === "authenticated");
-  assert.equal(temporary.requiresPasswordChange, true); assert.equal(await sessions.verify(temporary.token), null);
-  const changed = await auth.resetPassword("replacement password", temporary.token, address);
+  assert.equal(limited.status, "busy"); assert.match(limited.message, /24 hours/iu);
+  time += DAY;
+  const changed = await auth.changePassword("replacement password", "self service password", { member: await sessions.verify(saved.token) });
   assert.equal(changed.status, "authenticated"); assert.ok(await sessions.verify(changed.token));
-  assert.equal((await auth.resetPassword("another password", temporary.token, address)).status, "unauthorized");
-  const expired = await owner.temporaryPassword({ id: member.accountId }, "synthetic-owner");
-  time += passwordRecoveryRules.temporaryMs;
-  assert.equal((await auth.login(phone, expired.temporaryPassword, address)).status, "unauthorized");
+  assert.equal(await sessions.verify(saved.token), null);
+  assert.equal((await restart().login(phone, "replacement password", address)).status, "authenticated");
   const otherPhone = "256700001002", unverified = await auth.register(otherPhone, password, { member: null }, "198.51.100.9");
   const sends = await Promise.all(Array.from({ length: 5 }, (_, i) => auth.requestVerification(i % 2 ? "sms" : "whatsapp", unverified.token, `198.51.100.${i + 10}`)));
   assert.equal(sends.filter(result => result.status === "requested").length, 3); assert.equal(sends.filter(result => result.status === "busy").length, 2);
@@ -90,7 +75,7 @@ test("channel verification, recovery limits and administrator assistance persist
   assert.equal((await auth.requestPasswordReset("256700001098", address, "whatsapp")).status, "requested");
   assert.equal(messages.length, before);
   const audits = await f.database.query(tx => tx.ownerAuditEvent.findMany({ where: { action: "password_reset" } }));
-  assert.equal(audits.length, 2); assert.ok(!JSON.stringify(audits.map(row => row.details)).includes(reset.temporaryPassword));
+  assert.equal(audits.length, 0, "Self-service recovery never issues an administrator temporary password.");
 });
 
 test("successful and concurrent password logins transfer one device and premium access on MySQL", { timeout: 180_000 }, async t => {

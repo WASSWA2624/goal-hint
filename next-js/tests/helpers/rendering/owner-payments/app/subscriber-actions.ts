@@ -10,7 +10,7 @@ export async function subscriberAction(request: Request) {
   const body = read.body, id = new URL(request.url).pathname.split("/").at(-1), state = fixtureState();
   const account = state.accounts.find(row => row.id === id), action = body.action;
   if (!account || account.erasedAt && action !== "delete") return json({ status: "refused", message: "This account is unavailable." }, 409);
-  if (["change-number", "temporary-password", "erase", "delete"].includes(String(action)) && body.confirmed !== true)
+  if (["change-number", "erase", "delete"].includes(String(action)) && body.confirmed !== true)
     return json({ message: "Confirm the account action first." }, 400);
   switch (action) {
     case "note":
@@ -23,13 +23,6 @@ export async function subscriberAction(request: Request) {
       recordFixtureAudit(action === "block" ? "member_blocked" : "member_unblocked", account.id);break;
     case "sign-out-all":
       state.devices = state.devices.filter(row => row.accountId !== account.id);recordFixtureAudit("member_signed_out_all", account.id);break;
-    case "temporary-password": {
-      if (account.blockedAt) return json({ status: "refused", message: "Unblock this account before setting a password." }, 409);
-      const sessionsDeleted = state.devices.filter(row => row.accountId === account.id).length;
-      state.devices = state.devices.filter(row => row.accountId !== account.id);account.passwordResetRequestedAt = null;
-      recordFixtureAudit("password_reset", account.id);
-      return json({ status: "reset", accountId: account.id, temporaryPassword: "testpass42", expiresAt: new Date(Date.now() + 900000).toISOString(), created: false, sessionsDeleted });
-    }
     case "change-number": {
       const phone = normalizePhone(body.newPhone);
       if (!phone || phone === account.phone || !["old-number", "payment-details"].includes(String(body.verifiedBy))) return json({ message: "Choose another number and verify the request." }, 400);
@@ -44,7 +37,7 @@ export async function subscriberAction(request: Request) {
       recordFixtureAudit("number_changed", destination.id);return json(result, 201);
     }
     case "erase": {
-      const phone = account.phone;account.phone = null;account.ownerNote = null;account.blockedReason = null;account.erasedAt = new Date();account.passwordResetRequestedAt = null;
+      const phone = account.phone;account.phone = null;account.ownerNote = null;account.blockedReason = null;account.erasedAt = new Date();
       state.devices = state.devices.filter(row => row.accountId !== account.id);
       for (const payment of state.payments.filter(row => row.accountId === account.id || row.payerPhone === phone)) payment.payerPhone = null;
       recordFixtureAudit("member_erased", account.id);break;

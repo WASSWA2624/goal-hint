@@ -6,7 +6,7 @@ import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { passwordChangeWindowMs, supportedMessageChannels, type MessageChannel } from "../../domain/member-verification.ts";
 import { authLabels } from "../../i18n/messages/auth.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
-import { hashPassword, verifyPassword } from "../analytics/analytics-password.ts";
+import { hashPassword, isPasswordHash, verifyPassword } from "../analytics/analytics-password.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, grantRegistrationTrial, lockMemberAccount } from "./access-codes.ts";
@@ -34,7 +34,7 @@ const wrongPassword = (): AuthFailure => ({ status: "unauthorized", message: "Yo
 const busy = (): AuthFailure => ({ status: "busy", message: "Too many attempts. Please wait before trying again." });
 const conflict = (): AuthFailure => ({ status: "conflict", message: `An account already exists, so please ${authLabels.signIn.toLowerCase()}.` });
 const messageLimit = (): AuthFailure => ({ status: "busy", message: "You can request up to three messages within 24 hours. Please wait or contact the admin for assistance." });
-const passwordLimit = (): AuthFailure => ({ status: "busy", message: "You can change your password only once within 24 hours. Contact the admin for further assistance." });
+const passwordLimit = (): AuthFailure => ({ status: "busy", message: "You can change your password only once within 24 hours. Please try again after the limit resets." });
 const deliveryFailure = (): AuthFailure => ({ status: "unavailable", message: "We couldn't send your code. Please try again later or contact the admin." });
 const resetRequested = (): Requested => ({ status: "requested", message: "If this number has an eligible account, a password reset code has been sent through your selected channel." });
 const canChangePassword = (account: MemberAccount, at: Date) => !account.passwordChangedAt || +at - +account.passwordChangedAt >= passwordChangeWindowMs;
@@ -112,10 +112,11 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         || !await limit({ purpose: "password-login-phone", value: phone, maximum: 10, windowMs: 15 * 60_000 })) return busy();
       const administrator = adminPhone(phone), credential = administrator ? adminPasswordHash() : null;
       const account = await database.query((tx) => tx.memberAccount.findUnique({ where: { phone } }));
-      const temporary = !administrator && !!account?.temporaryPasswordHash;
-      const stored = administrator ? credential : temporary ? account!.temporaryPasswordHash : account?.passwordHash;
-      const matches = administrator && stored ? await verifyMemberAdminCredential(password, stored) : await verifyPassword(password, stored ?? await dummyHash());
-      if (!matches || !stored || account?.erasedAt || account?.blockedAt) return refused();
+      const stored = administrator ? credential : account?.passwordHash;
+      // Retired credentials and missing accounts still perform the normal password work.
+      const matches = administrator && stored ? await verifyMemberAdminCredential(password, stored)
+        : await verifyPassword(password, stored && isPasswordHash(stored) ? stored : await dummyHash());
+      if (!matches || !stored || !administrator && !isPasswordHash(stored) || account?.erasedAt || account?.blockedAt) return refused();
       if (!administrator && !account) return refused();
       return decide<AuthSuccess | AuthFailure>(database, async (tx) => {
         const at = new Date(now());
@@ -124,17 +125,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         const found = account ?? await tx.memberAccount.findUnique({ where: { phone } });
         const current = found ? await lockMemberAccount(tx, found.id) : null;
         if (!current || current.phone !== phone || current.blockedAt || current.erasedAt) return refused();
-        if (administrator ? !adminPhone(phone) || adminPasswordHash() !== stored
-          : temporary ? current.temporaryPasswordHash !== stored || !current.temporaryPasswordExpiresAt || current.temporaryPasswordExpiresAt <= at
-            : current.passwordHash !== stored || !!current.temporaryPasswordHash) return refused();
-        if (temporary) {
-          // Consume the password under the account lock. This cookie can only complete a password change.
-          await tx.memberAccount.update({ where: { id: current.id }, data: { temporaryPasswordHash: null, temporaryPasswordExpiresAt: null, lastSignInAt: at } });
-          await tx.memberSession.deleteMany({ where: { accountId: current.id } });
-          const { token, session } = await issueMemberSession(tx, current.id, at, previous);
-          await tx.memberSession.update({ where: { tokenHash: session.tokenHash }, data: { passwordResetAt: at, expiresAt: new Date(+at + passwordRecoveryRules.resetSessionMs) } });
-          return { status: "authenticated", token, accountId: current.id, phone, requiresPasswordChange: true };
-        }
+        if (administrator ? !adminPhone(phone) || adminPasswordHash() !== stored : current.passwordHash !== stored) return refused();
         const verified = administrator || !!current.phoneVerifiedAt;
         const { token, session, otherDeviceSignedOut } = await issueMemberSession(tx, current.id, at, previous, verified);
         if (administrator) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
@@ -211,7 +202,6 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         if (!account || account.phone !== phone || account.blockedAt || account.erasedAt || adminPhone(phone) || !account.passwordHash) return resetRequested();
         const reservation = await codes.reserve(tx, account, "reset", channel, at);
         if (!reservation) return messageLimit();
-        await tx.memberAccount.update({ where: { id: account.id }, data: { passwordResetRequestedAt: account.passwordResetRequestedAt ?? at } });
         return reservation;
       });
       if (!("id" in reserved)) return reserved;
@@ -254,7 +244,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         if (!account?.phone || account.blockedAt || account.erasedAt || adminPhone(account.phone) || !session?.passwordResetAt || session.authenticatedAt || session.expiresAt <= at) return refused();
         if (!canChangePassword(account, at)) return passwordLimit();
         const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { passwordHash, phoneVerifiedAt: account.phoneVerifiedAt ?? at,
-          passwordChangedAt: at, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null, passwordResetRequestedAt: null, lastSignInAt: at } });
+          passwordChangedAt: at, lastSignInAt: at } });
         await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
         return rotate(tx, updated, { member: null }, at);
       });

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AdminFrame } from "@/app/_components/admin-frame";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { DeskHead } from "@/components/admin/desk-styles";
@@ -22,6 +21,6 @@ export default async function AdminSubscribersPage({ searchParams }: { searchPar
     const selectedId = id ?? accounts[0]?.id;
     return { accounts, plans, detail: selectedId ? await createSubscribers(db).detail(selectedId).catch(() => null) : null };
   }).catch(() => null) : null;
-  return <AdminFrame database={page.services.database}>{data ? <SubscribersEditor accounts={data.accounts} detail={data.detail} plans={data.plans} initialQuery={query} selectedExplicitly={!!id} />
-    : <><DeskHead><h1>Subscribers</h1></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>}</AdminFrame>;
+  return data ? <SubscribersEditor accounts={data.accounts} detail={data.detail} plans={data.plans} initialQuery={query} selectedExplicitly={!!id} />
+    : <><DeskHead><h1>Subscribers</h1></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>;
 }
