@@ -130,7 +130,7 @@ export const Ticket = styled(RecordItem)`
 export const TicketProvider = styled.span`
   display: none;
   ${media.desktop} {
-    display: grid; place-items: center; grid-column: 1; grid-row: 1 / span 2; align-self: center; min-block-size: 28px;
+    display: grid; place-items: start center; grid-column: 1; grid-row: 1; align-self: start; min-block-size: 0;
     [data-payment-logo="mtn"] { inline-size: 30px; block-size: 18px; }
     [data-payment-logo="airtel"] { inline-size: 23px; block-size: 23px; }
   }
@@ -149,7 +149,7 @@ export const TicketRef = styled.span`
   min-inline-size: 0;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   overflow-wrap: anywhere;
-  ${media.desktop} { display: block; grid-column: 2; grid-row: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; > [data-ticket-inline-network] { display: none; } }
+  ${media.desktop} { display: block; grid-column: 2; grid-row: 1; align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; > [data-ticket-inline-network] { display: none; } }
 `;
 export const TicketAmount = styled.span`
   font-weight: ${({ theme }) => theme.typography.weight.heavy};

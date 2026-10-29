@@ -79,7 +79,7 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   }, [queue.payments]);
 
   useEffect(() => {
-    // The stepper remounts with the review, so focus returns to the same step button (or the other one at the end of the queue).
+    // Keep keyboard focus on the same step button, or the other one at the end of the queue.
     if (stepFocus.current) {
       const direction = stepFocus.current; stepFocus.current = null;
       const target = document.querySelector<HTMLButtonElement>(`[data-payment-step="${direction}"]:not(:disabled)`) ?? document.querySelector<HTMLButtonElement>("[data-payment-step]:not(:disabled)");
@@ -136,15 +136,16 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   };
   const feedback = { ...action, notice: action.notice && `${actionReference ? `${actionReference} · ` : ""}${action.notice}`,
     message: refreshMessage || (action.message && `${actionReference ? `${actionReference} · ` : ""}${action.message}`) };
-  const nav = selected && <ReviewNav>
+  const stepper = selected && payments.length > 1 && <Stepper role="group" aria-label={`Report ${index + 1} of ${payments.length}`}>
+    <button type="button" aria-label={index > 0 ? `Previous report, ${payments[index - 1]!.reference}` : "Previous report"} disabled={action.busy || index <= 0}
+      onClick={() => step("previous")} data-payment-step="previous"><ChevronLeftIcon /></button>
+    <span aria-hidden="true">{index + 1} of {payments.length}</span>
+    <button type="button" aria-label={index < payments.length - 1 ? `Next report, ${payments[index + 1]!.reference}` : "Next report"} disabled={action.busy || index >= payments.length - 1}
+      onClick={() => step("next")} data-payment-step="next"><ChevronRightIcon /></button>
+  </Stepper>;
+  const nav = !desktop && selected && <ReviewNav>
     <ReviewBack type="button" disabled={action.busy} onClick={back} data-review-back><ChevronLeftIcon />All payments</ReviewBack>
-    {payments.length > 1 && <Stepper role="group" aria-label={`Report ${index + 1} of ${payments.length}`}>
-      <button type="button" aria-label={index > 0 ? `Previous report, ${payments[index - 1]!.reference}` : "Previous report"} disabled={action.busy || index <= 0}
-        onClick={() => step("previous")} data-payment-step="previous"><ChevronLeftIcon /></button>
-      <span aria-hidden="true">{index + 1} of {payments.length}</span>
-      <button type="button" aria-label={index < payments.length - 1 ? `Next report, ${payments[index + 1]!.reference}` : "Next report"} disabled={action.busy || index >= payments.length - 1}
-        onClick={() => step("next")} data-payment-step="next"><ChevronRightIcon /></button>
-    </Stepper>}
+    {stepper}
   </ReviewNav>;
 
   return <PaymentLayout data-payments-editor data-layout="compact" data-analytics-ignore>
@@ -154,6 +155,7 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
         prefetch={false} aria-current={tab === value ? "page" : undefined} aria-disabled={action.busy || undefined}
         onClick={event => { if (action.busy) event.preventDefault(); else { setDetailOpen(false); setRefreshMessage(""); } }}>{label}{value === "pending" && ` (${liveCount ?? pendingCount})`}</Link>)}</StatusTabs>
       <HeadEnd>
+        {desktop && stepper}
         <RefreshSquare type="button" $changed={queueChanged} aria-label="Refresh queue" title="Refresh queue" disabled={action.busy} onClick={refresh}><ResetIcon /></RefreshSquare>
       </HeadEnd>
     </PaymentHead>

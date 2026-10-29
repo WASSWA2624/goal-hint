@@ -28,7 +28,7 @@
   <h1 class="sr-only">Goal Hint desktop payment layout studies</h1>
   <header class="review-toolbar">
     <div class="study-brand"><span class="study-index">GH / DESIGN</span><span>Desktop workspace studies</span></div>
-    <div class="study-current"><h2 id="design-title">01 · Classic inbox</h2><p id="design-description">A familiar queue, with everything you need alongside it.</p></div>
+    <div class="study-current"><h2 id="design-title">01 · Balanced review</h2><p id="design-description">Editable payment details and account context beside the evidence.</p></div>
     <div class="study-actions">
       <button id="previous-design" class="square-button" aria-label="Previous layout">←</button>
       <button id="next-design" class="square-button" aria-label="Next layout">→</button>
@@ -38,7 +38,7 @@
   </header>
   <nav id="design-strip" class="design-strip" aria-label="Choose desktop layout"></nav>
   <div class="desktop-notice"><strong>A desktop workspace, made for a wider view.</strong><p>Open this preview in a window at least 1024px wide to compare the ten desktop layouts.</p></div>
-  <div id="app" class="dashboard" data-layout="inbox">
+  <div id="app" class="dashboard" data-layout="balanced">
     <header class="app-header">
       <div class="app-brand"><img class="brand-light" src="../brand/goal-hint-header-primary.svg" width="130" height="30" alt="Goal Hint"><img class="brand-dark" src="../brand/goal-hint-header-inverse.svg" width="130" height="30" alt="Goal Hint"><span>Admin</span></div>
       <nav class="public-nav" aria-label="Website navigation"><button data-preview-nav>Matches</button><button data-preview-nav>Predictions</button><button data-preview-nav>Slips</button><button data-preview-nav>Performance</button></nav>
@@ -62,7 +62,7 @@
         <div class="sidebar-bottom"><span class="connection-dot"></span>Design preview <span>v.01</span></div>
       </aside>
       <main class="payments-workspace" aria-label="Payment review workspace">
-        <div class="status-bar"><nav id="status-tabs" class="status-tabs" aria-label="Payment status"></nav><div class="status-meta"><span class="sample-tag">Sample data</span><button id="refresh-queue" class="icon-button" aria-label="Refresh sample queue"><svg><use href="#nav-refresh"/></svg></button></div></div>
+        <div class="status-bar"><nav id="status-tabs" class="status-tabs" aria-label="Payment status"></nav><div class="status-meta"><div id="payment-navigator" class="payment-navigator" role="group" aria-label="Payment navigation"><button id="previous-payment" type="button" aria-label="Previous payment">‹</button><span id="payment-position" aria-live="polite">1 of 20</span><button id="next-payment" type="button" aria-label="Next payment">›</button></div><button id="refresh-queue" class="icon-button" aria-label="Refresh queue" title="Refresh queue"><svg><use href="#nav-refresh"/></svg></button></div></div>
         <div class="payment-panes">
           <section class="queue-pane" aria-labelledby="queue-title">
             <header class="queue-header"><div><p class="eyebrow">Review queue</p><div class="queue-heading-line"><h2 id="queue-title">Payment queue</h2><span id="queue-count">20 waiting</span></div></div><span class="queue-live"><span class="connection-dot"></span>Ready to review</span></header>
@@ -80,6 +80,7 @@
   </div>
   <footer class="preview-caption"><span><span class="caption-dot"></span>Interactive preview · Decisions affect sample data only</span><span id="shortlist-note">Shortlist your favorites, then tell me the layout number.</span><span>DESKTOP / 10 CONCEPTS</span></footer>
   <dialog id="gallery" class="gallery-dialog" aria-labelledby="gallery-title"><header class="gallery-head"><div><p class="eyebrow">Ten ways to review</p><h2 id="gallery-title">Find your workspace.</h2><p>Same payments. Different ways to focus. Select a layout to explore it.</p></div><button id="close-gallery" class="square-button" aria-label="Close layout gallery">×</button></header><div id="gallery-grid" class="gallery-grid"></div><p class="gallery-foot">Every layout keeps the queue and review visible, with independent scrolling and square edges.</p></dialog>
+  <dialog id="action-dialog" class="action-dialog" aria-label="Sample payment action"></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

@@ -1,68 +1,70 @@
 # Desktop payment layout review
 
-The desktop Payments screen now uses **02 · Compact queue**, with the separate
-queue heading removed. Search and filters sit directly above the payment list.
-The other nine concepts remain available for comparison. The live screen uses
-the existing payment services and real evidence; this gallery uses sample data.
+Open `/admin-payment-layouts/index.html` on the running application to compare
+ten revised Payments designs. The local review is at
+<http://localhost:3000/admin-payment-layouts/index.html>. Links ending in `#01`
+through `#10` open a specific design. This gallery replaces the earlier studies;
+it does not apply a content redesign to the live admin screen.
 
-The live desktop layout has since been compacted into two-line payment rows,
-with expanded sorting and a shared sidebar that collapses or resizes by dragging
-its divider. The sidebar also supports arrow keys, Home/End, Enter to reset,
-and a reset button beside the Admin caption. Its width/collapse preferences
-persist only in the browser. The redundant manual-review summary is removed;
-actual warnings and checks remain in the selected payment.
+Use the numbered strip, previous/next layout buttons, or **All 10 layouts** to
+compare the options. **Shortlist** saves favorite numbers in this browser.
+Choose a number for the next production implementation.
 
-Open `/admin-payment-layouts/index.html` on the running application. The local
-review is at <http://localhost:3000/admin-payment-layouts/index.html>.
-The HTML carries `noindex, nofollow` metadata.
-
-Use the numbered strip, previous/next controls, or **All 10 layouts** to compare
-the concepts. Links ending in `#01` through `#10` open a particular concept.
-**Shortlist** records favorite concept numbers in this browser. Tell the
-implementer which number to apply; choosing a preview does not apply a design.
-
-| Number | Concept | Review emphasis |
+| Number | Concept | Arrangement |
 | --- | --- | --- |
-| 01 | Classic inbox | Balanced payment information and receipt |
-| 02 | Compact queue | Dense list, verification summary, earlier decision form |
-| 03 | Transaction ledger | Aligned references and structured reconciliation |
-| 04 | Receipt first | Large evidence area beside payment facts |
-| 05 | Side by side | Reported amount compared with the package price |
-| 06 | Activity trail | Timeline of submission, evidence, and review |
-| 07 | Review workspace | Separate fact, evidence, and decision columns |
-| 08 | Dark queue | Dark list beside the document review |
-| 09 | Grouped by provider | Provider groups and subscriber context |
-| 10 | Focused review | Prominent amount and decision form |
+| 01 | Balanced review | Transfer and account beside the evidence |
+| 02 | Verification sheet | Broad confirmation fields above supporting sections |
+| 03 | Transaction ledger | Aligned form rows beside account, checks, and evidence |
+| 04 | Evidence desk | Large evidence panel beside transfer and account |
+| 05 | Decision rail | Editable confirmation in a dedicated side column |
+| 06 | Guided review | Numbered, visible sections in review order |
+| 07 | Review workbench | Account, confirmation, and evidence in distinct columns |
+| 08 | Document review | Restrained document composition with an evidence margin |
+| 09 | Attention first | Verification concerns before the payment fields |
+| 10 | Compact essentials | Shallow confirmation area with supporting evidence below |
 
-All concepts retain the ten admin menu items and four payment-status tabs,
-omit the Payments page title, and show the payment list beside a persistent
-review. Every list entry includes provider artwork, payment ID, phone, EAT
-timestamp, UGX amount, and package. The viewport shell stays fixed; the list
-and details scroll separately. Review actions stay available below the details.
-All controls and panels have square edges.
+## Shared review principles
 
-The preview is for desktop windows at least 1024px wide. It supports light/dark
-appearance, payment selection, status queues, normalized phone/reference/package
-search, provider filtering, sorting, empty results, editable sample fields,
-and illustrative decision feedback. Only the shortlist and theme persist.
+- One editable amount and transaction ID per selected payment, with visible
+  provider and package controls. Avoid repeated amount banners and footer totals.
+- Distinct payment/account information in one place. Show a package price only
+  when it helps explain a difference; describe automatic checks without copying
+  the same figures into each check.
+- Illustrative evidence is marked as fictional. It does not create another
+  transcript of the same payment values. Production continues to use real
+  uploaded evidence and existing verification services.
+- Previous/count/next payment navigation sits immediately before Refresh queue.
+  Provider artwork aligns with the top of the payment reference.
+- Persistent approval/rejection actions, independent queue/detail scrolling,
+  square edges, keyboard focus indicators, and light/dark appearances.
 
-The eighty fictional reports do not load private data or call payment APIs.
-The receipt is a clearly marked illustrative document. A production
-implementation should retain the existing real evidence and review services.
-The gallery never changes a payment. The production desktop implementation
-uses the selected layout; mobile keeps its queue-to-review navigation.
+## Sample interactions
 
-This is a buildless preview, following the existing `public/payment-samples/`
-pattern. It reuses the local Goal Hint and payment-provider artwork. No package
-installation or database is needed. To serve it without the application, run
-from `next-js/`:
+The gallery includes fictional status queues, normalized search, provider
+filtering, sorting, editable confirmation fields, wallet SMS entry, an evidence
+preview, and illustrative subscriber details. Approving or rejecting operates
+on the in-memory sample queue and advances to another report. Reloading resets
+sample records and drafts. Only shortlist and theme preferences persist.
+
+No private records are loaded and no payment APIs are called. The page is marked
+`noindex, nofollow` and supports desktop windows at least 1024px wide. Mobile
+visitors see a desktop preview notice.
+
+The live Payments screen retains its current compact content layout while a
+replacement is selected. Its desktop navigator is moved beside Refresh queue
+and queue logos align with their references. Mobile queue/review navigation and
+payment business logic are unchanged.
+
+## Source and local serving
+
+`public/admin-payment-layouts/catalog.js` defines the ten arrangements;
+`app.js` renders reusable review sections and sample interactions; `styles.css`
+defines shared geometry and the desktop variants; `index.html` provides the
+shell. All artwork is local. No package installation or database is required
+for the buildless gallery. To serve it independently, run from `next-js/`:
 
 ```powershell
 python -m http.server 3122 --bind 127.0.0.1 --directory public
 ```
 
-The source is in `public/admin-payment-layouts/`: `catalog.js` defines the ten
-concepts, `app.js` renders shared sample components and interactions,
-`styles.css` controls the layout variants, and `index.html` defines the shell.
-Generated screenshots and local QA scripts remain in ignored `output/` and
-`.tmp/` directories.
+Local QA logs and screenshots belong in ignored `.tmp/` and `output/` folders.
