@@ -48,8 +48,8 @@ export function MobileBannerDesignGallery({ locale }: { locale: string }) {
       <Content>
         <Intro>
           <span>Goal Hint · Mobile banner review</span>
-          <h1>A clear next step. Made for a small screen.</h1>
-          <p>Ten mobile banner options beneath the same app header, each shown for visitors, members without a subscription, and active subscribers. The approved desktop banner and the live mobile banner stay unchanged while you choose.</p>
+          <h1>One row. A clear next step.</h1>
+          <p>Ten brief mobile banners, each shown for visitors, members without a subscription, and active subscribers. Every offer and action fits in one row. The approved desktop banner and the live mobile banner stay unchanged while you choose.</p>
         </Intro>
         <Toolbar aria-label="Mobile banner preview settings">
           <label><span>Design</span><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>

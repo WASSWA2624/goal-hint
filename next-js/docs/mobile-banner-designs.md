@@ -3,7 +3,8 @@
 Open `/en/banner/designs/mobile` to compare ten options. Each initially shows
 signed-out visitors, signed-in members without a subscription, and active
 subscribers. Use the controls to isolate a design or state, switch theme, or
-compare 320/360/390/430px phone widths. Previews retain their selected width in
+compare 320/360/390/430px phone widths. Copy and actions fit a single banner row.
+Previews retain their selected width in
 narrow windows and can be scrolled horizontally within their own frames.
 
 The mobile header context is consistent across options. Signed-out banners
