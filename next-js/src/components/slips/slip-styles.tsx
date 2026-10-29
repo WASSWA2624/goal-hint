@@ -8,6 +8,7 @@ import { PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
 const compactControlHeight = "2rem";
+const mobileToolbarFontSize = "var(--slip-toolbar-font-size, 0.625rem)";
 const toolbarAction = css`
   min-block-size: ${compactControlHeight}; min-inline-size: 0; padding: 4px 8px;
   border-radius: 0; gap: 5px; font-size: 0.75rem; line-height: 1.3;
@@ -29,7 +30,7 @@ const mobileBuildAction = css`
     && {
       flex: none; inline-size: 13rem; min-inline-size: 13rem;
       block-size: 36px; min-block-size: 36px; padding: 4px 8px;
-      font-size: 0.75rem; line-height: 1.3; white-space: nowrap;
+      font-size: ${mobileToolbarFontSize}; line-height: 1.3; white-space: nowrap;
     }
   }
 `;
@@ -91,6 +92,7 @@ export const BuilderPanel = styled(CriteriaPanel)`
   [data-criteria-dialog] { background: var(--filter-panel-background); }
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
+    --slip-toolbar-font-size: 0.625rem;
     && { padding: 6px; }
     [data-slip-label="desktop"] { display: none; }
     [data-slip-label="mobile"] { display: inline; }
@@ -99,26 +101,26 @@ export const BuilderPanel = styled(CriteriaPanel)`
     && [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
     && [data-slip-count] label, && [data-criteria-field="targets"] label,
     && [data-slip-target-groups] > fieldset > legend {
-      font-size: 0.625rem; line-height: 1.25; white-space: nowrap;
+      font-size: ${mobileToolbarFontSize}; line-height: 1.25; white-space: nowrap;
     }
     && [data-slip-target-groups] { gap: 6px; }
     && [data-slip-target-groups] > fieldset > legend { margin-block-end: 8px; }
     && [data-slip-builder-essentials] [data-slip-numeric-field] {
-      block-size: 36px; min-block-size: 36px; padding-block: 2px; font-size: 0.875rem;
+      block-size: 36px; min-block-size: 36px; padding-block: 2px; font-size: ${mobileToolbarFontSize};
     }
     && [data-slip-builder-options] { gap: 4px; padding-block-start: 4px; }
     && [data-slip-criteria-options] { grid-template-columns: 1.15fr 1.1fr 0.9fr; gap: 4px; }
     && [data-criteria-trigger] {
-      min-block-size: 36px; padding: 3px; gap: 2px; font-size: 0.6875rem; line-height: 1.2;
+      min-block-size: 36px; padding: 3px; gap: 2px; font-size: ${mobileToolbarFontSize}; line-height: 1.2;
     }
     &&& [data-criteria-label] { white-space: nowrap; }
     &&& [data-criteria-value] { display: none; }
     && [data-criteria-trigger] > svg { font-size: 0.625rem; }
     &&& [data-criteria-count] {
-      min-inline-size: 0.8125rem; block-size: 0.8125rem; padding-inline: 2px; font-size: 0.5625rem;
+      min-inline-size: 0.8125rem; block-size: 0.8125rem; padding-inline: 2px; font-size: ${mobileToolbarFontSize};
     }
     && [data-criteria-actions] { flex: 1 0 100%; margin-inline-start: 0; }
-    && [data-slip-criteria-summary] { font-size: 0.625rem; line-height: 1.35; }
+    && [data-slip-criteria-summary] { font-size: ${mobileToolbarFontSize}; line-height: 1.35; }
     && [data-criteria-dialog] > header, && [data-criteria-dialog] > footer { padding: 8px 10px; }
     && [data-criteria-dialog] > header > h2 { font-size: 0.875rem; }
     && [data-criteria-dialog] > header button { min-block-size: 36px; min-inline-size: 36px; }
@@ -137,6 +139,7 @@ export const BuilderPanel = styled(CriteriaPanel)`
     }
     @supports (-webkit-touch-callout: none) {
       && [data-slip-numeric-field] { font-size: 0.875rem !important; }
+      && [data-slip-builder-essentials] input[data-slip-numeric-field] { font-size: ${mobileToolbarFontSize} !important; }
     }
   }
 `;
@@ -338,7 +341,7 @@ export const ClearLink = styled(ButtonLink)`
   && { ${toolbarAction} flex: 1 1 auto; }
   ${media.desktop} { && { ${filterButtonColors} } }
   ${media.belowDesktop} {
-    && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; white-space: nowrap; ${filterButtonColors} }
+    && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; font-size: ${mobileToolbarFontSize}; white-space: nowrap; ${filterButtonColors} }
   }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;

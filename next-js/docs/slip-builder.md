@@ -57,7 +57,10 @@ placeholders, reclaiming the former sub-label row. Numeric values are centered;
 desktop mouse steppers reserve equal side padding so values remain centered.
 
 Below 1024px, the mobile toolbar uses 36px controls with compact padding and
-10–11px labels, with 14px numeric text. Total slips, Total odds
+one shared 10px type size for labels, numeric values, Any placeholders, floating
+Min/Max labels, trigger text/counts, Reset, the account action and summary.
+Font weights still distinguish emphasis. Dialog forms and guard messages keep
+their independent typography. Total slips, Total odds
 and Matches per slip remain visible together; three short dialog buttons share
 the next row, followed by Reset and the fixed 208px action. The compact summary
 shows date, time, selected market count and Auto/manual outcomes. Longer custom
