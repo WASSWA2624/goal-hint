@@ -24,8 +24,8 @@ import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { AccessLink, AccessNotice, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOptions, CriteriaSummary, CriteriaTrigger, FieldGroup,
-  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
+import { AccessLink, AccessNotice, ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
+  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   const messages = createMessages(locale);
@@ -47,6 +47,9 @@ function SlipBuildActionLabel({ locale, restricted, signedIn, pending = false }:
     <span data-action-label="mobile">{restricted ? messages.text(signedIn ? "subscribe.title" : "slips.signIn") : build}</span>
     <span data-action-label="desktop">{restricted ? messages.text(signedIn ? "slips.subscribeToBuild" : "slips.signInToBuild") : build}</span>
   </BuildActionLabel>;
+}
+function SlipStatusCopy({ mobile, desktop }: { mobile: string; desktop: string }) {
+  return <StatusCopy><span data-slip-access-message="mobile">{mobile}</span><span data-slip-access-message="desktop">{desktop}</span></StatusCopy>;
 }
 type NumericRangeField = `${"total" | "teams" | "odds" | "prob" | "totalProb"}${"Min" | "Max"}`;
 const groupFields = {
@@ -256,7 +259,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
-  const accessRequired = <AccessNotice headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
+  const accessRequired = <AccessNotice headingLevel={3} title={messages.text("paywall.slips")} description={<SlipStatusCopy
+    mobile={messages.text("paywall.slipsDescription")} desktop={messages.text(signedIn ? "slips.access.subscribe" : "slips.access.signIn")} />}
     action={<AccessLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
       <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />
     </AccessLink>} />;
@@ -268,16 +272,16 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     </BuilderHeader>
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
-      <CriteriaForm id={formId} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
+      <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
         <input type="hidden" name="build" value="1" />
         <BuilderEssentials data-slip-builder-essentials>
-        <div data-slip-count>{field("slips", messages.text("slips.countShort"), { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</div>
-        <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups>
-          <fieldset><legend>{messages.text("slips.totalOddsRange")}</legend><Fields>
+        <div data-slip-count data-toolbar-group="slips">{field("slips", messages.text("slips.countShort"), { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</div>
+        <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups data-slip-target-groups>
+          <fieldset data-toolbar-group="total"><legend>{messages.text("slips.totalOddsRange")}</legend><Fields>
             {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMin") })}
             {field("totalMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMax") })}
           </Fields></fieldset>
-          <fieldset><legend>{messages.text("slips.selectionsRange")}</legend><Fields>
+          <fieldset data-toolbar-group="matches"><legend>{messages.text("slips.selectionsRange")}</legend><Fields>
             {field("teamsMin", messages.text("slips.minimum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMin") })}
             {field("teamsMax", messages.text("slips.maximum"), { min: 1, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMax") })}
           </Fields></fieldset>
@@ -345,26 +349,37 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         {errorMessage(null)}
         <BuilderOptions data-slip-builder-options>
         <CriteriaOptions data-slip-criteria-options hidden={!enhanced}>
-          {(["limits", "kickoff", "markets"] as const).map((group) => <CriteriaTrigger key={group} type="button" variant="secondary" data-criteria-trigger={group}
+          {(["limits", "kickoff", "markets"] as const).map((group) => {
+            const title = messages.text(group === "kickoff" ? "slips.toolbar.kickoff" : `slips.dialog.${group}`);
+            const desktopLabel = group === "limits" ? messages.text("slips.toolbar.editRanges") : group === "kickoff"
+              ? messages.text("slips.toolbar.editDates") : messages.text(manualMarkets ? "slips.toolbar.manual" : "slips.automatic");
+            return <CriteriaOption key={group} data-criteria-option={group} data-toolbar-group={group}>
+            <CriteriaTitle data-criteria-title>{title}</CriteriaTitle>
+            <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger={group}
+            aria-label={desktop ? `${title}: ${desktopLabel}` : undefined}
             data-edited={edited(group)} aria-haspopup="dialog" aria-controls={`${prefix}-${group}`} aria-expanded={activeGroup === group}
             aria-describedby={`${prefix}-${group}-summary`} aria-invalid={({ limits: invalidLimits, kickoff: invalidKickoff, markets: invalidMarkets })[group] || undefined}
             disabled={pending} onClick={() => openDialog(group)}>
-            <span data-criteria-label>{messages.text(group === "kickoff" ? "slips.toolbar.kickoff" : `slips.dialog.${group}`)}</span>
-            {group === "markets" && !edited(group) ? <span data-criteria-value>{messages.text("slips.autoShort")}</span>
+            <span data-criteria-label><span data-criteria-view="mobile">{title}</span><span data-criteria-view="desktop">{desktopLabel}</span></span>
+            {group === "markets" && !edited(group) ? <span data-criteria-value data-criteria-view="mobile">{messages.text("slips.autoShort")}</span>
               : criteriaCounts[group] > 0 && <>
                 <small data-criteria-count aria-hidden="true">{messages.number(criteriaCounts[group])}</small>
                 <VisuallyHidden> {messages.plural(group === "markets" ? "slips.marketCount" : "slips.activeFilterCount", criteriaCounts[group])}</VisuallyHidden>
               </>}
             <ChevronDownIcon />
-          </CriteriaTrigger>)}
+          </CriteriaTrigger></CriteriaOption>;
+          })}
         </CriteriaOptions>
-        <Actions data-criteria-actions>
+        <Actions data-criteria-actions data-toolbar-group="actions">
+          <CriteriaTitle data-criteria-title>{messages.text("slips.toolbar.actions")}</CriteriaTitle>
+          <ActionControls>
           <ClearLink href={action} variant="quiet" prefetch={false} onClick={(event) => { event.preventDefault(); reset(); }}><ResetIcon />{messages.text("slips.reset")}</ClearLink>
           {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
             <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />
           </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
             <SlipBuildActionLabel locale={locale} restricted={false} signedIn={signedIn} pending={pending} />
           </BuildButton>}
+          </ActionControls>
         </Actions>
         </BuilderOptions>
         <CriteriaSummary data-slip-criteria-summary>
@@ -394,7 +409,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         </SlipMatchRefreshProvider>
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
-        description={messages.text(emptyState ? `slips.state.${emptyState}.description` : "slips.idle")} />}
+        description={emptyState ? messages.text(`slips.state.${emptyState}.description`) : <SlipStatusCopy
+          mobile={messages.text("slips.idle")} desktop={messages.text("slips.access.ready")} />} />}
       {result?.searchLimited && <Note>{messages.text("slips.limited")}</Note>}
       {result?.partialCoverage && <Note>{messages.text("slips.partial")}</Note>}
       {generated && data.slips.length < criteria.slips && !result.searchLimited && <Note>{messages.text("slips.fewer")}</Note>}

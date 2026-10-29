@@ -148,7 +148,11 @@ def main():
                 label = "Subscribe" if signed_in else "Sign in"
                 assert len(actions) == 1, (viewer, "one Slip Builder action group")
                 links = builder.nodes("a", "data-slip-access-action")
-                assert len(links) == 2, (viewer, "Slip Builder toolbar and results access actions")
+                assert len(links) == 2, (viewer, "Slip Builder toolbar and mobile-only results access actions")
+                status = {node.attrs["data-slip-access-message"]: node.text.strip() for node in builder.nodes(attr="data-slip-access-message")}
+                assert set(status) == {"mobile", "desktop"}, (viewer, "responsive Slip Builder status guidance")
+                assert "active subscription" in status["desktop"].lower(), (viewer, "Slip Builder subscription requirement")
+                assert ("Subscribe to build slips above" if signed_in else "sign in") in status["desktop"], (viewer, "Slip Builder account-aware instruction")
                 for link in links:
                     labels = {node.attrs["data-action-label"]: node.text.strip() for node in link.nodes(attr="data-action-label")}
                     assert labels == {"mobile": label, "desktop": label + " to build slips"}, (viewer, "responsive Slip Builder access labels")

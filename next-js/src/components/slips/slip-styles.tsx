@@ -24,6 +24,14 @@ const desktopBuildAction = css`
     @media (pointer: coarse) { && { block-size: 44px; min-block-size: 44px; } }
   }
 `;
+const desktopGroupDivider = css`
+  padding-inline-start: 10px;
+  border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+`;
+const desktopGroupTitle = css`
+  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem;
+  font-weight: ${({ theme }) => theme.typography.weight.body}; line-height: 1.3;
+`;
 
 export const BuildActionLabel = styled.span`
   > [data-action-label="desktop"] { display: none; }
@@ -34,10 +42,13 @@ export const BuildActionLabel = styled.span`
 `;
 export const AccessLink = styled(ButtonLink)`${desktopBuildAction}`;
 export const AccessNotice = styled(EmptyState)`
+  ${media.desktop} { > div:last-child { display: none; } }
+`;
+export const StatusCopy = styled.span`
+  > [data-slip-access-message="desktop"] { display: none; }
   ${media.desktop} {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px;
-    > h3, > div { grid-column: 1; }
-    > div:last-child { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin: 0; }
+    > [data-slip-access-message="mobile"] { display: none; }
+    > [data-slip-access-message="desktop"] { display: inline; }
   }
 `;
 
@@ -66,20 +77,23 @@ export const BuilderPanel = styled(CriteriaPanel)`
 export const BuilderHeader = styled.div`
   display: flex; align-items: center; justify-content: space-between; gap: 12px; min-inline-size: 0;
   > h1 { font-size: 1.1875rem; }
-  ${media.desktop} { > h1 { font-size: 1.375rem; } }
+  ${media.desktop} {
+    position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
 `;
 export const CriteriaForm = styled.form`
   display: flex; flex-direction: column; gap: 6px;
   min-inline-size: 0;
   > [role="alert"] { margin: 0; }
   ${media.desktop} {
-    display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px 12px;
-    align-items: end;
-    > [data-slip-builder-essentials] { grid-column: 1; grid-row: 1; }
-    [data-slip-criteria-options] { grid-column: 2 / -1; grid-row: 1; }
-    [data-criteria-actions] { grid-column: 3; grid-row: 2; }
-    > [data-slip-criteria-summary] { grid-column: 1 / 3; grid-row: 2; align-self: center; }
-    > [role="alert"], > [data-criteria-dialog] { grid-column: 1 / -1; }
+    &[data-enhanced="true"] {
+      flex-direction: row; flex-wrap: wrap; align-items: stretch; gap: 8px 10px;
+      > [data-slip-builder-essentials] { display: contents; }
+      [data-criteria-field="targets"], [data-slip-target-groups] { display: contents; }
+      [data-slip-criteria-options]:not([hidden]) { display: contents; }
+      > [role="alert"], > [data-slip-criteria-summary] { flex: 1 0 100%; }
+    }
   }
 `;
 export const BuilderEssentials = styled.div`
@@ -95,6 +109,9 @@ export const BuilderEssentials = styled.div`
   }
   ${media.desktop} {
     grid-template-columns: 4.25rem max-content; gap: 12px;
+    > [data-slip-count] { flex: none; inline-size: 4.25rem; }
+    > [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
+    > [data-slip-count] label { ${desktopGroupTitle} }
     > [data-slip-count] input { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
   }
   @media (pointer: coarse) { > [data-slip-count] input { min-block-size: 44px; } }
@@ -110,6 +127,21 @@ export const CriteriaOptions = styled.div`
   gap: 5px; min-inline-size: 0;
   &[hidden] { display: none; }
   ${media.desktop} { display: flex; flex: 0 1 auto; flex-wrap: wrap; gap: 6px; align-items: end; }
+`;
+export const CriteriaOption = styled.div`
+  display: contents;
+  [data-criteria-view="desktop"] { display: none; }
+  ${media.desktop} {
+    display: flex; flex: none; flex-direction: column; justify-content: space-between; gap: 8px;
+    ${desktopGroupDivider}
+    > [data-criteria-title] { white-space: nowrap; }
+    [data-criteria-view="mobile"] { display: none; }
+    [data-criteria-view="desktop"] { display: inline; }
+  }
+`;
+export const CriteriaTitle = styled.span`
+  display: none;
+  ${media.desktop} { display: block; ${desktopGroupTitle} }
 `;
 export const CriteriaTrigger = styled(Button)`
   && {
@@ -129,7 +161,7 @@ export const CriteriaTrigger = styled(Button)`
     &[data-edited="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link}; border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
     ${controlFeedback}
   }
-  ${media.desktop} { && { inline-size: auto; min-block-size: ${compactControlHeight}; padding-inline: 8px; } }
+  ${media.desktop} { && { inline-size: 100%; min-block-size: ${compactControlHeight}; padding-inline: 8px; } }
   @media (pointer: coarse) { && { min-block-size: 44px; } }
 `;
 export const CriteriaSummary = styled.p`
@@ -179,6 +211,8 @@ export const TargetGroups = styled(LimitGroups)`
   @media (max-width: 22.5rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   ${media.desktop} {
     grid-template-columns: repeat(2, max-content); gap: 12px;
+    > fieldset { flex: none; ${desktopGroupDivider} }
+    > fieldset > legend { ${desktopGroupTitle} }
     ${Fields} { grid-template-columns: repeat(2, 6rem); }
     ${Fields} > div > input { font-size: 0.75rem; padding-inline: 6px; font-variant-numeric: tabular-nums; }
   }
@@ -208,6 +242,14 @@ export const ReuseRow = styled.div`
 export const Actions = styled.div`
   display: flex; flex: 1 0 auto; flex-wrap: wrap; align-items: center;
   justify-content: flex-end; gap: 4px; margin-inline-start: auto;
+  ${media.desktop} {
+    flex: none; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 8px;
+    ${desktopGroupDivider}
+  }
+`;
+export const ActionControls = styled.div`
+  display: contents;
+  ${media.desktop} { display: flex; align-items: center; gap: 4px; }
 `;
 export const BuildButton = styled(Button)`
   && { ${toolbarAction} }

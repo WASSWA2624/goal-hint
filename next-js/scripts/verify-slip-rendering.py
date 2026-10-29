@@ -175,6 +175,12 @@ def criteria_groups(document, path, error_group=None):
     toolbars = document.nodes(attr="data-slip-builder-toolbar")
     assert len(toolbars) == 1, f"{path}: one shared compact settings toolbar"
     toolbar = toolbars[0]
+    toolbar_groups = toolbar.nodes(attr="data-toolbar-group")
+    assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "limits", "kickoff", "markets", "actions"], f"{path}: controls retain their titled category order"
+    for group in toolbar_groups:
+        name = group.attrs["data-toolbar-group"]
+        titles = group.nodes("label") if name == "slips" else group.nodes("legend") if name in {"total", "matches"} else group.nodes(attr="data-criteria-title")
+        assert len(titles) == 1 and titles[0].text.strip(), f"{path}: {name} has a category title"
     for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: one enabled essential target {name}"
@@ -330,10 +336,19 @@ def verify_builder_access(origin, directory):
         assert all(caption in desktop_summary.text for caption in ["Date", "Time", "Markets", "Selection"]), f"{path}: desktop summary identifies each setting"
         desktop_label = {"guest": "Sign in to build slips", "member": "Subscribe to build slips", "subscriber": label}[viewer]
         account_actions = document.nodes(attr="data-slip-access-action")
-        assert len(account_actions) == (2 if destination else 1), f"{path}: toolbar and locked results share account-aware actions"
+        assert len(account_actions) == (2 if destination else 1), f"{path}: preserve the toolbar action and mobile-only locked result action"
         for account_action in account_actions:
             labels = {node.attrs["data-action-label"]: node.text.strip() for node in account_action.nodes(attr="data-action-label")}
             assert labels == {"mobile": label, "desktop": desktop_label}, f"{path}: preserve mobile label and explain desktop action"
+        status = {node.attrs["data-slip-access-message"]: node.text.strip() for node in document.nodes(attr="data-slip-access-message")}
+        assert set(status) == {"mobile", "desktop"}, f"{path}: responsive account status guidance"
+        if destination:
+            assert status["mobile"] == "Explore the slip settings. Subscribe to generate predictions and odds.", f"{path}: preserve the existing mobile subscriber explanation"
+            assert "active subscription" in status["desktop"].lower(), f"{path}: desktop explains the subscription requirement"
+            assert ("sign in" if viewer == "guest" else "Subscribe to build slips above") in status["desktop"], f"{path}: desktop guidance matches the account action"
+        else:
+            assert status["mobile"] == "Choose your limits and build one or more slips from qualifying upcoming matches.", f"{path}: preserve the existing mobile ready guidance"
+            assert "select Build slips" in status["desktop"], f"{path}: eligible members receive generation guidance"
         if destination:
             for account_action in account_actions:
                 assert account_action.tag == "a", f"{path}: access action is a native link"
@@ -345,7 +360,7 @@ def verify_builder_access(origin, directory):
         else:
             submit = [node for node in actions[0].nodes("button") if node.attrs.get("type") == "submit"]
             assert len(submit) == 1 and submit[0] in account_actions, f"{path}: eligible members build slips"
-    print("PASS Slip Builder access actions: desktop/mobile labels, both locked sections, Sign in/login, Subscribe and Build slips.", flush=True)
+    print("PASS Slip Builder access actions: desktop/mobile labels and status guidance, titled categories, mobile locked action, Sign in/login, Subscribe and Build slips.", flush=True)
 
 
 def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):
