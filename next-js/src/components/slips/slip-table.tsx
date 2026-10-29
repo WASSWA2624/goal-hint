@@ -18,12 +18,12 @@ const PhoneSlipFallback = styled.div`
 `;
 
 /** One responsive slip renderer preserves the selected phone and desktop presentations. */
-export function SlipTable({ slip, index, locale, results, matchStates, collapsible = false }: {
-  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[]; collapsible?: boolean;
+export function SlipTable({ slip, index, locale, results, matchStates }: {
+  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[];
 }) {
   const desktop = useDesktopLayout();
   if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} {...(results ? { results } : {})}
     {...(matchStates ? { matchStates } : {})} />;
-  return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" collapsible={collapsible}
+  return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger"
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})} /></PhoneSlipFallback>;
 }

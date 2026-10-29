@@ -117,6 +117,20 @@ def verify_clean_ledger_selection(card, path):
     assert positions == sorted(positions), f"{path}: prediction facts preserve the requested reading order"
 
 
+def verify_collapsed_disclosure(disclosure, path):
+    assert "open" not in disclosure.attrs, f"{path}: slip starts collapsed before hydration"
+    toggles = disclosure.nodes("summary")
+    assert len(toggles) == 1 and "data-slip-toggle" in toggles[0].attrs, f"{path}: one native summary toggles the entire header"
+    toggle = toggles[0]
+    children = [child for child in disclosure.children if isinstance(child, Element)]
+    assert children and children[0] is toggle, f"{path}: the header is the disclosure's first direct child"
+    assert not any(toggle.nodes(tag) for tag in ["a", "button", "input"]), f"{path}: header has no competing interactive descendants"
+    assert not any(toggle.nodes(tag) for tag in ["dl", "div", "fieldset"]), f"{path}: native summary contains valid phrasing and heading content"
+    contents = disclosure.nodes(attr="data-slip-content")
+    assert len(contents) == 1 and contents[0] in children, f"{path}: header owns one direct expandable content region"
+    return toggle, contents[0]
+
+
 SCENARIOS = {
     "generated": ("generated", 3), "idle": ("idle", 0), "no-qualifying": ("no-qualifying", 0),
     "no-combinations": ("no-combinations", 0), "odds-unavailable": ("odds-unavailable", 0),
@@ -245,10 +259,14 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
         assert len(rows) == expected_slips * selections_per_slip, f"{path}: one row per selection"
         for slip in slips:
             assert slip.attrs.get("data-compact-slip") == "clean-ledger", f"{path}: chosen Clean ledger design serves generated slips"
-            headers = slip.nodes("header", "data-slip-summary")
-            assert len(headers) == 1 and len(headers[0].nodes("h3")) == 1, f"{path}: static compact slip title header"
-            verify_mobile_header(headers[0], path, selections_per_slip)
-            summary = headers[0].text
+            disclosures = slip.nodes("details", "data-slip-disclosure")
+            assert len(disclosures) == 1, f"{path}: every generated slip has one native disclosure"
+            assert not slip.nodes("header", "data-slip-summary"), f"{path}: no static fallback slip header"
+            header, content = verify_collapsed_disclosure(disclosures[0], path)
+            verify_mobile_header(header, path, selections_per_slip)
+            assert content.nodes("li", "data-slip-selection") == slip.nodes("li", "data-slip-selection"), f"{path}: every original selection belongs to the expandable content"
+            assert len(content.nodes("li", "data-slip-selection")) == selections_per_slip, f"{path}: expandable content retains every original selection"
+            summary = header.text
             assert "%" in summary and re.search(r"\d+\.\d{2}", summary), f"{path}: title odds and average probability"
             assert len(slip.nodes("a", "data-fixture-id")) == selections_per_slip, f"{path}: one compact analysis link per original selection"
             assert not slip.nodes("table"), f"{path}: no duplicate selection table"
@@ -415,12 +433,7 @@ def verify_best_slips(origin, directory):
         assert all(node.attrs["data-compact-slip"] == "clean-ledger" for node in document.nodes(attr="data-compact-slip")), f"Best Slips {scenario}: selected Clean ledger disclosure serves every viewer"
         averages = []
         for index, disclosure in enumerate(disclosures):
-            assert "open" not in disclosure.attrs, f"Best Slips {scenario}: slip {index + 1} starts collapsed before hydration"
-            toggles = disclosure.nodes("summary", "data-slip-toggle")
-            assert len(toggles) == 1, f"Best Slips {scenario}: one native summary toggles the entire header"
-            toggle = toggles[0]
-            assert not any(toggle.nodes(tag) for tag in ["a", "button", "input"]), "Header toggles have no competing interactive descendants"
-            assert not any(toggle.nodes(tag) for tag in ["dl", "div", "fieldset"]), "Native summaries contain valid phrasing and heading content"
+            toggle, content = verify_collapsed_disclosure(disclosure, f"Best Slips {scenario}, slip {index + 1}")
             assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
             fields = verify_mobile_header(toggle, f"Best Slips {scenario}, slip {index + 1}", 2)
             assert "Total odds" in fields["odds"].text, "Collapsed headers retain the full accessible odds label"
@@ -428,14 +441,12 @@ def verify_best_slips(origin, directory):
             average = Decimal(fields["probability"].nodes("strong")[0].text.rstrip("%"))
             assert average == Decimal("80") + Decimal(index) / 10, "Every viewer sees the original mean, distinct from the joint win estimate"
             averages.append(average)
-            contents = disclosure.nodes(attr="data-slip-content")
-            assert len(contents) == 1, "Every toggle owns one expandable content region"
             if locked:
-                assert not contents[0].nodes(attr="data-fixture-id"), "Locked slip bodies expose no premium picks"
-                links = contents[0].nodes("a")
+                assert not content.nodes(attr="data-fixture-id"), "Locked slip bodies expose no premium picks"
+                links = content.nodes("a")
                 expected_action = "Subscribe" if scenario == "locked-member" else "Log in to access"
                 assert len(links) == 1 and links[0].text.strip() == expected_action, "The locked body has exactly the relevant access action"
-                assert contents[0].text.strip() == expected_action, "The locked body contains no redundant subscriber explanation"
+                assert content.text.strip() == expected_action, "The locked body contains no redundant subscriber explanation"
                 destination = urlsplit(links[0].attrs["href"])
                 if scenario == "locked-member":
                     assert destination.path == "/en/subscribe", "Signed-in viewers go directly to subscription"
@@ -444,8 +455,8 @@ def verify_best_slips(origin, directory):
                 assert "Synthetic" not in document.text and not document.nodes(attr="data-slip-id"), "Public results contain no slip identity or synthetic picks"
                 assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"homeTeam\"|\"awayTeam\"|\"forecast\"", response.text), "Locked HTML and flight data contain no private slip details"
             else:
-                assert len(contents[0].nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
-                for selection in contents[0].nodes("a", "data-fixture-id"):
+                assert len(content.nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
+                for selection in content.nodes("a", "data-fixture-id"):
                     verify_clean_ledger_selection(selection, f"Best Slips {scenario}")
         assert averages == sorted(averages), "Displayed means do not reorder the existing joint-probability ranking"
         statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status"]

@@ -58,7 +58,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
           {m.text(signedIn ? "subscribe.title" : "bestSlips.loginToAccess")}
         </ButtonLink></CriteriaPanel>}>
       <SlipList data-slip-list>{result.slips.map((view) => view.slip ? <SlipTable key={view.slip.id} index={view.rank - 1} locale={locale}
-        slip={view.slip} collapsible {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
+        slip={view.slip} {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
           totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}>
         <CriteriaPanel>
           <ButtonLink href={subscriberHref(signedIn, "/en", "login")} prefetch={false}>

@@ -4,6 +4,11 @@ Mobile slips use the selected **09 Minimal rules** header in Best slips, generat
 slips, completed history and aggregate-only access summaries. Desktop headers use
 their existing presentation. The Clean ledger match rows are unchanged.
 
+Every production mobile slip starts collapsed, showing only this header. Tapping
+anywhere on the header expands or collapses its own slip through the shared native
+`details`/`summary` disclosure, including Slip Builder, Best slips, completed
+history and performance slips. Access-limited summaries use the same behavior.
+
 `CompactSlipDisclosure` selects the shared `MobileSlipHeader` for Clean ledger.
 Its minimum 44px row contains the slip number, odds, probability, match count
 and status in five side-by-side columns. Figures and status use 14px text; metric
