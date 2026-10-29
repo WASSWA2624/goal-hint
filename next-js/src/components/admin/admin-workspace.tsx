@@ -10,7 +10,7 @@ import {
   CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GridIcon, KeyIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
-import { adminSections, type AdminSection } from "@/domain/admin-navigation";
+import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { usePasswordRequestCount } from "./admin-page-state";
@@ -27,7 +27,7 @@ function SectionLinks({ current, passwordRequests, onNavigate, collapsed = false
     {adminSections.map(({ key, href, label }) => {
       const Icon = sectionIcons[key];
       const count = key === "password-resets" && passwordRequests ? passwordRequests : 0;
-      return <li key={key} data-separated={key === "analytics" || undefined}>
+      return <li key={key} data-separated={key === "settings" || key === "analytics" || undefined}>
         <SectionLink href={href} prefetch={false} title={label} aria-label={collapsed ? `${label}${count ? `, ${count} waiting` : ""}` : undefined}
           aria-current={key === current ? "page" : undefined} {...(onNavigate ? { onClick: onNavigate } : {})}>
           <Icon /><span data-sidebar-label>{label}</span>
@@ -69,6 +69,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
 }) {
   const pathname = usePathname();
   const current = adminSections.find(section => section.href === pathname)?.key ?? initialSection ?? "overview";
+  const recordWorkspace = isRecordAdminSection(current);
   const { count: passwordRequests } = usePasswordRequestCount();
   const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, () => pendingCount ?? null);
   const sidebarSnapshot = useSyncExternalStore(subscribeSidebarPreference, getSidebarSnapshot, getServerSidebarSnapshot);
@@ -91,8 +92,8 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
     return watchPendingPaymentTitle(document, count ?? 0, current === "payments", () => window.location.pathname === pathname);
   }, [current, count, pathname]);
   return (
-    <Frame data-analytics-ignore data-sidebar-resizing={resizing || undefined} $fixed={current === "payments"} style={sidebarStyle}>
-      <Sidebar id="admin-sidebar" data-admin-sidebar data-collapsed={collapsed} aria-label="Admin sections" $fixed={current === "payments"}>
+    <Frame data-analytics-ignore data-sidebar-resizing={resizing || undefined} $fixed={recordWorkspace} style={sidebarStyle}>
+      <Sidebar id="admin-sidebar" data-admin-sidebar data-collapsed={collapsed} aria-label="Admin sections" $fixed={recordWorkspace}>
         <SidebarHead>
           <Caption data-sidebar-caption>Admin</Caption>
           <SidebarControls>
@@ -104,7 +105,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
         </SidebarHead>
         <SectionLinks current={current} passwordRequests={passwordRequests} collapsed={collapsed} />
       </Sidebar>
-      <SidebarResize hidden={collapsed} $fixed={current === "payments"} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
+      <SidebarResize hidden={collapsed} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
         aria-label="Resize admin sidebar" aria-orientation="vertical" aria-controls="admin-sidebar"
         aria-valuemin={adminSidebarSize.min} aria-valuemax={sidebarMaximum} aria-valuenow={sidebarWidth} aria-valuetext={`${sidebarWidth} pixels wide`}
         title="Drag to resize; use arrow keys or double-click to reset"
@@ -129,8 +130,8 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
           event.preventDefault(); setSidebarPreference({ width: clampSidebarWidth(width, sidebarMaximum) });
         }} />
       <SectionMenu current={current} passwordRequests={passwordRequests} />
-      <Main id="main-content" tabIndex={-1} $fixed={current === "payments"}>
-        <Column $wide={current === "analytics" || current === "payments"} $fixed={current === "payments"}>{children}</Column>
+      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace}>
+        <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace}>{children}</Column>
       </Main>
     </Frame>
   );
@@ -329,5 +330,8 @@ const Column = styled.div<{ $wide: boolean; $fixed: boolean }>`
   max-inline-size: ${({ $wide }) => $wide ? "100%" : "76rem"};
   margin-inline: auto;
   ${({ $wide }) => !$wide && css`${media.desktop} { gap: 20px; }`}
-  ${({ $fixed }) => $fixed && css`${media.desktop} { inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0; }`}
+  ${({ $fixed }) => $fixed && css`${media.desktop} {
+    inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0;
+    &:not(:has(> [data-record-workspace])) { display: block; padding: 20px; overflow-y: auto; }
+  }`}
 `;

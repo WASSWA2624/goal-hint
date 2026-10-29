@@ -3,7 +3,8 @@
 import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
-import { DeskColumn, DeskHead, Panel, Segmented, StatGrid, rowLayout } from "./desk-styles";
+import { Panel, Segmented, StatGrid, rowLayout } from "./desk-styles";
+import { RecordDetails, RecordHead, RecordList, RecordWorkspace, RecordDetailHead } from "./record-workspace";
 
 /** Out of sight but still read: the phone search label, and the h1 while a phone shows one account. */
 export const visuallyHidden = css`
@@ -37,40 +38,22 @@ export const formSurface = css`
 `;
 
 /* Workspace: the directory on the start side, the account on the wide side; phones show one of them at a time. */
-export const WorkspaceTitle = styled(DeskHead)``;
-export const DirectoryRoot = styled.section`
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  min-inline-size: 0;
-`;
+export const WorkspaceTitle = styled(RecordHead)``;
+export const DirectoryRoot = styled(RecordList)``;
 /**
  * `$quiet`: nothing to show on a phone (no account, no notice), so the column leaves no gap. The account's parts size to
  * this column, which is narrow at 1024px beside the sidebar and the directory.
  */
-export const AccountColumn = styled(DeskColumn)<{ $quiet: boolean }>`
+export const AccountColumn = styled(RecordDetails)<{ $quiet: boolean }>`
   container-type: inline-size;
+  ${media.desktop} { grid-template-rows: minmax(0, 1fr); }
   ${({ $quiet }) => $quiet && css`${media.belowDesktop} { display: none; }`}
 `;
-export const Workspace = styled.div<{ $selected: boolean }>`
-  display: grid;
-  gap: 12px;
-  align-items: start;
-  min-inline-size: 0;
-  > * { min-inline-size: 0; }
+export const Workspace = styled(RecordWorkspace)<{ $selected: boolean }>`
   ${media.belowDesktop} {
     ${({ $selected }) => $selected
-      ? css`> ${DirectoryRoot} { display: none; } > ${WorkspaceTitle} { ${visuallyHidden} }`
+      ? css`> ${DirectoryRoot} { display: none; } > ${WorkspaceTitle} { display: contents; > h1 { ${visuallyHidden} } > button { display: none; } }`
       : css`> ${AccountColumn} { order: 1; } > ${DirectoryRoot} { order: 2; }`}
-  }
-  /* The second row is flexible so the tall account column never stretches the title row above the directory. */
-  ${media.desktop} {
-    grid-template-columns: minmax(19.5rem, min(37%, 23rem)) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    gap: 16px 20px;
-    > ${WorkspaceTitle} { grid-area: 1 / 1; }
-    > ${DirectoryRoot} { grid-area: 2 / 1; }
-    > ${AccountColumn} { grid-area: 1 / 2 / span 2 / 3; }
   }
 `;
 export const BackLink = styled(Link)`
@@ -102,13 +85,12 @@ export const DrawerPanel = styled(Panel)`
 `;
 
 /* Account */
-export const AccountTop = styled.div`
+export const AccountTop = styled(RecordDetailHead)`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-  h2 { font-size: 1.375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  ${media.desktop} { flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; padding: 16px 18px; }
+  h2 { font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  ${media.belowDesktop} { gap: 8px; padding: 14px; align-items: stretch; h2 { font-size: 1.375rem; } }
+  ${media.desktop} { flex-direction: row; justify-content: space-between; }
 `;
 export const Badges = styled.p`display: flex; flex-wrap: wrap; gap: 6px;`;
 export const BlockedNote = styled.p`

@@ -267,15 +267,22 @@ def audit_rendering(origin):
         html = visible_html(response.text)
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
         match(r'data-audit-report', html)
+        for marker in ["data-record-workspace", "data-record-list-scroll", "data-record-detail-scroll"]:
+            match(marker, html)
         for control in ["audit-search", "audit-category", "audit-action", "audit-period"]:
             match(rf'id="{control}"', html)
         match(r'data-audit-count', html)
         export = match(r'<button\b(?=[^>]*data-audit-export)[^>]*>', html).group(0)
+        assert len(re.findall(r'<button\b(?=[^>]*data-audit-export)', html)) == 1, "One shared export control covers all matching events."
         found = re.findall(r'<details\b[^>]*data-audit-event="([^"]+)"', html)
         assert found == ids, (action, found)
         if not ids:
             match(r'data-audit-empty', html)
             match(r'\bdisabled(?:=""|\s|>)', export)
+        else:
+            assert re.findall(r'data-audit-detail="([^"]+)"', html) == [ids[0]], "The latest matching event starts in the read-only inspector."
+        main = match(r'<main\b[^>]*>([\s\S]*?)</main>', html).group(1)
+        no_match(r'<form\b|data-payment-approval|Approve payment|Reject payment', main, "Audit is a read-only inspector.")
         summaries = re.findall(r'<details\b[^>]*data-audit-event="([^"]+)"[^>]*>[\s\S]*?<summary\b[^>]*>([\s\S]*?)</summary>', html)
         summary_text = {key: unescape(re.sub(r'<[^>]+>', " ", summary)) for key, summary in summaries}
         for value in summary_text.values():
@@ -288,6 +295,56 @@ def audit_rendering(origin):
             match(r'payment[\s\S]*approv|approv[\s\S]*payment', summary_text["2"], flags=re.IGNORECASE)
             match(r'\bAdmin(?:istrator)?\b', summary_text["7"], flags=re.IGNORECASE)
             match(r'\bSystem\b', summary_text["12"], flags=re.IGNORECASE)
+
+
+def plans_api(origin):
+    """Exercise the production plan service, including its owner and same-origin guards."""
+    endpoint = "/api/admin/plans"
+    state_path = "/api/fixture/subscribers"
+    def action(body, expected=200):
+        status, reply = fixture_json(origin, endpoint, body)
+        assert status == expected, (body.get("action"), status, reply)
+        return reply
+    fixture_json(origin, state_path, {})
+    try:
+        status, baseline = fixture_json(origin, endpoint)
+        assert status == 200 and len(baseline["plans"]) == 1
+        original = baseline["plans"][0]
+        action({"action": "create", "plan": {"name": "", "durationDays": 0, "priceUgx": -1}}, 400)
+        created = action({"action": "create", "plan": {"name": "Synthetic plan", "durationDays": 3, "priceUgx": 3000}})
+        custom = next(row for row in created["plans"] if row["id"] != original["id"])
+        assert custom["active"] and custom["sortOrder"] > original["sortOrder"]
+        edited = action({"action": "edit", "id": original["id"], "plan": {"name": "Synthetic edited weekly", "durationDays": 8, "priceUgx": 6000}})
+        changed = next(row for row in edited["plans"] if row["id"] == original["id"])
+        assert (changed["name"], changed["durationDays"], changed["priceUgx"]) == ("Synthetic edited weekly", 8, 6000)
+        payment = fixture_json(origin, "/api/admin/payments?tab=pending")[1]["payments"][0]
+        assert (payment["planName"], payment["durationDays"], payment["price"]) == ("Weekly", 7, 5000), "Plan edits must preserve submitted payment snapshots."
+        ids = [custom["id"], original["id"]]
+        assert [row["id"] for row in action({"action": "reorder", "ids": ids})["plans"]] == ids
+        action({"action": "reorder", "ids": [custom["id"], custom["id"]]}, 400)
+        assert next(row for row in action({"action": "deactivate", "id": custom["id"]})["plans"] if row["id"] == custom["id"])["active"] is False
+        assert next(row for row in action({"action": "activate", "id": custom["id"]})["plans"] if row["id"] == custom["id"])["active"] is True
+        action({"action": "delete", "id": custom["id"]}, 400)
+        action({"action": "edit", "id": "00000000-0000-4000-8000-000000000999", "plan": {"name": "Missing"}}, 404)
+        audits = fixture_json(origin, state_path)[1]["audits"]
+        for event in ["plan_created", "plan_updated", "plans_reordered", "plan_deactivated", "plan_activated"]:
+            assert any(row["action"] == event for row in audits), event
+        assert fixture_json(origin, endpoint, headers={"Cookie": ""})[0] == 401
+        for headers, expected in [({"Cookie": ""}, 401), ({"Sec-Fetch-Site": "cross-site"}, 403)]:
+            assert fixture_json(origin, endpoint, {"action": "deactivate", "id": original["id"]}, headers=headers)[0] == expected
+    finally:
+        fixture_json(origin, state_path, {})
+
+
+def record_workspaces_rendering(origin):
+    """Shared desktop geometry is identified server-side; panes are checked after browser hydration."""
+    # Password requests preserves its existing mobile markup during server rendering.
+    for path in ["/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/plans", "/admin/audit"]:
+        html = visible_html(request(origin, path).text)
+        assert len(re.findall(r'data-record-workspace=', html)) == 1, path
+    sidebar = match(r'<(?:nav|aside)\b(?=[^>]*data-admin-sidebar)[^>]*>([\s\S]*?)</(?:nav|aside)>', visible_html(request(origin, "/admin/payments").text)).group(1)
+    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-resets", "/admin/plans", "/admin/audit", "/admin/settings", "/admin/forecasts", "/analytics"]
+    assert re.findall(r'href="([^"]+)"', sidebar) == expected
 
 
 def payments_api(origin):
@@ -513,6 +570,7 @@ def main():
         build_fixture(directory,env,timeout=300)
     with Server(directory,env,ready="/api/fixture/health") as server:
         owner_navigation(server.origin)
+        record_workspaces_rendering(server.origin)
         overview_notices(server.origin)
         subscriber_directory(server.origin)
         for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
@@ -545,14 +603,16 @@ def main():
         settings_api(server.origin)
         settings_rendering(server.origin)
         audit_rendering(server.origin)
+        plans_api(server.origin)
         payments_rendering(server.origin)
         payments_queue_rendering(server.origin)
         payments_api(server.origin)
-        print("PASS all nine owner routes and regular navigation; subscriber actions, Settings saves/modes, audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
+        print("PASS all nine owner routes and regular navigation; six shared record workspaces; subscriber actions, Plans create/edit/order/activation, Settings saves/modes, read-only audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
             print(f"Synthetic administrator browser entry: {server.origin}/api/fixture/session", flush=True)
             print(f"Settings browser entry: {server.origin}/api/fixture/session?page=settings&scenario=writable", flush=True)
             print(f"Audit browser entry: {server.origin}/api/fixture/session?page=audit", flush=True)
+            print(f"Plans browser entry: {server.origin}/api/fixture/session?page=plans", flush=True)
             print(f"Payments browser entry: {server.origin}/api/fixture/session?page=payments", flush=True)
             print(f"Long payment queue browser entry: {server.origin}/api/fixture/session?page=payments&scenario=queue", flush=True)
             server.serve()

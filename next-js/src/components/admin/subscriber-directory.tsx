@@ -10,8 +10,9 @@ import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { media } from "@/styles/theme";
 import { ActionButton, Badge } from "./admin-form";
-import { EmptyPanel, Panel, PanelHead, RowList, RowMeta, RowTitle, TextAction, rowAction } from "./desk-styles";
+import { EmptyPanel, RowMeta, RowTitle, TextAction } from "./desk-styles";
 import { DirectoryRoot, visuallyHidden } from "./subscriber-styles";
+import { RecordItem, RecordListFooter, RecordListScroll, RecordListTools } from "./record-workspace";
 
 export type SubscriberDirectoryProps = Readonly<{
   accounts: readonly OwnerAccount[];
@@ -43,20 +44,16 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
     void onSearch("");
   }
   return <DirectoryRoot aria-label="Find subscriber" data-subscriber-directory data-subscriber-compact={compact ? "true" : undefined} aria-busy={busy}>
+    <RecordListTools>
     <SearchForm role="search" method="post" action="/api/admin/subscribers" onSubmit={submit} data-subscriber-search>
       <PhoneInput label="Search by phone" name="search" value={search} onValueChange={onSearchChange} lookup hint="" disabled={busy} />
       <ActionButton type="submit" disabled={busy}><SearchIcon /><span>Search</span></ActionButton>
     </SearchForm>
     {children}
-    <Panel as="div">
-      <PanelHead>
-        <h2>{filtering ? "Search results" : "Recent accounts"}</h2>
-        <HeadEnd>
-          <Count data-subscriber-count role="status">{accounts.length} account{accounts.length === 1 ? "" : "s"} shown</Count>
-          {filtering && <TextAction type="button" disabled={busy} onClick={showAll}>Show all</TextAction>}
-        </HeadEnd>
-      </PanelHead>
-      {accounts.length ? <RowList data-subscriber-results>{accounts.map(account => <li key={account.id}>
+    <DirectoryTitle>{filtering ? "Search results" : "Recent accounts"}</DirectoryTitle>
+    </RecordListTools>
+    <RecordListScroll data-subscriber-results aria-label="Subscriber accounts" tabIndex={0}>
+      {accounts.length ? accounts.map(account => <li key={account.id}>
         <AccountRow href={`/admin/subscribers?${new URLSearchParams({ accountId: account.id })}`} prefetch={false} data-subscriber-row={account.id}
           aria-current={selectedId === account.id ? "page" : undefined}>
           <RowTitle>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}
@@ -65,9 +62,13 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
           <ChevronRightIcon />
           <RowMeta data-subscriber-last-sign-in>Last sign-in <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></RowMeta>
         </AccountRow>
-      </li>)}</RowList> : <EmptyPanel data-subscriber-empty><UserIcon /><p>{filtering ? "No accounts found." : "No subscriber accounts yet."}</p></EmptyPanel>}
-      {adminPhone && <AdminNumber><ShieldIcon /><span><strong>+{formatPhone(adminPhone)}</strong> is an administrator number. Its password is managed in the environment.</span></AdminNumber>}
-    </Panel>
+      </li>) : <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{filtering ? "No accounts found." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
+      {adminPhone && <li><AdminNumber><ShieldIcon /><span><strong>+{formatPhone(adminPhone)}</strong> is an administrator number. Its password is managed in the environment.</span></AdminNumber></li>}
+    </RecordListScroll>
+    <RecordListFooter>
+      <Count data-subscriber-count role="status">{accounts.length} account{accounts.length === 1 ? "" : "s"} shown</Count>
+      {filtering && <TextAction type="button" disabled={busy} onClick={showAll}>Show all</TextAction>}
+    </RecordListFooter>
   </DirectoryRoot>;
 }
 
@@ -92,17 +93,17 @@ const SearchForm = styled.form`
   ${media.belowDesktop} { ${searchIconOnly} }
   @container (max-width: 21rem) { ${searchIconOnly} }
 `;
-const HeadEnd = styled.div`display: flex; align-items: center; gap: 4px 10px;`;
 const Count = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-variant-numeric: tabular-nums;
 `;
-const AccountRow = styled(Link)`
-  ${rowAction}
+const DirectoryTitle = styled.h2`${visuallyHidden}`;
+const AccountRow = styled(RecordItem).attrs({ as: Link })`
   grid-template-columns: minmax(0, 1fr) 16px;
   > svg { grid-column: 2; grid-row: 1 / span 2; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; }
   time { font-variant-numeric: tabular-nums; }
+  &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
 `;
 const AdminNumber = styled.p`
   display: flex;

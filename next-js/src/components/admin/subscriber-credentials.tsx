@@ -14,28 +14,28 @@ import { MetaLine, monoFont, Panel, PanelBody, PanelHead } from "./desk-styles";
 /** The recovery password stays in memory only, and disappears on Done or leaving the account. */
 export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
 
-export function PasswordReset({ path, phone, action, reveal }: { path: string; phone?: string; action: CodeAction; reveal: (value: Revealed) => void }) {
+export function PasswordReset({ path, phone, action, reveal, formId, externalActions = false, isActive }: { path: string; phone?: string; action: CodeAction; reveal: (value: Revealed) => void; formId?: string; externalActions?: boolean; isActive?: () => boolean }) {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (action.busy) return;
     const form = event.currentTarget, confirmed = new FormData(form).get("confirmed") === "on";
     const reply = await action.send(path, { action: "temporary-password", ...(phone ? { phone } : {}), confirmed });
-    if (!mounted.current) return;
+    if (isActive ? !isActive() : !mounted.current) return;
     if (reply.ok && reply.body.status === "reset" && typeof reply.body.temporaryPassword === "string" && typeof reply.body.accountId === "string") {
       form.reset();
       reveal({ password: reply.body.temporaryPassword, accountId: reply.body.accountId, phone: phone ?? null, created: reply.body.created === true,
         expiresAt: typeof reply.body.expiresAt === "string" ? reply.body.expiresAt : "", sessionsDeleted: typeof reply.body.sessionsDeleted === "number" ? reply.body.sessionsDeleted : 0 });
     }
   }
-  return <ResetForm method="post" action={path} onSubmit={submit}>
+  return <ResetForm id={formId} method="post" action={path} onSubmit={submit}>
     <CheckField><input type="checkbox" name="confirmed" required disabled={action.busy} />I am on a call with the member and checked it is their number.</CheckField>
-    <ActionButton type="submit" $variant="primary" disabled={action.busy}><KeyIcon />Set temporary password</ActionButton>
+    {!externalActions && <ActionButton type="submit" $variant="primary" disabled={action.busy}><KeyIcon />Set temporary password</ActionButton>}
   </ResetForm>;
 }
 
 /** Shown once after a reset: the password large enough to read aloud, then Done forgets it. */
-export function TemporaryPassword({ value, done }: { value: Revealed; done: () => void }) {
+export function TemporaryPassword({ value, done, externalActions = false }: { value: Revealed; done: () => void; externalActions?: boolean }) {
   const [copied, setCopied] = useState(false), secret = useRef<HTMLSpanElement>(null);
   useEffect(() => { secret.current?.focus(); }, []);
   return <RevealPanel aria-label="Temporary password" data-subscriber-temporary-password>
@@ -51,7 +51,7 @@ export function TemporaryPassword({ value, done }: { value: Revealed; done: () =
         <span>{value.sessionsDeleted} device{value.sessionsDeleted === 1 ? "" : "s"} signed out</span>
       </MetaLine>
       {value.created && <p><Link href={`/admin/subscribers?accountId=${value.accountId}`} prefetch={false}>Open the new account</Link></p>}
-      <DoneButton type="button" onClick={done}>Done</DoneButton>
+      {!externalActions && <DoneButton type="button" onClick={done}>Done</DoneButton>}
     </PanelBody>
   </RevealPanel>;
 }

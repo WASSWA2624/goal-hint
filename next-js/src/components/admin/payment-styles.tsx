@@ -3,8 +3,9 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { ActionButton, adminControl } from "./admin-form";
-import { DeskHead, DeskHeadEnd, Drawer, EmptyPanel, panelRadius, Segmented, StickyActions, TextAction, Toolbar, visuallyHidden } from "./desk-styles";
+import { DeskHeadEnd, Drawer, EmptyPanel, panelRadius, Segmented, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopCompactReview } from "./payment-compact-styles";
+import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
 
 /**
  * Compact desktop queue beside a persistent review. Phones keep the queue-to-review flow.
@@ -21,19 +22,7 @@ const focusRing = css`
 const desktopOnly = css`${media.belowDesktop} { display: none; }`;
 const phoneOnly = css`${media.desktop} { display: none; }`;
 
-export const PaymentLayout = styled.div`
-  display: grid;
-  gap: 12px;
-  min-inline-size: 0;
-  > * { min-inline-size: 0; }
-  ${media.desktop} {
-    grid-template-columns: clamp(22rem, 30vw, 26rem) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    min-block-size: 0;
-    gap: 0;
-    overflow: hidden;
-  }
-`;
+export const PaymentLayout = styled(RecordWorkspace)``;
 export const PaymentUnavailable = styled.section`
   display: grid;
   align-content: start;
@@ -44,17 +33,7 @@ export const PaymentUnavailable = styled.section`
 `;
 
 /** On phones the review replaces the title row; the h1 stays for assistive technology. */
-export const PaymentHead = styled(DeskHead)<{ $reviewing: boolean }>`
-  position: relative;
-  ${media.desktop} {
-    grid-column: 1 / -1;
-    min-block-size: 48px;
-    padding: 4px 12px;
-    border-block-end: ${hairline};
-    background: ${({ theme }) => theme.color.surface};
-    > h1 { ${visuallyHidden} }
-    button, nav { border-radius: 2px; }
-  }
+export const PaymentHead = styled(RecordHead)<{ $reviewing: boolean }>`
   ${media.belowDesktop} {
     gap: 12px;
     > nav { order: 3; flex: 1 1 100%; }
@@ -77,11 +56,8 @@ export const StatusTabs = styled(Segmented)`
   }
 `;
 
-export const PaymentFeedback = styled.div`
+export const PaymentFeedback = styled(RecordFeedback)`
   scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
-  > p { margin: 0; }
-  > p + p { margin-block-start: 8px; }
-  ${media.desktop} { grid-column: 1 / -1; grid-row: 2; padding: 8px 16px; border-block-end: ${hairline}; }
 `;
 
 export const RefreshSquare = styled.button<{ $changed: boolean }>`
@@ -102,32 +78,15 @@ export const RefreshSquare = styled.button<{ $changed: boolean }>`
 `;
 
 /** Desktop: a panel with the toolbar above the ticket tray. Phones: the parts sit straight on the page. */
-export const QueuePanel = styled.section<{ $reviewing: boolean }>`
-  position: relative;
-  display: grid;
-  min-inline-size: 0;
-  ${media.desktop} {
-    grid-column: 1; grid-row: 3;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    min-block-size: 0;
-    overflow: hidden;
-    border-inline-end: ${hairline};
-    background: ${({ theme }) => theme.color.surface};
-  }
+export const QueuePanel = styled(RecordList)<{ $reviewing: boolean }>`
   ${media.belowDesktop} {
     gap: 12px;
     ${({ $reviewing }) => $reviewing && css`display: none;`}
   }
   > h2 { ${visuallyHidden} }
 `;
-export const QueueBar = styled(Toolbar)`
-  ${media.belowDesktop} { gap: 8px; padding: 0; border: 0; > :first-child { flex-basis: 100%; max-inline-size: none; } }
-  ${media.desktop} {
-    display: grid;
-    gap: 4px;
-    padding: 6px 10px 4px;
-    > :first-child { max-inline-size: none; }
-  }
+export const QueueBar = styled(RecordListTools)`
+  ${media.belowDesktop} { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; border: 0; > :first-child { flex-basis: 100%; max-inline-size: none; } }
 `;
 export const QueueFilters = styled.div`
   display: none;
@@ -147,71 +106,25 @@ export const SearchField = styled.div`
   > label { ${visuallyHidden} }
   ${media.desktop} { > input { min-block-size: 34px; padding-block: 4px; font-size: 0.8125rem; border-radius: 2px; } }
 `;
-export const QueueSummary = styled.p`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
   gap: 2px 6px;
-  min-inline-size: 0;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
   > span + span::before { content: "·"; margin-inline-end: 6px; }
   > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   ${media.belowDesktop} { margin-block-start: -4px; }
-  ${media.desktop} { grid-row: 3; padding: 5px 10px; border-block-start: ${hairline}; font-size: 0.6875rem; background: ${({ theme }) => theme.color.surfaceMuted}; }
 `;
 
-export const TicketTray = styled.ol<{ $opened: boolean }>`
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-inline-size: 0;
-  > li { display: grid; min-inline-size: 0; }
+export const TicketTray = styled(RecordListScroll)<{ $opened: boolean }>`
   ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] { border-color: ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; } }`}
-  ${media.desktop} {
-    grid-template-columns: minmax(0, 1fr);
-    grid-row: 2;
-    align-content: start;
-    min-block-size: 0;
-    gap: 0;
-    padding: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: ${({ theme }) => theme.color.controlBorder} transparent;
-  }
 `;
-export const Ticket = styled.button`
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-content: start;
-  align-items: baseline;
-  gap: 2px 12px;
-  inline-size: 100%;
-  min-inline-size: 0;
-  min-block-size: 64px;
-  padding: 10px 14px;
-  ${panelLook}
-  color: ${({ theme }) => theme.color.text};
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-  &[aria-current="true"] { border-color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
-  &:disabled { cursor: not-allowed; opacity: 0.6; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 1px; }
-  ${media.hover} { &:hover:not(:disabled):not([aria-current="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
+export const Ticket = styled(RecordItem)`
+  ${media.belowDesktop} {
+    align-content: start; align-items: baseline; gap: 2px 12px; min-block-size: 64px;
+    ${panelLook}
+    &[aria-current="true"] { border-color: ${({ theme }) => theme.color.link}; }
+  }
   ${media.desktop} {
     grid-template-columns: 30px minmax(0, 1fr) auto auto;
     align-items: center;
-    min-block-size: 54px;
-    gap: 3px 8px;
-    padding: 8px 10px;
-    border: 0; border-block-end: ${hairline}; border-radius: 0;
-    font-size: 0.8125rem;
-    &[aria-current="true"] { box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
   }
 `;
 export const TicketProvider = styled.span`
@@ -276,10 +189,7 @@ export const QueueEmpty = styled(EmptyPanel)`
   ${media.desktop} { grid-row: 2; align-self: start; padding-block: 28px; }
 `;
 
-export const ReviewSection = styled.section<{ $reviewing: boolean }>`
-  display: grid;
-  min-inline-size: 0;
-  ${media.desktop} { grid-column: 2; grid-row: 3; min-block-size: 0; overflow: hidden; }
+export const ReviewSection = styled(RecordDetails)<{ $reviewing: boolean }>`
   scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
   ${media.belowDesktop} { ${({ $reviewing }) => !$reviewing && css`display: none;`} }
 `;
@@ -287,24 +197,20 @@ export const ReviewSection = styled.section<{ $reviewing: boolean }>`
 /* ---------------- Review ---------------- */
 
 /** Phones: a bare stack (the zones are panels); desktop: one panel with a header row over the zones. Facts are dense 13px. */
-export const ReviewCard = styled.article`
-  display: grid;
-  gap: 12px;
-  min-inline-size: 0;
+export const ReviewCard = styled(RecordCard)`
   dl > div { padding-block: 8px; }
   dd { font-size: ${({ theme }) => theme.typography.scale.body}; }
-  ${media.desktop} { gap: 0; ${panelLook} }
   ${desktopCompactReview}
 `;
-export const ReviewHead = styled.header`
+export const ReviewHead = styled(RecordDetailHead)`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 10px;
+  ${media.belowDesktop} { gap: 2px 10px; }
   min-inline-size: 0;
   > h2 {
     flex: 1 1 100%;
-    font-size: 1.25rem;
+    ${media.belowDesktop} { font-size: 1.25rem; }
     line-height: 1.4;
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
@@ -314,10 +220,6 @@ export const ReviewHead = styled.header`
   > [data-review-badge] { order: 4; }
   > [data-review-link] { order: 5; flex: 0 0 100%; justify-content: flex-start; margin-inline-start: -4px; }
   ${media.desktop} {
-    gap: 6px 16px;
-    min-block-size: 62px;
-    padding: 10px 12px 10px 18px;
-    border-block-end: ${hairline};
     > h2 { flex: 0 1 auto; }
     > [data-review-badge] { order: 1; margin-inline-start: -6px; }
     > [data-review-meta] { order: 2; }
@@ -554,20 +456,15 @@ export const RejectDrawer = styled(ZoneDrawer)`
     [data-reject-inline] { display: none; }
   }
 `;
-export const DecisionBar = styled(StickyActions)<{ $rejecting: boolean }>`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
+export const DecisionBar = styled(RecordFooter)<{ $rejecting: boolean }>`
+  ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
   background: ${({ theme }) => theme.color.surface};
-  > button { min-inline-size: 0; padding-inline: 10px; }
+  ${media.belowDesktop} { > button { min-inline-size: 0; padding-inline: 10px; } }
   > [data-payment-footer-summary] { ${desktopOnly} }
   > [data-reject-toggle], > [data-reject-submit] { ${phoneOnly} }
   ${({ $rejecting }) => $rejecting ? css`
     ${media.belowDesktop} { > [data-payment-approve] { display: none; } }
   ` : css`> [data-reject-submit] { display: none; }`}
-  ${media.desktop} {
-    grid-template-columns: minmax(0, 1fr);
-    > [data-payment-approve] { min-block-size: 46px; font-size: 0.9375rem; }
-  }
 `;
 /** Danger outline while closed ("Reject"); a plain secondary button while the reject panel is open ("Cancel"). */
 export const RejectToggle = styled(ActionButton)<{ $open: boolean }>`

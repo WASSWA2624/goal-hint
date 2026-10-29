@@ -13,7 +13,6 @@ export default async function PasswordResetsPage({ searchParams }: { searchParam
   if (!page.owner) redirectToAccountLogin();
   const requests = page.services.database ? await readPasswordRequests(page.services.database) : null;
   return <AdminFrame database={page.services.database} passwordRequests={requests?.length ?? null}>
-    <DeskHead><DeskTitle><h1>Password requests</h1><p>Verify the member by phone, then set a temporary password and read it to them.</p></DeskTitle></DeskHead>
-    {requests ? <PasswordResetRequests requests={requests} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
+    {requests ? <PasswordResetRequests requests={requests} /> : <><DeskHead><DeskTitle><h1>Password requests</h1></DeskTitle></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>}
   </AdminFrame>;
 }

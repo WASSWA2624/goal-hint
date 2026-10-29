@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AdminFrame } from "@/app/_components/admin-frame";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
-import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
+import { RecordBody } from "@/components/admin/record-workspace";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { createSubscribers } from "@/server/admin/subscribers";
 import { AuditReport } from "@/components/admin/audit-report";
@@ -17,7 +17,6 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   // The report owns the title row (its Export button sits beside the h1 on phones); the error state keeps the same h1.
   return <AdminFrame database={page.services.database}>
     {data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} />
-      : <><DeskHead><DeskTitle><h1>Audit log</h1></DeskTitle></DeskHead>
-        <Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></>}
+      : <RecordBody><h1>Audit log</h1><Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></RecordBody>}
   </AdminFrame>;
 }

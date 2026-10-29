@@ -16,7 +16,6 @@ export default async function AdminCodesPage({ searchParams }: { searchParams: P
     createPaymentReview(db).codes().catch(() => null), plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
   return <AdminFrame database={page.services.database}>
-    <DeskHead><DeskTitle><h1>Codes</h1></DeskTitle></DeskHead>
-    {data ? <CodesEditor initialCodes={data} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
+    {data ? <CodesEditor initialCodes={data} plans={plans} /> : <div><DeskHead><DeskTitle><h1>Codes</h1></DeskTitle></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></div>}
   </AdminFrame>;
 }

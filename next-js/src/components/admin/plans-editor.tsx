@@ -7,9 +7,12 @@ import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { ArrowDownIcon, ArrowUpIcon, LayersIcon, PencilIcon, PlusIcon } from "@/components/ui/icons";
 import { formatPlanLength, formatUgx, planRules, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import { media } from "@/styles/theme";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { ActionButton, Badge, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage } from "./admin-form";
-import { DeskGrid, DeskHead, DeskTitle, EmptyPanel, Panel, panelRadius, ResponsiveDrawer, TextAction } from "./desk-styles";
+import { DeskGrid, EmptyPanel, Panel, panelRadius, ResponsiveDrawer, TextAction } from "./desk-styles";
 import { useAdminRefresh } from "./use-admin-refresh";
+import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordHead, RecordItem,
+  RecordItemMeta, RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordScroll, RecordWorkspace } from "./record-workspace";
 
 type Draft = Readonly<{ name: string; durationDays: string; priceUgx: string }>;
 type Status = Readonly<{ tone: "info" | "error"; text: string; where: "add" | "list" }> | null;
@@ -20,6 +23,8 @@ const draftOf = (plan: SubscriptionPlanView): Draft => ({ name: plan.name, durat
 const whole = (value: string) => (/^\d+$/u.test(value.trim()) ? Number(value.trim()) : value);
 const fieldsOf = (draft: Draft) => ({ name: draft.name, durationDays: whole(draft.durationDays), priceUgx: whole(draft.priceUgx) });
 const fieldKeys = ["name", "durationDays", "priceUgx"] as const;
+const controlId = (key: string) => `plan-control-${key}`;
+const controlFor = (key: string) => document.getElementById(controlId(key)) as HTMLButtonElement | null;
 /** The first field a refused reply names, or null when the refusal is about the whole plan. */
 const firstInvalid = (prefix: string, errors: Record<string, string>) => {
   const key = fieldKeys.find(name => errors[name]);
@@ -32,7 +37,7 @@ const firstInvalid = (prefix: string, errors: Record<string, string>) => {
  * lives here because its active count follows every change.
  */
 export function PlansEditor({ initialPlans }: { initialPlans: readonly SubscriptionPlanView[] }) {
-  const router = useRouter(), inFlight = useRef(false);
+  const router = useRouter(), desktop = useDesktopLayout(), inFlight = useRef(false);
   const [plans, setPlans] = useState(initialPlans);
   const [status, setStatus] = useState<Status>(null);
   const [saving, setSaving] = useState(false);
@@ -43,14 +48,16 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Readonly<{ id: string; draft: Draft; errors: Record<string, string> }> | null>(null);
+  const [selectedId, setSelectedId] = useState(initialPlans[0]?.id ?? ""), [adding, setAdding] = useState(initialPlans.length === 0), [search, setSearch] = useState("");
+  const listedPlans = plans.filter(plan => `${plan.name} ${plan.durationDays} ${plan.priceUgx} ${plan.active ? "active" : "inactive"}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const selected = listedPlans.find(plan => plan.id === selectedId) ?? listedPlans[0];
+  const activeEdit = selected ? editing?.id === selected.id ? editing : { id: selected.id, draft: draftOf(selected), errors: {} } : null;
   // Every button is disabled while a change is saved, which drops focus; put it back once the reply has rendered.
-  const controls = useRef(new Map<string, HTMLButtonElement>());
   const refocus = useRef<(() => HTMLElement | null | undefined) | null>(null);
   useEffect(() => {
     if (busy || !refocus.current) return;
     const target = refocus.current(); refocus.current = null; target?.focus();
   });
-  const control = (key: string) => (node: HTMLButtonElement | null) => { if (node) controls.current.set(key, node); else controls.current.delete(key); };
 
   async function send(body: Record<string, unknown>, done: string, where: "add" | "list"): Promise<Record<string, string> | null> {
     inFlight.current = true;
@@ -75,19 +82,20 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
     if (inFlight.current || busy) return;
     const refused = await send({ action: "create", plan: fieldsOf(draft) }, `Added ${draft.name.trim()}.`, "add");
     setErrors(refused ?? {});
-    if (!refused) setDraft(emptyDraft);
-    refocus.current = () => (refused && firstInvalid("new", refused)) || document.getElementById("new-plan-submit");
+    if (!refused) { setDraft(emptyDraft); if (desktop) setAdding(false); }
+    refocus.current = () => (refused && firstInvalid("new", refused)) || document.getElementById(!refused && desktop ? "add-plan-open" : "new-plan-submit");
   }
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
-    if (inFlight.current || busy || !editing) return;
-    const { id } = editing, refused = await send({ action: "edit", id, plan: fieldsOf(editing.draft) }, "Plan saved.", "list");
-    setEditing(refused ? { ...editing, errors: refused } : null);
-    refocus.current = () => (refused ? firstInvalid(`edit-${id}`, refused) ?? document.getElementById(`edit-${id}-save`) : controls.current.get(`${id}:edit`));
+    const currentEdit = desktop ? activeEdit : editing;
+    if (inFlight.current || busy || !currentEdit) return;
+    const { id } = currentEdit, refused = await send({ action: "edit", id, plan: fieldsOf(currentEdit.draft) }, "Plan saved.", "list");
+    setEditing(refused ? { ...currentEdit, errors: refused } : null);
+    refocus.current = () => (refused ? firstInvalid(`edit-${id}`, refused) ?? document.getElementById(`edit-${id}-save`) : controlFor(`${id}:edit`));
   }
   function closeEdit(id: string) {
     setEditing(null);
-    refocus.current = () => controls.current.get(`${id}:edit`);
+    refocus.current = () => controlFor(`${id}:edit`);
   }
   function move(index: number, offset: -1 | 1) {
     if (inFlight.current || busy) return;
@@ -97,29 +105,63 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
     void send({ action: "reorder", ids }, "Order saved.", "list");
     // At the top or bottom the pressed arrow is disabled, so the other one takes focus.
     const pressed = offset < 0 ? "up" : "down", other = offset < 0 ? "down" : "up";
-    refocus.current = () => { const button = controls.current.get(`${id}:${pressed}`); return button && !button.disabled ? button : controls.current.get(`${id}:${other}`); };
+    refocus.current = () => { const button = controlFor(`${id}:${pressed}`); return button && !button.disabled ? button : controlFor(`${id}:${other}`); };
   }
   function toggle(plan: SubscriptionPlanView) {
     if (inFlight.current || busy) return;
     void send({ action: plan.active ? "deactivate" : "activate", id: plan.id }, `${plan.name} ${plan.active ? "deactivated" : "activated"}.`, "list");
-    refocus.current = () => controls.current.get(`${plan.id}:toggle`);
+    refocus.current = () => controlFor(`${plan.id}:toggle`);
   }
 
-  const notice = (where: "add" | "list") => status?.where === where
+  const notice = (where: "add" | "list") => !desktop && status?.where === where
     && <Notice $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice>;
-  const addForm = <AddForm onSubmit={create} noValidate aria-label="Add a plan">
+  const addForm = <AddForm id="new-plan-form" onSubmit={create} noValidate aria-label="Add a plan">
     <Hint as="p">Every plan unlocks every feature; plans differ only in length and price. A day is 24 hours from payment confirmation, never a calendar day.</Hint>
     <Presets role="group" aria-label="Fill from a preset">{presets.map(preset =>
       <ActionButton key={preset.name} type="button" disabled={busy} onClick={() => { setErrors({}); setDraft({ name: preset.name, durationDays: String(preset.days), priceUgx: String(preset.price) }); }}>{preset.name}</ActionButton>)}</Presets>
     <PlanFields draft={draft} errors={errors} onChange={setDraft} idPrefix="new" disabled={busy} hints />
     {notice("add")}
-    <ActionButton id="new-plan-submit" type="submit" $variant="primary" disabled={busy}><PlusIcon />Add plan</ActionButton>
+    {!desktop && <ActionButton id="new-plan-submit" type="submit" $variant="primary" disabled={busy}><PlusIcon />Add plan</ActionButton>}
   </AddForm>;
 
   return (
-    <>
-      <DeskHead><DeskTitle><h1>Plans</h1><p>{plans.filter(({ active }) => active).length} active · first active plan is preselected on Get access</p></DeskTitle></DeskHead>
-      <DeskGrid>
+    <RecordWorkspace data-plans-workspace data-analytics-ignore>
+      <RecordHead><h1>Plans</h1><Hint>{plans.filter(({ active }) => active).length} active · first active plan is preselected on Get access</Hint>
+        {desktop && <HeaderEnd><ActionButton id="add-plan-open" type="button" disabled={busy} onClick={() => { setAdding(true); setStatus(null); }}><PlusIcon />Add plan</ActionButton></HeaderEnd>}
+      </RecordHead>
+      {desktop && status && <RecordFeedback><Notice $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice></RecordFeedback>}
+      {desktop ? <>
+        <RecordList aria-label="Plan directory">
+          <RecordListTools><FieldBlock>Find a plan<input aria-label="Find a plan" type="search" value={search} disabled={busy} onChange={event => setSearch(event.target.value)} placeholder="Name, days or price" /></FieldBlock></RecordListTools>
+          <RecordListScroll aria-label="Plan list" data-plans-list-scroll tabIndex={0}>{listedPlans.length ? listedPlans.map(plan => <li key={plan.id}>
+            <RecordItem id={controlId(`${plan.id}:edit`)} data-plan-row={plan.id} aria-current={!adding && selected?.id === plan.id ? "true" : undefined} aria-controls="plan-record-detail" disabled={busy}
+              onClick={() => { setSelectedId(plan.id); setAdding(false); setStatus(null); setEditing({ id: plan.id, draft: draftOf(plan), errors: {} }); }}>
+              <RecordItemTitle>{plan.name}</RecordItemTitle><Badge $tone={plan.active ? "good" : "muted"}>{plan.active ? "Active" : "Inactive"}</Badge>
+              <PlanRecordMeta>{formatPlanLength(plan.durationDays)} · {formatUgx(plan.priceUgx)}</PlanRecordMeta>
+            </RecordItem>
+          </li>) : <li><RecordEmpty><LayersIcon /><strong>{search ? "No matching plans" : "No plans yet"}</strong></RecordEmpty></li>}</RecordListScroll>
+          <RecordListFooter>{listedPlans.length} plan{listedPlans.length === 1 ? "" : "s"} · {plans.filter(plan => plan.active).length} active</RecordListFooter>
+        </RecordList>
+        <RecordDetails id="plan-record-detail" aria-label="Plan details">
+          <RecordCard><RecordScroll tabIndex={0} data-plans-detail-scroll>
+            <RecordDetailHead><h2>{adding ? "Add a plan" : selected?.name ?? "Plan details"}</h2>{!adding && selected && <Badge $tone={selected.active ? "good" : "muted"}>{selected.active ? "Active" : "Inactive"}</Badge>}</RecordDetailHead>
+            <RecordBody>{adding ? addForm : selected && activeEdit ? <PlanEdit key={selected.id} plan={selected} draft={activeEdit.draft} errors={activeEdit.errors} busy={busy} onSave={saveEdit} onCancel={() => closeEdit(selected.id)} externalActions
+              onChange={next => setEditing({ ...activeEdit, draft: next })} /> : <RecordEmpty><LayersIcon /><strong>Select a plan</strong><p>Choose a plan to edit its name, duration and price.</p></RecordEmpty>}
+              <Hint>Plans are never deleted. Deactivate one to hide it from Get access.</Hint>
+            </RecordBody>
+          </RecordScroll>
+          {adding ? <RecordFooter><ActionButton type="button" disabled={busy} onClick={() => setAdding(false)}>Cancel</ActionButton><ActionButton id="new-plan-submit" type="submit" form="new-plan-form" $variant="primary" disabled={busy}><PlusIcon />Add plan</ActionButton></RecordFooter>
+            : selected && <RecordFooter>
+              <span data-record-summary>Order {plans.findIndex(plan => plan.id === selected.id) + 1} of {plans.length}</span>
+              <Square data-record-icon id={controlId(`${selected.id}:up`)} type="button" disabled={busy || plans[0]?.id === selected.id} onClick={() => move(plans.findIndex(plan => plan.id === selected.id), -1)} aria-label={`Move ${selected.name} up`}><ArrowUpIcon /></Square>
+              <Square data-record-icon id={controlId(`${selected.id}:down`)} type="button" disabled={busy || plans[plans.length - 1]?.id === selected.id} onClick={() => move(plans.findIndex(plan => plan.id === selected.id), 1)} aria-label={`Move ${selected.name} down`}><ArrowDownIcon /></Square>
+              <ActionButton id={controlId(`${selected.id}:toggle`)} type="button" disabled={busy} onClick={() => toggle(selected)}>{selected.active ? "Deactivate" : "Activate"}</ActionButton>
+              <ActionButton type="button" disabled={busy} onClick={() => closeEdit(selected.id)}>Cancel</ActionButton>
+              <ActionButton id={`edit-${selected.id}-save`} type="submit" form={`plan-edit-${selected.id}`} $variant="primary" disabled={busy}>Save plan</ActionButton>
+            </RecordFooter>}
+          </RecordCard>
+        </RecordDetails>
+      </> : <DeskGrid>
         <ListPanel aria-label="Plan list" $busy={busy} aria-busy={busy}>
           {status?.where === "list" && <ListNotice>{notice("list")}</ListNotice>}
           {plans.length === 0 ? <EmptyPanel><LayersIcon /><strong>No plans yet.</strong><p>Add each plan you offer, for example Daily: 1 day, UGX 1,000.</p></EmptyPanel> : (
@@ -132,11 +174,11 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
                     <PlanMeta>{formatPlanLength(plan.durationDays)} · {formatUgx(plan.priceUgx)}</PlanMeta>
                   </PlanSummary>
                   <PlanActions>
-                    <Square ref={control(`${plan.id}:up`)} type="button" disabled={busy || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${plan.name} up`}><ArrowUpIcon /></Square>
-                    <Square ref={control(`${plan.id}:down`)} type="button" disabled={busy || index === plans.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${plan.name} down`}><ArrowDownIcon /></Square>
-                    <TextAction ref={control(`${plan.id}:edit`)} type="button" disabled={busy} aria-expanded={open} aria-controls={open ? `plan-edit-${plan.id}` : undefined}
+                    <Square id={controlId(`${plan.id}:up`)} type="button" disabled={busy || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${plan.name} up`}><ArrowUpIcon /></Square>
+                    <Square id={controlId(`${plan.id}:down`)} type="button" disabled={busy || index === plans.length - 1} onClick={() => move(index, 1)} aria-label={`Move ${plan.name} down`}><ArrowDownIcon /></Square>
+                    <TextAction id={controlId(`${plan.id}:edit`)} type="button" disabled={busy} aria-expanded={open} aria-controls={open ? `plan-edit-${plan.id}` : undefined}
                       onClick={() => { if (open) closeEdit(plan.id); else { setStatus(null); setEditing({ id: plan.id, draft: draftOf(plan), errors: {} }); } }}><PencilIcon />Edit</TextAction>
-                    <ToggleAction ref={control(`${plan.id}:toggle`)} type="button" disabled={busy} onClick={() => toggle(plan)}>{plan.active ? "Deactivate" : "Activate"}</ToggleAction>
+                    <ToggleAction id={controlId(`${plan.id}:toggle`)} type="button" disabled={busy} onClick={() => toggle(plan)}>{plan.active ? "Deactivate" : "Activate"}</ToggleAction>
                   </PlanActions>
                   {open && <PlanEdit plan={plan} draft={editing.draft} errors={editing.errors} busy={busy} onSave={saveEdit} onCancel={() => closeEdit(plan.id)}
                     onChange={next => setEditing({ ...editing, draft: next })} />}
@@ -147,14 +189,14 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
           <Footnote>Plans are never deleted. Deactivate one to hide it from Get access.</Footnote>
         </ListPanel>
         <ResponsiveDrawer title="Add a plan" icon={<PlusIcon />} defaultOpen={initialPlans.length === 0}>{addForm}</ResponsiveDrawer>
-      </DeskGrid>
-    </>
+      </DeskGrid>}
+    </RecordWorkspace>
   );
 }
 
-function PlanEdit({ plan, draft, errors, busy, onChange, onSave, onCancel }: {
+function PlanEdit({ plan, draft, errors, busy, onChange, onSave, onCancel, externalActions = false }: {
   plan: SubscriptionPlanView; draft: Draft; errors: Record<string, string>; busy: boolean;
-  onChange: (draft: Draft) => void; onSave: (event: FormEvent) => void; onCancel: () => void;
+  onChange: (draft: Draft) => void; onSave: (event: FormEvent) => void; onCancel: () => void; externalActions?: boolean;
 }) {
   const name = useRef<HTMLInputElement>(null);
   useEffect(() => { name.current?.focus(); }, []);
@@ -164,10 +206,10 @@ function PlanEdit({ plan, draft, errors, busy, onChange, onSave, onCancel }: {
       <PlanFields draft={draft} errors={errors} onChange={onChange} idPrefix={`edit-${plan.id}`} disabled={busy} nameRef={name} />
       <EditFoot>
         <Hint as="p">Codes and payments keep the name, days and price they were created with.</Hint>
-        <EditButtons>
+        {!externalActions && <EditButtons>
           <ActionButton id={`edit-${plan.id}-save`} type="submit" $variant="primary" disabled={busy}>Save plan</ActionButton>
           <ActionButton type="button" disabled={busy} onClick={onCancel}>Cancel</ActionButton>
-        </EditButtons>
+        </EditButtons>}
       </EditFoot>
     </EditForm>
   );
@@ -200,6 +242,8 @@ function PlanFields({ draft, errors, onChange, idPrefix, disabled, hints = false
 }
 
 /** Rows follow the panel's width, not the screen's: at 1024px the list column is phone-narrow beside Add a plan. */
+const HeaderEnd = styled.div`margin-inline-start: auto;`;
+const PlanRecordMeta = styled(RecordItemMeta)`grid-column: 1 / -1;`;
 const ListPanel = styled(Panel)<{ $busy: boolean }>`
   container-type: inline-size;
   transition: opacity 120ms;

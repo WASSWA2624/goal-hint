@@ -2,23 +2,10 @@
 
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
+import { RecordScroll } from "./record-workspace";
 
 /** One scroll surface for the desktop review; mobile keeps the existing panel flow. */
-export const CompactReviewScroll = styled.div`
-  display: contents;
-  ${media.desktop} {
-    display: grid;
-    align-content: start;
-    min-inline-size: 0;
-    min-block-size: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: ${({ theme }) => theme.color.controlBorder} transparent;
-    scroll-padding-block: 16px;
-  }
-`;
+export const CompactReviewScroll = RecordScroll;
 
 /** Reported/received money remains distinct from the package price when they differ. */
 export const CompactAmountSummary = styled.div`
@@ -44,24 +31,8 @@ export const CompactAmountSummary = styled.div`
 /** Applied to ReviewCard after its legacy styles; every override is desktop-only. */
 export const desktopCompactReview = css`
   ${media.desktop} {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
-    gap: 0;
-    min-block-size: 0;
-    block-size: 100%;
-    overflow: hidden;
-    border: 0;
-    border-radius: 0;
-    background: ${({ theme }) => theme.color.surfaceMuted};
-
-    input, select, textarea, button, details, summary, img, [role="group"], [data-review-badge], [data-payment-zone] > div { border-radius: 2px; }
+    [data-review-badge], [data-payment-zone] > div { border-radius: 2px; }
     [data-payment-head] {
-      gap: 4px 10px;
-      min-block-size: 44px;
-      padding: 6px 12px;
-      border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-      background: ${({ theme }) => theme.color.surface};
-      > h2 { font-size: 1.0625rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
       > [data-review-meta] { font-size: 0.75rem; }
       > [data-review-link] { min-block-size: 28px; padding-block: 2px; font-size: 0.75rem; }
     }
@@ -89,8 +60,6 @@ export const desktopCompactReview = css`
       [data-payment-facts] > div { padding-block: 9px; gap: 3px 10px; }
       [data-payment-facts] dt, [data-payment-facts] dd { font-size: 0.8125rem; }
       [data-payment-checks] > summary { min-block-size: 40px; font-size: 0.8125rem; }
-      input, select { min-block-size: 38px; font-size: 0.8125rem; }
-      textarea { font-size: 0.8125rem; }
       [data-payment-approval] { padding: 0; }
       [data-payment-zone="decision"] > [data-reject] { order: initial; }
       [data-payment-zone="proof"] img { max-block-size: none; }
@@ -99,26 +68,12 @@ export const desktopCompactReview = css`
     }
 
     > [data-decision-bar] {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-      position: static;
-      min-inline-size: 0;
-      margin: 0;
-      padding: 6px 12px;
-      border: 0;
-      border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-      background: ${({ theme }) => theme.color.surface};
-      > button { flex: 0 1 auto; min-inline-size: 0; min-block-size: 32px; padding: 4px 10px; font-size: 0.8125rem; }
       > [data-reject-toggle] { display: inline-flex; }
       > [data-reject-submit] { display: none; }
-      > [data-payment-footer-summary] { min-inline-size: 0; margin-inline-end: auto; overflow-wrap: anywhere; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
     }
   }
 
   @media (min-width: 64rem) and (max-width: 79.99rem) {
-    > [data-decision-bar] > [data-payment-footer-summary] { display: none; }
     [data-payment-zones] {
       grid-template-columns: minmax(0, 1fr);
       > [data-payment-zone="decision"] { grid-column: 1; grid-row: 1; }

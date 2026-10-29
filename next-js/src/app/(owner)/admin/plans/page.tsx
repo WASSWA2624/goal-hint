@@ -17,10 +17,10 @@ export default async function AdminPlansPage({ searchParams }: { searchParams: P
   const plans = database ? await plansServiceFor(database).list().catch(() => null) : null;
   return (
     <AdminFrame database={page.services.database}>
-      {plans ? <PlansEditor initialPlans={plans} /> : <>
+      {plans ? <PlansEditor initialPlans={plans} /> : <div>
         <DeskHead><DeskTitle><h1>Plans</h1><p>Length and price of each paid period</p></DeskTitle></DeskHead>
         <Notice $tone="error" role="alert">Plans are unavailable because the database cannot be read. Try again shortly.</Notice>
-      </>}
+      </div>}
     </AdminFrame>
   );
 }

@@ -4,37 +4,29 @@ import styled, { css } from "styled-components";
 import { ButtonLink } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
-import { Panel } from "./desk-styles";
+import { RecordDetails, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
 
-export const AuditLayout = styled.div`
-  display: grid; gap: 12px; min-inline-size: 0;
-  ${media.desktop} { gap: 16px; }
-`;
+export const AuditLayout = styled(RecordWorkspace)``;
+export const AuditDetails = styled(RecordDetails)`${media.belowDesktop} { display: none; }`;
+export const HeadActions = styled.div`margin-inline-start: auto;`;
 
-/** One Export button lives in the phone title row, the other at the foot of the desktop filter panel; only one shows. */
-export const ExportButton = styled(ActionButton)<{ $place: "head" | "panel" }>`
+/** Export always covers the matching loaded activity, including rows beyond the current page. */
+export const ExportButton = styled(ActionButton)`
   color: ${({ theme }) => theme.color.link};
   > svg { flex: none; font-size: 1rem; }
-  ${({ $place }) => $place === "head" ? css`${media.desktop} { display: none; }`
-    : css`inline-size: 100%; ${media.belowDesktop} { display: none; } ${media.desktop} { min-block-size: 40px; }`}
 `;
 
 /** Search and filters: loose on phones (search, then a Filters drawer), one open side panel from desktop up. */
-export const AuditTools = styled(Panel)`
-  display: grid; gap: 12px; align-content: start;
-  ${media.belowDesktop} { background: none; border: 0; }
-  ${media.desktop} {
-    position: sticky; inset-block-start: calc(var(--app-header-height, 4rem) + 16px);
-    padding: 14px 16px 16px;
-  }
+export const AuditTools = styled(RecordListTools)`
   label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   input, select { min-block-size: 44px; }
   ${media.belowDesktop} { input, select { font-size: 16px; } }
-  ${media.desktop} { input, select { min-block-size: 40px; padding-block: 6px; } }
+  ${media.desktop} { input, select { min-block-size: 34px; padding-block: 4px; } }
 `;
 
 /** The search label stays for assistive technology; the placeholder and icon name the field on screen. */
 export const SearchField = styled.div`
+  position: relative;
   min-inline-size: 0;
   label { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden;
     clip: rect(0 0 0 0); white-space: nowrap; }
@@ -75,18 +67,17 @@ export const FilterBody = styled.div<{ $open: boolean }>`
 
 /** "n events · 1–20 shown" on the start side, the window and time zone on the end side. */
 export const AuditSummary = styled.div`
+  inline-size: 100%;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 10px; min-inline-size: 0;
   font-size: ${({ theme }) => theme.typography.scale.body};
   p { margin: 0; }
   b { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-inline-size: 0; }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${media.desktop} { font-size: 0.75rem; button { min-block-size: 28px; font-size: 0.75rem; } }
 `;
 
-export const FeedPanel = styled(Panel)`overflow: hidden;`;
-
-export const AuditFeed = styled.section`
-  display: grid; min-inline-size: 0;
+export const AuditFeed = styled(RecordListScroll)`
   scroll-margin-block-start: calc(var(--app-header-height, 4rem) + 16px);
   > * + * { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
   &:focus { outline: none; }
@@ -112,7 +103,12 @@ export const AuditEvent = styled.details`
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
   ${media.hover} { > summary:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
-  ${media.desktop} { > summary { gap: 0 12px; padding: 8px 14px 8px 16px; } }
+  ${media.desktop} {
+    > summary { grid-template-columns: 28px minmax(0, 1fr) auto; min-block-size: 54px; gap: 0 8px; padding: 8px 10px; }
+    > summary > svg:last-child { display: none; }
+    > summary[aria-current="true"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
+    > [data-audit-inline-details] { display: none; }
+  }
 `;
 
 /** Small tinted tile per category: payments green, sign-in and security amber, everything else brand blue. */
@@ -123,6 +119,7 @@ export const EventIcon = styled.span<{ $category: string }>`
   color: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.text
     : $category === "security" ? theme.color.accent.amber.text : theme.color.link};
   svg { font-size: 1rem; }
+  ${media.desktop} { inline-size: 28px; block-size: 28px; border-radius: 2px; }
 `;
 
 export const EventText = styled.span`
@@ -153,15 +150,16 @@ export const EventFacts = styled.dl`
   dd { min-inline-size: 0; margin: 0; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold};
     overflow-wrap: anywhere; }
   dd[data-code] { font-family: ui-monospace, Consolas, "Courier New", monospace; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${media.desktop} { grid-template-columns: repeat(2, minmax(0, 10rem)); gap: 8px 24px; }
+  ${media.desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
 `;
 
 export const EventLink = styled(ButtonLink)`
   && { color: ${({ theme }) => theme.color.link}; min-block-size: 44px; font-size: ${({ theme }) => theme.typography.scale.body}; }
-  ${media.desktop} { && { flex: none; min-block-size: 40px; } }
+  ${media.desktop} { && { flex: none; min-block-size: 32px; font-size: 0.8125rem; } }
 `;
 
 export const AuditPager = styled.nav`
+  inline-size: 100%;
   display: flex; align-items: center; justify-content: space-between; gap: 8px; min-inline-size: 0; padding: 0 6px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }

@@ -176,7 +176,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
     </ReviewZones>
     </CompactReviewScroll>
     {pending && <DecisionBar $rejecting={rejecting} data-decision-bar>
-      <span data-payment-footer-summary>{p.reference} · {formatUgx(receivedAmount ?? p.amount)}</span>
+      <span data-payment-footer-summary data-record-summary>{p.reference} · {formatUgx(receivedAmount ?? p.amount)}</span>
       <RejectToggle type="button" $open={rejecting} aria-expanded={rejecting} aria-controls={rejectId} disabled={action.busy} onClick={toggleReject}
         data-reject-toggle>{rejecting ? "Cancel" : <><CloseIcon />Reject</>}</RejectToggle>
       <ActionButton type="submit" form={approvalId} $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : topUp ? "Approve top-up" : "Approve payment"}</ActionButton>

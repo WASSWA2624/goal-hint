@@ -10,9 +10,10 @@ import { auditActionLabel, auditActorLabel, auditCategories, auditCategory, audi
   auditTargetLabel, filterAuditRows, type AuditCategory, type AuditPeriod } from "@/domain/admin-audit";
 import type { OwnerAuditRow } from "@/domain/owner-members";
 import { publicPolicy } from "@/domain/public-policy";
-import { DeskColumn, DeskGrid, DeskHead, DeskHeadEnd, DeskTitle, DrawerNote, EmptyPanel, TextAction } from "./desk-styles";
-import { AuditDay, AuditEvent, AuditFeed, AuditLayout, AuditPager, AuditSummary, AuditTools, EventDetails, EventFacts, EventIcon, EventLink,
-  EventText, EventTime, ExportButton, FeedPanel, FilterBody, FilterDrawer, FilterToggle, SearchField } from "./audit-styles";
+import { DrawerNote, EmptyPanel, Panel, PanelBody, TextAction } from "./desk-styles";
+import { RecordBody, RecordCard, RecordDetailHead, RecordFeedback, RecordFooter, RecordHead, RecordList, RecordListFooter, RecordScroll } from "./record-workspace";
+import { AuditDay, AuditDetails, AuditEvent, AuditFeed, AuditLayout, AuditPager, AuditSummary, AuditTools, EventDetails, EventFacts, EventIcon, EventLink,
+  EventText, EventTime, ExportButton, FilterBody, FilterDrawer, FilterToggle, HeadActions, SearchField } from "./audit-styles";
 
 const pageSize = 20;
 const recordId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -53,10 +54,13 @@ export function AuditReport({ rows, actions, action }: { rows: readonly OwnerAud
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pending, startNavigation] = useTransition();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const matches = useMemo(() => filterAuditRows(rows, { search, category, period }), [rows, search, category, period]);
   const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
   const currentPage = Math.min(pageIndex, pageCount - 1);
   const pageRows = matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const selected = pageRows.find(row => row.id === selectedId) ?? pageRows[0];
+  const selectedLink = selected ? eventLink(selected) : null;
   const groups = new Map<string, OwnerAuditRow[]>();
   for (const row of pageRows) { const day = auditDay(row.at); groups.set(day, [...(groups.get(day) ?? []), row]); }
   const filtered = search !== "" || category !== "" || period !== "all" || action !== "";
@@ -65,7 +69,7 @@ export function AuditReport({ rows, actions, action }: { rows: readonly OwnerAud
 
   function changeEvent(value: string) {
     setPageIndex(0); setExportStatus(null);
-    startNavigation(() => router.push(`/admin/audit${value ? `?action=${encodeURIComponent(value)}` : ""}`));
+    startNavigation(() => router.push(`/admin/audit${value ? `?action=${encodeURIComponent(value)}` : ""}`, { scroll: false }));
   }
   function reset() {
     setSearch(""); setCategory(""); setPeriod("all"); setPageIndex(0); setExportStatus(null);
@@ -75,7 +79,9 @@ export function AuditReport({ rows, actions, action }: { rows: readonly OwnerAud
     setPageIndex(next);
     requestAnimationFrame(() => {
       const feed = document.getElementById("audit-results");
-      feed?.focus({ preventScroll: true }); feed?.scrollIntoView({ block: "start" });
+      feed?.focus({ preventScroll: true });
+      if (window.matchMedia("(min-width: 64rem)").matches) { if (feed) feed.scrollTop = 0; }
+      else feed?.scrollIntoView({ block: "start" });
     });
   }
   function download() {
@@ -90,59 +96,13 @@ export function AuditReport({ rows, actions, action }: { rows: readonly OwnerAud
     } catch { setExportStatus("Export unavailable. Try again."); }
     finally { if (url) { const savedUrl = url; setTimeout(() => URL.revokeObjectURL(savedUrl), 1_000); } }
   }
-  const exportButton = (place: "head" | "panel") => <ExportButton type="button" $place={place} disabled={!matches.length || pending} onClick={download}
+  const exportButton = <ExportButton type="button" disabled={!matches.length || pending} onClick={download}
     data-audit-export title={`Export all ${matches.length} matching events from the loaded activity`}><DownloadIcon />Export CSV</ExportButton>;
 
   return <AuditLayout data-audit-report data-analytics-ignore>
-    <DeskHead>
-      <DeskTitle><h1>Audit log</h1></DeskTitle>
-      <DeskHeadEnd>{exportButton("head")}</DeskHeadEnd>
-    </DeskHead>
-    <DeskGrid $asideFirst>
-      <DeskColumn>
-        <AuditSummary>
-          <div>
-            <p aria-live="polite" data-audit-count>{pending ? "Loading activity…" : <b>{matches.length} {matches.length === 1 ? "event" : "events"}</b>}
-              {!pending && matches.length > pageSize && ` · ${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, matches.length)} shown`}</p>
-            {filtered && <TextAction type="button" disabled={pending} onClick={reset}><ResetIcon />Reset filters</TextAction>}
-          </div>
-          <p>Up to 100 recent {action ? "matching " : ""}events · EAT</p>
-        </AuditSummary>
-        {exportStatus && <Notice role="status">{exportStatus}</Notice>}
-        <FeedPanel as="div">
-          <AuditFeed id="audit-results" tabIndex={-1} aria-label="Audit activity" aria-busy={pending}>
-            {matches.length === 0 ? <EmptyPanel data-audit-empty><SearchIcon /><strong>{filtered ? "No matching activity" : "No activity yet"}</strong></EmptyPanel>
-              : [...groups].map(([day, events]) => <Fragment key={day}>
-                <AuditDay>{day ? dateLabel(`${day}T12:00:00+03:00`) : "Date unavailable"}</AuditDay>
-                {events.map(row => {
-                  const kind = auditCategory(row.action), Icon = categoryIcons[kind], reference = auditReference(row), link = eventLink(row);
-                  return <AuditEvent key={row.id} data-audit-event={row.id}>
-                    <summary>
-                      <EventIcon $category={kind}><Icon /></EventIcon>
-                      <EventText><strong>{auditActionLabel(row.action)}</strong><span>{auditActorLabel(row.actor)} · {auditTargetLabel(row.targetType)}</span></EventText>
-                      <EventTime dateTime={row.at}>{timeLabel(row.at)}</EventTime>
-                      <ChevronDownIcon />
-                    </summary>
-                    <EventDetails>
-                      <EventFacts>
-                        <Fact label="Category" value={auditCategoryLabel(kind)} />
-                        <Fact label="Event reference" value={row.id} />
-                        {reference && reference !== row.accountId && <Fact label="Record reference" value={reference} />}
-                        {row.accountId && <Fact label="Subscriber reference" value={row.accountId} />}
-                      </EventFacts>
-                      {link && <EventLink href={link.href} variant="secondary" prefetch={false}>{link.label}</EventLink>}
-                    </EventDetails>
-                  </AuditEvent>;
-                })}
-              </Fragment>)}
-          </AuditFeed>
-          {pageCount > 1 && <AuditPager aria-label="Audit pages">
-            <TextAction type="button" disabled={currentPage === 0 || pending} onClick={() => paginate(currentPage - 1)}><ChevronLeftIcon />Previous</TextAction>
-            <span>Page {currentPage + 1} of {pageCount}</span>
-            <TextAction type="button" disabled={currentPage === pageCount - 1 || pending} onClick={() => paginate(currentPage + 1)}>Next<ChevronRightIcon /></TextAction>
-          </AuditPager>}
-        </FeedPanel>
-      </DeskColumn>
+    <RecordHead><h1>Audit log</h1><HeadActions>{exportButton}</HeadActions></RecordHead>
+    {exportStatus && <RecordFeedback><Notice role="status">{exportStatus}</Notice></RecordFeedback>}
+    <RecordList aria-label="Audit activity list">
       <AuditTools role="search" aria-label="Find audit activity">
         <SearchField>
           <TextInput id="audit-search" type="search" label="Search recent activity" placeholder="Event, person or reference" leading={<SearchIcon />}
@@ -164,8 +124,67 @@ export function AuditReport({ rows, actions, action }: { rows: readonly OwnerAud
             </SelectInput>
           </FilterBody>
         </FilterDrawer>
-        {exportButton("panel")}
       </AuditTools>
-    </DeskGrid>
+      <AuditFeed as="section" id="audit-results" tabIndex={0} aria-label="Audit activity" aria-busy={pending}>
+        {matches.length === 0 ? <EmptyPanel data-audit-empty><SearchIcon /><strong>{filtered ? "No matching activity" : "No activity yet"}</strong></EmptyPanel>
+          : [...groups].map(([day, events]) => <Fragment key={day}>
+            <AuditDay>{day ? dateLabel(`${day}T12:00:00+03:00`) : "Date unavailable"}</AuditDay>
+            {events.map(row => {
+              const kind = auditCategory(row.action), Icon = categoryIcons[kind], reference = auditReference(row), link = eventLink(row);
+              return <AuditEvent key={row.id} data-audit-event={row.id}>
+                <summary aria-current={selected?.id === row.id ? "true" : undefined} onClick={event => {
+                  setSelectedId(row.id);
+                  if (window.matchMedia("(min-width: 64rem)").matches) event.preventDefault();
+                }}>
+                  <EventIcon $category={kind}><Icon /></EventIcon>
+                  <EventText><strong>{auditActionLabel(row.action)}</strong><span>{auditActorLabel(row.actor)} · {auditTargetLabel(row.targetType)}</span></EventText>
+                  <EventTime dateTime={row.at}>{timeLabel(row.at)}</EventTime><ChevronDownIcon />
+                </summary>
+                <EventDetails data-audit-inline-details>
+                  <EventFacts>
+                    <Fact label="Category" value={auditCategoryLabel(kind)} /><Fact label="Event reference" value={row.id} />
+                    {reference && reference !== row.accountId && <Fact label="Record reference" value={reference} />}
+                    {row.accountId && <Fact label="Subscriber reference" value={row.accountId} />}
+                  </EventFacts>
+                  {link && <EventLink href={link.href} variant="secondary" prefetch={false}>{link.label}</EventLink>}
+                </EventDetails>
+              </AuditEvent>;
+            })}
+          </Fragment>)}
+      </AuditFeed>
+      <RecordListFooter>
+        <AuditSummary>
+          <div>
+            <p aria-live="polite" data-audit-count>{pending ? "Loading activity…" : <b>{matches.length} {matches.length === 1 ? "event" : "events"}</b>}
+              {!pending && matches.length > pageSize && ` · ${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, matches.length)} shown`}</p>
+            {filtered && <TextAction type="button" disabled={pending} onClick={reset}><ResetIcon />Reset filters</TextAction>}
+          </div>
+          <p>Up to 100 recent {action ? "matching " : ""}events · EAT</p>
+        </AuditSummary>
+          {pageCount > 1 && <AuditPager aria-label="Audit pages">
+            <TextAction type="button" disabled={currentPage === 0 || pending} onClick={() => paginate(currentPage - 1)}><ChevronLeftIcon />Previous</TextAction>
+            <span>Page {currentPage + 1} of {pageCount}</span>
+            <TextAction type="button" disabled={currentPage === pageCount - 1 || pending} onClick={() => paginate(currentPage + 1)}>Next<ChevronRightIcon /></TextAction>
+          </AuditPager>}
+      </RecordListFooter>
+    </RecordList>
+    <AuditDetails aria-label="Selected audit event">
+      <RecordCard key={selected?.id ?? "empty"} data-audit-detail={selected?.id}>
+        <RecordScroll tabIndex={0} aria-label="Audit event details">
+          {selected ? <>
+            <RecordDetailHead><h2>{auditActionLabel(selected.action)}</h2><EventTime dateTime={selected.at}>{dateLabel(selected.at)} · {timeLabel(selected.at)} EAT</EventTime></RecordDetailHead>
+            <RecordBody><Panel><PanelBody><EventFacts>
+              <Fact label="Performed by" value={auditActorLabel(selected.actor)} />
+              <Fact label="Record type" value={auditTargetLabel(selected.targetType)} />
+              <Fact label="Category" value={auditCategoryLabel(auditCategory(selected.action))} />
+              <Fact label="Event reference" value={selected.id} />
+              {auditReference(selected) && auditReference(selected) !== selected.accountId && <Fact label="Record reference" value={auditReference(selected)} />}
+              {selected.accountId && <Fact label="Subscriber reference" value={selected.accountId} />}
+            </EventFacts></PanelBody></Panel></RecordBody>
+          </> : <EmptyPanel><DocumentIcon /><strong>Select an audit event</strong><p>Choose another filter to find an event.</p></EmptyPanel>}
+        </RecordScroll>
+        {selectedLink && <RecordFooter><EventLink href={selectedLink.href} variant="secondary" prefetch={false}>{selectedLink.label}</EventLink></RecordFooter>}
+      </RecordCard>
+    </AuditDetails>
   </AuditLayout>;
 }

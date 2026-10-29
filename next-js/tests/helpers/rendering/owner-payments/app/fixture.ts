@@ -2,6 +2,7 @@ import "server-only";
 import { createHmac, randomUUID } from "node:crypto";
 import { normalizePhone } from "@/domain/phone";
 import { codeStatus } from "@/domain/subscription-period";
+import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 import type { OwnerAccount, OwnerCode } from "@/domain/owner-members";
 import type { AnalyticsServices } from "@/server/analytics/analytics-http";
 import { memberTokenHash } from "@/server/members/member-sessions";
@@ -19,6 +20,7 @@ export const fixturePlan = { id: planId, name: "Weekly", durationDays: 7, priceU
 export const fixturePaymentPlans = [fixturePlan,
   { ...fixturePlan, id: "00000000-0000-4000-8000-000000000002", name: "Daily", durationDays: 1, priceUgx: 1000, sortOrder: 1 },
   { ...fixturePlan, id: "00000000-0000-4000-8000-000000000003", name: "Monthly", durationDays: 30, priceUgx: 15000, sortOrder: 2 }];
+type FixturePlan = typeof fixturePlan;
 export type FixtureAccount = { id: string; phone: string | null; blockedAt: Date | null; blockedReason: string | null;
   ownerNote: string | null; erasedAt: Date | null; lastSignInAt: Date; trialRequestedAt: Date | null;
   trialDismissedAt: Date | null; passwordResetRequestedAt: Date | null };
@@ -36,7 +38,7 @@ type FixtureAudit = { id: bigint; at: Date; actor: string; action: string; accou
 type FixtureNotice = { id: string; accountId: string; targetType: string; decision: string; targetId: string; status: string; attemptId: string | null;
   createdAt: Date; startedAt: Date | null; finishedAt: Date | null };
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
-  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; paymentsQueueExpanded?: boolean;
+  plans: FixturePlan[]; payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; paymentsQueueExpanded?: boolean;
   movedAccountIds?: string[]; notices?: FixtureNotice[] };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
@@ -84,7 +86,7 @@ function initialState(): FixtureState {
   payments: [{ id: paymentId, reference: "TEST", accountId, payerPhone: "256700000102", claimedNetwork: "mtn",
     claimedTxnRef: "TEST1234", claimedTxnKey: "TEST1234", claimedAmountUgx: 5000, amountReceivedUgx: null,
     planId, planName: "Weekly", durationDays: 7, priceUgx: 5000, submittedAt: at, status: "pending", imageSha256: null, screenshot: null, transactionRef: null }],
-  audits: initialAudits(codes[0]!.id), counter: 400 });
+  plans: [fixturePlan], audits: initialAudits(codes[0]!.id), counter: 400 });
 }
 
 /** State belongs only to this isolated Next process. It never connects to business storage or a messaging provider. */
@@ -101,6 +103,7 @@ export function loadPaymentsFixture() {
   const state = fixtureState();
   if (state.paymentsExpanded) return;
   state.paymentsExpanded = true;
+  state.plans.push(...structuredClone(fixturePaymentPlans.filter(plan => !state.plans.some(existing => existing.id === plan.id))));
   const original = state.payments[0]!;
   // Keep a visible sender warning in the first review and duplicate evidence on the attached report.
   original.payerPhone = "256700000118";
@@ -186,7 +189,7 @@ export function fixtureSnapshot() {
     ownerNote: row.ownerNote, blockedReason: row.blockedReason,
     devices: state.devices.filter(device => device.accountId === row.id && device.unlocked).length })),
     codes: fixtureCodes(), payments: state.payments.map(row => ({ id: row.id, accountId: row.accountId, payerPhone: row.payerPhone, status: row.status })),
-    audits: state.audits.map(row => ({ accountId: row.accountId, action: row.action })), plans: [fixturePlan.id] };
+    audits: state.audits.map(row => ({ accountId: row.accountId, action: row.action })), plans: state.plans.map(plan => plan.id) };
 }
 
 type AccountQuery = { where?: { phone?: string | { in?: string[] }; passwordResetRequestedAt?: unknown } };
@@ -227,10 +230,25 @@ function auditRows(rows: FixtureAudit[], query: AuditQuery = {}) {
 }
 const ownedRows = <T extends { accountId: string }>(rows: T[], query?: OwnedQuery) => query?.where?.accountId
   ? rows.filter(row => row.accountId === query.where!.accountId) : rows;
+type PlanQuery = { where?: { id?: string | { in?: string[]; not?: string }; active?: boolean } };
+function planRows(rows: FixturePlan[], query: PlanQuery = {}) {
+  const where = query.where;
+  return rows.filter(row => (where?.active === undefined || row.active === where.active)
+    && (!where?.id || (typeof where.id === "string" ? row.id === where.id
+      : (!where.id.in || where.id.in.includes(row.id)) && row.id !== where.id.not)))
+    .sort((a, b) => a.sortOrder - b.sortOrder || +a.createdAt - +b.createdAt || a.id.localeCompare(b.id));
+}
 function createClient(emptySubscribers: boolean) {
   const state = fixtureState(), phoneFor = (id: string) => state.accounts.find(row => row.id === id)?.phone ?? null;
+  const settings = { ...defaultSubscriptionSettings, id: 1, updatedAt: at, paymentNumbersChangedAt: at };
   return {
-    $executeRaw: async () => 0, $queryRaw: async () => [{ total: 1n }],
+    $executeRaw: async () => 0,
+    $queryRaw: async (parts: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = parts.join("?");
+      if (sql.includes("FROM SubscriptionPlan")) return state.plans.filter(plan => !values.length || plan.id === values[0]).map(({ id }) => ({ id }));
+      if (sql.includes("FROM SubscriptionSettings")) return [{ id: 1 }];
+      return [{ total: 1n }];
+    },
     memberSession: { findMany: async (query?: OwnedQuery) => ownedRows(state.devices, query).filter(row => !query?.where?.codeEnteredAt || row.unlocked),
       findUnique: async ({ where }: { where: { tokenHash: string } }) => {
         if (where.tokenHash !== memberTokenHash(fixtureAdminToken)) return null;
@@ -240,7 +258,16 @@ function createClient(emptySubscribers: boolean) {
           adminPasswordVersion: fixtureKey("admin-password-version", `plain:${fixtureAdminPassword}`),
           account: { phone: fixtureAdminPhone, passwordHash: null, phoneVerifiedAt: now, blockedAt: null, erasedAt: null } };
       }, updateMany: async () => ({ count: 0 }) },
-    subscriptionPlan: { findMany: async () => state.paymentsExpanded ? fixturePaymentPlans : [fixturePlan] },
+    subscriptionPlan: { findMany: async (query?: PlanQuery) => planRows(state.plans, query),
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+        const row = state.plans.find(plan => plan.id === where.id);if (!row) throw new Error("Synthetic plan not found.");return row;
+      }, count: async (query?: PlanQuery) => planRows(state.plans, query).length,
+      aggregate: async () => ({ _max: { sortOrder: state.plans.length ? Math.max(...state.plans.map(plan => plan.sortOrder)) : null } }),
+      create: async ({ data }: { data: FixturePlan }) => { state.plans.push(data);return data; },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FixturePlan> }) => {
+        const index = state.plans.findIndex(plan => plan.id === where.id);if (index < 0) throw new Error("Synthetic plan not found.");
+        const row = { ...state.plans[index]!, ...data };state.plans[index] = row;return row;
+      } },
     paymentSubmission: { findMany: async (query?: PaymentQuery) => paymentRows(state.payments, query).map(row => ({ purpose: "plan", ...row, account: { phone: phoneFor(row.accountId), creditUgx: 0 } })),
       count: async (query?: PaymentQuery) => paymentRows(state.payments, query).length, aggregate: async () => ({ _sum: { amountReceivedUgx: 5000 } }) },
     paymentScreenshot: { findUnique: async ({ where }: { where: { submissionId: string } }) => state.payments.some(row => row.id === where.submissionId && row.screenshot)
@@ -260,22 +287,33 @@ function createClient(emptySubscribers: boolean) {
     ownerAuditEvent: { findMany: async (query: AuditQuery = {}) => {
       const rows = auditRows(state.audits, query);
       return query.select ? rows.map(row => Object.fromEntries(Object.entries(query.select!).filter(([, included]) => included).map(([key]) => [key, row[key as keyof FixtureAudit]]))) : rows;
-    }, count: async (query?: AuditQuery) => auditRows(state.audits, query).length }, rateLimitBucket: { findMany: async () => [] },
+    }, count: async (query?: AuditQuery) => auditRows(state.audits, query).length,
+      create: async ({ data }: { data: Omit<FixtureAudit, "id"> }) => { const row = { ...data, id: BigInt(++state.counter) };state.audits.push(row);return row; } },
+    rateLimitBucket: { findMany: async () => [] },
     walletEntry: { findMany: async () => [] },
     // Overview inspection reads stored notices only; it never dispatches a message.
     paymentNotificationOutbox: { findMany: async () => (state.notices ?? []).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
       count: async () => state.notices?.length ?? 0 },
     accessCode: { findMany: async (query?: OwnedQuery) => ownedRows(state.codes, query).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
       aggregate: async () => ({ _sum: { amountReceivedUgx: 3000 } }), count: async () => state.codes.length },
-    subscriptionSettings: { findUnique: async () => ({ paymentNumbersChangedAt: at }) },
+    subscriptionSettings: { findUnique: async () => settings, findUniqueOrThrow: async () => settings },
   };
 }
 export function seed({ emptySubscribers = false }: { emptySubscribers?: boolean } = {}) {
   const registered = fixtureGlobal.goalHintOwnerServices ??= new Map();
   let services = registered.get(emptySubscribers);
   if (!services) {
+    let queue = Promise.resolve<unknown>(undefined);
     services = { config: { production: false, key: fixtureKey, cookies: { session: "synthetic-owner", exclude: "synthetic-owner-exclude", secure: false } },
-      database: { query: async (run: (client: unknown) => unknown) => run(createClient(emptySubscribers)) },
+      database: { query: async (run: (client: unknown) => unknown) => run(createClient(emptySubscribers)),
+        transaction(run: (client: unknown) => unknown) {
+          const result = queue.then(async () => {
+            const before = structuredClone(fixtureState());
+            try { return await run(createClient(emptySubscribers)); }
+            catch (error) { fixtureGlobal.goalHintOwnerFixture = before;throw error; }
+          });
+          queue = result.catch(() => undefined);return result;
+        } },
       auth: null } as unknown as AnalyticsServices;
     registered.set(emptySubscribers, services);
   }
