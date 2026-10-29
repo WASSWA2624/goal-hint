@@ -36,7 +36,8 @@ type FixtureAudit = { id: bigint; at: Date; actor: string; action: string; accou
 type FixtureNotice = { id: string; accountId: string; targetType: string; decision: string; targetId: string; status: string; attemptId: string | null;
   createdAt: Date; startedAt: Date | null; finishedAt: Date | null };
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
-  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; movedAccountIds?: string[]; notices?: FixtureNotice[] };
+  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; paymentsQueueExpanded?: boolean;
+  movedAccountIds?: string[]; notices?: FixtureNotice[] };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
 
@@ -123,6 +124,24 @@ export function loadPaymentsFixture() {
     payment("06", { status: "reversed", claimedTxnRef: "MTN2026102206", claimedTxnKey: "MTN2026102206",
       amountReceivedUgx: 5000, network: "mtn", transactionRef: "MTN2026102206", approvedTxnKey: "mtn:MTN2026102206" }),
   );
+}
+/** A genuine thirty-report queue for independent-pane browser checks; the review baseline remains unchanged. */
+export function loadPaymentsQueueFixture() {
+  loadPaymentsFixture();
+  const state = fixtureState();
+  if (state.paymentsQueueExpanded) return;
+  state.paymentsQueueExpanded = true;
+  const original = state.payments[0]!;
+  state.payments.push(...Array.from({ length: 27 }, (_, index): FixturePayment => {
+    const plan = fixturePaymentPlans[index % fixturePaymentPlans.length]!, network = index % 2 ? "airtel" : "mtn";
+    const transaction = `QUEUE20261029${String(index + 1).padStart(3, "0")}`;
+    return { ...original, id: `00000000-0000-4000-8000-${String(700 + index).padStart(12, "0")}`,
+      reference: `QUEUE${String(index + 1).padStart(3, "0")}`, accountId: "00000000-0000-4000-8000-000000000102",
+      payerPhone: "256700000118", claimedNetwork: network, claimedTxnRef: transaction, claimedTxnKey: transaction,
+      claimedAmountUgx: plan.priceUgx, planId: plan.id, planName: plan.name, durationDays: plan.durationDays,
+      priceUgx: plan.priceUgx, submittedAt: new Date(+original.submittedAt + (index + 1) * 60000),
+      screenshot: null, imageSha256: null };
+  }));
 }
 export function fixtureAccountForPhone(phone: string): FixtureAccount {
   const state = fixtureState(), existing = state.accounts.find(row => row.phone === phone);

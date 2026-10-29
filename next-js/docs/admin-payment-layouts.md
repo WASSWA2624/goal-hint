@@ -1,5 +1,10 @@
 # Desktop payment layout review
 
+The desktop Payments screen now uses **02 · Compact queue**, with the separate
+queue heading removed. Search and filters sit directly above the payment list.
+The other nine concepts remain available for comparison. The live screen uses
+the existing payment services and real evidence; this gallery uses sample data.
+
 Open `/admin-payment-layouts/index.html` on the running application. The local
 review is at <http://localhost:3000/admin-payment-layouts/index.html>.
 The HTML carries `noindex, nofollow` metadata.
@@ -37,8 +42,8 @@ and illustrative decision feedback. Only the shortlist and theme persist.
 The eighty fictional reports do not load private data or call payment APIs.
 The receipt is a clearly marked illustrative document. A production
 implementation should retain the existing real evidence and review services.
-The live Payments screen and mobile implementation are not changed by this
-review.
+The gallery never changes a payment. The production desktop implementation
+uses the selected layout; mobile keeps its queue-to-review navigation.
 
 This is a buildless preview, following the existing `public/payment-samples/`
 pattern. It reuses the local Goal Hint and payment-provider artwork. No package

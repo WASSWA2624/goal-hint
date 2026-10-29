@@ -2,6 +2,9 @@
 
 ## Scope
 
+Selection: **02 · Compact queue**, implemented in plan 136 with the queue
+heading block omitted at the user's request.
+
 Prepare ten interactive desktop-only Payments layouts for selection before
 changing the live review workflow. Keep the current admin menu and four status
 tabs, remove the page title, and introduce a left payment queue beside a

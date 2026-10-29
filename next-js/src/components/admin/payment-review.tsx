@@ -14,6 +14,7 @@ import { ActionButton, CheckField, DangerButton, FieldBlock, FieldRow, FormStack
 import { ManualCodeForm, type CodeAction } from "./code-tools";
 import { DrawerNote, FactList, TextAction, ZoneLabel } from "./desk-styles";
 import { NetworkChip, networkLabel } from "./network-chip";
+import { CompactAmountSummary, CompactReviewScroll, CompactReviewSummary } from "./payment-compact-styles";
 import { ApprovalForm, BigAmount, CheckList, CopyRow, DecisionBar, DecisionPanel, DecisionZone, ExpectedZone, NetworkValue, PaymentBadge, PaymentWarnings,
   ProofActions, ProofFrame, ProofImage, ProofToggle, ProofZone, RecoveryStack, RejectDrawer, RejectToggle, ReviewCard, ReviewHead, ReviewMeta, ReviewZones, ShieldMark,
   ZoneDrawer } from "./payment-styles";
@@ -76,19 +77,31 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
   function closedReject(drawer: HTMLDetailsElement) {
     setRejecting(drawer.open);
     const lost = document.activeElement === document.body || drawer.contains(document.activeElement);
-    if (!drawer.open && lost && getComputedStyle(drawer).display === "none") drawer.parentElement?.querySelector<HTMLElement>("[data-reject-toggle]")?.focus();
+    if (!drawer.open && lost && getComputedStyle(drawer).display === "none") drawer.closest("[data-payment-review]")?.querySelector<HTMLElement>("[data-reject-toggle]")?.focus();
   }
 
   return <ReviewCard id={p.id} data-payment-review={p.id}>
-    <ReviewHead>
+    <CompactReviewScroll data-payment-review-scroll tabIndex={0} aria-label="Payment details">
+    <ReviewHead data-payment-head>
       {nav}
       <h2 id="payment-review-title" tabIndex={-1}>{phoneLabel(p.accountPhone)}</h2>
       <PaymentBadge data-review-badge $status={reversed ? "reversed" : p.status}>{reversed ? "Reversed" : p.status === "superseded" ? "Replaced report" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}</PaymentBadge>
       <ReviewMeta data-review-meta>{p.reference} · {formatPeriodEnd(new Date(p.submittedAt))}</ReviewMeta>
       <TextAction as={Link} data-review-link href={`/admin/subscribers?accountId=${encodeURIComponent(p.accountId)}`} prefetch={false}><UserIcon />View subscriber</TextAction>
     </ReviewHead>
-    <ReviewZones $proof={p.hasImage}>
-      {p.hasImage && <ProofZone aria-label="Proof">
+    <CompactReviewSummary $tone={warnings.length ? "warning" : checks.length && allClear ? "good" : "neutral"}>
+      {warnings.length ? <AlertIcon /> : <ShieldIcon />}<div><strong>{warnings.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"} to review` : pending ? "Ready for manual review" : "Reviewed payment"}</strong>
+        <small>{warnings.length ? "Review the warnings below before confirming the received transfer." : checks.length ? "Review the checks and confirm the received transfer." : "Confirm the received transfer against the report."}</small></div>
+      <span data-payment-summary-count>{checks.length} check{checks.length === 1 ? "" : "s"}</span>
+    </CompactReviewSummary>
+    <CompactAmountSummary>
+      <div><small>{typeof receivedAmount === "number" ? "Amount received" : "Amount reported"}</small><strong>{formatUgx(receivedAmount ?? p.amount)}</strong>
+        {p.purpose !== "topup" && (receivedAmount ?? p.amount) !== price && <small>Package price: {formatUgx(price)}</small>}</div>
+      <div><span data-payment-package>{topUp ? "Credit top-up" : p.planName}</span><small>{!topUp && p.durationDays !== null ? `${formatPlanLength(p.durationDays)} of access` : "Account credit"}</small></div>
+      <span data-payment-submitted>Submitted {formatPeriodEnd(new Date(p.submittedAt))}</span>
+    </CompactAmountSummary>
+    <ReviewZones $proof={p.hasImage} data-payment-zones>
+      {p.hasImage && <ProofZone aria-label="Proof" data-payment-zone="proof">
         <ZoneLabel>Proof</ZoneLabel>
         <ProofFrame id={`${p.id}-proof`} $clipped={tall && !zoomed}><ProofImage ref={measure} src={screenshot} alt={`Payment screenshot ${p.reference}`} onLoad={event => measure(event.currentTarget)} /></ProofFrame>
         <ProofActions $hideLink={tall && !zoomed}>
@@ -96,11 +109,11 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
           <TextAction as="a" href={screenshot} target="_blank" rel="noopener noreferrer" aria-label={`Open full screenshot ${p.reference}`} data-payment-attachment><ExpandIcon />Open full size</TextAction>
         </ProofActions>
       </ProofZone>}
-      <ExpectedZone aria-labelledby={`${p.id}-expected`}>
-        <BigAmount><ZoneLabel id={`${p.id}-expected`}>{typeof receivedAmount === "number" ? "Amount received" : "Expected payment"}</ZoneLabel>
+      <ExpectedZone aria-labelledby={`${p.id}-expected`} data-payment-zone="expected">
+        <BigAmount data-payment-amount><ZoneLabel id={`${p.id}-expected`}>{typeof receivedAmount === "number" ? "Amount received" : "Expected payment"}</ZoneLabel>
           <strong>{formatUgx(receivedAmount ?? p.price)}</strong>
           {(pending || !p.final) && p.amount !== p.price && <span>Reported amount: {formatUgx(p.amount)}</span>}</BigAmount>
-        <FactList>
+        <FactList data-payment-facts>
           <div><dt>For</dt><dd>{topUp || p.durationDays === null ? "Credit top-up" : `${p.planName} · ${formatPlanLength(p.durationDays)}`}</dd></div>
           <div><dt>Network</dt><NetworkValue><NetworkChip network={shownNetwork} />{networkLabel(shownNetwork)}</NetworkValue></div>
           <div><dt>Paid from</dt><dd>{p.payerPhone ? phoneLabel(p.payerPhone) : "Not provided"}</dd></div>
@@ -108,12 +121,12 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
           <div><dt>Credit now</dt><dd>{formatUgx(p.accountCreditUgx)}</dd></div>
         </FactList>
         {warnings.length > 0 && <PaymentWarnings role="note" aria-label="Payment warnings">{warnings.map(text => <p key={text}><AlertIcon />{text}</p>)}</PaymentWarnings>}
-        {checks.length > 0 && <ZoneDrawer>
+        {checks.length > 0 && <ZoneDrawer data-payment-checks>
           <summary><ShieldMark $clear={allClear}><ShieldIcon /></ShieldMark>{warnings.length ? "Other checks" : "Checks"}<DrawerNote>{allClear ? `all ${checks.length} clear` : `(${checks.length})`}</DrawerNote><ChevronDownIcon /></summary>
           <div><CheckList aria-label="Automatic checks">{checks.map(check => <li key={check.text} data-tone={check.tone}>{check.tone === "good" ? <CheckIcon /> : <InfoIcon />}{check.text}</li>)}</CheckList></div>
         </ZoneDrawer>}
       </ExpectedZone>
-      <DecisionZone>
+      <DecisionZone data-payment-zone="decision">
         {pending ? <>
           <ApprovalForm id={approvalId} method="post" action={`/api/admin/payments/${p.id}`} onSubmit={approve} aria-labelledby={`${p.id}-decision`} data-payment-approval>
             <ZoneLabel id={`${p.id}-decision`}>Decision</ZoneLabel>
@@ -145,12 +158,6 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
               {p.hasImage && <CheckField><input type="checkbox" name="deleteImage" disabled={action.busy} />Delete screenshot</CheckField>}
               <DangerButton type="submit" disabled={action.busy} data-reject-inline>Reject payment</DangerButton></FormStack></form></div>
           </RejectDrawer>
-          <DecisionBar $rejecting={rejecting} data-decision-bar>
-            <RejectToggle type="button" $open={rejecting} aria-expanded={rejecting} aria-controls={rejectId} disabled={action.busy} onClick={toggleReject}
-              data-reject-toggle>{rejecting ? "Cancel" : <><CloseIcon />Reject</>}</RejectToggle>
-            <ActionButton type="submit" form={approvalId} $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : topUp ? "Approve top-up" : "Approve payment"}</ActionButton>
-            <DangerButton type="submit" form={`${rejectId}-form`} disabled={action.busy} data-reject-submit><CloseIcon />Reject payment</DangerButton>
-          </DecisionBar>
         </> : <DecisionPanel>
           <ZoneLabel>Decision</ZoneLabel>
           <FactList>
@@ -172,5 +179,13 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
         </DecisionPanel>}
       </DecisionZone>
     </ReviewZones>
+    </CompactReviewScroll>
+    {pending && <DecisionBar $rejecting={rejecting} data-decision-bar>
+      <span data-payment-footer-summary>{p.reference} · {formatUgx(receivedAmount ?? p.amount)}</span>
+      <RejectToggle type="button" $open={rejecting} aria-expanded={rejecting} aria-controls={rejectId} disabled={action.busy} onClick={toggleReject}
+        data-reject-toggle>{rejecting ? "Cancel" : <><CloseIcon />Reject</>}</RejectToggle>
+      <ActionButton type="submit" form={approvalId} $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : topUp ? "Approve top-up" : "Approve payment"}</ActionButton>
+      <DangerButton type="submit" form={`${rejectId}-form`} disabled={action.busy} data-reject-submit><CloseIcon />Reject payment</DangerButton>
+    </DecisionBar>}
   </ReviewCard>;
 }

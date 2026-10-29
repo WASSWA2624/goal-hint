@@ -3,7 +3,7 @@ import { AdminFrame } from "@/app/_components/admin-frame";
 import { PaymentsEditor } from "@/components/admin/payments-editor";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
-import { DeskHead } from "@/components/admin/desk-styles";
+import { PaymentUnavailable } from "@/components/admin/payment-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { createPaymentReview } from "@/server/admin/payment-review";
 import { plansServiceFor } from "@/server/members/plans";
@@ -21,5 +21,5 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
     createPaymentReview(db).list(tab).catch(() => null),
     plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
-  return <AdminFrame database={page.services.database} {...(data ? { pendingCount: data.pendingCount } : {})}>{data ? <PaymentsEditor queue={data} tab={tab} plans={plans} /> : <><DeskHead><h1>Payments</h1></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>}</AdminFrame>;
+  return <AdminFrame database={page.services.database} {...(data ? { pendingCount: data.pendingCount } : {})}>{data ? <PaymentsEditor queue={data} tab={tab} plans={plans} /> : <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">Member storage is unavailable.</Notice></PaymentUnavailable>}</AdminFrame>;
 }

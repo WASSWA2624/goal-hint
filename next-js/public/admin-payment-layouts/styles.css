@@ -219,7 +219,9 @@ label { min-width: 0; }
 [data-layout="inbox"] { --queue-width: 350px; }
 [data-layout="inbox"] .proof-section { grid-row: span 2; }
 [data-layout="compact"] { --queue-width: 365px; }
-[data-layout="compact"] .queue-header { padding-block: 14px 12px; }
+[data-layout="compact"] .queue-pane { grid-template-rows: auto minmax(0, 1fr) 30px; }
+[data-layout="compact"] .queue-header { display: none; }
+[data-layout="compact"] .queue-tools { padding-top: 14px; }
 [data-layout="compact"] .payment-row { padding-block: 10px; gap: 8px; }
 [data-layout="compact"] .payment-main, [data-layout="compact"] .payment-side { gap: 3px; }
 [data-layout="compact"] #detail-content { padding: 20px; }

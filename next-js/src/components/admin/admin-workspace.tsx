@@ -76,14 +76,14 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
     return watchPendingPaymentTitle(document, count ?? 0, current === "payments", () => window.location.pathname === pathname);
   }, [current, count, pathname]);
   return (
-    <Frame data-analytics-ignore>
-      <Sidebar aria-label="Admin sections">
+    <Frame data-analytics-ignore $fixed={current === "payments"}>
+      <Sidebar aria-label="Admin sections" $fixed={current === "payments"}>
         <Caption>Admin</Caption>
         <SectionLinks current={current} passwordRequests={passwordRequests} />
       </Sidebar>
       <SectionMenu current={current} passwordRequests={passwordRequests} />
-      <Main id="main-content" tabIndex={-1}>
-        <Column $wide={current === "analytics"}>{children}</Column>
+      <Main id="main-content" tabIndex={-1} $fixed={current === "payments"}>
+        <Column $wide={current === "analytics" || current === "payments"} $fixed={current === "payments"}>{children}</Column>
       </Main>
     </Frame>
   );
@@ -116,15 +116,16 @@ export const AdminMark = styled.span`
 `;
 
 const sidebarWidth = "14.5rem";
-const Frame = styled.div`
+const Frame = styled.div<{ $fixed: boolean }>`
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   min-inline-size: 0;
   ${media.desktop} { grid-template-columns: ${sidebarWidth} minmax(0, 1fr); align-content: stretch; }
+  ${({ $fixed }) => $fixed && css`${media.desktop} { block-size: calc(100dvh - var(--app-header-height, 3rem)); flex: none; min-block-size: 0; overflow: hidden; }`}
 `;
-const Sidebar = styled.nav`
+const Sidebar = styled.nav<{ $fixed: boolean }>`
   display: none;
   ${media.desktop} {
     display: block;
@@ -140,6 +141,7 @@ const Sidebar = styled.nav`
   }
   ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
   li[data-separated] { margin-block-start: 10px; padding-block-start: 10px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; max-block-size: 100%; min-block-size: 0; overflow-x: hidden; }`}
 `;
 const Caption = styled.p`
   padding: 0 10px 8px;
@@ -227,13 +229,14 @@ const MenuPopup = styled.nav`
   ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
   li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
 `;
-const Main = styled.main`
+const Main = styled.main<{ $fixed: boolean }>`
   min-inline-size: 0;
   padding: 20px 16px calc(40px + 3.5rem + 1px + env(safe-area-inset-bottom));
   &:focus { outline: none; }
   ${media.desktop} { padding: 24px 28px 48px; }
+  ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
 `;
-const Column = styled.div<{ $wide: boolean }>`
+const Column = styled.div<{ $wide: boolean; $fixed: boolean }>`
   display: grid;
   gap: 16px;
   align-content: start;
@@ -241,4 +244,5 @@ const Column = styled.div<{ $wide: boolean }>`
   max-inline-size: ${({ $wide }) => $wide ? "100%" : "76rem"};
   margin-inline: auto;
   ${({ $wide }) => !$wide && css`${media.desktop} { gap: 20px; }`}
+  ${({ $fixed }) => $fixed && css`${media.desktop} { inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0; }`}
 `;

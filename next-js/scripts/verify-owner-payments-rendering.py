@@ -378,8 +378,13 @@ def payments_rendering(origin):
                 row_text = unescape(re.sub(r'<[^>]+>', " ", row))
                 match(r'\+\d|Payer not provided', row_text, "Queue rows identify the payer or a missing payer.")
                 match(r'UGX\s+[\d,]+', row_text)
-                match(r'\bP(?:TEST|DEMO\d+)\b', row_text, "Queue tickets lead with the payment reference.")
-                no_match(r'Expected|EAT|No screenshot|<time\b', row)
+                match(r'\bP(?:TEST|DEMO\d+)\b', row_text, "Queue entries retain their payment reference.")
+                match(r'data-payment-logo="(?:mtn|airtel)"', row, "Queue entries identify the payment provider with its artwork.")
+                match(r'\b(?:Weekly|Monthly|Daily)\b', row_text, "The purchased package stays visible in the queue.")
+                match(r'\b\d{1,2}\s+Oct\b', row_text, "Queue entries include the submission date.")
+                match(r'\b\d{2}:\d{2}\b', row_text, "Queue entries include the submission time.")
+                match(r'\bEAT\b', row_text, "Queue timestamps name the dashboard timezone.")
+                no_match(r'Expected|No screenshot', row)
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
             assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
             if tab == "superseded":
@@ -406,6 +411,31 @@ def payments_rendering(origin):
                 no_match(r'No screenshot available', html)
             no_match(r'data-payment-trials|Free trial requests|Grant free trial', html)
             no_match(r'<img\b[^>]*src="/api/admin/payments/', html, "The first report in these tab fixtures has no image.")
+    finally:
+        fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
+
+
+def payments_queue_rendering(origin):
+    """The opt-in long queue mounts actual reports in the shared desktop scroll regions."""
+    fixture_json(origin, "/api/fixture/payments", {"scenario": "queue"})
+    try:
+        response = request(origin, "/admin/payments?fixture=queue")
+        html = visible_html(response.text)
+        assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
+        editor = match(r'<div\b(?=[^>]*data-payments-editor)[^>]*>', html).group(0)
+        match(r'data-layout="compact"', editor)
+        assert html.count("data-payment-queue-scroll") == 1
+        assert html.count("data-payment-review-scroll") == 1
+        rows = re.findall(r'data-payment-row="([^"]+)"', html)
+        assert len(rows) == 30 and len(set(rows)) == 30
+        assert len(re.findall(r'data-payment-review="([^"]+)"', html)) == 1
+        status, queue = fixture_json(origin, "/api/admin/payments?tab=pending")
+        assert status == 200 and queue["pendingCount"] == 30
+        assert [row["id"] for row in queue["payments"]] == rows
+        assert len([row for row in queue["payments"] if row["reference"].startswith("PQUEUE")]) == 27
+        assert {row["planName"] for row in queue["payments"]} == {"Weekly", "Monthly", "Daily"}
+        match(r'href="/admin/payments\?tab=pending"', html)
+        assert request(origin, "/admin/payments?fixture=queue", headers={"Cookie": ""}).status == 307
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
@@ -511,6 +541,7 @@ def main():
         settings_rendering(server.origin)
         audit_rendering(server.origin)
         payments_rendering(server.origin)
+        payments_queue_rendering(server.origin)
         payments_api(server.origin)
         print("PASS all nine owner routes and regular navigation; subscriber actions, Settings saves/modes, audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
@@ -518,5 +549,6 @@ def main():
             print(f"Settings browser entry: {server.origin}/api/fixture/session?page=settings&scenario=writable", flush=True)
             print(f"Audit browser entry: {server.origin}/api/fixture/session?page=audit", flush=True)
             print(f"Payments browser entry: {server.origin}/api/fixture/session?page=payments", flush=True)
+            print(f"Long payment queue browser entry: {server.origin}/api/fixture/session?page=payments&scenario=queue", flush=True)
             server.serve()
 if __name__=="__main__":main_guard(main)
