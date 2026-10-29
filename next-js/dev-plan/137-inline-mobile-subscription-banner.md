@@ -44,4 +44,3 @@ the header. Preserve the approved desktop presentation and all unrelated work.
 - Full application production build and database integration suites were not
   run. The isolated production fixture covers the changed surfaces; no schema
   or API contract changed. Unrelated admin work was preserved.
-
