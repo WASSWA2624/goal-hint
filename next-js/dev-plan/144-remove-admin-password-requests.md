@@ -46,6 +46,37 @@ including verification, rate limits, one-device sessions, and account protection
   retired page returns 404, retired mutation returns 400, remaining navigation
   works, verified-code Forgot password completes, and signed-in Change password
   retains current/new password fields. No page errors were observed.
-- The migration was exercised against a disposable MySQL instance. The working
-  application database has not been migrated; deployment must apply the forward
-  migration alongside this application version.
+- The migration was first exercised against a disposable MySQL instance. The
+  running local application database was subsequently migrated as recorded below.
+  Hosted environments still require the migration alongside this application version.
+
+## Local migration follow-up · 29 October 2026
+
+- Applied `20261029120000_remove_admin_password_requests` to the ownership-verified
+  `goal_hint_demo` database used by the running localhost:3000 application. The
+  persistent configured MySQL instance and hosted databases were untouched.
+- Saved and authenticated an encrypted checkpoint of the affected account columns
+  before deployment. Prisma records the completed migration with the exact source
+  checksum, and its migration history is current.
+- Verified removal of the three retired columns and queue index. All 51 existing
+  accounts, their ordinary password hashes, and sampled account/session,
+  verification, payment, access-period, and audit table counts were preserved.
+- Schema comparison matches the application models; the intentionally separate
+  `DevelopmentDemoSourcePair` table remains intact.
+- Real-database service checks passed for recovery-code generation and consumption,
+  restricted reset authorization, password saving, old-password rejection,
+  current-password checks, session replacement, and the 24-hour change limit.
+  Verification delivery was captured locally; no external messages or notification
+  outbox intents were sent.
+- Reloaded the normal Next.js development worker so its cached Prisma client
+  picked up the migrated schema. Process identity checks confirmed the original
+  MySQL server and development launcher stayed running; the demo was not reseeded.
+- The live localhost:3000 browser walkthrough passed ten checks: code recovery,
+  password saving, sign-in with the new password, rejection of both old passwords,
+  rejection of an incorrect current password, and successful signed-in password
+  change, without page errors. Only Forgot password delivery used the injected
+  local capture adapter; code verification, reset, change, and login used the
+  actual running application's endpoints.
+- Removed the temporary test accounts and their verification/session records.
+  Final comparison with the authenticated pre-migration checkpoint confirms all
+  51 original account identities and password hashes are exactly unchanged.
