@@ -86,5 +86,5 @@ export function AccountContactLinks({ locale, contact, text }: { locale: string;
 }
 
 export function AccountLogOut({ locale }: { locale: string }) {
-  return <div><SignOut variant="quiet">{createMessages(locale).text("account.logOut")}</SignOut></div>;
+  return <div><SignOut variant="quiet">{createMessages(locale).text("auth.signOut")}</SignOut></div>;
 }

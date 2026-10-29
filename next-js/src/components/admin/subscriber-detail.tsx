@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import Link from "@/components/navigation/navigation-link";
+import { authLabels } from "@/i18n/messages/auth";
 import type { OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { formatPhone } from "@/domain/phone";
@@ -25,7 +26,7 @@ type Tab = "overview" | "access" | "payments" | "credit" | "devices";
 const tabs: readonly Tab[] = ["overview", "access", "payments", "credit", "devices"];
 const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", credit: "Credit", devices: "Devices" };
 const actionTitles: Record<AccountAction, string> = { grant: "Grant access", number: "Change number", password: "Reset password",
-  block: "Account restriction", devices: "Sign out all devices" };
+  block: "Account restriction", devices: `${authLabels.signOut} all devices` };
 const codeTones = { active: "good", queued: "warning" } as const;
 const paymentTones = { approved: "good", pending: "warning" } as const;
 
@@ -79,7 +80,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal }
         {task("number", "Change number", <SwapIcon />)}
         {task("password", "Reset password", <KeyIcon />, !!account.blockedAt)}
         {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
-        {task("devices", "Sign out devices", <SignOutIcon />)}
+        {task("devices", `${authLabels.signOut} devices`, <SignOutIcon />)}
       </QuickActions>}
       {!erased && account.blockedAt && <ActionHint>Unblock this account to reset its password.</ActionHint>}
     </Panel>
@@ -96,12 +97,12 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal }
           event.preventDefault(); if (action.busy) return;
           const reply = await action.send(path, { action: account.blockedAt ? "unblock" : "block", value: new FormData(event.currentTarget).get("reason") }, account.blockedAt ? "Account unblocked." : "Account blocked and devices signed out.");
           if (reply.ok) closeAction();
-        }}><MutedText>{account.blockedAt ? "Allow this member to sign in again." : "Prevent sign-in and sign out every device."}</MutedText>
+        }}><MutedText>{account.blockedAt ? `Allow this member to ${authLabels.signIn.toLowerCase()} again.` : `Prevent sign-in and ${authLabels.signOut.toLowerCase()} every device.`}</MutedText>
           <FieldBlock>Reason<input name="reason" required maxLength={200} disabled={action.busy} /></FieldBlock>
           <ActionButton type="submit" $variant="primary" disabled={action.busy}>{account.blockedAt ? "Unblock account" : "Block account"}</ActionButton></CompactForm>}
-        {active === "devices" && <><MutedText>The member will need to log in again on every device.</MutedText><div><ActionButton type="button" disabled={action.busy} onClick={async () => {
+        {active === "devices" && <><MutedText>The member will need to {authLabels.signIn.toLowerCase()} again on every device.</MutedText><div><ActionButton type="button" disabled={action.busy} onClick={async () => {
           const reply = await action.send(path, { action: "sign-out-all" }, "All devices signed out."); if (reply.ok) closeAction();
-        }}>Sign out all devices</ActionButton></div></>}
+        }}>{actionTitles.devices}</ActionButton></div></>}
       </ActionBody>
     </ActionPanel>}
     <DetailTabs role="tablist" aria-label="Subscriber details" onKeyDown={tabKey} data-subscriber-tabs>

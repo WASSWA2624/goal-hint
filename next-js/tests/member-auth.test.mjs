@@ -111,7 +111,7 @@ test("registration creates a restricted verification session and never claims an
   assert.equal([...f.sessions.values()][0].passwordResetAt, null);
   assert.notEqual([...f.accounts.values()][0].passwordHash, password);
   assert.ok(await verifyPassword(password, [...f.accounts.values()][0].passwordHash));
-  assert.deepEqual(await f.service.register(phone, password, browser(), "198.51.100.1"), { status: "conflict", message: "An account already exists, so please log in." });
+  assert.deepEqual(await f.service.register(phone, password, browser(), "198.51.100.1"), { status: "conflict", message: "An account already exists, so please sign in." });
   const legacy = fixture(); await legacy.account({ passwordHash: null });
   assert.equal((await legacy.service.register(phone, password, browser(), "198.51.100.1")).status, "conflict");
 });

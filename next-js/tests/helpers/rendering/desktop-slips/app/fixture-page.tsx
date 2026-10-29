@@ -8,6 +8,7 @@ import type { BestSlipsResult } from "@/domain/best-slips";
 import { defaultSlipCriteria } from "@/domain/slip-builder";
 import { ButtonLink } from "@/components/ui/controls";
 import { Container, PageMain, Stack } from "@/components/ui/layout";
+import { createMessages } from "@/i18n/messages";
 import { autoInitialStates, autoSlip, desktopSlip, matchStates, savedResults, stateSlip } from "./data";
 import { autoControl } from "./auto-state";
 
@@ -45,7 +46,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
           data: { slips: [0, 1].map((index) => ({ ...shownSlip, id: `desktop-builder-${index}` })), qualifyingMatches: shownSlip.selections.length,
             excludedMissingForecast: 0, excludedMissingOdds: 0, searchLimited: false } }} /> : locked ? <DesktopSlipDisclosure index={0} locale="en" totalOdds="21.95" averageProbability={0.7237666666666667} selectionCount={3}>
         <ButtonLink prefetch={false} href={scenario === "locked-member" ? "/en/subscribe" : "/en/account?view=login"}>
-          {scenario === "locked-member" ? "Subscribe" : "Log in to access"}
+          {createMessages("en").text(scenario === "locked-member" ? "account.subscribe" : "auth.signInToAccess")}
         </ButtonLink>
       </DesktopSlipDisclosure> : scenario === "states" ? <DesktopSlip slip={stateSlip} matchStates={matchStates} index={0} locale="en" />
         : scenario === "responsive" ? <SlipTable slip={desktopSlip} index={0} locale="en" />

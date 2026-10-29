@@ -191,7 +191,7 @@ def main():
                         assert '61.7%' in response.text and '70.3%' in response.text, (viewer, "entitled original match probabilities")
                     else:
                         signed_in = viewer not in {"anonymous", "off", "evicted"}
-                        expected_cta = "Subscribe" if signed_in else "Log in to access"
+                        expected_cta = "Subscribe" if signed_in else "Sign in to access"
                         body = markup.nodes(attr="data-slip-content")[0]
                         assert body.text.strip() == expected_cta, (viewer, "only the relevant access action remains")
                         links = body.nodes("a")
@@ -206,7 +206,7 @@ def main():
             return checks
         with ThreadPoolExecutor(max_workers=4) as pool:
             checks = sum(pool.map(verify_viewer, VIEWERS))
-        for viewer, expected_cta in [("anonymous", "Log in to access"), ("expired", "Subscribe")]:
+        for viewer, expected_cta in [("anonymous", "Sign in to access"), ("expired", "Subscribe")]:
             for extra in [{}, {"RSC": "1"}]:
                 path = f"/refresh-access/{viewer}" + ("?_rsc" if extra else "")
                 response = request(server.origin, path, headers=extra)

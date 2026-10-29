@@ -444,7 +444,7 @@ def verify_best_slips(origin, directory):
             if locked:
                 assert not content.nodes(attr="data-fixture-id"), "Locked slip bodies expose no premium picks"
                 links = content.nodes("a")
-                expected_action = "Subscribe" if scenario == "locked-member" else "Log in to access"
+                expected_action = "Subscribe" if scenario == "locked-member" else "Sign in to access"
                 assert len(links) == 1 and links[0].text.strip() == expected_action, "The locked body has exactly the relevant access action"
                 assert content.text.strip() == expected_action, "The locked body contains no redundant subscriber explanation"
                 destination = urlsplit(links[0].attrs["href"])

@@ -1,8 +1,9 @@
+import { authLabels } from "./auth.ts";
+
 export const slipsMessages = {
-  "slips.signIn": "Sign in",
-  "slips.signInToBuild": "Sign in to build slips",
+  "slips.signInToBuild": `${authLabels.signIn} to build slips`,
   "slips.subscribeToBuild": "Subscribe to build slips",
-  "slips.access.signIn": "Set your slip preferences above, then sign in to continue. Building slips with match predictions and odds requires an active subscription.",
+  "slips.access.signIn": `Set your slip preferences above, then ${authLabels.signIn.toLowerCase()} to continue. Building slips with match predictions and odds requires an active subscription.`,
   "slips.access.subscribe": "An active subscription is required to build slips with match predictions and odds. Use Subscribe to build slips above to choose a plan and unlock generation.",
   "slips.access.ready": "Choose your settings above, then select Build slips to generate slips with match predictions and odds.",
   "slips.toolbar.editRanges": "Edit ranges",
@@ -14,7 +15,7 @@ export const slipsMessages = {
   "slips.mobile.matches": "Matches per slip",
   "slips.mobile.limits": "Odds & prob.",
   "slips.mobile.manual": "{count} manual",
-  "slips.mobile.access.signIn": "Sign in above to continue. An active subscription is required to build slips.",
+  "slips.mobile.access.signIn": `${authLabels.signIn} above to continue. An active subscription is required to build slips.`,
   "slips.mobile.access.subscribe": "Subscribe above to build slips with match predictions and odds.",
   "slips.mobile.access.ready": "Set your preferences above, then tap Build slips to generate slips.",
   "slips.guard.number": "Use numbers only.",
@@ -47,7 +48,6 @@ export const slipsMessages = {
   "slips.match.snapshot": "Saved result",
   "slips.result.won": "Won",
   "slips.result.lost": "Lost",
-  "bestSlips.loginToAccess": "Log in to access",
   "slips.showMatches": "Show matches",
   "slips.hideMatches": "Hide matches",
   "slips.error.invalid-slip-count": "Choose between 1 and 100 slips.",

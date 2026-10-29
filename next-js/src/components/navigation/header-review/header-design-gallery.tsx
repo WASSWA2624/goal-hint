@@ -5,6 +5,7 @@ import { ThemeProvider } from "styled-components";
 import { MoonIcon, SunIcon } from "@/components/ui/icons";
 import { darkTheme, lightTheme } from "@/styles/theme";
 import { resolveLocale } from "@/i18n/locales";
+import { authLabels } from "@/i18n/messages/auth";
 import { headerReviewDesigns } from "./designs";
 import { HeaderSample, type HeaderReviewSession } from "./header-sample";
 import { Canvas, Content, Footer, Gallery, Intro, Label, MobileRow, Option, Review, Spec, Status, Toolbar, Viewport } from "./gallery-styles";
@@ -33,7 +34,7 @@ export function HeaderDesignGallery({ locale }: { locale: string }) {
             {headerReviewDesigns.map((design) => <option key={design.id} value={design.id}>{String(design.id).padStart(2, "0")} · {design.name}</option>)}
           </select></label>
           <label><span>Account state</span><select aria-label="Account state" value={session} onChange={(event) => setSession(event.target.value as HeaderReviewSession)}>
-            <option value="guest">Guest · Login / Register</option><option value="member">Member · Account</option><option value="admin">Admin · Payments / Account</option>
+            <option value="guest">Guest · {authLabels.signIn} / {authLabels.signUp}</option><option value="member">Member · Account</option><option value="admin">Admin · Payments / Account</option>
           </select></label>
           <label><span>Mobile width</span><select aria-label="Mobile preview width" value={mobileWidth} onChange={(event) => setMobileWidth(Number(event.target.value))}>
             {[320, 360, 390, 430].map((width) => <option key={width} value={width}>{width}px</option>)}

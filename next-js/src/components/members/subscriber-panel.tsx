@@ -13,7 +13,7 @@ export function SubscriberPanel({ locale = "en", returnTo, offer, signedIn = fal
       price: messages.number(offer.priceUgx), days: messages.plural("paywall.days", offer.durationDays),
     })}</>}</p>
     <Inline>
-      <ButtonLink size="large" href={subscriberHref(signedIn, returnTo)} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>
+      <ButtonLink size="large" href={subscriberHref(signedIn, returnTo)} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "auth.signUp")}</ButtonLink>
     </Inline>
   </Stack>;
 }

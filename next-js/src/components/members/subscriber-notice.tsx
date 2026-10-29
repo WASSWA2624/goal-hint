@@ -8,5 +8,5 @@ export function SubscriberNotice({ locale = "en", kind = "history", signedIn = f
 }) {
   const messages = createMessages(locale), text = messages.text(`paywall.${kind}`);
   return kind === "card" ? <span data-subscriber-notice>{text}</span>
-    : <TextLink data-subscriber-notice href={subscriberHref(signedIn, returnTo)} prefetch={false}>{text} {messages.text(signedIn ? "subscribe.title" : "account.register")}</TextLink>;
+    : <TextLink data-subscriber-notice href={subscriberHref(signedIn, returnTo)} prefetch={false}>{text} {messages.text(signedIn ? "subscribe.title" : "auth.signUp")}</TextLink>;
 }

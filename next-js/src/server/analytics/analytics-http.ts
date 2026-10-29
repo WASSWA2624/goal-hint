@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ZodError } from "zod";
+import { authLabels } from "../../i18n/messages/auth.ts";
 import { breakdownKeys, collectPayloadSchema, parseReportParameters, analyticsRules, type AnalyticsReport, type BreakdownKey } from "../../domain/analytics.ts";
 import { isBotUserAgent } from "../../domain/analytics-classify.ts";
 import { analyticsDatasets, csvHeader, csvValue, formatDuration } from "../../domain/analytics-datasets.ts";
@@ -169,7 +170,7 @@ function guarded(handler: Guarded, services: () => Promise<AnalyticsServices>) {
   return async (request: Request): Promise<Response> => {
     const resolved = await services();
     if (!resolved.reporter) return json({ error: "unavailable", message: "Analytics storage is not configured." }, 503);
-    if (!(await requireAdmin(resolved, request))) return json({ error: "unauthorized", message: "Sign in to view analytics." }, 401);
+    if (!(await requireAdmin(resolved, request))) return json({ error: "unauthorized", message: `${authLabels.signIn} to view analytics.` }, 401);
     try { return await handler({ services: resolved, reporter: resolved.reporter, request }); } catch (error) { return reportFailure(error); }
   };
 }

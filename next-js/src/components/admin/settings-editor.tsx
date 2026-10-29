@@ -281,13 +281,13 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
                   : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => resolve(key === "contact" ? "contactPhone" : "mtnNumber")}>{requirementLabels[key]}</button>
                     : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList>
               </RequirementBox>}
-              <TwoUp>{range("trialDays", "Free trial on registration", "0 disables trials for new accounts.")}
+              <TwoUp>{range("trialDays", "Free trial on sign-up", "0 disables trials for new accounts.")}
                 <FieldBlock htmlFor="setting-screenshotRetentionDays">Keep payment proofs after approval · days
                   <input {...field("screenshotRetentionDays", true)} type="number" inputMode="numeric" min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} />
                   {error("screenshotRetentionDays")}<Hint id="setting-screenshotRetentionDays-hint">{settingsRules.screenshotRetentionDays.min}–{settingsRules.screenshotRetentionDays.max} days</Hint>
                 </FieldBlock>
               </TwoUp>
-              {drawer("maxUnlockedDevices", "Advanced", <NarrowField>{range("maxUnlockedDevices", "Grant device limit", "For existing grants. Accounts always have one active login.")}</NarrowField>)}
+              {drawer("maxUnlockedDevices", "Advanced", <NarrowField>{range("maxUnlockedDevices", "Grant device limit", "For existing grants. Accounts always have one active session.")}</NarrowField>)}
             </PanelBody>
           </>}
           {section === "display" && <PanelBody>

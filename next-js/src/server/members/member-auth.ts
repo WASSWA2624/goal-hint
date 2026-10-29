@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { normalizePhone } from "../../domain/phone.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { passwordChangeWindowMs, supportedMessageChannels, type MessageChannel } from "../../domain/member-verification.ts";
+import { authLabels } from "../../i18n/messages/auth.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, verifyPassword } from "../analytics/analytics-password.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
@@ -30,7 +31,7 @@ const refused = (): AuthFailure => ({ status: "unauthorized", message: "We could
 const reserved = (): AuthFailure => ({ status: "unauthorized", message: "This number is reserved." });
 const wrongPassword = (): AuthFailure => ({ status: "unauthorized", message: "Your current password is incorrect." });
 const busy = (): AuthFailure => ({ status: "busy", message: "Too many attempts. Please wait before trying again." });
-const conflict = (): AuthFailure => ({ status: "conflict", message: "An account already exists, so please log in." });
+const conflict = (): AuthFailure => ({ status: "conflict", message: `An account already exists, so please ${authLabels.signIn.toLowerCase()}.` });
 const messageLimit = (): AuthFailure => ({ status: "busy", message: "You can request up to three messages within 24 hours. Please wait or contact the admin for assistance." });
 const passwordLimit = (): AuthFailure => ({ status: "busy", message: "You can change your password only once within 24 hours. Contact the admin for further assistance." });
 const deliveryFailure = (): AuthFailure => ({ status: "unavailable", message: "We couldn't send your code. Please try again later or contact the admin." });

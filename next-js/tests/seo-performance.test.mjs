@@ -8,7 +8,7 @@ import { privateHeaders } from "../src/server/http/private-http.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*", "/en/account", "/en/subscribe",
-  "/api/account/:path*"];
+  "/api/account/:path*", "/api/slips/:path*"];
 
 test("flags and brand files are browser-cached while the private rules stay last and unchanged", async () => {
   const rules = await nextConfig.headers();

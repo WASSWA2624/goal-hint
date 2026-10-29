@@ -33,7 +33,7 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
   const messages = createMessages(locale);
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
     <EmptyState headingLevel={1} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
-      action={<ButtonLink size="large" href={subscriberHref(signedIn, slipsHref(locale), "login")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "slips.signIn")}</ButtonLink>} />
+      action={<ButtonLink size="large" href={subscriberHref(signedIn, slipsHref(locale), "login")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "auth.signIn")}</ButtonLink>} />
   </SlipStack>;
 }
 

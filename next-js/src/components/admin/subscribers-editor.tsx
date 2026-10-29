@@ -65,7 +65,7 @@ export function SubscribersEditor({ accounts, detail: selected, plans }: { accou
       {revealed && detail && revealed.accountId === detail.id && !detail.erasedAt && <TemporaryPassword key={revealed.password} value={revealed} done={() => setRevealed(null)} />}
       {detail ? <SubscriberDetail key={detail.id} account={detail} plans={plans} action={action} onReveal={setRevealed}
         onDeleted={() => { setDeletedId(detail.id); setRevealed(null); router.replace("/admin/subscribers", { scroll: false }); }} />
-        : <EmptyAccount as="div"><EmptyPanel><UserIcon /><h2>Select an account</h2><p>Find a subscriber to manage their access, login and details.</p></EmptyPanel></EmptyAccount>}
+        : <EmptyAccount as="div"><EmptyPanel><UserIcon /><h2>Select an account</h2><p>Find a subscriber to manage their access, sign-in and details.</p></EmptyPanel></EmptyAccount>}
     </AccountColumn>
   </Workspace>;
 }

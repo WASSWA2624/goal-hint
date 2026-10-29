@@ -1,7 +1,9 @@
 """Verify the account's initial production HTML using the shared rendering harness."""
 import json
 import re
+from html import unescape
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener, urlopen
 from lib.rendering import NoRedirect, Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request, visible_html
@@ -10,6 +12,29 @@ from lib.runtime import ROOT, main_guard
 
 def auth_card(html):
     return match(r'<section\b[^>]*data-account-auth[^>]*>([\s\S]*?)</section>', html).group(1)
+
+
+def authentication_form(html, view, label):
+    """Canonical labels keep their established form endpoints and header destinations."""
+    card = auth_card(html)
+    match(rf'<h1[^>]*>{re.escape(label)}</h1>', card)
+    forms = re.findall(r'<form\b[^>]*>', card)
+    assert len(forms) == 1, f"{label}: one credential form."
+    match(r'method="post"', forms[0])
+    match(rf'action="/api/account/{view}"', forms[0])
+    submits = re.findall(r'<button\b[^>]*type="submit"[^>]*>([\s\S]*?)</button>', card)
+    assert len(submits) == 1 and unescape(re.sub(r'<[^>]+>', "", submits[0])).strip() == label, \
+        f"{label}: one consistently named submit action."
+    header = match(r'<header\b[^>]*data-app-header[^>]*>([\s\S]*?)</header>', html).group(1)
+    for destination, action_label in [("login", "Sign in"), ("register", "Sign up")]:
+        link = match(rf'<a\b(?=[^>]*data-header-auth="{destination}")([^>]*)>([\s\S]*?)</a>', header)
+        href = unescape(match(r'href="([^"]+)"', link.group(1)).group(1))
+        target = urlsplit(href)
+        assert target.path == "/en/account" and parse_qs(target.query).get("view") == [destination], \
+            f"{action_label}: the header retains its account view."
+        assert unescape(re.sub(r'<[^>]+>', "", link.group(2))).strip() == action_label, \
+            f"{action_label}: header and form use the same vocabulary."
+    return card
 
 
 def phone_field(html, name="phone"):
@@ -55,7 +80,7 @@ def delivery_step(html):
     match(r'data-account-step-form="delivery"', html)
     no_match(r'data-account-step-form="code"|name="code"|autoComplete="one-time-code"', html)
     support = match(r'<nav\b[^>]*data-account-support[^>]*>([\s\S]*?)</nav>', html).group(1)
-    for label in ["Contact support", "Back to log in"]:
+    for label in ["Contact support", "Back to sign in"]:
         match(label, support)
     no_match(r'data-verification-help|data-verification-tracker|<ol\b|up to 3 messages|Codes expire after', auth_card(html))
     no_match(r'256 700 000 101', auth_card(html))
@@ -116,7 +141,7 @@ def verify_synthetic_api(origin):
     with response:
         assert response.status == 303 and response.headers["Location"] == "/en/matches", "Sign-out keeps the visitor browsing matches"
         assert "Max-Age=0" in response.headers["Set-Cookie"]
-    match(r'<h1[^>]*>Log in</h1>', request(origin, "/en/account?view=login&status=signed-out").text)
+    match(r'<h1[^>]*>Sign in</h1>', request(origin, "/en/account?view=login&status=signed-out").text)
 
 
 def unified_login(origin):
@@ -129,7 +154,7 @@ def unified_login(origin):
             assert response.status == 307 and response.headers.get("Location") == "/en/account?view=login", (path, member, response.status)
             no_match(r'Analytics sign-in|Admin sign-in|Owner username|type="password"', visible_html(response.text))
         accepted = request(origin, path, headers={"Cookie": "goal-hint-member=" + "d" * 43})
-        assert accepted.status == 200 and "data-fixture-" in accepted.text and "Log out" in accepted.text
+        assert accepted.status == 200 and "data-fixture-" in accepted.text and "Sign out" in accepted.text
     for token, administrator in [("a", False), ("v", False), ("r", False), ("b", False), ("d", True)]:
         cookie = owner + "; goal-hint-member=" + token * 43
         status = request(origin, "/api/admin/fixture", headers={"Cookie": cookie})
@@ -216,7 +241,7 @@ def main():
         print(f"Building member acceptance fixture: {directory}", flush=True)
         build_fixture(directory, env=env, timeout=240)
     with Server(directory, env=env, ready="/en/account") as server:
-        for state, expected in [("off", "Log in"), ("signed-out", "Phone number"),
+        for state, expected in [("off", "Sign in"), ("signed-out", "Phone number"),
                 ("signed-in", "256 700 000 101"), ("unavailable", "Member access is unavailable."),
                 ("active", "You have access until"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
@@ -230,15 +255,13 @@ def main():
                 match(r'type="tel"', response.text)
                 match(r'type="password"', response.text)
                 match(r'autoComplete="current-password"', response.text)
-                login_html = auth_card(visible_html(response.text))
-                assert len(re.findall(r'<form\b', login_html)) == 1
-                match(r'action="/api/account/login"', login_html)
+                login_html = authentication_form(visible_html(response.text), "login", "Sign in")
                 no_match(r'Analytics sign-in|Admin sign-in|Owner username', login_html)
                 phone_field(login_html)
                 notice = match(r'<details\b([^>]*)>([\s\S]*?Signing in signs out your other device\.[\s\S]*?)</details>', login_html)
                 no_match(r'\bopen(?:\s|=|$)', notice.group(1))
                 match(r'<summary[^>]*aria-label="Signing in signs out your other device\."', notice.group(2))
-                match(r'<button[^>]*type="submit"[^>]*>Log in</button>', login_html)
+                match(r'<button[^>]*type="submit"[^>]*>Sign in</button>', login_html)
                 match(r'18\+', login_html)
                 match(r'href="/en/terms"[^>]*>Terms', login_html)
                 no_match(r'account-single-device-notice|By signing in|Use 8–128 characters', login_html)
@@ -247,14 +270,14 @@ def main():
             if state in ("signed-in", "active", "ended"):
                 match("Change phone", response.text)
                 match("Change password", response.text)
-                match("Log out", response.text)
+                match("Sign out", response.text)
             if state in ("active", "ended"):
                 match("Sign out others", response.text)
         register = request(server.origin, "/en/account?view=register")
-        match("Create account", register.text)
+        match(r'<button[^>]*type="submit"[^>]*>Sign up</button>', register.text)
         match(r'<h1[^>]*>Sign up</h1>', register.text)
         match(r'autoComplete="new-password"', register.text)
-        register_html = auth_card(visible_html(register.text))
+        register_html = authentication_form(visible_html(register.text), "register", "Sign up")
         phone_field(register_html)
         no_match(r'Use 8–128 characters|Use the number you pay from|By signing in|Signing in signs out your other device', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)

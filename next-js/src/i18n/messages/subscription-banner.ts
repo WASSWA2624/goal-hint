@@ -1,0 +1,11 @@
+export const subscriptionBannerMessages = {
+  "banner.label": "Account and subscription access",
+  "banner.invitation": "{signUp} or {signIn} to unlock all predictions and odds",
+  "banner.unlock": "Unlock all predictions and odds",
+  "banner.from": "from UGX {price}.",
+  "banner.active": "Full access is active.",
+  "banner.account": "My account",
+  "banner.unlocked": "All predictions and odds are unlocked.",
+  "banner.expired": "Your access has ended.",
+  "banner.renew": "Unlock all predictions and odds again",
+} as const;

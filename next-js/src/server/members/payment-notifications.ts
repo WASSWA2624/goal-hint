@@ -1,5 +1,6 @@
 import "server-only";
 
+import { authLabels } from "../../i18n/messages/auth.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import { supportedMessageChannels } from "../../domain/member-verification.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
@@ -24,7 +25,7 @@ export type PaymentNotifications = Readonly<{
   renewed(renewal: RenewalNotification): Promise<PaymentNotificationStatus>;
 }>;
 // The gateway and lock-screen previews can expose message contents. Keep financial and subscription details in the app.
-export const accountUpdateMessage = "Goal Hint: Your account has been updated. Sign in to view the details or contact admin for help.";
+export const accountUpdateMessage = `Goal Hint: Your account has been updated. ${authLabels.signIn} to view the details or contact admin for help.`;
 
 /** Explicit transport adapter for injected callers. Decision services default to the atomic outbox producer. */
 export function createPaymentNotifications({ database, now = Date.now, delivery = createYoolaMessaging() }: {

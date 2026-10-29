@@ -7,6 +7,7 @@ import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonM
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
 import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analytics-datasets";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
+import { authLabels } from "@/i18n/messages/auth";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
@@ -226,7 +227,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
           {empty ? <Panel>
             <EmptyChart>
               No visits recorded for {formatRange(selection)}{Object.keys(filters).length ? " with these filters" : ""}. Visitors appear here once they
-              allow analytics in the consent banner; your own browser is excluded after you sign in.
+              allow analytics in the consent banner; your own browser is excluded after you {authLabels.signIn.toLowerCase()}.
             </EmptyChart>
           </Panel> : <>
             <TrendPanel report={report} metric={metric} onMetric={setMetric} busy={busy} compareLabel={compareLabel} exportHref={exportHref("timeseries")} />

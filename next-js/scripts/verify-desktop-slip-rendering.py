@@ -147,7 +147,7 @@ def verify(origin, directory):
             assert all(value in summary.text for value in ["21.95", "72.4%", "3 selections"]), f"{scenario}: public aggregate facts"
             content = single(disclosure.nodes(attr="data-slip-content"), f"{scenario}: locked body")
             action = single(content.nodes("a"), f"{scenario}: one relevant action")
-            expected = "Subscribe" if scenario.endswith("member") else "Log in to access"
+            expected = "Subscribe" if scenario.endswith("member") else "Sign in to access"
             assert action.text.strip() == expected, f"{scenario}: correct access action"
         else:
             assert not document.nodes(attr="data-desktop-row"), "Responsive SSR retains the existing mobile fallback"

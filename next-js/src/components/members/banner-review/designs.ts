@@ -1,3 +1,5 @@
+import { authLabels } from "../../../i18n/messages/auth.ts";
+
 export type BannerReviewState = "signed-out" | "unsubscribed" | "active";
 
 export type BannerReviewDesign = Readonly<{
@@ -9,11 +11,9 @@ export type BannerReviewDesign = Readonly<{
   recommended?: boolean;
 }>;
 
-/** Shared vocabulary for the concepts; production localization is a separate implementation step. */
+/** Review-specific actions extend the same authentication vocabulary used in the app. */
 export const bannerReviewLabels = {
-  signIn: "Sign in",
-  signUp: "Sign up",
-  signOut: "Sign out",
+  ...authLabels,
   subscribe: "Subscribe",
   account: "My account",
   viewPredictions: "View predictions",

@@ -149,7 +149,7 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
       {!administratorName && <nav aria-label={messages.text("account.title")} onClick={dismiss}>
         <Destination href={`/${resolveLocale(locale)}/account`} prefetch={false}><UserIcon />{messages.text("account.title")}<ChevronRightIcon /></Destination>
       </nav>}
-      <SignOut logoutAction={administratorName ? "/api/admin/logout" : "/api/account/sign-out"}><SignOutIcon />{messages.text("account.logOut")}</SignOut>
+      <SignOut logoutAction={administratorName ? "/api/admin/logout" : "/api/account/sign-out"}><SignOutIcon />{messages.text("auth.signOut")}</SignOut>
     </Popup>
   </Disclosure>;
 }
@@ -174,8 +174,8 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   return <Actions data-account-actions>
     {(administratorName || administrator) && <AdminPaymentsLink />}
     {phone || adminIdentity ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} /></> : <>
-      <AuthLink href={`${base}?view=login`} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("account.login")}</span></AuthLink>
-      <AuthLink href={`${base}?view=register`} prefetch={false} $primary aria-label={messages.text("account.register")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("account.register")}</span></AuthLink>
+      <AuthLink href={`${base}?view=login`} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("auth.signIn")}</span></AuthLink>
+      <AuthLink href={`${base}?view=register`} prefetch={false} $primary aria-label={messages.text("auth.signUp")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("auth.signUp")}</span></AuthLink>
       <ThemeToggle locale={locale} />
     </>}
   </Actions>;

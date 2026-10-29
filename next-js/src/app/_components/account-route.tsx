@@ -92,7 +92,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       {!member ? <>
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
         <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} contact={contact} />
-      </> : member.blocked ? <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("account.logOut")}</MemberSignOut></MemberPanel> : <AccountSheet data-account-details>
+      </> : member.blocked ? <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("auth.signOut")}</MemberSignOut></MemberPanel> : <AccountSheet data-account-details>
         <h1>{messages.text("account.yourAccount")}</h1>
         {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}

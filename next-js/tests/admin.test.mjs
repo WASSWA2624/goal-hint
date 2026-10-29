@@ -307,7 +307,7 @@ test("verify({ touch: false }) checks a session without extending it", async () 
 test("every private exclusion point covers /admin; member pages stay crawlable but noindex", async () => {
   const rules = await nextConfig.headers();
   assert.deepEqual(rules[0], { source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] }, "The global rule stays first.");
-  const sources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*", "/en/account", "/en/subscribe", "/api/account/:path*"];
+  const sources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*", "/en/account", "/en/subscribe", "/api/account/:path*", "/api/slips/:path*"];
   // Public asset caching (tests/seo-performance.test.mjs) sits between; the private rules stay last, so they win.
   assert.deepEqual(rules.slice(-sources.length).map((rule) => rule.source), sources);
   for (const rule of rules.slice(-sources.length)) {

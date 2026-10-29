@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { authLabels } from "../../i18n/messages/auth.ts";
 
 import { autoRenewFor } from "../members/auto-renew.ts";
 import { membersPurgeFor } from "../members/purge.ts";
@@ -41,7 +42,7 @@ export function adminRoute(handler: (context: AdminContext) => Promise<Response>
       return json({ error: "unavailable", message: "Account sign-in is unavailable." }, 503);
     }
     const owner = await requireOwner(resolved, request);
-    if (!owner) return json({ error: "unauthorized", message: "Sign in with an administrator account." }, 401);
+    if (!owner) return json({ error: "unauthorized", message: `${authLabels.signIn} with an administrator account.` }, 401);
     return handler({ request, owner, services: resolved });
   };
 }

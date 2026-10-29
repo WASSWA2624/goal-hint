@@ -35,7 +35,7 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
   if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} contact={contact} />;
   if (createdTrial) return <FreeTrialNotice locale={locale} {...createdTrial} />;
   return <AccountCard data-account-auth data-analytics-ignore>
-    <AccountCardHeading><UserIcon /><h1>{m.text(view === "register" ? "account.register" : "account.login")}</h1></AccountCardHeading>
+    <AccountCardHeading><UserIcon /><h1>{m.text(view === "register" ? "auth.signUp" : "auth.signIn")}</h1></AccountCardHeading>
     <AccountCardBody>
       <MemberForm method="post" action={`/api/account/${view}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}>
         <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} lookup={view === "login"} required disabled={busy} hint="" />
@@ -48,10 +48,10 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
           </AccountSingleDeviceInfo>
         </AccountActions>}
         {error && <AccountError role="alert">{error}</AccountError>}
-        <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : view === "login" ? "account.login" : "account.createAccount")}</AccountPrimary>
+        <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : view === "login" ? "auth.signIn" : "auth.signUp")}</AccountPrimary>
       </MemberForm>
       <AccountActions>
-        <TextLink href={href(view === "login" ? "register" : "login")} prefetch={false}>{m.text(view === "login" ? "account.register" : "account.login")}</TextLink>
+        <TextLink href={href(view === "login" ? "register" : "login")} prefetch={false}>{m.text(view === "login" ? "auth.signUp" : "auth.signIn")}</TextLink>
         <AccountNote>{m.text("account.ageAssent")} · <TextLink href={`${base}/terms`} prefetch={false}>{m.text("account.terms")}</TextLink></AccountNote>
       </AccountActions>
     </AccountCardBody>

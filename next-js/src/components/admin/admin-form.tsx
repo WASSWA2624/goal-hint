@@ -2,6 +2,7 @@
 
 import styled, { css } from "styled-components";
 import { ToolButton } from "@/components/analytics/dashboard/dashboard-styles";
+import { authLabels } from "@/i18n/messages/auth";
 import { media } from "@/styles/theme";
 
 /**
@@ -119,7 +120,7 @@ export async function postAdmin(path: string, body: unknown): Promise<AdminReply
 
 /** The message a refused reply carries, with the sign-in hint when the owner session ended. */
 export function replyMessage(reply: AdminReply, fallback: string): string {
-  if (reply.status === 401) return "Your owner session has ended. Reload the page and sign in again; nothing was saved.";
+  if (reply.status === 401) return `Your owner session has ended. Reload the page and ${authLabels.signIn.toLowerCase()} again; nothing was saved.`;
   return typeof reply.body.message === "string" ? reply.body.message : fallback;
 }
 

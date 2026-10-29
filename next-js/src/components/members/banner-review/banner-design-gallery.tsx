@@ -34,7 +34,7 @@ export function BannerDesignGallery({ locale }: { locale: string }) {
   const [state, setState] = useState<BannerReviewState | "all">("all");
   const [width, setWidth] = useState(1280);
   const [shortlisted, setShortlisted] = useState<number | null>(null);
-  const [notice, setNotice] = useState("Ten desktop concepts · Three account states each · No design has been applied.");
+  const [notice, setNotice] = useState("Selected: 01 · Inline invitation. Applied on desktop; mobile design unchanged.");
   const designs = option ? bannerReviewDesigns.filter((design) => design.id === option) : bannerReviewDesigns;
   const states = state === "all" ? bannerReviewStates : bannerReviewStates.filter((item) => item.id === state);
 
@@ -44,7 +44,7 @@ export function BannerDesignGallery({ locale }: { locale: string }) {
         <Intro>
           <span>Goal Hint · Desktop banner review</span>
           <h1>A small invitation. The right next step.</h1>
-          <p>Compare ten compact banners directly beneath the same app header. Each shows signed-out visitors, signed-in members without a subscription, and active subscribers. Mobile and the live banner are unchanged.</p>
+          <p>Compare ten compact banners directly beneath the same app header. Each shows signed-out visitors, signed-in members without a subscription, and active subscribers. Option 01 is applied on desktop. Mobile keeps its existing design.</p>
         </Intro>
         <Toolbar aria-label="Banner preview settings">
           <label><span>Design</span><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>
@@ -68,13 +68,13 @@ export function BannerDesignGallery({ locale }: { locale: string }) {
             <header>
               <span data-number aria-hidden="true">{String(design.id).padStart(2, "0")}</span>
               <DesignHeading>
-                <h2>{design.name}{"recommended" in design && design.recommended && <span data-recommended>Recommended</span>}</h2>
+                <h2>{design.name}{design.id === 1 && <span data-recommended>Selected · Applied</span>}</h2>
                 <p>{design.description}</p>
               </DesignHeading>
               <Shortlist type="button" aria-pressed={shortlisted === design.id} aria-label={`Shortlist ${design.name}`} onClick={() => {
                 const next = shortlisted === design.id ? null : design.id;
                 setShortlisted(next);
-                setNotice(next ? `Shortlisted: ${String(design.id).padStart(2, "0")} · ${design.name}. Tell me this number or name to choose it; the app is unchanged.` : "Shortlist cleared. No design has been applied.");
+                setNotice(next ? `Shortlisted for review: ${String(design.id).padStart(2, "0")} · ${design.name}. Option 01 remains applied on desktop.` : "Shortlist cleared. Option 01 remains applied on desktop.");
               }}>{shortlisted === design.id ? "Shortlisted" : "Shortlist"}</Shortlist>
             </header>
             <StateGroup>
@@ -89,7 +89,7 @@ export function BannerDesignGallery({ locale }: { locale: string }) {
             </StateGroup>
           </Option>)}
         </Gallery>
-        <Footer>Preview offer: from UGX 1,000. The final banner will use current plan pricing and real session status. Shortlisting records a review preference only. <a href={`/${resolveLocale(locale)}`}>Return to app</a></Footer>
+        <Footer>Option 01 is applied on desktop with current plan pricing and real session status. The samples use an illustrative UGX 1,000 offer. Shortlisting records a review preference only. <a href={`/${resolveLocale(locale)}`}>Return to app</a></Footer>
       </Content>
     </Review>
   </ThemeProvider>;

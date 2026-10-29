@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/icons";
 import type { HeaderReviewDesign } from "./designs";
 import { HeaderReviewBrand } from "./header-review-brand";
+import { authLabels } from "@/i18n/messages/auth";
 
 export type HeaderReviewSession = "guest" | "member" | "admin";
 
@@ -143,7 +144,7 @@ function Menu({ label, children, control, administrator = false, onPreview }: {
     <summary aria-label={label} aria-controls={id} data-control={control}>{children}</summary>
     <div id={id}>
       {control && <span data-menu-identity>{administrator ? "Administrator" : "Sample member"}</span>}
-      {(control ? (administrator ? ["Sign out"] : ["My account", "Sign out"]) : ["Performance", "About", "Contact", "Privacy", "Terms"]).map((item) =>
+      {(control ? (administrator ? [authLabels.signOut] : ["My account", authLabels.signOut]) : ["Performance", "About", "Contact", "Privacy", "Terms"]).map((item) =>
         <button key={item} type="button" data-menu-performance={item === "Performance" ? "" : undefined} onClick={(event) => {
           onPreview(`${item} preview — this gallery uses sample accounts.`);
           const details = event.currentTarget.closest("details");
@@ -182,8 +183,8 @@ export function HeaderSample({ design, device, session, dark, onTheme, onPreview
           <span data-mobile-icon><CardIcon /></span><span data-label>Payments</span><strong data-count>3</strong>
         </button>}
         {session === "guest" && <>
-          <button type="button" data-control="login" onClick={action("Login")}><span data-auth-icon><SignInIcon /></span><span data-label>Login</span></button>
-          <button type="button" data-control="register" aria-label="Register" onClick={action("Register")}><span data-auth-icon><UserPlusIcon /></span><span data-label>Register</span></button>
+          <button type="button" data-control="login" onClick={action(authLabels.signIn)}><span data-auth-icon><SignInIcon /></span><span data-label>{authLabels.signIn}</span></button>
+          <button type="button" data-control="register" aria-label={authLabels.signUp} onClick={action(authLabels.signUp)}><span data-auth-icon><UserPlusIcon /></span><span data-label>{authLabels.signUp}</span></button>
         </>}
         <button type="button" data-control="utility" aria-label={`Switch previews to ${dark ? "light" : "dark"} theme`} onClick={onTheme}>
           {dark ? <SunIcon /> : <MoonIcon />}

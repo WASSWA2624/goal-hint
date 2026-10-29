@@ -128,8 +128,8 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
       </>}
       <AccountSupport aria-label={m.text("account.support")} data-account-support>
         <AccountSupportLink locale={locale} contact={contact} />
-        {recovery ? <TextLink href={loginHref} prefetch={false}>{m.text("account.backToLogin")}</TextLink>
-          : <MemberSignOut disabled={!!busy} variant="quiet">{m.text("account.backToLogin")}</MemberSignOut>}
+        {recovery ? <TextLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</TextLink>
+          : <MemberSignOut disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>}
       </AccountSupport>
     </AccountCardBody>
   </AccountCard>;
