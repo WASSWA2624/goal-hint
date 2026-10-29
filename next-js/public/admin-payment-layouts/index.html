@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Ten interactive desktop layout studies for the Goal Hint payment review workspace. Illustrative data only.">
+  <title>Payment layout studies · Goal Hint</title>
+  <link rel="icon" href="../brand/goal-hint-favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="nav-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></symbol>
+    <symbol id="nav-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><path d="M3 10h18M7 15h4"/></symbol>
+    <symbol id="nav-ticket" viewBox="0 0 24 24"><path d="M3 6h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4V6zM15 6v12"/></symbol>
+    <symbol id="nav-user" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 21v-3a8 8 0 0 1 16 0v3"/></symbol>
+    <symbol id="nav-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><path d="m12 12 9 9m-5-5 3-3m-1 5 3-3"/></symbol>
+    <symbol id="nav-layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8l10-5zM2 12l10 5 10-5M2 16l10 5 10-5"/></symbol>
+    <symbol id="nav-settings" viewBox="0 0 24 24"><path d="M5 3v18M12 3v18M19 3v18M2 8h6m1 8h6m1-9h6"/></symbol>
+    <symbol id="nav-list" viewBox="0 0 24 24"><path d="M8 5h13M8 12h13M8 19h13M3 5h1M3 12h1M3 19h1"/></symbol>
+    <symbol id="nav-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M7 16v-5m5 5V6m5 10V9"/></symbol>
+    <symbol id="nav-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-10m-7 0h7v7"/></symbol>
+    <symbol id="nav-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="nav-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 7a8 8 0 0 1 14-1l1 6M4 12l1 6a8 8 0 0 0 14-1"/></symbol>
+  </svg>
+  <h1 class="sr-only">Goal Hint desktop payment layout studies</h1>
+  <header class="review-toolbar">
+    <div class="study-brand"><span class="study-index">GH / DESIGN</span><span>Desktop workspace studies</span></div>
+    <div class="study-current"><h2 id="design-title">01 · Classic inbox</h2><p id="design-description">A familiar queue, with everything you need alongside it.</p></div>
+    <div class="study-actions">
+      <button id="previous-design" class="square-button" aria-label="Previous layout">←</button>
+      <button id="next-design" class="square-button" aria-label="Next layout">→</button>
+      <button id="shortlist" class="toolbar-button" aria-pressed="false">☆ Shortlist</button>
+      <button id="open-gallery" class="toolbar-button gallery-trigger">All 10 layouts <span>↗</span></button>
+    </div>
+  </header>
+  <nav id="design-strip" class="design-strip" aria-label="Choose desktop layout"></nav>
+  <div class="desktop-notice"><strong>A desktop workspace, made for a wider view.</strong><p>Open this preview in a window at least 1024px wide to compare the ten desktop layouts.</p></div>
+  <div id="app" class="dashboard" data-layout="inbox">
+    <header class="app-header">
+      <div class="app-brand"><img class="brand-light" src="../brand/goal-hint-header-primary.svg" width="130" height="30" alt="Goal Hint"><img class="brand-dark" src="../brand/goal-hint-header-inverse.svg" width="130" height="30" alt="Goal Hint"><span>Admin</span></div>
+      <nav class="public-nav" aria-label="Website navigation"><button data-preview-nav>Matches</button><button data-preview-nav>Predictions</button><button data-preview-nav>Slips</button><button data-preview-nav>Performance</button></nav>
+      <div class="account-tools"><span class="workspace-label">Owner workspace</span><button id="theme-toggle" class="icon-button" aria-label="Switch to dark theme">◐</button><button class="account-button" data-preview-nav><span class="avatar">WW</span>Wilson <span class="muted">⌄</span></button></div>
+    </header>
+    <div class="app-workspace">
+      <aside class="admin-sidebar" aria-label="Admin sections">
+        <p class="nav-caption">Administration</p>
+        <nav class="admin-nav">
+          <button data-preview-nav><svg><use href="#nav-grid"/></svg>Overview</button>
+          <button aria-current="page" data-preview-nav><svg><use href="#nav-card"/></svg>Payments<span class="nav-count">20</span></button>
+          <button data-preview-nav><svg><use href="#nav-ticket"/></svg>Codes</button>
+          <button data-preview-nav><svg><use href="#nav-user"/></svg>Subscribers</button>
+          <button data-preview-nav><svg><use href="#nav-key"/></svg>Password requests<span class="request-count">3</span></button>
+          <button data-preview-nav><svg><use href="#nav-layers"/></svg>Plans</button>
+          <button data-preview-nav><svg><use href="#nav-settings"/></svg>Settings</button>
+          <button data-preview-nav><svg><use href="#nav-list"/></svg>Audit</button>
+          <button data-preview-nav><svg><use href="#nav-trend"/></svg>Forecast sources</button>
+          <button class="nav-separated" data-preview-nav><svg><use href="#nav-chart"/></svg>Analytics</button>
+        </nav>
+        <div class="sidebar-bottom"><span class="connection-dot"></span>Design preview <span>v.01</span></div>
+      </aside>
+      <main class="payments-workspace" aria-label="Payment review workspace">
+        <div class="status-bar"><nav id="status-tabs" class="status-tabs" aria-label="Payment status"></nav><div class="status-meta"><span class="sample-tag">Sample data</span><button id="refresh-queue" class="icon-button" aria-label="Refresh sample queue"><svg><use href="#nav-refresh"/></svg></button></div></div>
+        <div class="payment-panes">
+          <section class="queue-pane" aria-labelledby="queue-title">
+            <header class="queue-header"><div><p class="eyebrow">Review queue</p><div class="queue-heading-line"><h2 id="queue-title">Payment queue</h2><span id="queue-count">20 waiting</span></div></div><span class="queue-live"><span class="connection-dot"></span>Ready to review</span></header>
+            <div class="queue-tools"><label class="search-field"><svg><use href="#nav-search"/></svg><input id="search" type="search" placeholder="Search ID, phone or package" aria-label="Search payments" autocomplete="off"></label><div class="queue-filters"><label><span class="sr-only">Payment provider</span><select id="provider-filter"><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></label><label><span class="sr-only">Sort payments</span><select id="sort-order"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount">Highest amount</option></select></label></div></div>
+            <div id="list-scroll" class="list-scroll" tabindex="0" aria-label="Scrollable payment list"><div id="payment-list" class="payment-list"></div></div>
+            <footer class="queue-footnote"><span>29 OCT 2026 · EAT</span><span>Illustrative payments</span></footer>
+          </section>
+          <section class="detail-pane" aria-label="Selected payment details">
+            <div id="detail-scroll" class="detail-scroll" tabindex="0" aria-label="Scrollable payment details"><div id="detail-content"></div></div>
+            <footer id="review-footer" class="review-footer"></footer>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+  <footer class="preview-caption"><span><span class="caption-dot"></span>Interactive preview · Decisions affect sample data only</span><span id="shortlist-note">Shortlist your favorites, then tell me the layout number.</span><span>DESKTOP / 10 CONCEPTS</span></footer>
+  <dialog id="gallery" class="gallery-dialog" aria-labelledby="gallery-title"><header class="gallery-head"><div><p class="eyebrow">Ten ways to review</p><h2 id="gallery-title">Find your workspace.</h2><p>Same payments. Different ways to focus. Select a layout to explore it.</p></div><button id="close-gallery" class="square-button" aria-label="Close layout gallery">×</button></header><div id="gallery-grid" class="gallery-grid"></div><p class="gallery-foot">Every layout keeps the queue and review visible, with independent scrolling and square edges.</p></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
