@@ -56,11 +56,13 @@ both layouts. The labels remain visible with entered values and blank Any
 placeholders, reclaiming the former sub-label row. Numeric values are centered;
 desktop mouse steppers reserve equal side padding so values remain centered.
 
-Below 1024px, the mobile toolbar uses 36px controls with compact padding and
-one shared 10px type size for labels, numeric values, Any placeholders, floating
-Min/Max labels, trigger text/counts, Reset, the account action and summary.
-Font weights still distinguish emphasis. Dialog forms and guard messages keep
-their independent typography. Total slips, Total odds
+Below 1024px, the mobile toolbar uses 36px controls with compact padding,
+12px category and floating Min/Max labels, and 14px numeric values and Any
+placeholders. Reset and the account action use 12px text; dialog triggers scale
+from 11px on narrow phones to 12px, with 11px count badges. The secondary summary
+scales from 10px to 11px to preserve wrapping on narrow phones.
+Existing label and summary line heights preserve the compact layout. Dialog
+forms and guard messages keep their independent typography. Total slips, Total odds
 and Matches per slip remain visible together; three short dialog buttons share
 the next row, followed by Reset and the fixed 208px action. The compact summary
 shows date, time, selected market count and Auto/manual outcomes. Longer custom
