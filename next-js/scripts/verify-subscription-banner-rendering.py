@@ -7,7 +7,7 @@ from lib.rendering import Server, build_fixture, create_fixture, environment, pa
 from lib.runtime import ROOT, main_guard
 
 
-SCENARIOS = ["signed-out", "member", "active", "pending", "expired", "active-pending", "sales-closed",
+SCENARIOS = ["signed-out", "signed-out-no-price", "signed-out-max-price", "member", "active", "pending", "expired", "active-pending", "sales-closed",
              "pending-closed", "active-closed", "no-price", "price-changed"]
 
 
@@ -32,7 +32,7 @@ def verify(origin, directory):
         assert response.headers.get("set-cookie") is None, "Rendering must never create a session."
         html = visible_html(response.text)
         assert "data-app-header" in html and "data-banner-fixture" in html, (state, "real shared header and probe")
-        assert "data-desktop-subscription-status" not in html and "data-subscription-status-bar" not in html, \
+        assert all(marker not in html for marker in ("data-desktop-subscription-status", "data-mobile-subscription-status", "data-subscription-status-bar")), \
             (state, "unresolved server sessions must not flash an account or acquisition banner")
         assert "256700000001" not in html, "Account identity must not enter shared server HTML."
         assert "data-styled=" in response.text, "Production component styles must be server-rendered."
@@ -42,22 +42,27 @@ def verify(origin, directory):
         assert session_response.headers.get("set-cookie") is None, "Session reads must remain read-only."
         session = json.loads(session_response.text)
         summary = session["subscription"]
-        assert (session["phone"] is None) == (state in {"signed-out", "sales-closed"}), state
+        assert (session["phone"] is None) == (state.startswith("signed-out") or state == "sales-closed"), state
         assert bool(summary["activeUntil"]) == (state in {"active", "active-pending", "active-closed"}), state
         assert summary["paymentPending"] == (state in {"pending", "active-pending", "pending-closed"}), state
         assert summary["canSubscribe"] == (not state.endswith("closed")), state
-        if state in {"active", "active-pending", "active-closed", "no-price"}:
+        if state in {"active", "active-pending", "active-closed", "no-price", "signed-out-no-price"}:
             assert "offer" not in summary, state
         else:
-            assert summary["offer"]["priceUgx"] == (2_750 if state == "price-changed" else 1_750), state
+            expected_price = 10_000_000 if state == "signed-out-max-price" else 2_750 if state == "price-changed" else 1_750
+            assert summary["offer"]["priceUgx"] == expected_price, state
         if state == "expired":
             assert summary["expired"] is True
     failure = request(origin, "/api/account/session?state=failure")
     assert failure.status == 503, "The fixture supports temporary transport failures."
+    for surface in ("account", "subscribe"):
+        response = request(origin, f"/en/{surface}?state=active")
+        assert response.status == 200 and "data-banner-fixture" in visible_html(response.text), \
+            (surface, "pathname-based visibility acceptance must use a real fixture page")
     write_json(directory / "verification.json", {"scenarios": SCENARIOS, "unresolvedBannerHidden": True,
-        "privateSessionApi": True, "liveFixturePrices": [1750, 2750], "productionHeaderAndBanner": True,
-        "browserTransitionsVerified": False})
-    print("Subscription banner SSR/session checks passed: eleven scenarios, hidden unresolved banners, private identity and variable offer prices.", flush=True)
+        "privateSessionApi": True, "liveFixturePrices": [1750, 2750, 10_000_000], "productionHeaderAndBanner": True,
+        "pathnameVisibilitySurfaces": ["matches", "account", "subscribe"], "browserTransitionsVerified": False})
+    print(f"Subscription banner SSR/session checks passed: {len(SCENARIOS)} scenarios, hidden unresolved desktop/mobile banners, private identity and variable offer prices.", flush=True)
 
 
 def main():

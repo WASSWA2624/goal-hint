@@ -43,5 +43,5 @@ export function AppBrandBar({ locale, showAccount = true }: { locale: string; sh
     </Home>
     <AccountLinks locale={locale} showAccount={showAccount} />
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />
-  </Bar><SubscriptionStatusBar locale={locale} compact /></Group>;
+  </Bar><SubscriptionStatusBar locale={locale} /></Group>;
 }

@@ -8,4 +8,8 @@ export const subscriptionBannerMessages = {
   "banner.unlocked": "All predictions and odds are unlocked.",
   "banner.expired": "Your access has ended.",
   "banner.renew": "Unlock all predictions and odds again",
+  "banner.mobile.access": "Access",
+  "banner.mobile.from": "from UGX {price}",
+  "banner.mobile.active": "Access active",
+  "banner.mobile.expired": "Access ended",
 } as const;

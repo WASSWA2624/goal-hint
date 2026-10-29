@@ -38,7 +38,7 @@ export function MobileBannerDesignGallery({ locale }: { locale: string }) {
   const [state, setState] = useState<BannerReviewState | "all">("all");
   const [width, setWidth] = useState(390);
   const [shortlisted, setShortlisted] = useState<number | null>(null);
-  const [notice, setNotice] = useState("Ten mobile concepts · Three account states each · No mobile design has been applied.");
+  const [notice, setNotice] = useState("Selected: 01 · Inline invitation. Applied on mobile; the approved desktop Inline invitation stays in place.");
   const designs = option ? mobileBannerReviewDesigns.filter((design) => design.id === option) : mobileBannerReviewDesigns;
   const states = state === "all" ? bannerReviewStates : bannerReviewStates.filter((item) => item.id === state);
   const toggleTheme = () => setDark((value) => !value);
@@ -49,7 +49,7 @@ export function MobileBannerDesignGallery({ locale }: { locale: string }) {
         <Intro>
           <span>Goal Hint · Mobile banner review</span>
           <h1>One row. A clear next step.</h1>
-          <p>Ten brief mobile banners, each shown for visitors, members without a subscription, and active subscribers. Every offer and action fits in one row. The approved desktop banner and the live mobile banner stay unchanged while you choose.</p>
+          <p>Ten brief mobile banners, each shown for visitors, members without a subscription, and active subscribers. Every offer and action fits in one row. Option 01 is applied on mobile, alongside the approved desktop Inline invitation.</p>
         </Intro>
         <Toolbar aria-label="Mobile banner preview settings">
           <label><span>Design</span><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>
@@ -73,13 +73,13 @@ export function MobileBannerDesignGallery({ locale }: { locale: string }) {
             <header>
               <span data-number aria-hidden="true">{String(design.id).padStart(2, "0")}</span>
               <DesignHeading>
-                <h2>{design.name}{"recommended" in design && design.recommended && <span data-recommended>Recommended</span>}</h2>
+                <h2>{design.name}{design.id === 1 && <span data-recommended>Selected · Applied</span>}</h2>
                 <p>{design.description}</p>
               </DesignHeading>
               <Shortlist type="button" aria-pressed={shortlisted === design.id} aria-label={`Shortlist ${design.name}`} onClick={() => {
                 const next = shortlisted === design.id ? null : design.id;
                 setShortlisted(next);
-                setNotice(next ? `Shortlisted: ${String(design.id).padStart(2, "0")} · ${design.name}. Tell me this number or name to choose it. Both live banners are unchanged.` : "Shortlist cleared. No mobile design has been applied.");
+                setNotice(next ? `Shortlisted for review: ${String(design.id).padStart(2, "0")} · ${design.name}. Option 01 remains applied on mobile; shortlisting does not change either live banner.` : "Shortlist cleared. Option 01 remains applied on mobile, alongside the approved desktop banner.");
               }}>{shortlisted === design.id ? "Shortlisted" : "Shortlist"}</Shortlist>
             </header>
             <StateGrid $width={width}>
@@ -95,7 +95,7 @@ export function MobileBannerDesignGallery({ locale }: { locale: string }) {
             </StateGrid>
           </Option>)}
         </Gallery>
-        <Footer>The samples use an illustrative UGX 1,000 offer and account states. Shortlisting records a review preference only. Desktop Inline invitation and the live mobile banner are unchanged. <a href={`/${resolveLocale(locale)}`}>Return to app</a></Footer>
+        <Footer>Option 01 is applied on mobile with real session status and current plan pricing. Desktop keeps its approved Inline invitation. These samples use an illustrative UGX 1,000 offer and account states; their actions and shortlisting provide review feedback only. <a href={`/${resolveLocale(locale)}`}>Return to app</a></Footer>
       </Content>
     </Review>
   </ThemeProvider>;

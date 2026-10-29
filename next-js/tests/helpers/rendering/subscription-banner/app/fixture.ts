@@ -1,6 +1,7 @@
 import type { SubscriptionSummary } from "@/domain/subscription-summary";
+import { planRules } from "@/domain/subscription-plans";
 
-export const bannerScenarios = ["signed-out", "member", "active", "pending", "expired", "active-pending", "sales-closed", "pending-closed", "active-closed", "no-price", "price-changed", "failure"] as const;
+export const bannerScenarios = ["signed-out", "signed-out-no-price", "signed-out-max-price", "member", "active", "pending", "expired", "active-pending", "sales-closed", "pending-closed", "active-closed", "no-price", "price-changed", "failure"] as const;
 export type BannerScenario = (typeof bannerScenarios)[number];
 
 export function bannerScenario(value: unknown): BannerScenario {
@@ -10,12 +11,13 @@ export function bannerScenario(value: unknown): BannerScenario {
 /** Synthetic prices deliberately differ from the gallery offer to detect production fallbacks. */
 export function bannerSession(scenario: BannerScenario) {
   const active = ["active", "active-pending", "active-closed"].includes(scenario);
+  const priceUgx = scenario === "signed-out-max-price" ? planRules.priceUgx.max : scenario === "price-changed" ? 2_750 : 1_750;
   const subscription: SubscriptionSummary = {
     activeUntil: active ? new Date(Date.now() + 3 * 86_400_000).toISOString() : null,
     paymentPending: ["pending", "active-pending", "pending-closed"].includes(scenario),
     canSubscribe: !scenario.endsWith("closed"), creditUgx: 0, autoRenew: false, renewsFromCredit: false,
-    ...(scenario !== "no-price" && !active ? { offer: { priceUgx: scenario === "price-changed" ? 2_750 : 1_750, durationDays: 1 } } : {}),
+    ...(!scenario.endsWith("no-price") && !active ? { offer: { priceUgx, durationDays: 1 } } : {}),
     ...(scenario === "expired" ? { expired: true } : {}),
   };
-  return { phone: scenario === "signed-out" || scenario === "sales-closed" ? null : "256700000001", administrator: false, subscription };
+  return { phone: scenario.startsWith("signed-out") || scenario === "sales-closed" ? null : "256700000001", administrator: false, subscription };
 }

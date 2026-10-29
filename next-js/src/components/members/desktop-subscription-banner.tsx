@@ -4,11 +4,9 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { CheckIcon, ChevronRightIcon, ClockIcon, LockIcon } from "@/components/ui/icons";
 import { Container } from "@/components/ui/layout";
-import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
-import { desktopSubscriptionBannerState } from "@/domain/subscription-banner";
+import { subscriptionBannerLinks, subscriptionBannerState } from "@/domain/subscription-banner";
 import type { SubscriptionSummary } from "@/domain/subscription-summary";
 import { createMessages } from "@/i18n/messages";
-import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
 import { richText } from "./rich-text";
 
@@ -65,18 +63,15 @@ export function DesktopSubscriptionBanner({ locale, pathname, signedIn, subscrip
   locale: string; pathname: string; signedIn: boolean; subscription: SubscriptionSummary | null;
   now: number; wide: boolean; className?: string;
 }) {
-  const state = desktopSubscriptionBannerState(signedIn, subscription, now);
-  const base = `/${resolveLocale(locale)}`, accountPath = `${base}/account`, subscribePath = `${base}/subscribe`;
-  if (!state || !subscription || pathname === accountPath || pathname === subscribePath && state !== "active") return null;
-  const messages = createMessages(locale), returnTo = memberReturnPath(pathname);
-  const authPath = (view: "login" | "register") => `${accountPath}?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
+  const state = subscriptionBannerState(signedIn, subscription, now), links = subscriptionBannerLinks(locale, pathname);
+  if (!state || !subscription || pathname === links.account || pathname === links.subscribe && state !== "active") return null;
+  const messages = createMessages(locale);
   const pending = subscription.paymentPending;
-  const paymentPath = `${memberNextPath("subscribe", returnTo)}#report`;
   const price = subscription.offer ? <Price>{messages.text("banner.from", { price: messages.number(subscription.offer.priceUgx) })}</Price> : null;
   const action = state === "signed-out" ? null : state === "pending" || state === "active" && pending
-    ? { href: paymentPath, label: messages.text("account.viewPayment") }
-    : state === "active" ? { href: accountPath, label: messages.text("banner.account") }
-    : { href: `${memberNextPath("subscribe", returnTo)}#plans`, label: messages.text("account.subscribe") };
+    ? { href: links.payment, label: messages.text("account.viewPayment") }
+    : state === "active" ? { href: links.account, label: messages.text("banner.account") }
+    : { href: links.plans, label: messages.text("account.subscribe") };
   const icon = state === "active" ? <CheckIcon /> : state === "pending" ? <ClockIcon /> : <LockIcon />;
 
   return <Banner className={className} aria-label={messages.text("banner.label")} data-desktop-subscription-status
@@ -85,8 +80,8 @@ export function DesktopSubscriptionBanner({ locale, pathname, signedIn, subscrip
       {icon}
       <Copy role="status" aria-atomic="true">
         {state === "signed-out" ? <>{richText(messages.text("banner.invitation"), {
-          signUp: <Action href={authPath("register")} prefetch={false}>{messages.text("auth.signUp")}</Action>,
-          signIn: <Action href={authPath("login")} prefetch={false}>{messages.text("auth.signIn")}</Action>,
+          signUp: <Action href={links.signUp} prefetch={false}>{messages.text("auth.signUp")}</Action>,
+          signIn: <Action href={links.signIn} prefetch={false}>{messages.text("auth.signIn")}</Action>,
         })}{price ? <> {price}</> : "."}</>
           : state === "active" ? <><strong>{messages.text("banner.active")}</strong> {messages.text(pending ? "account.pending" : "banner.unlocked")}</>
           : state === "pending" ? <>{messages.text("account.pending")}</>
