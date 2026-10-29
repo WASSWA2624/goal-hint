@@ -36,7 +36,7 @@ const firstInvalid = (prefix: string, errors: Record<string, string>) => {
  * to `/api/admin/plans`, whose reply carries the whole list, so the page always shows what is stored. The title row
  * lives here because its active count follows every change.
  */
-export function PlansEditor({ initialPlans }: { initialPlans: readonly SubscriptionPlanView[] }) {
+export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans: readonly SubscriptionPlanView[]; initialSelectedId?: string }) {
   const router = useRouter(), desktop = useDesktopLayout(), inFlight = useRef(false);
   const [plans, setPlans] = useState(initialPlans);
   const [status, setStatus] = useState<Status>(null);
@@ -47,8 +47,11 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
   const busy = saving || refreshing;
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [editing, setEditing] = useState<Readonly<{ id: string; draft: Draft; errors: Record<string, string> }> | null>(null);
-  const [selectedId, setSelectedId] = useState(initialPlans[0]?.id ?? ""), [adding, setAdding] = useState(initialPlans.length === 0), [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<Readonly<{ id: string; draft: Draft; errors: Record<string, string> }> | null>(() => {
+    const initial = initialPlans.find(plan => plan.id === initialSelectedId);
+    return initial ? { id: initial.id, draft: draftOf(initial), errors: {} } : null;
+  });
+  const [selectedId, setSelectedId] = useState(initialSelectedId ?? initialPlans[0]?.id ?? ""), [adding, setAdding] = useState(initialPlans.length === 0), [search, setSearch] = useState("");
   const listedPlans = plans.filter(plan => `${plan.name} ${plan.durationDays} ${plan.priceUgx} ${plan.active ? "active" : "inactive"}`.toLowerCase().includes(search.trim().toLowerCase()));
   const selected = listedPlans.find(plan => plan.id === selectedId) ?? listedPlans[0];
   const activeEdit = selected ? editing?.id === selected.id ? editing : { id: selected.id, draft: draftOf(selected), errors: {} } : null;

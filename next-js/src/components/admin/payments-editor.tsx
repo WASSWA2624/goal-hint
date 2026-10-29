@@ -35,17 +35,17 @@ function ticketTime(instant: string) {
 }
 
 /** Payment decisions share one queue; only the selected report mounts a review form. */
-export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; plans: readonly SubscriptionPlanView[]; tab: string }) {
+export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue: PaymentQueue; plans: readonly SubscriptionPlanView[]; tab: string; initialPaymentId?: string }) {
   const mutation = useCodeAction(), [refreshMessage, setRefreshMessage] = useState("");
   const { refreshing, refresh: refreshAdmin } = useAdminRefresh(setRefreshMessage);
   const action = { ...mutation, busy: mutation.busy || refreshing };
   const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverDesktopSnapshot);
-  const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(queue.payments[0]?.id ?? "");
+  const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(initialPaymentId ?? queue.payments[0]?.id ?? "");
   const [provider, setProvider] = useState("all"), [sort, setSort] = useState<PaymentSort>("queue");
-  const [detailOpen, setDetailOpen] = useState(false), [completed, setCompleted] = useState<readonly string[]>([]);
+  const [detailOpen, setDetailOpen] = useState(!!initialPaymentId), [completed, setCompleted] = useState<readonly string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
-  const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(false);
+  const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(!!initialPaymentId);
   const focusNext = useRef(false), stepFocus = useRef<"previous" | "next" | null>(null);
   const refreshFocus = useRef<HTMLButtonElement | null>(null);
   const lastHash = useRef<string | null>(null);
@@ -102,8 +102,14 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
 
   function locationFor(id: string) {
     lastHash.current = id;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("paymentId")) {
+      if (id) url.searchParams.set("paymentId", id);
+      else url.searchParams.delete("paymentId");
+    }
+    url.hash = id;
     // Next preserves its own history fields and synchronizes the router URL for native History API updates.
-    history.replaceState(null, "", `${location.pathname}${location.search}${id ? `#${id}` : ""}`);
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }
   function select(payment: OwnerPayment) {
     if (action.busy) return;

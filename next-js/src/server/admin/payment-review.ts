@@ -11,21 +11,30 @@ import { writeOwnerAudit } from "./audit.ts";
 import type { PaymentNotifications, PaymentRejectionNotification } from "../members/payment-notifications.ts";
 import { createQueuedPaymentNotifications } from "../members/payment-notification-outbox.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 const reference = (row?: { reference: string }) => row ? formatPaymentReference(row.reference) : null;
+const paymentSelect = {
+  id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
+  claimedAmountUgx: true, screenshotAmountUgx: true, purpose: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
+  transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } },
+} as const satisfies Prisma.PaymentSubmissionSelect;
 export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createQueuedPaymentNotifications() }: {
   notifications?: PaymentNotifications;
 } = {}) {
   return {
-    async list(tab = "pending"): Promise<PaymentQueue> {
-      const selected = ["pending", "approved", "rejected", "superseded"].includes(tab) ? tab : "pending";
+    async list(tab = "pending", paymentId?: string): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
       return database.query(async tx => {
+        // An old audit event may describe a payment whose status has since changed.
+        const target = paymentId ? await tx.paymentSubmission.findUnique({ where: { id: paymentId }, select: paymentSelect }) : null;
+        const requested = target?.status === "reversed" ? "approved" : target?.status ?? tab;
+        const selected = ["pending", "approved", "rejected", "superseded"].includes(requested) ? requested : "pending";
         const rows = await tx.paymentSubmission.findMany({ where: { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected },
           orderBy: [{ submittedAt: selected === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100,
-          select: { id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
-            claimedAmountUgx: true, screenshotAmountUgx: true, purpose: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
-            transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } } } });
+          select: paymentSelect });
+        // Keep the queue bounded while making the exact historical report available.
+        if (target && !rows.some(row => row.id === target.id)) rows.splice(99, rows.length > 99 ? 1 : 0, target);
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
         const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
         const [related, payers, pendingCount] = await Promise.all([
@@ -34,7 +43,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           phones.length ? tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }) : [],
           tx.paymentSubmission.count({ where: { status: "pending" } }),
         ]);
-        return { pendingCount, payments: rows.map(r => ({ id: r.id, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
+        return { pendingCount, ...(paymentId ? { tab: selected, targetFound: !!target } : {}), payments: rows.map(r => ({ id: r.id, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx,
           purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, accountCreditUgx: r.account.creditUgx, planId: r.planId,
           planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,

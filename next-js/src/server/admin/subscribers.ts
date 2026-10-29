@@ -1,4 +1,5 @@
 import "server-only";
+import { auditDateBounds, type AuditFilters } from "../../domain/admin-audit.ts";
 import { randomInt } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow, OwnerPaymentSummary } from "../../domain/owner-members.ts";
@@ -168,8 +169,11 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
         return { status: "reset", accountId: id, temporaryPassword, expiresAt: expiresAt.toISOString(), created: false, sessionsDeleted };
       });
     },
-    async audit(action = ""): Promise<readonly OwnerAuditRow[]> {
-      return database.query(async tx => (await tx.ownerAuditEvent.findMany({ where: ownerAuditActions.includes(action as typeof ownerAuditActions[number]) ? { action } : {}, orderBy: [{ at: "desc" }, { id: "desc" }], take: 100,
+    async audit(action = "", dates: Pick<AuditFilters, "period" | "startDate" | "endDate"> = {}): Promise<readonly OwnerAuditRow[]> {
+      const bounds = auditDateBounds({ ...dates, now: now() });
+      return database.query(async tx => (await tx.ownerAuditEvent.findMany({ where: {
+        ...(ownerAuditActions.includes(action as typeof ownerAuditActions[number]) ? { action } : {}), ...(bounds ? { at: bounds } : {}),
+      }, orderBy: [{ at: "desc" }, { id: "desc" }], take: 100,
         select: { id: true, at: true, actor: true, action: true, accountId: true, targetType: true, targetId: true } })).map(r => ({ ...r, id: String(r.id), at: r.at.toISOString() })));
     },
   };

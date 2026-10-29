@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { auditActionLabel, auditActorLabel, auditCategories, auditCategory, auditCategoryLabel, auditCsv,
+import { auditActionLabel, auditActorLabel, auditCategories, auditCategory, auditCategoryLabel, auditCsv, auditDateBounds,
   auditDay, auditReference, auditTargetLabel, filterAuditRows } from "../src/domain/admin-audit.ts";
 
 const accountId = "00000000-0000-4000-8000-000000000100";
@@ -75,6 +75,68 @@ test("search combines friendly labels and identifier lookups with exact category
   assert.deepEqual(filterAuditRows(rows, { search: "18" }), [rows[1]]);
   assert.deepEqual(filterAuditRows(rows, { category: "access" }), []);
   assert.equal(rows[0].targetId, "P-FIRST", "filtering does not mutate source rows");
+});
+
+test("the last hour includes its endpoints and crosses an EAT midnight without including future events", () => {
+  const now = Date.parse("2026-10-22T21:30:00.000Z");
+  const rows = [
+    row({ id: "before", at: "2026-10-22T20:29:59.999Z" }),
+    row({ id: "start", at: "2026-10-22T20:30:00.000Z" }),
+    row({ id: "now", at: "2026-10-22T21:30:00.000Z" }),
+    row({ id: "future", at: "2026-10-22T21:30:00.001Z" }),
+    row({ id: "invalid", at: "invalid" }),
+  ];
+  assert.deepEqual(filterAuditRows(rows, { period: "1hour", now }).map(item => item.id), ["start", "now"]);
+  assert.deepEqual(auditDateBounds({ period: "1hour", now }), {
+    gte: new Date("2026-10-22T20:30:00.000Z"), lt: new Date("2026-10-22T21:30:00.001Z"),
+  });
+});
+
+test("month presets use reporting dates, clamp February and cross year boundaries", () => {
+  const cases = [
+    ["3months", "2026-05-31T09:00:00Z", "2026-02-27T21:00:00.000Z"],
+    ["6months", "2026-08-31T09:00:00Z", "2026-02-27T21:00:00.000Z"],
+    ["6months", "2024-08-31T09:00:00Z", "2024-02-28T21:00:00.000Z"],
+    ["3months", "2026-01-30T21:00:00Z", "2025-10-30T21:00:00.000Z"],
+  ];
+  for (const [period, instant, earliest] of cases) {
+    const now = Date.parse(instant), start = Date.parse(earliest);
+    const rows = [row({ id: "before", at: new Date(start - 1).toISOString() }), row({ id: "start", at: earliest }),
+      row({ id: "now", at: instant }), row({ id: "future", at: new Date(now + 1).toISOString() })];
+    assert.deepEqual(filterAuditRows(rows, { period, now }).map(item => item.id), ["start", "now"], `${period}: ${instant}`);
+    assert.deepEqual(auditDateBounds({ period, now }), { gte: new Date(start), lt: new Date(now + 1) });
+  }
+});
+
+test("custom audit ranges include both full EAT dates, including a single selected day", () => {
+  const rows = [
+    row({ id: "before", at: "2026-10-21T20:59:59.999Z" }),
+    row({ id: "start", at: "2026-10-21T21:00:00.000Z" }),
+    row({ id: "last-day-start", at: "2026-10-22T21:00:00.000Z" }),
+    row({ id: "end", at: "2026-10-23T20:59:59.999Z" }),
+    row({ id: "after", at: "2026-10-23T21:00:00.000Z" }),
+  ];
+  const range = { period: "custom", startDate: "2026-10-22", endDate: "2026-10-23" };
+  assert.deepEqual(filterAuditRows(rows, range).map(item => item.id), ["start", "last-day-start", "end"]);
+  assert.deepEqual(auditDateBounds(range), {
+    gte: new Date("2026-10-21T21:00:00.000Z"), lt: new Date("2026-10-23T21:00:00.000Z"),
+  });
+  assert.deepEqual(filterAuditRows(rows, { ...range, startDate: "2026-10-23" }).map(item => item.id), ["last-day-start", "end"]);
+  assert.equal(auditDateBounds({ period: "all", startDate: "invalid", now: NaN }), null);
+});
+
+test("custom audit ranges reject missing, impossible, malformed and reversed dates", () => {
+  const invalid = [
+    { startDate: "", endDate: "2026-10-23" },
+    { startDate: "2026-10-23", endDate: "" },
+    { startDate: "2026-02-30", endDate: "2026-10-23" },
+    { startDate: "2026-1-01", endDate: "2026-10-23" },
+    { startDate: "2026-10-24", endDate: "2026-10-23" },
+  ];
+  for (const dates of invalid) {
+    assert.throws(() => auditDateBounds({ period: "custom", ...dates }), { name: "CalendarValidationError" });
+    assert.deepEqual(filterAuditRows([row()], { period: "custom", ...dates }), []);
+  }
 });
 
 test("CSV includes only supplied rows and friendly fixed fields, UTF-8 and safely quoted formula cells", () => {

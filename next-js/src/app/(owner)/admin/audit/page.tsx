@@ -7,16 +7,21 @@ import { adminPageGate } from "@/server/admin/admin-http";
 import { createSubscribers } from "@/server/admin/subscribers";
 import { AuditReport } from "@/components/admin/audit-report";
 import { ownerAuditActions } from "@/server/admin/audit";
+import { auditDateBounds, auditPeriods } from "@/domain/admin-audit";
+import { TextLink } from "@/components/ui/controls";
 export const metadata: Metadata = { title: "Audit · Admin · Goal Hint" };
 export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
   if (!page.owner) redirectToAccountLogin();
   const params = await searchParams, db = page.services.database;
   const action = typeof params.action === "string" && ownerAuditActions.includes(params.action as typeof ownerAuditActions[number]) ? params.action : "";
-  const data = db ? await createSubscribers(db).audit(action).catch(() => null) : null;
+  const period = auditPeriods.find(item => item.value === params.period)?.value ?? "all";
+  const startDate = period === "custom" && typeof params.startDate === "string" ? params.startDate : "";
+  const endDate = period === "custom" && typeof params.endDate === "string" ? params.endDate : "";
+  try { auditDateBounds({ period, startDate, endDate }); }
+  catch { return <AdminFrame database={page.services.database}><RecordBody><h1>Audit</h1><Notice $tone="error" role="alert">Invalid audit date range. <TextLink href="/admin/audit">Reset filters</TextLink></Notice></RecordBody></AdminFrame>; }
+  const data = db ? await createSubscribers(db).audit(action, { period, startDate, endDate }).catch(() => null) : null;
   // The report owns the title row (its Export button sits beside the h1 on phones); the error state keeps the same h1.
-  return <AdminFrame database={page.services.database}>
-    {data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} />
-      : <RecordBody><h1>Audit log</h1><Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></RecordBody>}
-  </AdminFrame>;
+  return <AdminFrame database={page.services.database}>{data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} period={period} startDate={startDate} endDate={endDate} />
+    : <RecordBody><h1>Audit</h1><Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></RecordBody>}</AdminFrame>;
 }

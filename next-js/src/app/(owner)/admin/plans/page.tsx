@@ -6,6 +6,7 @@ import { redirectToAccountLogin } from "@/server/members/account-login-redirect"
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { plansServiceFor } from "@/server/members/plans";
+import { uuid } from "@/server/admin/codes-http";
 
 export const metadata: Metadata = { title: "Plans · Admin · Goal Hint" };
 
@@ -14,13 +15,13 @@ export default async function AdminPlansPage({ searchParams }: { searchParams: P
   const page = await adminPageGate(searchParams);
   if (!page.owner) redirectToAccountLogin();
   const { database } = page.services;
+  const params = await searchParams, planId = uuid(params.planId) ? params.planId : undefined;
   const plans = database ? await plansServiceFor(database).list().catch(() => null) : null;
-  return (
-    <AdminFrame database={page.services.database}>
-      {plans ? <PlansEditor initialPlans={plans} /> : <div>
-        <DeskHead><DeskTitle><h1>Plans</h1><p>Length and price of each paid period</p></DeskTitle></DeskHead>
-        <Notice $tone="error" role="alert">Plans are unavailable because the database cannot be read. Try again shortly.</Notice>
-      </div>}
-    </AdminFrame>
-  );
+  if (plans && params.planId !== undefined && (!planId || !plans.some(plan => plan.id === planId))) {
+    return <AdminFrame database={page.services.database}><DeskHead><h1>Plans</h1></DeskHead><Notice $tone="error">This plan is unavailable.</Notice></AdminFrame>;
+  }
+  return <AdminFrame database={page.services.database}>{plans ? <PlansEditor key={planId ?? "all"} initialPlans={plans} {...(planId ? { initialSelectedId: planId } : {})} /> : <div>
+    <DeskHead><DeskTitle><h1>Plans</h1><p>Length and price of each paid period</p></DeskTitle></DeskHead>
+    <Notice $tone="error" role="alert">Plans are unavailable because the database cannot be read. Try again shortly.</Notice>
+  </div>}</AdminFrame>;
 }

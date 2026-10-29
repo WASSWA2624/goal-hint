@@ -1,4 +1,6 @@
 import { toCsv } from "./analytics-csv.ts";
+import { addReportingDays, CalendarValidationError, getReportingDate, getReportingDayBounds, parseReportingDate,
+  utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
 import type { OwnerAuditRow } from "./owner-members.ts";
 import { publicPolicy } from "./public-policy.ts";
 
@@ -13,8 +15,21 @@ export const auditCategories = Object.freeze([
   { value: "other", label: "Other" },
 ] as const);
 export type AuditCategory = (typeof auditCategories)[number]["value"];
-export type AuditPeriod = "all" | "today" | "7days" | "30days";
-export type AuditFilters = Readonly<{ search?: string; category?: AuditCategory | ""; period?: AuditPeriod; now?: number }>;
+export const auditPeriods = Object.freeze([
+  { value: "all", label: "Any date" },
+  { value: "1hour", label: "Last hour" },
+  { value: "today", label: "Today" },
+  { value: "7days", label: "Last 7 days" },
+  { value: "30days", label: "Last 30 days" },
+  { value: "3months", label: "Last 3 months" },
+  { value: "6months", label: "Last 6 months" },
+  { value: "custom", label: "Custom date range" },
+] as const);
+export type AuditPeriod = (typeof auditPeriods)[number]["value"];
+export type AuditFilters = Readonly<{ search?: string; category?: AuditCategory | ""; period?: AuditPeriod;
+  startDate?: string; endDate?: string; now?: number }>;
+export type AuditDateFilters = Pick<AuditFilters, "period" | "startDate" | "endDate" | "now">;
+export type AuditDateBounds = Readonly<{ gte: Date; lt: Date }>;
 
 type ActionDescription = Readonly<{ label: string; category: AuditCategory }>;
 const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze({
@@ -128,22 +143,51 @@ export function auditDay(at: string): string {
   return parts ? `${parts.year!.padStart(4, "0")}-${parts.month}-${parts.day}` : "";
 }
 
+/** Clamp month-end dates instead of letting JavaScript roll into the following month. */
+function monthsBefore(day: ReportingDate, months: number): ReportingDate {
+  const date = new Date(`${day}T00:00:00Z`), dayOfMonth = date.getUTCDate();
+  date.setUTCMonth(date.getUTCMonth() - months + 1, 0);
+  date.setUTCDate(Math.min(dayOfMonth, date.getUTCDate()));
+  return parseReportingDate(date.toISOString().slice(0, 10));
+}
+
+/** Shared query and client bounds: inclusive reporting dates, with an exclusive UTC endpoint. */
+export function auditDateBounds({ period = "all", startDate = "", endDate = "", now = Date.now() }: AuditDateFilters = {}): AuditDateBounds | null {
+  if (period === "all") return null;
+  if (period === "custom") {
+    const start = parseReportingDate(startDate), end = parseReportingDate(endDate);
+    if (start > end) throw new CalendarValidationError("Start date must be on or before end date.");
+    return { gte: new Date(getReportingDayBounds(start).startInclusive), lt: new Date(getReportingDayBounds(end).endExclusive) };
+  }
+  const instant = utcInstantFromEpochMilliseconds(now), today = getReportingDate(instant);
+  let from: number;
+  switch (period) {
+    case "1hour": from = now - 3_600_000; break;
+    case "today": from = getReportingDayBounds(today).startInclusive; break;
+    case "7days": from = getReportingDayBounds(addReportingDays(today, -6)).startInclusive; break;
+    case "30days": from = getReportingDayBounds(addReportingDays(today, -29)).startInclusive; break;
+    case "3months": from = getReportingDayBounds(monthsBefore(today, 3)).startInclusive; break;
+    case "6months": from = getReportingDayBounds(monthsBefore(today, 6)).startInclusive; break;
+    default: throw new CalendarValidationError("Choose a valid audit date period.");
+  }
+  return { gte: new Date(from), lt: new Date(now + 1) };
+}
+
 const searchable = (value: string) => value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** Filters only the rows already loaded; the source order and source objects stay intact. */
-export function filterAuditRows(rows: readonly OwnerAuditRow[], { search = "", category = "", period = "all", now = Date.now() }: AuditFilters = {}): readonly OwnerAuditRow[] {
+export function filterAuditRows(rows: readonly OwnerAuditRow[], { search = "", category = "", ...dateFilters }: AuditFilters = {}): readonly OwnerAuditRow[] {
   const terms = searchable(search).trim().split(/\s+/u).filter(Boolean);
-  const limited = period !== "all", current = new Date(now);
-  const today = limited && Number.isFinite(current.getTime()) ? auditDay(current.toISOString()) : "";
-  const dayLimit = period === "today" ? 0 : period === "7days" ? 6 : 29;
-  const todayNumber = today ? Date.parse(`${today}T00:00:00Z`) / 86_400_000 : NaN;
+  let bounds: AuditDateBounds | null;
+  try { bounds = auditDateBounds(dateFilters); }
+  catch (error) { if (error instanceof CalendarValidationError) return []; throw error; }
+  const start = bounds?.gte.getTime(), end = bounds?.lt.getTime();
   return rows.filter(row => {
     const rowCategory = auditCategory(row.action);
     if (category && rowCategory !== category) return false;
-    if (limited) {
-      const at = Date.parse(row.at), day = auditDay(row.at);
-      const difference = todayNumber - Date.parse(`${day}T00:00:00Z`) / 86_400_000;
-      if (!Number.isFinite(difference) || at > now || difference < 0 || difference > dayLimit) return false;
+    if (start !== undefined && end !== undefined) {
+      const at = Date.parse(row.at);
+      if (!Number.isFinite(at) || at < start || at >= end) return false;
     }
     if (!terms.length) return true;
     const text = searchable([auditActionLabel(row.action), auditCategoryLabel(rowCategory), auditActorLabel(row.actor),

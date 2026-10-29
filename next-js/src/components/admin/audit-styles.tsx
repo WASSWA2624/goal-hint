@@ -2,11 +2,15 @@
 
 import styled, { css } from "styled-components";
 import { ButtonLink } from "@/components/ui/controls";
+import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
-import { RecordDetails, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
+import { RecordDetails, RecordHead, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
 
 export const AuditLayout = styled(RecordWorkspace)``;
+export const AuditHead = styled(RecordHead)`
+  > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
+`;
 export const AuditDetails = styled(RecordDetails)`${media.belowDesktop} { display: none; }`;
 export const HeadActions = styled.div`margin-inline-start: auto;`;
 
@@ -18,10 +22,10 @@ export const ExportButton = styled(ActionButton)`
 
 /** Search and filters: loose on phones (search, then a Filters drawer), one open side panel from desktop up. */
 export const AuditTools = styled(RecordListTools)`
-  label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   input, select { min-block-size: 44px; }
   ${media.belowDesktop} { input, select { font-size: 16px; } }
   ${media.desktop} { input, select { min-block-size: 34px; padding-block: 4px; } }
+  [data-floating-field] select { border-radius: 0; }
 `;
 
 /** The search label stays for assistive technology; the placeholder and icon name the field on screen. */
@@ -37,7 +41,7 @@ export const FilterDrawer = styled.div`
   ${media.belowDesktop} {
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 6px;
+    border-radius: 0;
   }
 `;
 
@@ -57,12 +61,26 @@ export const FilterToggle = styled.button`
 export const FilterBody = styled.div<{ $open: boolean }>`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 8px; min-inline-size: 0;
   > * { min-inline-size: 0; }
-  > :first-child { grid-column: 1 / -1; }
+  > :nth-child(n + 3) { grid-column: 1 / -1; }
   ${({ $open, theme }) => css`${media.belowDesktop} {
     padding: 12px 14px 14px; border-block-start: ${theme.border.width} solid ${theme.color.border};
     ${!$open && css`display: none;`}
   }`}
-  ${media.desktop} { grid-template-columns: minmax(0, 1fr); }
+`;
+
+export const AuditRangeSummary = styled.div`
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
+`;
+
+export const AuditRangeDialog = styled(CriteriaDialog)`
+  border-radius: 0;
+  && button { border-radius: 0; }
+`;
+
+export const AuditRangeFields = styled.div`
+  display: grid; gap: 14px;
+  > p { margin: 0; }
 `;
 
 /** "n events · 1–20 shown" on the start side, the window and time zone on the end side. */
@@ -160,8 +178,9 @@ export const EventLink = styled(ButtonLink)`
 
 export const AuditPager = styled.nav`
   inline-size: 100%;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-inline-size: 0; padding: 0 6px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; min-inline-size: 0; padding: 0;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${media.desktop} { padding: 4px 8px; }
+  > button { gap: 2px; padding-inline: 2px; font-size: 0.75rem; }
+  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; white-space: nowrap; }
+  ${media.desktop} { padding-block: 4px; }
 `;
