@@ -207,3 +207,53 @@ test('anonymous API visitors receive the same ranked original aggregates without
   assert.deepEqual(await response.json(), expected);
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });
+
+test('filtered API reads receive normalized dates/results and recheck access before returning private selections', async () => {
+  let checks = 0, received;
+  const handler = createBestSlipsHandler({ now: () => now, access: async () => checks++ ? free : full,
+    read: async () => { throw new Error('must use the filtered reader'); },
+    browse: async (viewer, query) => {
+      assert.equal(viewer.tier, 'full'); received = query;
+      const result = await service()(full);
+      return { ...result, slips: result.slips.map((view, index) => ({ ...view, id: `publication-${index}`,
+        publicationDay: today, outcome: 'won' })),
+        browse: { query, total: result.slips.length, pageSize: 20, hasMore: false, nextCursor: null, from: today, to: today } };
+    } });
+  const response = await handler(new Request('https://goalhint.com/api/best-slips?period=today&status=won&page=1'));
+  assert.equal(response.status, 200); assert.equal(checks, 2);
+  assert.deepEqual(received, { period: 'today', status: 'won', page: 1 });
+  const data = await response.json();
+  assert.equal(data.browse.query.status, 'won'); assert.equal(data.slips[0].outcome, 'won');
+  assert.equal(data.slips[0].publicationDay, today);
+  assert.equal(data.slips[0].slip, undefined); assert.equal(data.slips[0].matchStates, undefined);
+  assert.doesNotMatch(JSON.stringify(data), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|oddsBasis/);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+});
+
+test('filtered API rejects malformed or reversed criteria before accessing private data', async () => {
+  let reads = 0;
+  const handler = createBestSlipsHandler({ now: () => now, access: async () => { reads++; return full; },
+    browse: async () => { reads++; throw new Error('must not read'); } });
+  for (const search of ['period=unknown', 'status=void', 'period=custom&from=2026-02-30&to=2026-03-01',
+    'period=custom&from=2026-10-29&to=2026-10-28', 'period=today&period=yesterday', 'page=0', 'period=all&cursor=broken']) {
+    const response = await handler(new Request(`https://goalhint.com/api/best-slips?${search}`));
+    assert.equal(response.status, 400, search);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  }
+  assert.equal(reads, 0);
+});
+
+test('filtered API failures return private unavailable responses without internal diagnostics', async () => {
+  const handler = createBestSlipsHandler({ now: () => now, access: async () => full,
+    browse: async () => { throw new Error('private database diagnostics'); } });
+  const response = await handler(new Request('https://goalhint.com/api/best-slips?period=yesterday'));
+  assert.equal(response.status, 503); assert.deepEqual(await response.json(), { error: 'unavailable' });
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+});
+
+test('a failed publication read retains an unavailable HTTP status even when the service returns a safe empty DTO', async () => {
+  const handler = createBestSlipsHandler({ now: () => now, access: async () => free,
+    browse: async () => ({ day: today, state: 'data-unavailable', slips: [], searchLimited: false, partialCoverage: false }) });
+  const response = await handler(new Request('https://goalhint.com/api/best-slips?period=last7'));
+  assert.equal(response.status, 503); assert.equal((await response.json()).state, 'data-unavailable');
+});

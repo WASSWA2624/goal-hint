@@ -6,6 +6,7 @@ import type { ReportingDate } from "./calendar.ts";
 import type { SlipBuildState } from "./slip-page.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-state.ts";
+import type { BestSlipsQuery } from "./best-slips-query.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
 
@@ -17,12 +18,20 @@ export function compareBestSlips(left: BestSlip, right: BestSlip): number {
 export type BestSlipSummary = Readonly<{
   rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;
 }>;
-export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip; matchStates?: readonly SlipMatchState[] }>;
+export type BestSlipView = BestSlipSummary & Readonly<{
+  slip?: BestSlip; matchStates?: readonly SlipMatchState[];
+  id?: string; publicationDay?: ReportingDate; outcome?: "won" | "lost" | "pending" | "void";
+}>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
   searchLimited: boolean; partialCoverage: boolean;
   /** All slips in this daily publication, including those with active original cycles. */
   statistics?: PerformanceSummaryCounts | null;
+  browse?: Readonly<{
+    query: BestSlipsQuery; total: number | null; pageSize: number; hasMore: boolean; nextCursor: string | null;
+    /** Requested range for exact totals; actually scanned publication dates for All dates. */
+    from: ReportingDate | null; to: ReportingDate | null;
+  }>;
 }>;
 
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {

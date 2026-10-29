@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { getReportingDate, utcInstantFromEpochMilliseconds } from '../src/domain/calendar.ts';
+import { defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { createPublishedSlips } from '../src/server/slips/published-slips.ts';
 import { liveRecord } from './helpers/live-refresh-fixtures.mjs';
 import { MysqlServerUnavailableError } from './helpers/mysql-instance.mjs';
@@ -49,6 +50,10 @@ test('genuine MySQL publication DDL, concurrent first-writer ownership, sealed r
   assert.equal(history.total, 1); assert.equal(history.records[0].outcome, 'lost');
   assert.equal(history.records[0].slip.selections[0].forecast.revisionId, revisionId);
   assert.equal(history.records[0].slip.totalOdds, '5.00');
+  const browse = await store.browse(defaultBestSlipsQuery(), day);
+  assert.equal(browse.browse.total, 1); assert.equal(browse.slips[0].outcome, 'lost');
+  assert.equal(browse.slips[0].publicationDay, day); assert.equal(browse.statistics.lost, 1);
+  assert.equal(browse.slips[0].matchStates[0].forecast.revisionId, revisionId);
   for (const table of ['DailySlipPublication', 'PublishedSlip', 'PublishedSlipLeg']) {
     const column = table === 'PublishedSlipLeg' ? 'slipId' : 'id';
     await assert.rejects(root.query(`UPDATE ${table} SET ${column}=${column}`), /append-only/);

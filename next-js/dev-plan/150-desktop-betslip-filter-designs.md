@@ -74,4 +74,5 @@ Review at `http://127.0.0.1:8358/desktop-betslip-filter-designs.html`.
   ignored `output/`. Commit the editable HTML, README, and this plan.
 
 No production integration or build result is claimed by this design-only plan.
-Await concept selection before implementing the working BetSlip filters.
+The user selected Compact selectors; its production implementation and
+verification are tracked in [plan 152](152-compact-desktop-betslip-filters.md).

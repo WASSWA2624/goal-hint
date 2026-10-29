@@ -13,6 +13,9 @@ import { createPublishedSlips } from "./published-slips.ts";
 export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
   return { ...result, slips: result.slips.map((view) => ({ rank: view.rank, matchCount: view.matchCount,
     totalOdds: view.totalOdds, estimatedProbability: view.estimatedProbability, averageProbability: view.averageProbability,
+    ...(view.id !== undefined ? { id: view.id } : {}),
+    ...(view.publicationDay !== undefined ? { publicationDay: view.publicationDay } : {}),
+    ...(view.outcome !== undefined ? { outcome: view.outcome } : {}),
     ...(access.tier === "full" && view.slip ? { slip: view.slip,
       ...(view.matchStates ? { matchStates: view.slip.selections.flatMap((selection) => {
         const state = slipMatchStateForSelection(selection, view.matchStates); return state ? [state] : [];

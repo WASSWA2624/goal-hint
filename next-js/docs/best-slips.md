@@ -74,6 +74,42 @@ response. The page refreshes while visible and after a background tab returns.
 Automatic refresh waits during a pending navigation or an unfinished refresh,
 so it cannot replace a user's page change.
 
+## Desktop date and result filters
+
+The selected Compact selectors design adds one toolbar above the desktop slip
+list: Slip date, All slips/Won/Lost/Pending, and Reset. It uses the shared Matches
+filter palette, 32px square controls, and the existing custom-range dialog.
+Phones and tablets keep their original daily presentation.
+
+Dates select the slip's publication day in EAT. Today, Yesterday, Tomorrow,
+Last 3/7/30 days, Next 7/30 days, All dates, and Custom range are available.
+Past periods include today; future periods start tomorrow. Custom bounds are
+inclusive and limited to 366 days. Reset restores Today and All slips. Dates
+and outcomes combine; editing or canceling dates preserves the result choice.
+Future periods honestly remain empty until a publication exists.
+
+Desktop refinements read `/api/best-slips` with `period`, `status`, `page`, and,
+for custom dates, `from`/`to`. Default daily server rendering remains unchanged.
+Filters and page controls use local state; switching to mobile shows the daily
+server result. Superseded requests are aborted and ignored. Read failures show
+retry feedback instead of stale slips or an empty-result claim.
+
+Explicit ranges have exact result counts and 20 slips per page. All dates scans
+at most 31 publications per request and uses an original-day/rank cursor to
+continue without dropping remaining slips from a publication. Its summary
+states the dates examined and the number shown rather than claiming an
+all-history total. A scan with no matching outcomes still offers continuation
+when older publications remain. Date/result changes reset pagination.
+
+Outcome filtering uses the original recorded forecast cycles, including a loss
+before every other selection settles. Void remains visible under All slips.
+Statistics cover the whole selected explicit date range, independent of the
+result filter and current page. All dates omits partial-period statistics.
+Public rows include only approved aggregates, the publication date, outcome,
+and an opaque publication-row hash; the internal built-slip identity and
+active selections remain gated. Entitlement is rechecked after every API read.
+No database migration is required.
+
 Local test mode exposes sign-in, plans, automatic registration trials, payment reports and code
 activation. Every fixture's predictions/odds remain gated; valid unlocked periods
 are honored until expiry. Nothing was deployed or activated on a production host.

@@ -5,15 +5,16 @@ BetSlip page. They follow the existing Goal Hint desktop styling: compact
 controls, square edges, Manrope typography, blue selection accents, and the
 shared slip presentation.
 
-These designs await selection. The production BetSlip page, queries, data
-access, and slip outcome rules are unchanged. Choose a concept before
-implementing the working feature.
+The user selected **01 · Compact selectors** for desktop implementation, tracked
+in [plan 152](../../dev-plan/152-compact-desktop-betslip-filters.md). This gallery
+remains a reference with illustrative local data; it does not read production
+slips or control the working page.
 
 ## Concepts
 
 | No. | Concept | Structure and tradeoff |
 | --- | --- | --- |
-| 01 | Compact selectors | A date selector and result buttons share one small toolbar. Uses little space; date options open on demand. |
+| 01 | Compact selectors — selected | A date selector and result buttons share one small toolbar. Uses little space; date options open on demand. |
 | 02 | Outcome tabs | All, Won, Lost, and Pending remain visible as tabs. Makes result changes quick; uses another row. |
 | 03 | Visible date presets | Grouped date buttons expose the available periods. Easy to discover; needs more vertical space. |
 | 04 | Day navigator | Yesterday, Today, and Tomorrow are direct actions, with other periods in a selector. Suits daily browsing; longer ranges take another interaction. |

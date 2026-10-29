@@ -2,7 +2,9 @@ import "server-only";
 
 import { z } from "zod";
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
-import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
+import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
+import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
+import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
 import { savedSlipOutcome, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
@@ -163,6 +165,73 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           searchLimited: value.searchLimited, partialCoverage: value.partialCoverage, statistics };
       });
     },
+    /** Date/result browsing reuses original-cycle adjudication and keeps active rows behind the caller's access gate. */
+    async browse(input: BestSlipsQuery, today: ReportingDate): Promise<BestSlipsResult> {
+      const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), today), dates = resolveBestSlipsDates(query, today);
+      const cursor = query.cursor === undefined ? null : parseBestSlipsCursor(query.cursor), allDates = query.period === "all";
+      return transaction(async (tx) => {
+        const asOf = await databaseTime(tx);
+        const scope = allDates ? cursor ? Prisma.sql`AND eatDate<=${new Date(`${cursor.day}T00:00:00Z`)}` : Prisma.empty
+          : Prisma.sql`AND eatDate>=${new Date(`${dates.from}T00:00:00Z`)} AND eatDate<=${new Date(`${dates.to}T00:00:00Z`)}`;
+        const publicationLimit = allDates ? bestSlipsQueryRules.scanDays : bestSlipsQueryRules.maximumDays;
+        const publications = await tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
+          FROM DailySlipPublication WHERE publishedAt<=${new Date(asOf)} ${scope} ORDER BY eatDate DESC LIMIT ${publicationLimit + 1}`);
+        if (!allDates && publications.length > publicationLimit) fail("unavailable");
+        const hasOlder = allDates && publications.length > publicationLimit;
+        const selected = publications.slice(0, publicationLimit), parents = new Map(selected.map((row) => [row.id, publication(row)]));
+        const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0 };
+        const views: BestSlipView[] = [];
+        let total = 0;
+        const offset = (query.page - 1) * bestSlipsQueryRules.pageSize;
+        for (let start = 0; start < selected.length; start += bestSlipsQueryRules.scanDays) {
+          const batch = selected.slice(start, start + bestSlipsQueryRules.scanDays);
+          const rows = await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
+            FROM PublishedSlip WHERE publicationId IN (${Prisma.join(batch.map((row) => row.id))}) ORDER BY publicationId,\`rank\`
+            LIMIT ${bestSlipsQueryRules.scanDays * publishedSlipRules.maximumDailySlips + 1}`);
+          if (rows.length !== batch.reduce((count, row) => count + parents.get(row.id)!.count, 0)) fail("unavailable");
+          const siblings = new Map<string, SlipRow[]>();
+          for (const row of rows) {
+            if (!parents.has(row.publicationId)) fail("unavailable");
+            const family = siblings.get(row.publicationId) ?? []; family.push(row); siblings.set(row.publicationId, family);
+          }
+          for (const row of batch) {
+            const family = siblings.get(row.id) ?? [];
+            if (family.length !== parents.get(row.id)!.count || family.some((slip, index) => slip.rank !== index + 1)) fail("unavailable");
+          }
+          const snapshots = await readSnapshots(tx, rows);
+          const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), asOf);
+          const resultsByFixture = new Map<string, typeof results[number][]>();
+          for (const result of results) {
+            const candidates = resultsByFixture.get(result.fixtureId) ?? []; candidates.push(result); resultsByFixture.set(result.fixtureId, candidates);
+          }
+          const ordered = rows.map((row, index) => ({ row, snapshot: snapshots[index]!, parent: parents.get(row.publicationId)! }))
+            .sort((left, right) => right.parent.day.localeCompare(left.parent.day) || left.row.rank - right.row.rank);
+          for (const { row, snapshot, parent } of ordered) {
+            const slipResults = snapshot.slip.selections.flatMap((selection) => resultsByFixture.get(selection.fixtureId) ?? []);
+            const outcome = savedSlipOutcome(snapshot.slip, slipResults);
+            statistics.total++; statistics[outcome]++;
+            if (cursor && (parent.day > cursor.day || parent.day === cursor.day && row.rank <= cursor.rank)) continue;
+            if (query.status !== "all" && outcome !== query.status) continue;
+            const position = total++;
+            if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
+            const slip: BestSlip = { ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability };
+            const [view] = bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, slipResults));
+            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), outcome });
+          }
+        }
+        const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;
+        const last = retained.at(-1), oldest = selected.at(-1);
+        const nextCursor = allDates && overflow && last ? `${last.publicationDay}:${last.rank}`
+          : allDates && hasOlder && oldest ? `${parents.get(oldest.id)!.day}:${publishedSlipRules.maximumDailySlips}` : null;
+        return { day: today, state: "generated", slips: retained,
+          searchLimited: [...parents.values()].some((value) => value.searchLimited),
+          partialCoverage: [...parents.values()].some((value) => value.partialCoverage), statistics: allDates ? null : statistics,
+          browse: { query, total: allDates ? null : total, pageSize: bestSlipsQueryRules.pageSize,
+            hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
+            from: allDates ? oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
+            to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };
+      });
+    },
     async history(input: PublishedSlipHistoryQuery): Promise<PublishedSlipHistory> {
       const query = parsePublishedSlipHistoryQuery(input);
       return transaction(async (tx) => {
@@ -203,11 +272,15 @@ export function createPublishedSlips(database: DatabaseRuntime, {
 
 async function readSnapshots(tx: Prisma.TransactionClient, rows: readonly SlipRow[]) {
   const legs = rows.length ? await tx.publishedSlipLeg.findMany({ where: { slipId: { in: rows.map((row) => row.id) } } }) : [];
+  const membershipBySlip = new Map<string, typeof legs>();
+  for (const leg of legs) {
+    const group = membershipBySlip.get(leg.slipId) ?? []; group.push(leg); membershipBySlip.set(leg.slipId, group);
+  }
   return rows.map((row) => {
     assertHistorySeal(row.validIntegrity);
     const value = snapshotSchema.parse(historyJson(row.snapshotJson));
     if (row.rank < 1 || row.rank > publishedSlipRules.maximumDailySlips || row.id !== evidenceFingerprint({ publicationId: row.publicationId, rank: row.rank, snapshot: value })) fail("unavailable");
-    const membership = legs.filter((leg) => leg.slipId === row.id);
+    const membership = membershipBySlip.get(row.id) ?? [];
     if (membership.length !== value.slip.selections.length || value.slip.selections.some((selection) => !membership.some((leg) =>
       leg.fixtureId === selection.fixtureId && leg.cycleId === selection.forecast!.cycleId && leg.revisionId === selection.forecast!.revisionId))) fail("unavailable");
     return value;
