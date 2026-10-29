@@ -324,18 +324,28 @@ def verify_builder_access(origin, directory):
         verify_defaults(document)
         actions = document.nodes(attr="data-criteria-actions")
         assert len(actions) == 1, f"{path}: one toolbar action group"
+        summary = document.nodes(attr="data-slip-summary-layout")
+        assert {node.attrs["data-slip-summary-layout"] for node in summary} == {"mobile", "desktop"}, f"{path}: responsive summaries"
+        desktop_summary = next(node for node in summary if node.attrs["data-slip-summary-layout"] == "desktop")
+        assert all(caption in desktop_summary.text for caption in ["Date", "Time", "Markets", "Selection"]), f"{path}: desktop summary identifies each setting"
+        desktop_label = {"guest": "Sign in to build slips", "member": "Subscribe to build slips", "subscriber": label}[viewer]
+        account_actions = document.nodes(attr="data-slip-access-action")
+        assert len(account_actions) == (2 if destination else 1), f"{path}: toolbar and locked results share account-aware actions"
+        for account_action in account_actions:
+            labels = {node.attrs["data-action-label"]: node.text.strip() for node in account_action.nodes(attr="data-action-label")}
+            assert labels == {"mobile": label, "desktop": desktop_label}, f"{path}: preserve mobile label and explain desktop action"
         if destination:
-            links = [node for node in actions[0].nodes("a") if node.text.strip() == label]
-            assert len(links) == 1, f"{path}: exact {label} action"
-            target = urlsplit(links[0].attrs["href"])
-            assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
-            if viewer == "guest":
-                assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Sign in rather than registration"
+            for account_action in account_actions:
+                assert account_action.tag == "a", f"{path}: access action is a native link"
+                target = urlsplit(account_action.attrs["href"])
+                assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
+                if viewer == "guest":
+                    assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Sign in rather than registration"
             assert not any(node.attrs.get("type") == "submit" for node in actions[0].nodes("button")), f"{path}: access-restricted toolbar cannot submit a build"
         else:
             submit = [node for node in actions[0].nodes("button") if node.attrs.get("type") == "submit"]
-            assert len(submit) == 1 and submit[0].text.strip() == label, f"{path}: eligible members build slips"
-    print("PASS Slip Builder access actions: Sign in/login, Subscribe and Build slips.", flush=True)
+            assert len(submit) == 1 and submit[0] in account_actions, f"{path}: eligible members build slips"
+    print("PASS Slip Builder access actions: desktop/mobile labels, both locked sections, Sign in/login, Subscribe and Build slips.", flush=True)
 
 
 def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):

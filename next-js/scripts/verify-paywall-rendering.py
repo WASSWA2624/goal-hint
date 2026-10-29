@@ -147,13 +147,16 @@ def main():
                 signed_in = viewer not in {"anonymous", "off", "evicted"}
                 label = "Subscribe" if signed_in else "Sign in"
                 assert len(actions) == 1, (viewer, "one Slip Builder action group")
-                links = [node for node in actions[0].nodes("a") if node.text.strip() == label]
-                assert len(links) == 1, (viewer, "Slip Builder access action")
-                destination = urlsplit(links[0].attrs["href"])
-                assert destination.path == ("/en/subscribe" if signed_in else "/en/account"), (viewer, "Slip Builder access destination")
-                assert parse_qs(destination.query).get("return") == ["/en/slips"], (viewer, "Slip Builder return destination")
-                if not signed_in:
-                    assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open sign in")
+                links = builder.nodes("a", "data-slip-access-action")
+                assert len(links) == 2, (viewer, "Slip Builder toolbar and results access actions")
+                for link in links:
+                    labels = {node.attrs["data-action-label"]: node.text.strip() for node in link.nodes(attr="data-action-label")}
+                    assert labels == {"mobile": label, "desktop": label + " to build slips"}, (viewer, "responsive Slip Builder access labels")
+                    destination = urlsplit(link.attrs["href"])
+                    assert destination.path == ("/en/subscribe" if signed_in else "/en/account"), (viewer, "Slip Builder access destination")
+                    assert parse_qs(destination.query).get("return") == ["/en/slips"], (viewer, "Slip Builder return destination")
+                    if not signed_in:
+                        assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open sign in")
                 checks += 1
             for path, extra in [("/en", {}), ("/en?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:
                 response = request(server.origin, path, headers={**headers, **extra})

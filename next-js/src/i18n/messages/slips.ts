@@ -1,5 +1,11 @@
 export const slipsMessages = {
   "slips.signIn": "Sign in",
+  "slips.signInToBuild": "Sign in to build slips",
+  "slips.subscribeToBuild": "Subscribe to build slips",
+  "slips.summary.dateLabel": "Date",
+  "slips.summary.timeLabel": "Time",
+  "slips.summary.marketsLabel": "Markets",
+  "slips.summary.selectionLabel": "Selection",
   "slips.today": "Today",
   "slips.autoShort": "Auto",
   "slips.toolbar.kickoff": "Date & time",

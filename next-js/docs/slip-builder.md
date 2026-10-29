@@ -38,6 +38,14 @@ desktop and mobile. Reset and the primary action remain in the compact toolbar.
 The settings reuse the Matches search/filter chrome: flat surfaces, quiet borders,
 compact labels, and square controls, with usable touch targets on phones.
 
+From the 1024px desktop breakpoint, the five numeric inputs and three popup
+buttons share one row. The slip-count field is sized for four digits; the four
+range fields use equal widths accommodating five-digit values and decimal odds.
+These are display widths; validation and generation limits remain shared across
+devices. The next row labels the current Date, Time, Markets and Selection,
+alongside a lightly shaded Reset button and the account-aware primary action.
+Custom summaries wrap within their row rather than overflowing the page.
+
 The buttons show counts for their current settings. Odds & probability counts custom
 individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date
 range and a custom daily time window, also up to two. Markets shows the number
@@ -118,6 +126,12 @@ When subscriber access is required, the primary action shows Sign in for a
 signed-out viewer and opens the login form with the Slip Builder return path.
 Signed-in viewers without the required subscription see Subscribe; eligible
 viewers see Build slips. Sign up remains reachable from the account screen.
+On desktop the locked toolbar and subscriber notice use the more explicit
+Sign in to build slips / Subscribe to build slips labels. Their actions share
+the same fixed 208px by 32px size (44px high for coarse pointers), including
+Build slips and its pending label, so changing access status does not resize
+the button. The subscriber notice aligns its action beside the explanation.
+Mobile retains its existing layout, short action labels, and control sizing.
 
 The optional `outcomes` mapping stores explicit arrays per market family. Missing
 families mean Automatic. Native fields `picks.<family>` accept `auto` alone or a

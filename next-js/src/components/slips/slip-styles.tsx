@@ -2,6 +2,7 @@
 
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
+import { EmptyState } from "@/components/ui/feedback";
 import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors } from "@/components/ui/filter-chrome";
 import { PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
@@ -12,6 +13,32 @@ const toolbarAction = css`
   border-radius: 0; gap: 5px; font-size: 0.75rem; line-height: 1.3;
   > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
+`;
+const desktopBuildAction = css`
+  ${media.desktop} {
+    && {
+      flex: none; inline-size: 13rem; min-inline-size: 13rem;
+      block-size: ${compactControlHeight}; min-block-size: ${compactControlHeight};
+      padding: 4px 8px; border-radius: 0; font-size: 0.75rem; line-height: 1.3; white-space: nowrap;
+    }
+    @media (pointer: coarse) { && { block-size: 44px; min-block-size: 44px; } }
+  }
+`;
+
+export const BuildActionLabel = styled.span`
+  > [data-action-label="desktop"] { display: none; }
+  ${media.desktop} {
+    > [data-action-label="mobile"] { display: none; }
+    > [data-action-label="desktop"] { display: inline; }
+  }
+`;
+export const AccessLink = styled(ButtonLink)`${desktopBuildAction}`;
+export const AccessNotice = styled(EmptyState)`
+  ${media.desktop} {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px;
+    > h3, > div { grid-column: 1; }
+    > div:last-child { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin: 0; }
+  }
 `;
 
 export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; }`;
@@ -45,6 +72,15 @@ export const CriteriaForm = styled.form`
   display: flex; flex-direction: column; gap: 6px;
   min-inline-size: 0;
   > [role="alert"] { margin: 0; }
+  ${media.desktop} {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px 12px;
+    align-items: end;
+    > [data-slip-builder-essentials] { grid-column: 1; grid-row: 1; }
+    [data-slip-criteria-options] { grid-column: 2 / -1; grid-row: 1; }
+    [data-criteria-actions] { grid-column: 3; grid-row: 2; }
+    > [data-slip-criteria-summary] { grid-column: 1 / 3; grid-row: 2; align-self: center; }
+    > [role="alert"], > [data-criteria-dialog] { grid-column: 1 / -1; }
+  }
 `;
 export const BuilderEssentials = styled.div`
   display: grid; grid-template-columns: 3.25rem minmax(0, 1fr); gap: 8px;
@@ -58,8 +94,8 @@ export const BuilderEssentials = styled.div`
     &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   }
   ${media.desktop} {
-    grid-template-columns: 6rem minmax(0, 1fr);
-    > [data-slip-count] input { font-size: 0.75rem; }
+    grid-template-columns: 4.25rem max-content; gap: 12px;
+    > [data-slip-count] input { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
   }
   @media (pointer: coarse) { > [data-slip-count] input { min-block-size: 44px; } }
 `;
@@ -67,12 +103,13 @@ export const BuilderOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   min-inline-size: 0; padding-block-start: 6px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  ${media.desktop} { display: contents; }
 `;
 export const CriteriaOptions = styled.div`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex: 1 1 18rem;
   gap: 5px; min-inline-size: 0;
   &[hidden] { display: none; }
-  ${media.desktop} { display: flex; flex: 0 1 auto; flex-wrap: wrap; gap: 6px; }
+  ${media.desktop} { display: flex; flex: 0 1 auto; flex-wrap: wrap; gap: 6px; align-items: end; }
 `;
 export const CriteriaTrigger = styled(Button)`
   && {
@@ -98,6 +135,15 @@ export const CriteriaTrigger = styled(Button)`
 export const CriteriaSummary = styled.p`
   margin: 0; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText};
   font-size: 0.6875rem; line-height: 1.4; overflow-wrap: anywhere;
+  > [data-slip-summary-layout="desktop"] { display: none; }
+  ${media.desktop} {
+    > [data-slip-summary-layout="mobile"] { display: none; }
+    > [data-slip-summary-layout="desktop"] {
+      display: flex; flex-wrap: wrap; gap: 4px 12px;
+      > span { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+      strong { font-weight: ${({ theme }) => theme.typography.weight.medium}; color: ${({ theme }) => theme.color.text}; }
+    }
+  }
 `;
 export const FieldGroup = styled.fieldset`
   border: 0; padding: 0; margin: 0; min-inline-size: 0;
@@ -131,7 +177,11 @@ export const TargetGroups = styled(LimitGroups)`
     &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   }
   @media (max-width: 22.5rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-  ${media.desktop} { ${Fields} > div > input { font-size: 0.75rem; padding-inline: 6px; } }
+  ${media.desktop} {
+    grid-template-columns: repeat(2, max-content); gap: 12px;
+    ${Fields} { grid-template-columns: repeat(2, 6rem); }
+    ${Fields} > div > input { font-size: 0.75rem; padding-inline: 6px; font-variant-numeric: tabular-nums; }
+  }
 `;
 export const MarketChoices = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr);
@@ -161,12 +211,15 @@ export const Actions = styled.div`
 `;
 export const BuildButton = styled(Button)`
   && { ${toolbarAction} }
+  ${desktopBuildAction}
 `;
 export const BuildLink = styled(ButtonLink)`
   && { ${toolbarAction} }
+  ${desktopBuildAction}
 `;
 export const ClearLink = styled(ButtonLink)`
   && { ${toolbarAction} }
+  ${media.desktop} { && { ${filterButtonColors} } }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;
 export const Results = styled.section`

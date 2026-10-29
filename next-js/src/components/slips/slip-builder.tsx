@@ -24,7 +24,7 @@ import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { Actions, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOptions, CriteriaSummary, CriteriaTrigger, FieldGroup,
+import { AccessLink, AccessNotice, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOptions, CriteriaSummary, CriteriaTrigger, FieldGroup,
   Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
@@ -37,6 +37,17 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
+/** CSS selects the desktop copy without changing the existing mobile action or its size. */
+function SlipBuildActionLabel({ locale, restricted, signedIn, pending = false }: {
+  locale: string; restricted: boolean; signedIn: boolean; pending?: boolean;
+}) {
+  const messages = createMessages(locale);
+  const build = messages.text(pending ? "slips.building" : "slips.build");
+  return <BuildActionLabel>
+    <span data-action-label="mobile">{restricted ? messages.text(signedIn ? "subscribe.title" : "slips.signIn") : build}</span>
+    <span data-action-label="desktop">{restricted ? messages.text(signedIn ? "slips.subscribeToBuild" : "slips.signInToBuild") : build}</span>
+  </BuildActionLabel>;
+}
 type NumericRangeField = `${"total" | "teams" | "odds" | "prob" | "totalProb"}${"Min" | "Max"}`;
 const groupFields = {
   limits: ["oddsMin", "oddsMax", "probMin", "probMax", "totalProbMin", "totalProbMax"],
@@ -132,10 +143,11 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const invalidKickoff = invalidField === "dateFrom" || invalidField === "dateTo" || invalidField === "timeFrom" || invalidField === "timeTo";
   const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
   const manualMarkets = selectedMarkets.filter((family) => outcomes[family]?.length).length;
+  const marketCountSummary = selectedMarkets.length === publicPolicy.markets.length
+    ? messages.text("slips.summary.allMarkets", { count: messages.number(selectedMarkets.length) })
+    : messages.plural("slips.marketCount", selectedMarkets.length);
   const marketsSummary = messages.text("slips.summary.markets", {
-    markets: selectedMarkets.length === publicPolicy.markets.length
-      ? messages.text("slips.summary.allMarkets", { count: messages.number(selectedMarkets.length) })
-      : messages.plural("slips.marketCount", selectedMarkets.length),
+    markets: marketCountSummary,
     results: manualMarkets ? messages.text("slips.summary.chosenResults", { count: messages.number(manualMarkets) })
       : messages.text("slips.summary.automaticResults"),
   });
@@ -242,8 +254,12 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
-  const accessRequired = <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
-    action={<ButtonLink href={subscriberHref(signedIn, action, "login")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "slips.signIn")}</ButtonLink>} />;
+  const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
+    ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
+  const accessRequired = <AccessNotice headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
+    action={<AccessLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
+      <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />
+    </AccessLink>} />;
 
   return <SlipStack aria-busy={pending}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
@@ -344,13 +360,22 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         </CriteriaOptions>
         <Actions data-criteria-actions>
           <ClearLink href={action} variant="quiet" prefetch={false} onClick={(event) => { event.preventDefault(); reset(); }}><ResetIcon />{messages.text("slips.reset")}</ClearLink>
-          {subscriberOnly ? <BuildLink href={subscriberHref(signedIn, action, "login")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "slips.signIn")}</BuildLink>
-            : <BuildButton type="submit" disabled={pending}>{messages.text(pending ? "slips.building" : "slips.build")}</BuildButton>}
+          {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
+            <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />
+          </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
+            <SlipBuildActionLabel locale={locale} restricted={false} signedIn={signedIn} pending={pending} />
+          </BuildButton>}
         </Actions>
         </BuilderOptions>
         <CriteriaSummary data-slip-criteria-summary>
-          {dateSummary()} · {draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
-            ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`} · {marketsSummary}
+          <span data-slip-summary-layout="mobile">{dateSummary()} · {timeSummary} · {marketsSummary}</span>
+          <span data-slip-summary-layout="desktop">
+            <span><strong>{messages.text("slips.summary.dateLabel")}:</strong> {dateSummary()}</span>
+            <span><strong>{messages.text("slips.summary.timeLabel")}:</strong> {timeSummary}</span>
+            <span><strong>{messages.text("slips.summary.marketsLabel")}:</strong> {marketCountSummary}</span>
+            <span><strong>{messages.text("slips.summary.selectionLabel")}:</strong> {manualMarkets
+              ? messages.text("slips.summary.chosenResults", { count: messages.number(manualMarkets) }) : messages.text("slips.automatic")}</span>
+          </span>
         </CriteriaSummary>
       </CriteriaForm>
     </BuilderPanel>
