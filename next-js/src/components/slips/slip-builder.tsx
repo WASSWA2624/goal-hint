@@ -457,7 +457,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
         requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       {subscriberOnly ? accessRequired : generated ? <>
-        <Note>{messages.text(data.jointProbabilities ? "slips.jointRanking" : "slips.ranking")}</Note>
+        {data.jointProbabilities && <Note>{messages.text("slips.jointRanking")}</Note>}
         <SlipMatchRefreshProvider slips={data.slips} enabled={desktop && !pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList $phoneGap={9} data-slip-list>{data.slips.map((slip, index) => {

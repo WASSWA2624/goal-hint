@@ -531,7 +531,6 @@ export const en = {
   "slips.kickoffColumn": "Kickoff · EAT",
   "slips.odds": "Odds",
   "slips.probability": "Probability",
-  "slips.ranking": "Fewest selections first, then highest average match probability, then total odds.",
   "slips.jointRanking": "Highest estimated combined probability first; tied estimates use fewer selections, then higher total odds.",
   "slips.unestimated": { one: "{count} examined combination had no valid combined estimate and was excluded.", other: "{count} examined combinations had no valid combined estimate and were excluded." },
   "slips.averageHint": "Average match probability is the mean of the selected predictions, not the chance that every selection wins.",
