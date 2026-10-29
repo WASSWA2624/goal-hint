@@ -466,6 +466,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         <SlipList $phoneGap={9} data-slip-list>{data.slips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
           return <SlipTable key={slip.id} slip={slip} index={index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
+            shareSource={{ source: "builder", criteria: serializeSlipCriteria(criteria).toString(), slipId: slip.id }}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>
         </SlipMatchRefreshProvider>

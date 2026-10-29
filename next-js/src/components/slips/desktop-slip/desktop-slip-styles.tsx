@@ -7,7 +7,7 @@ export { alignedLedgerStyles } from "@/components/match/desktop-match-styles";
 
 /** Shared desktop geometry for production slips and the design review. */
 export const DesktopSlipBase = styled.div`
-  min-inline-size: 0;
+  min-inline-size: 0; position: relative;
 
   &&& [data-slip-summary] {
     grid-template-columns: minmax(13rem, 1fr) minmax(8.25rem, auto) minmax(7.5rem, auto) minmax(12rem, auto);
@@ -25,6 +25,13 @@ export const DesktopSlipBase = styled.div`
   &&& [data-summary-odds] strong { min-inline-size: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
   &&& [data-summary-count], &&& [data-summary-average] { justify-self: end; }
   &&& [data-summary-average] [data-fact-label] { max-inline-size: none; }
+  &&&[data-shareable] [data-slip-summary] {
+    grid-template-columns: minmax(8.25rem, 1fr) auto auto auto;
+    column-gap: 18px; padding-inline-end: 116px;
+  }
+  [data-slip-header-action] {
+    position: absolute; inset-inline-end: 31px; inset-block-start: 4px; z-index: 2;
+  }
 
   ${desktopMatchBaseStyles}
   @media (pointer: coarse) {

@@ -73,5 +73,6 @@ export const PencilIcon = (props: IconProps) => <Icon {...props}><path d="M4 20h
 export const PlusIcon = (props: IconProps) => <Icon {...props}><path d="M12 5v14M5 12h14" /></Icon>;
 export const ExpandIcon = (props: IconProps) => <Icon {...props}><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" /></Icon>;
 export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 4v11M7 10l5 5 5-5M4 20h16" /></Icon>;
+export const ShareIcon = (props: IconProps) => <Icon {...props}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" /></Icon>;
 export const AlertIcon = (props: IconProps) => <Icon {...props}><path d="M12 3 2 20h20L12 3ZM12 10v4M12 17h.01" /></Icon>;
 export const EyeIcon = (props: IconProps) => <Icon {...props}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></Icon>;

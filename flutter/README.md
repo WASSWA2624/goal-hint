@@ -6,6 +6,13 @@ platform browser adapters on Android, iOS, macOS, and Windows; Linux embedding
 remains an explicit integration gap.
 The Next.js app owns the product screens, authentication, data, and business logic.
 
+Shared slip HTTPS links can target the existing browser on cold launch or while
+the app is running. Android and iOS app-link declarations are included, but
+opening an installed app also requires deployed domain associations and rebuilt
+signed apps. Configure the actual signing fingerprint and Apple team as described
+in [shared-slip app links](../next-js/docs/slip-app-links.md); the website remains
+the fallback. No current device/domain verification is implied by source setup.
+
 For local Windows development, start `npm run dev` in `next-js/`, then run
 `& .\tool\windows\run-dev.ps1` from `flutter/`. The development launcher opens
 `http://localhost:3000` in a Debug host; the installed Goal Hint shortcut continues

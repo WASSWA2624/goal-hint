@@ -16,6 +16,7 @@ Read [the app specification](../../app-write-up.md), [the shell requirements](..
 | 006 | [Installed identity and appearance](006-app-identity-and-theme.md) | 003 |
 | 007 | [Platform builds and release acceptance](007-platform-builds-and-release.md) | 001-006 |
 | 008 | [Local Windows development](008-local-windows-development.md) | 002, 003 |
+| 009 | [Shared-slip app links](009-shared-slip-app-links.md) | 002, 003, deployed web sharing route |
 
 Run Flutter commands from `flutter/` and web commands from `next-js/`. Paths in a feature plan are relative to the application it identifies; links explicitly cross project boundaries when needed. Keep general task prompts under repository-root `prompts/` and each application's numbered development plan in its own `dev-plan/` directory.
 

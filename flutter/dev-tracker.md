@@ -805,3 +805,39 @@ no authentication or privacy action was performed. The development run preserves
 the installed release. Its hosting suspension and
 the prior platform/release qualification limits remain unchanged. Generated
 builds, logs and browser profiles remain ignored.
+
+## 009 — Shared-slip app links — 29 October 2026
+
+**Partial: source integration and automated checks complete; signed device and
+domain verification remain external setup.**
+
+The existing WebView now opens a validated shared-slip URL on cold launch and
+later native route notifications. Warm and repeated links preserve the same
+browser and account session; a link delivered during initialization uses the
+latest pending target. Only the configured origin and `/s/<32 lowercase hex>`
+are accepted. Unknown hosts, credentials, encoded paths, malformed tokens,
+queries, fragments, and unrelated native routes are ignored. Native startup
+always generates one root page while its WebView owns the shared web route.
+
+Android declares `autoVerify` for HTTPS `goalhint.com/s/`. iOS includes
+`applinks:goalhint.com` in the Runner entitlement for all three build variants,
+with built-in Flutter deep linking enabled. Public association JSON is served by
+the web app and uses optional, validated release-certificate and Apple-team
+settings. No native package dependency or package-lock change was needed.
+
+| Check | Actual result |
+| --- | --- |
+| Final targeted Dart analysis | Passed: five changed Dart files, no issues, 22.2s |
+| Full Flutter test suite | All 51 passed, including eight new native-link and platform configuration checks |
+| Web association/configuration tests | All five passed |
+| Targeted web ESLint | Passed with zero warnings |
+| iOS plist/entitlement XML and Git whitespace | Passed |
+| Signed native builds, deployed domain associations, Android/iOS device verification | Not performed; actual release fingerprint, Apple team, live deployment and signed installs are required |
+
+The initial full analyzer run found one unused test import; it was removed
+before final targeted analysis. Native tests also caught and verified the fix
+for Flutter's initial-route override, preventing a cold-link native navigation
+error. These checks do not qualify a signed app or domain association.
+See [plan 009](dev-plan/009-shared-slip-app-links.md) and
+[app-link setup](../next-js/docs/slip-app-links.md). The website remains the
+fallback while association configuration is blank or unverified.

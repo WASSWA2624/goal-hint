@@ -19,11 +19,15 @@ class WebAppShell extends StatefulWidget {
     required this.configuration,
     this.adapter,
     this.onAppearanceChanged,
+    this.sharedSlipUri,
+    this.sharedSlipRequest = 0,
   });
 
   final AppConfig configuration;
   final WebViewAdapter? adapter;
   final ValueChanged<WebAppearance?>? onAppearanceChanged;
+  final Uri? sharedSlipUri;
+  final int sharedSlipRequest;
 
   @override
   State<WebAppShell> createState() => _WebAppShellState();
@@ -69,6 +73,28 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
     });
   }
 
+  @override
+  void didUpdateWidget(WebAppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.sharedSlipRequest != oldWidget.sharedSlipRequest &&
+        widget.sharedSlipUri != null &&
+        !_initializing) {
+      unawaited(_loadSharedSlip(widget.sharedSlipUri!));
+    }
+  }
+
+  Future<void> _loadSharedSlip(Uri uri) async {
+    try {
+      await _browser.load(uri);
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open this slip. Try again.')),
+        );
+      }
+    }
+  }
+
   Future<bool> _openExternal(Uri uri) async {
     var opened = false;
     try {
@@ -91,7 +117,9 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
       await _browser.initialize();
       if (mounted) {
         setState(() => _initializing = false);
-        await _browser.load(widget.configuration.origin);
+        await _browser.load(
+          widget.sharedSlipUri ?? widget.configuration.origin,
+        );
         _syncVisibility();
       }
     } on Exception {

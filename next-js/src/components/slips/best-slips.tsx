@@ -80,6 +80,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
       <SlipList data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
         {desktop && <SlipPublicationMeta view={view} locale={locale} />}
         {view.slip ? <SlipTable index={view.rank - 1} locale={locale}
+        shareSource={{ source: "best", day: view.publicationDay ?? content.day, slipId: view.slip.id }}
         slip={view.slip} {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
           totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}>
         <CriteriaPanel>

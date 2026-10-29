@@ -263,6 +263,18 @@ model SavedSlip {
   @@index([createdAt])
 }
 
+// Explicitly published snapshots survive source expiry and account erasure. ownerKey is a private keyed digest.
+model SharedSlip {
+  id           String   @id @db.Char(32)
+  ownerKey     String   @db.Char(64)
+  fingerprint  String   @db.Char(64)
+  snapshotJson Json
+  integrity    String   @db.Char(64)
+  createdAt    DateTime @db.DateTime(3)
+
+  @@unique([ownerKey, fingerprint])
+}
+
 // Fixture membership for a saved slip, without personal data. Foreign keys prevent orphan legs and cascade parent erasure.
 model SavedSlipFixture {
   slipId    String          @db.Char(36)
