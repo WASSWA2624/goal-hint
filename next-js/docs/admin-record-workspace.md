@@ -56,3 +56,20 @@ for the production acceptance fixture. Its printed synthetic entry establishes
 only the fixture session. Test mutations there rather than against business
 storage. The fixture includes a long payment queue, account/password workflows,
 stateful plans, Audit filtering/export, and all approved menu destinations.
+
+## Balanced compact Subscribers
+
+The live Subscribers workspace and its ten design studies share
+`SubscriberDirectoryFilters` and `SubscriberAccountRow` from
+`subscriber-directory-parts.tsx`. Keep the floating search, four filters, account
+identity, status, and carrier treatment in those shared parts. Carrier artwork
+requires a configured phone-prefix match; unknown carriers use the globe icon.
+The `subscriberPresentation` mixin in `subscriber-presentation-styles.ts` applies
+the approved compact summary, statistics, actions, and tabs to both surfaces.
+Account actions reuse the existing forms inside `SubscriberReviewDialog`.
+
+Run `python scripts/verify-subscriber-directory-rendering.py` from `next-js/`
+for focused production rendering and API acceptance. Use `--origin` to check an
+already running isolated owner fixture, or `--fixture` to reuse a built fixture
+under `.tmp`. The owner acceptance suite delegates its Subscribers checks to
+this verifier. Browser checks cover independent scrolling and dialog behavior.

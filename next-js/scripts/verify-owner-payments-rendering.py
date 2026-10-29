@@ -3,6 +3,7 @@ import json
 import re
 from html import unescape
 from pathlib import Path
+from runpy import run_path
 from urllib.error import HTTPError
 from urllib.request import Request as HttpRequest, urlopen
 from lib.rendering import Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request as raw_request, visible_html
@@ -32,69 +33,8 @@ def fixture_json(origin, path, body=None, method=None, headers=None):
 
 
 def subscriber_directory(origin):
-    response = request(origin, "/admin/subscribers")
-    html = visible_html(response.text)
-    directory = match(r'<section\b[^>]*data-subscriber-directory[^>]*>([\s\S]*?)</section>', html).group(1)
-    match(r'<form\b[^>]*data-subscriber-search', directory)
-    match(r'action="/api/admin/subscribers"', directory)
-    match("Search by phone", directory)
-    match(r'type="tel"', directory)
-    match(r'data-subscriber-count', directory)
-    assert len(re.findall(r'data-subscriber-row="[^"]+"', directory)) == 6
-    assert sorted(re.findall(r'data-subscriber-status="([^"]+)"', directory)) == ["blocked", "erased", "open", "open", "open", "open"]
-    for label in ["Open", "Blocked", "Erased", "Last sign-in", "EAT"]:
-        match(label, directory)
-    no_match(r'Active access|Queued access|days left|passwordHash|tokenHash|ownerNote', directory)
-    empty = visible_html(request(origin, "/admin/subscribers?fixture=empty").text)
-    match(r'data-subscriber-empty', empty)
-    match("No subscriber accounts yet.", empty)
-    no_match(r'data-subscriber-row=', empty)
-    selected = visible_html(request(origin, "/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100").text)
-    row = match(r'<a\b[^>]*data-subscriber-row="00000000-0000-4000-8000-000000000100"[^>]*>', selected).group(0)
-    match(r'aria-current="page"', row)
-    match(r'data-subscriber-workspace', selected)
-    match(r'data-subscriber-compact="true"', selected)
-    match(r'data-subscriber-detail="00000000-0000-4000-8000-000000000100"', selected)
-    toolbar = match(r'<div\b[^>]*data-subscriber-actions[^>]*>([\s\S]*?)</div>', selected).group(1)
-    assert len(re.findall(r'<button\b', toolbar)) == 5
-    for label in ["Grant access", "Change number", "Reset password", "Block account", "Sign out devices"]:
-        match(label, toolbar)
-    no_match("Delete", toolbar, "Removal lives in its own danger drawer, not among the everyday actions.")
-    removal = match(r'<details\b([^>]*)>\s*<summary[^>]*>(?:(?!</summary>)[\s\S])*Delete or erase', selected)
-    no_match(r'\bopen(?:=""|\s|$)', removal.group(1))
-    tabs = match(r'<div\b[^>]*role="tablist"[^>]*>([\s\S]*?)</div>', selected).group(1)
-    assert len(re.findall(r'role="tab"', tabs)) == 5
-    for label in ["Overview", "Access", "Payments", "Credit", "Devices"]:
-        match(label, tabs)
-    assert len(re.findall(r'aria-selected="true"', tabs)) == 1
-    panels = re.findall(r'<[^>]+\brole="tabpanel"[^>]*>', selected)
-    assert len(panels) == 5 and sum(bool(re.search(r'\bhidden(?:=""|\s|>)', panel)) for panel in panels) == 4
-    match(r'<dt>Credit</dt><dd data-subscriber-credit="true">UGX 0</dd>', selected)
-    for target in re.findall(r'aria-controls="([^"]+)"', tabs):
-        assert any(f'id="{target}"' in panel for panel in panels), target
-    match(r'data-subscriber-tab="overview"', selected)
-    no_match(r'data-subscriber-action-panel|data-subscriber-removal|data-subscriber-add', selected)
-    no_match(r'name="(?:reason|newPhone|verifiedBy|confirmed|planId|amount|days)"|Permanently delete account|Set temporary password', selected)
-    for query, expected in [("", 6), ("0700000101", 1), ("+256 700 000 204", 1), ("+44 7700 900123", 1), ("256700000999", 0), ("invalid", 0), ("", 6)]:
-        outgoing = Request(origin + "/api/admin/subscribers", data=json.dumps({"search": query}).encode(),
-            headers={"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin"}, method="POST")
-        with urlopen(outgoing, timeout=20) as reply:
-            payload = json.loads(reply.read())
-            assert reply.status == 200 and len(payload["accounts"]) == expected, (query, payload)
-            assert reply.headers.get("Cache-Control") == "no-store"
-            for account in payload["accounts"]:
-                assert set(account) == {"id", "phone", "status", "lastSignInAt"}
-                assert account["status"] in {"open", "blocked", "erased"}
-            if query == "+256 700 000 204":
-                assert payload["accounts"][0]["status"] == "blocked"
-    refused = Request(origin + "/api/admin/subscribers", data=b'{"search":""}',
-        headers={"Content-Type": "application/json", "Sec-Fetch-Site": "cross-site"}, method="POST")
-    try:
-        urlopen(refused, timeout=20)
-    except HTTPError as reply:
-        assert reply.code == 403
-    else:
-        raise AssertionError("Cross-site fixture searches must use the production admin guard.")
+    verifier = run_path(str(ROOT / "scripts/verify-subscriber-directory-rendering.py"), run_name="subscriber_acceptance")
+    verifier["verify"](origin)
 
 
 def subscriber_mutations(origin):
@@ -594,7 +534,7 @@ def main():
         record_workspaces_rendering(server.origin)
         overview_notices(server.origin)
         subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)

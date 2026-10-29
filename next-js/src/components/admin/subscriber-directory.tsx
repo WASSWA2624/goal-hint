@@ -1,119 +1,54 @@
 "use client";
 
-import type { FormEvent, ReactNode } from "react";
-import styled, { css } from "styled-components";
-import Link from "@/components/navigation/navigation-link";
-import { PhoneInput } from "@/components/ui/phone-input";
-import { ChevronRightIcon, SearchIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
-import type { OwnerAccount } from "@/domain/owner-members";
+import styled from "styled-components";
+import { ShieldIcon, UserIcon } from "@/components/ui/icons";
 import { formatPhone } from "@/domain/phone";
-import { formatPeriodEnd } from "@/domain/subscription-period";
-import { media } from "@/styles/theme";
-import { ActionButton, Badge } from "./admin-form";
-import { EmptyPanel, RowMeta, RowTitle, TextAction } from "./desk-styles";
-import { DirectoryRoot, visuallyHidden } from "./subscriber-styles";
-import { RecordItem, RecordListFooter, RecordListScroll, RecordListTools } from "./record-workspace";
+import { emptySubscriberDirectoryQuery, subscriberDirectoryFiltered, type SubscriberDirectoryAccount, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
+import type { SubscriptionPlanView } from "@/domain/subscription-plans";
+import { ActionButton, FieldError } from "./admin-form";
+import { EmptyPanel, TextAction } from "./desk-styles";
+import { RecordListFooter, RecordListScroll, RecordListTools } from "./record-workspace";
+import { SubscriberAccountRow, SubscriberDirectoryFilters } from "./subscriber-directory-parts";
+import { DirectoryRoot } from "./subscriber-styles";
 
 export type SubscriberDirectoryProps = Readonly<{
-  accounts: readonly OwnerAccount[];
+  accounts: readonly SubscriberDirectoryAccount[];
   selectedId?: string | null;
-  search: string;
-  filtering: boolean;
-  busy: boolean;
+  query: SubscriberDirectoryQuery;
+  plans: readonly SubscriptionPlanView[];
+  loading?: boolean;
+  error?: string;
   adminPhone?: string | null;
-  /** An account is open beside the directory. */
-  compact?: boolean;
-  onSearchChange: (value: string) => void;
-  onSearch: (query: string) => void | Promise<void>;
-  /** Shown between the search row and the account list (the add-subscriber drawer). */
-  children?: ReactNode;
+  onQueryChange: (query: SubscriberDirectoryQuery) => void;
+  accountHref: (id: string) => string;
+  onRetry?: () => void;
 }>;
 
-const statusLabels: Readonly<Record<string, string>> = { open: "Open", blocked: "Blocked", erased: "Erased" };
-const statusTones = { open: "good", blocked: "warning" } as const;
-
-/** Account state is separate from paid access. The same directory supports recent accounts and exact phone searches. */
-export function SubscriberDirectory({ accounts, selectedId, search, filtering, busy, adminPhone, compact = false, onSearchChange, onSearch, children }: SubscriberDirectoryProps) {
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!busy) void onSearch(search);
-  }
-  function showAll() {
-    if (busy) return;
-    onSearchChange("");
-    void onSearch("");
-  }
-  return <DirectoryRoot aria-label="Find subscriber" data-subscriber-directory data-subscriber-compact={compact ? "true" : undefined} aria-busy={busy}>
+/** Search remains available while the latest directory request is in flight. */
+export function SubscriberDirectory({ accounts, selectedId, query, plans, loading = false, error, adminPhone, onQueryChange, accountHref, onRetry }: SubscriberDirectoryProps) {
+  const filtered = subscriberDirectoryFiltered(query);
+  return <DirectoryRoot aria-label="Find subscriber" data-subscriber-directory data-review-directory>
     <RecordListTools>
-    <SearchForm role="search" method="post" action="/api/admin/subscribers" onSubmit={submit} data-subscriber-search>
-      <PhoneInput label="Search by phone" name="search" value={search} onValueChange={onSearchChange} lookup hint="" disabled={busy} />
-      <ActionButton type="submit" disabled={busy}><SearchIcon /><span>Search</span></ActionButton>
-    </SearchForm>
-    {children}
-    <DirectoryTitle>{filtering ? "Search results" : "Recent accounts"}</DirectoryTitle>
+      <SubscriberDirectoryFilters query={query} plans={plans} onQueryChange={onQueryChange} />
+      {error && <DirectoryError role="alert"><FieldError>{error}</FieldError>{onRetry && <ActionButton type="button" onClick={onRetry}>Retry</ActionButton>}</DirectoryError>}
     </RecordListTools>
-    <RecordListScroll data-subscriber-results aria-label="Subscriber accounts" tabIndex={0}>
-      {accounts.length ? accounts.map(account => <li key={account.id}>
-        <AccountRow href={`/admin/subscribers?${new URLSearchParams({ accountId: account.id })}`} prefetch={false} data-subscriber-row={account.id}
-          aria-current={selectedId === account.id ? "page" : undefined}>
-          <RowTitle>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}
-            <Badge data-subscriber-status={account.status} $tone={statusTones[account.status as keyof typeof statusTones] ?? "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge>
-          </RowTitle>
-          <ChevronRightIcon />
-          <RowMeta data-subscriber-last-sign-in>Last sign-in <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></RowMeta>
-        </AccountRow>
-      </li>) : <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{filtering ? "No accounts found." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
+    <RecordListScroll data-subscriber-results data-review-subscriber-list aria-label="Subscriber accounts" aria-busy={loading} tabIndex={0}>
+      {accounts.length ? accounts.map(account => <li key={account.id}><SubscriberAccountRow account={account} selected={selectedId === account.id} href={accountHref(account.id)} /></li>)
+        : <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{loading ? "Finding subscribers…" : filtered ? "No matching subscribers." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
       {adminPhone && <li><AdminNumber><ShieldIcon /><span><strong>+{formatPhone(adminPhone)}</strong> is an administrator number. Its password is managed in the environment.</span></AdminNumber></li>}
     </RecordListScroll>
     <RecordListFooter>
-      <Count data-subscriber-count role="status">{accounts.length} account{accounts.length === 1 ? "" : "s"} shown</Count>
-      {filtering && <TextAction type="button" disabled={busy} onClick={showAll}>Show all</TextAction>}
+      <span data-subscriber-count role="status" aria-live="polite">{loading ? "Updating…" : `${accounts.length} account${accounts.length === 1 ? "" : "s"} shown · up to 100`}</span>
+      {filtered && <TextAction type="button" onClick={() => onQueryChange(emptySubscriberDirectoryQuery)}>Clear filters</TextAction>}
     </RecordListFooter>
   </DirectoryRoot>;
 }
 
-const searchIconOnly = css`
-  > button { min-inline-size: ${({ theme }) => theme.control.minHeight}; padding-inline: 0; }
-  > button > span { ${visuallyHidden} }
-`;
-/** Country, number and Search on one row; the label stays for screen readers and Search becomes an icon where space is short. */
-const SearchForm = styled.form`
-  container-type: inline-size;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 6px 8px;
-  min-inline-size: 0;
-  > [data-phone-field] { display: contents; }
-  > [data-phone-field] > label { ${visuallyHidden} }
-  > [data-phone-field] > [data-phone-control] { grid-column: 1; grid-row: 1; }
-  > [data-phone-field] > :not(label):not([data-phone-control]) { grid-column: 1 / -1; }
-  > button { grid-column: 2; grid-row: 1; min-block-size: ${({ theme }) => theme.control.minHeight}; }
-  > button > svg { flex: none; font-size: 1.125rem; }
-  ${media.belowDesktop} { ${searchIconOnly} }
-  @container (max-width: 21rem) { ${searchIconOnly} }
-`;
-const Count = styled.span`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  font-variant-numeric: tabular-nums;
-`;
-const DirectoryTitle = styled.h2`${visuallyHidden}`;
-const AccountRow = styled(RecordItem).attrs({ as: Link })`
-  grid-template-columns: minmax(0, 1fr) 16px;
-  > svg { grid-column: 2; grid-row: 1 / span 2; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; }
-  time { font-variant-numeric: tabular-nums; }
-  &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
-`;
+const DirectoryError = styled.div`display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0; > span { flex: 1 1 12rem; }`;
 const AdminNumber = styled.p`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 14px;
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
   > svg { flex: none; margin-block-start: 1px; font-size: 1rem; }
   strong { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  ${media.desktop} { padding-inline: 16px; }
 `;

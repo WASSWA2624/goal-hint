@@ -5,6 +5,8 @@ import { isMemberAdminPhone } from "../members/member-admin.ts";
 import { json } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 import { createSubscribers, type TemporaryPasswordOutcome } from "./subscribers.ts";
+import { parseSubscriberDirectoryQuery } from "../../domain/subscriber-directory.ts";
+import { readSubscriberDirectory } from "./subscriber-directory.ts";
 import { codeAnswer, invalidAction, storageUnavailable, uuid } from "./codes-http.ts";
 /** The temporary password is in this one answer only (uncached, never logged or audited); the owner reads it out on the call. */
 const passwordAnswer = (outcome: TemporaryPasswordOutcome) => outcome.status === "reset" ? json(outcome)
@@ -22,8 +24,9 @@ export function createSubscriberHandlers() {
           // An allow-listed administrator number without an account: the owner's temporary password creates it.
           if (body.action === "temporary-password") return body.confirmed === true && typeof body.phone === "string" && body.phone.length <= 40
             ? passwordAnswer(await service.temporaryPassword({ phone: body.phone }, owner.username)) : invalidAction();
-          if (typeof body.search !== "string" || body.search.length > 40) return invalidAction();
-          const accounts = await service.search(body.search), phone = body.search ? normalizePhone(body.search) : null;
+          const query = parseSubscriberDirectoryQuery(body);
+          if (!query) return invalidAction();
+          const accounts = await readSubscriberDirectory(services.database, query), phone = query.search ? normalizePhone(query.search) : null;
           return json({ accounts, ...(accounts.length === 0 && phone && isMemberAdminPhone(phone) ? { adminPhone: phone } : {}) });
         }
         if (!uuid(id)) return invalidAction();

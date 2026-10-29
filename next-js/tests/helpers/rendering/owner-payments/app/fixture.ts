@@ -7,6 +7,7 @@ import type { OwnerAccount, OwnerCode } from "@/domain/owner-members";
 import type { AnalyticsServices } from "@/server/analytics/analytics-http";
 import { memberTokenHash } from "@/server/members/member-sessions";
 import { fixturePaymentProof } from "./payment-proof";
+import { fixtureSubscriberDirectory, type SubscriberDirectoryFixtureQuery } from "./subscriber-directory-query";
 
 export const fixtureAdminToken = "z".repeat(43), fixtureAdminPassword = "Synthetic owner fixture password", fixtureAdminPhone = "256700000991";
 const fixtureKey = (purpose: string, value: string) => createHmac("sha256", "synthetic-owner-fixture-key").update(`${purpose}\0${value}`).digest("hex");
@@ -276,8 +277,9 @@ function createClient(emptySubscribers: boolean) {
     memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = state.accounts.find(item => item.id === query.where.id);
       return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },
       aggregate: async () => ({ _sum: { creditUgx: null } }),
-      findMany: async (query: AccountQuery = {}) => {
-        const where = query.where;
+      findMany: async (query: AccountQuery | SubscriberDirectoryFixtureQuery = {}) => {
+        if ("select" in query && query.select?.codes) return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
+        const where = query.where as AccountQuery["where"];
         if (where?.passwordResetRequestedAt) return state.accounts.filter(row => row.passwordResetRequestedAt && !row.blockedAt && !row.erasedAt && row.phone);
         const rows = emptySubscribers ? [] : [...state.accounts].sort((a, b) => +b.lastSignInAt - +a.lastSignInAt);
         if (typeof where?.phone === "string") return rows.filter(row => row.phone === where.phone);

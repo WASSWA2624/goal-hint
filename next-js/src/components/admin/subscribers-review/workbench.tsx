@@ -2,23 +2,22 @@
 
 import { useId, useState } from "react";
 import styled from "styled-components";
-import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
-import { ChevronLeftIcon, GlobeIcon, UserPlusIcon } from "@/components/ui/icons";
-import { formatPhone, localUgandaPhone, type MobileNetwork } from "@/domain/phone";
-import { formatPeriodEnd } from "@/domain/subscription-period";
+import { ChevronLeftIcon, UserPlusIcon } from "@/components/ui/icons";
+import { localUgandaPhone } from "@/domain/phone";
+import type { SubscriberDirectoryQuery, SubscriberDirectoryAccount } from "@/domain/subscriber-directory";
 import { media } from "@/styles/theme";
-import { ActionButton, Badge } from "../admin-form";
+import { ActionButton } from "../admin-form";
 import { ActionNotices, ManualCodeForm, useCodeAction } from "../code-tools";
 import { TextAction } from "../desk-styles";
-import { FloatingField } from "../floating-field";
-import { RecordCard, RecordDetails, RecordEmpty, RecordFeedback, RecordHead, RecordItem, RecordItemMeta, RecordItemTitle,
+import { SubscriberAccountRow, SubscriberDirectoryFilters } from "../subscriber-directory-parts";
+import { RecordCard, RecordDetails, RecordEmpty, RecordFeedback, RecordHead,
   RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "../record-workspace";
 import { SubscriberDetail } from "../subscriber-detail";
 import { SubscriberReviewDialog } from "../subscriber-review-dialog";
 import { reviewNow, samplePlans, type SubscriberReviewRecord, type useSubscriberDemo } from "./demo-state";
 
 type Demo = ReturnType<typeof useSubscriberDemo>;
-type Filters = { status: string; access: string; plan: string; recent: string };
+type Filters = Omit<SubscriberDirectoryQuery, "search">;
 const emptyFilters: Filters = { status: "all", access: "all", plan: "all", recent: "all" };
 const statusLabels: Readonly<Record<string, string>> = { open: "Open", blocked: "Blocked", erased: "Erased" };
 const accessLabels = { active: "Active access", queued: "Queued access", none: "No current access" };
@@ -41,12 +40,6 @@ function matches(record: SubscriberReviewRecord, search: string, filters: Filter
   return search.trim().toLowerCase().split(/\s+/u).every(word => text.includes(word));
 }
 
-/** Network metadata is fictional review data, never inferred from a phone or payment provider. */
-function NetworkMark({ network }: { network: MobileNetwork | null }) {
-  const label = network === "mtn" ? "MTN · sample network" : network === "airtel" ? "Airtel · sample network" : "Network unknown";
-  return <span data-review-network role="img" aria-label={label} title={label}>{network ? <MobileMoneyLogo network={network} /> : <GlobeIcon />}</span>;
-}
-
 export function SubscriberReviewWorkbench({ variant, demo }: { variant: string; demo: Demo }) {
   const id = useId(), action = useCodeAction(undefined, { request: demo.request, localOnly: true });
   const [selectedId, setSelectedId] = useState(demo.subscribers[0]?.id ?? "");
@@ -56,28 +49,18 @@ export function SubscriberReviewWorkbench({ variant, demo }: { variant: string; 
   const selected = listed.find(record => record.id === selectedId) ?? listed[0];
   const filtered = !!search || Object.values(filters).some(value => value !== "all");
   const formId = `${id}-add-subscriber`;
-  function changeFilter(key: keyof Filters, value: string) { setFilters(current => ({ ...current, [key]: value })); }
   function select(record: SubscriberReviewRecord) { action.clearFeedback(); setSelectedId(record.id); setMobileDetail(true); }
 
   return <ReviewWorkspace data-subscriber-review-workspace data-subscriber-design={variant} $selected={mobileDetail} data-analytics-ignore>
     <RecordHead><h1>Subscribers</h1><ActionButton type="button" onClick={() => { action.clearFeedback(); setAdding(true); }}><UserPlusIcon />Grant access / add subscriber</ActionButton></RecordHead>
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
     <RecordList data-review-directory aria-label="Subscriber directory">
-      <RecordListTools><FiltersBar data-subscriber-review-filters role="search" aria-label="Search and filter subscribers">
-        <FloatingField label="Search subscribers"><input type="search" value={search} onChange={event => setSearch(event.currentTarget.value)} placeholder="Phone, package, code or note" maxLength={120} autoComplete="off" /></FloatingField>
-        <FloatingField label="Account status"><select value={filters.status} onChange={event => changeFilter("status", event.currentTarget.value)}><option value="all">All accounts</option><option value="open">Open</option><option value="blocked">Blocked</option><option value="erased">Erased</option></select></FloatingField>
-        <FloatingField label="Access"><select value={filters.access} onChange={event => changeFilter("access", event.currentTarget.value)}><option value="all">All access</option><option value="active">Active</option><option value="queued">Queued</option><option value="none">No current access</option></select></FloatingField>
-        <FloatingField label="Package"><select value={filters.plan} onChange={event => changeFilter("plan", event.currentTarget.value)}><option value="all">All packages</option>{samplePlans.map(plan => <option key={plan.id} value={plan.name}>{plan.name}</option>)}<option value="none">No current package</option></select></FloatingField>
-        <FloatingField label="Last sign-in"><select value={filters.recent} onChange={event => changeFilter("recent", event.currentTarget.value)}><option value="all">Any time</option><option value="1">Within 24 hours</option><option value="7">Within 7 days</option><option value="30">Within 30 days</option></select></FloatingField>
-      </FiltersBar></RecordListTools>
+      <RecordListTools><SubscriberDirectoryFilters query={{ ...filters, search }} plans={samplePlans} onQueryChange={({ search: nextSearch, ...nextFilters }) => { setSearch(nextSearch); setFilters(nextFilters); }} /></RecordListTools>
       <RecordListScroll aria-label="Subscribers" data-review-subscriber-list tabIndex={0}>
         {listed.length ? listed.map(record => {
-          const period = accessFor(record), access = period?.status ?? "none";
-          return <li key={record.id}><RecordItem type="button" data-review-subscriber-row={record.id} onClick={() => select(record)} aria-current={selected?.id === record.id ? "true" : undefined}>
-            <NetworkMark network={record.network} /><RecordItemTitle data-review-phone>{record.phone ? `+${formatPhone(record.phone)}` : "Erased account"}</RecordItemTitle>
-            <Badge data-review-row-status $tone={record.status === "open" ? "good" : record.status === "blocked" ? "warning" : "muted"}>{statusLabels[record.status]}</Badge>
-            <RecordItemMeta data-review-row-meta>{period?.planName ?? accessLabels[access as keyof typeof accessLabels]} · Last sign-in {formatPeriodEnd(new Date(record.lastSignInAt))}</RecordItemMeta>
-          </RecordItem></li>;
+          const period = accessFor(record);
+          const account: SubscriberDirectoryAccount = { ...record, access: period?.status === "active" ? "active" : period?.status === "queued" ? "queued" : "none", planNames: period ? [period.planName] : [] };
+          return <li key={record.id}><SubscriberAccountRow account={account} selected={selected?.id === record.id} onSelect={() => select(record)} /></li>;
         }) : <li><RecordEmpty><h2>No matching subscribers</h2><p>Try another search or clear the filters.</p></RecordEmpty></li>}
       </RecordListScroll>
       <RecordListFooter><span role="status" aria-live="polite">{listed.length} of {demo.subscribers.length} subscribers</span>{filtered && <TextAction type="button" onClick={() => { setSearch(""); setFilters(emptyFilters); }}>Clear filters</TextAction>}</RecordListFooter>
@@ -102,9 +85,5 @@ const ReviewWorkspace = styled(RecordWorkspace)<{ $selected: boolean }>`
     > [data-review-directory] { display: ${({ $selected }) => $selected ? "none" : "grid"}; }
     > [data-review-account] { display: ${({ $selected }) => $selected ? "grid" : "none"}; }
   }
-`;
-const FiltersBar = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 8px; min-inline-size: 0;
-  > :first-child { grid-column: 1 / -1; }
 `;
 const MobileBack = styled(ActionButton)`justify-self: start; ${media.desktop} { display: none; }`;
