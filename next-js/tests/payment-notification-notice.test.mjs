@@ -4,12 +4,12 @@ import { paymentNotificationNotice } from "../src/domain/payment-notification.ts
 
 test("payment notification notices distinguish provider acceptance from handset delivery", () => {
   const notice = paymentNotificationNotice("sent");
-  assert.equal(notice, "SMS accepted for delivery.");
+  assert.equal(notice, "Message accepted for delivery.");
   assert.doesNotMatch(notice, /delivered|received/iu);
 });
 
 test("a durable queued notice does not claim provider or handset acceptance", () => {
-  assert.equal(paymentNotificationNotice("queued"), "Account update SMS queued for delivery.");
+  assert.equal(paymentNotificationNotice("queued"), "Account update queued for delivery.");
   assert.doesNotMatch(paymentNotificationNotice("queued"), /accepted|sent|received/iu);
 });
 

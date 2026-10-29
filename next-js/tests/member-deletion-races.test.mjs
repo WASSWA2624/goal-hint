@@ -9,7 +9,7 @@ import { createPayments } from "../src/server/members/payments.ts";
 const instant = Date.parse("2026-10-23T12:00:00Z");
 
 function fixture() {
-  let account = { id: randomUUID(), phone: "256700000111", blockedAt: null, erasedAt: null };
+  let account = { id: randomUUID(), phone: "256700000111", phoneVerifiedAt: new Date(instant), blockedAt: null, erasedAt: null };
   let session = { accountId: account.id, tokenHash: "a".repeat(64), authenticatedAt: new Date(instant),
     passwordResetAt: null, expiresAt: new Date(instant + 86_400_000) };
   const member = { accountId: account.id, tokenHash: session.tokenHash, phone: account.phone };
@@ -34,6 +34,7 @@ function fixture() {
     },
   };
   const database = {
+    async query(run) { return run(tx); },
     async transaction(run) {
       const previous = pending; let release; pending = new Promise(resolve => { release = resolve; }); await previous;
       inTransaction = true;
@@ -61,13 +62,15 @@ for (const decision of ["approved", "rejected"]) {
   });
 }
 
-test("notification auditing skips erased accounts and remains best effort", async () => {
+test("notifications fail closed for erased accounts and unreadable recipient verification", async () => {
   const f = fixture(); f.account.erasedAt = new Date(instant);
   const notification = { accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone, reference: "PABCD", reason: "other" };
-  const delivery = { async sendSms() {} };
-  assert.equal(await createPaymentNotifications({ database: f.database, delivery }).rejected(notification), "sent");
+  let sends = 0;
+  const delivery = { async sendSms() { sends++; } };
+  assert.equal(await createPaymentNotifications({ database: f.database, delivery }).rejected(notification), "unavailable");
   assert.deepEqual(f.audits, []);
-  assert.equal(await createPaymentNotifications({ database: { async transaction() { throw new Error("Synthetic audit outage"); } }, delivery }).rejected(notification), "sent");
+  assert.equal(await createPaymentNotifications({ database: { async query() { throw new Error("Synthetic recipient read outage"); } }, delivery }).rejected(notification), "failed");
+  assert.equal(sends, 0);
 });
 
 test("stale authenticated uploads cannot recreate rate buckets after deletion", async () => {

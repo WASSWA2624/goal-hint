@@ -15,7 +15,8 @@ import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdent
 import { isMemberAdminPhone, memberAdminCredential, verifyMemberAdminCredential } from "./member-admin.ts";
 import { passwordRecoveryRules } from "./password-recovery.ts";
 import { createMemberRateLimit, takeMemberLimit } from "./rate-limit.ts";
-import { decide } from "./settings.ts";
+import { decide, settingsServiceFor } from "./settings.ts";
+import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 import { createVerificationCodes } from "./verification-codes.ts";
 import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts";
 
@@ -48,7 +49,8 @@ const dummyHash = () => dummyPasswordHash ??= hashPassword(randomBytes(32).toStr
  * Password login yields a restricted session until phone ownership is verified. Delivery and code checks share durable
  * account locks, and administrator credentials remain separate from member recovery.
  */
-export function createMemberAuth({ database, config, now = Date.now, adminPhone = isMemberAdminPhone, adminPasswordHash = memberAdminCredential, delivery = createYoolaMessaging() }: {
+export function createMemberAuth({ database, config, now = Date.now, adminPhone = isMemberAdminPhone, adminPasswordHash = memberAdminCredential,
+  delivery = createYoolaMessaging({ settings: () => settingsServiceFor(database).current().then(state => state.settings) }) }: {
   database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number; adminPhone?: (phone: string) => boolean; adminPasswordHash?: () => string | null; delivery?: MemberMessaging;
 }) {
   const limit = createMemberRateLimit(database, config, now);
@@ -183,12 +185,15 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       return await codes.deliver(reserved) ? { status: "requested", message: "Your verification code has been sent. It is valid for up to 24 hours." } : deliveryFailure();
     },
 
-    async verifyAccount(code: unknown, token: string | undefined, address: string): Promise<AuthSuccess | AuthFailure> {
+    async verifyAccount(code: unknown, token: string | undefined, address: string, whatsappNotifications = false): Promise<AuthSuccess | AuthFailure> {
+      if (typeof whatsappNotifications !== "boolean") return invalid("Choose a valid WhatsApp update preference.");
       if (!await limit({ purpose: "verification-check-address", value: safeAddress(address), maximum: 30, windowMs: 15 * 60_000 })) return busy();
       return decide(database, async tx => {
         const at = new Date(now()), account = await pendingAccount(tx, token, at);
         if (!account || !await codes.consume(tx, account, "account", code, at)) return refused();
-        const verified = await tx.memberAccount.update({ where: { id: account.id }, data: { phoneVerifiedAt: at, lastSignInAt: at } });
+        const verified = await tx.memberAccount.update({ where: { id: account.id }, data: { phoneVerifiedAt: at, lastSignInAt: at,
+          ...(whatsappNotifications ? { whatsappNotificationsAt: at } : {}) } });
+        await enqueueMemberMessage(tx, { accountId: account.id, targetType: "member", targetId: account.id, decision: "welcome", at });
         const trial = await tx.accessCode.findFirst({ where: { accountId: account.id, source: "trial", revokedAt: null, endsAt: { gt: at } }, orderBy: { createdAt: "asc" } });
         return rotate(tx, verified, { member: null }, at, trial);
       });
@@ -273,7 +278,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           const existing = await tx.memberAccount.findUnique({ where: { phone } });
           if (existing && existing.id !== account.id) return conflict();
           if (phone !== account.phone) await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });
-          const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { phone, ...(phone !== account.phone ? { phoneVerifiedAt: null } : {}) } });
+          const updated = await tx.memberAccount.update({ where: { id: account.id }, data: { phone, ...(phone !== account.phone ? { phoneVerifiedAt: null, whatsappNotificationsAt: null } : {}) } });
           return rotate(tx, updated, binding, at);
         });
       } catch (error) { if (error instanceof DatabaseOperationError && error.code === "constraint") return conflict(); throw error; }

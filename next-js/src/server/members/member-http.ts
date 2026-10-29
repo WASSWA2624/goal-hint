@@ -10,12 +10,14 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
 import { createAccessCodes, type AccessCodes } from "./access-codes.ts";
 import { createMemberAuth, type MemberAuth } from "./member-auth.ts";
+import { createMemberPreferences, type MemberPreferences } from "./member-preferences.ts";
 import { createPlansService } from "./plans.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { cheapestActivePlan, type SubscriptionOffer } from "../../domain/subscription-offer.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
 export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null;
+  preferences?: MemberPreferences | null;
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
@@ -28,6 +30,7 @@ export async function getMemberServices(): Promise<MemberServices> {
     payments: database && keyed ? createPayments({ database, config }) : null,
     codes: database && keyed ? createAccessCodes({ database, config }) : null,
     auth: database && keyed ? createMemberAuth({ database, config }) : null,
+    preferences: database && keyed ? createMemberPreferences({ database }) : null,
     offer: database ? () => readOffer(database) : null };
 }
 

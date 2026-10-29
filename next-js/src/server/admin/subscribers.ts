@@ -136,7 +136,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
               await writeOwnerAudit(tx, { at, actor, action: "credit_forfeited", accountId: id, targetType: "member", targetId: id, details: { amountUgx: credit, walletEntryId: entry.id } });
             }
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null,
-              passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
+              passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null, ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
             await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });

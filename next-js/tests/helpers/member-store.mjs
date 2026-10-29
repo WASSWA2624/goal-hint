@@ -4,9 +4,9 @@ import { defaultSubscriptionSettings } from "../../src/domain/subscription-setti
 
 /** Basic canonical outbox shape validation for the transactional fixture. */
 function checkNotice(row) {
-  assert.ok(["approved", "rejected", "credited", "renewed"].includes(row.decision));
-  assert.equal(row.targetType, row.decision === "renewed" ? "access-code" : "payment");
-  assert.ok(["queued", "dispatching", "sent", "failed", "uncertain", "unsupported", "unavailable", "cancelled"].includes(row.status));
+  assert.ok(["approved", "rejected", "credited", "renewed", "received", "welcome"].includes(row.decision));
+  assert.equal(row.targetType, row.decision === "renewed" ? "access-code" : row.decision === "welcome" ? "member" : "payment");
+  assert.ok(["queued", "dispatching", "sent", "failed", "uncertain", "unsupported", "unavailable", "cancelled", "skipped"].includes(row.status));
   assert.equal(["queued", "dispatching"].includes(row.status), row.finishedAt == null);
   if (row.status === "queued") assert.deepEqual([row.startedAt, row.attemptId], [null, null]);
   if (["dispatching", "sent", "failed", "uncertain"].includes(row.status)) assert.ok(row.startedAt && row.attemptId);
@@ -57,7 +57,7 @@ function apply(row, data) {
  * Transactions serialize and roll back on error; `committed` is the state other connections would see.
  */
 export function memberStore({ instant, settings = {} }) {
-  const account = { id: randomUUID(), phone: "256700000111", blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null,
+  const account = { id: randomUUID(), phone: "256700000111", phoneVerifiedAt: new Date(instant), blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null,
     creditUgx: 0, autoRenew: false, autoRenewPlanId: null, autoRenewTermsVersion: null, passwordHash: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
   let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [],
@@ -83,7 +83,7 @@ export function memberStore({ instant, settings = {} }) {
         const row = { ...data, ...(table === "accessCode" ? { extensionDays: data.extensionDays ?? 0, revokedAt: data.revokedAt ?? null } : {}) };
         if (table === "paymentNotificationOutbox") {
           row.startedAt ??= null; row.finishedAt ??= null; row.attemptId ??= null;
-          assert.ok(!state.paymentNotificationOutbox.some(other => other.targetType === row.targetType && other.targetId === row.targetId && other.decision === row.decision), "one notice per decision");
+          assert.ok(!state.paymentNotificationOutbox.some(other => other.targetType === row.targetType && other.targetId === row.targetId && other.decision === row.decision && (other.channel ?? "sms") === (row.channel ?? "sms")), "one notice per decision and channel");
         }
         state[table].push(written(row)); return { ...row };
       },
@@ -110,7 +110,7 @@ export function memberStore({ instant, settings = {} }) {
     }
     if (sql.includes("DELETE FROM PaymentNotificationOutbox")) {
       const [accepted, undelivered, limit] = values;
-      const doomed = state.paymentNotificationOutbox.filter(row => row.finishedAt && (["sent", "unsupported", "unavailable", "cancelled"].includes(row.status) && +row.finishedAt <= +accepted
+      const doomed = state.paymentNotificationOutbox.filter(row => row.finishedAt && (["sent", "unsupported", "unavailable", "cancelled", "skipped"].includes(row.status) && +row.finishedAt <= +accepted
         || ["failed", "uncertain"].includes(row.status) && +row.finishedAt <= +undelivered)).slice(0, limit);
       state.paymentNotificationOutbox = state.paymentNotificationOutbox.filter(row => !doomed.includes(row));
       return doomed.length;

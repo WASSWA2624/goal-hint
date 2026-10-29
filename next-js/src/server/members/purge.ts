@@ -41,7 +41,7 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
       // Closed account-update SMS notices: a week once accepted or skipped, 30 days when not delivered or not confirmed. Open
       // rows are never deleted here, so this needs no account lock and cannot deadlock with a dispatcher.
       result.notices = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM PaymentNotificationOutbox WHERE finishedAt IS NOT NULL
-        AND ((status IN ('sent', 'unsupported', 'unavailable', 'cancelled') AND finishedAt <= ${new Date(+at - paymentNoticeRules.keepAcceptedDays * DAY)})
+        AND ((status IN ('sent', 'unsupported', 'unavailable', 'cancelled', 'skipped') AND finishedAt <= ${new Date(+at - paymentNoticeRules.keepAcceptedDays * DAY)})
           OR (status IN ('failed', 'uncertain') AND finishedAt <= ${new Date(+at - paymentNoticeRules.keepUndeliveredDays * DAY)})) LIMIT ${BATCH}`));
       result.accounts = await drain(() => database.transaction(async tx => {
         const admins = memberAdminPhones();

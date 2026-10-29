@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { defaultSubscriptionSettings, protectedSettingFields } from "../src/domain/subscription-settings.ts";
+import { defaultSubscriptionSettings, identitySettingFields } from "../src/domain/subscription-settings.ts";
 
 test("demo settings use the editable isolated row while explicit managed identity keeps normal protection", async (t) => {
   const previous = { NODE_ENV: process.env.NODE_ENV, NEXT_PUBLIC_GOAL_HINT_DEMO: process.env.NEXT_PUBLIC_GOAL_HINT_DEMO };
@@ -22,7 +22,7 @@ test("demo settings use the editable isolated row while explicit managed identit
   const identity = { mtnNumber: "256700000090", mtnName: "Configured wallet", mtnMenuShortcut: null,
     airtelNumber: null, airtelName: null, airtelMenuShortcut: null, contactPhone: null, whatsappPhone: null };
   const managed = createSettingsService(database, { environment: identity });
-  assert.deepEqual(managed.environmentFields, protectedSettingFields);
+  assert.deepEqual(managed.environmentFields, identitySettingFields);
   assert.equal((await managed.current()).settings.mtnNumber, identity.mtnNumber);
   assert.equal((await managed.save("owner", { mtnNumber: row.mtnNumber }, { password: null, confirm: async () => assert.fail() })).status, "invalid");
 });

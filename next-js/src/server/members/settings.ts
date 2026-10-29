@@ -4,7 +4,9 @@ import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeRequirements, paywallModes, parseSettingsChanges,
   type CopyFormat, type EditableSettingField, type ModeFacts, type ModeRequirement, type PaywallMode, type ProtectedSettingField,
-  protectedSettingFields, type ShortcutField, type SubscriptionIdentity, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
+  identitySettingFields, type ShortcutField, type SubscriptionIdentity, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
+import { parseSupportContacts, supportContactsOf } from "../../domain/support-contacts.ts";
+import { defaultMessageTemplates, parseMessageTemplates } from "../../domain/message-templates.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { auditTextErrors, writeOwnerAudit } from "../admin/audit.ts";
 import type { LoginRefusal, PasswordCheck } from "../analytics/analytics-auth.ts";
@@ -40,12 +42,17 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
     throw new RangeError("Stored subscription settings are outside the reviewed shape.");
   }
   const instant = (value: Date | null) => value?.toISOString() ?? null;
+  const contacts = row.supportContacts == null ? null : parseSupportContacts(row.supportContacts);
+  const messages = row.messageTemplates == null ? null : parseMessageTemplates(row.messageTemplates);
+  if (contacts && !contacts.ok || messages && !messages.ok) throw new RangeError("Stored settings contain invalid contacts or message templates.");
   return Object.freeze({
     paywallMode: row.paywallMode as PaywallMode,
     mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut,
     airtelNumber: row.airtelNumber, airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut,
     copyFormat: row.copyFormat as CopyFormat,
     contactPhone: row.contactPhone, whatsappPhone: row.whatsappPhone,
+    supportContacts: contacts?.ok ? contacts.contacts : null,
+    messageTemplates: messages?.ok ? messages.settings : defaultMessageTemplates,
     paymentNote: row.paymentNote, reviewTime: row.reviewTime,
     maxUnlockedDevices: row.maxUnlockedDevices, trialDays: row.trialDays, screenshotRetentionDays: row.screenshotRetentionDays,
     paymentNumbersChangedAt: instant(row.paymentNumbersChangedAt), lastMembersPurgeAt: instant(row.lastMembersPurgeAt),
@@ -113,7 +120,11 @@ export type PasswordReentry = Readonly<{ password: string | null; confirm: (pass
 
 /** Overlay identity for reads and transaction decisions without changing stored history. Null is for historical fixtures. */
 export function configuredSubscriptionSettings(settings: SubscriptionSettings, environment: SubscriptionIdentity | null): SubscriptionSettings {
-  return environment ? Object.freeze({ ...settings, ...environment }) : settings;
+  const configured = environment ? { ...settings, ...environment } : settings;
+  if (configured.supportContacts == null) return configured;
+  const contacts = supportContactsOf(configured);
+  return Object.freeze({ ...configured, contactPhone: contacts.find(contact => contact.calls)?.phone ?? null,
+    whatsappPhone: contacts.find(contact => contact.whatsapp)?.phone ?? null });
 }
 
 export function createSettingsService(database: DatabaseRuntime,
@@ -125,7 +136,7 @@ export function createSettingsService(database: DatabaseRuntime,
     /** Null uses stored identity in isolated demos/fixtures. Production defaults to environment identity. */
     environment?: SubscriptionIdentity | null;
   } = {}) {
-  const environmentFields = environment ? protectedSettingFields : [];
+  const environmentFields = environment ? identitySettingFields : [];
   const effective = (settings: SubscriptionSettings) => configuredSubscriptionSettings(settings, environment);
   let cached: Readonly<{ state: SettingsState; until: number }> | null = null;
   let lastGood: SubscriptionSettings | null = null;
@@ -202,7 +213,10 @@ export function createSettingsService(database: DatabaseRuntime,
       if (!parsed.ok) return { status: "invalid", errors: parsed.errors };
       const managed = environmentFields.filter((field) => Object.hasOwn(parsed.changes, field));
       if (managed.length) return { status: "invalid", errors: Object.fromEntries(managed.map((field) => [field, "Managed through environment variables; restart after changing configuration."])) };
-      const unsafe = auditTextErrors(parsed.changes, { ownerSetting: true });
+      // Structured owner settings need the same preflight as scalar copy, before their recursive audit write.
+      const auditFields = Object.fromEntries(Object.entries(parsed.changes).map(([field, value]) =>
+        [field, value !== null && typeof value === "object" ? JSON.stringify(value) : value]));
+      const unsafe = auditTextErrors(auditFields, { ownerSetting: true });
       if (unsafe) return { status: "invalid", errors: unsafe };
       const preview = applySettingsChanges((await stored()).settings, parsed.changes);
       if (!preview.ok) return { status: "invalid", errors: preview.errors };

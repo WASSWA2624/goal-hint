@@ -8,9 +8,9 @@ export type OwnerPayment = Readonly<{ id: string; reference: string; accountId: 
 export type PaymentQueue = Readonly<{ pendingCount: number; payments: readonly OwnerPayment[] }>;
 export type OwnerPaymentSummary = Pick<OwnerPayment, "id" | "reference" | "network" | "amount" | "submittedAt">;
 export type OwnerCode = Readonly<{ id: string; accountId: string; reference: string; phone: string | null; planName: string; source: string; startsAt: string; endsAt: string; status: "revoked" | "queued" | "active" | "expired"; daysLeft: number }>;
-/** An account-update SMS that needs the owner's attention; reference is the payment's (P…) or the renewal period's (C…). */
+/** An account update that needs the owner's attention; reference is the payment's (P…) or the renewal period's (C…). */
 export type OwnerNotice = Readonly<{ id: string; accountId: string; phone: string | null; kind: string; reference: string | null; state: string;
-  lastError: string | null; attempts: number; createdAt: string; attemptedAt: string | null }>;
+  channel?: "sms" | "whatsapp"; lastError: string | null; attempts: number; createdAt: string; attemptedAt: string | null }>;
 
 /** creditHeld is all positive balances (credit members may still spend); creditOwed the negative ones after reversals. */
 export type OwnerOverview = Readonly<{ pending: number; active: number; weekRevenue: number; monthRevenue: number; trials: number; busy: number; paymentNumbersChangedAt: string | null;

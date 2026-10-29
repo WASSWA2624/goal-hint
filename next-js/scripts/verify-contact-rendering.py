@@ -18,13 +18,13 @@ def main(*, indexable: bool = False) -> None:
     for path in paths:
         visible = policy_document(origin, path, page="contact", title="Contact and corrections",
             notice=notice, sections=["report", "corrections", "policies"], patterns=[
-                "Contact Goal Hint", "For subscriber plans, payment reports and access codes",
+                "Contact Goal Hint", "For subscriber plans, payment reports and access, use Get access",
                 "Wilson Wasswa", "Uganda", "aged 18 and over",
                 "no contact-form or email-sending system", "no response time is promised",
                 "Goal Hint match URL",
                 "supporting public source link", "same locked forecast",
-                "do not replace the pick with a more favorable revision"],
-            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|tel:|untrusted-query|\{(?:date|operator|country|audience|minimumAge|requestsOwner)\}",
+                "do not replace the prediction with a more favorable revision"],
+            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|untrusted-query|\{(?:date|operator|country|audience|minimumAge|requestsOwner)\}",
             forms=r"<form|<iframe|<input|<textarea", indexable=indexable and "?" not in path)
         expected = urlsplit(origin)
         assert visible.count(f'href="{notice["destination"]}"') == 1, "Exactly one fixed owner-approved email link."
@@ -35,6 +35,14 @@ def main(*, indexable: bool = False) -> None:
                 assert not target.query and not target.fragment and "\r" not in href and "\n" not in href
                 continue
             target = urlsplit(urljoin(origin, unescape(href)))
+            if target.scheme == "tel" or target.netloc == "wa.me":
+                assert "data-desktop-support" in visible, "Phone links belong to the configured desktop support directory."
+                assert not target.query and not target.fragment
+                if target.scheme == "tel":
+                    assert not target.netloc and re.fullmatch(r"\+\d{10,15}", target.path)
+                else:
+                    assert target.scheme == "https" and re.fullmatch(r"/\d{10,15}", target.path)
+                continue
             assert (target.scheme, target.netloc) == (expected.scheme, expected.netloc), "Other links remain fixed same-origin navigation."
         print(f"PASS production contact HTML and safe query handling: {path}")
     for path, section in [("/en/privacy", "privacy-choices"), ("/en/terms", "terms-outcomes"), ("/en/help", "results")]:

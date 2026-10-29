@@ -99,6 +99,69 @@ function fixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
     now: () => time, advance: (ms) => { time += ms; } };
 }
 
+test("enabled welcome content queues only after successful account verification and stores no OTP", async () => {
+  const { defaultMessageTemplates } = await import("../src/domain/message-templates.ts");
+  const f = fixture(), notices = [];
+  f.settings.messageTemplates = structuredClone(defaultMessageTemplates); f.settings.messageTemplates.events.welcome.enabled = true;
+  f.tx.paymentNotificationOutbox = {
+    async findFirst({ where }) { return notices.find(row => Object.entries(where).every(([key, value]) => row[key] === value)) ?? null; },
+    async create({ data }) { notices.push(data); return data; },
+  };
+  const registered = await f.service.register(phone, password, browser(), address);
+  assert.equal(registered.status, "authenticated"); assert.equal(notices.length, 0);
+  await f.service.requestVerification("sms", registered.token, address);
+  const code = f.messages[0].code;
+  assert.equal((await f.service.verifyAccount(wrongCode(code), registered.token, address)).status, "unauthorized");
+  assert.equal(notices.length, 0);
+  assert.equal((await f.service.verifyAccount(code, registered.token, address)).status, "authenticated");
+  assert.equal(notices.length, 1); assert.equal(notices[0].decision, "welcome"); assert.equal(notices[0].targetType, "member");
+  assert.equal(JSON.stringify(notices).includes(phone), false); assert.equal(JSON.stringify(notices).includes(code), false);
+  assert.equal((await f.service.verifyAccount(code, registered.token, address)).status, "unauthorized"); assert.equal(notices.length, 1);
+});
+
+test("changing the recipient phone clears account-update WhatsApp consent before new verification", async () => {
+  const f = fixture(), logged = await f.authenticate();
+  f.accounts.get(logged.member.accountId).whatsappNotificationsAt = new Date(f.now());
+  const changed = await f.service.changePhone(replacement, password, { member: logged.member });
+  assert.equal(changed.status, "authenticated"); assert.equal(changed.requiresVerification, true);
+  assert.equal(f.accounts.get(logged.member.accountId).whatsappNotificationsAt, null);
+});
+
+test("explicit optional signup consent is recorded only after a valid code and enables the WhatsApp welcome intent", async () => {
+  const { defaultMessageTemplates } = await import("../src/domain/message-templates.ts");
+  const f = fixture(), notices = [];
+  f.settings.messageTemplates = structuredClone(defaultMessageTemplates);
+  f.settings.messageTemplates.events.welcome = { enabled: true, channels: ["whatsapp"], sms: "Welcome to Goal Hint.",
+    whatsapp: { templateName: "goal_hint_welcome", parameters: ["{{access_url}}"] } };
+  f.tx.paymentNotificationOutbox = {
+    async findFirst({ where }) { return notices.find(row => Object.entries(where).every(([key, value]) => row[key] === value)) ?? null; },
+    async create({ data }) { notices.push(data); return data; },
+  };
+  const registered = await f.service.register(phone, password, browser(), address);
+  await f.service.requestVerification("whatsapp", registered.token, address);
+  assert.equal(f.accounts.get(registered.accountId).whatsappNotificationsAt == null, true, "requesting an OTP never consents to account updates");
+  const code = f.messages[0].code;
+  assert.equal((await f.service.verifyAccount(wrongCode(code), registered.token, address, true)).status, "unauthorized");
+  assert.equal(f.accounts.get(registered.accountId).whatsappNotificationsAt == null, true); assert.equal(notices.length, 0);
+  assert.equal((await f.service.verifyAccount(code, registered.token, address, true)).status, "authenticated");
+  assert.equal(+f.accounts.get(registered.accountId).whatsappNotificationsAt, f.now());
+  assert.equal(notices.length, 1); assert.equal(notices[0].channel, "whatsapp"); assert.equal(notices[0].decision, "welcome");
+});
+
+test("verification HTTP accepts only an explicit boolean account-update consent preference", async () => {
+  for (const whatsappNotifications of [null, "true", 1, {}]) {
+    const handler = createMemberAuthHandler("verify", async () => { assert.fail("Invalid consent never reaches storage"); });
+    assert.equal((await handler(authRequest("verify", { code: "123456", whatsappNotifications }))).status, 400);
+  }
+  for (const whatsappNotifications of [true, false, undefined]) {
+    let selected;
+    const handler = createMemberAuthHandler("verify", async () => ({ config: { production: false }, sessions: { async verify() { return null; } },
+      auth: { async verifyAccount(_code, _token, _address, value) { selected = value; return { status: "unauthorized", message: "Synthetic code refused" }; } } }));
+    assert.equal((await handler(authRequest("verify", { code: "123456", ...(whatsappNotifications === undefined ? {} : { whatsappNotifications }) }))).status, 401);
+    assert.equal(selected, whatsappNotifications === true);
+  }
+});
+
 test("registration creates a restricted verification session and never claims an existing passwordless account", async () => {
   const f = fixture();
   const result = await f.service.register(phone, password, browser(), "198.51.100.1");

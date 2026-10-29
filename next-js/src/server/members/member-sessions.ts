@@ -18,7 +18,7 @@ export const validMemberToken = (token: unknown): token is string => typeof toke
 export const memberCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-member`;
 
 export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; phone: string; blocked: boolean;
-  codeEnteredAt: Date | null; accessCodeId: string | null; expiresAt: Date; administrator?: boolean }>;
+  codeEnteredAt: Date | null; accessCodeId: string | null; expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
 
 /** The caller holds the account lock. A full login replaces every prior session atomically; restricted sessions only use the pending cap. */
@@ -91,7 +91,8 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
         data: { lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } }));
       }
       return { tokenHash: hash, accountId: row.accountId, phone: row.account.phone, blocked: row.account.blockedAt !== null,
-        codeEnteredAt: row.codeEnteredAt, accessCodeId: row.accessCodeId, expiresAt: row.expiresAt, ...(administrator ? { administrator: true } : {}) };
+        codeEnteredAt: row.codeEnteredAt, accessCodeId: row.accessCodeId, expiresAt: row.expiresAt,
+        whatsappNotificationsAt: row.account.whatsappNotificationsAt ?? null, ...(administrator ? { administrator: true } : {}) };
     },
 
     async signOut(token?: string): Promise<void> {

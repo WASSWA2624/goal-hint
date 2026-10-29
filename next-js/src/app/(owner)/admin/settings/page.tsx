@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { AdminFrame } from "@/app/_components/admin-frame";
-import { DeskHead } from "@/components/admin/desk-styles";
+import { MobileSettingsHead } from "@/components/admin/settings-styles";
 import { SettingsEditor } from "@/components/admin/settings-editor";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
@@ -19,7 +19,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const view = database ? await settingsView(settingsServiceFor(database), await headers()).catch(() => null) : null;
   return (
     <AdminFrame database={page.services.database}>
-      <DeskHead><h1>Settings</h1></DeskHead>
+      <MobileSettingsHead><h1>Settings</h1></MobileSettingsHead>
       {view ? <SettingsEditor initial={view} username={page.owner.username} sessionAuthorized={!!page.owner.memberAccountId} />
         : <Notice $tone="error" role="alert">Settings are unavailable because the database cannot be read. Paid access stays as it was.</Notice>}
     </AdminFrame>

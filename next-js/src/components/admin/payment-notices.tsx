@@ -6,27 +6,30 @@ import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { OwnerNotice } from "@/domain/owner-members";
 import { paymentNoticeKindLabel, paymentNoticeLabel } from "@/domain/payment-notification";
 import { CloseIcon, ResetIcon, UserIcon } from "@/components/ui/icons";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
 import { Hint } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { Panel, PanelHead, RowList, RowMeta, RowTitle, TextAction } from "./desk-styles";
 
 /**
- * Account-update SMS notices that need the owner: not sent, refused, unconfirmed, unsupported or waiting too long. Accepted
+ * Account-update notices that need the owner: not sent, refused, unconfirmed, unsupported or waiting too long. Accepted
  * means the gateway took it, never that the member's phone received it. The list is server-seeded and refreshed after an action.
  */
 export function PaymentNotices({ notices, now }: { notices: readonly OwnerNotice[]; now: number }) {
-  const action = useCodeAction();
+  const action = useCodeAction(), desktop = useDesktopLayout();
+  const visible = desktop ? notices : notices.filter(notice => notice.channel !== "whatsapp");
+  if (!visible.length) return null;
   const send = (notice: OwnerNotice, kind: "resend" | "dismiss") => void action.send("/api/admin/notices", { action: kind, id: notice.id },
-    kind === "resend" ? "SMS notice queued again." : "SMS notice dismissed.");
+    kind === "resend" ? `${desktop ? "Message" : "SMS"} notice queued again.` : `${desktop ? "Message" : "SMS"} notice dismissed.`);
   return <Panel aria-labelledby="payment-notices-title" data-payment-notices>
-    <PanelHead><h2 id="payment-notices-title">SMS notices</h2></PanelHead>
+    <PanelHead><h2 id="payment-notices-title">{desktop ? "Message notices" : "SMS notices"}</h2></PanelHead>
     <ActionNotices action={action} />
-    <RowList>{notices.map(notice => {
-      const closed = ["failed", "uncertain", "unsupported", "unavailable", "cancelled"].includes(notice.state);
+    <RowList>{visible.map(notice => {
+      const closed = ["failed", "uncertain", "unsupported", "unavailable", "cancelled", "skipped"].includes(notice.state);
       return <NoticeRow key={notice.id}>
         <span>
-          <RowTitle>{notice.reference ?? "Unknown reference"}<small>{paymentNoticeKindLabel(notice.kind)}</small></RowTitle>
+          <RowTitle>{notice.reference ?? (desktop ? paymentNoticeKindLabel(notice.kind) : "Unknown reference")}<small>{paymentNoticeKindLabel(notice.kind)}{desktop && <> · {notice.channel === "whatsapp" ? "WhatsApp" : "SMS"}</>}</small></RowTitle>
           <RowMeta>{paymentNoticeLabel(notice, now)} · {formatPeriodEnd(new Date(notice.attemptedAt ?? notice.createdAt))}
             {notice.phone ? <> · +{formatPhone(notice.phone)}</> : null}</RowMeta>
           {["failed", "uncertain"].includes(notice.state) && <Hint>The member may receive this notice twice if the earlier one arrived.</Hint>}
@@ -34,9 +37,9 @@ export function PaymentNotices({ notices, now }: { notices: readonly OwnerNotice
         <Actions>
           <TextAction as={Link} href={`/admin/subscribers?accountId=${encodeURIComponent(notice.accountId)}`} prefetch={false}><UserIcon />View subscriber</TextAction>
           {["failed", "uncertain"].includes(notice.state) && <TextAction type="button" disabled={action.busy} onClick={() => send(notice, "resend")}
-            aria-label={`Send the SMS for ${notice.reference ?? "this notice"} again`}><ResetIcon />Send again</TextAction>}
+            aria-label={`Send the ${desktop ? "message" : "SMS"} for ${notice.reference ?? "this notice"} again`}><ResetIcon />Send again</TextAction>}
           {closed && <TextAction type="button" disabled={action.busy} onClick={() => send(notice, "dismiss")}
-            aria-label={`Dismiss the SMS notice for ${notice.reference ?? "this notice"}`}><CloseIcon />Dismiss</TextAction>}
+            aria-label={`Dismiss the ${desktop ? "message" : "SMS"} notice for ${notice.reference ?? "this notice"}`}><CloseIcon />Dismiss</TextAction>}
         </Actions>
       </NoticeRow>;
     })}</RowList>

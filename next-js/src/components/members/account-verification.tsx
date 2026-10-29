@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import styled from "styled-components";
 import { SegmentedChoice, TextInput, TextLink } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/icons";
@@ -9,12 +10,14 @@ import { normalizePhone } from "@/domain/phone";
 import { parseVerificationCode } from "@/domain/verification-code";
 import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
 import { AccountSupportLink, type AdminContact } from "./admin-contact";
 import { accountRequest } from "./account-security";
 import { AccountCard, AccountCardBody, AccountCardHeading, AccountCodeField, AccountError, AccountNote, AccountPrimary,
   AccountSteps, AccountSupport, AccountTextButton } from "./account-styles";
 import { MemberForm, MemberSignOut } from "./member-controls";
 import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
+import { AccountWhatsAppConsentLabel } from "./account-notification-preferences";
 
 type CodeFormProps = { locale: string; returnTo: string | null; contact: AdminContact } & (
   { purpose: "account"; phone: string } | { purpose: "password-reset"; phone?: never }
@@ -26,6 +29,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
   const [channel, setChannel] = useState<MessageChannel | "">("sms"), [code, setCode] = useState("");
   const [step, setStep] = useState<"delivery" | "code">("delivery");
   const [requested, setRequested] = useState(false), [error, setError] = useState(""), [invalidCode, setInvalidCode] = useState(false);
+  const [whatsappNotifications, setWhatsappNotifications] = useState(false);
   const [busy, setBusy] = useState<"request" | "verify" | null>(null);
   const [verifiedTrial, setVerifiedTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const codeInput = useRef<HTMLInputElement>(null), codeRevision = useRef(0), clipboardPending = useRef(false);
@@ -78,7 +82,8 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
     if (parsed === null || invalidCode) { setInvalidCode(true); return; }
     setBusy("verify"); setError("");
     try {
-      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(recovery ? "reset-code" : "verify", { ...(recovery ? { phone } : {}), code: parsed, ...returnBody });
+      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(recovery ? "reset-code" : "verify", {
+        ...(recovery ? { phone } : whatsappNotifications ? { whatsappNotifications: true } : {}), code: parsed, ...returnBody });
       if (!recovery && result.trial?.active) { setCode(""); setVerifiedTrial({ trial: result.trial, next: result.next }); return; }
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(null); }
@@ -119,6 +124,13 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
             onClick={event => { if (event.isTrusted && event.button === 0) void readCopiedCode(event.currentTarget); }}
             autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} required disabled={!!busy} data-analytics-ignore data-validated-code
             error={invalidCode ? <span role="alert">{m.text("account.invalidCode")}</span> : undefined} /></AccountCodeField>
+          {!recovery && channels.includes("whatsapp") && <DesktopConsent data-signup-whatsapp-consent>
+            <AccountWhatsAppConsentLabel>
+              <input type="checkbox" name="whatsappNotifications" checked={whatsappNotifications} disabled={!!busy}
+                onChange={event => setWhatsappNotifications(event.currentTarget.checked)} />
+              <span><strong>{m.text("account.whatsappUpdates")}</strong><small>{m.text("account.whatsappSignupConsent")}</small></span>
+            </AccountWhatsAppConsentLabel>
+          </DesktopConsent>}
           {error && <AccountError role="alert">{error}</AccountError>}
           <AccountPrimary type="submit" disabled={!!busy || code.length !== 6 || invalidCode}>{m.text(busy === "verify" ? "account.working" : recovery ? "account.continueReset" : "account.verifyCode")}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
@@ -142,3 +154,9 @@ export function AccountVerificationForm(props: { locale: string; phone: string; 
 export function ForgotPasswordForm(props: { locale: string; returnTo: string | null; contact: AdminContact }) {
   return <AccountCodeForm {...props} purpose="password-reset" />;
 }
+
+const DesktopConsent = styled.div`
+  display: none;
+  ${media.desktop} { display: block; }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; }
+`;

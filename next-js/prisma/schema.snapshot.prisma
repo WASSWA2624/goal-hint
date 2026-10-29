@@ -1668,6 +1668,7 @@ model MemberAccount {
   phone            String?             @unique @db.VarChar(15)
   passwordHash     String?             @db.VarChar(255)
   phoneVerifiedAt  DateTime?           @db.DateTime(3)
+  whatsappNotificationsAt DateTime?    @db.DateTime(3)
   passwordChangedAt DateTime?          @db.DateTime(3)
   temporaryPasswordHash String?        @db.VarChar(255)
   temporaryPasswordExpiresAt DateTime? @db.DateTime(3)
@@ -1706,7 +1707,9 @@ model PaymentNotificationOutbox {
   accountId   String        @db.Char(36)
   targetType  String        @db.VarChar(16)
   targetId    String        @db.Char(36)
-  decision    String        @db.VarChar(8)
+  decision    String        @db.VarChar(32)
+  channel     String        @default("sms") @db.VarChar(8)
+  templateSnapshot Json?
   status      String        @default("queued") @db.VarChar(12)
   createdAt   DateTime      @db.DateTime(3)
   startedAt   DateTime?     @db.DateTime(3)
@@ -1714,7 +1717,7 @@ model PaymentNotificationOutbox {
   attemptId   String?       @db.Char(36)
   account     MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@unique([targetType, targetId, decision])
+  @@unique([targetType, targetId, decision, channel])
   @@index([status, createdAt])
   @@index([status, finishedAt])
   @@index([accountId])
@@ -1952,6 +1955,8 @@ model SubscriptionSettings {
   copyFormat              String    @default("international") @db.VarChar(16)
   contactPhone            String?   @db.VarChar(15)
   whatsappPhone           String?   @db.VarChar(15)
+  supportContacts         Json?
+  messageTemplates        Json?
   paymentNote             String?   @db.VarChar(300)
   reviewTime              String?   @db.VarChar(60)
   maxUnlockedDevices      Int       @default(2) @db.UnsignedTinyInt

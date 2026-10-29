@@ -1,5 +1,7 @@
 import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
+import { parseSupportContacts, supportContactsOf, type SupportContact } from "./support-contacts.ts";
+import { defaultMessageTemplates, parseMessageTemplates, type MessageTemplateSettings } from "./message-templates.ts";
 
 /**
  * Paid-access settings the owner edits on /admin/settings (prompts/monetization.md 5.7). They live in one row, id = 1, of
@@ -39,6 +41,9 @@ export type SubscriptionSettings = Readonly<{
   copyFormat: CopyFormat;
   contactPhone: string | null;
   whatsappPhone: string | null;
+  /** Null keeps the legacy/configured support numbers until the owner saves a contact list. */
+  supportContacts: readonly SupportContact[] | null;
+  messageTemplates: MessageTemplateSettings;
   paymentNote: string | null;
   reviewTime: string | null;
   maxUnlockedDevices: number;
@@ -57,6 +62,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   airtelNumber: null, airtelName: null, airtelMenuShortcut: null,
   copyFormat: "international",
   contactPhone: null, whatsappPhone: null,
+  supportContacts: null, messageTemplates: defaultMessageTemplates,
   paymentNote: null, reviewTime: null,
   maxUnlockedDevices: settingsRules.maxUnlockedDevices.default,
   trialDays: settingsRules.trialDays.default,
@@ -67,7 +73,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 /** The fields the Settings form saves; the mode has its own two-tap control. */
 export const editableSettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "maxUnlockedDevices", "trialDays",
-  "screenshotRetentionDays"] as const);
+  "screenshotRetentionDays", "supportContacts", "messageTemplates"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
 
@@ -75,15 +81,17 @@ export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSetting
  * The numbers and names that Safety tips tell subscribers to trust. Changing any of them needs the owner password again
  * and is audited with the old and new values.
  */
-export const protectedSettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
+export const identitySettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "contactPhone", "whatsappPhone"] as const);
+export const protectedSettingFields = Object.freeze([...identitySettingFields, "supportContacts", "messageTemplates"] as const);
 export type ProtectedSettingField = (typeof protectedSettingFields)[number];
-export type SubscriptionIdentity = Pick<SubscriptionSettings, ProtectedSettingField>;
+export type IdentitySettingField = (typeof identitySettingFields)[number];
+export type SubscriptionIdentity = Pick<SubscriptionSettings, IdentitySettingField>;
 export const subscriptionIdentityVariables = Object.freeze({
   mtnNumber: "GOAL_HINT_MTN_MOMO_NUMBER", mtnName: "GOAL_HINT_MTN_MOMO_NAME", mtnMenuShortcut: "GOAL_HINT_MTN_MOMO_MENU_SHORTCUT",
   airtelNumber: "GOAL_HINT_AIRTEL_MONEY_NUMBER", airtelName: "GOAL_HINT_AIRTEL_MONEY_NAME", airtelMenuShortcut: "GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT",
   contactPhone: "GOAL_HINT_CUSTOMER_SUPPORT_NUMBER", whatsappPhone: "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER",
-} as const satisfies Readonly<Record<ProtectedSettingField, string>>);
+} as const satisfies Readonly<Record<IdentitySettingField, string>>);
 export const isProtectedSettingField = (field: string): field is ProtectedSettingField =>
   (protectedSettingFields as readonly string[]).includes(field);
 
@@ -97,6 +105,8 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   copyFormat: "Copy number format",
   contactPhone: "Contact phone (calls)",
   whatsappPhone: "WhatsApp number",
+  supportContacts: "Support contacts",
+  messageTemplates: "Message templates",
   paymentNote: "Extra payment note",
   reviewTime: "Typical review time",
   maxUnlockedDevices: "Unlocked devices per account",
@@ -143,7 +153,15 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
   for (const [field, value] of Object.entries(input)) {
     if (!(editableSettingFields as readonly string[]).includes(field)) { errors.changes = `Unknown setting: ${field.slice(0, 40)}.`; continue; }
     const key = field as EditableSettingField;
-    if (phoneFields.has(key)) {
+    if (key === "supportContacts") {
+      const parsed = parseSupportContacts(value);
+      if (parsed.ok) changes[key] = parsed.contacts;
+      else errors[key] = parsed.error;
+    } else if (key === "messageTemplates") {
+      const parsed = parseMessageTemplates(value);
+      if (parsed.ok) changes[key] = parsed.settings;
+      else errors[key] = parsed.error;
+    } else if (phoneFields.has(key)) {
       if (value === null || value === "") { changes[key] = null; continue; }
       const phone = validMobilePhone(value);
       if (phone === null) errors[key] = phoneHint(value) === "outside-uganda" ? `${outsideUgandaHint}.`
@@ -202,7 +220,8 @@ export function applySettingsChanges(current: SubscriptionSettings, changes: Set
     if (next[shortcut] !== null && next[number] === null) errors[shortcut] = "Add the payment number first: a menu shortcut works only beside it.";
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  const changed = editableSettingFields.filter((field) => next[field] !== current[field]);
+  const changed = editableSettingFields.filter((field) => field === "supportContacts" || field === "messageTemplates"
+    ? JSON.stringify(next[field]) !== JSON.stringify(current[field]) : next[field] !== current[field]);
   return { ok: true, change: {
     next: Object.freeze({ ...next }),
     changed,
@@ -226,7 +245,7 @@ export function modeRequirements(settings: SubscriptionSettings, mode: PaywallMo
   if (!((settings.mtnNumber && settings.mtnName) || (settings.airtelNumber && settings.airtelName))) {
     missing.push({ key: "payment-number", message: "Add an MTN MoMo or Airtel Money number with its registered name." });
   }
-  if (!settings.contactPhone && !settings.whatsappPhone) missing.push({ key: "contact", message: "Add a contact or WhatsApp number." });
+  if (supportContactsOf(settings).length === 0) missing.push({ key: "contact", message: "Add a contact or WhatsApp number." });
   if (mode === "on") {
     if (!facts.privacyReleaseReady) missing.push({ key: "privacy", message: "The privacy notice is not release-ready yet." });
     if (!facts.termsReleaseReady) missing.push({ key: "terms", message: "The terms are not release-ready yet." });

@@ -15,7 +15,7 @@ const fields: Readonly<Record<AuthAction, readonly string[]>> = {
   register: ["phone", "password", "return"], login: ["phone", "password", "return", "destination"],
   phone: ["phone", "currentPassword"], password: ["password", "currentPassword"],
   forgot: ["phone", "channel", "return"], reset: ["password", "return"],
-  verification: ["channel", "return"], verify: ["code", "return"], "reset-code": ["phone", "code", "return"],
+  verification: ["channel", "return"], verify: ["code", "return", "whatsappNotifications"], "reset-code": ["phone", "code", "return"],
 };
 
 async function bodyOf(request: Request, allowed: readonly string[]): Promise<Record<string, unknown> | null> {
@@ -47,6 +47,8 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       let body;
       try { body = await bodyOf(request, fields[action]); } catch { body = null; }
       if (!body) return json({ error: "invalid-request", message: "Check the form and try again." }, 400);
+      if (action === "verify" && body.whatsappNotifications !== undefined && typeof body.whatsappNotifications !== "boolean")
+        return json({ error: "invalid-request", message: "Choose a valid WhatsApp update preference." }, 400);
       const services = await source();
       if (!services.auth || !services.sessions) return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503);
       const memberName = memberCookieName(services.config.production), currentToken = readCookie(request, memberName);
@@ -58,7 +60,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       }
       const result = action === "login" ? await services.auth.login(body.phone, body.password, address, currentToken)
         : action === "register" ? await services.auth.register(body.phone, body.password, binding, address)
-        : action === "verify" ? await services.auth.verifyAccount(body.code, currentToken, address)
+        : action === "verify" ? await services.auth.verifyAccount(body.code, currentToken, address, body.whatsappNotifications === true)
         : action === "reset-code" ? await services.auth.verifyPasswordReset(body.phone, body.code, address)
         : action === "phone" ? await services.auth.changePhone(body.phone, body.currentPassword, binding)
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)

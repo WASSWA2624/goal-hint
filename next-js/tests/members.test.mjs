@@ -176,9 +176,9 @@ test("a changed payment number clears its tested shortcut unless the same save s
   assert.deepEqual([contact.change.protectedChanged, contact.change.paymentNumbersChanged], [["contactPhone"], false]);
 });
 
-test("exactly the eight payment and contact fields are protected", () => {
+test("payment identity, support contacts and message templates are protected", () => {
   assert.deepEqual([...protectedSettingFields].sort(), ["airtelMenuShortcut", "airtelName", "airtelNumber", "contactPhone", "mtnMenuShortcut", "mtnName",
-    "mtnNumber", "whatsappPhone"]);
+    "mtnNumber", "whatsappPhone", "supportContacts", "messageTemplates"].sort());
   assert.ok(protectedSettingFields.every((field) => editableSettingFields.includes(field)));
 });
 
@@ -216,13 +216,13 @@ test("environment identity overrides stored history and managed updates fail bef
   const environment = { mtnNumber: "256700000910", mtnName: "ENV PAYEE", airtelNumber: null, airtelName: null,
     mtnMenuShortcut: null, airtelMenuShortcut: null, contactPhone: "256700000911", whatsappPhone: null };
   const service = createSettingsService(database, { environment });
-  assert.deepEqual(service.environmentFields, protectedSettingFields);
+  assert.deepEqual(service.environmentFields, protectedSettingFields.filter(field => !["supportContacts", "messageTemplates"].includes(field)));
   const settings = (await service.current()).settings;
   for (const [key, value] of Object.entries(environment)) assert.equal(settings[key], value, key);
   assert.equal(state.row.mtnNumber, OWNER_MTN, "stored history is preserved");
   assert.equal(state.row.whatsappPhone, OWNER_CONTACT, "an absent environment value never falls back to storage");
   const reads = state.reads;
-  for (const field of protectedSettingFields) {
+  for (const field of service.environmentFields) {
     const refused = await service.save("owner", { [field]: null }, { password: "unused", confirm() { assert.fail("password must not be checked"); } });
     assert.equal(refused.status, "invalid");
     assert.match(refused.errors[field], /environment variables/u);

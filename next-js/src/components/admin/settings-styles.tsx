@@ -3,7 +3,42 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
-import { Panel, panelRadius, Segmented, StickyActions } from "./desk-styles";
+import { DeskColumn, DeskGrid, DeskHead, Panel, panelRadius, Segmented, StickyActions } from "./desk-styles";
+
+export const MobileSettingsHead = styled(DeskHead)`
+  ${media.desktop} { display: none; }
+`;
+export const DesktopOnly = styled.div`
+  display: none;
+  ${media.desktop} { display: block; min-inline-size: 0; }
+`;
+export const MobileOnly = styled.div`
+  ${media.desktop} { display: none; }
+`;
+/** Desktop owns its scroll area, leaving both navigation and the save footer in view. */
+export const SettingsForm = styled.form`
+  ${media.desktop} {
+    display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px;
+    block-size: calc(100dvh - var(--app-header-height, 3rem) - 28px);
+    min-block-size: 0; margin-block: -12px -32px;
+    input, select, textarea, button, section, details { border-radius: 0; }
+  }
+`;
+export const SettingsHeading = styled(DeskHead)`
+  display: none;
+  ${media.desktop} { display: flex; flex-wrap: nowrap; gap: 24px; min-block-size: 44px; > h1 { flex: none; } }
+`;
+export const SettingsGrid = styled(DeskGrid)`
+  ${media.desktop} { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 0; min-block-size: 0; overflow: hidden; }
+`;
+export const SettingsColumn = styled(DeskColumn)`
+  ${media.desktop} { display: flex; flex-direction: column; gap: 12px; min-block-size: 0; overflow: auto; padding-block-end: 16px; scrollbar-gutter: stable; > * { flex: none; } }
+`;
+export const DesktopSettingsTabs = styled(Segmented)`
+  min-inline-size: 0; overflow-x: auto; border-radius: 0;
+  > button { flex: none; white-space: nowrap; border-radius: 0; }
+  > [aria-current="page"] > svg { color: ${({ theme }) => theme.color.link}; }
+`;
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -30,7 +65,7 @@ export const SectionTabs = styled(Segmented)`
     }
     > button > svg { font-size: 1.125rem; }
   }
-  ${media.desktop} { justify-self: start; }
+  ${media.desktop} { display: none; }
 `;
 
 /** The one content panel under the tabs; fields size to the panel, not the window, so 1024px with the sidebar still fits. */
@@ -275,8 +310,8 @@ export const RequirementList = styled.ul`
 `;
 
 /**
- * The save panel. From desktop up it is the side panel (state, password, Undo and Save) and sticks under the header;
- * on phones only the password part shows, in the flow, and Save lives in the bottom bar.
+ * The desktop footer occupies its own viewport-grid row. On phones only the password part shows in the flow;
+ * the existing SaveDock continues to hold mobile actions.
  */
 export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
   container-type: inline-size;
@@ -289,9 +324,11 @@ export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
     ${({ $phoneHidden }) => $phoneHidden && css`display: none;`}
   }
   ${media.desktop} {
-    position: sticky;
-    inset-block-start: calc(var(--app-header-height, 4rem) + 16px);
-    padding: 16px;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px;
+    border-radius: 0; padding: 12px 16px; border-block-start: 2px solid ${({ theme }) => theme.color.border};
+    > [data-save-wide]:first-child { align-self: center; }
+    > [data-save-wide]:last-child { grid-column: 2; grid-row: 1 / span 2; }
+    > [data-setting-password] { max-inline-size: 30rem; grid-column: 1; }
   }
 `;
 export const SaveButtons = styled.div`

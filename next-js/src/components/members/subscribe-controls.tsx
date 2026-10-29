@@ -8,11 +8,14 @@ import { Button, TextInput } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardIcon, CopyIcon, DialpadIcon, HelpIcon, ImageIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
+import { copiedPaymentPhone } from "@/domain/copied-payment-phone";
 import { formatPhone, localUgandaPhone, networkForPrefix, telHref, waHref, type MobileNetwork } from "@/domain/phone";
 import { validMobilePhone } from "@/domain/phone-mobile";
 import { canOpenMoneyMenu, normalizeTransactionId, parseTransactionId, type PaymentStatus, type PaymentView } from "@/domain/payment";
 import { paymentEvidence, sameTransactionId, type PaymentEvidence } from "@/domain/payment-sms";
-import type { SubscriptionSettings } from "@/domain/subscription-settings";
+import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
+import { supportContactsOf, type SupportContactSettings } from "@/domain/support-contacts";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { validTopUp, walletRules } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
@@ -26,6 +29,7 @@ import { EvidenceFindings, ReadingProgress, evidenceRows, type PaymentTarget, ty
 import { CreditPurchase } from "./credit-controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { PaymentStatusCard, useApprovalRefresh } from "./payment-status";
+import { DesktopSupportContacts, MobileSupportContent } from "./support-contact-links";
 import { PaymentWizard, WizardActions, WizardConfirm, WizardEdit, WizardFooter, WizardMethod, WizardNotice, WizardPayee, WizardPlans, WizardReceipt, WizardReview, WizardScreenshot, type PaymentStep } from "./payment-wizard";
 
 import {
@@ -56,24 +60,25 @@ export function SubscribeIntro({ locale }: { locale: string }) {
   const m = createMessages(locale);
   return <VisuallyHidden as="h1">{m.text("subscribe.title")}</VisuallyHidden>;
 }
-type HelpSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone">;
+type HelpSettings = SupportContactSettings;
 function PaymentHelp({ settings, text, locale }: { settings: HelpSettings; text?: string | undefined; locale: string }) {
   const m = createMessages(locale);
-  if (!settings.contactPhone && !settings.whatsappPhone) return null;
-  return <Row><HelpTitle>{m.text("subscribe.help")}</HelpTitle><HelpActions>
+  if (!settings.contactPhone && !settings.whatsappPhone && !supportContactsOf(settings).length) return null;
+  return <Row><HelpTitle>{m.text("subscribe.help")}</HelpTitle><MobileSupportContent><HelpActions>
     {settings.contactPhone && <ActionLink href={telHref(settings.contactPhone)} variant="secondary" data-analytics-ignore><PhoneIcon />{m.text("subscribe.call")}</ActionLink>}
     {settings.whatsappPhone && <ActionLink href={waHref(settings.whatsappPhone, text)} variant="secondary" data-analytics-ignore><ChatIcon />{m.text("subscribe.whatsapp")}</ActionLink>}
-  </HelpActions></Row>;
+  </HelpActions></MobileSupportContent><DesktopSupportContacts locale={locale} contact={settings} text={text} /></Row>;
 }
 function SubscribeSignIn({ locale, returnTo, settings }: { locale: string; returnTo: string | null; settings: HelpSettings }) {
   return <AccountAuthForm locale={locale} view="login" returnTo={returnTo} contact={settings} />;
 }
 /** startWithTopUp opens the form on Add credit (the account page's link); a signed-out visitor always sees plans. */
 export function SubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, startWithTopUp = false }: {
-  locale: string; settings: SubscriptionSettings; plans: readonly SubscriptionPlanView[];
+  locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
   account: { id: string; phone: string } | null; view: PaymentView | null; returnTo: string | null; userAgent: string; startWithTopUp?: boolean;
 }) {
   const m = createMessages(locale), router = useRouter(), ids = useId();
+  const desktop = useDesktopLayout();
   const networks = useMemo(() => (["mtn", "airtel"] as const).filter((key) => !!settings[key === "mtn" ? "mtnNumber" : "airtelNumber"]), [settings]);
   const initial = useMemo<PaymentDraft>(() => ({ purpose: startWithTopUp && account ? "topup" : "plan", planId: plans[0]?.id ?? "", topUpAmount: "", payerPhone: account?.phone ?? "256",
     network: networks.find((network) => network === networkForPrefix(account?.phone ?? "")) ?? networks[0] ?? "", transactionId: "", accepted: false }), [account, networks, plans, startWithTopUp]);
@@ -393,7 +398,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       <WalletMeta>{m.text("subscribe.payeeNames")} {name}</WalletMeta>
       <CopyButton variant="secondary" data-analytics-ignore onClick={async () => {
         update({ network: payNetwork });
-        try { await navigator.clipboard.writeText(localUgandaPhone(number)); setCopied(payNetwork); }
+        try { await navigator.clipboard.writeText(copiedPaymentPhone(number, settings.copyFormat, desktop)); setCopied(payNetwork); }
         catch { setError(m.text("account.copyFailed")); }
       }}>
         {copied === payNetwork ? <CheckIcon /> : <CopyIcon />}<span aria-hidden="true">{m.text(copied === payNetwork ? "account.copied" : "subscribe.copy")}</span>

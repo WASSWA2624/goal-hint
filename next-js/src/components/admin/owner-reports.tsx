@@ -6,6 +6,7 @@ import { formatUgx } from "@/domain/subscription-plans";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { OwnerNotice, OwnerOverview, OwnerPaymentSummary } from "@/domain/owner-members";
 import { ChevronDownIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { DeskGrid, Panel, PanelHead, RowList, StatGrid } from "./desk-styles";
 import { NetworkChip } from "./network-chip";
 import { PaymentNotices } from "./payment-notices";
@@ -13,18 +14,20 @@ import { PaymentNotices } from "./payment-notices";
 /** Metrics on the main side, the two oldest payment reports beside them; on phones the queue sits between the two. */
 export function OverviewReport({ value: v, payments, notices = null, now = 0 }: { value: OwnerOverview; payments: readonly OwnerPaymentSummary[] | null;
   notices?: readonly OwnerNotice[] | null; now?: number }) {
-  const attention = notices?.length ?? 0;
+  const desktop = useDesktopLayout();
+  const attention = (desktop ? notices : notices?.filter(notice => notice.channel !== "whatsapp"))?.length ?? 0;
+  const noticeLabel = desktop ? "Message notices to check" : "SMS notices to check";
   const metrics = [
     ["Pending payments", v.pending], ["Active paid subscribers", v.active],
     ["Revenue · EAT week", formatUgx(v.weekRevenue)], ["Revenue · EAT month", formatUgx(v.monthRevenue)],
     ["Trials · this week", v.trials], ["Upload alerts · this week", v.busy],
     // Credit members hold is owed in plans, not cash: it is already in revenue from the payments that added it.
     ["Credit held by members", formatUgx(v.creditHeld)], ...(v.creditOwed > 0 ? [["Credit owed after reversals", formatUgx(v.creditOwed)] as const] : []),
-    ...(attention ? [["SMS notices to check", attention] as const] : []),
+    ...(attention ? [[noticeLabel, attention] as const] : []),
   ] as const;
   return <Overview $notices={attention > 0}>
     <Metrics><StatGrid aria-label="Admin overview">{metrics.map(([label, value]) =>
-      <Tile key={label} $pending={label === "Pending payments" ? v.pending > 0 : label === "SMS notices to check"}><dt>{label}</dt><dd>{value}</dd></Tile>)}</StatGrid></Metrics>
+      <Tile key={label} $pending={label === "Pending payments" ? v.pending > 0 : label === noticeLabel}><dt>{label}</dt><dd>{value}</dd></Tile>)}</StatGrid></Metrics>
     <Panel aria-labelledby="payment-queue-title">
       <PanelHead><h2 id="payment-queue-title">Payment queue</h2><ViewAll href="/admin/payments" prefetch={false}>View all<ChevronRightIcon /></ViewAll></PanelHead>
       {payments === null ? <QueueMessage role="status">Payment queue is unavailable. Try again later.</QueueMessage>

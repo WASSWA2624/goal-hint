@@ -15,7 +15,7 @@ const owner = "synthetic-owner";
 
 /** A transactional store for exercising production payment services without MySQL or provider credentials. */
 function fixture() {
-  const account = { id: randomUUID(), phone: "256700000111", blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null };
+  const account = { id: randomUUID(), phone: "256700000111", phoneVerifiedAt: new Date(instant), blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
   let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [], walletEntry: [], paymentNotificationOutbox: [],
     subscriptionSettings: [{ ...defaultSubscriptionSettings, id: 1, updatedAt: new Date(instant) }] };
@@ -253,10 +253,22 @@ test("missing or unsupported registered numbers do not call the SMS provider", a
 });
 
 test("an audit outage does not undo an SMS accepted by the provider", async () => {
-  let calls = 0;
-  const notifications = createPaymentNotifications({ database: { async query() { throw new Error("Synthetic audit outage"); } }, delivery: { async sendSms() { calls++; } } });
-  assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: randomUUID(), phone: "256700000111", reference: "PABCD", reason: "other" }), "sent");
+  const f = fixture(); let calls = 0;
+  const notifications = createPaymentNotifications({ database: { ...f.database, async transaction() { throw new Error("Synthetic audit outage"); } }, delivery: { async sendSms() { calls++; } } });
+  assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "other" }), "sent");
   assert.equal(calls, 1);
+});
+
+test("the direct account-update adapter requires the current verified recipient and fails closed when it cannot read one", async () => {
+  const f = fixture(); let calls = 0;
+  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms() { calls++; } } });
+  const message = { paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "other" };
+  for (const fields of [{ phoneVerifiedAt: null }, { phoneVerifiedAt: new Date(instant), phone: "256700000222" }, { phone: message.phone, blockedAt: new Date(instant) }]) {
+    Object.assign(f.account, fields);
+    assert.equal(await notifications.rejected(message), "unavailable");
+  }
+  const offline = createPaymentNotifications({ database: { async query() { throw new Error("Synthetic read failure"); } }, delivery: { async sendSms() { calls++; } } });
+  assert.equal(await offline.rejected(message), "failed"); assert.equal(calls, 0);
 });
 
 test("production approval and rejection intents commit atomically without contacting a gateway", async () => {

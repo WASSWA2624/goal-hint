@@ -16,7 +16,7 @@ test("payment notification outbox on restricted genuine MySQL", { timeout: 180_0
   const at = new Date(instant), planId = randomUUID(), accountId = randomUUID();
   await db.query(tx => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000,
     active: true, sortOrder: 0, createdAt: at, updatedAt: at } }));
-  await db.query(tx => tx.memberAccount.create({ data: { id: accountId, phone: "256700000111", createdAt: at, lastSignInAt: at } }));
+  await db.query(tx => tx.memberAccount.create({ data: { id: accountId, phone: "256700000111", phoneVerifiedAt: at, createdAt: at, lastSignInAt: at } }));
   const codes = createAccessCodes({ database: db, now: () => clock });
   const producer = createQueuedPaymentNotifications();
   const calls = [], worker = () => createPaymentOutboxWorker({ database: db, now: () => clock, delivery: { async sendSms(message) { calls.push(message); } } });

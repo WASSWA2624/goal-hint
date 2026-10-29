@@ -10,6 +10,7 @@ import { memberReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { SubscriptionStatus } from "@/domain/subscription-summary";
+import { publicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { createMessages } from "@/i18n/messages";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
@@ -55,7 +56,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
           : member?.blocked ? <p role="status">{m.text("account.refused")}</p>
             // The URL decides plans or Add credit: moving between them starts the flow afresh (its draft is saved per account).
-            : <SubscribeFlow key={`${member?.tokenHash ?? "signed-out"}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={settings!} plans={offers}
+            : <SubscribeFlow key={`${member?.tokenHash ?? "signed-out"}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings!)} plans={offers}
               account={member ? { id: member.accountId, phone: member.phone } : null} view={view} returnTo={returnTo} userAgent={userAgent}
               startWithTopUp={parameters.add === "credit"} />}
     </SubscribeLayout></PublicShell>;

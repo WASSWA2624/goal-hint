@@ -1,12 +1,15 @@
 import "server-only";
 
-import { supportedMessageChannels, type MessageChannel, type VerificationPurpose } from "../../domain/member-verification.ts";
+import { supportedMessageChannels, verificationCodeLifetimeMs, type MessageChannel, type VerificationPurpose } from "../../domain/member-verification.ts";
+import { defaultMessageTemplates, renderMessageTemplate } from "../../domain/message-templates.ts";
+import { sharedMessageValues, type MessagingSettingsReader } from "./message-content.ts";
 
 export type VerificationMessage = Readonly<{ phone: string; channel: MessageChannel; purpose: VerificationPurpose; code: string }>;
 export type MemberMessaging = Readonly<{ send(message: VerificationMessage): Promise<void> }>;
 export type SmsMessage = Readonly<{ phone: string; message: string }>;
 /** configured() is optional for injected fakes; a missing method counts as configured. */
-export type SmsMessaging = Readonly<{ sendSms(message: SmsMessage): Promise<void>; configured?(): boolean }>;
+export type WhatsAppMessage = Readonly<{ phone: string; templateName: string; parameters: readonly string[]; consent: true }>;
+export type SmsMessaging = Readonly<{ sendSms(message: SmsMessage): Promise<void>; sendWhatsApp?(message: WhatsAppMessage): Promise<void>; configured?(): boolean }>;
 type MessagingErrorCode = "invalid-message" | "unsupported-country" | "configuration" | "delivery";
 /**
  * `not-sent` failed local validation before dispatch. Provider/transport failures are `uncertain`: the gateway's HTTP or
@@ -38,8 +41,8 @@ export class YoolaMessagingError extends Error {
  * lifetime does not implement our 24-hour rule, so use SMS send and the approved WhatsApp authentication template.
  * Calling send with channel=whatsapp must follow the recipient's explicit choice to receive that message on WhatsApp.
  */
-export function createYoolaMessaging({ env = process.env, fetch: request = globalThis.fetch }: {
-  env?: Readonly<Record<string, string | undefined>>; fetch?: typeof globalThis.fetch;
+export function createYoolaMessaging({ env = process.env, fetch: request = globalThis.fetch, settings: readSettings }: {
+  env?: Readonly<Record<string, string | undefined>>; fetch?: typeof globalThis.fetch; settings?: MessagingSettingsReader;
 } = {}): MemberMessaging & SmsMessaging {
   function credentials() {
     const apiKey = env.YOOLA_SMS_API_KEY?.trim(), sender = env.YOOLA_SMS_SENDER?.trim();
@@ -76,18 +79,32 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
     await deliver(phone, "sms", { message });
   }
 
+  async function sendWhatsApp({ phone, templateName, parameters, consent }: WhatsAppMessage): Promise<void> {
+    if (consent !== true || !/^[a-z0-9_]{1,128}$/u.test(templateName) || !Array.isArray(parameters) || parameters.length > 20
+      || parameters.some(value => typeof value !== "string" || !value.trim() || value.length > 1_600)) throw new YoolaMessagingError("invalid-message");
+    await deliver(phone, "whatsapp", { template_name: templateName, template_params: parameters, consent: "yes" });
+  }
+
   return Object.freeze({
     sendSms,
+    sendWhatsApp,
     /** The same key and sender rule delivery checks, without a request: an unconfigured process leaves outbox rows alone. */
     configured: () => credentials() !== null,
     async send({ phone, channel, purpose, code }: VerificationMessage): Promise<void> {
       if (typeof code !== "string" || !/^\d{6}$/u.test(code) || !["account", "password-reset"].includes(purpose) || !["sms", "whatsapp"].includes(channel)) {
         throw new YoolaMessagingError("invalid-message");
       }
+      const settings = readSettings ? await readSettings() : null;
+      if (readSettings && !settings) throw new YoolaMessagingError("configuration");
+      const event = purpose === "account" ? "account-verification" : "password-reset";
+      const template = (settings?.messageTemplates ?? defaultMessageTemplates).events[event];
+      if (!template.enabled || !template.channels.includes(channel)) throw new YoolaMessagingError("configuration");
+      const values = { ...sharedMessageValues(settings, phone), verification_code: code, expiry_hours: String(verificationCodeLifetimeMs / 3_600_000) };
       if (channel === "sms") {
-        await sendSms({ phone, message: `Goal Hint ${purpose === "account" ? "account verification" : "password reset"} code: ${code}. Valid for 24 hours. Do not share this code.` });
+        await sendSms({ phone, message: renderMessageTemplate(event, template.sms, values) });
       } else {
-        await deliver(phone, "whatsapp", { template_name: "yoola_otp_verification", template_params: [code], consent: "yes" });
+        await sendWhatsApp({ phone, templateName: template.whatsapp.templateName,
+          parameters: template.whatsapp.parameters.map(source => renderMessageTemplate(event, source, values)), consent: true });
       }
     },
   });

@@ -7,6 +7,7 @@ import type { PaymentStatus } from "@/domain/payment";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
+import { supportContactsOf, type SupportContactSettings } from "@/domain/support-contacts";
 import { createMessages } from "@/i18n/messages";
 import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
 import { AccountBlock, AccountBlockActions, AccountBlockText, AccountContactLinks, AccountFine } from "./account-overview";
@@ -14,7 +15,7 @@ import { richText } from "./rich-text";
 import { refreshMemberSession } from "./member-session";
 import { Action, Disclosure, Note, PaymentReviewBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
-export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
+export type StatusSettings = SupportContactSettings & Pick<SubscriptionSettings, "reviewTime">;
 const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 type RejectReason = (typeof rejectReasons)[number];
 const reasonOf = (code: string | null): RejectReason => rejectReasons.find((reason) => reason === code) ?? "other";
@@ -106,7 +107,7 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
       <p>{message}</p>
     </header>
     <PaymentDetails locale={locale} status={status} pending={pending} reviewTime={pending ? settings.reviewTime : null} />
-    {settings.contactPhone || settings.whatsappPhone
+    {settings.contactPhone || settings.whatsappPhone || supportContactsOf(settings).length
       ? <AdminContactLinks locale={locale} contact={settings} compact text={supportText} />
       : <AccountSupportLink locale={locale} contact={settings} />}
     {nextAction}

@@ -3,11 +3,13 @@
 import styled, { css } from "styled-components";
 import { Button, TextLink } from "@/components/ui/controls";
 import { telHref, waHref } from "@/domain/phone";
+import { supportContactsOf } from "@/domain/support-contacts";
 import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import type { AdminContact } from "./admin-contact";
 import { MemberSignOut } from "./member-controls";
+import { DesktopSupportContacts, DesktopSupportContent, MobileSupportContent } from "./support-contact-links";
 
 /** The account written as short sentences, each followed by its actions; one column on phones and desktop. */
 export const AccountSheet = styled.article`
@@ -78,11 +80,12 @@ const SignOut = styled(MemberSignOut)`&& { ${actionText} min-block-size: 52px; c
 /** Text links to the admin; a missing number hides its link, and no number at all falls back to the contact page. */
 export function AccountContactLinks({ locale, contact, text }: { locale: string; contact: AdminContact; text?: string }) {
   const m = createMessages(locale);
-  if (!contact.contactPhone && !contact.whatsappPhone) return <AccountActionLink href={`/${resolveLocale(locale)}/contact`} prefetch={false}>{m.text("account.contactSupport")}</AccountActionLink>;
-  return <>
+  const fallback = <AccountActionLink href={`/${resolveLocale(locale)}/contact`} prefetch={false}>{m.text("account.contactSupport")}</AccountActionLink>;
+  return <><MobileSupportContent>{!contact.contactPhone && !contact.whatsappPhone ? fallback : <>
     {contact.contactPhone && <AccountActionLink href={telHref(contact.contactPhone)} data-analytics-ignore>{m.text("subscribe.callAdmin")}</AccountActionLink>}
     {contact.whatsappPhone && <AccountActionLink href={waHref(contact.whatsappPhone, text)} data-analytics-ignore>{m.text("subscribe.whatsapp")}</AccountActionLink>}
-  </>;
+  </>}</MobileSupportContent>{supportContactsOf(contact).length ? <DesktopSupportContacts locale={locale} contact={contact} text={text} appearance="text" />
+    : <DesktopSupportContent>{fallback}</DesktopSupportContent>}</>;
 }
 
 export function AccountLogOut({ locale }: { locale: string }) {

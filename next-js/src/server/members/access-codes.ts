@@ -121,7 +121,7 @@ export async function grantRegistrationTrial(tx: Prisma.TransactionClient, accou
 }
 
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
-export function createAccessCodes({ database, now = Date.now, notifications = createQueuedPaymentNotifications() }: {
+export function createAccessCodes({ database, now = Date.now, notifications = createQueuedPaymentNotifications(database) }: {
   database: DatabaseRuntime; now?: () => number; notifications?: PaymentNotifications;
   /** Accepted for existing callers; nothing here is keyed since code entry (and its throttle) was removed. */
   config?: Pick<AnalyticsConfig, "key">;

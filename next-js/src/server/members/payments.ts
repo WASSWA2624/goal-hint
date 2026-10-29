@@ -18,6 +18,7 @@ import { walletHistory } from "./wallet.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { configuredSubscriptionSettings, decide, lockSettings } from "./settings.ts";
+import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 
 type Outcome = Readonly<{ status: "saved"; reference: string }> | Readonly<{ status: "busy" | "refused" | "invalid" | "duplicate" }>;
 type Bucket = { key: string; count: number; bytes: number };
@@ -109,6 +110,7 @@ export function createPayments({ database, config, now = Date.now, environment =
           await tx.rateLimitBucket.update({ where: { key: site.key }, data: { count: { increment: 1 }, bytes: { increment: imageBytes } } });
           await writeOwnerAudit(tx, { at, actor: "member", action: "payment_submitted", accountId: member.accountId,
             targetType: "payment", targetId: id, details: { bytes: imageBytes, ...(topUp === null ? {} : { purpose, topUpUgx: topUp }) } });
+          await enqueueMemberMessage(tx, { accountId: member.accountId, targetType: "payment", targetId: id, decision: "received", at }, settings.messageTemplates);
           return { status: "saved", reference: formatPaymentReference(reference) };
         }); } catch (error) {
           if (attempt >= 3 || !(error instanceof DatabaseOperationError) || !["conflict", "constraint"].includes(error.code)) throw error;

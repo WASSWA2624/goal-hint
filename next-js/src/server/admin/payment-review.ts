@@ -20,7 +20,7 @@ const paymentSelect = {
   claimedAmountUgx: true, screenshotAmountUgx: true, purpose: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
   transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } },
 } as const satisfies Prisma.PaymentSubmissionSelect;
-export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createQueuedPaymentNotifications() }: {
+export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createQueuedPaymentNotifications(database) }: {
   notifications?: PaymentNotifications;
 } = {}) {
   return {

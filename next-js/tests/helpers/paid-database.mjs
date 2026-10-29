@@ -31,6 +31,7 @@ export async function paidDatabase({ seedPlans = false } = {}) {
     // Applied whole: its trigger bodies contain semicolons.
     await root.query(await readFile(new URL("../../prisma/migrations/20261024210000_account_credit/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261025230000_payment_notification_outbox/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261029140000_desktop_settings_contacts_messages/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "SavedSlip", "PaymentNotificationOutbox"]);

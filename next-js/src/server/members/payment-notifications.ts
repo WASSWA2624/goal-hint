@@ -8,14 +8,19 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount } from "./access-codes.ts";
 import { createYoolaMessaging, type SmsMessaging } from "./yoola-messaging.ts";
+import type { MessageEvent } from "../../domain/message-templates.ts";
 
 type PaymentReceipt = Readonly<{ paymentId: string; accountId: string; phone: string | null; reference: string }>;
 export type PaymentApprovalNotification = PaymentReceipt & Readonly<{ planName: string; expiresAt: Date; creditAddedUgx?: number }>;
 export type PaymentRejectionNotification = PaymentReceipt & Readonly<{ reason: string }>;
 export type CreditNotification = PaymentReceipt & Readonly<{ addedUgx: number; balanceUgx: number }>;
 export type RenewalNotification = Readonly<{ accessCodeId: string; accountId: string; phone: string | null; planName: string; expiresAt: Date; balanceUgx: number }>;
-export type PaymentNotificationEvent = Readonly<{ accountId: string; targetType: "payment" | "access-code"; targetId: string;
-  decision: "approved" | "rejected" | "credited" | "renewed"; at: Date }>;
+export type PaymentNotificationEvent = Readonly<{ accountId: string; targetType: "payment" | "access-code" | "member"; targetId: string;
+  decision: "approved" | "rejected" | "credited" | "renewed" | "received" | "welcome"; at: Date }>;
+export function notificationEvent(decision: PaymentNotificationEvent["decision"]): MessageEvent {
+  return ({ approved: "payment-approved", rejected: "payment-rejected", credited: "credit-added", renewed: "subscription-renewed",
+    received: "payment-received", welcome: "welcome" } as const)[decision];
+}
 export type PaymentNotifications = Readonly<{
   /** Persist inside the same account-locked transaction as the decision. Injected transports may omit this hook. */
   enqueue?(tx: Prisma.TransactionClient, event: PaymentNotificationEvent): Promise<void>;
@@ -37,7 +42,12 @@ export function createPaymentNotifications({ database, now = Date.now, delivery 
     if (!payment.phone) status = "unavailable";
     else if (!supportedMessageChannels(payment.phone).includes("sms")) status = "unsupported";
     else {
-      try { await delivery.sendSms({ phone: payment.phone, message: accountUpdateMessage }); status = "sent"; }
+      try {
+        const account = await database.query(tx => tx.memberAccount.findUnique({ where: { id: payment.accountId },
+          select: { phone: true, phoneVerifiedAt: true, blockedAt: true, erasedAt: true } }));
+        if (!account?.phoneVerifiedAt || account.phone !== payment.phone || account.blockedAt || account.erasedAt) status = "unavailable";
+        else { await delivery.sendSms({ phone: account.phone, message: accountUpdateMessage }); status = "sent"; }
+      }
       catch { status = "failed"; }
     }
     // Neither provider nor audit failures may turn a committed approval/rejection into an apparent failed decision.

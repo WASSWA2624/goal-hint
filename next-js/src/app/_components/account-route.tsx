@@ -6,6 +6,7 @@ import { MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/componen
 import { AccountAuthForm, type AccountAuthView } from "@/components/members/account-auth-form";
 import { AccountBlock, AccountBlockActions, AccountBlockText, AccountFlash, AccountLogOut, AccountSheet } from "@/components/members/account-overview";
 import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
+import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
 import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
@@ -16,6 +17,7 @@ import { Stack } from "@/components/ui/layout";
 import { SignOutIcon } from "@/components/ui/icons";
 import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
+import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { formatSubscriptionExpiry, subscriptionTimeLeft } from "@/domain/subscription-expiry";
 import { codeStatus, formatPeriodEnd } from "@/domain/subscription-period";
 import { createMessages } from "@/i18n/messages";
@@ -40,7 +42,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const resolved = await services(), settings = resolved.settings.settings;
     const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
     const returnTo = memberReturnPath(parameters.return);
-    const contact = { contactPhone: settings?.contactPhone ?? null, whatsappPhone: settings?.whatsappPhone ?? null, reviewTime: settings?.reviewTime ?? null };
+    const contact = { ...publicSupportContactSettings(settings), reviewTime: settings?.reviewTime ?? null };
     // Old reset links enter the same code-based recovery flow.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
     const mode = settings?.paywallMode;
@@ -111,6 +113,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
         {credit && hasCredit && <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} active={!!activeUntil} />}
         <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} devices={view ? view.devices.map((device) => formatPeriodEnd(device.lastSeenAt)) : null} />
+        <AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} />
         <AccountLogOut locale={locale} />
       </AccountSheet>}
     </Stack></PublicShell>;

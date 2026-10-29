@@ -56,7 +56,7 @@ export function createSettingsHandlers({ service = settingsServiceFor }: { servi
     },
     async POST({ services, owner, request }: AdminContext): Promise<Response> {
       if (!services.database) return unavailable();
-      const read = await readJsonBody(request);
+      const read = await readJsonBody(request, 65_536);
       if ("refusal" in read) return read.refusal;
       const { action } = read.body;
       const settings = service(services.database);

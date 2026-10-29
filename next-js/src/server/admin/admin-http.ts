@@ -78,14 +78,14 @@ export const adminBodyRules = Object.freeze({ maximumBytes: 16_384, deadlineMs: 
  * The JSON object an owner action sent, or the response that refuses it. Requiring `application/json` also means a
  * cross-site page could only send it after a CORS preflight, behind the guard's same-origin check.
  */
-export async function readJsonBody(request: Request): Promise<Readonly<{ body: Record<string, unknown> }> | Readonly<{ refusal: Response }>> {
+export async function readJsonBody(request: Request, maximumBytes: number = adminBodyRules.maximumBytes): Promise<Readonly<{ body: Record<string, unknown> }> | Readonly<{ refusal: Response }>> {
   if (!/^application\/json\s*(;|$)/iu.test(request.headers.get("content-type") ?? "")) {
     return { refusal: json({ error: "invalid-request", message: "Send the change as JSON." }, 415) };
   }
   const tooLarge = { refusal: json({ error: "too-large", message: "The request is too large." }, 413) };
-  if (Number(request.headers.get("content-length") ?? 0) > adminBodyRules.maximumBytes) return tooLarge;
+  if (Number(request.headers.get("content-length") ?? 0) > maximumBytes) return tooLarge;
   let bytes: Uint8Array | null;
-  try { bytes = await readLimitedBody(request, adminBodyRules.maximumBytes, { deadlineMs: adminBodyRules.deadlineMs }); }
+  try { bytes = await readLimitedBody(request, maximumBytes, { deadlineMs: adminBodyRules.deadlineMs }); }
   catch (error) {
     if (error instanceof BodyDeadlineError) return { refusal: json({ error: "timeout", message: "The request took too long. Try again." }, 408) };
     // An aborted or broken upload is the sender's problem, never a server error.
