@@ -68,6 +68,26 @@ Before JavaScript attaches, dialogs render as visible inline sections so the
 complete form remains usable without JavaScript. Hydration enables the modal
 presentation and the three compact triggers.
 
+All numeric controls progressively enhance to guarded spinbuttons. Typing,
+pasting and stepping reject signs, exponents, nonnumeric characters, excessive
+precision and values beyond the shared parser's limits, with accessible field
+warnings outside normal layout flow. Total slips accepts 1–100; odds step by
+0.01 with two decimal places; probabilities remain within 0–100 with up to
+three decimal places; matches step by one and display comma thousands grouping.
+The single named input per criterion keeps an unformatted canonical value for
+GET submission. Without JavaScript, the original native number inputs remain.
+
+Empty numeric ranges stay editable as Any, with blank minima using their valid
+floor. Decimal prefixes such as 0 and 0. remain editable while entering 0.01.
+Integer zero is rejected. Range ordering is checked on leaving a field and when
+applying/building, so both endpoints can be edited without trapping a range.
+Native dates retain calendar selection with valid supported years, an ordered
+date window of at most 31 days and valid ordered minute-resolution times.
+Incomplete date segments remain editable; field warnings and the existing
+shared parser prevent invalid windows being applied. The dialog triggers use
+right-facing chevrons. The desktop gap below the toolbar is reduced to 6px;
+the mobile layout, compact label and spacing remain unchanged.
+
 A validation error exposes its invalid optional group; essential target errors
 stay beside the visible controls. Draft values remain editable and retain their
 accessible error association. The defaults and blank numeric bounds below apply

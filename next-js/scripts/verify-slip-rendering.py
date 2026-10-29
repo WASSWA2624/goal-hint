@@ -148,6 +148,7 @@ def criteria_groups(document, path, error_group=None):
     triggers = option_rows[0].nodes("button")
     assert len(triggers) == 3, f"{path}: three optional criteria buttons"
     assert all(button.attrs.get("type") == "button" and button.attrs.get("aria-haspopup") == "dialog" for button in triggers), f"{path}: optional criteria open dialogs without submitting"
+    assert all(any(node.attrs.get("d") == "m9 6 6 6-6 6" for node in button.nodes("path")) for button in triggers), f"{path}: dialog triggers use right-pointing arrows"
     values = {}
     for name, group in by_name.items():
         assert "open" in group.attrs and group.attrs.get("data-enhanced") == "false", f"{path}: {name} stays available inline before hydration"
@@ -294,8 +295,14 @@ def verify_defaults(document):
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and fields[name] == value, f"Default {name}: expected {value!r}, found {fields.get(name)!r}"
         assert controls[0].attrs.get("placeholder") == "Any", f"Default {name}: blank numeric range displays Any"
-        if name in ("totalMin", "totalMax", "oddsMin", "oddsMax", "teamsMin", "teamsMax"):
-            assert "max" not in controls[0].attrs, f"{name}: optional maximum does not impose an unrelated price or search cap"
+        if name in ("totalMin", "totalMax", "oddsMin", "oddsMax"):
+            assert controls[0].attrs.get("min") == "0.01" and controls[0].attrs.get("step") == "0.01", f"{name}: hundredth odds steps and valid minimum"
+            assert controls[0].attrs.get("max") == "90071992547409.91", f"{name}: only the shared exact-number ceiling limits entry"
+        if name in ("teamsMin", "teamsMax"):
+            assert controls[0].attrs.get("min") == "1" and controls[0].attrs.get("step") == "1", f"{name}: positive whole-match steps"
+            assert controls[0].attrs.get("max") == "9007199254740991", f"{name}: optional match ceiling has no unrelated search cap"
+        if name in ("probMin", "probMax"):
+            assert controls[0].attrs.get("min") == "0" and controls[0].attrs.get("max") == "100", f"{name}: probability stays within zero to one hundred"
     assert not any(node.attrs.get("name", "").startswith("totalProb") for node in document.nodes("input")), "Unqualified default form does not offer combined-estimate fields"
     assert fields["dateFrom"] == fields["dateTo"] == "2026-10-13", "SSR defaults use today for both dates"
     assert fields["timeFrom"] == "00:00" and fields["timeTo"] == "23:59", "SSR defaults explicitly select all-day kickoff times"

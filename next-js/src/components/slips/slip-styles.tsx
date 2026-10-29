@@ -52,7 +52,7 @@ export const StatusCopy = styled.span`
   }
 `;
 
-export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; }`;
+export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; &[data-slip-builder-page] { gap: 6px; } }`;
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
 export const SlipList = styled.div<{ $phoneGap?: number }>`
   display: grid; min-inline-size: 0; gap: ${({ $phoneGap = 10 }) => $phoneGap}px;
@@ -101,6 +101,7 @@ export const BuilderEssentials = styled.div`
   align-items: end; min-inline-size: 0;
   > [data-slip-count] > div { gap: 2px; }
   > [data-slip-count] label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  [data-slip-count-label="desktop"] { display: none; }
   > [data-slip-count] input {
     min-block-size: ${compactControlHeight}; padding: 4px; border-radius: 0; font-size: 1rem;
     ${filterControlColors}
@@ -112,6 +113,8 @@ export const BuilderEssentials = styled.div`
     > [data-slip-count] { flex: none; inline-size: 4.25rem; }
     > [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
     > [data-slip-count] label { ${desktopGroupTitle} }
+    [data-slip-count-label="mobile"] { display: none; }
+    [data-slip-count-label="desktop"] { display: inline; }
     > [data-slip-count] input { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
   }
   @media (pointer: coarse) { > [data-slip-count] input { min-block-size: 44px; } }
