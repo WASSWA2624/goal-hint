@@ -46,8 +46,18 @@ sections, as requested in the follow-up.
 - Public contact HTML/query handling and contextual privacy/terms/help links
   passed. A serialization test checks that disabled contacts, private templates
   and owner metadata never enter public client props.
-- Genuine MySQL integration checks were skipped: the isolated harness could not
-  find a MySQL server binary. The migration has not been applied to a live target.
+- Follow-up on 29 October 2026 located the portable MySQL 8.4.11 runtime used by
+  the development demo. All eight isolated notification integration checks passed
+  without skips. The migration's unique-index name was corrected to Prisma's
+  generated 64-character name before deployment.
+- Applied only the settings migration to the running, ownership-verified local
+  demo database through a scoped Prisma deployment. Migration history/checksum,
+  all five columns, channel uniqueness and expanded CHECK constraints passed
+  verification. The application successfully read stored settings, all eight
+  message events and notification columns; the existing settings route responded.
+- Existing table counts were preserved. The unrelated pending account-recovery
+  migration was excluded, the demo was not reseeded, and its running launcher was
+  retained. No production database, mobile layout or private configuration changed.
   No real messages were sent. Gateway delivery tests used injected fake adapters.
 - A broader existing admin-routes source assertion still fails on the unrelated
   Codes sample's conditional GET form. This was preserved outside the settings

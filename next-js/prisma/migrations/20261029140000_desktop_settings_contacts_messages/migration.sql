@@ -13,7 +13,7 @@ ALTER TABLE `PaymentNotificationOutbox`
     MODIFY COLUMN `decision` VARCHAR(32) NOT NULL,
     ADD COLUMN `channel` VARCHAR(8) NOT NULL DEFAULT 'sms',
     ADD COLUMN `templateSnapshot` JSON NULL,
-    ADD UNIQUE INDEX `PaymentNotificationOutbox_targetType_targetId_decision_channel_key` (`targetType`, `targetId`, `decision`, `channel`),
+    ADD UNIQUE INDEX `PaymentNotificationOutbox_targetType_targetId_decision_chann_key` (`targetType`, `targetId`, `decision`, `channel`),
     ADD CONSTRAINT `PaymentNotificationOutbox_decision_check` CHECK (
         (`targetType` = 'payment' AND `decision` IN ('approved', 'credited', 'rejected', 'received')) OR
         (`targetType` = 'access-code' AND `decision` = 'renewed') OR
