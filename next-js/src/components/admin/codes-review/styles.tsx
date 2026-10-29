@@ -6,7 +6,6 @@ import { adminControl } from "../admin-form";
 
 export const Gallery = styled.main`
   min-block-size: 100dvh; padding: 24px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.page};
-  --code-section-gap: 18px;
   *, *::before, *::after { box-sizing: border-box; }
   a { color: ${({ theme }) => theme.color.link}; }
   button, input, select, textarea, fieldset, details { border-radius: 0; }
@@ -51,18 +50,9 @@ export const Preview = styled.section`
 `;
 export const PreviewCanvas = styled.div`
   min-inline-size: 0;
-  && input, && button, && select, && textarea, && fieldset, && details, && [role="group"] { border-radius: 0; }
-  [data-code-form-stack] { gap: var(--code-section-gap); }
-  [data-grant-section] { display: grid; min-inline-size: 0; gap: 14px; }
-  [data-grant-payment] { border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 8px; }
-  [data-code-facts] { background: ${({ theme }) => theme.color.surface}; }
   ${media.desktop} {
     block-size: 690px;
     > [data-codes-workspace] { block-size: 100%; }
-    [data-grant-section="account"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
-    [data-grant-section="terms"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    [data-code-variant="balanced"] [data-code-form-stack] { max-inline-size: 56rem; margin-inline: auto; padding: 10px; }
-    [data-code-variant="balanced"] [data-grant-section="reason"] { padding-block-start: 6px; }
 
     [data-code-variant="ledger"] [data-code-form-stack] { gap: 0; padding: 8px 10px; background: ${({ theme }) => theme.color.surface}; }
     [data-code-variant="ledger"] [data-grant-section] { padding: 18px 6px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
@@ -118,7 +108,6 @@ export const PreviewCanvas = styled.div`
   }
   ${media.belowDesktop} {
     padding: 16px;
-    [data-code-form-stack] { gap: 18px; }
     [data-code-variant="framed"] [data-grant-section], [data-code-variant="guided"] [data-grant-section] { padding: 14px; border: 1px solid ${({ theme }) => theme.color.border}; }
     [data-code-variant="accent"] [data-code-form-stack] { padding-inline-start: 12px; border-inline-start: 3px solid ${({ theme }) => theme.color.brand}; }
     [data-code-variant="compact"] [data-code-form-stack] { gap: 10px; }

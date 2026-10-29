@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "styled-components";
+import Link from "@/components/navigation/navigation-link";
 import { HeaderBrand } from "@/components/ui/brand";
 import { ChevronLeftIcon, ChevronRightIcon, MoonIcon, ResetIcon, SunIcon } from "@/components/ui/icons";
 import { darkTheme, lightTheme } from "@/styles/theme";
-import { ActionButton } from "../admin-form";
+import { ActionButton, Badge } from "../admin-form";
 import { CodesEditor } from "../code-tools";
 import { codeDesigns } from "./designs";
 import { samplePlans, useCodeDemo } from "./demo-state";
@@ -37,6 +38,7 @@ export function CodesDesignGallery() {
         <Intro>
           <div><small>Goal Hint · Admin interface studies</small><h1>Codes, with room to focus.</h1>
             <p>Ten arrangements of the same shared components. Compare the grant form and record details, then choose the sample you prefer.</p></div>
+          <Link href="/admin/codes" prefetch={false}>Open Codes page</Link>
         </Intro>
         <Toolbar aria-label="Codes sample controls">
           <label>Sample<select aria-label="Codes sample" value={index} onChange={event => choose(Number(event.currentTarget.value))}>
@@ -55,7 +57,7 @@ export function CodesDesignGallery() {
           {codeDesigns.map((item, position) => <button type="button" key={item.id} aria-label={`${item.id} ${item.name}`} aria-current={position === index ? "true" : undefined} onClick={() => choose(position)}>{item.id}</button>)}
           <ActionButton type="button" aria-label="Next sample" onClick={() => choose(index + 1)}><ChevronRightIcon /></ActionButton>
         </NumberStrip>
-        <SampleHeading aria-live="polite"><div><h2>{design.id} · {design.name}</h2><p>{design.description}</p></div><span>Shared components · Desktop & mobile</span></SampleHeading>
+        <SampleHeading aria-live="polite"><div><h2>{design.id} · {design.name} {design.id === "01" && <Badge $tone="good">Selected · Applied</Badge>}</h2><p>{design.description}</p></div><span>Shared components · Desktop & mobile</span></SampleHeading>
         <Preview aria-label={`${design.name} Codes interface sample`}>
           <header><HeaderBrand height={20} /><span>Admin / Codes</span></header>
           <PreviewCanvas data-code-preview={design.variant}>
@@ -66,7 +68,7 @@ export function CodesDesignGallery() {
         <Overview id="all-samples" aria-label="All ten Codes samples"><h2>Choose a direction</h2><p>Every sample keeps the code, phone number and status in the list, with the remaining information in the details area.</p>
           <div>{codeDesigns.map((item, position) => <OverviewCard key={item.id} type="button" data-code-design-option={item.id} data-code-design-variant={item.variant} aria-current={position === index ? "true" : undefined}
             onClick={() => { choose(position); document.querySelector("[data-code-gallery]")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-            <span>{item.id}</span><strong>{item.name}</strong><small>{item.description}</small>
+            <span>{item.id}{item.id === "01" && " · Applied"}</span><strong>{item.name}</strong><small>{item.description}</small>
           </OverviewCard>)}</div>
         </Overview>
       </div>

@@ -21,6 +21,7 @@ import { refreshPendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { FloatingField } from "./floating-field";
 import { NetworkChoice } from "./network-choice";
+import { balancedCodePresentation, codePresentation } from "./code-presentation-styles";
 
 type CodeRequest = typeof postAdmin;
 type CodeActionOptions = Readonly<{ request: CodeRequest; localOnly: true }>;
@@ -243,7 +244,7 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     setSelectedId(code.id); setGrantOpen(false);
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-codes-detail-scroll]")?.scrollTo({ top: 0 }));
   }
-  return <Codes data-codes-workspace data-code-variant={preview?.variant} data-analytics-ignore>
+  return <Codes data-codes-workspace data-code-variant={preview?.variant ?? "balanced"} data-analytics-ignore>
     <RecordHead><h1>Codes</h1><HeaderEnd><ActionButton type="button" disabled={action.busy} onClick={() => setGrantOpen(true)}><PlusIcon />Grant access manually</ActionButton></HeaderEnd></RecordHead>
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
     <CodeList aria-label="Code directory">
@@ -301,6 +302,8 @@ function CodeFacts({ code, preview }: { code: OwnerCode; preview: boolean }) {
   </Facts>;
 }
 const Codes = styled(RecordWorkspace)`
+  ${codePresentation}
+  &[data-code-variant="balanced"] { ${balancedCodePresentation} }
   ${RecordHead} > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
 `;
 const HeaderEnd = styled.div`margin-inline-start: auto; ${media.belowDesktop} { display: none; }`;

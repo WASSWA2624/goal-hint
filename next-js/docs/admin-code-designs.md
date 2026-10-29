@@ -5,6 +5,13 @@ Open `/admin-code-designs` on the running application, normally
 number strip, sample selector, previous/next buttons, or overview cards.
 Fragments such as `#05` open a specific sample directly.
 
+**Selected and applied: 01 · Balanced.** The live `/admin/codes` workspace now
+uses this composition, with account and plan side by side when the desktop pane
+has room, paired access terms, centered form spacing, square controls, and
+responsive mobile fields. Narrow panes stack the account fields to preserve
+phone-entry space. The gallery marks the selected sample and links to the live
+Codes page.
+
 | Sample | Name | Arrangement |
 | --- | --- | --- |
 | 01 | Balanced | Account and plan side by side, followed by access terms |
@@ -36,8 +43,8 @@ Codes header, floating search/status fields, capitalized status labels, compact
 code/phone/status list rows, and full record information in the details view.
 The manual form keeps required reason validation and custom-day rules, explains
 the reason field, and uses shared logo radio choices for optional payment
-details. The ten sample compositions are available for selection before a
-specific composition is applied to the production workspace.
+details. The live workspace and gallery share the same production presentation
+styles; the remaining sample variations stay confined to the gallery.
 
 The gallery contains synthetic records only. Its request adapter operates in
 memory; it never loads private records, posts to admin APIs, refreshes server
