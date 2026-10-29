@@ -98,8 +98,8 @@ three decimal places; matches step by one and display comma thousands grouping.
 The single named input per criterion keeps an unformatted canonical value for
 GET submission. Without JavaScript, the original native number inputs remain.
 
-Empty numeric ranges stay editable as Any, with blank minima using their valid
-floor. Decimal prefixes such as 0 and 0. remain editable while entering 0.01.
+Empty numeric ranges stay editable as Any, with blank minima using their configured
+defaults. Decimal prefixes such as 0 and 0. remain editable while entering 0.01.
 Integer zero is rejected. Range ordering is checked on leaving a field and when
 applying/building, so both endpoints can be edited without trapping a range.
 Native dates retain calendar selection with valid supported years, an ordered
@@ -126,23 +126,27 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Kickoff time range | Inclusive daily minutes in Africa/Kampala (EAT) | 00:00–23:59, all day |
 | Markets | One or more match result, double chance, total goals or both teams to score | All four |
 | Market outcomes | Automatic or one or more supported results within each selected family | Any (Automatic) |
-| Total odds | Inclusive minimum from 0.01; optional maximum | 0.01–Any |
+| Total odds | Inclusive minimum from 0.01; optional maximum | 5.00–10.00 |
 | Individual selection odds | Inclusive minimum from 0.01; optional maximum | 0.01–Any |
-| Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank minimum; maximum 100% |
+| Selection probability | Inclusive unrounded percentage bounds, 0–100 | 75–100% |
 | Combined probability | Optional `totalProbMin` / `totalProbMax`, inclusive percentage bounds, 0–100; requires a verified joint model | Blank (no joint filter) |
 | Selection count | Whole match counts, minimum 1; optional maximum | 1–Any |
 | Number of slips | 1–100 | 5 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
 
-Total and individual minimum odds display 0.01, minimum matches displays 1, and
-maximum probability displays 100. The other numeric bounds start blank; maximum
-placeholders display Any. Custom criteria retain their supplied values.
+Total odds display 5.00–10.00 and retain two decimal places after editing.
+Individual minimum odds display 0.01, minimum matches displays 1, and probability
+displays 75–100. Individual odds and match-count maxima start blank with Any
+placeholders. Custom criteria retain their supplied values, including a 0% minimum.
 Reset restores these defaults, today's from/to dates, 00:00–23:59, all markets
 with Automatic outcomes, five requested slips, and disabled match reuse,
 including after loading a criteria query.
+Each dialog's Reset restores only that dialog's fields. Apply retains those
+defaults; Cancel restores the values from before the dialog opened.
 
-Blank numeric minima use the valid floor: 0.01 odds, 1 match, or 0% probability.
-Blank maxima mean Any rather than a requested numeric ceiling. A 0.01 odds
+Blank numeric minima use their defaults: 5.00 total odds, 0.01 individual odds,
+1 match, or 75% selection probability. An omitted total-odds maximum uses 10.00;
+an explicitly blank maximum means Any rather than a requested numeric ceiling. A 0.01 odds
 criterion does not change the approved bookmaker-price validation contract.
 The pure criteria contract omits unrestricted total-odds, individual-odds, and
 match-count maxima; canonical GET serialization preserves them as blank fields.
@@ -334,7 +338,7 @@ results are ranked among the explored candidates and do not claim global
 optimality or that all possible qualifying slips were found.
 
 The daily Best Slips criteria retain their previous eight-match and odds bounds;
-the custom builder's Any defaults do not change that publication policy.
+the custom builder's configured defaults do not change that publication policy.
 
 The page distinguishes generated slips, no qualifying selections, no valid
 combinations, odds unavailable, combined model unavailable, data unavailable and rate limiting. It reports

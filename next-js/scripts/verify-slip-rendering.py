@@ -147,8 +147,8 @@ CRITERIA_GROUP_FIELDS = {
 }
 
 NUMERIC_RANGE_DEFAULTS = {
-    "totalMin": "0.01", "totalMax": "", "teamsMin": "1", "teamsMax": "",
-    "oddsMin": "0.01", "oddsMax": "", "probMin": "", "probMax": "100",
+    "totalMin": "5.00", "totalMax": "10.00", "teamsMin": "1", "teamsMax": "",
+    "oddsMin": "0.01", "oddsMax": "", "probMin": "75", "probMax": "100",
 }
 
 
@@ -508,7 +508,7 @@ def verify(origin, directory):
                 for node in document.nodes(attr="data-slip-summary")), "Qualified custom slips show the mean while retaining joint ranking context separately"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
     verify_defaults(idle)
-    explicit_defaults = [(name, "0" if name == "probMin" else value) for name, value in native_inputs(idle) if name != "build"]
+    explicit_defaults = [(name, value) for name, value in native_inputs(idle) if name != "build"]
     canonical = inspect(origin, "/en/slips?" + urlencode(explicit_defaults), directory, "route-default-bounds", "idle", 0)
     verify_defaults(canonical)
     verify_builder_access(origin, directory)
@@ -565,7 +565,7 @@ def verify(origin, directory):
     quantity = next(node for node in required.nodes("input") if node.attrs.get("name") == "slips")
     assert quantity.attrs.get("value") == "" and "required" in quantity.attrs and quantity.attrs.get("aria-invalid") == "true", "The blank required quantity remains editable and invalid"
     native = native_inputs(idle)
-    overrides = {"probMin": "0", "probMax": "30", "teamsMin": "1", "teamsMax": "1", "slips": "1"}
+    overrides = {"totalMin": "0.01", "probMin": "0", "probMax": "30", "teamsMin": "1", "teamsMax": "1", "slips": "1"}
     manual = [(name, overrides.get(name, value)) for name, value in native if name != "markets" or value == "match-result"]
     manual.extend([("picks.match-result", "home-win"), ("picks.total-goals", "under-2.5")])
     selected = inspect(origin, "/en/slips?" + urlencode(manual), directory, "route-native-manual", "generated", 1, selections_per_slip=1)

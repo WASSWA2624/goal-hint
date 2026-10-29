@@ -75,8 +75,8 @@ function fail(field: keyof SlipCriteria | "query", code: SlipCriteriaErrorCode):
 export function defaultSlipCriteria(today: string): SlipCriteria {
   const from = parseReportingDate(today);
   return { dateFrom: from, dateTo: from, timeFrom: "", timeTo: "", markets: [...publicPolicy.markets],
-    totalMin: slipBuilderRules.minimumOddsHundredths, oddsMin: slipBuilderRules.minimumOddsHundredths,
-    probMin: 0, probMax: 100, teamsMin: 1, slips: 5, reuse: false };
+    totalMin: 500, totalMax: 1000, oddsMin: slipBuilderRules.minimumOddsHundredths,
+    probMin: 75, probMax: 100, teamsMin: 1, slips: 5, reuse: false };
 }
 const outcomeKeys = new Map(publicPolicy.markets.map((family) => [`picks.${family}`, family]));
 const keys = new Set(["dateFrom", "dateTo", "timeFrom", "timeTo", "markets", "totalMin", "totalMax", "oddsMin", "oddsMax",
@@ -169,7 +169,8 @@ export function parseSlipCriteria(input: FeedParameters, today: string): SlipCri
     outcomes[family] = marketSelections[family].filter((selection) => choices.includes(selection));
   }
   const totalMin = get("totalMin") ? oddsBound(get("totalMin")!, "totalMin") : defaults.totalMin;
-  const totalMax = get("totalMax") ? oddsBound(get("totalMax")!, "totalMax") : undefined;
+  const totalMax = get("totalMax") === undefined ? defaults.totalMax
+    : get("totalMax") ? oddsBound(get("totalMax")!, "totalMax") : undefined;
   const oddsMin = get("oddsMin") ? oddsBound(get("oddsMin")!, "oddsMin") : defaults.oddsMin;
   const oddsMax = get("oddsMax") ? oddsBound(get("oddsMax")!, "oddsMax") : undefined;
   if (totalMax !== undefined && totalMin > totalMax) fail("totalMin", "invalid-odds-range");

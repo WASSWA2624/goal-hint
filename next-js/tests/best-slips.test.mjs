@@ -38,6 +38,7 @@ test('daily target returns every available disjoint slip up to its capacity with
   assert.deepEqual(generate().slips, result.slips);
   const criteria = bestSlipCriteria(today, { minimumTotal: 480, maximumTotal: 490, count: 10 });
   assert.equal(criteria.dateTo, today); assert.equal(criteria.totalMin, 480); assert.equal(criteria.reuse, false);
+  assert.equal(criteria.probMin, 0, 'daily publication keeps its probability policy independent of builder defaults');
   assert.equal(bestSlipCriteria(today).slips, 100); assert.equal(bestSlipsRules.count, 100);
 });
 

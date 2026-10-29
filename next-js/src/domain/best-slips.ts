@@ -27,7 +27,7 @@ export type BestSlipsResult = Readonly<{
 
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {
   return { ...defaultSlipCriteria(today), dateTo: today, totalMin: target.minimumTotal, totalMax: target.maximumTotal,
-    oddsMin: oddsRules.minimumHundredths, oddsMax: oddsRules.maximumHundredths, teamsMax: 8, slips: target.count, reuse: false };
+    oddsMin: oddsRules.minimumHundredths, oddsMax: oddsRules.maximumHundredths, probMin: 0, teamsMax: 8, slips: target.count, reuse: false };
 }
 
 export function bestSlipBuilder(model: JointSlipModel) {

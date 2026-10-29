@@ -19,7 +19,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
   type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
-import { guardSlipDateTime, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
+import { guardSlipDateTime, guardSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
@@ -84,17 +84,20 @@ function rangeValue(name: NumericRangeField, value: string | undefined, defaults
   return value === undefined || value === "" ? bound : Number(value);
 }
 
-/** Keep default minima explicit, optional ceilings blank, and invalid submitted drafts editable. */
+/** Keep configured defaults explicit, unrestricted ceilings blank, and invalid submitted drafts editable. */
 function criteriaDraft(criteria: SlipCriteria, inputs: SlipInputs = {}): SlipInputs {
   const values = serializeSlipCriteria(criteria);
   return Object.fromEntries(slipInputFields.map((name) => {
     let value = inputs[name] ?? values.get(name) ?? "";
     if (!value && name !== "slips" && !isNumericRange(name)) value = values.get(name) || (name === "timeFrom" ? fullDayKickoffTime.from : name === "timeTo" ? fullDayKickoffTime.to : "");
-    // Display the same number without spending phone width on trailing decimal zeroes.
+    // Keep total odds at two decimal places; other ranges retain compact numeric formatting.
     const numericFormat = name.startsWith("prob") || name.startsWith("totalProb") ? /^(0|[1-9]\d*)(?:\.\d{1,3})?$/
       : name.startsWith("odds") || name.startsWith("total") ? /^(0|[1-9]\d*)(?:\.\d{1,2})?$/ : /^[1-9]\d*$/;
     if (name !== "dateFrom" && name !== "dateTo" && name !== "timeFrom" && name !== "timeTo" && numericFormat.test(value)) {
-      value = (name === "probMin" || name === "totalProbMin") && Number(value) === 0 ? ""
+      if (name === "totalMin" || name === "totalMax") {
+        const checked = guardSlipNumber(name, value, true);
+        if (checked.accepted) value = checked.value;
+      } else value = name === "totalProbMin" && Number(value) === 0 ? ""
         : value.includes(".") ? value.replace(/0+$/u, "").replace(/\.$/u, "") : value;
     }
     return [name, value];
@@ -220,13 +223,13 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   }
   function reset() {
     setInputWarning(null); setFeedbackKey((current) => current + 1);
-    setDraft(resetDraft); setSelectedMarkets(publicPolicy.markets); setOutcomes({}); setReuse(false);
+    setDraft(resetDraft); setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
     setError(null); snapshot.current = null; setActiveGroup(null);
     if (window.location.search) startTransition(() => router.push(action, { scroll: false }));
   }
   function resetDialog(group: CriteriaGroup) {
     setInputWarning(null); setFeedbackKey((current) => current + 1);
-    if (group === "markets") { setSelectedMarkets(publicPolicy.markets); setOutcomes({}); setReuse(false); }
+    if (group === "markets") { setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse); }
     else setDraft((current) => ({ ...current, ...Object.fromEntries(groupFields[group].map((name) => [name, resetDraft[name]])) }));
     setError((current) => issueGroup(current) === group ? null : current);
   }
@@ -275,7 +278,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     if (!isDateTimeField(name)) return <SlipNumericInput {...shared} field={name as SlipNumericField} locale={locale}
       feedbackKey={feedbackKey}
       value={draft[name] ?? ""} onValueChange={(value) => updateField(name, value)}
-      onCommit={(value) => slipNumberRangeIssue(name, { ...draft, [name]: value }) ? messages.text("slips.guard.range") : undefined} />;
+      onCommit={(value) => slipNumberRangeIssue(name, { ...draft, [name]: value }, resetDraft) ? messages.text("slips.guard.range") : undefined} />;
     const date = name.startsWith("date"), warningId = `${prefix}-${name}-warning`;
     const warning = inputWarning?.field === name ? inputWarning.message : null;
     const bounds = date ? name === "dateFrom" ? { min: "0001-01-01", max: "9999-12-31" } : slipDateBounds("dateTo", draft)

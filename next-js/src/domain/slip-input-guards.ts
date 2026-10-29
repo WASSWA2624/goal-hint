@@ -47,6 +47,10 @@ export function guardSlipNumber(field: SlipNumericField, raw: string, commit = f
   if (amount > scaled(rule.maximum, rule.precision)) return { accepted: false, issue: "maximum", limit: rule.maximum };
   const aboveFloor = amount >= scaled(rule.minimum, rule.precision);
   if (!aboveFloor && (commit || rule.precision === 0)) return { accepted: false, issue: "minimum", limit: rule.minimum };
+  if (commit && (field === "totalMin" || field === "totalMax")) {
+    const [integer, decimal = ""] = value.split(".");
+    value = `${integer}.${decimal.padEnd(2, "0")}`;
+  }
   return { accepted: true, value, complete: aboveFloor && !value.endsWith(".") };
 }
 
@@ -76,11 +80,11 @@ export function stepSlipNumber(field: SlipNumericField, raw: string, direction: 
 }
 
 /** Ordering feedback is separate from draft guards so both bounds remain freely editable. */
-export function slipNumberRangeIssue(field: SlipNumericField, draft: SlipInputs): "range" | null {
+export function slipNumberRangeIssue(field: SlipNumericField, draft: SlipInputs, defaults: SlipInputs = {}): "range" | null {
   if (field === "slips") return null;
   const prefix = field.replace(/(?:Min|Max)$/u, "");
   const from = `${prefix}Min` as SlipNumericField, to = `${prefix}Max` as SlipNumericField;
-  const rule = slipNumericRule(field), lower = draft[from] || rule.minimum, upper = draft[to];
+  const rule = slipNumericRule(field), lower = draft[from] || defaults[from] || rule.minimum, upper = draft[to];
   if (!upper) return null;
   const minimum = guardSlipNumber(from, lower, true), maximum = guardSlipNumber(to, upper, true);
   return minimum.accepted && maximum.accepted && scaled(minimum.value, rule.precision) > scaled(maximum.value, rule.precision) ? "range" : null;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { slipBuilderRules } from '../src/domain/slip-builder.ts';
+import { defaultSlipCriteria, serializeSlipCriteria, slipBuilderRules } from '../src/domain/slip-builder.ts';
 import {
   formatSlipMatchCount, guardSlipDateTime, guardSlipNumber, normalizeSlipMatchCount,
   slipDateBounds, slipNumberRangeIssue, slipNumericRule, stepSlipNumber,
@@ -51,9 +51,19 @@ test('intermediate decimal editing stays usable while commit validation enforces
   assert.equal(guardSlipNumber('slips', '', true).issue, 'minimum');
   assert.equal(guardSlipNumber('teamsMin', '0', true).issue, 'minimum');
   assert.equal(guardSlipNumber('totalMin', '0.00', true).issue, 'minimum');
-  assert.deepEqual(guardSlipNumber('totalMin', '1.', true), { accepted: true, value: '1', complete: true });
+  assert.deepEqual(guardSlipNumber('totalMin', '1.', true), { accepted: true, value: '1.00', complete: true });
   for (const field of ['teamsMin', 'teamsMax', 'totalMin', 'totalMax', 'oddsMax', 'probMin', 'probMax', 'totalProbMin']) {
     assert.deepEqual(guardSlipNumber(field, '', true), { accepted: true, value: '', complete: true }, `${field} preserves blank bounds`);
+  }
+});
+
+test('total odds commit to two decimal places without rounding exact large values or filling Any ceilings', () => {
+  for (const field of ['totalMin', 'totalMax']) {
+    for (const [input, expected] of [['5', '5.00'], ['10.0', '10.00'], ['3.5', '3.50'], ['90071992547409.91', '90071992547409.91']]) {
+      assert.deepEqual(guardSlipNumber(field, input, true), { accepted: true, value: expected, complete: true });
+    }
+    assert.equal(guardSlipNumber(field, '5').value, '5', 'typing keeps the current edit state');
+    assert.equal(guardSlipNumber(field, '', true).value, '');
   }
 });
 
@@ -100,6 +110,15 @@ test('pair ordering feedback uses exact decimal bounds and preserves blank Any c
   assert.equal(slipNumberRangeIssue('probMin', { probMin: '80', probMax: '75' }), 'range');
   assert.equal(slipNumberRangeIssue('probMin', { probMin: '', probMax: '0' }), null);
   assert.equal(slipNumberRangeIssue('totalMin', { totalMin: '.', totalMax: '10' }), null);
+});
+
+test('range feedback uses configured defaults when a minimum is cleared and keeps explicit zero', () => {
+  const defaults = Object.fromEntries(serializeSlipCriteria(defaultSlipCriteria('2026-10-29')));
+  assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '', totalMax: '4' }, defaults), 'range');
+  assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '', totalMax: '5' }, defaults), null);
+  assert.equal(slipNumberRangeIssue('probMax', { probMin: '', probMax: '70' }, defaults), 'range');
+  assert.equal(slipNumberRangeIssue('probMax', { probMin: '0', probMax: '70' }, defaults), null);
+  assert.equal(slipNumberRangeIssue('totalMax', { totalMin: '20', totalMax: '' }, defaults), null);
 });
 
 test('date guards enforce real dates, ordering and the inclusive 31-day window without inventing a future-only rule', () => {
