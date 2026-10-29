@@ -1,10 +1,9 @@
 # Desktop slip sharing samples
 
-Ten interactive desktop concepts show where the slip-header Share action sits
-and how a visitor prepares a branded slip image and message for WhatsApp. The
-gallery supports both **Best Slips** and **Slip Builder**, following the existing
-shared Aligned ledger slip presentation, Manrope typography, cool blue surfaces,
-compact controls, and square edges.
+Ten simple desktop concepts show the slip-header Share action, a branded slip
+image, and a short WhatsApp caption. The gallery supports both **Best Slips** and
+**Slip Builder**, following the existing shared Aligned ledger presentation,
+Manrope typography, cool blue surfaces, compact controls, and square edges.
 
 These are design samples awaiting selection. No production sharing component,
 public-slip route, image export service, or app-link registration is implemented.
@@ -13,20 +12,21 @@ public-slip route, image export service, or app-link registration is implemented
 
 | No. | Concept | Sharing arrangement |
 | --- | --- | --- |
-| 01 | Header menu | A compact menu anchored to the slip-header Share action. |
-| 02 | Preview dialog | A centered image-and-message review dialog. |
-| 03 | Right drawer | A sharing panel beside the slip list. |
-| 04 | Inline expansion | Sharing controls expand beneath the selected slip header. |
-| 05 | Guided steps | A sequential destination, preview, and handoff flow. |
-| 06 | Split workspace | The selected slip and sharing preparation appear side by side. |
-| 07 | Bottom tray | A desktop tray keeps sharing controls below the slip context. |
-| 08 | Image lightbox | A larger image preview leads to the sharing controls. |
-| 09 | Export checklist | An explicit preparation checklist accompanies the preview. |
-| 10 | Share studio | A dedicated sharing workspace groups image and message controls. |
+| 01 | Compact menu | A small preview anchored to the header action. |
+| 02 | Centered preview | A compact dialog keeps the image and caption together. |
+| 03 | Slim drawer | A narrow side panel preserves the slip context. |
+| 04 | Inline preview | Sharing opens directly beneath the slip. |
+| 05 | Quick WhatsApp | A direct WhatsApp action keeps preparation brief. |
+| 06 | Split preview | The slip and its share preview sit side by side. |
+| 07 | Bottom bar | Sharing actions appear below the slip context. |
+| 08 | Image first | The branded image leads a restrained preview. |
+| 09 | Quick actions | A small action area keeps sharing controls close together. |
+| 10 | Minimal sheet | A quiet sheet groups the image, caption, and primary action. |
 
-Every concept includes the header trigger, WhatsApp choice, branded image and
-caption review, and the desktop save/copy/open/attach handoff. Other destinations
-are reserved for later design and implementation.
+Each concept uses one or two interactions: the header action opens a short
+WhatsApp preview, with one main WhatsApp action and secondary **Save image** and
+**Copy caption** actions. Feedback stays in the preview. There is no separate
+handoff screen or technical route explanation in the product UI.
 
 ## Shared sample
 
@@ -50,31 +50,28 @@ individual-slip URL appear in the review.
 
 ## Preview behavior
 
-`desktop-slip-sharing.html` is the editable, standalone-compatible HTML fragment.
-The conversation host supplies the concept carousel; the generated standalone
-wrapper supplies navigation fallback for browser review. Switch the application
-context to compare the same sharing design on Best Slips and Slip Builder.
-Each concept starts at its image review. The four stage controls above the
-application show the header trigger, WhatsApp options, review, and handoff;
-Restart returns to the initial slip header. The bottom concept picker supplies
-all ten named samples. The optional host design controls compare page context,
-image-footer wording, and appearance. The page-context navigation also works
-without those optional controls.
+`desktop-slip-sharing.html` is the editable fragment used by the conversation
+host carousel. The standalone browser builder combines it with
+`browser-controls.html`, adding visible **01–10** buttons, **Previous**, **Next**,
+and **Show all 10** at the top. Show all displays the ten designs one below
+another. The browser controls work without the conversation host.
 
-Opening the fragment directly does not load the host carousel. For a complete
-local browser preview, render a wrapper with the installed visualization skill:
+Switch the app navigation between Best Slips and Slip Builder to compare the
+same sharing design in both page contexts. The source remains a design preview;
+opening the generated browser page provides the complete navigation controls.
+
+Run these commands from the repository root:
 
 ```powershell
-python "C:/Users/WASSWA WILSON/.codex/plugins/cache/openai-bundled/visualize/1.0.57/skills/visualize/scripts/render.py" "next-js/design/desktop-slip-sharing/desktop-slip-sharing.html" "next-js/output/desktop-slip-sharing-preview.html" --force
+python next-js/design/desktop-slip-sharing/build-preview.py
 python -m http.server 8357 --bind 127.0.0.1 --directory "next-js/output"
 ```
 
-Run from the repository root, then open
-`http://127.0.0.1:8357/desktop-slip-sharing-preview.html`. The renderer path is
-workstation-specific. The wrapper and browser screenshots stay in ignored
-`next-js/output/`; only the editable design source and documentation are tracked.
+Open `http://127.0.0.1:8357/desktop-slip-sharing-preview.html`. The generated page
+and browser screenshots stay in ignored `next-js/output/`; the editable design
+sources, browser builder, and documentation are tracked.
 
-All sends, downloads, copies, recipient choices, and handoff actions are local
+All sends, downloads, copies, recipient choices, and WhatsApp actions are local
 preview simulations. No real WhatsApp recipient is selected, no message is sent,
 and no production data or account state is changed. The samples demonstrate the
 interface to review before implementation approval.
@@ -96,23 +93,20 @@ chosen. The preview does not claim those capabilities are already available.
 
 ## Verification
 
-- JavaScript syntax passed `node --check` on the extracted script. Fragment
-  validation confirmed ten variants, one script, no document wrapper, and a size
-  below 1 MB.
-- Chromium exercised all ten complete sharing flows in each application context
-  (20 flows), including the image preview, caption preparation, simulated handoff,
-  return controls, and separate slip disclosure control.
-- All ten review layouts were checked at browser widths of 1080, 800, and 390px
-  with no horizontal overflow or sharing panel extending beyond the app surface.
-  The narrow check verifies containment, not a proposed mobile design.
-- Light screenshots of all ten review arrangements and a dark dialog screenshot
-  were inspected. PNG concepts intentionally retain their light paper treatment
-  in dark app chrome.
-- Editable notes keep the app URL, slip URL, and branding in a separate fixed
-  caption block. Export checklist handoff proceeds in one action.
-- Modal Tab containment and Escape dismissal with focus returned to the Share
-  action passed. A repeated local state notification preserves keyboard focus.
-- Final browser console reported no errors or warnings.
+- Python builder syntax and both browser scripts passed syntax checks.
+- All ten numbered buttons, Previous/Next, Show all 10, and return to one design
+  passed browser checks. The numbered buttons appear in the first viewport.
+- All ten sharing flows passed in both Best Slips and Slip Builder (20 flows).
+  Most designs open the preview directly; Compact menu and Quick actions first
+  offer a compact sharing choice. Feedback remains within the same panel.
+- Thirty layout checks covered all ten previews at browser widths of 1200,
+  800, and 390px, with no horizontal overflow or panels extending outside the
+  app. The narrow check is containment verification, not a new mobile design.
+- All ten designs remained visible and contained in Show all mode. Numbered
+  keyboard activation, menu toggling, and Escape dismissal restoring focus passed.
+- Compact dialog, landscape sheet, and dark-theme screenshots received visual
+  review with no material clipping, contrast, or spacing issues.
+- The browser console reported zero errors and warnings.
 
-Production integration checks and a production build were not run because this
-change contains isolated design HTML and documentation, with no runtime edits.
+A production app build and sharing integration are outside this isolated design
+change. Only design sources, their browser builder, and documentation changed.

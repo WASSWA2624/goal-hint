@@ -1,0 +1,66 @@
+<style>
+  #gh-share-concepts { max-inline-size: 1200px; margin-inline: auto; }
+  #gh-share-concepts .gh-gallery-bar { padding: 8px 0 18px; margin-block-end: 14px; border-block-end: 1px solid var(--gh-line); }
+  #gh-share-concepts .gh-gallery-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-block-end: 14px; }
+  #gh-share-concepts .gh-gallery-title h1 { margin: 0; font-size: 21px; font-weight: 500; letter-spacing: -.5px; }
+  #gh-share-concepts .gh-gallery-title span { color: var(--gh-muted); font-size: 12px; }
+  #gh-share-concepts .gh-gallery-nav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #gh-share-concepts .gh-design-numbers { display: flex; gap: 4px; flex-wrap: wrap; }
+  #gh-share-concepts .gh-number { min-inline-size: 35px; min-block-size: 34px; padding-inline: 8px; }
+  #gh-share-concepts .gh-number[aria-pressed="true"] { color: var(--gh-blue); background: var(--gh-tint); border-color: var(--gh-blue); }
+  #gh-share-concepts .gh-gallery-move { display: flex; align-items: center; gap: 4px; }
+  #gh-share-concepts .gh-gallery-all { margin-inline-start: auto; }
+  #gh-share-concepts .gh-gallery-all[aria-pressed="true"] { color: var(--gh-blue); background: var(--gh-tint); }
+  #gh-share-concepts .gh-browser-designs > .gh-stage { min-block-size: 0; }
+  #gh-share-concepts[data-gallery-view="all"] .gh-stage { padding-block: 14px 30px; margin-block-end: 24px; border-block-end: 1px solid var(--gh-line); }
+  #gh-share-concepts .gh-gallery-status { color: var(--gh-muted); font-size: 12px; padding-block-start: 12px; }
+  @media (max-width: 620px) {
+    #gh-share-concepts .gh-gallery-all { margin-inline-start: 0; }
+    #gh-share-concepts .gh-number { min-inline-size: 29px; padding-inline: 5px; }
+  }
+</style>
+<header class="gh-gallery-bar" aria-label="Design gallery">
+  <div class="gh-gallery-title"><h1>Slip sharing</h1><span>10 desktop ideas · Simple WhatsApp sharing</span></div>
+  <div class="gh-gallery-nav">
+    <nav class="gh-design-numbers" aria-label="Choose one of ten designs"></nav>
+    <div class="gh-gallery-move"><button type="button" class="gh-button gh-quiet cursor-interaction" data-gallery-action="previous">← Previous</button><button type="button" class="gh-button gh-quiet cursor-interaction" data-gallery-action="next">Next →</button></div>
+    <button type="button" class="gh-button gh-gallery-all cursor-interaction" data-gallery-action="all" aria-pressed="false">Show all 10</button>
+  </div>
+  <div class="gh-gallery-status" role="status" aria-live="polite"></div>
+</header>
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    const root = document.getElementById('gh-share-concepts');
+    const designs = Array.from(root.querySelectorAll('[data-variant]'));
+    const numbers = root.querySelector('.gh-design-numbers');
+    let selected = 0;
+    let showAll = false;
+    designs.forEach((design, i) => {
+      const control = document.createElement('button');
+      control.type = 'button'; control.className = 'gh-button gh-number cursor-interaction';
+      control.dataset.galleryIndex = String(i); control.textContent = String(i + 1).padStart(2, '0');
+      control.setAttribute('aria-label', `Design ${i + 1}: ${design.dataset.variant}`);
+      numbers.append(control);
+    });
+    function render() {
+      root.dataset.galleryView = showAll ? 'all' : 'single';
+      designs.forEach((design, i) => { design.hidden = !showAll && i !== selected; });
+      numbers.querySelectorAll('button').forEach((control, i) => control.setAttribute('aria-pressed', String(!showAll && i === selected)));
+      const allButton = root.querySelector('[data-gallery-action="all"]');
+      allButton.setAttribute('aria-pressed', String(showAll)); allButton.textContent = showAll ? 'Show one design' : 'Show all 10';
+      root.querySelector('.gh-gallery-status').textContent = showAll ? 'All 10 designs · Scroll to compare' : `${String(selected + 1).padStart(2, '0')} / 10 · ${designs[selected].dataset.variant}`;
+      root.querySelector('[data-gallery-action="previous"]').disabled = !showAll && selected === 0;
+      root.querySelector('[data-gallery-action="next"]').disabled = !showAll && selected === designs.length - 1;
+    }
+    root.querySelector('.gh-gallery-bar').addEventListener('click', event => {
+      const control = event.target.closest('button');
+      if (!control || control.disabled) return;
+      if (control.dataset.galleryIndex !== undefined) { selected = Number(control.dataset.galleryIndex); showAll = false; }
+      else if (control.dataset.galleryAction === 'all') showAll = !showAll;
+      else if (control.dataset.galleryAction === 'previous') { selected = Math.max(0, selected - 1); showAll = false; }
+      else if (control.dataset.galleryAction === 'next') { selected = Math.min(designs.length - 1, selected + 1); showAll = false; }
+      render();
+    });
+    render();
+  });
+</script>
