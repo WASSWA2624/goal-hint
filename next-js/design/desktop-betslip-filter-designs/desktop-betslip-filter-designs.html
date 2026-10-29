@@ -1,0 +1,436 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500&display=swap">
+<style>
+  #gh-slip-filters {
+    --gh-page: light-dark(#F0F3F8, #03111F);
+    --gh-surface: light-dark(#FFFFFF, #081B2C);
+    --gh-soft: light-dark(#E8EDF5, #0D253B);
+    --gh-text: light-dark(#15243B, #F4F7FF);
+    --gh-muted: light-dark(#53647C, #A8CBEF);
+    --gh-line: light-dark(#D9E1ED, #263D50);
+    --gh-field-line: light-dark(#718099, #58728C);
+    --gh-blue: light-dark(#2457C5, #00B9F2);
+    --gh-tint: light-dark(#E3ECFF, #073052);
+    --gh-won: light-dark(#007754, #70DEA4);
+    --gh-lost: light-dark(#B32B3B, #FF9DA9);
+    --gh-pending: light-dark(#8D5B00, #EEC46D);
+    --gh-scrim: light-dark(rgb(21 36 59 / 30%), rgb(0 8 20 / 65%));
+    color: var(--gh-text); font: 400 13px/1.5 Manrope, Arial, sans-serif; text-align: start;
+  }
+  #gh-slip-filters *, #gh-slip-filters *::before, #gh-slip-filters *::after { box-sizing: border-box; }
+  #gh-slip-filters [hidden] { display: none !important; }
+  #gh-slip-filters h1, #gh-slip-filters h2, #gh-slip-filters h3, #gh-slip-filters p { margin: 0; }
+  #gh-slip-filters button, #gh-slip-filters select, #gh-slip-filters input { font: inherit; border-radius: 0; max-inline-size: 100%; }
+  #gh-slip-filters button, #gh-slip-filters select { cursor: var(--cursor-interaction, pointer); }
+  #gh-slip-filters button:focus-visible, #gh-slip-filters select:focus-visible, #gh-slip-filters input:focus-visible, #gh-slip-filters summary:focus-visible { outline: 2px solid var(--gh-blue); outline-offset: 2px; }
+  #gh-slip-filters .gh-stage { min-block-size: 860px; padding-block: 6px 18px; }
+  #gh-slip-filters .gh-caption { display: flex; align-items: baseline; gap: 8px 14px; flex-wrap: wrap; padding: 0 100px 12px 0; }
+  #gh-slip-filters .gh-caption h2 { font-size: 18px; font-weight: 500; }
+  #gh-slip-filters .gh-caption p { font-size: 12px; color: var(--gh-muted); }
+  #gh-slip-filters .gh-app { border: 1px solid var(--gh-line); background: var(--gh-page); min-inline-size: 0; }
+  #gh-slip-filters .gh-header { display: flex; flex-wrap: wrap; gap: 8px 26px; align-items: center; padding: 10px 18px; border-block-end: 1px solid var(--gh-line); background: var(--gh-surface); }
+  #gh-slip-filters .gh-brand { font-size: 19px; font-weight: 500; letter-spacing: -.7px; white-space: nowrap; }
+  #gh-slip-filters .gh-brand span { color: var(--gh-blue); }
+  #gh-slip-filters .gh-navigation { display: flex; gap: 20px; align-items: center; color: var(--gh-muted); font-size: 12px; }
+  #gh-slip-filters .gh-navigation [aria-current] { color: var(--gh-blue); border-block-end: 2px solid var(--gh-blue); padding-block: 5px; }
+  #gh-slip-filters .gh-demo { margin-inline-start: auto; font-size: 11px; color: var(--gh-muted); }
+  #gh-slip-filters .gh-content { padding: 18px; min-inline-size: 0; }
+  #gh-slip-filters .gh-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; margin-block-end: 14px; }
+  #gh-slip-filters .gh-title h3 { font-size: 18px; font-weight: 500; }
+  #gh-slip-filters .gh-title p { color: var(--gh-muted); font-size: 11px; }
+  #gh-slip-filters .gh-workspace { min-inline-size: 0; }
+  #gh-slip-filters .gh-panel { padding: 8px; background: color-mix(in srgb, var(--gh-soft) 55%, var(--gh-page)); border: 1px solid var(--gh-line); min-inline-size: 0; }
+  #gh-slip-filters .gh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-inline-size: 0; }
+  #gh-slip-filters .gh-row + .gh-row { margin-block-start: 8px; }
+  #gh-slip-filters .gh-end { margin-inline-start: auto; }
+  #gh-slip-filters .gh-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 32px; padding: 5px 10px; border: 1px solid var(--gh-field-line); background: var(--gh-surface); color: var(--gh-text); font-size: 12px; font-weight: 500; white-space: normal; }
+  #gh-slip-filters .gh-button:hover { background: var(--gh-tint); }
+  #gh-slip-filters .gh-button[aria-pressed="true"], #gh-slip-filters .gh-button[aria-expanded="true"] { background: var(--gh-tint); color: var(--gh-blue); border-color: var(--gh-blue); }
+  #gh-slip-filters .gh-button:disabled { opacity: .45; cursor: default; }
+  #gh-slip-filters .gh-quiet { border-color: transparent; background: transparent; color: var(--gh-muted); }
+  #gh-slip-filters .gh-primary { background: var(--gh-blue); color: var(--gh-surface); border-color: var(--gh-blue); }
+  #gh-slip-filters .gh-primary:hover { background: var(--gh-blue); filter: brightness(.95); }
+  #gh-slip-filters .gh-label { display: inline-flex; align-items: center; gap: 8px; color: var(--gh-muted); font-size: 12px; min-inline-size: 0; }
+  #gh-slip-filters select, #gh-slip-filters input[type="date"] { min-block-size: 32px; padding: 5px 8px; border: 1px solid var(--gh-field-line); color: var(--gh-text); background: var(--gh-surface); font-size: 12px; min-inline-size: 0; }
+  #gh-slip-filters .gh-period { inline-size: 158px; }
+  #gh-slip-filters .gh-status { inline-size: 115px; }
+  #gh-slip-filters .gh-segments { display: flex; flex-wrap: wrap; gap: 4px; }
+  #gh-slip-filters .gh-segments .gh-button { border-color: var(--gh-line); }
+  #gh-slip-filters .gh-segments .gh-button[aria-pressed="true"] { border-color: var(--gh-blue); }
+  #gh-slip-filters .gh-count { font-variant-numeric: tabular-nums; opacity: .8; margin-inline-start: 5px; }
+  #gh-slip-filters .gh-tabs { display: flex; flex-wrap: wrap; gap: 0 20px; border-block-end: 1px solid var(--gh-line); margin: -8px -8px 8px; padding-inline: 10px; }
+  #gh-slip-filters .gh-tabs .gh-button { border: 0; border-block-end: 2px solid transparent; background: transparent; min-block-size: 40px; padding: 7px 4px; }
+  #gh-slip-filters .gh-tabs .gh-button[aria-pressed="true"] { border-block-end-color: var(--gh-blue); color: var(--gh-blue); }
+  #gh-slip-filters .gh-date-band { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: start; }
+  #gh-slip-filters .gh-band-group { display: grid; gap: 5px; }
+  #gh-slip-filters .gh-overline { color: var(--gh-muted); font-size: 11px; letter-spacing: .03em; }
+  #gh-slip-filters .gh-divider { border-block-start: 1px solid var(--gh-line); padding-block-start: 8px; margin-block-start: 8px; }
+  #gh-slip-filters .gh-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-block-end: 10px; }
+  #gh-slip-filters .gh-tile { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; min-block-size: 58px; }
+  #gh-slip-filters .gh-tile .gh-count { font-size: 21px; opacity: 1; }
+  #gh-slip-filters [data-tone="won"] { color: var(--gh-won); }
+  #gh-slip-filters [data-tone="lost"] { color: var(--gh-lost); }
+  #gh-slip-filters [data-tone="pending"] { color: var(--gh-pending); }
+  #gh-slip-filters .gh-range-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 8px; align-items: end; }
+  #gh-slip-filters .gh-field { display: grid; gap: 5px; color: var(--gh-muted); font-size: 11px; min-inline-size: 0; }
+  #gh-slip-filters .gh-field select, #gh-slip-filters .gh-field input { inline-size: 100%; }
+  #gh-slip-filters .gh-inline-range { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+  #gh-slip-filters .gh-inline-range input { inline-size: 152px; }
+  #gh-slip-filters .gh-sentence { gap: 8px; padding: 14px; font-size: 14px; }
+  #gh-slip-filters .gh-sentence select { font-size: 14px; border-width: 0 0 1px; background: transparent; }
+  #gh-slip-filters .gh-summary-text { color: var(--gh-muted); font-size: 12px; }
+  #gh-slip-filters details > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; list-style: none; cursor: var(--cursor-interaction, pointer); min-block-size: 32px; }
+  #gh-slip-filters details > summary::-webkit-details-marker { display: none; }
+  #gh-slip-filters .gh-disclosure-label { color: var(--gh-blue); margin-inline-start: auto; font-size: 12px; }
+  #gh-slip-filters .gh-disclosure-label::after { content: ' +'; }
+  #gh-slip-filters details[open] .gh-disclosure-label::after { content: ' −'; }
+  #gh-slip-filters .gh-expanded { margin-block-start: 10px; border-block-start: 1px solid var(--gh-line); padding-block-start: 10px; }
+  #gh-slip-filters .gh-rail-layout { display: grid; grid-template-columns: 174px minmax(0, 1fr); gap: 14px; align-items: start; }
+  #gh-slip-filters .gh-rail { display: grid; gap: 12px; }
+  #gh-slip-filters .gh-rail .gh-segments { display: grid; gap: 3px; }
+  #gh-slip-filters .gh-rail .gh-button { justify-content: space-between; border-color: transparent; background: transparent; text-align: start; }
+  #gh-slip-filters .gh-rail .gh-button[aria-pressed="true"] { background: var(--gh-tint); border-inline-start-color: var(--gh-blue); }
+  #gh-slip-filters .gh-results { margin-block-start: 12px; min-inline-size: 0; }
+  #gh-slip-filters .gh-results-bar { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-block-end: 10px; font-size: 12px; }
+  #gh-slip-filters .gh-results-bar .gh-summary-text { font-size: 11px; }
+  #gh-slip-filters .gh-slips { display: grid; gap: 8px; }
+  #gh-slip-filters .gh-slip { background: var(--gh-surface); border: 1px solid var(--gh-line); }
+  #gh-slip-filters .gh-slip-top { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-block-size: 38px; padding: 6px 12px; border-block-end: 1px solid var(--gh-line); }
+  #gh-slip-filters .gh-slip-name { font-weight: 500; font-size: 13px; }
+  #gh-slip-filters .gh-slip-ref { color: var(--gh-muted); font-size: 11px; margin-inline-start: 8px; }
+  #gh-slip-filters .gh-outcome { font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+  #gh-slip-filters .gh-slip-facts { color: var(--gh-muted); font-size: 11px; }
+  #gh-slip-filters .gh-slip-facts strong { color: var(--gh-text); font-size: 14px; font-weight: 500; margin-inline-start: 5px; font-variant-numeric: tabular-nums; }
+  #gh-slip-filters .gh-slip-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 8px 12px; color: var(--gh-muted); font-size: 11px; }
+  #gh-slip-filters .gh-slip-body strong { color: var(--gh-text); font-weight: 400; }
+  #gh-slip-filters .gh-empty { padding: 30px 16px; text-align: center; border: 1px solid var(--gh-line); background: var(--gh-surface); display: grid; justify-items: center; gap: 8px; }
+  #gh-slip-filters .gh-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-block-start: 12px; color: var(--gh-muted); font-size: 11px; }
+  #gh-slip-filters dialog { border: 1px solid var(--gh-field-line); background: var(--gh-surface); color: var(--gh-text); border-radius: 0; padding: 18px; inline-size: min(560px, calc(100% - 32px)); max-block-size: calc(100% - 32px); overflow-y: auto; font: inherit; }
+  #gh-slip-filters dialog::backdrop { background: var(--gh-scrim); }
+  #gh-slip-filters .gh-dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-block-end: 14px; }
+  #gh-slip-filters .gh-dialog-head h2 { font-size: 17px; font-weight: 500; }
+  #gh-slip-filters .gh-dialog-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  #gh-slip-filters .gh-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-block-start: 18px; }
+  #gh-slip-filters .gh-dialog-hint { color: var(--gh-muted); font-size: 11px; margin-block: 10px; }
+  #gh-slip-filters .gh-error { color: var(--gh-lost); font-size: 12px; margin-block-start: 8px; }
+  #gh-slip-filters .gh-review-controls { padding: 8px 0 14px; }
+  #gh-slip-filters .gh-review-controls select { inline-size: min(270px, 100%); }
+  #gh-slip-filters .gh-review-controls .gh-label { margin-inline-start: auto; }
+  @media (max-width: 780px) {
+    #gh-slip-filters .gh-range-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #gh-slip-filters .gh-rail-layout { grid-template-columns: 150px minmax(0, 1fr); gap: 10px; }
+    #gh-slip-filters .gh-slip-top { gap: 8px; padding-inline: 8px; }
+    #gh-slip-filters .gh-slip-ref { display: none; }
+  }
+  @media (max-width: 520px) {
+    #gh-slip-filters .gh-stage { min-block-size: 1100px; }
+    #gh-slip-filters .gh-content { padding: 10px; }
+    #gh-slip-filters .gh-header { padding-inline: 10px; gap: 4px 16px; }
+    #gh-slip-filters .gh-navigation { gap: 12px; }
+    #gh-slip-filters .gh-demo { inline-size: 100%; margin-inline-start: 0; }
+    #gh-slip-filters .gh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #gh-slip-filters .gh-rail-layout { grid-template-columns: minmax(0, 1fr); }
+    #gh-slip-filters .gh-rail .gh-segments { display: flex; flex-wrap: wrap; }
+    #gh-slip-filters .gh-slip-top { grid-template-columns: minmax(0, 1fr) auto; }
+    #gh-slip-filters .gh-slip-facts { grid-column: 1 / -1; }
+    #gh-slip-filters .gh-caption { display: grid; padding-inline-end: 80px; }
+    #gh-slip-filters .gh-tabs { gap: 0 10px; }
+    #gh-slip-filters .gh-label { flex-wrap: wrap; }
+    #gh-slip-filters .gh-dialog-grid { grid-template-columns: minmax(0, 1fr); }
+    #gh-slip-filters .gh-review-controls .gh-label { margin-inline-start: 0; }
+  }
+  @media (pointer: coarse) {
+    #gh-slip-filters .gh-button, #gh-slip-filters select, #gh-slip-filters input { min-block-size: 44px; }
+    #gh-slip-filters input { font-size: 16px; }
+  }
+</style>
+<div id="gh-slip-filters" aria-label="Desktop BetSlip filter design review">
+  <div class="gh-review-controls gh-row" data-standalone hidden>
+    <button type="button" class="gh-button" data-review="previous">Previous</button>
+    <select aria-label="Choose a filter design" data-review="concept"></select>
+    <button type="button" class="gh-button" data-review="next">Next</button>
+    <button type="button" class="gh-button gh-quiet" data-review="all">Show all 10</button>
+    <label class="gh-label">Appearance <select data-review="appearance"><option value="light">Light</option><option value="dark">Dark</option><option value="auto">System</option></select></label>
+  </div>
+  <div class="viz-carousel" aria-label="Ten desktop BetSlip filter concepts" data-concepts></div>
+  <dialog id="gh-betslip-filter-dialog" aria-labelledby="gh-range-title" data-range-dialog>
+    <div class="gh-dialog-head"><h2 id="gh-range-title">Custom date range</h2><button type="button" class="gh-button gh-quiet" data-action="close-dialog" aria-label="Close date range">Close</button></div>
+    <div data-dialog-period hidden></div>
+    <div class="gh-dialog-grid" data-dialog-dates></div>
+    <p class="gh-dialog-hint">Slip publication dates · Africa/Kampala (EAT) · Both dates included</p>
+    <div data-dialog-status hidden></div>
+    <p class="gh-error" role="alert" data-dialog-error hidden></p>
+    <div class="gh-dialog-actions"><button type="button" class="gh-button gh-quiet" data-action="dialog-reset">Reset</button><button type="button" class="gh-button" data-action="close-dialog">Cancel</button><button type="button" class="gh-button gh-primary" data-action="apply-dialog">Apply range</button></div>
+  </dialog>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('gh-slip-filters');
+  const carousel = root.querySelector('[data-concepts]');
+  const dialog = root.querySelector('[data-range-dialog]');
+  const referenceDay = '2026-10-29';
+  const periods = [
+    ['today', 'Today'], ['yesterday', 'Yesterday'], ['tomorrow', 'Tomorrow'],
+    ['last3', 'Last 3 days'], ['last7', 'Last 7 days'], ['last30', 'Last 30 days'],
+    ['next7', 'Next 7 days'], ['next30', 'Next 30 days'], ['all', 'All dates'], ['custom', 'Custom range']
+  ];
+  const statuses = [['all', 'All slips'], ['won', 'Won'], ['lost', 'Lost'], ['pending', 'Pending']];
+  const concepts = [
+    ['Compact selectors', 'Date and result controls in one compact row.'],
+    ['Outcome tabs', 'Switch results first, then narrow the dates.'],
+    ['Visible date presets', 'Past, present and future ranges stay in sight.'],
+    ['Day navigator', 'Move between days with quick access to longer ranges.'],
+    ['Result summary tiles', 'Click a result count to filter the slips below.'],
+    ['Range-first form', 'Keep the exact start and end dates visible.'],
+    ['Sentence bar', 'Read your filters as one simple sentence.'],
+    ['Collapsible filter section', 'A quiet summary expands into the full filter section.'],
+    ['Combined popover', 'Edit dates and results together in one popup.'],
+    ['Left filter rail', 'Keep all periods beside the slip list.']
+  ];
+  const addDays = (date, amount) => {
+    const value = new Date(date + 'T12:00:00Z');
+    value.setUTCDate(value.getUTCDate() + amount);
+    return value.toISOString().slice(0, 10);
+  };
+  const dateValid = (date) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date + 'T12:00:00Z')) && new Date(date + 'T12:00:00Z').toISOString().slice(0, 10) === date;
+  const shortDate = (date) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(date + 'T12:00:00Z'));
+  const defaults = () => ({ period: 'today', status: 'all', from: referenceDay, to: referenceDay });
+  const validState = (candidate) => candidate && periods.some(([key]) => key === candidate.period) && statuses.some(([key]) => key === candidate.status) && dateValid(candidate.from) && dateValid(candidate.to) && candidate.from <= candidate.to;
+  const saved = window.openai?.widgetState;
+  let state = validState(saved?.privateContent?.filters) ? { ...saved.privateContent.filters } : defaults();
+  let draft = null, inlineDraft = null, opener = null, combined = false, currentConcept = 0, showAll = false;
+  const appearance = { mode: 'auto' };
+  const range = (filter = state) => {
+    const key = filter.period;
+    if (key === 'all') return [null, null];
+    if (key === 'custom') return [filter.from, filter.to];
+    if (key === 'yesterday') return [addDays(referenceDay, -1), addDays(referenceDay, -1)];
+    if (key === 'tomorrow') return [addDays(referenceDay, 1), addDays(referenceDay, 1)];
+    if (key.startsWith('last')) return [addDays(referenceDay, 1 - Number(key.slice(4))), referenceDay];
+    if (key.startsWith('next')) return [addDays(referenceDay, 1), addDays(referenceDay, Number(key.slice(4)))];
+    return [referenceDay, referenceDay];
+  };
+  const periodName = (filter = state) => periods.find(([key]) => key === filter.period)[1];
+  const rangeName = (filter = state) => {
+    const [from, to] = range(filter);
+    return !from ? 'All dates' : from === to ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`;
+  };
+  const statusName = (filter = state) => statuses.find(([key]) => key === filter.status)[1];
+  const names = ['Daily treble', 'Balanced picks', 'Evening double', 'Weekend accumulator', 'Value selections', 'Early kickoffs'];
+  const fixtures = ['Arsenal – Chelsea', 'Inter Milan – Napoli', 'Sporting CP – Braga', 'Bayern – Leipzig', 'Barcelona – Valencia', 'Lyon – Lille'];
+  const sampleSlips = Array.from({ length: 69 }, (_, dayIndex) => {
+    const offset = dayIndex - 34;
+    return Array.from({ length: offset === 0 ? 8 : 4 }, (_, index) => ({
+      id: `GH-${dayIndex + 10}${index + 1}`, date: addDays(referenceDay, offset),
+      status: offset > 0 ? 'pending' : offset === 0 ? ['pending', 'won', 'lost', 'pending'][index % 4] : ['won', 'lost', 'won', 'pending'][index],
+      name: names[(dayIndex + index) % names.length], fixture: fixtures[(dayIndex + index) % fixtures.length],
+      matches: 2 + index % 3, odds: (2.15 + index * 1.08).toFixed(2), index
+    }));
+  }).flat().sort((a, b) => b.date.localeCompare(a.date) || a.index - b.index);
+  const withinDate = (slip) => {
+    const [from, to] = range();
+    return !from || slip.date >= from && slip.date <= to;
+  };
+  const persist = () => {
+    window.openai?.setWidgetState?.({
+      modelContent: { filterDesign: concepts[currentConcept][0], period: periodName(), result: statusName(), dates: rangeName() },
+      privateContent: { filters: { ...state } }
+    })?.catch(() => {});
+  };
+  const button = (label, attrs = '', className = '') => `<button type="button" class="gh-button cursor-interaction ${className}" ${attrs}>${label}</button>`;
+  const periodSelect = (id, extra = '') => `<select id="${id}" class="gh-period" data-period ${extra}>${periods.map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select>`;
+  const statusSelect = (id) => `<select id="${id}" class="gh-status" data-status>${statuses.map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select>`;
+  const periodField = (id) => `<label class="gh-label" for="${id}">Slip date ${periodSelect(id)}</label>`;
+  const statusField = (id) => `<label class="gh-label" for="${id}">Result ${statusSelect(id)}</label>`;
+  const reset = () => button('Reset', 'data-action="reset"', 'gh-quiet');
+  const statusButtons = (className = 'gh-segments', counts = false, tiles = false) => `<div class="${className}" role="group" aria-label="Filter by slip result">${statuses.map(([key, label]) => button(`${label}${counts ? `<span class="gh-count" data-count="${key}"></span>` : ''}`, `data-status-button="${key}" aria-pressed="${key === state.status}"`, tiles ? 'gh-tile' : '')).join('')}</div>`;
+  const dateButtons = (keys = periods.map(([key]) => key)) => `<div class="gh-segments" role="group" aria-label="Filter by slip date">${keys.map((key) => button(periods.find(([id]) => id === key)[1], `data-period-button="${key}" aria-pressed="${key === state.period}"`)).join('')}</div>`;
+  const dateFields = (prefix, dataPrefix = 'range') => `<label class="gh-field" for="${prefix}-from">From<input type="date" id="${prefix}-from" data-${dataPrefix}-from value="${referenceDay}" required></label><label class="gh-field" for="${prefix}-to">To<input type="date" id="${prefix}-to" data-${dataPrefix}-to value="${referenceDay}" required></label>`;
+  const layouts = [
+    (id) => `<div class="gh-panel gh-row">${periodField(id + '-date')}${statusButtons()}<span class="gh-end">${reset()}</span></div>`,
+    (id) => `<div class="gh-panel">${statusButtons('gh-tabs', true)}<div class="gh-row">${periodField(id + '-date')}<span class="gh-summary-text" data-range-name></span><span class="gh-end">${reset()}</span></div></div>`,
+    () => `<div class="gh-panel"><div class="gh-date-band"><div class="gh-band-group"><span class="gh-overline">PAST</span>${dateButtons(['last30', 'last7', 'last3', 'yesterday'])}</div><div class="gh-band-group"><span class="gh-overline">TODAY & AHEAD</span>${dateButtons(['today', 'tomorrow', 'next7', 'next30'])}</div><div class="gh-band-group"><span class="gh-overline">ANY PERIOD</span>${dateButtons(['all', 'custom'])}</div></div><div class="gh-row gh-divider">${statusButtons()}<span class="gh-end">${reset()}</span></div></div>`,
+    (id) => `<div class="gh-panel"><div class="gh-row">${button('‹', 'data-action="previous-day" aria-label="Previous day"')}${dateButtons(['yesterday', 'today', 'tomorrow'])}${button('›', 'data-action="next-day" aria-label="Next day"')}<span class="gh-end">${periodSelect(id + '-date', 'aria-label="Choose any date period"')}</span></div><div class="gh-row gh-divider">${statusField(id + '-status')}<span class="gh-summary-text" data-range-name></span><span class="gh-end">${reset()}</span></div></div>`,
+    (id) => `<div class="gh-panel">${statusButtons('gh-tiles', true, true)}<div class="gh-row">${periodField(id + '-date')}<span class="gh-summary-text" data-range-name></span><span class="gh-end">${reset()}</span></div></div>`,
+    (id) => `<div class="gh-panel"><div class="gh-range-grid"><label class="gh-field" for="${id}-date">Period${periodSelect(id + '-date')}</label>${dateFields(id)}<label class="gh-field" for="${id}-status">Result${statusSelect(id + '-status')}</label>${button('Apply range', 'data-action="apply-inline-range"')}</div><div class="gh-row gh-divider"><span class="gh-summary-text">Slip publication dates · EAT · Inclusive range</span><span class="gh-end">${reset()}</span></div><p class="gh-error" role="alert" data-inline-error hidden></p></div>`,
+    (id) => `<div class="gh-panel gh-row gh-sentence"><label class="gh-label" for="${id}-status">Show ${statusSelect(id + '-status')}</label><label class="gh-label" for="${id}-date">from ${periodSelect(id + '-date')}</label><span class="gh-end">${reset()}</span></div>`,
+    (id) => `<div class="gh-panel"><div class="gh-row"><details style="flex:1;min-width:0"><summary><span>Filters</span><span class="gh-summary-text" data-filter-summary></span><span class="gh-disclosure-label">Edit filters</span></summary><div class="gh-expanded"><div class="gh-row">${periodField(id + '-date')}${statusButtons()}<span class="gh-end">${reset()}</span></div><div class="gh-row">${dateButtons(['today', 'yesterday', 'last7', 'last30', 'custom'])}</div></div></details></div></div>`,
+    () => `<div class="gh-panel gh-row">${button('Filter slips', 'data-action="open-combined" aria-haspopup="dialog" aria-controls="gh-betslip-filter-dialog"')}<span class="gh-summary-text" data-filter-summary></span><span class="gh-end">${reset()}</span></div>`,
+    () => `<aside class="gh-panel gh-rail" aria-label="Slip filters"><div class="gh-band-group"><span class="gh-overline">SLIP DATE</span>${dateButtons()}</div><div class="gh-band-group gh-divider"><span class="gh-overline">RESULT</span>${statusButtons('gh-segments', true)}</div>${reset()}</aside>`
+  ];
+  carousel.innerHTML = concepts.map(([name, description], index) => {
+    const id = 'gh-concept-' + index;
+    return `<section class="gh-stage" data-variant="${name}" data-concept="${index}" aria-label="${name}" ${index ? 'hidden' : ''}>
+      <div class="gh-caption"><h2>${name}</h2><p>${description}</p></div>
+      <div class="gh-app"><header class="gh-header"><div class="gh-brand">goal <span>hint</span></div><nav class="gh-navigation" aria-label="Sample application"><span>Matches</span><span aria-current="page">BetSlips</span><span>Slip Builder</span></nav><span class="gh-demo">Design preview · Sample data</span></header>
+      <div class="gh-content"><div class="gh-title"><h3>BetSlips</h3><p>Slip date · EAT &nbsp; / &nbsp; Preview today: 29 Oct 2026</p></div>
+      <div class="gh-workspace ${index === 9 ? 'gh-rail-layout' : ''}">${layouts[index](id)}<div class="gh-result-area"><div class="gh-results" aria-live="polite" aria-atomic="true"><div class="gh-results-bar"><span data-result-count></span><span class="gh-summary-text" data-result-summary></span></div><div class="gh-slips" data-slips></div></div><div class="gh-row" style="margin-top:10px" data-pagination></div></div></div>
+      <footer class="gh-footer"><span>Illustrative slips · Local preview only</span><span>Outcomes are not guaranteed.</span></footer></div></div>
+    </section>`;
+  }).join('');
+  const sections = [...carousel.querySelectorAll('[data-concept]')];
+  const pages = Array(10).fill(0), pageSize = 4;
+  const render = () => {
+    const dateSlips = sampleSlips.filter(withinDate);
+    const counts = { all: dateSlips.length, won: 0, lost: 0, pending: 0 };
+    dateSlips.forEach((slip) => counts[slip.status]++);
+    const filtered = dateSlips.filter((slip) => state.status === 'all' || slip.status === state.status);
+    root.querySelectorAll('[data-period]').forEach((control) => { if (!dialog.contains(control)) control.value = state.period; });
+    root.querySelectorAll('[data-status]').forEach((control) => { if (!dialog.contains(control)) control.value = state.status; });
+    root.querySelectorAll('[data-period-button]').forEach((control) => control.setAttribute('aria-pressed', String(control.dataset.periodButton === state.period)));
+    root.querySelectorAll('[data-status-button]').forEach((control) => control.setAttribute('aria-pressed', String(control.dataset.statusButton === state.status)));
+    root.querySelectorAll('[data-count]').forEach((control) => control.textContent = counts[control.dataset.count]);
+    root.querySelectorAll('[data-range-name]').forEach((control) => control.textContent = rangeName() + ' · EAT');
+    root.querySelectorAll('[data-filter-summary]').forEach((control) => control.textContent = `${periodName()} · ${statusName()}`);
+    const [from, to] = range();
+    root.querySelectorAll('[data-range-from]').forEach((control) => control.value = inlineDraft?.from ?? from ?? '');
+    root.querySelectorAll('[data-range-to]').forEach((control) => control.value = inlineDraft?.to ?? to ?? '');
+    sections.forEach((section, index) => {
+      pages[index] = Math.min(pages[index], Math.max(0, Math.ceil(filtered.length / pageSize) - 1));
+      const start = pages[index] * pageSize;
+      const visible = filtered.slice(start, start + pageSize);
+      section.querySelector('[data-result-count]').textContent = filtered.length ? `${start + 1}–${start + visible.length} of ${filtered.length} slips` : '0 slips';
+      section.querySelector('[data-result-summary]').textContent = `${rangeName()} · ${statusName()} · Latest first`;
+      section.querySelector('[data-slips]').innerHTML = visible.length ? visible.map((slip) => `<article class="gh-slip"><div class="gh-slip-top"><div class="gh-slip-name">${slip.name}<span class="gh-slip-ref">${slip.id}</span></div><span class="gh-outcome" data-tone="${slip.status}">${{ won: '✓ Won', lost: '× Lost', pending: '◷ Pending' }[slip.status]}</span><span class="gh-slip-facts">Total odds<strong>${slip.odds}</strong></span></div><div class="gh-slip-body"><span><strong>${slip.fixture}</strong> + ${slip.matches - 1} more · ${slip.matches} matches</span><time datetime="${slip.date}">${shortDate(slip.date)}</time></div></article>`).join('') : `<div class="gh-empty"><strong>No slips match these filters</strong><span class="gh-summary-text">Try another period or choose all results.</span>${button('Reset filters', 'data-action="reset"')}</div>`;
+      section.querySelector('[data-pagination]').innerHTML = filtered.length > pageSize ? `${button('Previous slips', 'data-action="previous-page"' + (pages[index] === 0 ? ' disabled' : ''), 'gh-quiet')}<span class="gh-summary-text">Page ${pages[index] + 1} of ${Math.ceil(filtered.length / pageSize)}</span>${button('Next slips', 'data-action="next-page"' + (start + pageSize >= filtered.length ? ' disabled' : ''), 'gh-quiet')}` : '';
+    });
+  };
+  const update = (next) => {
+    if (Object.hasOwn(next, 'period')) inlineDraft = null;
+    state = { ...state, ...next }; pages.fill(0); render(); persist();
+  };
+  const restoreDialogFocus = () => { if (opener?.isConnected) opener.focus(); };
+  dialog.addEventListener('close', restoreDialogFocus);
+  const openDialog = (trigger, allFilters = false) => {
+    opener = trigger; combined = allFilters; draft = { ...state, period: allFilters ? state.period : 'custom' };
+    const [from, to] = range();
+    draft.from = from ?? referenceDay; draft.to = to ?? referenceDay;
+    dialog.querySelector('h2').textContent = allFilters ? 'Filter slips' : 'Custom date range';
+    dialog.querySelector('[data-dialog-period]').hidden = !allFilters;
+    dialog.querySelector('[data-dialog-period]').innerHTML = allFilters ? `<div class="gh-row" style="margin-bottom:12px">${periodField('gh-dialog-period')}</div>` : '';
+    dialog.querySelector('[data-dialog-dates]').innerHTML = dateFields('gh-dialog', 'dialog');
+    dialog.querySelector('[data-dialog-status]').hidden = !allFilters;
+    dialog.querySelector('[data-dialog-status]').innerHTML = allFilters ? `<div class="gh-row gh-divider">${statusField('gh-dialog-status')}</div>` : '';
+    dialog.querySelector('[data-action="apply-dialog"]').textContent = allFilters ? 'Apply filters' : 'Apply range';
+    dialog.querySelector('[data-dialog-error]').hidden = true;
+    syncDraft(); dialog.showModal();
+    (allFilters ? dialog.querySelector('[data-period]') : dialog.querySelector('[data-dialog-from]')).focus();
+  };
+  const syncDraft = () => {
+    const [from, to] = range(draft);
+    dialog.querySelector('[data-dialog-from]').value = from ?? '';
+    dialog.querySelector('[data-dialog-to]').value = to ?? '';
+    dialog.querySelector('[data-dialog-dates]').hidden = combined && draft.period !== 'custom';
+    const period = dialog.querySelector('[data-period]'), status = dialog.querySelector('[data-status]');
+    if (period) period.value = draft.period;
+    if (status) status.value = draft.status;
+  };
+  const validateRange = (from, to, error) => {
+    const message = !dateValid(from) || !dateValid(to) ? 'Choose both a valid start and end date.' : from > to ? 'The end date must be on or after the start date.' : '';
+    error.textContent = message; error.hidden = !message;
+    return !message;
+  };
+  root.addEventListener('input', (event) => {
+    if (!event.target.matches('[data-range-from], [data-range-to]')) return;
+    const section = event.target.closest('[data-concept]');
+    inlineDraft = { from: section.querySelector('[data-range-from]').value, to: section.querySelector('[data-range-to]').value };
+    section.querySelector('[data-inline-error]').hidden = true;
+  });
+  root.addEventListener('change', (event) => {
+    const target = event.target;
+    if (target.closest('[data-concept]')) currentConcept = Number(target.closest('[data-concept]').dataset.concept);
+    if (dialog.contains(target)) {
+      if (target.matches('[data-period]')) { draft.period = target.value; syncDraft(); }
+      if (target.matches('[data-status]')) draft.status = target.value;
+      if (target.matches('[data-dialog-from]')) draft.from = target.value;
+      if (target.matches('[data-dialog-to]')) draft.to = target.value;
+      dialog.querySelector('[data-dialog-error]').hidden = true;
+      return;
+    }
+    if (target.matches('[data-period]')) {
+      if (target.value === 'custom' && target.closest('[data-concept]')?.dataset.concept !== '5') { target.value = state.period; openDialog(target); }
+      else {
+        const [from, to] = range();
+        update(target.value === 'custom' ? { period: 'custom', from: from ?? referenceDay, to: to ?? referenceDay } : { period: target.value });
+      }
+    }
+    if (target.matches('[data-status]')) update({ status: target.value });
+  });
+  root.addEventListener('click', (event) => {
+    const target = event.target.closest('button');
+    if (!target) return;
+    if (target.closest('[data-concept]')) currentConcept = Number(target.closest('[data-concept]').dataset.concept);
+    if (target.hasAttribute('data-status-button')) update({ status: target.dataset.statusButton });
+    if (target.hasAttribute('data-period-button')) {
+      if (target.dataset.periodButton === 'custom') openDialog(target);
+      else update({ period: target.dataset.periodButton });
+    }
+    const action = target.dataset.action;
+    if (action === 'reset') { root.querySelectorAll('[data-inline-error]').forEach((error) => error.hidden = true); update(defaults()); }
+    if (action === 'open-combined') openDialog(target, true);
+    if (action === 'close-dialog') dialog.close();
+    if (action === 'dialog-reset') { draft = { ...defaults(), status: combined ? 'all' : draft.status, period: combined ? 'today' : 'custom' }; syncDraft(); dialog.querySelector('[data-dialog-error]').hidden = true; }
+    if (action === 'apply-dialog') {
+      if (draft.period === 'custom' && !validateRange(draft.from, draft.to, dialog.querySelector('[data-dialog-error]'))) return;
+      update(draft); dialog.close();
+    }
+    if (action === 'apply-inline-range') {
+      const section = target.closest('[data-concept]');
+      const from = section.querySelector('[data-range-from]').value, to = section.querySelector('[data-range-to]').value;
+      if (validateRange(from, to, section.querySelector('[data-inline-error]'))) update({ period: 'custom', from, to });
+    }
+    if (action === 'previous-day' || action === 'next-day') {
+      const date = addDays(range()[0] ?? referenceDay, action === 'previous-day' ? -1 : 1);
+      update({ period: date === referenceDay ? 'today' : date === addDays(referenceDay, -1) ? 'yesterday' : date === addDays(referenceDay, 1) ? 'tomorrow' : 'custom', from: date, to: date });
+    }
+    if (action === 'previous-page' || action === 'next-page') {
+      const index = Number(target.closest('[data-concept]').dataset.concept);
+      pages[index] += action === 'previous-page' ? -1 : 1;
+      render();
+      const replacement = sections[index].querySelector(`[data-action="${action}"]`);
+      const fallback = sections[index].querySelector(`[data-action="${action === 'next-page' ? 'previous-page' : 'next-page'}"]`);
+      if (replacement && !replacement.disabled) replacement.focus();
+      else if (fallback && !fallback.disabled) fallback.focus();
+    }
+  });
+  render();
+  window.addEventListener('openai:set_globals', (event) => {
+    const candidate = event.detail?.globals?.widgetState?.privateContent?.filters;
+    if (validState(candidate)) { state = { ...candidate }; inlineDraft = null; pages.fill(0); render(); }
+  });
+  const theme = () => { root.style.colorScheme = appearance.mode === 'auto' ? 'light dark' : appearance.mode; };
+  theme();
+  if (globalThis.Tweak) {
+    const tweak = new Tweak({ container: root, onChange: theme });
+    tweak.addSelect(appearance, 'mode', { label: 'Appearance', options: [{ label: 'Follow app', value: 'auto' }, { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }] });
+  }
+  // The conversation supplies its own carousel. A direct browser visit gets an equivalent picker.
+  if (window.self === window.top) {
+    document.title = 'Desktop BetSlip filter designs · Goal Hint';
+    const controls = root.querySelector('[data-standalone]');
+    controls.hidden = false; appearance.mode = 'light'; theme();
+    controls.querySelector('[data-review="concept"]').innerHTML = concepts.map(([name], index) => `<option value="${index}">${String(index + 1).padStart(2, '0')} · ${name}</option>`).join('');
+    const show = () => {
+      sections.forEach((section, index) => section.hidden = !showAll && index !== currentConcept);
+      controls.querySelector('[data-review="concept"]').value = currentConcept;
+      controls.querySelector('[data-review="previous"]').disabled = currentConcept === 0 || showAll;
+      controls.querySelector('[data-review="next"]').disabled = currentConcept === 9 || showAll;
+      controls.querySelector('[data-review="all"]').textContent = showAll ? 'Show one' : 'Show all 10';
+    };
+    controls.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-review]')?.dataset.review;
+      if (action === 'previous') currentConcept = Math.max(0, currentConcept - 1);
+      if (action === 'next') currentConcept = Math.min(9, currentConcept + 1);
+      if (action === 'all') showAll = !showAll;
+      show();
+    });
+    controls.addEventListener('change', (event) => {
+      if (event.target.dataset.review === 'concept') { currentConcept = Number(event.target.value); showAll = false; show(); }
+      if (event.target.dataset.review === 'appearance') { appearance.mode = event.target.value; theme(); }
+    });
+    show();
+  }
+})();
+</script>
