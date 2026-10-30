@@ -1,30 +1,42 @@
 # Mobile slip headers
 
-Mobile slips use the selected **09 Minimal rules** header in Best slips, generated
-slips, completed history and aggregate-only access summaries. Desktop headers use
-their existing presentation. The Clean ledger match rows are unchanged.
+Mobile slips use the selected **Compact Rail** header in Best slips, generated
+slips, completed history, shared snapshots and aggregate-only access summaries. Desktop headers use
+their existing presentation, with the separately requested larger rounded
+disclosure indicator. The Clean ledger match rows are unchanged.
 
-Every production mobile slip starts collapsed, showing only this header. Tapping
+Mobile slips start collapsed unless the caller explicitly requests an open
+snapshot, such as a shared slip. Tapping
 anywhere on the header expands or collapses its own slip through the shared native
 `details`/`summary` disclosure, including Slip Builder, Best slips, completed
 history and performance slips. Access-limited summaries use the same behavior.
 
-`CompactSlipDisclosure` selects the shared `MobileSlipHeader` for Clean ledger.
-Its minimum 44px row contains the slip number, odds, probability, match count
-and status in five side-by-side columns. Figures and status use 14px text; metric
-labels use 12px text above their figures. The aggregate price is labeled Total
-odds. The first column shows only the centered slip number in 16px extra-bold
-text; three-digit numbers retain a fitting 14px size and the same extra-bold
-weight. Its accessible heading retains the full localized Slip N title. Status
-uses the same label-above-value arrangement as the other columns. Metric/status
-cells have 4px vertical and 2px horizontal padding.
+`SlipCard` and `SlipCardSummary` choose the same `CompactSlipDisclosure` and
+`MobileSlipHeader` for Clean ledger. The shared phone frame has a thin blue rail
+and `theme.radius.control` corners. Header padding is 6px vertically and 8px
+on the starting edge; the arrow column owns the ending space. The first line groups a subtly blue-styled Slip N with a pipe and
+the generation timestamp. The uniform status badge sits on the right before
+the chevron. The arrow has its own separated column spanning the header; the
+bottom line keeps labelled odds, probability and match count to its left, with
+no figure below the arrow. On narrow cards the identity/date group wraps.
+Figures use 14px text and supporting labels 11px. The full
+localized title and mean-probability explanation remain accessible.
 
-At the default text size, the identity/odds/matches/status/chevron tracks are
-32/80/56/62/10px. Probability receives the remaining width with a 58px minimum.
-Every status has the same width. Narrow containers use `Prob.`; large odds retain
-their full figures at the normal 14px size. Enlarged text can scroll locally
+The mobile indicator is a 20px circle with a visible border and blue background,
+centered in a 32px column with balanced edge spacing. The full native summary
+remains the click/tap and keyboard target; no nested button competes with it.
+
+When timestamp metadata exists, the header shows the actual EAT
+weekday followed by a bold date/time, for example Fri **30 Oct 2026 · 09:16 EAT**.
+Best slips use the persisted immutable daily snapshot timestamp; builder slips
+use their generation result's `asOf` without changing desktop headers. History
+retains its recorded save timestamp. Date-only records do not invent a clock.
+The body does not repeat a Published timestamp.
+
+Every status reuses the desktop badge's 5.75rem width, colours and animated
+in-progress dot. Narrow cards use `Prob.`. Facts can wrap at enlarged text sizes
 without widening the page. Native disclosure controls retain keyboard operation
-and a minimum 44px target. Text and minimum height scale with the root font size.
+and a minimum 44px target. Shared match rows remain unchanged.
 
 Probability remains the mean of individual selection probabilities, with its
 existing accessible explanation. Header status reuses `slipOutcome`: a verified

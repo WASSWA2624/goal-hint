@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import { slipDisclosureIndicator } from "../slip-disclosure-styles";
 
 /** Minimal rules: stable metadata columns with compact, even text padding. */
 export const MobileHeaderRow = styled.summary`
@@ -63,39 +64,62 @@ export const MobileHeaderRow = styled.summary`
     block-size: max(var(--header-height), 2rem);
   }
 
-  /* Production uses a readable scale; historical comparison samples retain their original sizing. */
-  &:not([data-header-variant]) {
+  /* Compact Rail is shared by every production mobile slip. Historical samples stay isolated. */
+  &&:not([data-header-variant]) {
     --header-height: 2.75rem;
-    grid-template-columns: 2rem 4rem minmax(3rem, 1fr) 2.875rem 5.75rem 0.625rem;
-    block-size: auto;
-    font-size: 0.875rem;
+    grid-template-columns: minmax(0, 1fr) 5.75rem 2rem;
+    gap: 4px 6px; padding: 6px 0 6px 8px; block-size: auto; white-space: normal;
     > h3, > h3[data-dense-identity] {
-      justify-content: center; text-align: center; white-space: normal;
-      font-size: 0.875rem;
+      grid-column: 1; grid-row: 1; flex-wrap: wrap; gap: 3px 5px; align-items: baseline;
+      padding: 0; font-size: 0.875rem; text-align: start; line-height: 1.3;
     }
-    [data-header-number] { font-size: 1rem; font-weight: 800; }
-    > h3[data-dense-identity] [data-header-number] { font-size: 0.875rem; }
-    [data-header-field], [data-header-status] {
-      flex-direction: column; justify-content: center; gap: 0.1875rem;
-      padding: 4px 2px;
+    [data-header-slip-number] {
+      display: inline-flex; align-items: baseline; gap: 3px; flex: none; padding: 2px 4px;
+      border-radius: ${({ theme }) => theme.radius.small};
+      color: ${({ theme }) => theme.color.accent.blue.text}; background: ${({ theme }) => theme.color.accent.blue.soft};
+      white-space: nowrap; font-weight: 700;
     }
-    [data-header-field] strong { font-size: 0.875rem; }
-    [data-header-field="odds"] strong {
-      min-inline-size: 0; max-inline-size: 100%; overflow: hidden;
-      text-overflow: ellipsis; flex-shrink: 1;
+    [data-header-number] { font-size: inherit; font-weight: inherit; }
+    [data-rank] { color: ${({ theme }) => theme.color.link}; font-size: 0.6875rem; font-weight: 400; margin-inline-start: 3px; }
+    [data-header-generation] {
+      display: inline-flex; align-items: baseline; gap: 5px; min-inline-size: 0; max-inline-size: 100%;
+      font-size: 0.6875rem; line-height: 1.4;
+      [data-slip-publication-date] { min-inline-size: 0; font-size: inherit; white-space: normal; }
+      [data-slip-weekday] { font-weight: 400; }
+      strong { color: ${({ theme }) => theme.color.text}; font-weight: 600; }
     }
-    [data-header-label] { order: -1; font-size: 0.75rem; }
+    [data-header-identity-separator] { color: ${({ theme }) => theme.color.mutedText}; font-weight: 400; }
+    [data-header-metrics] {
+      grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
+      align-items: baseline; gap: 4px 6px; min-inline-size: 0;
+    }
+    [data-header-field] {
+      align-self: auto; flex-wrap: wrap; gap: 2px 4px; padding: 0; border: 0;
+      align-items: baseline; justify-content: flex-start; white-space: normal;
+    }
+    [data-header-field] strong { font-size: 0.875rem; font-weight: 700; }
+    [data-header-field="odds"] strong { color: ${({ theme }) => theme.color.accent.blue.text}; }
+    [data-header-label] { order: -1; min-inline-size: 0; flex-shrink: 1; font-size: 0.6875rem; }
+    [data-label-full] { display: inline; }
+    [data-label-compact] { display: none; }
     &[data-large-odds] [data-header-field="odds"] [data-header-label] { display: inline; }
-    &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.875rem; }
-    [data-header-status] { padding-inline: 0; font-size: 0.875rem; }
-    [data-slip-status] { inline-size: 100%; min-block-size: 1.25rem; padding: 2px 3px; font-size: 0.75rem; }
-    [data-header-chevron] { inline-size: 6px; block-size: 6px; }
-    &[data-header-publication] {
-      grid-template-columns: 5rem minmax(3.25rem, 1fr) 3.25rem 5.75rem 0.625rem;
-      > h3 { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; gap: 4px 7px; padding: 6px 4px; }
-      [data-rank] { color: ${({ theme }) => theme.color.link}; font-size: 0.6875rem; font-weight: 400; }
-      [data-slip-publication-date] { font-size: 0.6875rem; }
-      [data-header-field="odds"] { border-inline-start: 0; }
+    &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.875rem; overflow-wrap: anywhere; white-space: normal; }
+    [data-header-status] {
+      grid-column: 2; grid-row: 1; align-self: center; padding: 0; border: 0;
+      > [data-header-label] { display: none; }
     }
+    [data-slip-status] { inline-size: 5.75rem; min-block-size: 1.5rem; font-size: 0.75rem; }
+    [data-header-toggle] {
+      grid-column: 3; grid-row: 1 / 3; align-self: stretch; display: grid; place-items: center;
+      border-inline-start: 1px solid var(--header-rule);
+    }
+    [data-header-chevron] { ${slipDisclosureIndicator} inline-size: 1.25rem; block-size: 1.25rem; transform: none; --slip-chevron-size: 5px; }
+    &[data-header-only] [data-header-toggle] { visibility: hidden; }
+    @container compact-slip (max-width: 18rem) {
+      [data-label-full] { display: none; }
+      [data-label-compact] { display: inline; }
+    }
+    @container compact-slip (max-width: 18.875rem) { overflow: visible; contain: none; }
   }
+  details[open] > &&:not([data-header-variant]) [data-header-chevron] { transform: none; --slip-chevron-rotation: 225deg; }
 `;

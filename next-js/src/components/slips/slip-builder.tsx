@@ -474,6 +474,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         <SlipList $phoneGap={9} data-slip-list>{shownSlips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
           return <SlipCard key={slip.id} slip={slip} index={offset + index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
+            {...(!desktop ? { publishedAt: result.asOf } : {})}
             shareSource={{ source: "builder", criteria: serializeSlipCriteria(criteria).toString(), slipId: slip.id }}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>

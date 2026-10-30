@@ -16,6 +16,12 @@ import type { SlipHeaderPublication } from "./slip-header-meta";
 /** Keep desktop content visually collapsed until hydration selects its native disclosure. */
 const PhoneSlipFallback = styled.div`
   min-inline-size: 0;
+  ${media.belowDesktop} {
+    [data-compact-slip="clean-ledger"] {
+      border-radius: ${({ theme }) => theme.radius.control};
+      border-inline-start: 2px solid ${({ theme }) => theme.color.accent.blue.text};
+    }
+  }
   ${media.desktop} {
     @media (scripting: enabled) { [data-slip-content] { display: none; } }
   }

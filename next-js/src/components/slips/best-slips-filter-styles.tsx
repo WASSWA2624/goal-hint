@@ -34,6 +34,11 @@ export const FiltersPanel = styled.section`
   background: transparent;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
+  ${media.belowDesktop} {
+    padding: 4px; border: 1px solid color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.text} 28%, ${({ theme }) => theme.color.border});
+    border-radius: ${({ theme }) => theme.radius.control};
+    background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.soft} 65%, ${({ theme }) => theme.color.surface});
+  }
 `;
 
 export const FiltersRow = styled.div`
@@ -66,6 +71,7 @@ export const ToggleRow = styled.div`
     gap: 10px 14px;
     @media (max-width: 79.99rem) { flex-wrap: wrap; }
   }
+  ${media.belowDesktop} { flex-wrap: wrap; gap: 4px; }
 `;
 
 export const ResultGroup = styled.div`
@@ -81,6 +87,11 @@ export const ResultGroup = styled.div`
     padding: 3px;
     background: transparent;
     @media (max-width: 79.99rem) { flex: 1 0 100%; box-sizing: border-box; }
+  }
+  ${media.belowDesktop} {
+    order: 2; flex: 1 0 100%; display: flex; flex-wrap: nowrap;
+    gap: 4px; padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none};
+    overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; background: transparent;
   }
 `;
 
@@ -111,6 +122,21 @@ export const DateControls = styled.div`
   ${media.desktop} {
     @media (max-width: 79.99rem) { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
   }
+  ${media.belowDesktop} { flex: 1 1 12rem; gap: 4px; margin: 0; padding: 0; border: 0; }
+`;
+
+/** A visual floating label complements the SelectMenu's existing accessible name. */
+export const DateField = styled.div`
+  display: contents;
+  > [data-slip-date-label] { display: none; }
+  ${media.belowDesktop} {
+    position: relative; display: block; flex: 1; min-inline-size: 0;
+    > [data-slip-date-label] {
+      position: absolute; inset-block-start: 3px; inset-inline-start: 9px; z-index: 1;
+      display: block; color: ${({ theme }) => theme.color.mutedText};
+      font-size: .6875rem; line-height: 1.2; pointer-events: none;
+    }
+  }
 `;
 
 export const DateSelect = styled(SelectMenu)`
@@ -120,6 +146,10 @@ export const DateSelect = styled(SelectMenu)`
     box-shadow: 0 1px 2px color-mix(in srgb, ${({ theme }) => theme.color.text} 6%, transparent);
     ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
     ${media.desktop} { font-size: .8125rem; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
+  }
+  ${media.belowDesktop} {
+    inline-size: 100%;
+    > [data-select-trigger] { min-block-size: 44px; padding: 17px 8px 3px; font-size: .875rem; box-shadow: none; }
   }
 `;
 
@@ -136,6 +166,7 @@ export const CustomRangeButton = styled(FilterButton)`
   > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; font-weight: 600; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
+  ${media.belowDesktop} { min-block-size: 44px; padding: 4px 6px; }
 `;
 
 export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
@@ -161,6 +192,7 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   &::before { content: ""; inline-size: 5px; block-size: 5px; background: currentColor; }
   > strong { font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
   [data-slip-result-percent] { font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+  [data-mobile-result-percent] { display: none; }
   &:focus-visible { outline-offset: -3px; }
   &[aria-pressed="true"]:focus-visible { outline-color: ${({ theme }) => theme.color.surface}; }
   &[aria-pressed="true"] {
@@ -190,6 +222,20 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
       &[aria-pressed="true"]:focus-visible { outline-color: ${theme.color.accent.blue.text}; }
     `}
   }
+  ${media.belowDesktop} {
+    gap: 4px; min-block-size: 44px; padding: 4px 6px; border-color: var(--result-text);
+    border-radius: ${({ theme }) => theme.radius.control}; font-size: .8125rem;
+    &::before { display: none; }
+    > strong { font-size: .8125rem; font-weight: 700; }
+    [data-slip-result-percent] { font-size: .75rem; }
+    [data-mobile-result-percent] { display: inline; }
+    ${({ theme, $status }) => $status === "all" && css`
+      color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft}; border-color: ${theme.color.accent.blue.text};
+      &[aria-pressed="true"], &[aria-pressed="true"]:hover {
+        color: ${theme.color.accent.blue.soft}; background: ${theme.color.accent.blue.text}; border-color: ${theme.color.accent.blue.text};
+      }
+    `}
+  }
 `;
 
 export const ResetButton = styled(FilterButton)`
@@ -207,6 +253,7 @@ export const ResetButton = styled(FilterButton)`
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; } }
   @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; }
+  ${media.belowDesktop} { min-block-size: 44px; padding: 4px 6px; }
 `;
 
 export const RangeButton = styled(FilterButton)`
@@ -269,6 +316,7 @@ export const DateFields = styled.div`
     font-size: 0.875rem;
     &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   }
+  ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr); input { font-size: 1rem; } }
 `;
 
 export const DateHint = styled.p`

@@ -53,13 +53,20 @@ panel. Mobile retains its original access panel and status bar. Unfinished slips
 public list, including their aggregate headers.
 Native expansion works before hydration.
 
+Disclosure indicators share one rounded, theme-aware border/background recipe.
+Desktop uses a centered 28px circle with a reserved end gutter, keeping header
+and match-row status tracks aligned; mobile uses a centered 20px circle in its
+isolated arrow column. Only the inner chevron rotates, and native summary
+click/keyboard behavior remains intact.
+
 Shared slip headers place the actual publication date/time after the slip
 number, followed by Top ranked, with no separate date/status row above the card.
 Saved history uses its recorded save time. Date-only metadata never invents a
 publication time. Desktop publication dates include the actual short weekday,
 ordinal day, full month and year, for example Fri, 30th October, 2026, followed
 by the supplied 24-hour EAT time. Thin separators distinguish the number/date
-and summary fields; mobile keeps its compact date format.
+and summary fields. Mobile uses Compact Rail with the actual EAT weekday and
+bold short-month generation timestamp in the header; see `mobile-slip-headers.md`.
 Desktop uses Average probability, followed by Share, the fixed-width slip-status
 badge and the far-right disclosure arrow. Slip and match statuses share the same
 final track, border and inner padding so their badge edges align when expanded.
@@ -117,7 +124,18 @@ sharing. Shared caches never contain a viewer response. The page refreshes while
 Automatic refresh waits during a pending navigation or an unfinished refresh,
 so it cannot replace a user's page change.
 
-## Desktop date and result filters
+## Date and result filters
+
+Mobile uses the same filter/query component in a compact Blue Signal panel:
+one horizontal row of All/Won/Lost/Pending/Void/Cancelled controls, each with
+its count and bracketed percentage inline. Every status keeps its semantic
+colour. The row scrolls horizontally on narrow screens and reveals keyboard
+focus. Slip date has a floating label, alongside Custom date and Reset. These
+controls replace the previous separate performance strip, preserving every
+whole-cohort figure and filter. Controls keep 44px targets, tighter padding and
+shared subtle corner tokens. Pagination reuses the desktop numbered control,
+including the current-page blue treatment and first/last and scroll controls.
+Its mobile buttons are a compact 32px with 4px gaps and 12px labels.
 
 The desktop filter section has one toolbar with All/Won/Lost/Pending/Void/Cancelled
 toggles, followed by a date-preset select, Custom range, and Reset. Result toggles show their
@@ -132,7 +150,7 @@ Below 1280px the six result buttons occupy a full row, followed by dates and
 Reset; wider desktops retain one toolbar row. Reset remains a separate outlined
 icon action. The applied-filter summary and displayed slip
 range share one row below it. There is no separate desktop Overall Performance
-panel or repeated date; mobile retains its compact performance strip.
+panel or repeated date. Mobile presents these counts in its Blue Signal filter panel.
 The section uses the shared Matches palette and square controls, with no outer
 padding, border or background. Status controls start at the slips' left edge;
 Reset aligns with their right edge. The result-button container is transparent;
@@ -192,7 +210,7 @@ The paginator appears only when more than 50 slips are available. Builder pages
 slice the generated cohort locally and preserve absolute slip numbering; a new
 build restarts page 1. Best Slips uses the same 50-slip size in its API and local
 projection, preserving selected dates/status across page changes. Pagination
-works on both desktop and mobile; date/result controls remain desktop-only.
+and date/result controls work on both desktop and mobile.
 
 Explicit ranges have exact result counts and 50 slips per page. The API retains
 the All dates option for compatibility, although it is no longer in the date

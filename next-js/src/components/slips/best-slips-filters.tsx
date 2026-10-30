@@ -6,7 +6,7 @@ import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, type
 import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
-import { AppliedDetails, AppliedSummary, CustomRangeButton, DateControls, DateError, DateFields, DateHint, DateSelect, FiltersPanel,
+import { AppliedDetails, AppliedSummary, CustomRangeButton, DateControls, DateError, DateField, DateFields, DateHint, DateSelect, FiltersPanel,
   RangeButton, RangeDialog, ResetButton, ResultButton, ResultGroup, ToggleRow } from "./best-slips-filter-styles";
 
 const dateOptions = [
@@ -27,7 +27,7 @@ function revealResultToggle({ currentTarget, target }: FocusEvent<HTMLDivElement
   if (offset) currentTarget.scrollLeft += offset;
 }
 
-/** Desktop-only compact date/result controls; custom dates stay a local draft until Apply. */
+/** Responsive date/result controls; custom dates stay a local draft until Apply. */
 export function BestSlipsFilters({ query, appliedQuery = query, today, locale, entitled = false, busy = false, updating = false, statistics, countSummary, onChange }: {
   query: BestSlipsQuery; today: ReportingDate; locale: string; entitled?: boolean; busy?: boolean; onChange: (query: BestSlipsQuery) => void;
   appliedQuery?: BestSlipsQuery; updating?: boolean;
@@ -93,17 +93,21 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
             <span>{m.text(status === "all" ? "bestSlips.filters.allShort" : `bestSlips.filters.${status}`)}</span>
             <strong data-slip-result-count={status}>{count}</strong>
             {percentage !== null && <span data-slip-result-percent={status}>({percentage})</span>}
+            {status === "all" && <span data-slip-result-percent="all" data-mobile-result-percent>
+              ({statistics ? m.number(statistics.total > 0 ? 1 : 0, { style: "percent", maximumFractionDigits: 1 }) : "—"})
+            </span>}
           </ResultButton>;
         })}
       </ResultGroup>
       <DateControls role="group" aria-label={m.text("bestSlips.filters.slipDate")} data-slip-dates>
+        <DateField><span data-slip-date-label aria-hidden="true">{m.text("bestSlips.filters.slipDate")}</span>
         <DateSelect value={query.period} options={selectablePeriod ? selectOptions
           : [...selectOptions, { value: query.period, label: currentPeriodLabel, disabled: true }]}
           label={m.text("bestSlips.filters.slipDate")} data-slip-period-select data-slip-period={query.period}
           onValueChange={(value) => {
             const option = dateOptions.find(([period]) => period === value);
             if (option) onChange({ period: option[0], status: query.status, page: 1 });
-          }} />
+          }} /></DateField>
         <CustomRangeButton type="button" data-slip-custom-range aria-pressed={query.period === "custom"}
           aria-label={m.text("bestSlips.filters.customRange")} title={m.text("bestSlips.filters.customRange")}
           aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} onClick={(event) => openDates(event.currentTarget)}>

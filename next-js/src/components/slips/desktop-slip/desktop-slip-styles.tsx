@@ -3,6 +3,7 @@
 import styled from "styled-components";
 import { alignedLedgerStyles, desktopMatchBaseStyles } from "@/components/match/desktop-match-styles";
 import { media } from "@/styles/theme";
+import { slipDisclosureIndicator } from "../slip-disclosure-styles";
 
 export { alignedLedgerStyles } from "@/components/match/desktop-match-styles";
 
@@ -75,6 +76,18 @@ export const DesktopSlipBase = styled.div`
 export const DesktopSlipLayout = styled(DesktopSlipBase)`
   ${alignedLedgerStyles}
   ${media.desktop} {
+    /* Reserve the end gutter for the control and keep header/body status tracks aligned. */
+    &:has([data-toggle-chevron]) {
+      --slip-header-end: 34px;
+      [data-desktop-row] { padding-inline-end: var(--slip-header-end); }
+    }
+    &&& [data-toggle-chevron] {
+      ${slipDisclosureIndicator}
+      --slip-chevron-size: 7px;
+      inline-size: 1.75rem; block-size: 1.75rem;
+      inset-inline-end: calc((var(--slip-header-end) - 1.75rem) / 2); inset-block-start: 50%; transform: translateY(-50%);
+    }
+    &&& [data-slip-disclosure][open] > [data-slip-summary] [data-toggle-chevron] { --slip-chevron-rotation: 225deg; }
     /* Draw on the outer frame so the rail spans matches without affecting their layout. */
     &::before {
       content: "";

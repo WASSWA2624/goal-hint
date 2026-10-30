@@ -78,15 +78,17 @@ def verify_mobile_header(header, path, selection_count=None):
     if selection_count is not None:
         assert fields["count"].nodes("strong")[0].text == str(selection_count), f"{path}: original match count remains visible"
     statuses = header.nodes(attr="data-header-status")
-    status_labels = {"pending": "Pending", "won": "Won", "lost": "Lost", "void": "Void"}
+    status_labels = {"pending": "Pending", "not-started": "Not started", "in-progress": "In progress",
+        "won": "Won", "lost": "Lost", "void": "Void", "cancelled": "Cancelled"}
     assert len(statuses) == 1, f"{path}: one distinct status column"
     captions = statuses[0].nodes(attr="data-header-label")
-    assert len(captions) == 1 and captions[0].text == "Status" and captions[0].attrs.get("aria-hidden") == "true", f"{path}: status has its requested visible caption"
+    assert len(captions) == 1 and captions[0].text == "Status" and captions[0].attrs.get("aria-hidden") == "true", f"{path}: status retains its caption without duplicating the accessible badge label"
     outcomes = statuses[0].nodes(attr="data-status-full")
-    assert len(outcomes) == 1 and outcomes[0].text == status_labels.get(header.attrs.get("data-header-outcome")), f"{path}: full status word agrees with the original outcome"
+    status = header.attrs.get("data-header-status-value", header.attrs.get("data-header-outcome"))
+    assert len(outcomes) == 1 and outcomes[0].text == status_labels.get(status), f"{path}: full status word agrees with the original observed progress or outcome"
     descriptions = [node for node in header.nodes() if node.attrs.get("id") == header.attrs.get("aria-describedby")]
     assert len(descriptions) == 1 and "hidden" in descriptions[0].attrs, f"{path}: header retains its accessible probability description"
-    assert "Average match probability" in descriptions[0].text and "not the chance that every selection wins" in descriptions[0].text, f"{path}: probability remains explicitly the mean rather than joint winning probability"
+    assert "mean of the selected predictions" in descriptions[0].text and "not the chance that every selection wins" in descriptions[0].text, f"{path}: probability remains explicitly the mean rather than joint winning probability"
     assert "Win probability" not in header.text and "Combined" not in header.text, f"{path}: header never presents a whole-slip win estimate"
     return fields
 
@@ -287,9 +289,12 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             assert len(card.nodes(attr="data-home")) == len(card.nodes(attr="data-away")) == 1, f"{path}: both full team names remain available"
             assert card.nodes(attr="data-competition") and card.nodes(attr="data-country") and card.nodes("time", "data-kickoff"), f"{path}: competition, country and kickoff remain visible"
             assert card.nodes(attr="data-market-label"), f"{path}: compact outcome retains its market context"
-            assert card.attrs.get("data-status") == "unknown" and card.attrs.get("data-match-state") == "snapshot", f"{path}: original snapshots never invent a live or final fixture status"
+            if card.attrs.get("data-match-state") == "snapshot":
+                assert card.attrs.get("data-status") == "unknown", f"{path}: original snapshots never invent a live or final fixture status"
+            else:
+                assert card.attrs.get("data-status") == card.attrs.get("data-match-state"), f"{path}: recorded sidecar progress remains coherent with its original selection"
             assert card.attrs["data-outcome"] == "pending" and not card.nodes(attr="data-saved-score"), f"{path}: an original selection without a saved result invents no outcome or score"
-        assert "Average match probability" in document.text, f"{path}: average is identified correctly"
+        assert "Probability" in document.text, f"{path}: probability is identified correctly"
         assert "not the chance that every selection wins" in document.text, f"{path}: mean is distinguished from joint probability"
     else:
         assert not rows and not document.nodes("tbody"), f"{path}: no invented selections in empty/unavailable states"
@@ -429,11 +434,27 @@ def verify_best_slips(origin, directory):
         (directory / f"best-slips-{scenario}.html").write_text(response.text, encoding="utf-8")
         document = Document(response.text).root
         disclosures = document.nodes("details", "data-slip-disclosure")
-        assert len(disclosures) == count, f"Best Slips {scenario}: renders all {count} slips"
+        headers = document.nodes(attr="data-mobile-slip-header")
+        assert len(headers) == count, f"Best Slips {scenario}: renders all {count} shared headers"
+        assert len(disclosures) == (0 if locked else count), f"Best Slips {scenario}: only full slips expose match disclosures"
         assert all(node.attrs["data-compact-slip"] == "clean-ledger" for node in document.nodes(attr="data-compact-slip")), f"Best Slips {scenario}: selected Clean ledger disclosure serves every viewer"
+        if locked:
+            assert not document.nodes(attr="data-fixture-id") and not document.nodes(attr="data-slip-id"), "Aggregate access summaries expose no private picks or identities"
+            access = document.nodes(attr="data-best-slips-access")
+            assert len(access) == 1, "Locked summaries retain one shared access invitation"
+            links = {link.text.strip(): urlsplit(link.attrs["href"]) for link in access[0].nodes("a")}
+            if scenario == "locked-member":
+                assert links["Subscribe"].path == "/en/subscribe", "Signed-in viewers go to subscription"
+            else:
+                assert links["Sign up"].path == links["Sign in"].path == "/en/account", "Guests retain both account actions"
+                assert parse_qs(links["Sign in"].query)["view"] == ["login"], "Sign in preserves the login view"
+            assert "Synthetic" not in document.text, "Public summaries contain no synthetic picks"
+            assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"homeTeam\"|\"awayTeam\"|\"forecast\"", response.text), "Locked HTML and flight data contain no private slip details"
         averages = []
-        for index, disclosure in enumerate(disclosures):
-            toggle, content = verify_collapsed_disclosure(disclosure, f"Best Slips {scenario}, slip {index + 1}")
+        for index, toggle in enumerate(headers):
+            if not locked:
+                verified, content = verify_collapsed_disclosure(disclosures[index], f"Best Slips {scenario}, slip {index + 1}")
+                assert verified is toggle, "Full slips reuse the shared header"
             assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
             fields = verify_mobile_header(toggle, f"Best Slips {scenario}, slip {index + 1}", 2)
             assert "Total odds" in fields["odds"].text, "Collapsed headers retain the full accessible odds label"
@@ -441,25 +462,12 @@ def verify_best_slips(origin, directory):
             average = Decimal(fields["probability"].nodes("strong")[0].text.rstrip("%"))
             assert average == Decimal("80") + Decimal(index) / 10, "Every viewer sees the original mean, distinct from the joint win estimate"
             averages.append(average)
-            if locked:
-                assert not content.nodes(attr="data-fixture-id"), "Locked slip bodies expose no premium picks"
-                links = content.nodes("a")
-                expected_action = "Subscribe" if scenario == "locked-member" else "Sign in to access"
-                assert len(links) == 1 and links[0].text.strip() == expected_action, "The locked body has exactly the relevant access action"
-                assert content.text.strip() == expected_action, "The locked body contains no redundant subscriber explanation"
-                destination = urlsplit(links[0].attrs["href"])
-                if scenario == "locked-member":
-                    assert destination.path == "/en/subscribe", "Signed-in viewers go directly to subscription"
-                else:
-                    assert destination.path == "/en/account" and parse_qs(destination.query).get("view", ["login"]) == ["login"], "Guests go directly to login"
-                assert "Synthetic" not in document.text and not document.nodes(attr="data-slip-id"), "Public results contain no slip identity or synthetic picks"
-                assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"homeTeam\"|\"awayTeam\"|\"forecast\"", response.text), "Locked HTML and flight data contain no private slip details"
-            else:
+            if not locked:
                 assert len(content.nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
                 for selection in content.nodes("a", "data-fixture-id"):
                     verify_clean_ledger_selection(selection, f"Best Slips {scenario}")
         assert averages == sorted(averages), "Displayed means do not reorder the existing joint-probability ranking"
-        statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status"]
+        statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status" and "data-best-slips-access" not in node.attrs]
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
         assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"
         assert "The matches and selections in this slip are for subscribers." not in document.text, "Locked slips omit the removed explanatory sentence"
@@ -493,7 +501,7 @@ def verify(origin, directory):
     assert compact_row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73", "Compact saved rows retain the original alternative price"
     assert compact_row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Compact saved rows retain original probability precision"
     assert compact_row.nodes(attr="data-pick-label")[0].text == "1", "Compact saved rows retain the original selected alternative"
-    assert compact_row.attrs["data-outcome"] == "incorrect" and "Loss" in compact_row.nodes(attr="data-result")[0].text, "Compact saved rows retain supplied settlement"
+    assert compact_row.attrs["data-outcome"] == "incorrect" and compact_row.nodes(attr="data-match-status")[0].attrs["data-match-status"] == "incorrect", "Compact saved rows retain supplied settlement"
     assert compact_row.attrs.get("data-status") == "unknown" and compact_row.attrs.get("data-match-state") == "snapshot", "Compact saved settlements never invent current fixture state"
     assert "Score after 90 minutes: 2–1" in compact_row.nodes(attr="data-saved-score")[0].text, "Compact saved regulation scores keep their own explicit meaning"
     print("PASS compact saved slip: original alternative, price/probability and supplied regulation score/outcome.", flush=True)
@@ -504,7 +512,7 @@ def verify(origin, directory):
             assert "search reached its limit" in document.text and "Fixture coverage is incomplete" in document.text, "Source and search limits remain visible"
         if scenario == "joint-generated":
             assert "Highest estimated combined probability first" in document.text, "Qualified custom ranking is described separately"
-            assert all("Win probability" not in node.text and "Average match probability" in node.text
+            assert all("Win probability" not in node.text and "Probability" in node.text
                 for node in document.nodes(attr="data-slip-summary")), "Qualified custom slips show the mean while retaining joint ranking context separately"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
     verify_defaults(idle)
@@ -527,7 +535,7 @@ def verify(origin, directory):
     assert "Highest estimated combined probability first" in qualified.text, "Real route and stored service apply the verified synthetic binding"
     for field in ("totalProbMin", "totalProbMax"):
         assert any(node.attrs.get("name") == field for node in qualified.nodes("input")), "Qualified route offers combined estimate bounds"
-    assert all("Win probability" not in node.text and "Average match probability" in node.text for node in qualified.nodes(attr="data-slip-summary")), "Real route uses the compact mean summary"
+    assert all("Win probability" not in node.text and "Probability" in node.text for node in qualified.nodes(attr="data-slip-summary")), "Real route uses the compact mean summary"
     verify_custom_numeric_bounds(generated, dict(query))
     initial_groups = criteria_groups(generated, "/en/slips?build=1")
     for group, changes in [

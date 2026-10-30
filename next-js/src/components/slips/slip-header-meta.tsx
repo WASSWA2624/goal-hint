@@ -28,15 +28,20 @@ export function SlipHeaderDate({ publicationDay, publishedAt, locale }: SlipHead
   const m = createMessages(locale);
   if (publishedAt !== undefined) {
     const instant = utcInstantFromEpochMilliseconds(publishedAt);
+    const day = getReportingDate(instant), parts = m.reportingDayParts(day);
     return <PublicationTime data-slip-publication-date dateTime={toUtcIsoString(instant)}>
-      <span data-slip-date-layout="mobile">{m.reportingInstant(instant)}</span>
-      <span data-slip-date-layout="desktop">{formatSlipPublicationDate(getReportingDate(instant), locale)} · {m.reportingTime(instant)} EAT</span>
+      <span data-slip-date-layout="mobile"><span data-slip-weekday>{parts.weekday}</span>{" "}<strong data-slip-generated-at>
+        {parts.day} {parts.month} {day.slice(0, 4)} · {m.reportingTime(instant)} EAT</strong></span>
+      <span data-slip-date-layout="desktop">{formatSlipPublicationDate(day, locale)} · {m.reportingTime(instant)} EAT</span>
     </PublicationTime>;
   }
-  return publicationDay ? <PublicationTime data-slip-publication-date dateTime={publicationDay}>
-    <span data-slip-date-layout="mobile">{m.reportingDateMedium(publicationDay)} · EAT</span>
+  if (!publicationDay) return null;
+  const parts = m.reportingDayParts(publicationDay);
+  return <PublicationTime data-slip-publication-date dateTime={publicationDay}>
+    <span data-slip-date-layout="mobile"><span data-slip-weekday>{parts.weekday}</span>{" "}<strong>
+      {parts.day} {parts.month} {publicationDay.slice(0, 4)} · EAT</strong></span>
     <span data-slip-date-layout="desktop">{formatSlipPublicationDate(publicationDay, locale)} · EAT</span>
-  </PublicationTime> : null;
+  </PublicationTime>;
 }
 
 const ProgressDot = styled(LiveDot)`

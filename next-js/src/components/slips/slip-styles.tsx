@@ -68,7 +68,7 @@ export const StatusCopy = styled.span`
 
 export const SlipStack = styled(Stack)`
   gap: 10px;
-  ${media.belowDesktop} { &[data-slip-builder-page] { gap: 6px; } }
+  ${media.belowDesktop} { &[data-slip-builder-page], &[data-best-slips-page] { gap: 6px; } }
   ${media.desktop} {
     gap: 12px;
     &[data-slip-builder-page] { gap: 6px; }

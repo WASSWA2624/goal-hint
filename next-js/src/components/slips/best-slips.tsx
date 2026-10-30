@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { TextLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { matchesHref } from "@/domain/navigation";
 import type { BestSlipsResult } from "@/domain/best-slips";
-import { defaultBestSlipsQuery, resolveBestSlipsDates } from "@/domain/best-slips-query";
+import { resolveBestSlipsDates } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
 import { SlipCard, SlipCardSummary } from "./slip-card";
@@ -28,7 +27,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
   const [refreshing, startRefresh] = useTransition();
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
   const browse = useBestSlipsBrowse(result, desktop, recheckAccess), content = browse.result;
-  const dates = resolveBestSlipsDates(desktop ? browse.query : defaultBestSlipsQuery(browse.entitled), result.day);
+  const dates = resolveBestSlipsDates(desktop ? browse.query : browse.displayQuery, result.day);
   const requiresSubscription = !browse.entitled;
   const period = dates.from && dates.to
     ? dates.from === dates.to ? `${m.reportingDateMedium(dates.from)} · EAT`
@@ -55,12 +54,11 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
   return <SlipStack data-best-slips-page>
     <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
-    {desktop && <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
+    <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
       entitled={browse.entitled} busy={browse.loading || browse.updating} updating={browse.updating}
       statistics={content?.statistics} countSummary={content?.state === "generated"
-        ? <BestSlipsSummary result={content} period={period} locale={locale} /> : null} onChange={browse.change} />}
+        ? <BestSlipsSummary result={content} period={period} locale={locale} /> : null} onChange={browse.change} />
     {requiresSubscription && <BestSlipsAccess signedIn={signedIn} locale={locale} />}
-    {!desktop && content?.statistics && <PerformanceSummary counts={content.statistics} locale={locale} kind="slips" period={period} />}
     {browse.failed && content && <FiltersRow role="alert" data-best-slips-update-failed>
       <Note>{m.text("bestSlips.filters.updateFailed")}</Note>
       <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton>
@@ -82,7 +80,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
       <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={browse.revokeAccess}
         accessFallback={requiresSubscription ? null : <BestSlipsAccess signedIn={signedIn} locale={locale} />}>
-      <SlipList data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
+      <SlipList $phoneGap={6} data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
         {view.slip ? <SlipCard index={view.rank - 1} locale={locale}
         {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
         {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}

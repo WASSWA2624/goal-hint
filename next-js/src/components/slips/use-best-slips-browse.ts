@@ -10,7 +10,7 @@ type ResponseState = Readonly<{
 }>;
 type NavigationState = Readonly<{ entitled: boolean; desktop: boolean; query: BestSlipsQuery }>;
 
-/** Both layouts page the daily view; date/result refinements remain desktop controls. */
+/** Both layouts reuse the same date/result queries, paging, cache and access checks. */
 export function useBestSlipsBrowse(initial: BestSlipsResult, desktop: boolean, onAccessChanged: () => void) {
   const [response, setResponse] = useState<ResponseState | null>(null);
   const [observedAccess, setObservedAccess] = useState<Readonly<{ source: BestSlipsResult; entitled: boolean }> | null>(null);

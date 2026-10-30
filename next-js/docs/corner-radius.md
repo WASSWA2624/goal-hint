@@ -16,7 +16,7 @@ brand exports expose the matching `--gh-radius-*` CSS variables.
 | `overlay` | 8px | Menus, popovers, tooltips and dialogs |
 | `none` | 0 | Joined internal edges, continuous rows and borderless structural wrappers |
 | `pill` | 999px | Controls whose function deliberately calls for a capsule |
-| `circle` | 50% | Avatars, radio controls, live dots and loading spinners |
+| `circle` | 50% | Avatars, radio controls, live dots, loading spinners and explicitly round disclosure indicators |
 
 Use a semantic token directly, for example:
 
