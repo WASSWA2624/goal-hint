@@ -5,6 +5,23 @@ fragment is displayed in the chat's named variant carousel; its previous/next
 controls and picker come from the visualization host. The host also provides
 light/dark/device appearance and Subscriber / Free member / Guest preview modes.
 
+## Browser review
+
+From `next-js/`, run:
+
+```text
+python scripts/preview-best-slips-mobile-designs.py --serve
+```
+
+Open `http://127.0.0.1:4390/`. The sticky navigator at the top has Previous/Next
+arrows and a dropdown containing all ten named designs. Appearance and viewer
+selectors sit alongside it. The URL retains the selected design and settings;
+switching designs preserves each concept's local filters and disclosures.
+For example, `/?design=easy-reading&appearance=dark&viewer=subscriber` opens
+Easy Reading directly. Use `--port` for another local port or omit `--serve`
+to regenerate only the ignored standalone HTML. The review shell loads pinned
+Lucide icons from a CDN and Manrope from Google Fonts; local app data is not used.
+
 | Concept | Layout decision |
 | --- | --- |
 | Blue Signal | Familiar desktop identity rail, clearly labelled mobile card metrics. |
@@ -39,5 +56,6 @@ sharing implementation stays in production.
 
 No production components, routes, styles, APIs, desktop layouts or Flutter files
 are changed. A chosen concept will be implemented separately after review.
-The source is an HTML fragment, not a standalone website. Generated standalone
-wrappers and browser captures belong in ignored `output/`, not Git.
+The concept source is an HTML fragment; the browser shell embeds that same
+source. Generated standalone output and browser captures belong in ignored
+`output/`, not Git.
