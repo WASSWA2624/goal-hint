@@ -6,6 +6,7 @@ import 'package:goal_hint/app.dart';
 import 'package:goal_hint/config/app_config.dart';
 import 'package:goal_hint/web/native_recovery_view.dart';
 import 'package:goal_hint/web/navigation_policy.dart';
+import 'package:goal_hint/web/web_appearance.dart';
 import 'package:goal_hint/web/web_view_factory.dart';
 import 'package:goal_hint/web/windows_web_view.dart';
 import 'package:integration_test/integration_test.dart';
@@ -62,8 +63,27 @@ void main() {
         }
 
         hiddenBrowser();
+        await tester.tap(find.byTooltip('Appearance'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.widgetWithText(
+            CheckedPopupMenuItem<WebThemePreference>,
+            'Light',
+          ),
+        );
+        await tester.pumpAndSettle();
         server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
         server.listen((request) async {
+          if (mode == 'redirect-suspended' &&
+              request.uri.path != '/cgi-sys/suspendedpage.cgi') {
+            request.response.statusCode = HttpStatus.found;
+            request.response.headers.set(
+              HttpHeaders.locationHeader,
+              '/cgi-sys/suspendedpage.cgi',
+            );
+            await request.response.close();
+            return;
+          }
           if (mode == 'abort') {
             final socket = await request.response.detachSocket(
               writeHeaders: false,
@@ -73,10 +93,16 @@ void main() {
           }
           if (mode == 'unavailable') {
             request.response.statusCode = HttpStatus.serviceUnavailable;
+          } else if (mode == 'suspended-forbidden') {
+            request.response.statusCode = HttpStatus.forbidden;
           }
           request.response.headers.contentType = ContentType.html;
           request.response.write(
-            '<!doctype html><title>Recovery fixture</title><body data-recovery-ready="true">Goal Hint test page</body>',
+            mode == 'suspended' ||
+                    mode == 'redirect-suspended' ||
+                    mode == 'suspended-forbidden'
+                ? '<!doctype html><title>Account Suspended</title><h1>This Account has been suspended.</h1>'
+                : '<!doctype html><title>Recovery fixture</title><meta name="goal-hint-appearance" content=\'{"version":1,"scheme":"light","background":"#EFF7FF","surface":"#FFFFFF","foreground":"#061747","accent":"#0064FF","chrome":"#FFFFFF"}\'><body data-recovery-ready="true">Goal Hint test page</body>',
           );
           await request.response.close();
         });
@@ -89,8 +115,18 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(NativeRecoveryView), findsNothing);
         expect(browser.controller, same(controller));
+        expect(
+          await page.read('localStorage.getItem("goal-hint-theme")'),
+          'light',
+        );
 
-        for (final fault in ['abort', 'unavailable']) {
+        for (final fault in [
+          'abort',
+          'unavailable',
+          'suspended',
+          'redirect-suspended',
+          'suspended-forbidden',
+        ]) {
           mode = fault;
           final target = config.origin.resolve('/$fault');
           await browser.load(target);

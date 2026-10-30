@@ -111,12 +111,35 @@ class WindowsWebViewAdapter extends WebViewAdapter {
               return;
             }
             _currentUri = Uri.tryParse(address.toString());
+            if (_currentUri != null && !isHostingInterstitial(_currentUri!)) {
+              _pendingUri = _currentUri;
+            }
             _loading = _failure == null;
             _notify();
           },
           onLoadStop: (_, address) async {
             if (_disposed) return;
             _remember(address);
+            if (_failure == null &&
+                address != null &&
+                navigationPolicy.evaluate(address.toString()) ==
+                    NavigationAction.allow) {
+              try {
+                final health = webScriptScalar(
+                  await _controller?.evaluateJavascript(
+                    source: webDocumentHealthQuery(configuration.origin),
+                  ),
+                );
+                if (health == 'unavailable') {
+                  _fail(WebViewFailure.unavailable);
+                  return;
+                }
+              } catch (_) {
+                /* Keep unknown documents web-owned. */
+              }
+              await applyPendingTheme();
+            }
+            if (_disposed) return;
             if (_failure == null &&
                 address != null &&
                 navigationPolicy.evaluate(address.toString()) ==
@@ -137,6 +160,12 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             }
             final decision = navigationPolicy.evaluate(address);
             if (decision == NavigationAction.allow) {
+              final uri = Uri.tryParse(address);
+              if (action.isForMainFrame &&
+                  uri != null &&
+                  !isHostingInterstitial(uri)) {
+                _pendingUri = uri;
+              }
               if (action.isForMainFrame && _failure != null) {
                 _failure = null;
                 _loading = true;
@@ -180,7 +209,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
               );
             }
           },
-          onReceivedHttpError: (_, request, response) {
+          onReceivedHttpError: (_, request, response) async {
             // Application 4xx pages and authorization stay owned by Next.js.
             if (request.isForMainFrame != true) return;
             final status = response.statusCode ?? 0;
@@ -189,6 +218,22 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             } else if (status >= 400 &&
                 navigationPolicy.evaluate(request.url.toString()) ==
                     NavigationAction.allow) {
+              try {
+                final health = webScriptScalar(
+                  await _controller?.evaluateJavascript(
+                    source: webDocumentHealthQuery(configuration.origin),
+                  ),
+                );
+                if (_disposed) return;
+                if (health == 'unavailable') {
+                  _fail(WebViewFailure.unavailable);
+                  return;
+                }
+              } catch (_) {
+                /* Preserve ordinary web-owned 4xx responses. */
+              }
+              await applyPendingTheme();
+              if (_disposed) return;
               _hasDocument = true;
               _loading = false;
               _notify();
@@ -223,6 +268,17 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   }
 
   @override
+  Future<bool> updateWebTheme(WebThemePreference value) async {
+    if (_disposed || _controller == null) return false;
+    final result = await _controller!.evaluateJavascript(
+      source: webThemePreferenceScript(configuration.origin, value),
+    );
+    final applied = webScriptScalar(result) == true;
+    if (applied) _appearanceSampler.refresh();
+    return applied;
+  }
+
+  @override
   Future<void> load(Uri uri) async {
     if (_disposed) return;
     if (navigationPolicy.evaluate(uri.toString()) != NavigationAction.allow) {
@@ -251,7 +307,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
     if (_disposed) return;
     if (!ready) await initialize();
     if (_controller == null || _failure != null) {
-      await load(_currentUri ?? _pendingUri ?? configuration.origin);
+      await load(_pendingUri ?? _currentUri ?? configuration.origin);
       return;
     }
     _loading = true;

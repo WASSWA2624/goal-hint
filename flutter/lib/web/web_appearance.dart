@@ -2,7 +2,26 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
-/// Public web colors only. Account state and theme preference stay in the page.
+enum WebThemePreference { light, dark, system }
+
+bool isHostingInterstitial(Uri uri) => uri.path == '/cgi-sys/suspendedpage.cgi';
+
+Object? webScriptScalar(Object? value) {
+  for (
+    var count = 0;
+    count < 2 && value is String && value.length <= 1024;
+    count++
+  ) {
+    try {
+      value = jsonDecode(value);
+    } on FormatException {
+      break;
+    }
+  }
+  return value;
+}
+
+/// Public colors and theme choice only; account state stays in the page.
 class WebAppearance {
   const WebAppearance({
     required this.brightness,
@@ -11,6 +30,7 @@ class WebAppearance {
     required this.foreground,
     required this.accent,
     required this.chrome,
+    this.preference,
   });
 
   final Brightness brightness;
@@ -19,6 +39,7 @@ class WebAppearance {
   final Color foreground;
   final Color accent;
   final Color chrome;
+  final WebThemePreference? preference;
 
   static const _fields = {
     'version',
@@ -43,8 +64,11 @@ class WebAppearance {
       return null;
     }
     if (decoded is! Map ||
-        decoded.length != _fields.length ||
-        decoded.keys.any((key) => !_fields.contains(key)) ||
+        (decoded.length != _fields.length &&
+            decoded.length != _fields.length + 1) ||
+        decoded.keys.any(
+          (key) => !_fields.contains(key) && key != 'preference',
+        ) ||
         decoded['version'] is! int ||
         decoded['version'] != 1 ||
         !const ['light', 'dark'].contains(decoded['scheme'])) {
@@ -53,6 +77,11 @@ class WebAppearance {
     for (final key in _fields.difference({'version', 'scheme'})) {
       final color = decoded[key];
       if (color is! String || !_hex.hasMatch(color)) return null;
+    }
+    final preference = decoded['preference'];
+    if (preference != null &&
+        !WebThemePreference.values.any((value) => value.name == preference)) {
+      return null;
     }
     Color color(String key) => Color(
       0xFF000000 | int.parse((decoded as Map)[key].substring(1), radix: 16),
@@ -66,6 +95,9 @@ class WebAppearance {
       foreground: color('foreground'),
       accent: color('accent'),
       chrome: color('chrome'),
+      preference: preference == null
+          ? null
+          : WebThemePreference.values.byName(preference as String),
     );
   }
 
@@ -77,11 +109,34 @@ class WebAppearance {
       surface == other.surface &&
       foreground == other.foreground &&
       accent == other.accent &&
-      chrome == other.chrome;
+      chrome == other.chrome &&
+      preference == other.preference;
 
   @override
-  int get hashCode =>
-      Object.hash(brightness, background, surface, foreground, accent, chrome);
+  int get hashCode => Object.hash(
+    brightness,
+    background,
+    surface,
+    foreground,
+    accent,
+    chrome,
+    preference,
+  );
+
+  Map<String, Object?> toJson() {
+    String hex(Color color) =>
+        '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+    return {
+      'version': 1,
+      'scheme': brightness.name,
+      'background': hex(background),
+      'surface': hex(surface),
+      'foreground': hex(foreground),
+      'accent': hex(accent),
+      'chrome': hex(chrome),
+      if (preference != null) 'preference': preference!.name,
+    };
+  }
 }
 
 /// Fixed read-only query: no page-created native channel or arbitrary commands.
@@ -91,12 +146,49 @@ String webAppearanceQuery(Uri origin) =>
   try {
     if (window.top !== window || location.origin !== ${jsonEncode(origin.origin)}) return null;
     const content = document.querySelector('meta[name="goal-hint-appearance"]')?.content;
-    return typeof content === 'string' && content.length <= 1024 ? content : null;
+    if (typeof content !== 'string' || content.length > 1024) return null;
+    const value = JSON.parse(content);
+    let preference = null;
+    try {
+      const stored = localStorage.getItem('goal-hint-theme');
+      preference = stored === 'light' || stored === 'dark' ? stored : 'system';
+    } catch {}
+    return JSON.stringify({...value, preference});
   } catch { return null; }
 })()
 ''';
 
-/// One lightweight foreground read at a time; no network or native preference.
+/// Updates only the public theme key after an explicit recovery-page choice.
+String webThemePreferenceScript(Uri origin, WebThemePreference preference) =>
+    '''
+(() => {
+  try {
+    if (window.top !== window || location.origin !== ${jsonEncode(origin.origin)} ||
+        !document.querySelector('meta[name="goal-hint-appearance"]')) return false;
+    const key = 'goal-hint-theme';
+    const value = ${preference == WebThemePreference.system ? 'null' : jsonEncode(preference.name)};
+    if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value);
+    window.dispatchEvent(new StorageEvent('storage', {key, newValue: value}));
+    return true;
+  } catch { return false; }
+})()
+''';
+
+/// Hosting interstitials can return HTTP 200; only a bounded status is returned.
+String webDocumentHealthQuery(Uri origin) =>
+    '''
+(() => {
+  try {
+    if (window.top !== window || location.origin !== ${jsonEncode(origin.origin)}) return null;
+    if (document.querySelector('meta[name="goal-hint-appearance"]')) return 'app';
+    const title = document.title.trim().toLowerCase();
+    return location.pathname === '/cgi-sys/suspendedpage.cgi' ||
+      title === 'account suspended' || title === 'website suspended' ? 'unavailable' : null;
+  } catch { return null; }
+})()
+''';
+
+/// One lightweight foreground read at a time; no network requests.
 class WebAppearanceSampler {
   WebAppearanceSampler({
     required this.read,

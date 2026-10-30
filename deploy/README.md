@@ -24,10 +24,11 @@ Run commands from the repository root with each application's pinned toolchain:
 ```powershell
 npm --prefix next-js run package:development
 python flutter/tool/package_development.py android --origin http://192.168.1.148:3000
-python flutter/tool/package_development.py windows --origin http://192.168.1.148:3000
+python flutter/tool/package_development.py windows --origin http://localhost:3000
 ```
 
-Use your development computer's current LAN address instead of the example.
+Use your development computer's current LAN address for the physical Android
+device. Windows on the same computer uses `http://localhost:3000`.
 Start the Next.js development server on port 3000, allow it through the local
 firewall as appropriate, and keep the computer and test device on a network
 where they can reach each other. The packaged instructions record the origin

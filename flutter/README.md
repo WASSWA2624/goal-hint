@@ -37,8 +37,9 @@ the fallback. No current device/domain verification is implied by source setup.
 
 For local Windows development, start `npm run dev` in `next-js/`, then run
 `& .\tool\windows\run-dev.ps1` from `flutter/`. The development launcher opens
-`http://localhost:3000` in a Debug host; the installed Goal Hint shortcut continues
-to use the production website. See [development URLs](docs/development-urls.md).
+`http://localhost:3000` in a Debug host. The active installed Windows shortcuts
+also use that local development build; the earlier production installation is
+preserved separately. See [development URLs](docs/development-urls.md).
 
 Android development can install and debug over Wi-Fi without a USB cable; follow
 [wireless setup and target selection](docs/development-urls.md#android-wireless-development).
@@ -62,13 +63,14 @@ gates. See [builds and release acceptance](docs/releases.md),
 [Windows packaging](docs/windows-release.md) and [Android signing](docs/android-release.md).
 All distributable archives belong in the root [`deploy/`](../deploy/README.md)
 folder; `build/` contains ignored compiler intermediates only. The initial public
-version is **1.0.0**, with Flutter build number **5**. Use
+version is **1.0.0**, with Flutter build number **6**. Use
 `python tool/package_release.py android` for the signed APK ZIP, the Windows
 packager for its setup EXE ZIP, and the Apple commands in
 [the release guide](docs/releases.md) on a macOS signing host. Linux is excluded
 from this initial set of delivery packages. For the current development builds,
 use `python tool/package_development.py android --origin http://192.168.1.148:3000`
-or replace `android` with `windows` on the Windows host. These produce clearly
+or `python tool/package_development.py windows --origin http://localhost:3000`
+on the Windows host. These produce clearly
 labelled `1.0.0-dev.zip` packages that use the development web server; production
 signing gates remain unchanged. See [development packaging](docs/releases.md#development-delivery-packages).
 The configured production hosting currently returns an Account Suspended page;
@@ -222,3 +224,16 @@ native support only for demonstrated platform gaps. Keep interface styling and
 business logic in the web app. Shared requirements remain in
 [the shell prompt](../prompts/flutter-app-shell.md) and
 [the app write-up](../app-write-up.md).
+
+Native recovery now retains the website's public theme choice across restarts.
+Its Appearance menu also offers Light, Dark and System while offline; an explicit
+choice is synchronized with the owned app when it returns. Only bounded public
+colors and theme choice are mirrored locally, scoped to the configured origin.
+The canonical inverse mark is used on dark surfaces. Known hosting suspension
+pages use the branded service-unavailable screen, including HTTP 200/403 and
+provider redirects. See [plan 012](dev-plan/012-recovery-theme-and-desktop-update.md).
+
+The Windows host selected for local use loads `http://localhost:3000`; the
+Android development host reaches the same server through its LAN address.
+Use the existing development package for this Windows configuration. Production
+release origin restrictions remain unchanged.

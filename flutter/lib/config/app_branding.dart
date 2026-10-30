@@ -10,10 +10,14 @@ class AppBranding {
       defaultValue: BrandTokens.name,
     ),
     this.logoAsset = 'assets/branding/goal-hint-mark.png',
+    this.darkLogoAsset = 'assets/branding/goal-hint-mark-inverse.png',
   });
 
   final String name;
   final String logoAsset;
+  final String darkLogoAsset;
+  String logoFor(Brightness brightness) =>
+      brightness == Brightness.dark ? darkLogoAsset : logoAsset;
 }
 
 class AppBrandingScope extends InheritedWidget {
@@ -34,5 +38,6 @@ class AppBrandingScope extends InheritedWidget {
   @override
   bool updateShouldNotify(AppBrandingScope oldWidget) =>
       branding.name != oldWidget.branding.name ||
-      branding.logoAsset != oldWidget.branding.logoAsset;
+      branding.logoAsset != oldWidget.branding.logoAsset ||
+      branding.darkLogoAsset != oldWidget.branding.darkLogoAsset;
 }

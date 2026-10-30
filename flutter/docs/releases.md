@@ -14,10 +14,11 @@ The current deliverables are development versions, named
 
 ```sh
 python tool/package_development.py android --origin http://192.168.1.148:3000
-python tool/package_development.py windows --origin http://192.168.1.148:3000
+python tool/package_development.py windows --origin http://localhost:3000
 ```
 
-Use the development computer's current reachable LAN origin. Keep Next.js
+Use the development computer's reachable LAN origin for a physical phone and
+localhost for Windows on that computer. Keep Next.js
 running with `npm --prefix next-js run dev` from the repository root. Android
 uses the standard Android Debug signing key; Windows creates an unsigned setup
 EXE with a separate `Goal Hint Development` per-user installation and shortcuts.

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'web_appearance.dart';
 import '../config/app_branding.dart';
 import '../config/brand_tokens.dart';
+import 'native_theme_scope.dart';
 
 /// Only native feedback is styled here. The web owns its theme and preference.
 ThemeData nativeTheme(Brightness brightness, {WebAppearance? appearance}) {
@@ -20,16 +21,20 @@ ThemeData nativeTheme(Brightness brightness, {WebAppearance? appearance}) {
     onPrimary: primary.computeLuminance() > 0.179 ? Colors.black : Colors.white,
     surface:
         appearance?.surface ??
-        (brightness == Brightness.light ? BrandTokens.white : null),
+        (brightness == Brightness.light
+            ? BrandTokens.white
+            : Color.lerp(BrandTokens.navy, Colors.black, 0.3)),
     onSurface:
         appearance?.foreground ??
-        (brightness == Brightness.light ? BrandTokens.navy : null),
+        (brightness == Brightness.light ? BrandTokens.navy : BrandTokens.paper),
   );
   return ThemeData(
     colorScheme: scheme,
     scaffoldBackgroundColor:
         appearance?.background ??
-        (brightness == Brightness.light ? BrandTokens.paper : scheme.surface),
+        (brightness == Brightness.light
+            ? BrandTokens.paper
+            : Color.lerp(BrandTokens.navy, Colors.black, 0.55)),
     outlinedButtonTheme: const OutlinedButtonThemeData(
       style: ButtonStyle(
         shape: WidgetStatePropertyAll(RoundedRectangleBorder()),
@@ -45,11 +50,13 @@ class NativeChrome extends StatefulWidget {
     required this.child,
     this.appearance,
     this.launching = false,
+    this.recovery = false,
   });
 
   final Widget child;
   final WebAppearance? appearance;
   final bool launching;
+  final bool recovery;
 
   @override
   State<NativeChrome> createState() => _NativeChromeState();
@@ -90,10 +97,10 @@ class _NativeChromeState extends State<NativeChrome> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final appearance = widget.appearance;
-    final brightness = widget.launching
-        ? Brightness.light
-        : appearance?.brightness ?? theme.brightness;
+    final appearance = widget.appearance?.brightness == theme.brightness
+        ? widget.appearance
+        : null;
+    final brightness = widget.launching ? Brightness.light : theme.brightness;
     final background = widget.launching
         ? Colors.white
         : appearance?.surface ?? theme.colorScheme.surface;
@@ -102,9 +109,13 @@ class _NativeChromeState extends State<NativeChrome> {
         : appearance?.foreground ?? theme.colorScheme.onSurface;
     final chrome = widget.launching
         ? Colors.white
+        : widget.recovery
+        ? theme.scaffoldBackgroundColor
         : appearance?.chrome ?? theme.scaffoldBackgroundColor;
     final darkChrome = chrome.computeLuminance() < 0.179;
-    final navigation = appearance?.chrome ?? BrandTokens.navy;
+    final navigation = widget.recovery
+        ? theme.scaffoldBackgroundColor
+        : appearance?.chrome ?? theme.scaffoldBackgroundColor;
     final navigationIcons = widget.launching
         ? Brightness.dark
         : navigation.computeLuminance() < 0.179
@@ -185,13 +196,15 @@ class NativeErrorView extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Image.asset(
-                  AppBrandingScope.of(context).logoAsset,
+                  AppBrandingScope.of(
+                    context,
+                  ).logoFor(Theme.of(context).brightness),
                   width: 40,
                   height: 40,
                   excludeFromSemantics: true,
                 ),
                 const SizedBox(width: 12),
-                Flexible(
+                Expanded(
                   child: Text(
                     AppBrandingScope.of(context).name,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -199,6 +212,7 @@ class NativeErrorView extends StatelessWidget {
                     ),
                   ),
                 ),
+                const NativeThemePicker(),
               ],
             ),
             const SizedBox(height: 36),

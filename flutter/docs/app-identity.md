@@ -16,7 +16,7 @@ node flutter/tool/generate-icons.mjs --check
 
 The [generator](../tool/generate-icons.mjs) uses the web project's pinned Sharp
 dependency and needs no additional Flutter runtime package. `--check` compares
-all 46 outputs without writing; it fails on missing/stale files. Catalog sizes
+all 47 outputs without writing; it fails on missing/stale files. Catalog sizes
 and Android's circular 66dp safe zone are validated during generation. It supplies:
 
 - Native feedback's default name and palette in `lib/config/brand_tokens.dart`,
@@ -97,16 +97,18 @@ The existing web preference remains authoritative. The shared web provider emits
 five public colors: background, surface, foreground, accent and chrome. The host
 uses one fixed read-only query on the configured exact origin's top-level
 document, at most one foreground read at a time on a one-second cadence. It
-accepts only the bounded seven-field schema and six-digit RGB colors; account
-state, arbitrary fields and commands are excluded. Navigation/suspension/disposal
+accepts only the bounded public schema and six-digit RGB colors, adding the
+Light/Dark/System choice from the known public theme key; account state,
+arbitrary fields and commands are excluded. Navigation/suspension/disposal
 stop sampling and stale replies cannot replace newer document appearance.
 
 Flutter uses those colors for necessary native loading/error surfaces and system
 bars. Windows maps the public scheme/colors to DWM caption decoration; macOS has
 the corresponding native NSAppearance/color handler. The native method channel
 is Flutter-to-platform presentation only: generic page-to-native JavaScript IPC
-remains disabled. The host stores no native preference, copies no web components
-and never writes local storage or reloads a page to synchronize appearance.
+remains disabled. The host mirrors public presentation for recovery and copies
+no web components. An explicit choice on recovery updates only the owned
+website's public theme key when an application document returns, without a reload.
 
 Native integration/resource changes require a new Flutter build. Normal product
 screens, theme preference and public web palette updates continue to ship through
@@ -142,3 +144,14 @@ remain unqualified on this Windows host. These platform gaps keep
 [006](../dev-plan/006-app-identity-and-theme.md) Partial.
 The tracker retains prior
 Android observations separately; they do not qualify the new theme changes.
+
+### Recovery appearance continuity
+
+Native recovery mirrors the bounded public colors and Light/Dark/System choice
+in an origin-scoped application-support file. It restores that presentation when
+a document cannot load. The recovery Appearance menu remains available offline;
+only an explicit user selection queues an update to the owned website's existing
+public theme key. Native bars reject a stale appearance from another scheme.
+Recovery selects the primary or inverse bundled mark by the effective theme.
+This supersedes the earlier description of memory-only native appearance; no
+authentication, account information or browser cookie is mirrored.

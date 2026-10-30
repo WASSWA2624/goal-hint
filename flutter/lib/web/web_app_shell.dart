@@ -16,6 +16,7 @@ import 'web_view_adapter.dart';
 import 'web_view_factory.dart';
 import 'web_view_failure.dart';
 import 'web_view_pull_to_refresh.dart';
+import 'native_theme_scope.dart';
 
 class WebAppShell extends StatefulWidget {
   const WebAppShell({
@@ -46,6 +47,7 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
   WebViewFailure? _startupFailure;
   WebViewFailure? _recoveryFailure;
   bool _retrying = false;
+  WebThemePreference? _requestedTheme;
   WebAppearance? _reportedAppearance;
 
   @override
@@ -87,8 +89,24 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final pending = NativeThemeScope.of(context)?.pendingPreference;
+    if (pending != _requestedTheme) {
+      _requestedTheme = pending;
+      if (pending != null) _browser.requestThemePreference(pending);
+    }
+  }
+
   void _reportAppearance() {
-    if (_reportedAppearance == _browser.appearance) return;
+    final confirmsChoice =
+        _requestedTheme != null &&
+        _browser.appearance?.preference == _requestedTheme &&
+        _browser.hasDocument &&
+        !_browser.loading &&
+        _browser.failure == null;
+    if (_reportedAppearance == _browser.appearance && !confirmsChoice) return;
     _reportedAppearance = _browser.appearance;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.onAppearanceChanged?.call(_browser.appearance);
@@ -225,6 +243,7 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
           (!_browser.hasDocument || _initializing) && failure == null;
       return NativeChrome(
         launching: starting,
+        recovery: failure != null,
         appearance: _browser.appearance,
         child: PopScope(
           canPop: !_browser.canGoBack,
@@ -245,6 +264,8 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
             child: Scaffold(
               backgroundColor: starting
                   ? Colors.white
+                  : failure != null
+                  ? Theme.of(context).scaffoldBackgroundColor
                   : _browser.appearance?.chrome ??
                         Theme.of(context).scaffoldBackgroundColor,
               body: SafeArea(

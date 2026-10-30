@@ -59,12 +59,13 @@ configuration selects the same origin and mode. The equivalent direct command is
 flutter run -d windows --debug --target=lib/main.dart --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://localhost:3000
 ```
 
-The installed **Goal Hint** Start menu/taskbar shortcut opens the production
-release, which still uses `https://goalhint.com`. Launch the development build
-with the command or debugger above to see localhost. It builds in the workspace;
-it does not replace the installed release. Changing defines requires stopping
-and starting Flutter again. Refreshing a production build cannot switch its
-compiled origin to localhost.
+The active installed **Goal Hint** Start menu, desktop and taskbar shortcuts use
+the Windows development build at `http://localhost:3000`. The earlier production
+installation and its browser data are preserved separately. To create the local
+installer, run `python tool/package_development.py windows --origin http://localhost:3000`
+from `flutter/`. Keep Next.js running when using this build. Changing defines
+requires rebuilding the native host; refreshing an existing production binary
+cannot switch its compiled origin to localhost.
 
 For a connected physical device, replace the example IP with the server computer's LAN address and select the intended target if Flutter finds several:
 

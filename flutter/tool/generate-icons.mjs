@@ -139,6 +139,8 @@ await output('windows/runner/resources/app_icon.ico', Buffer.concat([header, ...
 await output('linux/runner/resources/goal-hint.png', await sharp(foreground).resize(256).png().toBuffer());
 const splashMark = await readFile(resolve(root, 'next-js/public/brand/goal-hint-mark-primary.svg'));
 await output('assets/branding/goal-hint-mark.png', await sharp(splashMark, { density: 288 }).resize(384).png().toBuffer());
+const inverseMark = await readFile(resolve(root, 'next-js/public/brand/goal-hint-mark-inverse.svg'));
+await output('assets/branding/goal-hint-mark-inverse.png', await sharp(inverseMark, { density: 288 }).resize(384).png().toBuffer());
 for (const scale of [1, 2, 3]) {
   const suffix = scale === 1 ? '' : `@${scale}x`;
   await output(`ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage${suffix}.png`,

@@ -34,6 +34,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   WebViewController? _controller;
   Future<void>? _initialization;
   Uri _currentUri;
+  late Uri _retryUri = configuration.origin;
   bool _ready = false;
   bool _hasDocument = false;
   bool _loading = false;
@@ -118,6 +119,20 @@ class SystemWebViewAdapter extends WebViewAdapter {
             }
             if (_failure == null &&
                 navigationPolicy.evaluate(url) == NavigationAction.allow) {
+              try {
+                final health = webScriptScalar(
+                  await _controller!.runJavaScriptReturningResult(
+                    webDocumentHealthQuery(configuration.origin),
+                  ),
+                );
+                if (health == 'unavailable') {
+                  _loadFailed(WebViewFailure.unavailable);
+                  return;
+                }
+              } catch (_) {
+                /* A transient inspection failure leaves the document web-owned. */
+              }
+              await applyPendingTheme();
               await _normalizeLinkTargets();
               try {
                 await _flushBrowserStore();
@@ -210,6 +225,17 @@ class SystemWebViewAdapter extends WebViewAdapter {
       : const SizedBox.shrink();
 
   @override
+  Future<bool> updateWebTheme(WebThemePreference value) async {
+    if (_disposed || _controller == null) return false;
+    final result = await _controller!.runJavaScriptReturningResult(
+      webThemePreferenceScript(configuration.origin, value),
+    );
+    final applied = webScriptScalar(result) == true;
+    if (applied) _appearanceSampler.refresh();
+    return applied;
+  }
+
+  @override
   Future<void> load(Uri uri) async {
     if (_disposed || !_ready) return;
     if (navigationPolicy.evaluate(uri.toString()) != NavigationAction.allow) {
@@ -217,6 +243,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
       return;
     }
     _currentUri = uri;
+    _retryUri = uri;
     await _load(() => _controller!.loadRequest(uri));
   }
 
@@ -225,7 +252,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
     if (_disposed || !_ready) return;
     // A failed native document may have a browser-internal error-page URL.
     if (_failure != null) {
-      await load(_currentUri);
+      await load(_retryUri);
     } else {
       await _load(() => _controller!.reload());
     }
@@ -294,6 +321,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
         if (request.isMainFrame) {
           // A failed redirect can be reported before its page-start callback.
           _currentUri = Uri.parse(request.url);
+          if (!isHostingInterstitial(_currentUri)) _retryUri = _currentUri;
           if (_failure != null) {
             _failure = null;
             _loading = true;
@@ -321,6 +349,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
       return;
     }
     _currentUri = Uri.parse(url);
+    if (!isHostingInterstitial(_currentUri)) _retryUri = _currentUri;
     _atTop = true;
     // Some engines emit a late start/finish for their built-in error document.
     // Only an explicit new navigation or retry clears the failure above.

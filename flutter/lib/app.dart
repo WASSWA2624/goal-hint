@@ -7,6 +7,8 @@ import 'web/native_appearance.dart';
 import 'web/web_appearance.dart';
 import 'web/web_view_adapter.dart';
 import 'web/shared_slip_link.dart';
+import 'web/native_appearance_store.dart';
+import 'web/native_theme_scope.dart';
 
 /// Native startup boundary around the shared web application.
 class GoalHintApp extends StatefulWidget {
@@ -15,6 +17,8 @@ class GoalHintApp extends StatefulWidget {
     required AppConfig this.configuration,
     this.webViewAdapter,
     this.branding = const AppBranding(),
+    this.initialAppearance,
+    this.appearanceStore,
   }) : configurationError = null;
 
   const GoalHintApp.configurationError(
@@ -22,12 +26,16 @@ class GoalHintApp extends StatefulWidget {
     super.key,
     this.branding = const AppBranding(),
   }) : configuration = null,
+       initialAppearance = null,
+       appearanceStore = null,
        webViewAdapter = null,
        configurationError = message;
 
   final AppConfig? configuration;
   final String? configurationError;
   final AppBranding branding;
+  final NativeAppearanceSnapshot? initialAppearance;
+  final NativeAppearanceStore? appearanceStore;
   final WebViewAdapter? webViewAdapter;
 
   @override
@@ -37,12 +45,19 @@ class GoalHintApp extends StatefulWidget {
 class _GoalHintAppState extends State<GoalHintApp> with WidgetsBindingObserver {
   final _navigatorKey = GlobalKey<NavigatorState>();
   WebAppearance? _appearance;
+  WebThemePreference? _preference;
+  WebThemePreference? _pendingPreference;
   Uri? _sharedSlipUri;
   int _sharedSlipRequest = 0;
 
   @override
   void initState() {
     super.initState();
+    _appearance = widget.initialAppearance?.appearance;
+    _preference = widget.initialAppearance?.preference;
+    if (widget.initialAppearance?.pending == true) {
+      _pendingPreference = _preference;
+    }
     final configuration = widget.configuration;
     if (configuration != null) {
       _sharedSlipUri = sharedSlipLink(
@@ -80,17 +95,48 @@ class _GoalHintAppState extends State<GoalHintApp> with WidgetsBindingObserver {
   }
 
   void _appearanceChanged(WebAppearance? appearance) {
-    if (mounted && _appearance != appearance) {
-      setState(() => _appearance = appearance);
+    if (mounted && appearance != null) {
+      setState(() {
+        _appearance = appearance;
+        // A usable application's current preference is authoritative again.
+        _pendingPreference = null;
+        _preference = appearance.preference;
+      });
+      _saveAppearance();
     }
+  }
+
+  void _saveAppearance() {
+    widget.appearanceStore?.save(
+      NativeAppearanceSnapshot(
+        appearance: _appearance,
+        preference: _preference,
+        pending: _pendingPreference != null,
+      ),
+    );
+  }
+
+  void _chooseTheme(WebThemePreference preference) {
+    setState(() {
+      _preference = preference;
+      _pendingPreference = preference;
+    });
+    _saveAppearance();
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: widget.branding.name,
-      builder: (context, child) =>
-          AppBrandingScope(branding: widget.branding, child: child!),
+      builder: (context, child) => AppBrandingScope(
+        branding: widget.branding,
+        child: NativeThemeScope(
+          preference: _preference ?? WebThemePreference.system,
+          onChanged: _chooseTheme,
+          pendingPreference: _pendingPreference,
+          child: child!,
+        ),
+      ),
       navigatorKey: _navigatorKey,
       initialRoute: '/',
       // The engine's cold-link route overrides initialRoute. Resolve only the
@@ -112,11 +158,17 @@ class _GoalHintAppState extends State<GoalHintApp> with WidgetsBindingObserver {
             ? _appearance
             : null,
       ),
-      themeMode: _appearance == null
-          ? ThemeMode.system
-          : _appearance!.brightness == Brightness.dark
-          ? ThemeMode.dark
-          : ThemeMode.light,
+      themeMode: switch (_preference) {
+        WebThemePreference.light => ThemeMode.light,
+        WebThemePreference.dark => ThemeMode.dark,
+        WebThemePreference.system => ThemeMode.system,
+        null =>
+          _appearance == null
+              ? ThemeMode.system
+              : _appearance!.brightness == Brightness.dark
+              ? ThemeMode.dark
+              : ThemeMode.light,
+      },
       routes: {
         Navigator.defaultRouteName: (_) => widget.configurationError == null
             ? WebAppShell(

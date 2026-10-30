@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'dart:async';
 
 import 'web_appearance.dart';
 import 'web_view_failure.dart';
@@ -15,6 +16,34 @@ abstract class WebViewAdapter extends ChangeNotifier {
   WebAppearance? get appearance => null;
   bool get supportsPullToRefresh => false;
   bool get atTop => false;
+  WebThemePreference? _pendingTheme;
+  bool _applyingTheme = false;
+
+  void requestThemePreference(WebThemePreference value) {
+    _pendingTheme = value;
+    unawaited(applyPendingTheme());
+  }
+
+  Future<void> applyPendingTheme() async {
+    final pending = _pendingTheme;
+    if (pending == null || _applyingTheme) return;
+    _applyingTheme = true;
+    try {
+      if (await updateWebTheme(pending) && _pendingTheme == pending) {
+        _pendingTheme = null;
+      }
+    } catch (_) {
+      /* Retry when an owned application document is ready. */
+    } finally {
+      _applyingTheme = false;
+      if (_pendingTheme != null && _pendingTheme != pending) {
+        unawaited(applyPendingTheme());
+      }
+    }
+  }
+
+  @protected
+  Future<bool> updateWebTheme(WebThemePreference value) async => false;
 
   Widget buildView();
   Future<void> initialize();
