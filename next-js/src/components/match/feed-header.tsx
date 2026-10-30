@@ -137,7 +137,7 @@ const SelectWrap = styled.span`
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     font: inherit;
     font-size: 0.8125rem;
     appearance: none;

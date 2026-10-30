@@ -22,7 +22,7 @@ There are no added dependencies or payment API changes.
 
 Copy is deliberately minimal: no repeated stage descriptions, short choice
 labels, concise instructions, and short action labels. The folded layouts show
-only one visible stage heading. All components use square corners.
+only one visible stage heading. Components use the shared `theme.radius` scale; see [Corner radius](corner-radius.md).
 
 Package defaults are illustrative (Daily UGX 1,000, Weekly UGX 5,000, Monthly
 UGX 20,000). Recipient numbers contain X characters and cannot receive money.

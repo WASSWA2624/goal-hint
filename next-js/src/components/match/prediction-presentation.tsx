@@ -27,7 +27,7 @@ export const ProbabilityBar = styled.span<{ $family: MarketFamily }>`
   min-inline-size: 12px;
   block-size: 6px;
   background: ${({ theme }) => theme.color.surfaceMuted};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.small};
   overflow: hidden;
   > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
 `;
@@ -42,7 +42,7 @@ export const OutcomeBadge = styled.span<{ $outcome: OutcomeTone }>`
   color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
   border: ${({ theme }) => theme.border.width} solid ${({ theme, $outcome }) => theme.color.outcome[$outcome].border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.small};
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   line-height: 1.2;

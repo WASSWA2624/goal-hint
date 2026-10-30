@@ -13,7 +13,7 @@ const Panel = styled.div`
   container: performance-summary / inline-size;
   position: relative; min-inline-size: 0; block-size: max(44px, 2.75rem); box-sizing: border-box;
   border: 1px solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.surface}; border-radius: 0; line-height: 1.35;
+  background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.surface}; line-height: 1.35;
   ${media.desktop} { block-size: 2.25rem; }
   @media (pointer: coarse) { block-size: max(44px, 2.75rem); ${media.desktop} { block-size: max(44px, 2.25rem); } }
 `;
@@ -66,7 +66,7 @@ const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean }>`
 `;
 const OutcomeCount = styled(OutcomeBadge)<{ $outcome: "correct" | "incorrect" | "pending" }>`
   flex: none; min-inline-size: max-content; min-block-size: 16px; padding: 0 4px;
-  border: 0; border-radius: 0; white-space: nowrap;
+  border: 0; border-radius: ${({ theme }) => theme.radius.small}; white-space: nowrap;
   color: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].background};
   font-size: 0.6875rem; line-height: 1.25; font-variant-numeric: tabular-nums;
@@ -89,6 +89,7 @@ const Extras = styled.dl`
 `;
 const Distribution = styled.div`
   position: absolute; inset-inline: 0; inset-block-end: 0; display: flex; block-size: 2px;
+  overflow: hidden; border-end-start-radius: ${({ theme }) => theme.radius.surface}; border-end-end-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.border};
 `;
 const Segment = styled.span<{ $tone: OutcomeTone }>`

@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
-import { DeskColumn, DeskGrid, DeskHead, Panel, panelRadius, Segmented, StickyActions } from "./desk-styles";
+import { DeskColumn, DeskGrid, DeskHead, Panel, Segmented, StickyActions } from "./desk-styles";
 
 export const MobileSettingsHead = styled(DeskHead)`
   ${media.desktop} { display: none; }
@@ -21,7 +21,6 @@ export const SettingsForm = styled.form`
     display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px;
     block-size: calc(100dvh - var(--app-header-height, 3rem) - 28px);
     min-block-size: 0; margin-block: -12px -32px;
-    input, select, textarea, button, section, details { border-radius: 0; }
   }
 `;
 export const SettingsHeading = styled(DeskHead)`
@@ -35,8 +34,8 @@ export const SettingsColumn = styled(DeskColumn)`
   ${media.desktop} { display: flex; flex-direction: column; gap: 12px; min-block-size: 0; overflow: auto; padding-block-end: 16px; scrollbar-gutter: stable; > * { flex: none; } }
 `;
 export const DesktopSettingsTabs = styled(Segmented)`
-  min-inline-size: 0; overflow-x: auto; border-radius: 0;
-  > button { flex: none; white-space: nowrap; border-radius: 0; }
+  min-inline-size: 0; overflow-x: auto; border-radius: ${({ theme }) => theme.radius.control};
+  > button { flex: none; white-space: nowrap; border-radius: ${({ theme }) => theme.radius.control}; }
   > [aria-current="page"] > svg { color: ${({ theme }) => theme.color.link}; }
 `;
 
@@ -113,7 +112,7 @@ export const ManagedBadge = styled.span`
   gap: 4px;
   flex: none;
   padding: 2px 6px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.scale.caption};
@@ -209,7 +208,7 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
     min-block-size: 68px;
     padding: 9px 10px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: ${panelRadius};
+    border-radius: ${({ theme }) => theme.radius.surface};
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surface};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
@@ -245,7 +244,7 @@ export const ConfirmBox = styled.div`
   min-inline-size: 0;
   padding: 12px 14px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.pending.border};
-  border-radius: ${panelRadius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.outcome.pending.background};
   > strong {
@@ -275,7 +274,7 @@ export const RequirementBox = styled.div`
   gap: 4px;
   min-inline-size: 0;
   padding: 10px 12px 6px;
-  border-radius: ${panelRadius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
 export const RequirementList = styled.ul`
@@ -325,7 +324,7 @@ export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
   }
   ${media.desktop} {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px;
-    border-radius: 0; padding: 12px 16px; border-block-start: 2px solid ${({ theme }) => theme.color.border};
+    border-radius: ${({ theme }) => theme.radius.none}; padding: 12px 16px; border-block-start: 2px solid ${({ theme }) => theme.color.border};
     > [data-save-wide]:first-child { align-self: center; }
     > [data-save-wide]:last-child { grid-column: 2; grid-row: 1 / span 2; }
     > [data-setting-password] { max-inline-size: 30rem; grid-column: 1; }

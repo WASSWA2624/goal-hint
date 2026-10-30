@@ -15,9 +15,9 @@ const Loading = styled.div`
 const Placeholder = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) 5.75rem; align-items: center;
   gap: 12px; min-block-size: 38px; padding: 10px 12px;
-  background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 3px;
+  background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.surface};
   > span {
-    display: block; block-size: 10px; border-radius: 2px;
+    display: block; block-size: 10px; border-radius: ${({ theme }) => theme.radius.small};
     background: linear-gradient(90deg, ${({ theme }) => theme.color.surfaceMuted} 25%,
       ${({ theme }) => theme.color.border} 50%, ${({ theme }) => theme.color.surfaceMuted} 75%);
     background-size: 200% 100%; animation: ${shimmer} 2s linear infinite;

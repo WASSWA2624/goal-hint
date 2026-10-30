@@ -24,7 +24,7 @@ const Dialog = styled.dialog`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.overlay};
   font: inherit;
 
   &[open] { display: flex; flex-direction: column; }
@@ -64,7 +64,7 @@ const CloseButton = styled(Button)`
     margin-inline-start: auto;
     padding: 0;
     border: 0;
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.mutedText};
     > svg { font-size: 1.125rem; }
     @media (pointer: coarse) { min-inline-size: 44px; min-block-size: 44px; }
@@ -100,7 +100,7 @@ const ActionButton = styled(Button)`
   && {
     min-block-size: 2.25rem;
     padding: 6px 12px;
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.8125rem;
     line-height: 1.3;
     @media (pointer: coarse) { min-block-size: 44px; }

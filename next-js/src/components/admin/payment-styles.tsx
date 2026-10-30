@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { ActionButton, adminControl } from "./admin-form";
-import { DeskHeadEnd, Drawer, EmptyPanel, panelRadius, Segmented, TextAction, visuallyHidden } from "./desk-styles";
+import { DeskHeadEnd, Drawer, EmptyPanel, Segmented, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopBalancedReview } from "./payment-balanced-styles";
 import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
 
@@ -13,7 +13,7 @@ import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFoot
 const panelLook = css`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${panelRadius};
+  border-radius: ${({ theme }) => theme.radius.surface};
 `;
 const hairline = css`${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}`;
 const focusRing = css`
@@ -69,7 +69,7 @@ export const RefreshSquare = styled.button<{ $changed: boolean }>`
   block-size: ${({ theme }) => theme.control.minHeight};
   padding: 0;
   border: ${hairline};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   cursor: pointer;
@@ -96,7 +96,7 @@ export const QueueFilters = styled.div`
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     label { min-inline-size: 0; }
     label > span { ${visuallyHidden} }
-    select { ${adminControl} min-block-size: 28px; padding: 2px 18px 2px 0; border: 0; border-radius: 2px; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
+    select { ${adminControl} min-block-size: 28px; padding: 2px 18px 2px 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
   }
 `;
 export const SearchField = styled.div`
@@ -106,7 +106,7 @@ export const SearchField = styled.div`
   > input { ${adminControl} padding-inline-start: 38px; }
   > input::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   > label { ${visuallyHidden} }
-  ${media.desktop} { > input { min-block-size: 34px; padding-block: 4px; font-size: 0.8125rem; border-radius: 2px; } }
+  ${media.desktop} { > input { min-block-size: 34px; padding-block: 4px; font-size: 0.8125rem; border-radius: ${({ theme }) => theme.radius.control}; } }
 `;
 export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
   gap: 2px 6px;
@@ -256,7 +256,7 @@ export const Stepper = styled.div`
     block-size: 44px;
     padding: 0;
     border: 0;
-    border-radius: ${panelRadius};
+    border-radius: ${({ theme }) => theme.radius.surface};
     color: ${({ theme }) => theme.color.link};
     background: none;
     cursor: pointer;
@@ -266,7 +266,7 @@ export const Stepper = styled.div`
     ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
   }
   > span { padding: 0 2px; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  ${media.desktop} { border-radius: 2px; > button { inline-size: 28px; block-size: 28px; border-radius: 2px; } > span { padding-inline: 4px; font-size: 0.75rem; } }
+  ${media.desktop} { border-radius: ${({ theme }) => theme.radius.control}; > button { inline-size: 28px; block-size: 28px; border-radius: ${({ theme }) => theme.radius.control}; } > span { padding-inline: 4px; font-size: 0.75rem; } }
 `;
 export const ReviewMeta = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
@@ -281,7 +281,7 @@ export const PaymentBadge = styled.span<{ $status: string }>`
   align-items: center;
   min-block-size: 20px;
   padding: 0 7px;
-  border-radius: 2px;
+  border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].text};
   background: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].background};
   font-size: ${({ theme }) => theme.typography.scale.caption};
@@ -317,7 +317,7 @@ export const ReviewZones = styled.div<{ $proof: boolean }>`
     ${({ $proof }) => $proof && css`
       grid-template-columns: minmax(16rem, 1.15fr) minmax(15rem, 1fr) minmax(17rem, 20rem);
       > :last-child { grid-column: auto; border-inline-start: ${hairline}; border-block-start: 0; }
-      > :first-child { border-end-start-radius: ${panelRadius}; }
+      > :first-child { border-end-start-radius: ${({ theme }) => theme.radius.surface}; }
     `}
   }
 `;
@@ -330,7 +330,7 @@ export const ProofZone = styled.section`
     gap: 8px;
     padding-block-end: 0;
     border: ${hairline};
-    border-radius: ${panelRadius};
+    border-radius: ${({ theme }) => theme.radius.surface};
   }
   ${media.desktop} { padding: 16px 18px 18px; }
 `;
@@ -352,7 +352,7 @@ export const ProofImage = styled.img`
   inline-size: 100%;
   block-size: auto;
   border: ${hairline};
-  border-radius: ${panelRadius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surface};
   ${media.desktop} { inline-size: auto; max-inline-size: 100%; max-block-size: 30rem; margin-inline: auto; object-fit: contain; }
 `;
@@ -389,7 +389,7 @@ export const PaymentWarnings = styled.div`
   gap: 6px;
   min-inline-size: 0;
   padding: 10px 12px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.outcome.pending.text};
   background: ${({ theme }) => theme.color.outcome.pending.background};
   > p { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }

@@ -254,10 +254,9 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
 /** Only the optional review presentation compresses summary and action geometry. */
 const DetailCard = styled(RecordCard)<{ $compact: boolean }>`
   ${({ $compact }) => $compact && css`
-    border-radius: 0;
-    input, select, textarea, button, fieldset, section, details, [role="group"] { border-radius: 0; }
+    border-radius: ${({ theme }) => theme.radius.surface};
     ${RecordBody} { gap: 8px; padding: 10px; }
-    [data-subscriber-summary] { border-radius: 0; }
+    [data-subscriber-summary] { border-radius: ${({ theme }) => theme.radius.surface}; }
     ${AccountTop} {
       padding: 8px 10px; gap: 6px 12px; min-block-size: 0;
       h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }

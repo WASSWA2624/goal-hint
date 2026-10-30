@@ -17,7 +17,7 @@ const Sample = styled.div`
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.background};
   font-size: 13px;
-  button, summary { font: inherit; cursor: pointer; border-radius: 0; }
+  button, summary { font: inherit; cursor: pointer; }
   :is(button, summary):focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
 `;
 const Rail = styled.header`

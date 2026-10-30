@@ -3,7 +3,8 @@
 ## Code and interface
 
 - Write efficient, professional, standard code and prefer reusable implementations.
-- Keep UI components uniform and reusable. Avoid rounded corners unless necessary.
+- Keep UI components uniform and reusable. Use the shared `theme.radius` scale
+  for subtle corners appropriate to each component; see `next-js/docs/corner-radius.md`.
 - Keep web screens and business logic in `next-js/`; the Flutter app is a minimal
   host for that shared web application.
 - Keep each application's numbered implementation plans in its own `dev-plan/`.

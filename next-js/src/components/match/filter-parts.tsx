@@ -36,7 +36,7 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   ${media.desktop} { min-block-size: 1.75rem; font-size: 0.75rem; }
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
@@ -89,7 +89,7 @@ export const IconButton = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: transparent;
   border: 0;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   /* 16px glyphs sit with the 11px phone controls; desktop keeps 20px. */
   font-size: 1rem;
   cursor: pointer;
@@ -114,7 +114,7 @@ const SelectFace = styled.span`
   color: ${({ theme }) => theme.color.text};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   ${filterControlColors}
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.body};
   ${controlFeedback}
@@ -166,7 +166,7 @@ const PickerSummary = styled.button`
   color: ${({ theme }) => theme.color.text};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
   ${filterButtonColors}
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.25;
@@ -192,7 +192,7 @@ const PickerPanel = styled.div`
   padding: ${({ theme }) => theme.space.sm};
   background: var(--filter-panel-background, ${({ theme }) => theme.color.surface});
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   transition-property: none;
   &[data-picker-floating] {
@@ -211,7 +211,7 @@ const PickerSearch = styled.input`
   color: ${({ theme }) => theme.color.text};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
   ${filterControlColors}
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   ${controlFeedback}
@@ -232,7 +232,7 @@ const PickerList = styled.ul`
     gap: 6px;
     min-block-size: 2.25rem;
     padding-inline: ${({ theme }) => theme.space.sm};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.small};
     font-size: 0.8125rem;
     cursor: pointer;
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }

@@ -8,5 +8,12 @@
   --gh-text-muted: #456A9D;
   --gh-border: #DFE6EE;
   --gh-font-family: Manrope, Arial, sans-serif;
-  --gh-radius: 2px;
+  --gh-radius-none: 0;
+  --gh-radius-small: 2px;
+  --gh-radius-control: 4px;
+  --gh-radius-surface: 6px;
+  --gh-radius-overlay: 8px;
+  --gh-radius-pill: 999px;
+  --gh-radius-circle: 50%;
+  --gh-radius: var(--gh-radius-control);
 }

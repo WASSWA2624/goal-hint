@@ -29,7 +29,7 @@ const Box = styled.section`
     margin-inline: 0;
     padding: 14px 18px 16px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.surface};
   }
 `;
 const Eyebrow = styled.div`

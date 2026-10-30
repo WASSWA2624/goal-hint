@@ -85,7 +85,7 @@ test("page, cards, navigation and table chrome share the selected theme", () => 
       assert.ok(theme.mode === "light" ? brightness >= 0.8 : brightness <= 0.08,
         `${theme.mode} neutral surface ${color} belongs to the selected palette`);
     }
-    assert.equal(theme.phoneCardFrame.radius, "0");
+    assert.equal(theme.phoneCardFrame.radius, theme.radius.surface);
     assert.equal(theme.phoneCardFrame.shadow, "none");
   }
   for (const colors of Object.values(darkTheme.color.verdict)) {

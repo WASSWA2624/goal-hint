@@ -23,7 +23,7 @@ Open [the standalone preview](goal-hint-brand-preview.html) or [the contact shee
 
 Use SVG for interface logos and PNG where vector files are unsupported. Keep aspect ratios unchanged. Leave clear space on every side equal to **one quarter of the displayed mark width**, including around a horizontal logo. Minimum display widths are **160 px for the primary horizontal logo** and **32 px for the full mark**; use the micro favicon at **16–32 px**.
 
-Do not stretch, recolor, add shadows or place artwork in rounded containers. UI components use the shared subtle `2px` radius from `shape.componentRadius` through `theme.border.radius`; joined edges, tables and dense rows remain square where they meet. The circular football is part of the identity, not a UI corner treatment.
+Do not stretch, recolor, add shadows or place artwork in rounded containers. UI components use the shared `shape.radius` scale through `theme.radius`: 2px small items, 4px controls, 6px surfaces and 8px overlays. See [corner-radius.md](../../docs/corner-radius.md). Joined edges, tables and dense rows remain straight where they meet. The circular football is part of the identity, not a UI corner treatment.
 
 ## Palette and accessibility
 

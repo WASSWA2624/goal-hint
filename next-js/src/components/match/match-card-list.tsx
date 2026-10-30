@@ -21,7 +21,9 @@ const Board = styled.div<{ $indexLength: number }>`
     ${alignedLedgerStyles}
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.surface};
+    > ul > li:first-child > article { border-start-start-radius: calc(${({ theme }) => theme.radius.surface} - 1px); border-start-end-radius: calc(${({ theme }) => theme.radius.surface} - 1px); }
+    > ul > li:last-child > article { border-end-start-radius: calc(${({ theme }) => theme.radius.surface} - 1px); border-end-end-radius: calc(${({ theme }) => theme.radius.surface} - 1px); }
     box-shadow: none;
   }
 `;

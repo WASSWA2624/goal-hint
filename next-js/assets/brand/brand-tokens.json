@@ -16,6 +16,14 @@
     "wordmarkWeight": 800
   },
   "shape": {
-    "componentRadius": "2px"
+    "radius": {
+      "none": "0",
+      "small": "2px",
+      "control": "4px",
+      "surface": "6px",
+      "overlay": "8px",
+      "pill": "999px",
+      "circle": "50%"
+    }
   }
 }

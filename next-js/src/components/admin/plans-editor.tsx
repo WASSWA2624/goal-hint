@@ -9,7 +9,7 @@ import { formatPlanLength, formatUgx, planRules, type SubscriptionPlanView } fro
 import { media } from "@/styles/theme";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { ActionButton, Badge, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage } from "./admin-form";
-import { DeskGrid, EmptyPanel, Panel, panelRadius, ResponsiveDrawer, TextAction } from "./desk-styles";
+import { DeskGrid, EmptyPanel, Panel, ResponsiveDrawer, TextAction } from "./desk-styles";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordHead, RecordItem,
   RecordItemMeta, RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordScroll, RecordWorkspace } from "./record-workspace";
@@ -310,7 +310,7 @@ const Square = styled.button`
   block-size: ${({ theme }) => theme.control.minHeight};
   padding: 0;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   cursor: pointer;
@@ -332,7 +332,7 @@ const EditForm = styled.form`
   padding: 12px;
   background: ${({ theme }) => theme.color.page};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${panelRadius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   ${media.desktop} { padding: 14px; }
   @container (min-width: 34rem) { grid-column: 1 / -1; }
 `;

@@ -39,7 +39,7 @@ export const Surface = styled.section`
   padding: 12px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => `${theme.border.width} solid ${theme.color.border}`};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   ${media.tablet} { padding: ${({ theme }) => theme.space.md}; }
   ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; }
 `;

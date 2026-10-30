@@ -93,11 +93,13 @@ Spacing and the page gutter use fixed pixel tokens so enlarging text leaves
 usable content width. Controls have a 2.75rem (44px) minimum height from 64rem;
 phones and tablets use the 2.25rem (36px) compact height.
 
-Use `theme.border.radius` for the shared square `0` corner radius, sourced from
-`shape.componentRadius` in `assets/brand/brand-tokens.json`. Apply it consistently
-to fields, buttons, menus, dialogs and standalone panels on every screen size.
-Keep joined control edges, tables and dense row structures square where they
-meet. Preserve functional circular or pill shapes and the logo's artwork geometry.
+Use the shared `theme.radius` scale from `shape.radius` in
+`assets/brand/brand-tokens.json`: `small` (2px), `control` (4px), `surface`
+(6px), and `overlay` (8px). The Best slips date controls establish the 4px
+reference. Apply the appropriate token by component size and purpose in both
+themes and at every viewport width. Keep joined internal edges straight with
+`none`, and preserve functional `circle`/`pill` shapes and logo artwork. See
+[Corner radius](corner-radius.md) for component assignments and nested edges.
 
 Keep passive frames quiet with `theme.color.border`: neutral `#D9E1ED` in light
 mode and `#142A3D` in dark mode. Use it for section and card outlines, dialog

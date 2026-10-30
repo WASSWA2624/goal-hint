@@ -56,6 +56,7 @@ const SummaryList = styled.ul`
     > li {
       display: block;
       padding: 2px 6px;
+      border-radius: ${({ theme }) => theme.radius.small};
       background: ${({ theme }) => theme.color.brandSoft};
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
       line-height: 1.4;

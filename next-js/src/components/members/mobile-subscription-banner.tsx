@@ -41,7 +41,7 @@ const Action = styled(Link)`
   gap: 3px;
   min-block-size: 24px;
   padding: 0;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.header.accent};
   font-weight: 600;
   text-decoration: underline;

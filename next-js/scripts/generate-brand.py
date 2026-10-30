@@ -209,7 +209,9 @@ class Brand:
         self.save_svg("goal-hint-open-graph", svg(1200, 630, "Goal Hint — Football predictions. Clearly explained.", og, "AI analysis, estimated probabilities and verified outcomes. goalhint.com."), 1)
         css_names = {"navy": "navy", "cyan": "cyan", "cyanOnDark": "cyan-on-dark", "paper": "paper", "white": "white", "muted": "text-muted", "border": "border"}
         css = "/* Generated from assets/brand/brand-tokens.json. */\n:root {\n" + "".join(f"  --gh-{css_names[key]}: {value};\n" for key, value in c.items())
-        css += f"  --gh-font-family: {self.tokens['typography']['family']};\n  --gh-radius: {self.tokens['shape']['componentRadius']};\n}}\n"
+        css += f"  --gh-font-family: {self.tokens['typography']['family']};\n"
+        css += "".join(f"  --gh-radius-{name}: {value};\n" for name, value in self.tokens["shape"]["radius"].items())
+        css += "  --gh-radius: var(--gh-radius-control);\n}\n"
         (self.output_dir / "goal-hint-brand-tokens.css").write_text(css, encoding="utf-8", newline="\n")
         (self.output_dir / "goal-hint-brand-tokens.json").write_text(json.dumps(self.tokens, indent=2) + "\n", encoding="utf-8", newline="\n")
         self.exports.extend(("goal-hint-brand-tokens.css", "goal-hint-brand-tokens.json"))

@@ -9,7 +9,7 @@ import { useMessages } from "@/i18n/use-messages";
 import { MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 
 const Frame = styled(Surface)`
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.surface};
   overflow-wrap: anywhere;
 `;
 const Stats = styled.table`

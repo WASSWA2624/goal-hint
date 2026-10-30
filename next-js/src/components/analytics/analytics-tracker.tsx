@@ -83,6 +83,7 @@ export function AnalyticsChoices() {
 }
 
 const Banner = styled.section`
+  border-radius: ${({ theme }) => theme.radius.overlay};
   position: fixed;
   z-index: 30;
   inset-inline: 8px;
@@ -117,6 +118,7 @@ const Choices = styled.div`
   gap: 8px;
 `;
 const ChoicePanel = styled.div`
+  border-radius: ${({ theme }) => theme.radius.surface};
   display: grid;
   gap: 8px;
   padding: 14px 16px;

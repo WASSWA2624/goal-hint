@@ -39,7 +39,7 @@ export const HelpSection = styled.section`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-block-start: 2px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
 `;
 export const HelpList = styled.dl`
   display: grid;

@@ -5,7 +5,6 @@ import { media } from "@/styles/theme";
 
 /** Shared Codes presentation used by the live workspace and every design study. */
 export const codePresentation = css`
-  && input, && button, && select, && textarea, && fieldset, && details, && [role="group"] { border-radius: 0; }
   [data-code-form-stack] { gap: 18px; }
   [data-grant-section] { display: grid; min-inline-size: 0; gap: 14px; }
   [data-grant-payment] { border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 8px; }

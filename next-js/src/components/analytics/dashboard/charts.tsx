@@ -286,14 +286,14 @@ const LineKey = styled.span<{ $color: string }>`
   display: inline-block;
   inline-size: 14px;
   block-size: 2px;
-  border-radius: 2px;
+  border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ $color }) => $color};
 `;
 const SwatchKey = styled.span<{ $color: string }>`
   display: inline-block;
   inline-size: 10px;
   block-size: 10px;
-  border-radius: 2px;
+  border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ $color }) => $color};
 `;
 const Tooltip = styled.div`
@@ -308,7 +308,7 @@ const Tooltip = styled.div`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
@@ -329,12 +329,12 @@ const SplitTrack = styled.div`
 `;
 const SplitSegment = styled.span<{ $active: boolean }>`
   min-inline-size: 4px;
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.radius.small};
   opacity: ${({ $active }) => ($active ? 0.85 : 1)};
 `;
 const SplitEmpty = styled.span`
   flex: 1;
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
 const BarRows = styled.ol`
@@ -355,7 +355,7 @@ const barRow = `
 `;
 const BarButton = styled.button`
   ${barRow}
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   cursor: pointer;
   @media (hover: hover) { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
@@ -372,13 +372,13 @@ const BarHead = styled.span`
 const BarTrack = styled.span`
   display: block;
   block-size: 8px;
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
 const BarFill = styled.span`
   display: block;
   block-size: 100%;
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.radius.small};
 `;
 export const EmptyChart = styled.p`
   display: grid;
@@ -405,6 +405,6 @@ const HeatGrid = styled.div`
 const HeatCell = styled.span<{ $active: boolean }>`
   display: block;
   block-size: 18px;
-  border-radius: 2px;
+  border-radius: ${({ theme }) => theme.radius.small};
   outline: ${({ $active, theme }) => ($active ? `2px solid ${theme.color.text}` : "none")};
 `;

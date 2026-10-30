@@ -33,9 +33,9 @@ const Search = styled.label`
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   &:focus-within { border-color: ${({ theme }) => theme.color.accent.blue.solid}; }
-  > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; border-radius: 0; font: inherit; font-size: ${size("secondary")}; outline: none; }
+  > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: ${size("secondary")}; outline: none; }
 `;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
 const columns = "minmax(0, 1.4fr) minmax(0, 1.1fr) 4rem 0.75rem";
@@ -73,7 +73,7 @@ const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   @container details-card (min-width: 27rem) { > span[data-bar] > span { display: block; } }
   > span[data-name] { grid-area: name; display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > span[data-name] > span:last-child { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-name] > span:first-child { inline-size: 1.375rem; block-size: 1.375rem; border-radius: ${({ theme }) => theme.border.radius}; font-size: ${size("body")}; }
+  > span[data-name] > span:first-child { inline-size: 1.375rem; block-size: 1.375rem; border-radius: ${({ theme }) => theme.radius.small}; font-size: ${size("body")}; }
   > span[data-pick] { grid-area: pick; padding: 3px 6px; border: 1px solid ${({ theme }) => theme.color.border}; border-inline-start: 3px solid ${({ theme, $family }) => theme.color.market[$family].solid}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
   > span[data-bar] { grid-area: bar; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
   > span[data-bar] > b { min-inline-size: 2.25rem; }

@@ -175,7 +175,7 @@ const PhoneControl = styled.div`
 `;
 const CountryTrigger = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px 8px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.border.radius};
+  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit; font-size: 0.875rem;
   white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
   > svg { inline-size: 14px; block-size: 14px; flex: none; }
@@ -191,12 +191,12 @@ const DialFlagFallback = styled.span`
 `;
 const CountryMenu = styled.div`
   position: fixed; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; box-sizing: border-box; padding: 10px;
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius}; overflow: hidden;
+  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.overlay}; overflow: hidden;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
 `;
 const CountrySearch = styled.input`
   box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: 44px; padding: 8px 10px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.border.radius}; font: inherit; font-size: 1rem;
+  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 1rem;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; ${focusTreatment}
 `;
 const CountrySearchLabel = styled.label`
@@ -206,7 +206,7 @@ const CountrySearchLabel = styled.label`
 const CountryResults = styled.div`display: grid; align-content: start; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain;`;
 const CountryOption = styled.button`
   display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 16px; align-items: center; gap: 8px;
-  inline-size: 100%; min-block-size: 48px; padding: 8px; text-align: start; border: 0; border-radius: 0; cursor: pointer;
+  inline-size: 100%; min-block-size: 48px; padding: 8px; text-align: start; border: 0; border-radius: ${({ theme }) => theme.radius.none}; cursor: pointer;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit; font-size: 0.875rem;
   > span:nth-child(2) { overflow-wrap: anywhere; }
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }

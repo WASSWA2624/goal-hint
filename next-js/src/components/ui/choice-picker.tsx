@@ -14,7 +14,7 @@ const Root = styled.details`
     min-block-size: 2rem; padding: 4px 6px; list-style: none;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.75rem; cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > span { min-inline-size: 0; overflow-wrap: anywhere; }
@@ -26,9 +26,9 @@ const Root = styled.details`
     position: absolute; inset-inline: 0; inset-block-start: calc(100% + 3px); z-index: 35;
     margin: 0; padding: 4px; min-inline-size: 0; max-block-size: min(20rem, 60dvh); overflow-y: auto;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.overlay};
     background: ${({ theme }) => theme.color.surface}; box-shadow: ${({ theme }) => theme.shadow.popover};
-    > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: 2rem; padding: 4px; font-size: 0.75rem; cursor: pointer; }
+    > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: 2rem; padding: 4px; border-radius: ${({ theme }) => theme.radius.small}; font-size: 0.75rem; cursor: pointer; }
     > button { inline-size: 100%; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder}; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text}; }
     > button[aria-pressed="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
     > p { font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; padding: 4px; }

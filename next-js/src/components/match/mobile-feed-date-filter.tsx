@@ -30,7 +30,7 @@ const Trigger = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -87,7 +87,7 @@ const Preset = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -109,7 +109,7 @@ const Footer = styled.div`
   > button {
     min-inline-size: 0; min-block-size: 44px; padding: 6px 12px;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
     font: inherit; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
     ${focusRing}
   }

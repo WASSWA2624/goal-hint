@@ -45,7 +45,7 @@ const progressGlow = keyframes`
 /** A steady core with a separate halo that reverses direction at each endpoint. */
 const ProgressDot = styled.span`
   position: relative; flex: none; inline-size: 5px; block-size: 5px; margin-inline-end: 5px;
-  border-radius: 50%; background: currentColor;
+  border-radius: ${({ theme }) => theme.radius.circle}; background: currentColor;
   &::before {
     content: ""; position: absolute; inset: 0; border-radius: inherit;
     background: currentColor; box-shadow: 0 0 5px 2px currentColor;
@@ -60,7 +60,7 @@ const StatusBadge = styled.span`
   --slip-status-fill: ${({ theme }) => theme.color.outcome.pending.background};
   display: inline-flex; flex: none; align-items: center; justify-content: center;
   inline-size: 5.75rem; min-block-size: 1.5rem; padding: 3px 5px; box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--slip-status-ink) 30%, transparent); border-radius: 0;
+  border: 1px solid color-mix(in srgb, var(--slip-status-ink) 30%, transparent); border-radius: ${({ theme }) => theme.radius.small};
   background: var(--slip-status-fill); color: var(--slip-status-ink);
   font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.2; text-align: center; white-space: nowrap;
   &[data-slip-status-value="not-started"] { --slip-status-ink: ${({ theme }) => theme.color.mutedText}; --slip-status-fill: ${({ theme }) => theme.color.surfaceMuted}; }

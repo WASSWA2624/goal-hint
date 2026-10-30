@@ -99,6 +99,7 @@ const Description = styled.p`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 const ExportLink = styled.a`
+  border-radius: ${({ theme }) => theme.radius.control};
   display: inline-flex;
   align-items: center;
   min-block-size: 32px;

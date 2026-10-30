@@ -35,8 +35,12 @@ export const MatchRow = styled.div`
 
 export const CompactCard = styled.article`
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0;
+  border: 1px solid ${({ theme }) => theme.phoneCardFrame.border}; border-radius: ${({ theme }) => theme.radius.surface};
   container: compact-slip / inline-size;
+  /* Paint joined headers inside the outer curve without clipping focus or tooltips. */
+  > details { border-radius: inherit; }
+  [data-slip-summary] { border-start-start-radius: inherit; border-start-end-radius: inherit; }
+  > details:not([open]) > [data-slip-summary], > header[data-slip-summary] { border-end-start-radius: inherit; border-end-end-radius: inherit; }
   details { min-inline-size: 0; }
   [data-slip-summary]:not([data-mobile-slip-header]) {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: 44px;

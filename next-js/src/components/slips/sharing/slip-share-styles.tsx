@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 
 export const ShareTrigger = styled(Button)`
-  && { min-block-size: 28px; min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: 0;
+  && { min-block-size: 28px; min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: ${({ theme }) => theme.radius.control};
     font-size: .75rem; line-height: 1.25; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   svg { inline-size: 14px; block-size: 14px; }
   @media (pointer: coarse) { && { min-block-size: 36px; } }
@@ -14,7 +14,10 @@ export const Drawer = styled.dialog`
   position: fixed; inset-block: 0; inset-inline: auto 0;
   inline-size: min(22rem, 100vw); max-inline-size: 100vw; block-size: 100dvh; max-block-size: 100dvh;
   margin: 0 0 0 auto; padding: 0; border: 0; border-inline-start: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: 0; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text};
+  border-radius: ${({ theme }) => theme.radius.none};
+  border-start-start-radius: ${({ theme }) => theme.radius.overlay}; border-end-start-radius: ${({ theme }) => theme.radius.overlay};
+  background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text};
+  @media (max-width: 22rem) { border-radius: ${({ theme }) => theme.radius.none}; }
   font: inherit; font-size: .8125rem; text-align: start; overflow: hidden;
   &[open] { display: flex; flex-direction: column; }
   &::backdrop { background: ${({ theme }) => theme.color.scrim}; }
@@ -27,7 +30,7 @@ export const DrawerHeader = styled.header`
 `;
 
 export const DrawerButton = styled(Button)`
-  && { min-block-size: 34px; min-inline-size: 34px; padding: 6px 8px; font-size: .75rem; line-height: 1.3; border-radius: 0; }
+  && { min-block-size: 34px; min-inline-size: 34px; padding: 6px 8px; font-size: .75rem; line-height: 1.3; border-radius: ${({ theme }) => theme.radius.control}; }
   svg { inline-size: 15px; block-size: 15px; }
   @media (pointer: coarse) { && { min-block-size: 44px; min-inline-size: 44px; } }
 `;
@@ -45,7 +48,7 @@ export const DrawerBody = styled.div`
   [data-share-public-note] { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; margin: 12px 0 0; }
   [data-share-error] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   textarea { inline-size: 100%; min-block-size: 150px; resize: vertical; background: ${({ theme }) => theme.color.surface};
-    color: inherit; border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0; font: inherit; padding: 8px; }
+    color: inherit; border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: 8px; }
 `;
 
 export const DrawerFooter = styled.footer`

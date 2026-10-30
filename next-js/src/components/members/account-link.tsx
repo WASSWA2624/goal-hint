@@ -77,7 +77,7 @@ const Popup = styled.div`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const Identity = styled.div`
@@ -117,7 +117,7 @@ const SignOut = styled(MemberSignOut)`
     background: transparent;
     border: 0;
     border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
     font-size: 0.875rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     > svg { flex: none; font-size: 1.125rem; }

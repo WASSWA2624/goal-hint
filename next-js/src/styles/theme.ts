@@ -97,7 +97,7 @@ export interface GoalHintTheme {
     readonly accent: string;
     /** Text and icons on an `accent` fill. */
     readonly onAccent: string;
-    /** Square icon buttons; both fills keep header text readable. */
+    /** Compact icon buttons; both fills keep header text readable. */
     readonly controlFill: string;
     readonly controlHover: string;
     /** The search pill; `fieldFillActive` on hover and focus. */
@@ -162,10 +162,10 @@ export interface GoalHintTheme {
     readonly lg: string;
     readonly xl: string;
   };
+  /** Shared corner scale: compact items, controls, surfaces and overlays. */
+  readonly radius: Readonly<typeof brandTokens.shape.radius>;
   readonly border: {
     readonly width: string;
-    readonly radius: string;
-    readonly pillRadius: string;
     readonly focusWidth: string;
     readonly focusOffset: string;
   };
@@ -275,10 +275,9 @@ export const lightTheme: GoalHintTheme = {
   },
   space: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px" },
   breakpoint: { md: "48rem", lg: "64rem", xl: "80rem" },
+  radius: brandTokens.shape.radius,
   border: {
     width: "1px",
-    radius: brandTokens.shape.componentRadius,
-    pillRadius: "999px",
     focusWidth: "3px",
     focusOffset: "3px",
   },
@@ -316,7 +315,7 @@ export const lightTheme: GoalHintTheme = {
     cardHover: "none",
     popover: "0 8px 24px rgb(7 23 71 / 16%)",
   },
-  phoneCardFrame: { border: "#D9E1ED", radius: "0", shadow: "none" },
+  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.surface, shadow: "none" },
 };
 
 /** The same semantic contract keeps every native control and detail panel readable in dark mode. */
@@ -408,7 +407,7 @@ export const darkTheme: GoalHintTheme = {
     },
   },
   shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
-  phoneCardFrame: { border: "#172D40", radius: "0", shadow: "none" },
+  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.surface, shadow: "none" },
 };
 
 /** A complete theme is required at a streamed or standalone style boundary. */

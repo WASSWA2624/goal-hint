@@ -61,7 +61,7 @@ const Box = styled.section`
     margin-inline: 0;
     padding: 15px 24px 18px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.surface};
   }
 `;
 /**
@@ -139,14 +139,14 @@ const Versus = styled.div`
     padding-inline: 6px;
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     font-size: ${size("body")};
     font-variant-numeric: tabular-nums;
   }
   > b[data-score] { block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: 2rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.05; white-space: nowrap; }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-live] { display: inline-flex; align-items: center; gap: 5px; color: ${({ theme }) => theme.color.live.text}; }
-  > span[data-live]::before { content: ""; inline-size: 7px; block-size: 7px; background: ${({ theme }) => theme.color.live.solid}; border-radius: 50%; }
+  > span[data-live]::before { content: ""; inline-size: 7px; block-size: 7px; background: ${({ theme }) => theme.color.live.solid}; border-radius: ${({ theme }) => theme.radius.circle}; }
   ${desktop} {
     gap: 4px;
     padding-block-start: 0;

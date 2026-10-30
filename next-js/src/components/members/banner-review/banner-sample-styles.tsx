@@ -8,7 +8,7 @@ export const Sample = styled.div`
   background: ${({ theme }) => theme.header.background};
   font-size: 13px;
   line-height: 1.5;
-  button { font: inherit; border-radius: 0; cursor: pointer; }
+  button { font: inherit; cursor: pointer; }
   button:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
 

@@ -11,7 +11,7 @@ import { MatchCardList } from "@/components/match/match-card-list";
 import { offlineFixture, offlineRules, offlineSnapshotSchema, type OfflineSnapshot } from "@/domain/offline";
 import { OfflineUpdateNotice } from "./offline-update-notice";
 
-const Notice = styled(Surface)`border-radius: 0;`;
+const Notice = styled(Surface)`border-radius: ${({ theme }) => theme.radius.surface};`;
 const Heading = styled(HeaderContent)`justify-content: space-between; gap: 12px;`;
 const Link = styled.a`color: inherit; text-underline-offset: 3px;`;
 

@@ -61,7 +61,7 @@ const Control = styled.div`
     display: block;
     box-sizing: border-box;
     min-inline-size: 0;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.control};
     font-weight: normal;
   }
   > input::placeholder, > textarea::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }

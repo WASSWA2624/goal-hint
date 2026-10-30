@@ -34,7 +34,7 @@ const ContactIdentity = styled.div`
 `;
 const ContactActions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
-  a { min-block-size: 36px; border-radius: 0; }
+  a { min-block-size: 36px; border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 const ContactTextLink = styled(TextLink)`
   display: inline-flex; align-items: center; gap: 6px; font-size: 0.875rem;

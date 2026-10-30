@@ -15,7 +15,7 @@ const compactControl = css`
   padding: 4px 9px;
   color: ${({ theme }) => theme.color.text};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.3;
@@ -33,7 +33,7 @@ export const FiltersPanel = styled.section`
   color: ${({ theme }) => theme.color.text};
   background: transparent;
   border: 0;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.none};
 `;
 
 export const FiltersRow = styled.div`
@@ -51,7 +51,7 @@ const toggleGroup = css`
   padding: 2px;
   background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.surface};
   min-inline-size: 0;
 `;
 
@@ -115,7 +115,7 @@ export const CustomRangeButton = styled(FilterButton)`
   gap: 5px;
   min-block-size: 34px;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.radius.control};
   white-space: nowrap;
   > svg { color: ${({ theme }) => theme.color.brand}; }
   > svg { flex: none; font-size: 0.875rem; }
@@ -213,8 +213,8 @@ export const AppliedDetails = styled.div`
 `;
 
 export const RangeDialog = styled(CriteriaDialog)`
-  border-radius: 0;
-  button, input { border-radius: 0; }
+  border-radius: ${({ theme }) => theme.radius.overlay};
+  button, input { border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
 export const DateFields = styled.div`

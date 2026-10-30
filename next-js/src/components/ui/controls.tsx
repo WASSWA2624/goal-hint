@@ -55,7 +55,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   padding-block: 6px;
   padding-inline: 12px;
   border: ${({ theme }) => theme.border.width} solid;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -119,6 +119,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   ${({ $large, theme }) => $large && css`
     min-block-size: 3rem;
     min-inline-size: 3rem;
+    border-radius: ${theme.radius.surface};
     font-size: ${theme.typography.scale.body};
     ${media.desktop} { min-block-size: 3rem; font-size: ${theme.typography.scale.body}; }
   `}
@@ -190,7 +191,7 @@ const inputTreatment = css<{ $invalid: boolean }>`
   border: ${({ theme }) => theme.border.width} solid
     ${({ theme, $invalid }) =>
       $invalid ? theme.color.outcome.incorrect.border : theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   line-height: 1.25;
   ${media.desktop} {
@@ -232,7 +233,7 @@ const PasswordToggle = styled(Button)`
   && {
     position: absolute; inset-inline-end: 1px; inset-block: 1px;
     inline-size: 44px; min-inline-size: 44px; min-block-size: 0; padding: 0;
-    border: 0; border-radius: 0; background: transparent;
+    border: 0; border-radius: calc(${({ theme }) => theme.radius.control} - 1px); background: transparent;
     color: ${({ theme }) => theme.color.link};
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; }
   }
@@ -373,6 +374,8 @@ const Segments = styled.fieldset`
   border: 0;
   > legend { margin-block-end: 6px; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > label { position: relative; min-inline-size: 0; }
+  > label:first-of-type > span { border-start-start-radius: ${({ theme }) => theme.radius.control}; border-end-start-radius: ${({ theme }) => theme.radius.control}; }
+  > label:last-of-type > span { border-start-end-radius: ${({ theme }) => theme.radius.control}; border-end-end-radius: ${({ theme }) => theme.radius.control}; }
   input { position: absolute; opacity: 0; inline-size: 1px; block-size: 1px; }
   span {
     display: flex;

@@ -16,7 +16,7 @@ const smallText = css`font-size: 12px; line-height: 18px;`;
 
 const Panel = styled.div`
   display: grid; gap: 6px; min-inline-size: 0; padding: 8px 10px;
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius};
+  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
   progress { inline-size: 100%; block-size: 6px; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
@@ -30,10 +30,10 @@ const Step = styled.li<{ $state: "done" | "active" | "waiting" }>`
 `;
 const Spinner = styled.i`
   border: 2px solid ${({ theme }) => theme.color.border}; border-block-start-color: ${({ theme }) => theme.color.brand};
-  border-radius: 50%; animation: ${spin} 0.8s linear infinite;
+  border-radius: ${({ theme }) => theme.radius.circle}; animation: ${spin} 0.8s linear infinite;
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
-const Waiting = styled.i`border: 2px solid ${({ theme }) => theme.color.border}; border-radius: 50%;`;
+const Waiting = styled.i`border: 2px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.circle};`;
 const List = styled.ul`display: grid; gap: 4px; margin: 0; padding: 0; list-style: none;`;
 const Item = styled.li<{ $ok: boolean }>`
   display: flex; align-items: flex-start; gap: 6px; min-inline-size: 0; ${smallText} overflow-wrap: anywhere;

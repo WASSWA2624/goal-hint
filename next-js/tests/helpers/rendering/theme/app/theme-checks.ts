@@ -26,6 +26,29 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   };
   const dark = theme.mode === "dark";
   const phone = window.innerWidth < 1024;
+  const checkRadius = (selector: string, expected: string) => {
+    const elements = [...document.querySelectorAll(selector)].filter(visible);
+    assert(elements.length > 0, `Missing visible radius example ${selector}`);
+    for (const element of elements) {
+      const style = getComputedStyle(element);
+      const target = element.id ? `#${element.id}` : element.getAttribute("data-slip-id") ?? element.tagName.toLowerCase();
+      for (const corner of ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"] as const) {
+        assert(Number.parseFloat(style[corner]) === Number.parseFloat(expected), `${target}: unexpected ${corner} ${style[corner]}`);
+      }
+    }
+  };
+  checkRadius("#theme-radius-badge", theme.radius.small);
+  checkRadius("#theme-control-input, #theme-control-select, #theme-controls [data-surface-control], #theme-admin-input, #theme-payment-input, #theme-payment-action, [data-slip-custom-range]", theme.radius.control);
+  checkRadius("#theme-controls, #theme-large-action, #theme-admin-panel, #theme-admin-record, [data-subscribe-layout=stepwise], #theme-slips [data-slip-id]", theme.radius.surface);
+  checkRadius("#theme-joined-controls", theme.radius.control);
+  checkRadius("#theme-joined-controls > button", theme.radius.none);
+  const dateFace = document.querySelector("[data-slip-period-select]");
+  const dateTrigger = dateFace?.querySelector("button") ?? dateFace;
+  if (!phone) assert(!!dateTrigger && Number.parseFloat(getComputedStyle(dateTrigger).borderTopLeftRadius) === Number.parseFloat(theme.radius.control), "Best slips date selection keeps the reference control radius");
+  if (document.querySelector("[data-select-options]")) checkRadius("[data-select-options]", theme.radius.overlay);
+  for (const dialog of document.querySelectorAll<HTMLDialogElement>("dialog[open][data-enhanced=true]")) {
+    checkRadius(`#${CSS.escape(dialog.id)}`, theme.radius.overlay);
+  }
   check("body", theme.color.page);
   check("#theme-controls", theme.color.surface);
   check("#theme-controls, #theme-checks, #theme-performance [data-performance-summary]", theme.color.border, "borderTopColor");

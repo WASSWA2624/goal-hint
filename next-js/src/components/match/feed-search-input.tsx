@@ -20,7 +20,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
   min-inline-size: 0;
   min-block-size: 2.75rem;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
   ${controlFeedback}
@@ -34,7 +34,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
     column-gap: 6px;
     min-block-size: 2rem;
     padding-inline-start: 8px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.control};
     background: ${({ theme }) => theme.color.surface};
     > svg { flex: none; font-size: 0.875rem; color: ${({ theme }) => theme.color.mutedText}; }
     > input, > button { min-block-size: calc(2rem - 2px); font-size: 0.75rem; }
@@ -57,7 +57,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
       grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
       min-block-size: 36px;
-      border-radius: 0;
+      border-radius: ${({ theme }) => theme.radius.control};
       background: ${({ theme }) => theme.color.surface};
       > input, > button { min-block-size: 34px; }
       > input { padding: 2px 6px 2px 0; }
@@ -79,7 +79,7 @@ const Input = styled.input`
   min-block-size: 2.625rem;
   padding: 8px 12px;
   border: 0;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.none};
   outline: 0;
   color: inherit;
   background: transparent;
@@ -99,7 +99,7 @@ const Submit = styled.button`
   padding-inline: 14px;
   border: 0;
   border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
   background: transparent;
   font: inherit;

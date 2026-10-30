@@ -39,7 +39,6 @@ export const TransactionControl = styled.div`
 /** The approved 01 layout changes desktop geometry; phones retain their panel flow. */
 export const desktopBalancedReview = css`
   ${media.desktop} {
-    input, select, textarea, button, form, details, summary, img, section, [role="group"] { border-radius: 0; }
     [data-payment-head] {
       display: flex; flex-wrap: nowrap; align-items: start; gap: 12px;
       min-block-size: 0; padding: 20px;
@@ -58,7 +57,7 @@ export const desktopBalancedReview = css`
       > [data-payment-zone] {
         min-inline-size: 0; padding: 16px;
         border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-        border-radius: 0; background: ${({ theme }) => theme.color.surface};
+        border-radius: ${({ theme }) => theme.radius.surface}; background: ${({ theme }) => theme.color.surface};
       }
       > [data-payment-zone="decision"] { grid-area: decision; display: grid; align-content: start; gap: 14px; }
       > [data-payment-zone="expected"] { grid-area: expected; }
@@ -85,7 +84,7 @@ export const desktopBalancedReview = css`
       [data-payment-sms] > div { padding-block: 10px 0; }
       [data-payment-zone="decision"] > [data-reject] { order: initial; }
       [data-reject] > summary { display: none; }
-      [data-payment-zone="proof"] img { inline-size: 100%; max-block-size: none; border-radius: 0; }
+      [data-payment-zone="proof"] img { inline-size: 100%; max-block-size: none; border-radius: ${({ theme }) => theme.radius.none}; }
       [data-payment-zone="proof"] > div { max-inline-size: 100%; }
       [data-proof-empty] { display: grid; place-content: center; gap: 10px; min-block-size: 240px; padding: 20px; text-align: center; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 0.8125rem; }
       [data-proof-empty] p { margin: 0; }

@@ -112,10 +112,15 @@ export const GlobalStyle = createGlobalStyle`
   input,
   select,
   textarea {
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     color: inherit;
     font: inherit;
   }
+
+  input[type="checkbox"] { border-radius: ${({ theme }) => theme.radius.small}; }
+  input[type="radio"] { border-radius: ${({ theme }) => theme.radius.circle}; }
+  :where(fieldset) { border-radius: ${({ theme }) => theme.radius.surface}; }
+  :where(dialog) { border-radius: ${({ theme }) => theme.radius.overlay}; }
 
   button,
   select {

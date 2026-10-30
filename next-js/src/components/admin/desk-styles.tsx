@@ -10,7 +10,6 @@ import { media } from "@/styles/theme";
  * quiet drawers for everything that is not the next decision. Every owner screen builds from these parts; screen-specific
  * pieces stay in that screen's own styles file. Owner copy is English only.
  */
-export const panelRadius = "6px";
 /** Codes, references and one-time passwords. */
 export const monoFont = 'ui-monospace, Consolas, "Courier New", monospace';
 
@@ -84,7 +83,7 @@ export const Panel = styled.section`
   min-inline-size: 0;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${panelRadius};
+  border-radius: ${({ theme }) => theme.radius.surface};
 `;
 /** Panel padding for content that is not a list or a drawer. */
 export const PanelBody = styled.div`
@@ -174,7 +173,7 @@ export const Segmented = styled.div`
   scrollbar-width: none;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   &::-webkit-scrollbar { display: none; }
   > a, > button {
     flex: 1 0 auto;
@@ -186,7 +185,7 @@ export const Segmented = styled.div`
     padding: 0 12px;
     border: 0;
     border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
     color: ${({ theme }) => theme.color.mutedText};
     background: transparent;
     font: inherit;

@@ -25,7 +25,7 @@ export const AuditTools = styled(RecordListTools)`
   input, select { min-block-size: 44px; }
   ${media.belowDesktop} { input, select { font-size: 16px; } }
   ${media.desktop} { input, select { min-block-size: 34px; padding-block: 4px; } }
-  [data-floating-field] select { border-radius: 0; }
+  [data-floating-field] select { border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
 /** The search label stays for assistive technology; the placeholder and icon name the field on screen. */
@@ -41,7 +41,7 @@ export const FilterDrawer = styled.div`
   ${media.belowDesktop} {
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.surface};
   }
 `;
 
@@ -74,8 +74,8 @@ export const AuditRangeSummary = styled.div`
 `;
 
 export const AuditRangeDialog = styled(CriteriaDialog)`
-  border-radius: 0;
-  && button { border-radius: 0; }
+  border-radius: ${({ theme }) => theme.radius.overlay};
+  && button { border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
 export const AuditRangeFields = styled.div`
@@ -131,13 +131,13 @@ export const AuditEvent = styled.details`
 
 /** Small tinted tile per category: payments green, sign-in and security amber, everything else brand blue. */
 export const EventIcon = styled.span<{ $category: string }>`
-  display: grid; place-items: center; inline-size: 32px; block-size: 32px; border-radius: 6px;
+  display: grid; place-items: center; inline-size: 32px; block-size: 32px; border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.soft
     : $category === "security" ? theme.color.accent.amber.soft : theme.color.brandSoft};
   color: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.text
     : $category === "security" ? theme.color.accent.amber.text : theme.color.link};
   svg { font-size: 1rem; }
-  ${media.desktop} { inline-size: 28px; block-size: 28px; border-radius: 2px; }
+  ${media.desktop} { inline-size: 28px; block-size: 28px; border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
 export const EventText = styled.span`

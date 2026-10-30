@@ -71,7 +71,7 @@ const QueryChoices = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;
   > select {
     inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 8px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     font: inherit; font-size: 0.8125rem;
     ${focusRing}
@@ -86,7 +86,7 @@ const CompactToolbar = styled(QueryChoices)`
   gap: 4px;
   > select {
     padding-inline: 8px 4px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
     font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
@@ -142,7 +142,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -176,7 +176,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
     min-block-size: 44px;
     padding: 0;
     border-color: ${({ theme }) => theme.color.controlBorder};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.overlay};
     > svg { font-size: 1rem; }
     > b {
       position: absolute;
@@ -223,7 +223,7 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
     display: grid;
     padding: 4px 8px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.surface};
   }
 `;
 /** Desktop keeps dates and times side by side above the filter row; phones stack sections and scroll. */
@@ -289,7 +289,7 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -332,12 +332,12 @@ const PhonePicker = styled(OptionPicker)`
     max-inline-size: 100%;
     inline-size: 100%;
     margin-block-start: 6px;
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.overlay};
     box-shadow: none;
     padding: 8px;
     gap: 8px;
-    > input { min-inline-size: 0; min-block-size: 2.75rem; border-radius: ${({ theme }) => theme.border.radius}; font-size: 16px; }
-    label { min-block-size: 2.75rem; border-radius: 0; font-size: 0.875rem; }
+    > input { min-inline-size: 0; min-block-size: 2.75rem; border-radius: ${({ theme }) => theme.radius.control}; font-size: 16px; }
+    label { min-block-size: 2.75rem; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.875rem; }
     label > span { overflow-wrap: anywhere; }
   }
 `;
@@ -364,7 +364,7 @@ const ProbabilityInputs = styled.div`
     padding-inline: 5px;
     /* Editable field boundaries stay distinct from quiet section frames. */
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     ${controlFeedback}
     background: ${({ theme }) => theme.color.surface};
     color: ${({ theme }) => theme.color.mutedText};
@@ -377,7 +377,7 @@ const ProbabilityInputs = styled.div`
     min-block-size: 1.75rem;
     padding: 0;
     border: 0;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
     background: transparent;
     color: ${({ theme }) => theme.color.text};
     font: inherit;
@@ -397,7 +397,7 @@ const ProbabilityInputs = styled.div`
       min-block-size: 2.5rem;
       padding: 4px 8px;
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-      border-radius: ${({ theme }) => theme.border.radius};
+      border-radius: ${({ theme }) => theme.radius.control};
       ${controlFeedback}
       font-size: 16px;
       &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.accent.red.text}; }
@@ -423,7 +423,7 @@ const QuietButton = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
@@ -468,7 +468,7 @@ const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
   padding-inline: 10px 4px;
   background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   &:focus-within { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; }
   ${media.hover} { &:hover { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; } }
 `;
@@ -481,7 +481,7 @@ const FieldName = styled.span<{ $accent: AccentName }>`
   font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
-  &::before { content: ""; inline-size: 7px; block-size: 7px; border-radius: 50%; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
+  &::before { content: ""; inline-size: 7px; block-size: 7px; border-radius: ${({ theme }) => theme.radius.circle}; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
 `;
 /** Selected values on one line: chips shrink with an ellipsis and the remainder becomes "+N". */
 const ChipLine = styled.div`
@@ -518,7 +518,7 @@ const ApplyButton = styled.button`
   background: ${({ theme }) => theme.gradient.action};
   border: 0;
   ${media.belowDesktop} { ${buttonBorder} }
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -531,7 +531,7 @@ const ApplyButton = styled.button`
 `;
 const OutlineButton = styled(QuietButton)`
   min-block-size: 2rem;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.8125rem;
   border-color: transparent;
   background: transparent;

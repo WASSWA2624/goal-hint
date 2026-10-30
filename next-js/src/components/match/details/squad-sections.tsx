@@ -84,7 +84,7 @@ const Pitch = styled.ol`
   list-style: none;
   background: repeating-linear-gradient(180deg, ${({ theme }) => theme.color.accent.emerald.soft} 0 2.5rem,
     color-mix(in srgb, ${({ theme }) => theme.color.accent.emerald.solid} 8%, ${({ theme }) => theme.color.accent.emerald.soft}) 2.5rem 5rem);
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   > li { display: flex; justify-content: space-around; gap: 4px; }
   button {
     display: grid;
@@ -96,7 +96,7 @@ const Pitch = styled.ol`
     color: ${({ theme }) => theme.color.accent.emerald.text};
     background: none;
     border: 0;
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     font: inherit;
     font-size: ${size("micro")};
     line-height: 1.15;
@@ -104,7 +104,7 @@ const Pitch = styled.ol`
     cursor: pointer;
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; }
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surface}; } }
-    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border-radius: 50%; font-size: ${size("caption")}; }
+    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.circle}; font-size: ${size("caption")}; }
     > span { overflow-wrap: anywhere; }
   }
   ${desktop} { button { font-size: ${size("caption")}; } }
@@ -189,7 +189,7 @@ const Avatar = styled.span`
   block-size: 1.5rem;
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
-  border-radius: 50%;
+  border-radius: ${({ theme }) => theme.radius.circle};
   font-size: 0.5625rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;

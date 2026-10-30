@@ -227,7 +227,7 @@ existing access/status policy determines its default elsewhere. This local
 mobile count does not change the shared query count or desktop badges. Sorting
 is edited inside Advanced filters and applies with that sheet's complete draft.
 A Changes ready to apply notice distinguishes valid unsent edits. Phone controls retain
-visible backgrounds, solid 1px borders, square corners, and top-level targets
+visible backgrounds, solid 1px borders, shared subtle corner radii, and top-level targets
 of at least 44px. The phone match count updates with the displayed projection,
 including live refreshes; desktop shows it with the results. It is omitted when
 no successful projection is available. Draft edits make no count-preview

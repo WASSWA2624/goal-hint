@@ -21,7 +21,7 @@ const TextLink = styled(Link)`
 
 const Tooltip = styled.span`
   position: fixed; z-index: 100; inline-size: max-content; max-inline-size: min(35rem, calc(100vw - 16px));
-  padding: 6px 8px; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0;
+  padding: 6px 8px; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.overlay};
   color: ${({ theme }) => theme.color.surface}; background: ${({ theme }) => theme.color.text};
   font-size: 0.75rem; line-height: 1.5; white-space: normal; overflow-wrap: anywhere;
 `;

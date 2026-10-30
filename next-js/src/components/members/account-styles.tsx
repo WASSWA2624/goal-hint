@@ -8,7 +8,7 @@ export const AccountCard = styled.section`
   inline-size: 100%; max-inline-size: 26rem; min-inline-size: 0; margin-inline: auto;
   background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   font-size: 0.875rem; line-height: 1.45;
   button, a { min-block-size: 44px; }
   input { min-block-size: 48px; font-size: 16px; }
@@ -44,7 +44,7 @@ export const AccountSingleDeviceInfo = styled.details`
   > summary svg { inline-size: 18px; block-size: 18px; }
   > p { position: absolute; inset-inline-end: 0; inset-block-start: 100%; z-index: 2; inline-size: 14rem; max-inline-size: 70vw;
     padding: 10px 12px; border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.surface};
     color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
 `;
 export const AccountSupport = styled.nav`
@@ -53,7 +53,7 @@ export const AccountSupport = styled.nav`
   > * { min-inline-size: 0; }
   form { margin: 0; }
   a, button { display: flex; align-items: center; min-block-size: 44px; padding: 4px 0; border: 0; background: transparent;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
     color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; font-weight: 400; text-decoration: underline;
     text-underline-offset: 3px; white-space: normal; }
   > :last-child, > :last-child button { justify-content: flex-end; text-align: end; }
@@ -76,7 +76,7 @@ export const AccountTextButton = styled(Button)`
 export const AccountPhone = styled.div`
   display: flex; align-items: center; gap: 10px; min-inline-size: 0;
   padding: 10px 12px; background: ${({ theme }) => theme.color.surfaceMuted};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   > svg { inline-size: 20px; block-size: 20px; flex: none; color: ${({ theme }) => theme.color.link}; }
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
   strong { font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }

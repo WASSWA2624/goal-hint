@@ -59,7 +59,7 @@ export const LivePill = styled.span`
   align-items: center;
   gap: 8px;
   padding: 4px 10px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.controlFill};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -68,7 +68,7 @@ export const LivePill = styled.span`
     content: "";
     inline-size: 8px;
     block-size: 8px;
-    border-radius: 50%;
+    border-radius: ${({ theme }) => theme.radius.circle};
     background: ${({ theme }) => theme.header.accent};
     animation: ${pulse} 2s infinite;
   }
@@ -78,7 +78,7 @@ const headerControl = css`
   min-block-size: 32px;
   padding: 4px 12px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.controlFill};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -116,7 +116,7 @@ export const PageTitle = styled.div`
 export const Notice = styled.p<{ $tone?: "warning" | "error" | "info" }>`
   padding: 10px 14px;
   border-inline-start: 4px solid;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   font-size: ${({ theme }) => theme.typography.scale.body};
   ${({ theme, $tone = "info" }) => {
     const tone = $tone === "error" ? theme.color.outcome.incorrect : $tone === "warning" ? theme.color.outcome.pending : theme.color.outcome.void;
@@ -135,7 +135,7 @@ export const FilterBar = styled.section`
   padding: 12px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   ${media.belowDesktop} { position: static; }
 `;
 export const Field = styled.label`
@@ -152,7 +152,7 @@ export const Field = styled.label`
     inline-size: 100%;
     padding: 4px 8px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     font-size: ${({ theme }) => theme.typography.scale.body};
@@ -167,7 +167,7 @@ export const ToolButton = styled.button<{ $variant?: "primary" | "secondary" | "
   min-block-size: 36px;
   padding: 4px 12px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   font-size: ${({ theme }) => theme.typography.scale.body};
@@ -195,7 +195,7 @@ export const Chip = styled.li`
   gap: 4px;
   max-inline-size: 100%;
   padding: 2px 4px 2px 10px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.brand};
   background: ${({ theme }) => theme.color.brandSoft};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
@@ -206,7 +206,7 @@ export const Chip = styled.li`
     inline-size: 26px;
     block-size: 26px;
     border: 0;
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.small};
     color: inherit;
     background: transparent;
     font-size: 1rem;
@@ -256,7 +256,7 @@ export const Panel = styled.section<{ $busy?: boolean }>`
   padding: 14px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   transition: opacity 120ms;
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   ${media.desktop} { padding: 18px 20px; }
@@ -314,7 +314,7 @@ export const SegmentButton = styled.button<{ $selected: boolean }>`
   min-block-size: 32px;
   padding: 4px 10px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme, $selected }) => ($selected ? theme.color.brand : theme.color.border)};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme, $selected }) => ($selected ? theme.color.brand : theme.color.mutedText)};
   background: ${({ theme, $selected }) => ($selected ? theme.color.brandSoft : "transparent")};
   font-size: ${({ theme }) => theme.typography.scale.secondary};

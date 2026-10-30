@@ -70,7 +70,7 @@ const Choice = styled.label`
   min-block-size: 44px;
   padding: 6px 8px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme }) => theme.color.surface};
   color: ${({ theme }) => theme.color.text};
   font-size: 0.75rem;

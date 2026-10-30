@@ -11,7 +11,7 @@ export const RangeFieldset = styled.fieldset`
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   border: 0;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.none};
   font-size: 0.75rem;
 `;
 
@@ -38,7 +38,7 @@ export const RangeFields = styled.div`
     background: ${({ theme }) => theme.color.surface};
     /* Editable field boundaries stay distinct from quiet section frames. */
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: ${({ theme }) => theme.border.radius};
+    border-radius: ${({ theme }) => theme.radius.control};
     ${controlFeedback}
     &:has(input:focus-visible) { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
     &:has(input[aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.outcome.incorrect.border}; }
@@ -59,7 +59,7 @@ export const RangeFields = styled.div`
     color: ${({ theme }) => theme.color.text};
     background: transparent;
     border: 0;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
     font: inherit;
     outline: none;
   }
@@ -91,7 +91,7 @@ export const RangeFields = styled.div`
       padding: 4px 8px;
       background: ${({ theme }) => theme.color.surface};
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-      border-radius: ${({ theme }) => theme.border.radius};
+      border-radius: ${({ theme }) => theme.radius.control};
       font-size: 16px;
       line-height: 1.2;
       ${controlFeedback}

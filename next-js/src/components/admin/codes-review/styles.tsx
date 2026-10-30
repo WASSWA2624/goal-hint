@@ -8,7 +8,6 @@ export const Gallery = styled.main`
   min-block-size: 100dvh; padding: 24px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.page};
   *, *::before, *::after { box-sizing: border-box; }
   a { color: ${({ theme }) => theme.color.link}; }
-  button, input, select, textarea, fieldset, details { border-radius: 0; }
   > div { max-inline-size: 1440px; margin-inline: auto; }
   @media (max-width: 40rem) { padding: 14px; }
 `;

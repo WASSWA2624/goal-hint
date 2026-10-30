@@ -12,7 +12,7 @@ const fieldControl = css`
   min-block-size: 40px;
   padding: 8px 11px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
   font: inherit;
@@ -30,7 +30,7 @@ const toolbarFieldControl = css`
   ${fieldControl}
   min-block-size: 2rem;
   padding: 4px 8px;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme }) => theme.color.surface};
   font-size: 0.75rem;
   @media (pointer: coarse) { min-block-size: 44px; }
@@ -45,7 +45,7 @@ export const Panel = styled.form`
   min-inline-size: 0;
   padding: 8px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   [data-criteria-dialog] { background: var(--filter-panel-background); }
@@ -86,7 +86,7 @@ export const SectionButton = styled.button`
   min-inline-size: 0;
   min-block-size: 2rem;
   padding: 4px 8px;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface};
@@ -114,7 +114,7 @@ export const Count = styled.span`
   min-inline-size: 16px;
   min-block-size: 16px;
   padding: 1px 4px;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
   font-size: 0.6875rem;
@@ -164,7 +164,7 @@ export const ActionButton = styled(Button)`
     min-inline-size: 0;
     min-block-size: 2rem;
     padding: 4px 8px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.75rem;
     line-height: 1.25;
     white-space: nowrap;

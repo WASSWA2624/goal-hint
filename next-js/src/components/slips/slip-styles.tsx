@@ -12,7 +12,7 @@ const mobileToolbarFontSize = "0.75rem";
 const mobileToolbarValueFontSize = "0.875rem";
 const toolbarAction = css`
   min-block-size: ${compactControlHeight}; min-inline-size: 0; padding: 4px 8px;
-  border-radius: 0; gap: 5px; font-size: 0.75rem; line-height: 1.3;
+  border-radius: ${({ theme }) => theme.radius.control}; gap: 5px; font-size: 0.75rem; line-height: 1.3;
   > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
 `;
@@ -21,7 +21,7 @@ const desktopBuildAction = css`
     && {
       flex: none; inline-size: 13rem; min-inline-size: 13rem;
       block-size: ${compactControlHeight}; min-block-size: ${compactControlHeight};
-      padding: 4px 8px; border-radius: 0; font-size: 0.75rem; line-height: 1.3; white-space: nowrap;
+      padding: 4px 8px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.75rem; line-height: 1.3; white-space: nowrap;
     }
     @media (pointer: coarse) { && { block-size: 44px; min-block-size: 44px; } }
   }
@@ -88,12 +88,12 @@ export const HeadingRow = styled.div`
 `;
 export const Note = styled.p`color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.45;`;
 export const CriteriaPanel = styled(Surface)`
-  && { padding: 8px; border-radius: ${({ theme }) => theme.border.radius}; }
+  && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   ${media.desktop} { && { padding: 10px; } }
 `;
 export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
-  && { padding: 8px; border-radius: 0; }
+  && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   [data-criteria-dialog] { background: var(--filter-panel-background); }
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
@@ -181,7 +181,7 @@ export const BuilderEssentials = styled.div`
   > [data-slip-count] label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
   [data-slip-count-label="desktop"] { display: none; }
   > [data-slip-count] input {
-    min-block-size: ${compactControlHeight}; padding: 4px; border-radius: 0; font-size: 1rem;
+    min-block-size: ${compactControlHeight}; padding: 4px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 1rem;
     ${filterControlColors}
     ${controlFeedback}
     &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
@@ -235,7 +235,7 @@ export const CriteriaTrigger = styled(Button)`
     > svg { font-size: 0.75rem; }
     > [data-criteria-count] {
       flex: none; display: inline-flex; align-items: center; justify-content: center;
-      min-inline-size: 1rem; block-size: 1rem; padding-inline: 3px; border-radius: 0;
+      min-inline-size: 1rem; block-size: 1rem; padding-inline: 3px; border-radius: ${({ theme }) => theme.radius.small};
       color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
       font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; line-height: 1;
     }
@@ -266,7 +266,7 @@ export const Fields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px;
   > div { gap: 2px; }
   > div > label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
-  > div > input { min-block-size: ${compactControlHeight}; padding: 4px 6px; border-radius: ${({ theme }) => theme.border.radius}; font-size: 1rem; }
+  > div > input { min-block-size: ${compactControlHeight}; padding: 4px 6px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 1rem; }
   ${media.desktop} { > div > input { font-size: 0.875rem; } }
   @media (max-width: 22.5rem) { &[data-kickoff-fields] { grid-template-columns: minmax(0, 1fr); } }
   @media (pointer: coarse) { > div > input { min-block-size: 44px; } }
@@ -284,7 +284,7 @@ export const TargetGroups = styled(LimitGroups)`
   > fieldset > legend { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; margin-block-end: 8px; }
   ${Fields} { gap: 4px; }
   ${Fields} > div > input {
-    padding-inline: 3px; border-radius: 0;
+    padding-inline: 3px; border-radius: ${({ theme }) => theme.radius.small};
     ${filterControlColors}
     ${controlFeedback}
     &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }

@@ -205,7 +205,7 @@ const SidebarControls = styled.div`
 `;
 const SidebarButton = styled.button`
   display: grid; place-items: center; inline-size: 28px; block-size: 28px; padding: 0;
-  border: 0; border-radius: 2px; color: ${({ theme }) => theme.color.mutedText}; background: none; cursor: pointer;
+  border: 0; border-radius: ${({ theme }) => theme.radius.control}; color: ${({ theme }) => theme.color.mutedText}; background: none; cursor: pointer;
   > svg { font-size: 1rem; }
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.rowHover}; } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
@@ -237,7 +237,7 @@ const SectionLink = styled(Link)`
   gap: 10px;
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding: 0 10px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;

@@ -48,7 +48,7 @@ export const SkipLink = styled.a`
   /* Above the sticky phone brand bar (30); below the filter popovers (35) and sheets. */
   z-index: 31;
   padding: ${({ theme }) => theme.space.sm};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
 
@@ -158,7 +158,7 @@ const topLink = css<{ $tone?: AccentName }>`
     inset-inline: 12px;
     inset-block-end: -1px;
     block-size: 3px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.control};
   }
   ${media.hover} {
     &:hover { color: ${({ theme }) => theme.header.text}; }
@@ -269,7 +269,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   list-style: none;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
   a {
     display: flex;
@@ -279,7 +279,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
     gap: 8px;
     padding-inline: ${({ theme }) => theme.space.md};
     color: ${({ theme }) => theme.color.text};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.small};
     text-decoration: none;
     overflow-wrap: anywhere;
     > svg { flex: none; inline-size: 1.125rem; block-size: 1.125rem; }
@@ -365,7 +365,7 @@ export const FooterLink = styled(Link)`
   min-block-size: 1.75rem;
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.mutedText};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; background: ${({ theme }) => theme.color.surfaceMuted}; } }

@@ -72,7 +72,7 @@ const CopyAction = styled(TextAction)<{ $compact: boolean }>`
   min-inline-size: 44px;
   min-block-size: 44px;
   padding-inline: 8px;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   ${({ $compact }) => $compact && css`padding-inline: 0; > span { ${visuallyHidden} }`}
   ${media.desktop} { min-block-size: 38px; }
 `;

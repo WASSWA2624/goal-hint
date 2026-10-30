@@ -21,7 +21,7 @@ const Card = styled.section`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.surface};
 
   > h2 {
     margin: 0;
@@ -50,7 +50,6 @@ const Card = styled.section`
   ${RowButton} { min-block-size: 44px; font-size: 14px; }
   ${Assent} { align-items: flex-start; padding-block: 4px; font-size: 15px; line-height: 21px; }
   ${Assent} input { inline-size: 18px; block-size: 18px; min-block-size: 18px; margin-block-start: 1px; }
-  button, input, fieldset, label { border-radius: 0; }
   @media (max-width: 400px) { padding: 14px 12px; }
 `;
 
@@ -140,7 +139,7 @@ export const WizardActions = styled.div`
     inline-size: 100%;
     min-block-size: 46px;
     padding: 8px 12px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.control};
     font-size: 16px;
     line-height: 22px;
   }
@@ -162,7 +161,7 @@ export const WizardPlans = styled(Plans)`
     gap: 8px;
     min-block-size: 58px;
     padding: 10px 12px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.radius.surface};
   }
   > ${Plan} input { inline-size: 18px; block-size: 18px; margin: 0; }
   ${PlanName} { font-size: 16px; line-height: 22px; }
@@ -257,7 +256,7 @@ export const WizardReceipt = styled.div`
 `;
 
 export const WizardEdit = styled(Button)`
-  && { min-block-size: 44px; min-inline-size: 44px; padding: 4px 6px; border-radius: 0; font-size: 14px; line-height: 20px; }
+  && { min-block-size: 44px; min-inline-size: 44px; padding: 4px 6px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 14px; line-height: 20px; }
 `;
 
 export const WizardScreenshot = styled.div`
@@ -291,7 +290,7 @@ export const WizardMethod = styled.div`
   min-inline-size: 0;
   > ${PaymentTransfer} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
   ${WalletChoices} { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  ${WalletChoice}, ${Wallet} { border-radius: 0; }
+  ${WalletChoice}, ${Wallet} { border-radius: ${({ theme }) => theme.radius.control}; }
   ${WalletChoice} > span { justify-content: flex-start; gap: 10px; min-block-size: 54px; padding: 8px 10px; font-size: 16px; line-height: 22px; }
   ${WalletChoice} > span > svg:last-child { margin-inline-start: auto; }
   ${Wallet} { inline-size: 100%; gap: 6px 10px; padding: 12px; }

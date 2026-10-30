@@ -8,7 +8,7 @@ import { ChevronDownIcon } from "./icons";
 const Disclosure = styled.details`
   min-inline-size: 0;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > summary {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;

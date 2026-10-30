@@ -21,13 +21,13 @@ export function NetworkChip({ network, labelled = false }: { network: string; la
 const NetworkMark = styled.span`
   display: inline-flex;
   flex: none;
-  [data-payment-logo] { inline-size: 40px; block-size: 18px; border-radius: 2px; overflow: hidden; }
+  [data-payment-logo] { inline-size: 40px; block-size: 18px; border-radius: ${({ theme }) => theme.radius.small}; overflow: hidden; }
   [data-payment-logo="airtel"] { inline-size: 18px; }
 `;
 const NetworkText = styled.span`
   display: inline-flex;
   padding: 0 5px;
-  border-radius: 2px;
+  border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.scale.micro};

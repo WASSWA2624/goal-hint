@@ -48,12 +48,11 @@ export function SubscriberReviewDialog({ open, title, onClose, children, footer,
 const Dialog = styled.dialog`
   position: fixed; inset: 0; inline-size: min(40rem, calc(100vw - 24px)); max-inline-size: calc(100vw - 24px);
   max-block-size: calc(100dvh - 24px); min-inline-size: 0; margin: auto; padding: 0; overflow: hidden;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0;
+  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.overlay};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit;
   &[open] { display: flex; flex-direction: column; }
   &::backdrop { background: ${({ theme }) => theme.color.scrim}; }
   *, *::before, *::after { box-sizing: border-box; }
-  input, select, textarea, button, fieldset, details, summary, section, [role="group"] { border-radius: 0; }
 `;
 const Header = styled.header`
   display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;

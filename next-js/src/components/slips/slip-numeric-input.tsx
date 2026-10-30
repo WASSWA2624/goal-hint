@@ -43,7 +43,7 @@ const Stepper = styled.span`
 `;
 const StepButton = styled.button`
   display: flex; align-items: center; justify-content: center; flex: 1; min-block-size: 0;
-  padding: 0; border: 0; border-radius: 0; color: ${({ theme }) => theme.color.mutedText};
+  padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 0.5rem; line-height: 1; cursor: pointer;
   &:hover, &:focus-visible { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
   &:focus-visible { outline: 1px solid ${({ theme }) => theme.color.focus}; outline-offset: -1px; }
@@ -54,7 +54,7 @@ const Warning = styled.span`
   inline-size: max-content; max-inline-size: min(20rem, calc(100vw - 16px));
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.incorrect.border};
-  border-radius: 0; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere;
+  border-radius: ${({ theme }) => theme.radius.surface}; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere;
   pointer-events: none;
 `;
 

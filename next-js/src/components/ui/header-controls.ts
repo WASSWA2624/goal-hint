@@ -28,7 +28,7 @@ export const compactHeaderControl = css`
   min-block-size: 2.75rem;
   padding: 4px 6px;
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.75rem;
   line-height: 1.25;

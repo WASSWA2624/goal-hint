@@ -16,7 +16,7 @@ export const AccountSheet = styled.article`
   box-sizing: border-box; inline-size: 100%; max-inline-size: 42.5rem; min-inline-size: 0; margin-inline: auto; padding: 4px 18px;
   background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   font-size: 0.9375rem; line-height: 1.55; overflow-wrap: break-word;
   a, button { min-block-size: 44px; }
   > h1 { margin: 14px 0 2px; font-size: 1.375rem; line-height: 1.3; font-weight: 800; }
@@ -71,7 +71,7 @@ export const AccountActionLink = styled(TextLink)`
 /** Status messages after a change, above the sentences. */
 export const AccountFlash = styled.p`
   && { margin-block-start: 8px; }
-  padding: 8px 12px; border-radius: ${({ theme }) => theme.border.radius};
+  padding: 8px 12px; border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.outcome.correct.text}; background: ${({ theme }) => theme.color.outcome.correct.background};
   font-size: 0.875rem;
 `;

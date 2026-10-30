@@ -65,7 +65,7 @@ export const RailStep = styled.li`
   input[data-topup-amount] { max-inline-size: 18rem; }
 `;
 export const RailNumber = styled.span`
-  display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: ${({ theme }) => theme.border.radius};
+  display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link};
   border: 1px solid ${({ theme }) => theme.color.controlBorder};
   font-size: 12px; line-height: 1; font-weight: ${({ theme }) => theme.typography.weight.heavy};
@@ -86,7 +86,7 @@ export const Plan = styled.label`
   position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 3px 6px; align-content: start;
   min-inline-size: 0; padding: 8px; cursor: pointer;
   border: 1px solid ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   input { inline-size: 14px; block-size: 14px; margin: 2px 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
   &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
   &:has(input:focus-visible) { ${focusRing} }
@@ -104,7 +104,7 @@ export const WalletChoices = styled.fieldset`
 export const WalletChoice = styled.label`
   position: relative; min-inline-size: 0; cursor: pointer;
   border: 1px solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   &:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; }
   input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
   > span { display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
@@ -117,7 +117,7 @@ export const WalletChoice = styled.label`
 export const Wallet = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; min-inline-size: 0; padding: 10px;
   background: ${({ theme }) => theme.color.surfaceMuted}; border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
 `;
 export const WalletNumber = styled.span`
   grid-column: 1; min-inline-size: 0; font-size: 18px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
@@ -134,10 +134,10 @@ export const Action = styled(Button)`font-size: 12px; gap: 6px; min-block-size: 
 export const ActionLink = styled(ButtonLink)`font-size: 12px; gap: 6px; min-block-size: 44px; ${icons}`;
 export const CopyButton = styled(Action)`grid-column: 2; grid-row: 1 / 3; padding-inline: 8px;`;
 export const MenuLink = styled(ActionLink)`justify-self: start; padding-inline: 0;`;
-export const Locked = styled.p`display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: ${({ theme }) => theme.border.radius}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText} ${icons}`;
+export const Locked = styled.p`display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: ${({ theme }) => theme.radius.surface}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText} ${icons}`;
 export const StatusBox = styled.div`
   display: grid; gap: 8px; min-inline-size: 0; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 13px; line-height: 20px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   p { margin: 0; }
   ${RowButton} { justify-self: start; min-block-size: 44px; }
 `;
@@ -180,13 +180,13 @@ export const ConfirmDetails = styled.dl`
   > div { display: grid; grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; }
   dt { ${smallText} } dd { margin: 0; min-inline-size: 0; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
 `;
-export const ConfirmPreview = styled.img`display: block; max-inline-size: 7rem; max-block-size: 9rem; border-radius: ${({ theme }) => theme.border.radius}; object-fit: contain;`;
+export const ConfirmPreview = styled.img`display: block; max-inline-size: 7rem; max-block-size: 9rem; border-radius: ${({ theme }) => theme.radius.surface}; object-fit: contain;`;
 export const PasteButton = styled(Button)`&& { gap: 6px; padding-inline: 10px; font-size: 13px; } ${icons}`;
 export const FileChoices = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0;`;
 export const FileBox = styled.label`
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;
   border: 1px dashed ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.control};
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
   ${icons}
   input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }

@@ -60,7 +60,7 @@ const Overview = styled(DeskGrid)<{ $notices: boolean }>`
 const Metrics = styled.div`
   overflow: hidden;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
+  border-radius: ${({ theme }) => theme.radius.surface};
   > dl > div { min-block-size: 64px; }
   /* An odd count would leave a bare hairline cell; the last tile takes the full row instead. */
   > dl > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
@@ -110,7 +110,7 @@ const Review = styled(Link)`
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding-inline: 14px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
+  border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   font-weight: ${({ theme }) => theme.typography.weight.bold};

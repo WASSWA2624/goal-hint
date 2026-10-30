@@ -12,7 +12,7 @@ const Review = styled.main`
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.page};
   font-size: 0.875rem;
   h1 { font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.2; letter-spacing: -0.04em; }
-  button, select { font: inherit; border-radius: 0; }
+  button, select { font: inherit; }
   button, select, a { outline-offset: 3px; }
   button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; }
 `;

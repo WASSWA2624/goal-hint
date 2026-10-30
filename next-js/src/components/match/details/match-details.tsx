@@ -88,7 +88,7 @@ const RoundLink = styled(Link)`
   inline-size: 2.75rem;
   block-size: 2.75rem;
   color: ${({ theme }) => theme.header.text};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.radius.control};
   font-size: 1.375rem;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}

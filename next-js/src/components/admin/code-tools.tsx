@@ -212,7 +212,7 @@ const RevokeConfirmation = styled.div`
   gap: 8px;
   padding: 10px 12px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.pending.border};
-  border-radius: 6px;
+  border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.outcome.pending.background};
   p { color: ${({ theme }) => theme.color.outcome.pending.text}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   > div { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -313,7 +313,7 @@ const Codes = styled(RecordWorkspace)`
 const HeaderEnd = styled.div`margin-inline-start: auto; ${media.belowDesktop} { display: none; }`;
 const CodeList = styled(RecordList)`${media.belowDesktop} { order: 2; }`;
 const CodeDetails = styled(RecordDetails)`${media.belowDesktop} { order: 1; }`;
-const GrantPanel = styled.div`min-inline-size: 0; &[hidden] { display: none; } ${media.belowDesktop} { background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 2px; }`;
+const GrantPanel = styled.div`min-inline-size: 0; &[hidden] { display: none; } ${media.belowDesktop} { background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.surface}; }`;
 const Facts = styled(FactList)`padding: 12px;`;
 const MobileCodeDetails = styled(PlainDrawer)`
   > summary { min-block-size: 44px; }

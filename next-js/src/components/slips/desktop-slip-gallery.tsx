@@ -11,7 +11,7 @@ const Review = styled.main`
   min-block-size: 100vh; padding: 28px clamp(12px, 3vw, 48px) 40px;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.page};
   font-size: 0.875rem;
-  button, select, input { font: inherit; border-radius: 0; }
+  button, select, input { font: inherit; }
   button, select, a, input { outline-offset: 3px; }
   :is(button, select, a, input):focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; }
 `;

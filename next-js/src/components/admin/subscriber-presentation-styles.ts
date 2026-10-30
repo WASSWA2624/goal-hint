@@ -6,19 +6,18 @@ import { RecordBody, RecordHead } from "./record-workspace";
 
 /** Approved Balanced compact presentation, shared by the live workspace and studies. */
 export const subscriberPresentation = css`
-  button, input, select, textarea, section, article, form, [role="group"], [role="tabpanel"] { border-radius: 0; }
   > ${RecordHead} { display: flex; justify-content: space-between; }
   > ${RecordHead} > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
   > ${RecordHead} > button { display: inline-flex; margin-inline-start: auto; }
   [data-subscriber-review-filters] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0; padding-block: 3px; }
   [data-subscriber-review-filters] > :first-child { grid-column: 1 / -1; }
-  [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-inline-size: 0; inline-size: 100%; border-radius: 0; }
-  [data-review-subscriber-row] { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 3px 8px; align-items: center; border-radius: 0; }
+  [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-inline-size: 0; inline-size: 100%; border-radius: ${({ theme }) => theme.radius.control}; }
+  [data-review-subscriber-row] { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 3px 8px; align-items: center; border-radius: ${({ theme }) => theme.radius.none}; }
   [data-review-network] { display: grid; place-items: center; grid-column: 1; grid-row: 1 / span 2; inline-size: 30px; min-inline-size: 0; }
   [data-review-network] > svg { inline-size: 22px; block-size: 22px; color: ${({ theme }) => theme.color.mutedText}; }
   [data-review-network] [data-payment-logo] { inline-size: 28px; block-size: 22px; }
   [data-review-phone] { grid-column: 2; min-inline-size: 0; font-size: 0.8125rem; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  [data-review-row-status] { grid-column: 3; justify-self: end; font-size: 0.625rem; border-radius: 0; }
+  [data-review-row-status] { grid-column: 3; justify-self: end; font-size: 0.625rem; border-radius: ${({ theme }) => theme.radius.small}; }
   [data-review-row-meta] { grid-column: 2 / -1; min-inline-size: 0; font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; overflow-wrap: anywhere; }
   [data-subscriber-detail] { container: subscriber-detail / inline-size; }
   [data-subscriber-detail] ${RecordBody} { gap: 8px; padding: 12px; }

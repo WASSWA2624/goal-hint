@@ -7,6 +7,7 @@ import { FallbackStyleProvider } from "@/styles/provider";
 import { Header, HeaderContent, ShellFrame } from "./shell-styles";
 
 const Placeholder = styled.div`
+  border-radius: ${({ theme }) => theme.radius.surface};
   min-block-size: 7rem;
   border: ${({ theme }) => `${theme.border.width} solid ${theme.color.border}`};
   background: ${({ theme }) => theme.color.surface};

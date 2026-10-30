@@ -91,7 +91,7 @@ const Card = styled.article`
     grid-template-areas: "meta" "teams" "pick";
     gap: 4px;
     padding: 6px 8px;
-    /* Match and slip tiles share the active theme's square, shadow-free phone frame. */
+    /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
     border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
     [data-mobile-only] { display: inline; }
@@ -242,9 +242,9 @@ const FlagImage = styled.img`
   block-size: 11px;
   margin-inline-end: 4px;
   object-fit: cover;
-  border-radius: 1px;
+  border-radius: ${({ theme }) => theme.radius.small};
   box-shadow: 0 0 0 0.5px ${({ theme }) => theme.color.border};
-  ${tile} { inline-size: 0.9375rem; block-size: 0.625rem; margin-inline-end: 3px; border-radius: 0; box-shadow: none; }
+  ${tile} { inline-size: 0.9375rem; block-size: 0.625rem; margin-inline-end: 3px; border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
 `;
 const FlagFallback = styled.span`
   display: grid;
@@ -394,7 +394,7 @@ const LiveDot = styled.span`
   flex: none;
   inline-size: 6px;
   block-size: 6px;
-  border-radius: 50%;
+  border-radius: ${({ theme }) => theme.radius.circle};
   background: ${({ theme }) => theme.color.live.solid};
   animation: ${glow} 1.6s ease-in-out infinite;
   /* Reduced motion keeps a still halo. */

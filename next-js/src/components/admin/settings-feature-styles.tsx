@@ -7,8 +7,7 @@ export const FeatureBody = styled.div`
   display: grid; gap: 16px; min-inline-size: 0; padding: 18px;
   h2 { font-size: 1rem; line-height: 1.35; }
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: 1.5; }
-  input:not([type="checkbox"], [type="radio"]), select, textarea { ${adminControl} border-radius: 0; }
-  button { border-radius: 0; }
+  input:not([type="checkbox"], [type="radio"]), select, textarea { ${adminControl} }
 `;
 export const FeatureHeading = styled.div`
   display: flex; align-items: center; justify-content: space-between; gap: 12px; min-inline-size: 0;
@@ -19,6 +18,7 @@ export const ContactList = styled.div`
   display: grid; gap: 12px; min-inline-size: 0;
 `;
 export const ContactRow = styled.section`
+  border-radius: ${({ theme }) => theme.radius.surface};
   display: grid; gap: 10px; min-inline-size: 0; padding: 14px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface};

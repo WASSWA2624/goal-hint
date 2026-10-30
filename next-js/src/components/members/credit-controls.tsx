@@ -23,7 +23,7 @@ const serverReady = () => false;
 
 const Box = styled.div`
   display: grid; gap: 8px; min-inline-size: 0; padding: 8px 10px;
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius};
+  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > p { margin: 0; }
   strong { font-variant-numeric: tabular-nums; }
@@ -47,7 +47,7 @@ const PlanPicker = styled.label`
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.875rem;
   select { min-block-size: 44px; max-inline-size: 100%; padding-inline: 10px; font: inherit;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.border.radius}; }
+    border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
 async function postCredit(body: unknown) {
