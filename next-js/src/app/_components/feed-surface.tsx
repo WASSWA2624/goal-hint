@@ -16,7 +16,7 @@ import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList, MatchListDivider } from "@/components/match/match-card-list";
 import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
-import { Stack } from "@/components/ui/layout";
+import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
@@ -36,7 +36,10 @@ import { media } from "@/styles/theme";
 
 const noLeagues: MatchFeedResponse["leagues"] = [];
 /** Compact spacing still separates controls and match cards clearly on phones. */
-const FeedStack = styled(Stack)`${media.belowDesktop} { gap: 8px; }`;
+const FeedStack = styled(Stack)`
+  ${joinedDesktopSections}
+  ${media.belowDesktop} { gap: 8px; }
+`;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
 const Results = styled(FeedStack)`
   transition: opacity 150ms ease;

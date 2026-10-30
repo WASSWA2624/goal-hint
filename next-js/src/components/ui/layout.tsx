@@ -15,6 +15,11 @@ export const Container = styled.div<{ $wide?: boolean }>`
 /** Phones and tablets step each gap down; desktop keeps the full space tokens. */
 const compactGap = { sm: "8px", md: "12px", lg: "16px", xl: "24px" } as const;
 
+/** Adjacent desktop sections meet at their edges; spacing inside each section stays local. */
+export const joinedDesktopSections = css`
+  ${media.desktop} { row-gap: 0; }
+`;
+
 export const Stack = styled.div<{ $gap?: "sm" | "md" | "lg" | "xl" }>`
   display: flex;
   flex-direction: column;
@@ -63,7 +68,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
   `}
   ${media.desktop} {
     padding-block: ${({ theme, $app }) => $app ? `14px ${theme.space.xl}` : theme.space.xl};
-    ${({ $compactTop }) => $compactTop && css`padding-block-start: 4px;`}
+    ${({ $app, $compactTop }) => ($app || $compactTop) && css`padding-block-start: 0;`}
   }
   ${({ $app }) => !$app && anchorClearance}
   ${({ $dashboard }) => $dashboard && css`

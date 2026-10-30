@@ -5444,3 +5444,45 @@ removed afterwards. Reviewed Light/Dark captures and command logs are ignored
 under `output/playwright/desktop-filters-*`. No account, data, native binary,
 dependency or production deployment change was required. See
 [plan 183](../dev-plan/183-sticky-desktop-filter-sections.md).
+
+## 184 — Joined desktop sections — 30 October 2026
+
+Shared `joinedDesktopSections` geometry removes desktop row gutters between
+Matches filters, Overall Performance and results, and between the corresponding
+Best Slips, Builder, Performance and Analytics sections. Desktop app-page top
+padding is zero; Analytics removes its top inset and uses the shared app-header
+sticky offset instead of 53px. Inner filter padding, control gaps, card spacing
+and phone/tablet spacing remain local to their existing components. The owner
+payments, codes, subscribers, plans and audit workspaces already use zero-gap
+desktop geometry and needed no changes. Regular content-page spacing is
+retained outside the app section stacks.
+
+- Changed-file ESLint with zero warnings and strict TypeScript checking passed
+  under Node 24.18.1.
+- Live local Matches, Best Slips and Builder passed twelve desktop cases:
+  1440px/1024px in Light/Dark, no positive gap at adjoining section boundaries,
+  zero outer row gap/top padding and no horizontal overflow. Sticky alignment
+  also passed after 16/50/150/600px scrolls. Matches measured exactly 0px from
+  the filters to Overall Performance. Builder used temporary browser-only
+  scroll space after hydration because the anonymous view had no generated
+  list; that space was removed.
+- At 375px, the original 8px Matches and 6px Best Slips/Builder section gaps,
+  8px main top padding and normal page width remained unchanged.
+- Isolated previews rendered the actual exported Performance sections and
+  Analytics styles, plus the actual Analytics `AdminWorkspace`, in both themes
+  at 1440px/1024px. Eight further desktop cases passed joined title/filter/result
+  boundaries and Analytics sticky alignment. Mobile previews retained 16px
+  section spacing, static filters and Analytics' 20px main top padding.
+
+The live Performance request timed out before its document finished loading;
+its layout was qualified with the isolated actual-component preview instead.
+The Analytics preview used sample content and stubbed navigation, without an
+owner login or private report. These checks do not establish live reporting or
+authentication acceptance. An initial browser-only Builder spacer was inserted
+before hydration; the corrected checks wait for its enhanced form before adding
+scroll space. No application hydration change was needed.
+
+Previews, scripts, captures and logs are ignored under `output/playwright/` with
+the `joined-` prefix. The owned preview server and browser were closed. No data,
+dependency, native binary or production deployment changed. See
+[plan 184](../dev-plan/184-joined-desktop-sections.md).

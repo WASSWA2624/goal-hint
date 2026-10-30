@@ -4,7 +4,7 @@ import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
-import { PageHeading, Stack, Surface } from "@/components/ui/layout";
+import { joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
 const compactControlHeight = "2rem";
@@ -71,9 +71,8 @@ export const SlipStack = styled(Stack)`
   ${media.belowDesktop} { &[data-slip-builder-page], &[data-best-slips-page] { gap: 6px; } }
   ${media.desktop} {
     gap: 12px;
-    &[data-slip-builder-page] { gap: 6px; }
-    &[data-best-slips-page] { gap: 4px; }
   }
+  &[data-slip-builder-page], &[data-best-slips-page] { ${joinedDesktopSections} }
 `;
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
 export const SlipList = styled.div<{ $phoneGap?: number }>`

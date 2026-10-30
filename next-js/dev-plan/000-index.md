@@ -12,6 +12,8 @@ Paths starting with `next-js/` or `prompts/`, and the specification
 
 The desktop filter follow-up is tracked in
 [183 — Sticky desktop filter sections](183-sticky-desktop-filter-sections.md).
+The matching section-spacing follow-up is
+[184 — Joined desktop sections](184-joined-desktop-sections.md).
 
 ## How to run a prompt
 

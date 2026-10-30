@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
 import { HomeLink } from "@/components/navigation/shell-styles";
 import { compactHeaderRow } from "@/components/ui/header-controls";
+import { joinedDesktopSections } from "@/components/ui/layout";
 import {
   CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GridIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
@@ -126,8 +127,8 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
           event.preventDefault(); setSidebarPreference({ width: clampSidebarWidth(width, sidebarMaximum) });
         }} />
       <SectionMenu current={current} />
-      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace}>
-        <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace}>{children}</Column>
+      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"}>
+        <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace} $joined={current === "analytics"}>{children}</Column>
       </Main>
     </Frame>
   );
@@ -296,14 +297,15 @@ const MenuPopup = styled.nav`
   ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
   li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
 `;
-const Main = styled.main<{ $fixed: boolean }>`
+const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
   min-inline-size: 0;
   padding: 20px 16px calc(40px + 3.5rem + 1px + env(safe-area-inset-bottom));
   &:focus { outline: none; }
   ${media.desktop} { grid-column: 3; padding: 24px 28px 48px; }
+  ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
 `;
-const Column = styled.div<{ $wide: boolean; $fixed: boolean }>`
+const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>`
   display: grid;
   gap: 16px;
   align-content: start;
@@ -311,6 +313,7 @@ const Column = styled.div<{ $wide: boolean; $fixed: boolean }>`
   max-inline-size: ${({ $wide }) => $wide ? "100%" : "76rem"};
   margin-inline: auto;
   ${({ $wide }) => !$wide && css`${media.desktop} { gap: 20px; }`}
+  ${({ $joined }) => $joined && joinedDesktopSections}
   ${({ $fixed }) => $fixed && css`${media.desktop} {
     inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0;
     &:not(:has(> [data-record-workspace])) { display: block; padding: 20px; overflow-y: auto; }

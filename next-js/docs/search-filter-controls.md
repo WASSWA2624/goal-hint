@@ -28,6 +28,12 @@ header-height offset and remain above the cards, with opaque theme surfaces.
 The Best Slips applied summary and Builder criteria summary remain inside their
 panels. Phone and tablet filters continue in normal page flow.
 
+Desktop app pages join adjacent filter, summary and result sections without
+page-background gutters. Shared section geometry also applies to Performance
+and Analytics; inner controls and result-card spacing keep their own tokens.
+The app content starts flush with the preceding header/access section, and
+Analytics uses the same header-height offset as the public sticky filters.
+
 Below 64rem, the approved Compact stack has two resting rows: full-width search,
 then one Date button, the match-status selector, and an icon-only Advanced
 filters button. Search uses a labeled submit icon at its leading edge and also

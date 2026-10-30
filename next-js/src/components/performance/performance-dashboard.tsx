@@ -17,7 +17,7 @@ import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surfac
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SlipCard } from "@/components/slips/slip-card";
 import { PerformanceSummary } from "./performance-summary";
-import { EvidenceList, MarketGrid, MetricList, PerformanceFilterPanel, PerformanceFilters, PerformanceTable, TableFrame } from "./performance-styles";
+import { EvidenceList, MarketGrid, MetricList, PerformanceFilterPanel, PerformanceFilters, PerformanceSections, PerformanceTable, TableFrame } from "./performance-styles";
 
 export type PerformanceDashboardProps = Readonly<{
   locale: string;
@@ -129,7 +129,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
   const leaguePages = report ? Math.ceil(report.leagues.totalGroups / report.leagues.pageSize) : 0;
   const leagueOutOfRange = Boolean(report && report.leagues.page > Math.max(1, leaguePages));
   const leagueHref = (page: number) => performancePageHref({ ...filters, leaguePage: page }, history?.page ?? 1, locale);
-  return <Stack $gap="lg" data-performance-dashboard>
+  return <PerformanceSections $gap="lg" data-performance-dashboard>
     <div><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></div>
     <PerformanceFilterPanel><Stack $gap="sm">
       <PerformanceFilters action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
@@ -176,5 +176,5 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
     </Stack></section>
     <MutedText>{m.text("performance.noGuarantee")}</MutedText>
-  </Stack>;
+  </PerformanceSections>;
 }
