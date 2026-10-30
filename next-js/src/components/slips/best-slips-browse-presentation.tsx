@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { useEffect, useRef } from "react";
-import type { BestSlipView, BestSlipsResult } from "@/domain/best-slips";
+import type { BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
 import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
 
@@ -10,13 +10,6 @@ const Summary = styled(FiltersRow)`
   justify-content: space-between;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: 0.75rem;
-`;
-const Publication = styled.div`
-  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-  padding: 5px 10px 3px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem;
-  [data-outcome="won"] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
-  [data-outcome="lost"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
-  [data-outcome="pending"] { color: ${({ theme }) => theme.color.outcome.pending.text}; }
 `;
 
 export function BestSlipsSummary({ result, period, locale }: { result: BestSlipsResult; period: string; locale: string }) {
@@ -53,13 +46,4 @@ export function BestSlipsPagination({ previous, next, canPrevious, canNext, page
     <span>{m.text("bestSlips.filters.page", { page: m.number(page) })}</span>
     <FilterButton ref={after} type="button" disabled={!canNext || busy} onClick={() => { direction.current = "next"; next(); }}>{m.text("bestSlips.filters.next")}</FilterButton>
   </FiltersRow>;
-}
-
-export function SlipPublicationMeta({ view, locale }: { view: BestSlipView; locale: string }) {
-  const m = createMessages(locale);
-  if (!view.publicationDay && !view.outcome) return null;
-  return <Publication data-slip-publication>
-    {view.publicationDay && <time dateTime={view.publicationDay}>{m.reportingDateMedium(view.publicationDay)} · EAT</time>}
-    {view.outcome && <span data-outcome={view.outcome}>{m.text(`slips.header.${view.outcome}`)}</span>}
-  </Publication>;
 }

@@ -17,7 +17,7 @@ import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surfac
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SlipTable } from "@/components/slips/slip-table";
 import { PerformanceSummary } from "./performance-summary";
-import { EvidenceList, MarketGrid, MetricList, PerformanceFilters, PerformanceTable, PublicationHeader, TableFrame } from "./performance-styles";
+import { EvidenceList, MarketGrid, MetricList, PerformanceFilters, PerformanceTable, TableFrame } from "./performance-styles";
 
 export type PerformanceDashboardProps = Readonly<{
   locale: string;
@@ -169,9 +169,8 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
       {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {history?.records.length ? history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
-        <PublicationHeader><strong>{m.text(`slips.outcome.${item.outcome}`)}</strong><time dateTime={item.publishedAt}>
-          {m.text("performance.publication", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(Date.parse(item.publishedAt))) })}</time></PublicationHeader>
-        <SlipTable slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale} />
+        <SlipTable slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
+          publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} />
       </article>) : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}

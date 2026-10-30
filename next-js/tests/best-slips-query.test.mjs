@@ -11,6 +11,8 @@ test('slip presets resolve inclusive EAT publication dates across month and year
     next3: ['2026-10-30', '2026-11-01'], next7: ['2026-10-30', '2026-11-05'], next30: ['2026-10-30', '2026-11-28'], all: [null, null],
   };
   assert.deepEqual(parseBestSlipsQuery({}, today), defaultBestSlipsQuery());
+  assert.deepEqual(defaultBestSlipsQuery(true), { period: 'today', status: 'all', page: 1 });
+  assert.deepEqual(defaultBestSlipsQuery(false), { period: 'yesterday', status: 'all', page: 1 });
   for (const [period, [from, to]] of Object.entries(expected)) {
     assert.deepEqual(resolveBestSlipsDates(parseBestSlipsQuery({ period }, today), today), { from, to });
   }

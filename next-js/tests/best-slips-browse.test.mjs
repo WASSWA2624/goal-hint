@@ -75,6 +75,7 @@ test('publication browsing filters original outcomes before pagination and retai
   const pending = await f.store.browse(query({ period: 'last7', status: 'pending' }), today);
   assert.equal(pending.slips.length, 14); assert.ok(pending.slips.every((view) => view.outcome === 'pending' && view.slip && view.matchStates.length));
   assert.equal(pending.slips[0].publicationDay, today); assert.equal(pending.slips.at(-1).publicationDay, addReportingDays(today, -6));
+  assert.equal(pending.slips[0].publishedAt, Date.parse(`${today}T00:00:01+03:00`));
   const future = await f.store.browse(query({ period: 'next7' }), today);
   assert.equal(future.browse.total, 0); assert.equal(future.state, 'generated');
 });
@@ -118,7 +119,7 @@ test('the browse gate keeps only approved aggregate metadata for free visitors, 
   assert.doesNotMatch(JSON.stringify(gated), /private-original|selections|fixtureId|cycleId|revisionId|home-win/);
   const read = createBestSlipsBrowseService({ read: async () => result, providerOdds: true, now: () => now });
   assert.deepEqual(await read(free, query()), gated);
-  assert.deepEqual(await read(full, query()), result);
+  assert.deepEqual(await read(full, query()), { ...result, entitled: true });
 });
 
 test('a replacement cycle on the same fixture cannot overwrite the original published outcome or row state', async () => {

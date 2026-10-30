@@ -2,7 +2,6 @@
 
 import type { SavedSlipView } from "@/domain/saved-slips";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
-import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { createMessages } from "@/i18n/messages";
 import { EmptyState } from "@/components/ui/feedback";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
@@ -20,8 +19,8 @@ export function SlipHistory({ slips, locale, statistics, period }: {
     <HeadingRow><h2 id="completed-slips">{m.text("slips.history")}</h2></HeadingRow>
     <Note>{m.text("slips.historyHint")}</Note>
     {slips?.length ? <SlipStack>{slips.map((item, index) => <div key={item.id}>
-      <HeadingRow><strong>{m.text(`slips.outcome.${item.outcome}`)}</strong><time dateTime={item.savedAt}>{m.reportingInstant(utcInstantFromEpochMilliseconds(Date.parse(item.savedAt)))}</time></HeadingRow>
-      <SlipTable slip={item.slip} index={index} locale={locale} results={item.results} />
+      <SlipTable slip={item.slip} index={index} locale={locale} results={item.results}
+        publishedAt={Date.parse(item.savedAt)} outcome={item.outcome} />
     </div>)}</SlipStack> : <EmptyState headingLevel={3} title={m.text(slips === null ? "slips.historyUnavailable" : "slips.historyEmpty")} />}
   </Results>;
 }

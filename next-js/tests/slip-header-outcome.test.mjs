@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { slipOutcome } from '../src/domain/slip-outcome.ts';
+import { slipHeaderOutcome } from '../src/components/slips/slip-header-outcome.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 
 const { slip: original } = slipForecastFixture({ fixtureId: '10000000-0000-4000-8000-000000000001' });
@@ -41,4 +42,24 @@ test('all original selections must be correct before the header reports won', ()
 test('a pending adjudication cannot be settled from a displayed score alone', () => {
   assert.equal(headerOutcome([result(0, 'correct'), result(1, 'correct'),
     result(2, 'pending', { home: 3, away: 0 })]), 'pending');
+});
+
+test('shared headers use matching original-cycle observations before saved result presentation', () => {
+  const states = slip.selections.map((selection) => ({ fixtureId: selection.fixtureId, family: selection.family,
+    selection: selection.selection, status: 'finished-regulation', score: { home: 1, away: 0 }, liveClock: null, outcome: 'correct' }));
+  const saved = [result(0, 'correct'), result(1, 'correct'), result(2, 'correct')];
+  assert.equal(slipHeaderOutcome(slip, saved, states), 'won');
+  assert.equal(slipHeaderOutcome(slip, saved, [{ ...states[0], outcome: 'incorrect' }]), 'lost');
+  assert.equal(slipHeaderOutcome(slip, saved, [{ ...states[0], outcome: 'pending' }]), 'pending');
+  assert.equal(slipHeaderOutcome(slip, saved, [{ ...states[0], selection: 'away-win', outcome: 'incorrect' }]), 'won');
+});
+
+test('shared headers preserve approved aggregate fallbacks without guessing a result from missing states', () => {
+  for (const outcome of ['won', 'lost', 'pending', 'void']) {
+    assert.equal(slipHeaderOutcome(slip, undefined, undefined, outcome), outcome);
+    assert.equal(slipHeaderOutcome(slip, undefined, [], outcome), outcome);
+  }
+  assert.equal(slipHeaderOutcome(slip), 'pending');
+  assert.equal(slipHeaderOutcome(slip, [], undefined, 'won'), 'pending');
+  assert.equal(slipHeaderOutcome(slip, [result(0, 'correct'), result(1, 'void'), result(2, 'correct')]), 'void');
 });

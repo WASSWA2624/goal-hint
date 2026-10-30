@@ -3,21 +3,25 @@
 `/en` is Best Slips; `/en/matches` preserves the match feed and `/en/slips` keeps
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
 previews use the selected responsive slip layout and show the rank, match count,
-total odds and average match probability to every visitor. Match identities, selections and individual
+total odds and average match probability to every visitor. Guests and members
+without a valid subscription start on yesterday's publication; subscribers
+start on today's. Previous publication days expose their original selections
+and results publicly. Today's and future selections and individual
 prices/probabilities require entitlement. Both the initial DTO and the final
-entitlement recheck use that allowlist.
+entitlement recheck enforce this publication-day rule.
 
 Desktop Best slips use Aligned ledger: a collapsed compact header, 3px gaps,
 hyphenated EAT dates/times, country before league, fixed metadata/status tracks,
 and strictly aligned score/VS and crest columns. Current score, provider clock
 and selection outcome are sidecar observations matched to the original forecast,
 never replacements for snapshot names, picks, prices or probabilities. Only
-released entitled slips carry these observations. Missing evidence stays Unknown
+released slips carry these observations. Missing evidence stays Unknown
 or Saved result; it does not invent elapsed minutes or a final score. The existing
-desktop match-details batch updates observations every 20 seconds while visible
-and online, without rebuilding the slips. Cohort/statistics refresh every 60
-seconds on watched desktop lists; mobile and aggregate-only page refresh remain
-at 20 seconds. Mobile slips retain their existing presentation and spacing.
+desktop match-details batch updates entitled observations every 20 seconds while
+visible and online, without rebuilding the slips. Cohort/statistics refresh
+every 60 seconds on entitled watched desktop lists; public history and mobile
+page refresh remain at 20 seconds. Public history never starts subscriber-only
+observation polling.
 
 The daily Kampala cohort targets 4.50–5.50 combined odds and up to 100 distinct
 slips; source-owned `bestSlipsRules` configures the range/count. Daily slips do
@@ -35,14 +39,21 @@ compatibility and ranking, while the UI displays the average only. Average match
 probability remains a description of the individual forecasts, not a joint
 probability estimate.
 
-Each daily slip initially shows only its summary. Clicking anywhere on the
-summary or pressing Enter/Space expands the matches; repeating the action
-collapses them. Locked previews use the same disclosure, with subscription
-links in the expanded content. Signed-out visitors see **Log in to access**,
-which opens login and retains a return to Best Slips. The login page also offers
-sign-up. Signed-in members without access see **Subscribe**; entitled members
-see the actual matches. There is no repeated subscriber-only explanatory text.
+Each available slip initially shows only its summary. Clicking the summary or
+pressing Enter/Space expands the matches; repeating the action collapses them.
+Locked previews use a noninteractive shared header. One access message above
+the list offers **Sign up** and **Sign in** to visitors, or **Subscribe** to
+signed-in members without access. It also appears for an empty future period.
 Native expansion works before hydration.
+
+Shared slip headers place the actual publication date/time after the slip
+number, followed by Top ranked, with no separate date/status row above the card.
+Saved history uses its recorded save time. Date-only metadata never invents a
+publication time. Desktop spells out Average match probability; Share precedes
+a fixed-width, square Won/Lost/Pending badge and the far-right disclosure
+arrow. Void remains a truthful exceptional outcome. Header outcomes follow the
+same original-cycle observations as the selection rows. Completed history and
+performance use these same headers without repeating their date or status.
 On desktop, Best slips, builder results and completed-slip history use Subtle
 dividers: a slim single-row header and one line per selection, initially
 collapsed. Short team-name pairs are centred in their column; long names use
@@ -95,12 +106,13 @@ and Reset together. Full labels remain the accessible button names and hover
 titles. Date controls can scroll horizontally only if their container becomes
 too narrow; result controls and Reset remain visible.
 Past periods include today; future periods start tomorrow. Custom bounds are
-inclusive and limited to 366 days. Reset restores Today and All slips. Dates
+inclusive and limited to 366 days. Reset restores Today and All slips for
+subscribers, or Yesterday and All slips for visitors and expired members. Dates
 and outcomes combine; editing or canceling dates preserves the result choice.
 Future periods honestly remain empty until a publication exists.
 
 Desktop refinements read `/api/best-slips` with `period`, `status`, `page`, and,
-for custom dates, `from`/`to`. Default daily server rendering remains unchanged.
+for custom dates, `from`/`to`. Default daily server rendering follows entitlement.
 Filters and page controls use local state; switching to mobile shows the daily
 server result. Superseded requests are aborted and ignored. Read failures show
 retry feedback instead of stale slips or an empty-result claim.
@@ -118,9 +130,12 @@ Outcome filtering uses the original recorded forecast cycles, including a loss
 before every other selection settles. Void remains visible under All slips.
 Statistics cover the whole selected explicit date range, independent of the
 result filter and current page. All dates omits partial-period statistics.
-Public rows include only approved aggregates, the publication date, outcome,
-and an opaque publication-row hash; the internal built-slip identity and
-active selections remain gated. Entitlement is rechecked after every API read.
+Locked current/future rows include only approved aggregates, the publication
+date/time, outcome, and an opaque publication-row hash; the internal built-slip
+identity and active selections remain gated. Historical rows include their
+original selections and results. Entitlement is rechecked after every API read.
+Implicit defaults are re-read once if entitlement changes during SSR/API reads;
+explicit periods retain the selected dates and use the final access gate.
 No database migration is required.
 
 Local test mode exposes sign-in, plans, automatic registration trials, payment reports and code

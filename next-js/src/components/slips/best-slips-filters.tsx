@@ -18,8 +18,8 @@ const results = ["all", "won", "lost", "pending"] as const;
 type DateDraft = Readonly<{ from: string; to: string }>;
 
 /** Desktop-only compact date/result controls; custom dates stay a local draft until Apply. */
-export function BestSlipsFilters({ query, today, locale, busy = false, onChange }: {
-  query: BestSlipsQuery; today: ReportingDate; locale: string; busy?: boolean; onChange: (query: BestSlipsQuery) => void;
+export function BestSlipsFilters({ query, today, locale, entitled = false, busy = false, onChange }: {
+  query: BestSlipsQuery; today: ReportingDate; locale: string; entitled?: boolean; busy?: boolean; onChange: (query: BestSlipsQuery) => void;
 }) {
   const m = createMessages(locale), prefix = useId();
   const [open, setOpen] = useState(false), [dates, setDates] = useState<DateDraft>({ from: today, to: today });
@@ -78,7 +78,7 @@ export function BestSlipsFilters({ query, today, locale, busy = false, onChange 
         {results.map((status) => <ResultButton key={status} type="button" $status={status} aria-pressed={query.status === status}
           onClick={() => changeStatus(status)} data-slip-result={status}>{m.text(`bestSlips.filters.${status}`)}</ResultButton>)}
       </ResultGroup>
-      <ResetButton type="button" onClick={() => onChange(defaultBestSlipsQuery())}><ResetIcon />{m.text("slips.reset")}</ResetButton>
+      <ResetButton type="button" onClick={() => onChange(defaultBestSlipsQuery(entitled))}><ResetIcon />{m.text("slips.reset")}</ResetButton>
     </ToggleRow>
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <span>{m.text("bestSlips.filters.applied")}</span>
@@ -89,7 +89,10 @@ export function BestSlipsFilters({ query, today, locale, busy = false, onChange 
       <span aria-hidden="true">·</span><span data-applied-result>{m.text(`bestSlips.filters.${query.status}`)}</span>
     </AppliedSummary>
     {open && <RangeDialog id={dialogId} group="best-slips-dates" open={open} title={m.text("bestSlips.filters.customRange")}
-      onApply={applyDates} onCancel={closeDates} onReset={() => { setDates({ from: today, to: today }); setIssue(null); }}
+      onApply={applyDates} onCancel={closeDates} onReset={() => {
+        const defaults = resolveBestSlipsDates(defaultBestSlipsQuery(entitled), today);
+        setDates({ from: defaults.from ?? today, to: defaults.to ?? today }); setIssue(null);
+      }}
       resetLabel={m.text("slips.reset")} applyLabel={m.text("bestSlips.filters.applyRange")}
       cancelLabel={m.text("slips.dialog.cancel")} closeLabel={m.text("slips.dialog.close", { section: m.text("bestSlips.filters.customRange") })}>
       <DateFields>

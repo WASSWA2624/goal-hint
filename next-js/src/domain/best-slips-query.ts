@@ -17,7 +17,7 @@ export class BestSlipsQueryError extends Error {
   }
 }
 const fail = (code: BestSlipsQueryError["code"]): never => { throw new BestSlipsQueryError(code); };
-export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "today", status: "all", page: 1 });
+export const defaultBestSlipsQuery = (entitled = true): BestSlipsQuery => ({ period: entitled ? "today" : "yesterday", status: "all", page: 1 });
 
 function customDates(from: unknown, to: unknown): BestSlipsDates {
   let start: ReportingDate, end: ReportingDate;

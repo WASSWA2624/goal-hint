@@ -20,10 +20,12 @@ export type BestSlipSummary = Readonly<{
 }>;
 export type BestSlipView = BestSlipSummary & Readonly<{
   slip?: BestSlip; matchStates?: readonly SlipMatchState[];
-  id?: string; publicationDay?: ReportingDate; outcome?: "won" | "lost" | "pending" | "void";
+  id?: string; publicationDay?: ReportingDate; publishedAt?: number; outcome?: "won" | "lost" | "pending" | "void";
 }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
+  /** Current/future prediction access, freshly checked at the response boundary. */
+  entitled?: boolean;
   searchLimited: boolean; partialCoverage: boolean;
   /** All slips in this daily publication, including those with active original cycles. */
   statistics?: PerformanceSummaryCounts | null;

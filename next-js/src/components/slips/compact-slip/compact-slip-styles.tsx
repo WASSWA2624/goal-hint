@@ -57,6 +57,7 @@ export const CompactCard = styled.article`
   [data-summary-odds] { grid-area: odds; }
   [data-summary-average] { grid-area: average; justify-self: end; }
   [data-summary-count] { grid-area: count; justify-self: end; }
+  [data-summary-status] { grid-column: 1 / -1; justify-self: end; }
   [data-toggle-chevron] { position: absolute; inset-inline-end: 10px; inset-block-start: calc(50% - 4px); inline-size: 6px; block-size: 6px; border-inline-end: 2px solid currentColor; border-block-end: 2px solid currentColor; transform: rotate(45deg); }
   details[open] > summary { border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
   details[open] [data-toggle-chevron] { transform: rotate(225deg); inset-block-start: calc(50% - 1px); }

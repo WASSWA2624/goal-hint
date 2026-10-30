@@ -187,7 +187,7 @@ test('API rechecks access after generation, strips expired selections, and disab
   let checks = 0;
   const handler = createBestSlipsHandler({ read: service(), access: async () => checks++ === 0 ? full : free });
   const response = await handler(new Request('https://goalhint.com/api/best-slips'));
-  assert.equal(response.status, 200); assert.equal(checks, 2);
+  assert.equal(response.status, 200); assert.equal(checks, 3);
   assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
   assert.equal(response.headers.get('set-cookie'), null);
   const payload = await response.json();

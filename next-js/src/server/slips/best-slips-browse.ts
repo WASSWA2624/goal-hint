@@ -31,7 +31,7 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
   return async (access: ViewerAccess, input: BestSlipsQuery, _locale = "en"): Promise<BestSlipsResult> => {
     const day = getReportingDate(utcInstantFromEpochMilliseconds(now()));
     const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), day), dates = resolveBestSlipsDates(query, day);
-    const empty = { day, slips: [], searchLimited: false, partialCoverage: false, statistics: null,
+    const empty = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false, statistics: null,
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };

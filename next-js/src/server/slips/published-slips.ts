@@ -161,7 +161,9 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         });
         return { day: parseReportingDate(day), state: "generated", slips: bestSlipViews(snapshots.map((snapshot) =>
           ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true,
-          slipMatchStatesFromResults(snapshots.flatMap((snapshot) => snapshot.slip.selections), results)),
+          slipMatchStatesFromResults(snapshots.flatMap((snapshot) => snapshot.slip.selections), results)).map((view, index) => ({ ...view,
+            id: rowsOfSlips[index]!.id, publicationDay: parseReportingDate(value.day), publishedAt: value.publishedAt,
+            outcome: savedSlipOutcome(view.slip!, results) })),
           searchLimited: value.searchLimited, partialCoverage: value.partialCoverage, statistics };
       });
     },
@@ -216,7 +218,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
             const slip: BestSlip = { ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability };
             const [view] = bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, slipResults));
-            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), outcome });
+            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome });
           }
         }
         const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;

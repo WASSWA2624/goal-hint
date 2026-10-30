@@ -66,7 +66,7 @@ export const MobileHeaderRow = styled.summary`
   /* Production uses a readable scale; historical comparison samples retain their original sizing. */
   &:not([data-header-variant]) {
     --header-height: 2.75rem;
-    grid-template-columns: 2rem 5rem minmax(3.625rem, 1fr) 3.5rem 3.875rem 0.625rem;
+    grid-template-columns: 2rem 5rem minmax(3.625rem, 1fr) 3.5rem 4.5rem 0.625rem;
     block-size: auto;
     font-size: 0.875rem;
     > h3, > h3[data-dense-identity] {
@@ -87,7 +87,15 @@ export const MobileHeaderRow = styled.summary`
     [data-header-label] { order: -1; font-size: 0.75rem; }
     &[data-large-odds] [data-header-field="odds"] [data-header-label] { display: inline; }
     &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.875rem; }
-    [data-header-status] { padding-inline: 2px; font-size: 0.875rem; }
+    [data-header-status] { padding-inline: 0; font-size: 0.875rem; }
+    [data-slip-status] { inline-size: 100%; min-block-size: 1.25rem; padding: 2px 3px; font-size: 0.75rem; }
     [data-header-chevron] { inline-size: 6px; block-size: 6px; }
+    &[data-header-publication] {
+      grid-template-columns: 5rem minmax(3.625rem, 1fr) 3.5rem 4.5rem 0.625rem;
+      > h3 { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; gap: 4px 7px; padding: 6px 4px; }
+      [data-rank] { color: ${({ theme }) => theme.color.link}; font-size: 0.6875rem; font-weight: 400; }
+      [data-slip-publication-date] { font-size: 0.6875rem; }
+      [data-header-field="odds"] { border-inline-start: 0; }
+    }
   }
 `;
