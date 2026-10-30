@@ -22,7 +22,7 @@ below for actual native execution evidence.
 | [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity/native appearance and Windows real OS/theme/restart checks passed; Android deferred, Apple/Linux and installed launcher qualification remain open |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Partial — pinned release tooling and signing gates implemented; production hosting, credentials and remaining platform acceptance prevent release |
 | [010](dev-plan/010-android-pull-to-refresh.md) | Android pull-to-refresh | Partial — native observer and widget coverage implemented; device gesture acceptance remains unverified |
-| [011](dev-plan/011-branded-native-recovery.md) | Branded native recovery | Partial — shared UI and native Windows recovery verified; Android/iOS device acceptance remains unverified |
+| [011](dev-plan/011-branded-native-recovery.md) | Branded native recovery | Partial — shared UI, Windows recovery and Android installation verified; Android fault scenarios and iOS acceptance remain unverified |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
 its implementation and required acceptance checks pass. Keep its plan state in
@@ -888,9 +888,20 @@ measure the user's balance or connectivity.
 | Canonical branding synchronization | `node flutter/tool/generate-icons.mjs --check` passed for all 46 assets/configuration outputs |
 | Normal-entry Windows Debug build | Passed, 74.4s, development origin `http://192.168.1.148:3000` |
 | Normal-entry Android Debug APK | Passed, 29.9s, same development origin; existing process-local JDK/temp/Kotlin build settings |
-| Android/iOS physical-device acceptance and Apple builds | Not performed: no Android device connected and no Apple build host available |
+| Android recovery fault scenarios and iOS/Apple acceptance | Not performed; normal Android installation/startup is verified below, and no Apple build host is available |
 
 No dependency or cookie/profile change was required. iOS/macOS share the updated
 system-WebView handling and recovery UI, but their native execution is not
 qualified here. Installed apps require rebuilt native binaries. This is not a
 signed production release. See [plan 011](dev-plan/011-branded-native-recovery.md).
+
+### Android installation follow-up
+
+The owner connected the physical TECNO CL8 over USB after the wireless transfer
+was interrupted. `adb install -r --no-incremental` completed successfully,
+upgrading the existing application from **0.1.0 / build 1** to **1.0.0 / build 5**.
+The installed base APK's SHA-256 exactly matches the verified development APK.
+The normal MainActivity is foreground and the shared Best Slips page loaded.
+No uninstall, app-data clearing, display/lock changes or test-target installation
+was performed. Wireless pairing was retained. This verifies replacement install
+and normal launch, not the still-unperformed Android network-fault scenarios.
