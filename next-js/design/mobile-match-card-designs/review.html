@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/favicon.ico">
+  <title>Compact mobile match cards · Goal Hint</title>
+  <style>
+    @font-face { font-family: Manrope; src: url("/Manrope.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+    :root { color-scheme: light dark; font: 400 14px/1.5 Manrope,Arial,sans-serif; background: light-dark(#F0F3F8,#03111F); color: light-dark(#15243B,#F4F7FF); }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .review-header { padding: 22px max(12px,calc((100% - 1200px) / 2)); background: light-dark(#FFFFFF,#081B2C); border-block-end: 1px solid light-dark(#D9E1ED,#263D50); }
+    .review-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
+    .review-title h1 { margin: 0; font-size: 22px; line-height: 1.25; letter-spacing: -.6px; }
+    .review-title p { margin: 0; color: light-dark(#53647C,#A8CBEF); font-size: 12px; }
+    .review-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-block-start: 18px; }
+    .review-field { display: grid; gap: 5px; flex: 1 1 120px; min-inline-size: 0; font-size: 12px; color: light-dark(#53647C,#A8CBEF); }
+    .review-controls > .review-field { flex: 1 1 260px; max-inline-size: 480px; }
+    .review-design-switcher { display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; gap: 5px; }
+    .review-controls :is(button,select) { inline-size: 100%; min-inline-size: 0; min-block-size: 44px; border: 1px solid light-dark(#718099,#58728C); border-radius: 4px; font: 500 14px/1.4 Manrope,Arial,sans-serif; color: light-dark(#15243B,#F4F7FF); background: light-dark(#FFFFFF,#0D253B); }
+    .review-controls button { cursor: pointer; font-size: 18px; }
+    .review-controls select { padding: 8px; }
+    .review-controls :is(button,select):focus-visible { outline: 2px solid light-dark(#2457C5,#00B9F2); outline-offset: 2px; }
+    .review-check { display: flex; align-items: center; gap: 7px; min-block-size: 44px; font-size: 12px; white-space: nowrap; }
+    .review-check input { inline-size: 18px; block-size: 18px; }
+    .review-settings { flex: 1 1 180px; }
+    .review-settings summary { display: flex; align-items: center; min-block-size: 44px; color: light-dark(#2457C5,#00B9F2); font-size: 13px; cursor: pointer; }
+    .review-settings summary::before { content: "+"; margin-inline-end: 7px; font-size: 18px; }
+    .review-settings[open] summary::before { content: "−"; }
+    .review-settings summary::marker { content: ""; }
+    .review-settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding-block: 8px; }
+    .review-caption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px 12px; max-inline-size: 1200px; margin: 18px auto 0; padding-inline: 12px; }
+    .review-caption h2 { margin: 0; font-size: 15px; }
+    .review-caption p { margin: 4px 0 0; color: light-dark(#53647C,#A8CBEF); font-size: 13px; }
+    #review-size { color: light-dark(#53647C,#A8CBEF); font-size: 12px; font-variant-numeric: tabular-nums; }
+    #review-stage { padding-block-end: 24px; }
+    #review-stage #mobile-match-card-concepts > section { min-block-size: 0; }
+    #review-stage[data-compare="true"] #mobile-match-card-concepts { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,360px),1fr)); align-items: start; max-inline-size: 2000px; margin-inline: auto; gap: 24px 12px; padding: 20px 12px; }
+    #review-stage[data-compare="true"] #mobile-match-card-concepts > section { padding: 0; }
+    #review-stage[data-compare="true"] #mobile-match-card-concepts > section::before { content: attr(data-variant); display: block; max-inline-size: var(--review-width,375px); margin: 0 auto 8px; font-size: 14px; font-weight: 700; }
+    .review-note { max-inline-size: 1200px; margin: 0 auto; padding: 0 12px 24px; color: light-dark(#53647C,#A8CBEF); font-size: 12px; }
+    @media(max-width:600px) { .review-controls > .review-field { flex-basis: 100%; max-inline-size: 100%; } .review-title h1 { font-size: 19px; } .review-header { padding-block: 16px; } .review-controls select { font-size: 16px; } .review-settings { flex-basis: 150px; } }
+  </style>
+</head>
+<body>
+  <header class="review-header">
+    <div class="review-title"><h1>Compact mobile match cards</h1><p>Goal Hint · 10 design options · Illustrative data</p></div>
+    <nav class="review-controls" aria-label="Match card comparison controls">
+      <div class="review-field"><label for="review-design">Design</label><span class="review-design-switcher"><button id="review-previous" type="button" aria-label="Previous design">←</button><select id="review-design"></select><button id="review-next" type="button" aria-label="Next design">→</button></span></div>
+      <details class="review-settings"><summary>Preview settings</summary><div class="review-settings-grid">
+        <label class="review-field">Show card in<select id="review-context"><option>Matches</option><option>Cards</option><option>Slips</option></select></label>
+        <label class="review-field">Example matches<select id="review-sample"><option>Typical matches</option><option>Long names</option><option>Live matches</option><option>Completed matches</option><option>Other states</option></select></label>
+        <label class="review-field">Phone width<select id="review-width"><option value="320">320px</option><option value="375" selected>375px</option><option value="430">430px</option></select></label>
+        <label class="review-field">Appearance<select id="review-appearance"><option value="system">Match device</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      </div></details>
+      <label class="review-check"><input id="review-compare" type="checkbox">Compare all 10</label>
+    </nav>
+  </header>
+  <div class="review-caption"><div><h2 id="review-name"></h2><p id="review-description"></p></div><span id="review-size" role="status"></span></div>
+  <main id="review-stage" data-compare="false"><!-- MOBILE_MATCH_CARDS --></main>
+  <p class="review-note">Tap a card to inspect its full match information. Estimated chance is a forecast, not a guarantee. These options leave the production match cards, slip headers and desktop layouts unchanged.</p>
+  <script>
+    (() => {
+      "use strict";
+      const root = document.getElementById("mobile-match-card-concepts");
+      const variants = Array.from(root.children);
+      const picker = document.getElementById("review-design");
+      const fields = Object.fromEntries(["context","sample","width","appearance"].map(key => [key,document.getElementById(`review-${key}`)]));
+      const compare = document.getElementById("review-compare");
+      const stage = document.getElementById("review-stage");
+      const query = new URLSearchParams(location.search);
+      const slug = variant => variant.dataset.variant.toLowerCase().replace(/\s+/g,"-");
+      let active = Math.max(0,variants.findIndex(variant => slug(variant) === query.get("design")));
+      variants.forEach((variant,index) => picker.add(new Option(`${String(index + 1).padStart(2,"0")} · ${variant.dataset.variant}`,String(index))));
+      for (const [key,field] of Object.entries(fields)) if (Array.from(field.options).some(option => option.value === query.get(key))) field.value = query.get(key);
+      compare.checked = query.get("compare") === "true";
+      function measure() {
+        const card = variants[active].querySelector(".mc-card");
+        document.getElementById("review-size").textContent = card ? `First card: ${Math.round(card.getBoundingClientRect().height)}px high · ${Math.round(card.getBoundingClientRect().width)}px wide` : "";
+      }
+      function render() {
+        variants.forEach((variant,index) => { variant.hidden = !compare.checked && index !== active; });
+        picker.value = String(active);
+        stage.dataset.compare = String(compare.checked);
+        stage.style.setProperty("--review-width",`${fields.width.value}px`);
+        document.getElementById("review-name").textContent = compare.checked ? "Compare all 10 layouts" : `${String(active + 1).padStart(2,"0")} · ${variants[active].dataset.variant}`;
+        document.getElementById("review-description").textContent = compare.checked ? "Same sample matches and predictions in every option." : variants[active].dataset.description;
+        const values = Object.fromEntries(Object.entries(fields).map(([key,field]) => [key,field.value]));
+        document.documentElement.style.colorScheme = values.appearance === "system" ? "light dark" : values.appearance;
+        window.dispatchEvent(new CustomEvent("openai:set_globals", { detail: { globals: { widgetState: { privateContent: values } } } }));
+        const url = new URL(location.href);
+        url.searchParams.set("design",slug(variants[active]));
+        for (const [key,value] of Object.entries(values)) url.searchParams.set(key,value);
+        url.searchParams.set("compare",String(compare.checked));
+        history.replaceState(null,"",url);
+        requestAnimationFrame(measure);
+      }
+      picker.addEventListener("change",() => { active = Number(picker.value); render(); });
+      document.getElementById("review-previous").addEventListener("click",() => { active = (active - 1 + variants.length) % variants.length; render(); });
+      document.getElementById("review-next").addEventListener("click",() => { active = (active + 1) % variants.length; render(); });
+      for (const field of Object.values(fields)) field.addEventListener("change",render);
+      compare.addEventListener("change",render);
+      new ResizeObserver(measure).observe(stage);
+      document.fonts.ready.then(measure);
+      render();
+    })();
+  </script>
+</body>
+</html>

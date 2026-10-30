@@ -1,0 +1,394 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  #mobile-match-card-concepts { inline-size: 100%; }
+  #mobile-match-card-concepts > section { min-block-size: 700px; padding: 20px 8px; box-sizing: border-box; }
+  #mobile-match-card-concepts[data-sample="Long names"] > section { min-block-size: 740px; }
+  #mobile-match-card-concepts[data-context="Slips"] > section { min-block-size: 880px; }
+  #mobile-match-card-concepts [hidden] { display: none !important; }
+  #mobile-match-card-concepts .mc-phone {
+    --mc-page: light-dark(#F0F3F8, #03111F);
+    --mc-surface: light-dark(#FFFFFF, #081B2C);
+    --mc-inset: light-dark(#E8EDF5, #0D253B);
+    --mc-text: light-dark(#15243B, #F4F7FF);
+    --mc-muted: light-dark(#53647C, #A8CBEF);
+    --mc-border: light-dark(#D9E1ED, #263D50);
+    --mc-control-border: light-dark(#718099, #58728C);
+    --mc-brand: light-dark(#2457C5, #00B9F2);
+    --mc-brand-soft: light-dark(#E3ECFF, #073052);
+    --mc-on-brand: light-dark(#FFFFFF, #03111F);
+    --mc-won: light-dark(#007754, #70DEA4);
+    --mc-won-soft: light-dark(#E5F4EC, #1C342B);
+    --mc-lost: light-dark(#9C2328, #FF9C9C);
+    --mc-lost-soft: light-dark(#FFF0F1, #3B252C);
+    --mc-void: light-dark(#515C6B, #B1BEC8);
+    --mc-void-soft: light-dark(#F0F3F6, #28343D);
+    --mc-live: light-dark(#991B1B, #FF9C9C);
+    --mc-radius-none: 0;
+    --mc-radius-small: 2px;
+    --mc-radius-control: 4px;
+    inline-size: min(100%, var(--mc-preview-width, 375px));
+    margin-inline: auto;
+    color: var(--mc-text); background: var(--mc-page);
+    border: 1px solid var(--mc-border);
+    font: 400 13px/1.4 Manrope, Arial, sans-serif;
+    container: mobile-match-preview / inline-size;
+  }
+  #mobile-match-card-concepts .mc-phone *,
+  #mobile-match-card-concepts .mc-phone *::before,
+  #mobile-match-card-concepts .mc-phone *::after { box-sizing: border-box; }
+  #mobile-match-card-concepts .mc-phone :is(h2,h3,p) { margin: 0; }
+  #mobile-match-card-concepts .mc-phone button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  #mobile-match-card-concepts .mc-phone button:focus-visible { outline: 2px solid var(--mc-brand); outline-offset: 2px; }
+  #mobile-match-card-concepts .mc-demo-header {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 14px 12px 12px; background: var(--mc-surface); border-block-end: 1px solid var(--mc-border);
+  }
+  #mobile-match-card-concepts .mc-demo-header h2 { font-size: 17px; font-weight: 800; letter-spacing: -.4px; }
+  #mobile-match-card-concepts .mc-demo-header p { margin-block-start: 3px; color: var(--mc-muted); font-size: 11px; }
+  #mobile-match-card-concepts .mc-sample-label { color: var(--mc-muted); font-size: 11px; white-space: nowrap; }
+  #mobile-match-card-concepts .mc-list { display: grid; gap: 6px; padding: 10px; }
+  #mobile-match-card-concepts .mc-entry { min-inline-size: 0; }
+  #mobile-match-card-concepts .mc-card {
+    position: relative; display: grid; inline-size: 100%; min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "kickoff league" "fixture fixture" "pick metrics";
+    align-items: center; gap: 7px 8px; padding: 8px 10px;
+    border: 1px solid var(--mc-border); border-radius: var(--mc-radius-none);
+    background: var(--mc-surface); text-align: start;
+    cursor: pointer; overflow-wrap: anywhere;
+  }
+  #mobile-match-card-concepts .mc-kickoff {
+    grid-area: kickoff; display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px;
+    color: var(--mc-muted); font-size: 11px; font-variant-numeric: tabular-nums;
+  }
+  #mobile-match-card-concepts .mc-kickoff > span { white-space: nowrap; }
+  #mobile-match-card-concepts .mc-league {
+    grid-area: league; min-inline-size: 0; max-inline-size: 155px; justify-self: end;
+    color: var(--mc-muted); font-size: 11px; text-align: end; overflow-wrap: anywhere;
+  }
+  #mobile-match-card-concepts .mc-fixture {
+    grid-area: fixture; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center; gap: 7px; min-inline-size: 0;
+  }
+  #mobile-match-card-concepts .mc-team { display: flex; align-items: center; gap: 5px; min-inline-size: 0; font-size: 14px; font-weight: 700; line-height: 1.3; }
+  #mobile-match-card-concepts .mc-team:first-child { justify-content: end; text-align: end; }
+  #mobile-match-card-concepts .mc-team-name { min-inline-size: 0; }
+  #mobile-match-card-concepts .mc-crest {
+    display: inline-grid; place-items: center; flex: 0 0 18px; block-size: 20px;
+    border: 1px solid var(--mc-border); border-radius: var(--mc-radius-small);
+    color: var(--mc-muted); background: var(--mc-inset); font-size: 9px; font-weight: 800;
+  }
+  #mobile-match-card-concepts .mc-team:first-child .mc-crest { order: 1; }
+  #mobile-match-card-concepts .mc-centre { display: grid; justify-items: center; gap: 1px; min-inline-size: 18px; color: var(--mc-muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
+  #mobile-match-card-concepts .mc-score { color: var(--mc-text); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  #mobile-match-card-concepts .mc-phase { font-size: 11px; font-weight: 600; }
+  #mobile-match-card-concepts [data-status="live"] :is(.mc-score,.mc-phase) { color: var(--mc-live); }
+  #mobile-match-card-concepts .mc-pick { grid-area: pick; display: grid; gap: 1px; min-inline-size: 0; }
+  #mobile-match-card-concepts .mc-market { display: grid; color: var(--mc-muted); font-size: 11px; }
+  #mobile-match-card-concepts .mc-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; min-inline-size: 0; }
+  #mobile-match-card-concepts .mc-selection strong { color: var(--mc-brand); font-size: 13px; font-weight: 800; line-height: 1.3; }
+  #mobile-match-card-concepts .mc-field-label { display: none; color: var(--mc-muted); font-size: 11px; font-weight: 400; }
+  #mobile-match-card-concepts .mc-metrics { grid-area: metrics; display: flex; align-items: start; justify-content: end; gap: 12px; min-inline-size: 0; font-variant-numeric: tabular-nums; }
+  #mobile-match-card-concepts .mc-stat { display: grid; gap: 1px; text-align: end; }
+  #mobile-match-card-concepts .mc-stat-label { color: var(--mc-muted); font-size: 11px; white-space: nowrap; }
+  #mobile-match-card-concepts .mc-stat-value { font-size: 14px; font-weight: 700; line-height: 1.3; }
+  #mobile-match-card-concepts .mc-chance-track { display: none; block-size: 3px; background: var(--mc-inset); }
+  #mobile-match-card-concepts .mc-chance-fill { display: block; block-size: 100%; inline-size: var(--mc-chance); background: var(--mc-brand); }
+  #mobile-match-card-concepts .mc-result { display: inline-block; padding: 1px 4px; border-radius: var(--mc-radius-small); font-size: 11px; font-weight: 600; color: var(--mc-void); background: var(--mc-void-soft); }
+  #mobile-match-card-concepts .mc-result[data-result="won"] { color: var(--mc-won); background: var(--mc-won-soft); }
+  #mobile-match-card-concepts .mc-result[data-result="lost"] { color: var(--mc-lost); background: var(--mc-lost-soft); }
+  #mobile-match-card-concepts .mc-detail { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--mc-border); border-block-start: 0; background: var(--mc-surface); font-size: 12px; }
+  #mobile-match-card-concepts .mc-detail p { color: var(--mc-muted); }
+  #mobile-match-card-concepts .mc-empty { grid-area: pick; grid-column: 1 / -1; display: grid; gap: 2px; padding-block-start: 5px; border-block-start: 1px solid var(--mc-border); font-size: 12px; }
+  #mobile-match-card-concepts .mc-empty > span { color: var(--mc-muted); font-size: 11px; }
+  #mobile-match-card-concepts .mc-footnote { padding: 0 10px 10px; color: var(--mc-muted); font-size: 11px; }
+  #mobile-match-card-concepts .mc-slip { margin: 10px; border: 1px solid var(--mc-border); border-inline-start: 3px solid var(--mc-brand); border-radius: 0 var(--mc-radius-control) var(--mc-radius-control) 0; background: var(--mc-surface); }
+  #mobile-match-card-concepts .mc-slip-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; padding: 10px; border-block-end: 1px solid var(--mc-border); }
+  #mobile-match-card-concepts .mc-slip-header strong { font-size: 13px; font-weight: 800; }
+  #mobile-match-card-concepts .mc-slip-header span { color: var(--mc-muted); font-size: 11px; }
+  #mobile-match-card-concepts .mc-slip-header b { color: var(--mc-text); font-weight: 700; }
+  #mobile-match-card-concepts .mc-slip .mc-list { padding: 6px; }
+  #mobile-match-card-concepts .mc-slip .mc-footnote { padding-inline: 8px; }
+
+  /* The same five information blocks form ten different spatial arrangements. */
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-card {
+    grid-template-columns: minmax(0, 1fr) 100px;
+    grid-template-areas: "kickoff league" "fixture pick" "fixture metrics"; gap: 6px 10px;
+  }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-fixture { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-team { justify-content: start; text-align: start; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-team:first-child .mc-crest { order: 0; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-centre { display: none; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-pick { align-self: end; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-metrics { justify-content: start; gap: 10px; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-stat { text-align: start; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-league { max-inline-size: 100%; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-selection strong { font-size: 14px; }
+
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-card {
+    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-areas: "kickoff league" "pick fixture" "pick metrics";
+    gap: 6px 10px; padding-inline-start: 0;
+  }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-pick { align-self: stretch; justify-content: start; align-content: center; padding: 4px 8px; background: var(--mc-brand-soft); border-inline-start: 3px solid var(--mc-brand); }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-selection strong { font-size: 15px; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-kickoff { padding-inline-start: 8px; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-metrics { justify-content: start; gap: 12px; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-stat { text-align: start; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-stat-label { font-size: 11px; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-stat-value { font-size: 12px; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-league { max-inline-size: 100%; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-fixture { grid-template-columns: minmax(0, 1fr); gap: 4px; align-self: center; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-team { justify-content: start; text-align: start; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-team:first-child .mc-crest { order: 0; }
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-centre { display: none; }
+
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-card {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    grid-template-areas: "kickoff league league" "kickoff fixture fixture" "kickoff pick metrics";
+    gap: 6px 9px;
+  }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-kickoff { align-self: stretch; align-content: center; justify-content: center; gap: 3px; padding-inline-end: 8px; border-inline-end: 1px solid var(--mc-border); text-align: center; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-kickoff > span:last-child { color: var(--mc-text); font-size: 13px; font-weight: 800; white-space: normal; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-league { justify-self: start; max-inline-size: 100%; text-align: start; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-fixture { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-team { justify-content: start; text-align: start; font-size: 13px; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-team:first-child .mc-crest { order: 0; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-centre { display: none; }
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-metrics { gap: 8px; }
+
+  #mobile-match-card-concepts [data-design="market-band"] .mc-card { gap: 8px 0; padding-block-end: 0; }
+  #mobile-match-card-concepts [data-design="market-band"] :is(.mc-pick,.mc-metrics) { align-self: stretch; align-content: center; padding-block: 6px; background: var(--mc-brand-soft); border-block-start: 1px solid var(--mc-border); }
+  #mobile-match-card-concepts [data-design="market-band"] .mc-pick { margin-inline-start: -10px; padding-inline: 10px 6px; }
+  #mobile-match-card-concepts [data-design="market-band"] .mc-metrics { margin-inline-end: -10px; padding-inline: 6px 10px; align-items: center; }
+
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-card { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "kickoff kickoff league league" "fixture fixture fixture fixture" "pick pick metrics metrics"; gap: 8px 0; padding-block-end: 0; }
+  #mobile-match-card-concepts [data-design="fact-grid"] :is(.mc-pick,.mc-metrics) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; align-items: stretch; align-self: stretch; border-block-start: 1px solid var(--mc-border); }
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-pick { margin-inline-start: -10px; }
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-metrics { margin-inline-end: -10px; }
+  #mobile-match-card-concepts [data-design="fact-grid"] :is(.mc-market,.mc-selection,.mc-stat) { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 6px 4px; text-align: center; }
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-field-label { display: block; }
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-market { color: var(--mc-text); font-size: 12px; }
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-selection,
+  #mobile-match-card-concepts [data-design="fact-grid"] .mc-stat { border-inline-start: 1px solid var(--mc-border); }
+
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-list { gap: 0; background: var(--mc-surface); }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-entry + .mc-entry { border-block-start: 1px solid var(--mc-border); }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-card { border: 0; padding: 10px 2px; grid-template-areas: "fixture fixture" "kickoff league" "pick metrics"; gap: 5px 8px; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-fixture { display: flex; flex-wrap: wrap; justify-content: start; gap: 3px 6px; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-team { justify-content: start; text-align: start; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-crest { display: none; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-pick { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-stat { display: flex; flex-wrap: wrap; justify-content: end; align-items: baseline; gap: 4px; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-metrics { gap: 8px; }
+  #mobile-match-card-concepts [data-design="open-ledger"] .mc-stat-label { white-space: normal; }
+
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-card { grid-template-columns: minmax(0, 1fr) 75px; grid-template-areas: "kickoff metrics" "league metrics" "fixture metrics" "pick metrics"; gap: 3px 10px; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-league { justify-self: start; max-inline-size: 100%; text-align: start; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-fixture { display: flex; flex-wrap: wrap; justify-content: start; gap: 2px 5px; padding-block: 3px; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-team { justify-content: start; text-align: start; font-size: 13px; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-crest { display: none; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-pick { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-metrics { align-self: stretch; display: flex; flex-direction: column-reverse; align-items: stretch; justify-content: center; gap: 8px; border-inline-start: 1px solid var(--mc-border); padding-inline-start: 10px; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-stat { justify-items: center; text-align: center; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-stat[data-stat="chance"] { display: flex; flex-direction: column-reverse; }
+  #mobile-match-card-concepts [data-design="chance-column"] [data-stat="chance"] .mc-stat-value { color: var(--mc-brand); font-size: 24px; letter-spacing: -1px; }
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-chance-track { display: block; inline-size: 100%; margin-block-end: 5px; }
+  #mobile-match-card-concepts [data-design="chance-column"] [data-stat="odds"] { display: flex; justify-content: center; align-items: baseline; gap: 4px; }
+  #mobile-match-card-concepts [data-design="chance-column"] [data-stat="odds"] .mc-stat-value { font-size: 12px; }
+
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-card { grid-template-areas: "league kickoff" "fixture fixture" "pick metrics"; gap: 6px 8px; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-league { justify-self: start; text-align: start; max-inline-size: 100%; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-kickoff { justify-content: end; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-fixture { grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-team { flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; font-size: 13px; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-crest,
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-team:first-child .mc-crest { order: -1; inline-size: 20px; flex-basis: auto; block-size: 22px; font-size: 9px; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-centre { font-size: 12px; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-score { font-size: 19px; }
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-pick,
+  #mobile-match-card-concepts [data-design="scoreboard"] .mc-metrics { padding-block-start: 6px; border-block-start: 1px solid var(--mc-border); align-self: stretch; }
+
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-card { grid-template-areas: "pick metrics" "fixture fixture" "kickoff league"; gap: 8px 6px; padding-block-start: 0; }
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-pick,
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-metrics { padding-block: 7px; background: var(--mc-brand-soft); border-block-end: 1px solid var(--mc-border); align-self: stretch; align-content: center; }
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-pick { margin-inline-start: -10px; padding-inline: 10px 0; }
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-metrics { margin-inline-end: -10px; padding-inline: 0 10px; align-items: center; }
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-selection strong { font-size: 15px; }
+
+  /* Scores remain visible in the layouts that stack both team names. */
+  #mobile-match-card-concepts [data-design="team-stack"] [data-status]:not([data-status="scheduled"]) .mc-centre,
+  #mobile-match-card-concepts [data-design="prediction-rail"] [data-status]:not([data-status="scheduled"]) .mc-centre,
+  #mobile-match-card-concepts [data-design="kickoff-column"] [data-status]:not([data-status="scheduled"]) .mc-centre { display: flex; justify-content: start; gap: 5px; }
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-card[data-access="missing"],
+  #mobile-match-card-concepts [data-design="team-stack"] .mc-card[data-access="locked"],
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-card[data-access="missing"],
+  #mobile-match-card-concepts [data-design="prediction-rail"] .mc-card[data-access="locked"],
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-card[data-access="missing"],
+  #mobile-match-card-concepts [data-design="kickoff-column"] .mc-card[data-access="locked"],
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-card[data-access="missing"],
+  #mobile-match-card-concepts [data-design="chance-column"] .mc-card[data-access="locked"],
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-card[data-access="missing"],
+  #mobile-match-card-concepts [data-design="pick-first"] .mc-card[data-access="locked"] { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "kickoff league" "fixture fixture" "pick metrics"; }
+
+  @container mobile-match-preview (max-width: 310px) {
+    #mobile-match-card-concepts .mc-list { padding: 7px; }
+    #mobile-match-card-concepts .mc-card { padding-inline: 8px; gap: 6px; }
+    #mobile-match-card-concepts .mc-league { max-inline-size: 128px; }
+    #mobile-match-card-concepts .mc-metrics { gap: 8px; }
+    #mobile-match-card-concepts [data-design="kickoff-column"] .mc-card { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 5px 7px; }
+    #mobile-match-card-concepts [data-design="kickoff-column"] .mc-metrics { flex-direction: column; gap: 3px; }
+    #mobile-match-card-concepts [data-design="kickoff-column"] .mc-stat { display: flex; align-items: baseline; gap: 4px; }
+    #mobile-match-card-concepts [data-design="market-band"] .mc-pick,
+    #mobile-match-card-concepts [data-design="fact-grid"] .mc-pick,
+    #mobile-match-card-concepts [data-design="pick-first"] .mc-pick { margin-inline-start: -8px; padding-inline-start: 8px; }
+    #mobile-match-card-concepts [data-design="market-band"] .mc-metrics,
+    #mobile-match-card-concepts [data-design="fact-grid"] .mc-metrics,
+    #mobile-match-card-concepts [data-design="pick-first"] .mc-metrics { margin-inline-end: -8px; padding-inline-end: 8px; }
+    #mobile-match-card-concepts [data-design="prediction-rail"] .mc-card { grid-template-columns: 100px minmax(0, 1fr); padding-inline-start: 0; }
+  }
+  @container mobile-match-preview (max-width: 350px) {
+    #mobile-match-card-concepts[data-sample="Long names"] .mc-fixture { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 6px; }
+    #mobile-match-card-concepts[data-sample="Long names"] .mc-team { flex-direction: row; justify-content: start; text-align: start; font-size: 13px; }
+    #mobile-match-card-concepts[data-sample="Long names"] .mc-team:first-child { grid-column: 1; grid-row: 1; }
+    #mobile-match-card-concepts[data-sample="Long names"] .mc-team:last-child { grid-column: 1; grid-row: 2; }
+    #mobile-match-card-concepts[data-sample="Long names"] .mc-crest { display: none; }
+    #mobile-match-card-concepts[data-sample="Long names"] .mc-centre { display: flex; grid-column: 2; grid-row: 1 / 3; }
+  }
+  @container mobile-match-preview (max-width: 235px) {
+    #mobile-match-card-concepts .mc-card { display: flex; flex-direction: column; align-items: stretch; }
+    #mobile-match-card-concepts .mc-league { max-inline-size: 100%; text-align: start; }
+    #mobile-match-card-concepts .mc-fixture { display: flex; flex-wrap: wrap; }
+    #mobile-match-card-concepts .mc-team { text-align: start; }
+    #mobile-match-card-concepts .mc-metrics { justify-content: start; }
+  }
+</style>
+<div id="mobile-match-card-concepts" class="viz-carousel viz-dotted-background" aria-label="Compact mobile match card designs">
+  <section data-variant="Balanced lines" data-description="A familiar three-line card with readable predictions and quiet figures." aria-label="Balanced lines design"><div class="mc-phone" data-design="balanced-lines"></div></section>
+  <section data-variant="Team stack" data-description="Two left-aligned team rows, with the prediction and figures alongside." aria-label="Team stack design" hidden><div class="mc-phone" data-design="team-stack"></div></section>
+  <section data-variant="Prediction rail" data-description="A narrow leading column anchors the pick beside the fixture." aria-label="Prediction rail design" hidden><div class="mc-phone" data-design="prediction-rail"></div></section>
+  <section data-variant="Kickoff column" data-description="A dedicated date and time column makes the schedule easy to scan." aria-label="Kickoff column design" hidden><div class="mc-phone" data-design="kickoff-column"></div></section>
+  <section data-variant="Market band" data-description="A tinted lower strip keeps the complete prediction together." aria-label="Market band design" hidden><div class="mc-phone" data-design="market-band"></div></section>
+  <section data-variant="Fact grid" data-description="Four aligned cells explicitly label the market, pick, odds and chance." aria-label="Fact grid design" hidden><div class="mc-phone" data-design="fact-grid"></div></section>
+  <section data-variant="Open ledger" data-description="Unframed, left-aligned rows remove visual weight from a long list." aria-label="Open ledger design" hidden><div class="mc-phone" data-design="open-ledger"></div></section>
+  <section data-variant="Chance column" data-description="The estimated probability has its own column; the pick stays beside the teams." aria-label="Chance column design" hidden><div class="mc-phone" data-design="chance-column"></div></section>
+  <section data-variant="Scoreboard" data-description="A small central scoreboard balances team identities above the prediction." aria-label="Scoreboard design" hidden><div class="mc-phone" data-design="scoreboard"></div></section>
+  <section data-variant="Pick first" data-description="The forecast leads the card, followed by the fixture and kickoff." aria-label="Pick first design" hidden><div class="mc-phone" data-design="pick-first"></div></section>
+</div>
+<script>
+  (() => {
+    "use strict";
+    const root = document.getElementById("mobile-match-card-concepts");
+    const phones = Array.from(root.querySelectorAll(".mc-phone"));
+    const state = { context: "Matches", sample: "Typical matches", width: "375", appearance: "system" };
+    const allowed = {
+      context: ["Matches", "Cards", "Slips"],
+      sample: ["Typical matches", "Long names", "Live matches", "Completed matches", "Other states"],
+      width: ["320", "375", "430"], appearance: ["system", "light", "dark"],
+    };
+    const matches = [
+      { id: "arsenal-chelsea", home: "Arsenal", away: "Chelsea", homeCode: "ARS", awayCode: "CHE", league: "Premier League", kickoff: "2026-10-30T17:30:00Z", market: "Match result", pick: "Arsenal win", fullPick: "Arsenal to win", odds: "1.72", chance: 76 },
+      { id: "inter-napoli", home: "Inter Milan", away: "Napoli", homeCode: "INT", awayCode: "NAP", league: "Serie A", kickoff: "2026-10-30T19:45:00Z", market: "Total goals", pick: "Over 2.5 goals", fullPick: "Over 2.5 total goals", odds: "1.42", chance: 81 },
+      { id: "sporting-braga", home: "Sporting CP", away: "Braga", homeCode: "SCP", awayCode: "BRA", league: "Primeira Liga", kickoff: "2026-10-31T18:00:00Z", market: "Both teams to score", pick: "Yes", fullPick: "Yes", odds: "1.68", chance: 69 },
+    ];
+    const escape = value => String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    const formatDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Kampala" });
+    const formatTime = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Kampala" });
+    function sampleMatches() {
+      return matches.map((match, index) => {
+        const item = { ...match, status: "scheduled", result: null, score: null, phase: null, access: "available" };
+        if (state.sample === "Long names") {
+          item.home = ["Wolverhampton Wanderers", "Borussia Mönchengladbach", "Club Athletico Paranaense"][index];
+          item.away = ["Brighton & Hove Albion", "1. FC Heidenheim 1846", "Red Bull Bragantino"][index];
+          item.homeCode = ["WOL", "BMG", "CAP"][index];
+          item.awayCode = ["BHA", "HEI", "RBB"][index];
+          item.league = ["Premier League", "Bundesliga", "International Club Championship · Qualification"][index];
+          if (index === 0) { item.pick = "Home win"; item.fullPick = `${item.home} to win`; }
+        }
+        if (state.sample === "Live matches") {
+          item.status = "live"; item.score = ["2–1", "0–0", "1–0"][index]; item.phase = ["67′ · Live", "HT", "23′ · Live"][index];
+        }
+        if (state.sample === "Completed matches") {
+          item.status = "finished"; item.score = ["2–1", "0–0", "1–0"][index]; item.phase = "FT"; item.result = ["won", "lost", "lost"][index];
+        }
+        if (state.sample === "Other states") {
+          if (index === 0) { item.access = "locked"; item.pick = null; item.fullPick = null; item.odds = null; item.chance = null; }
+          if (index === 1) { item.access = "missing"; item.pick = null; item.fullPick = null; item.odds = null; item.chance = null; item.kickoff = null; }
+          if (index === 2) { item.market = "Double chance"; item.pick = "Home or draw"; item.fullPick = "Sporting CP to win or draw"; item.odds = null; item.status = "postponed"; item.phase = "Postponed"; }
+        }
+        return item;
+      });
+    }
+    function team(name, code) {
+      return `<span class="mc-team"><span class="mc-crest" aria-hidden="true">${escape(code.slice(0, 2))}</span><span class="mc-team-name">${escape(name)}</span></span>`;
+    }
+    function centre(match) {
+      if (match.score) return `<span class="mc-centre"><span class="mc-phase">${escape(match.phase)}</span><span class="mc-score" aria-label="Score ${escape(match.score)}">${escape(match.score)}</span></span>`;
+      return `<span class="mc-centre">${match.status === "postponed" ? '<span class="mc-phase">PPD</span>' : "VS"}</span>`;
+    }
+    function prediction(match) {
+      if (match.access !== "available") {
+        const locked = match.access === "locked";
+        return `<span class="mc-empty"><strong>${locked ? "Subscriber prediction" : "Prediction unavailable"}</strong><span>${locked ? "Subscribe to view this pick" : "No published pick for this match"}</span></span>`;
+      }
+      const result = match.result ? `<span class="mc-result" data-result="${match.result}">${match.result === "won" ? "Won" : "Lost"}</span>` : "";
+      return `<span class="mc-pick"><span class="mc-market"><span class="mc-field-label">Market</span><span>${escape(match.market)}</span></span><span class="mc-selection"><span class="mc-field-label">Prediction</span><strong>${escape(match.pick)}</strong>${result}</span></span>
+        <span class="mc-metrics"><span class="mc-stat" data-stat="odds"><span class="mc-stat-label">Odds</span><span class="mc-stat-value"${match.odds === null ? ' aria-label="Odds unavailable"' : ""}>${match.odds ?? "—"}</span></span><span class="mc-stat" data-stat="chance"><span class="mc-stat-label">Est. chance</span><span class="mc-stat-value">${match.chance}%</span><span class="mc-chance-track" aria-hidden="true"><span class="mc-chance-fill" style="--mc-chance:${match.chance}%"></span></span></span></span>`;
+    }
+    function card(match, design) {
+      const id = `mc-detail-${design}-${match.id}`;
+      const kickoff = match.kickoff ? `<time class="mc-kickoff" datetime="${match.kickoff}"><span>${formatDate.format(new Date(match.kickoff))}</span><span>${formatTime.format(new Date(match.kickoff))}</span></time>` : '<span class="mc-kickoff">Kickoff TBC</span>';
+      const schedule = match.kickoff ? `${formatDate.format(new Date(match.kickoff))}, ${formatTime.format(new Date(match.kickoff))} EAT` : "Kickoff unconfirmed";
+      const forecast = match.access === "available" ? `${match.market}: ${match.fullPick}. Odds ${match.odds ?? "unavailable"}. Estimated chance ${match.chance}%${match.result ? `. ${match.result}` : ""}` : match.access === "locked" ? "Subscriber prediction" : "Prediction unavailable";
+      const label = `${match.home} versus ${match.away}. ${match.league}. ${schedule}. ${forecast}.${match.score ? ` ${match.phase}, score ${match.score}.` : match.status === "postponed" ? " Postponed." : ""} Show match information`;
+      return `<article class="mc-entry"><button type="button" class="mc-card cursor-interaction" data-status="${match.status}" data-access="${match.access}" data-match-id="${match.id}" aria-label="${escape(label)}" aria-expanded="false" aria-controls="${id}">
+        ${kickoff}<span class="mc-league">${escape(match.league)}</span><span class="mc-fixture">${team(match.home, match.homeCode)}${centre(match)}${team(match.away, match.awayCode)}</span>${prediction(match)}
+        </button><div id="${id}" class="mc-detail" hidden><strong>${escape(match.home)} vs ${escape(match.away)}</strong>
+        <p>${escape(match.league)} · ${match.kickoff ? `${formatDate.format(new Date(match.kickoff))}, ${formatTime.format(new Date(match.kickoff))} EAT` : "Kickoff unconfirmed"}${match.status === "postponed" ? " · Postponed" : ""}</p>
+        <p>${match.access === "available" ? `${escape(match.market)}: ${escape(match.fullPick)}. Odds: ${match.odds ?? "unavailable"}. Estimated chance: ${match.chance}%.${match.score ? ` Score: ${escape(match.score)} (${escape(match.phase)}).` : ""}` : match.access === "locked" ? "This illustrative prediction is available to subscribers." : "No prediction has been published for this illustrative match."}</p>
+        <p>Illustrative data${state.context === "Slips" ? " · Original slip selection" : ""} · Tap the card to close</p></div></article>`;
+    }
+    function render() {
+      const items = sampleMatches();
+      root.dataset.sample = state.sample;
+      root.dataset.context = state.context;
+      for (const phone of phones) {
+        const expanded = Array.from(phone.querySelectorAll('.mc-card[aria-expanded="true"]'), button => button.dataset.matchId);
+        phone.style.setProperty("--mc-preview-width", `${state.width}px`);
+        phone.style.colorScheme = state.appearance === "system" ? "inherit" : state.appearance;
+        const list = `<div class="mc-list">${items.map(match => card(match, phone.dataset.design)).join("")}</div>`;
+        const allOdds = items.every(match => match.odds !== null);
+        const totalOdds = allOdds ? items.reduce((total, match) => total * Number(match.odds), 1).toFixed(2) : "—";
+        const content = state.context === "Slips" ? `<section class="mc-slip" aria-label="Expanded sample slip"><header class="mc-slip-header"><strong>Slip #01 · ${items.length} matches</strong><span>Total odds <b>${totalOdds}</b> · Expanded</span></header>${list}<p class="mc-footnote">Original picks · Illustrative slip</p></section>` : list;
+        phone.innerHTML = `<header class="mc-demo-header"><div><h2>${state.context === "Slips" ? "Best slips" : state.context}</h2><p>${state.sample} · Kickoff times in EAT</p></div><span class="mc-sample-label">Sample</span></header>${content}<p class="mc-footnote">Odds and estimated chance refer to the shown pick.</p>`;
+        for (const button of phone.querySelectorAll(".mc-card")) {
+          if (expanded.includes(button.dataset.matchId)) { button.setAttribute("aria-expanded", "true"); phone.querySelector(`#${button.getAttribute("aria-controls")}`).hidden = false; }
+        }
+      }
+    }
+    function apply(values) {
+      if (!values || typeof values !== "object") return;
+      for (const [key, options] of Object.entries(allowed)) if (options.includes(values[key])) state[key] = values[key];
+      render();
+    }
+    function remember() {
+      if (window.openai?.setWidgetState) window.openai.setWidgetState({ modelContent: { matchCardPreview: { context: state.context, sample: state.sample } }, privateContent: { ...state } }).catch(() => {});
+    }
+    apply(window.openai?.widgetState?.privateContent);
+    window.addEventListener("openai:set_globals", event => apply(event.detail?.globals?.widgetState?.privateContent));
+    root.addEventListener("click", event => {
+      const button = event.target.closest(".mc-card");
+      if (!button || !root.contains(button)) return;
+      const open = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(open));
+      document.getElementById(button.getAttribute("aria-controls")).hidden = !open;
+    });
+    render();
+    if (globalThis.Tweak) {
+      const tweak = new Tweak({ container: root, onChange: () => { render(); remember(); } });
+      tweak.addSelect(state, "context", { label: "Show card in", options: allowed.context });
+      tweak.addSelect(state, "sample", { label: "Example matches", options: allowed.sample });
+      tweak.addSelect(state, "width", { label: "Phone width (px)", options: allowed.width });
+    }
+  })();
+</script>
