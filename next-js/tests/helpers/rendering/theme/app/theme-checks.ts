@@ -39,7 +39,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   };
   checkRadius("#theme-radius-badge", theme.radius.small);
   checkRadius("#theme-control-input, #theme-control-select, #theme-controls [data-surface-control], #theme-admin-input, #theme-payment-input, #theme-payment-action, [data-slip-custom-range]", theme.radius.control);
-  checkRadius("#theme-controls, #theme-large-action, #theme-admin-panel, #theme-admin-record, [data-subscribe-layout=stepwise], #theme-slips [data-slip-id]", theme.radius.surface);
+  checkRadius("#theme-controls, #theme-large-action, #theme-admin-panel, #theme-admin-record, [data-subscribe-layout=stepwise]", theme.radius.surface);
+  checkRadius("#theme-slips [data-slip-id]", phone ? theme.radius.surface : theme.radius.none);
   checkRadius("#theme-joined-controls", theme.radius.control);
   checkRadius("#theme-joined-controls > button", theme.radius.none);
   const dateFace = document.querySelector("[data-slip-period-select]");

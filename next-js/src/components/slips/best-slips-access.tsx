@@ -9,13 +9,10 @@ import { media } from "@/styles/theme";
 import { CriteriaPanel } from "./slip-styles";
 
 const AccessPanel = styled(CriteriaPanel)`
-  ${media.desktop} {
-    && { padding: 6px 8px; }
-    > ${Stack} { gap: 4px; }
-  }
+  ${media.desktop} { display: none; }
 `;
 
-/** One access message per list, including when a future publication has not been released yet. */
+/** Mobile keeps its existing access panel; desktop uses the shared subscription status bar. */
 export function BestSlipsAccess({ signedIn, locale }: { signedIn: boolean; locale: string }) {
   const m = createMessages(locale);
   return <AccessPanel role="status" data-best-slips-access><Stack $gap="sm">

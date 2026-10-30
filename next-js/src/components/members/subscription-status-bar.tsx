@@ -13,8 +13,8 @@ const currentMinute = () => Math.floor(Date.now() / minute) * minute;
 const serverMinute = () => 0;
 
 /** Both responsive invitations share one confirmed private session and its approval/expiry refreshes. */
-export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = false, wide = false }: {
-  locale?: string; className?: string; desktopOnly?: boolean; wide?: boolean;
+export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = false, wide = false, bestSlips = false }: {
+  locale?: string; className?: string; desktopOnly?: boolean; wide?: boolean; bestSlips?: boolean;
 }) {
   const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
   const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
@@ -23,7 +23,7 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
   if (!subscription || pathname === `/${resolveLocale(locale)}/account`) return null;
   const props = { locale, pathname, signedIn: phone !== null, subscription, now, wide, ...(className ? { className } : {}) };
   return <>
-    <DesktopSubscriptionBanner {...props} />
+    <DesktopSubscriptionBanner {...props} bestSlips={bestSlips} />
     {!desktopOnly && <MobileSubscriptionBanner {...props} />}
   </>;
 }

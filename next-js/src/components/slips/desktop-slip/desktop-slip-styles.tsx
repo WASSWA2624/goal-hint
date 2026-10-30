@@ -2,6 +2,7 @@
 
 import styled from "styled-components";
 import { alignedLedgerStyles, desktopMatchBaseStyles } from "@/components/match/desktop-match-styles";
+import { media } from "@/styles/theme";
 
 export { alignedLedgerStyles } from "@/components/match/desktop-match-styles";
 
@@ -58,4 +59,46 @@ export const DesktopSlipBase = styled.div`
   }
 `;
 
-export const DesktopSlipLayout = styled(DesktopSlipBase)`${alignedLedgerStyles}`;
+/** Blue Signal is shared by Best Slips, the builder and saved desktop slips. */
+export const DesktopSlipLayout = styled(DesktopSlipBase)`
+  ${alignedLedgerStyles}
+  ${media.desktop} {
+    /* Draw on the outer frame so the rail spans matches without affecting their layout. */
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      border-inline-start: 3px solid ${({ theme }) => theme.color.accent.blue.text};
+      border-radius: ${({ theme }) => theme.radius.none};
+      pointer-events: none;
+    }
+    [data-compact-slip] { border-color: ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.none}; }
+
+    &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
+    &&& [data-compact-slip] > header[data-slip-summary] {
+      min-block-size: 44px;
+      color: ${({ theme }) => theme.color.text};
+      background: ${({ theme }) => theme.color.surface};
+      [data-summary-identity] > span:first-child { font-size: .9375rem; font-weight: 700; }
+      [data-summary-odds] strong, [data-summary-average] strong {
+        color: ${({ theme }) => theme.color.accent.blue.text}; font-size: .9375rem; font-weight: 700;
+      }
+      [data-fact-label], [data-summary-count] { font-size: .8125rem; font-weight: 500; }
+      [data-slip-publication-date], [data-rank] { font-size: .75rem; font-weight: 500; line-height: 1.35; }
+      [data-rank] { color: ${({ theme }) => theme.color.accent.blue.text}; }
+      [data-slip-status] { font-size: .8125rem; font-weight: 600; }
+      &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
+      ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.color.surface} 94%, ${({ theme }) => theme.color.accent.blue.text}); } }
+    }
+    &:not(:has([data-slip-disclosure][open])) {
+      [data-slip-header-action] { inset-block-start: 0; block-size: 44px; display: flex; align-items: center; }
+      [data-share-slip] {
+        color: ${({ theme }) => theme.color.accent.blue.text}; background: ${({ theme }) => theme.color.surface};
+        font-size: .8125rem; font-weight: 600;
+        &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
+        @media (pointer: coarse) { min-block-size: 44px; }
+      }
+    }
+  }
+`;

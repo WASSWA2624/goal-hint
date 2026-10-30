@@ -60,7 +60,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
-      {!administratorName && <SubscriptionStatusBar locale={language} desktopOnly={app} wide={app || wide} />}
+      {!administratorName && <SubscriptionStatusBar locale={language} desktopOnly={app} wide={app || wide} bestSlips={current === "best-slips"} />}
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $compactTop={current === "best-slips"} $dashboard={current === "dashboard"}>
         <Container $wide={app || wide}>{children}</Container>
       </PageMain>

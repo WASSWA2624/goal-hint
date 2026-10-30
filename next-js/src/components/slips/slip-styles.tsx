@@ -78,7 +78,7 @@ export const SlipStack = styled(Stack)`
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
 export const SlipList = styled.div<{ $phoneGap?: number }>`
   display: grid; min-inline-size: 0; gap: ${({ $phoneGap = 10 }) => $phoneGap}px;
-  ${media.desktop} { gap: 3px; }
+  ${media.desktop} { gap: 4.5px; }
 `;
 export const SlipHeading = styled(PageHeading)`font-size: 1.25rem; ${media.desktop} { font-size: 1.5rem; }`;
 export const HeadingRow = styled.div`

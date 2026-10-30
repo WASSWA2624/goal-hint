@@ -4,6 +4,14 @@ import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/nu
 import type { BestSlipsResult } from "@/domain/best-slips";
 import { bestSlipsQueryRules } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
+import styled from "styled-components";
+import { media } from "@/styles/theme";
+
+const Pagination = styled.div`
+  ${media.desktop} {
+    [aria-current="page"] { background: ${({ theme }) => theme.color.accent.blue.text}; color: ${({ theme }) => theme.color.accent.blue.soft}; }
+  }
+`;
 
 export function BestSlipsSummary({ result, period, locale }: { result: BestSlipsResult; period: string; locale: string }) {
   const m = createMessages(locale), browse = result.browse;
@@ -23,6 +31,6 @@ export function BestSlipsPagination({ onPage, total, page, busy, locale }: {
 }) {
   const m = createMessages(locale);
   const pages = Math.min(bestSlipsQueryRules.maximumPage, Math.ceil(total / bestSlipsQueryRules.pageSize));
-  return pages > 1 ? <div data-best-slips-pagination><NumberedPagination page={page} pages={pages} disabled={busy}
-    onPage={onPage} labels={numberedPaginationLabels(m, m.text("slips.generated"))} /></div> : null;
+  return pages > 1 ? <Pagination data-best-slips-pagination><NumberedPagination page={page} pages={pages} disabled={busy}
+    onPage={onPage} labels={numberedPaginationLabels(m, m.text("slips.generated"))} /></Pagination> : null;
 }

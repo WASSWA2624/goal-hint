@@ -1,4 +1,4 @@
-# Best Slips (25 October 2026)
+# Best Slips (30 October 2026)
 
 `/en` is Best Slips; `/en/matches` preserves the match feed and `/en/slips` keeps
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
@@ -11,7 +11,11 @@ This applies regardless of publication day: yesterday's unfinished slips remain
 restricted, while today's fully completed results can be public. Both the
 initial read and final entitlement recheck enforce this completion rule.
 
-Desktop Best slips use Aligned ledger: a collapsed compact header, 3px gaps,
+Desktop Best slips use Blue Signal over the shared Aligned ledger layout:
+square cards, 44px collapsed headers, 4.5px gaps (1.5× the previous 3px), and a
+blue rail that spans the full card in both collapsed and expanded states.
+Primary header facts use 15px text, supporting labels 13px, and publication
+metadata 12px. Match rows retain their original presentation, including
 hyphenated EAT dates/times, country before league, fixed metadata/status tracks,
 and strictly aligned score/VS and crest columns. Current score, provider clock
 and selection outcome are sidecar observations matched to the original forecast,
@@ -42,9 +46,10 @@ probability estimate.
 
 Each available slip initially shows only its summary. Clicking the summary or
 pressing Enter/Space expands the matches; repeating the action collapses them.
-One access message above the public list explains that every match must be
-completed and offers **Sign up** and **Sign in** to visitors, or **Subscribe**
-to signed-in members without access. Unfinished slips are absent from the
+On desktop the existing account/subscription status bar explains which slips
+are public and offers **Sign up** and **Sign in** to visitors, or **Subscribe**
+to signed-in members without access. There is no duplicate Unlock new slips
+panel. Mobile retains its original access panel and status bar. Unfinished slips are absent from the
 public list, including their aggregate headers.
 Native expansion works before hydration.
 
@@ -65,7 +70,8 @@ original leg to be cancelled and void; mixed void outcomes remain Void. Pending
 is the honest fallback when recorded progress is unknown. These labels never
 change stored settlement outcomes. Completed history and
 performance use these same headers without repeating their date or status.
-Headers retain their existing theme colors. A plain ordinal precedes each match
+Outcome badges retain their existing theme colors; Blue Signal emphasizes
+collapsed-header values in blue. A plain ordinal precedes each match
 date and restarts at 1 inside each slip. Dates and time elements retain their
 original values; normal match-feed rows receive no slip-local numbering.
 In progress uses the blue theme accent and a steadily visible dot with a smooth
@@ -120,16 +126,19 @@ inventing zeros. Each result category also shows its percentage of that full
 date-range total, rounded to at most one decimal place. A known empty range
 shows 0%; unavailable percentages use a dash. All retains only its total count.
 Counts and percentages are included in accessible button names.
-Reset stays on the same row as a
-separate outlined icon action. The applied-filter summary and displayed slip
+Below 1280px the six result buttons occupy a full row, followed by dates and
+Reset; wider desktops retain one toolbar row. Reset remains a separate outlined
+icon action. The applied-filter summary and displayed slip
 range share one row below it. There is no separate desktop Overall Performance
 panel or repeated date; mobile retains its compact performance strip.
 The section uses the shared Matches palette and square controls, with no outer
 padding, border or background. Status controls start at the slips' left edge;
-Reset aligns with their right edge. Result selection uses neutral, green, red,
+Reset aligns with their right edge. The result-button container is transparent;
+individual buttons retain their outcome tints, with blue emphasis for All.
+Result selection uses blue, green, red,
 or amber, with matching resting
 tints. Filled selected states and `aria-pressed` distinguish the choices.
-Fine-pointer toggles are 28px high inside compact group frames; coarse pointers
+Fine-pointer toggles are 36px high with 6px gaps and 10px horizontal padding; coarse pointers
 retain 44px targets. Phones and tablets keep their original daily presentation.
 
 Dates select the slip's publication day in EAT. The select offers:

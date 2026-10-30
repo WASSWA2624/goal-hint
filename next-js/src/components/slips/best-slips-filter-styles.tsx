@@ -62,6 +62,10 @@ export const ToggleRow = styled.div`
   gap: 10px;
   min-inline-size: 0;
   @media (max-width: 79.99rem) { gap: 6px; }
+  ${media.desktop} {
+    gap: 10px 14px;
+    @media (max-width: 79.99rem) { flex-wrap: wrap; }
+  }
 `;
 
 export const ResultGroup = styled.div`
@@ -72,6 +76,12 @@ export const ResultGroup = styled.div`
   scrollbar-color: ${({ theme }) => theme.color.border} transparent;
   &::-webkit-scrollbar { block-size: 3px; }
   &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
+  ${media.desktop} {
+    gap: 6px;
+    padding: 3px;
+    background: transparent;
+    @media (max-width: 79.99rem) { flex: 1 0 100%; box-sizing: border-box; }
+  }
 `;
 
 export const FilterButton = styled.button`
@@ -85,6 +95,7 @@ export const FilterButton = styled.button`
     background: ${({ theme }) => theme.color.brandSoft};
   }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  ${media.desktop} { font-weight: 500; }
 `;
 
 export const DateControls = styled.div`
@@ -97,6 +108,9 @@ export const DateControls = styled.div`
   padding-inline-start: 14px;
   border-inline-start: 1px solid ${({ theme }) => theme.color.border};
   @media (max-width: 79.99rem) { margin-inline-start: 2px; padding-inline-start: 8px; gap: 6px; }
+  ${media.desktop} {
+    @media (max-width: 79.99rem) { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
+  }
 `;
 
 export const DateSelect = styled(SelectMenu)`
@@ -105,6 +119,7 @@ export const DateSelect = styled(SelectMenu)`
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     box-shadow: 0 1px 2px color-mix(in srgb, ${({ theme }) => theme.color.text} 6%, transparent);
     ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+    ${media.desktop} { font-size: .8125rem; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
   }
 `;
 
@@ -120,6 +135,7 @@ export const CustomRangeButton = styled(FilterButton)`
   > svg { color: ${({ theme }) => theme.color.brand}; }
   > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
+  ${media.desktop} { font-size: .8125rem; font-weight: 600; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
 `;
 
 export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
@@ -158,6 +174,22 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   }
   @media (max-width: 79.99rem) { gap: 3px; padding-inline: 4px; }
   @media (pointer: coarse) { min-block-size: 44px; }
+  ${media.desktop} {
+    gap: 6px;
+    min-block-size: 36px;
+    padding: 6px 10px;
+    font-size: .8125rem;
+    > strong { font-size: .8125rem; font-weight: 700; }
+    [data-slip-result-percent] { font-size: .75rem; font-weight: 500; }
+    @media (pointer: coarse) { min-block-size: 44px; }
+    ${({ theme, $status }) => $status === "all" && css`
+      &[aria-pressed="true"], &[aria-pressed="true"]:hover {
+        color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft};
+        border-color: ${theme.color.accent.blue.text};
+      }
+      &[aria-pressed="true"]:focus-visible { outline-color: ${theme.color.accent.blue.text}; }
+    `}
+  }
 `;
 
 export const ResetButton = styled(FilterButton)`
@@ -174,6 +206,7 @@ export const ResetButton = styled(FilterButton)`
   > svg { flex: none; font-size: 0.875rem; }
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; } }
   @media (pointer: coarse) { min-block-size: 44px; }
+  ${media.desktop} { font-size: .8125rem; }
 `;
 
 export const RangeButton = styled(FilterButton)`
@@ -202,6 +235,11 @@ export const AppliedSummary = styled.div`
   line-height: 1.4;
   [data-applied-result] { color: ${({ theme }) => theme.color.text}; }
   [data-best-slips-summary] { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+  ${media.desktop} {
+    font-size: .75rem;
+    font-weight: 500;
+    [data-best-slips-summary] { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  }
 `;
 
 export const AppliedDetails = styled.div`

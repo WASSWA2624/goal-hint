@@ -95,8 +95,11 @@ export const ReviewSurface = styled.div<{ $design: DesktopSlipDesign; $enabled: 
         --review-interface-accent: ${accent.text}; --review-interface-fill: ${accent.soft};
         --review-card-line: ${design.treatment === "outline" ? accent.text : theme.color.border};
         --review-hover: color-mix(in srgb, ${header} 94%, ${color});
-        --review-mark: ${design.treatment === "rail" ? `inset 3px 0 ${color}`
+        --review-mark: ${design.id === "blue-signal" ? "none" : design.treatment === "rail" ? `inset 3px 0 ${color}`
           : design.treatment === "rule" ? `inset 0 -2px ${color}` : "none"};
+
+        /* Other historical recipes keep their own marks; Blue Signal uses the live outer rail. */
+        ${design.id !== "blue-signal" && css`[data-production-desktop-slip]::before { display: none; }`}
 
         ${desktopSlipHeaderSkin}
         ${desktopSlipTypography}

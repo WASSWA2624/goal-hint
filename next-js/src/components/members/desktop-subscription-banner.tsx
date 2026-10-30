@@ -29,6 +29,7 @@ const Row = styled(Container)`
   > svg { flex: none; font-size: 1rem; color: ${({ theme }) => theme.header.accent}; }
   [data-subscription-state="active"] & > svg { color: ${({ theme }) => theme.header.tone.emerald}; }
   [data-subscription-state="pending"] & > svg { color: ${({ theme }) => theme.header.tone.amber}; }
+  [data-best-slips-status] & { min-block-size: 44px; font-size: .875rem; }
 `;
 const Copy = styled.span`
   flex: 1;
@@ -59,9 +60,9 @@ const Action = styled(Link)`
 `;
 
 /** The approved Inline invitation consumes the same confirmed private session as every header. */
-export function DesktopSubscriptionBanner({ locale, pathname, signedIn, subscription, now, wide, className }: {
+export function DesktopSubscriptionBanner({ locale, pathname, signedIn, subscription, now, wide, className, bestSlips = false }: {
   locale: string; pathname: string; signedIn: boolean; subscription: SubscriptionSummary | null;
-  now: number; wide: boolean; className?: string;
+  now: number; wide: boolean; className?: string; bestSlips?: boolean;
 }) {
   const state = subscriptionBannerState(signedIn, subscription, now), links = subscriptionBannerLinks(locale, pathname);
   if (!state || !subscription || pathname === links.account || pathname === links.subscribe && state !== "active") return null;
@@ -75,18 +76,18 @@ export function DesktopSubscriptionBanner({ locale, pathname, signedIn, subscrip
   const icon = state === "active" ? <CheckIcon /> : state === "pending" ? <ClockIcon /> : <LockIcon />;
 
   return <Banner className={className} aria-label={messages.text("banner.label")} data-desktop-subscription-status
-    data-subscription-status-bar data-subscription-state={state}>
+    data-subscription-status-bar data-subscription-state={state} data-best-slips-status={bestSlips || undefined}>
     <Row $wide={wide} data-desktop-subscription-row>
       {icon}
       <Copy role="status" aria-atomic="true">
-        {state === "signed-out" ? <>{richText(messages.text("banner.invitation"), {
+        {state === "signed-out" ? <>{richText(messages.text(bestSlips ? "banner.bestSlips.invitation" : "banner.invitation"), {
           signUp: <Action href={links.signUp} prefetch={false}>{messages.text("auth.signUp")}</Action>,
           signIn: <Action href={links.signIn} prefetch={false}>{messages.text("auth.signIn")}</Action>,
-        })}{price ? <> {price}</> : "."}</>
+        })}{price ? <> {price}</> : bestSlips ? null : "."}</>
           : state === "active" ? <><strong>{messages.text("banner.active")}</strong> {messages.text(pending ? "account.pending" : "banner.unlocked")}</>
-          : state === "pending" ? <>{messages.text("account.pending")}</>
-          : state === "expired" ? <><strong>{messages.text("banner.expired")}</strong> {messages.text("banner.renew")}{price ? <> {price}</> : "."}</>
-          : <><strong>{messages.text("banner.unlock")}</strong>{price ? <> {price}</> : "."}</>}
+          : state === "pending" ? <>{messages.text("account.pending")}{bestSlips && <> {messages.text("banner.bestSlips.public")}</>}</>
+          : state === "expired" ? <><strong>{messages.text("banner.expired")}</strong> {messages.text(bestSlips ? "banner.bestSlips.renew" : "banner.renew")}{price ? <> {price}</> : bestSlips ? null : "."}</>
+          : <><strong>{messages.text(bestSlips ? "banner.bestSlips.unlock" : "banner.unlock")}</strong>{price ? <> {price}</> : bestSlips ? null : "."}</>}
       </Copy>
       {action && <Action href={action.href} prefetch={false} data-banner-action>{action.label}<ChevronRightIcon /></Action>}
     </Row>
