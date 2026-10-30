@@ -60,8 +60,10 @@ publication time. Desktop publication dates include the actual short weekday,
 ordinal day, full month and year, for example Fri, 30th October, 2026, followed
 by the supplied 24-hour EAT time. Thin separators distinguish the number/date
 and summary fields; mobile keeps its compact date format.
-Desktop uses Average probability; its fixed-width, square
-status badge is followed by Share and the far-right disclosure arrow.
+Desktop uses Average probability, followed by Share, the fixed-width slip-status
+badge and the far-right disclosure arrow. Slip and match statuses share the same
+final track, border and inner padding so their badge edges align when expanded.
+Sharing stays outside the native summary to remain independent of its toggle.
 Header statuses follow the same original-cycle observations as the selection
 rows: Not started requires recorded scheduled/void-cancelled legs; In progress
 means an original leg has started while the slip remains unsettled. Won/Lost
