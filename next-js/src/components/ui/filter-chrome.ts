@@ -17,6 +17,13 @@ export const filterPanelColors = css`
   --filter-field-border: color-mix(in srgb, ${({ theme }) => theme.color.controlBorder} 97%, ${({ theme }) => theme.color.surfaceMuted});
 `;
 
+/** Outer phone filter groups share the page edges; individual input boundaries remain visible. */
+export const mobileFilterPanel = css`
+  ${media.belowDesktop} {
+    && { border: 0; border-radius: ${({ theme }) => theme.radius.none}; padding-inline: 0; box-shadow: none; }
+  }
+`;
+
 export const filterControlColors = css`
   background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
   border-color: var(--filter-field-border, ${({ theme }) => theme.color.controlBorder});

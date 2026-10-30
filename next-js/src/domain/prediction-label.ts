@@ -1,17 +1,13 @@
 import { createMessages, type Messages, type TextKey } from "../i18n/messages.ts";
 import type { GoalRule } from "./score-distribution-markets.ts";
 import type { NonGoalRule } from "./non-goal-market-definitions.ts";
+import { predictionSelectionAliases } from "./betting-short-forms.ts";
 
 type LabelMessages = Pick<Messages, "text">;
 type Result = "home" | "draw" | "away";
 export type PredictionLabelContext = Readonly<{ marketKey?: string; label?: string; line?: number; rule?: GoalRule | NonGoalRule }>;
 
-const selectionAliases: Readonly<Record<string, string>> = {
-  "1": "home-win", x: "draw", "2": "away-win", "1x": "home-or-draw", x1: "home-or-draw",
-  x2: "away-or-draw", "2x": "away-or-draw", "12": "home-or-away", "21": "home-or-away",
-  home: "home-win", away: "away-win", "home-draw": "home-or-draw", "draw-home": "home-or-draw",
-  "draw-away": "away-or-draw", "away-draw": "away-or-draw", "home-away": "home-or-away", "away-home": "home-or-away",
-};
+const selectionAliases = predictionSelectionAliases;
 const coreSelections = new Set(["home-win", "draw", "away-win", "home-or-draw", "away-or-draw", "home-or-away", "yes", "no"] as const);
 type CoreSelection = typeof coreSelections extends Set<infer Selection> ? Selection : never;
 const result = (messages: LabelMessages, value: Result) => messages.text(value === "draw" ? "market.selection.draw" : `market.selection.${value}-win`);

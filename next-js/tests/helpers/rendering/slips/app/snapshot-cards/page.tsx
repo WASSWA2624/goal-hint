@@ -22,11 +22,17 @@ export default function Page() {
     { id: "snapshot-redacted", props: { ...card, fixture: redacted } },
     { id: "snapshot-offline", props: { ...card, offline: true } },
   ];
-  const liveSelections = ["live-minute", "live-break"].map((fixtureId) => ({ ...selection, fixtureId }));
+  const liveClocks: NonNullable<SlipMatchState["liveClock"]>[] = [
+    { phase: "second-half", minute: 67 }, { phase: "half-time", minute: 45 },
+    { phase: "first-half", minute: 45, stoppageMinutes: 2 }, { phase: "second-half", minute: 90, stoppageMinutes: 4 },
+    { phase: "extra-time", minute: 104 }, { phase: "extra-time", minute: 120, stoppageMinutes: 1 },
+    { phase: "penalties", minute: 120 },
+  ];
+  const liveSelections = ["live-minute", "live-break", "live-first-added", "live-second-added", "live-extra", "live-extra-added", "live-penalties"].map((fixtureId) => ({ ...selection, fixtureId }));
   const liveStates = liveSelections.map((leg, index): SlipMatchState => ({
     fixtureId: leg.fixtureId, family: leg.family, selection: leg.selection,
     ...(leg.forecast ? { forecast: leg.forecast } : {}), status: "live", outcome: "pending",
-    score: { home: 1, away: 0 }, liveClock: { phase: index === 0 ? "second-half" : "half-time", minute: index === 0 ? 67 : null },
+    score: { home: 1, away: 0 }, liveClock: liveClocks[index]!,
   }));
   return <PageMain><Stack $gap="sm"><PageHeading>Saved selection boundaries</PageHeading>
     <MatchCardList>{cases.map(({ id, props }, index) => <li key={id}>

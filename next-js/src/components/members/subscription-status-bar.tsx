@@ -24,6 +24,6 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
   const props = { locale, pathname, signedIn: phone !== null, subscription, now, wide, ...(className ? { className } : {}) };
   return <>
     <DesktopSubscriptionBanner {...props} bestSlips={bestSlips} />
-    {!desktopOnly && <MobileSubscriptionBanner {...props} />}
+    {!desktopOnly && <MobileSubscriptionBanner {...props} bestSlips={bestSlips} />}
   </>;
 }

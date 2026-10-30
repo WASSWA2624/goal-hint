@@ -1,4 +1,5 @@
 import type { MarketFamily } from "./markets.ts";
+import { marketShortCode } from "./betting-short-forms.ts";
 
 const teamNames: Readonly<Record<string, string>> = {
   "Inter Milan": "Inter",
@@ -22,13 +23,6 @@ const leagueNames: Readonly<Record<string, string>> = {
   "Major League Soccer": "MLS",
 };
 
-const marketNames: Readonly<Record<MarketFamily, string>> = {
-  "match-result": "1X2",
-  "double-chance": "DC",
-  "total-goals": "O/U",
-  "both-teams-to-score": "BTTS",
-};
-
 /** Familiar visible labels only; callers retain the complete name for accessible descriptions and titles. */
 export function compactTeamName(name: string): string {
   const full = name.trim();
@@ -42,5 +36,5 @@ export function compactLeagueName(name: string): string {
 }
 
 export function compactMarketName(family: MarketFamily): string {
-  return marketNames[family];
+  return marketShortCode(family);
 }

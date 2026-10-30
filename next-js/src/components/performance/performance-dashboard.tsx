@@ -17,7 +17,7 @@ import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surfac
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SlipCard } from "@/components/slips/slip-card";
 import { PerformanceSummary } from "./performance-summary";
-import { EvidenceList, MarketGrid, MetricList, PerformanceFilters, PerformanceTable, TableFrame } from "./performance-styles";
+import { EvidenceList, MarketGrid, MetricList, PerformanceFilterPanel, PerformanceFilters, PerformanceTable, TableFrame } from "./performance-styles";
 
 export type PerformanceDashboardProps = Readonly<{
   locale: string;
@@ -131,7 +131,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
   const leagueHref = (page: number) => performancePageHref({ ...filters, leaguePage: page }, history?.page ?? 1, locale);
   return <Stack $gap="lg" data-performance-dashboard>
     <div><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></div>
-    <Surface><Stack $gap="sm">
+    <PerformanceFilterPanel><Stack $gap="sm">
       <PerformanceFilters action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
         <TextInput label={m.text("performance.from")} name="from" type="date" required defaultValue={filters.from} />
         <TextInput label={m.text("performance.to")} name="to" type="date" required defaultValue={filters.to} />
@@ -146,7 +146,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
         <Button type="submit">{m.text("performance.apply")}</Button>
       </PerformanceFilters>
       <MutedText>{m.text("performance.periodHint")}</MutedText><MutedText>{m.text("performance.pickFilterHint")}</MutedText>
-    </Stack></Surface>
+    </Stack></PerformanceFilterPanel>
     <section aria-labelledby="individual-performance"><Stack>
       <SectionHeading id="individual-performance">{m.text("performance.pickHeading")}</SectionHeading><MutedText>{m.text("performance.pickBasis")}</MutedText>
       {report ? <>

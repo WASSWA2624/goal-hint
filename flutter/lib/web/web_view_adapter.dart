@@ -10,6 +10,8 @@ abstract class WebViewAdapter extends ChangeNotifier {
   bool get canGoBack;
   String? get error;
   WebAppearance? get appearance => null;
+  bool get supportsPullToRefresh => false;
+  bool get atTop => false;
 
   Widget buildView();
   Future<void> initialize();

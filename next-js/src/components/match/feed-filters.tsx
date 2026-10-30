@@ -5,6 +5,7 @@ import styled, { css } from "styled-components";
 import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useClientReady } from "@/components/ui/use-client-ready";
+import { mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -66,6 +67,7 @@ const Panel = styled.form`
     gap: 6px; padding-inline: 6px;
     &[data-mobile-compact-filters] { gap: 4px; padding-inline: 0; }
   }
+  ${mobileFilterPanel}
 `;
 const QueryChoices = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;

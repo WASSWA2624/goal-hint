@@ -16,4 +16,5 @@ export const subscriptionBannerMessages = {
   "banner.mobile.from": "from UGX {price}",
   "banner.mobile.active": "Access active",
   "banner.mobile.expired": "Access ended",
+  "banner.mobile.bestSlips": "Completed slips are public. Subscribe for live/upcoming.",
 } as const;

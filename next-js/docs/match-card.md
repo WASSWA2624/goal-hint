@@ -18,7 +18,8 @@ Import directly from the owning module under `@/components/match`:
 | `desktop-match-row` | `DesktopMatchRow`: the shared desktop renderer for feed fixtures and slip selections. Inputs are supplied teams/competition, kickoff, score, match status/clock and already-authorized market, odds, probability and outcome. It selects no forecast and fabricates no missing facts. |
 | `desktop-match-styles` | `desktopMatchBaseStyles` and `alignedLedgerStyles`: one row geometry reused by `MatchCardList`, production desktop slips and their approved design review. |
 | `truncated-text` | Full desktop names remain in the DOM. Only clipped text becomes a keyboard-accessible tooltip trigger; focus, hover and Escape retain access to the full value. |
-| `team-stack-styles` | Shared phone/tablet geometry used by match cards and slip selections: kickoff/competition above left-aligned stacked teams, with market/pick and labeled odds/chance alongside. |
+| `team-stack-styles` | Shared phone/tablet geometry: one metadata row, stacked teams with scores, and a fixed-width right column containing status, Odds, Prob. and market/pick. |
+| Domain `match-clock` | Shared localized mobile live-clock labels, added time, paused phases and extra-time indicators; supplied observations only. |
 | `team-logo` | Shared team/league image treatment, reserved dimensions and initials fallback. Its container controls size through `--gh-logo-size`; missing or failed media retains the supplied name. |
 | Domain `prediction-label` | Generic full-word prediction wording and extended market-rule descriptions, without participant-name substitution or lost goal lines. |
 
@@ -63,8 +64,8 @@ The renderer reuses `selectedCardPrediction`, `selectedCardPrice` and
 Upcoming and VS without inventing a score. Running clocks use supplied phases,
 minutes and stoppage time; paused phases retain their phase label. Finished,
 postponed, canceled, abandoned and awarded fixtures keep their stored status.
-One shared status label shows Upcoming before kickoff and Live during play,
-including half-time. Only terminal fixtures show the recorded prediction outcome
+One shared status label shows Upcoming before kickoff. Desktop retains Live
+during play; mobile shows the observed live clock or paused phase. Only terminal fixtures show the recorded prediction outcome
 (Won, Lost, Pending, Void or unavailable). Postponed and unknown fixtures retain
 their match status. Saved results can show their recorded outcome without
 inventing a current fixture observation; anonymous offline cards retain Saved.
@@ -121,19 +122,30 @@ status; missing kickoff or score never receives an invented time or value.
 
 The compact cards remain consistent with slip selections:
 
-1. Kickoff date and AM/PM clock precede the league crest/short label and country
-   flag/code. Full competition and country names remain available to assistive
-   technology and in labels/tooltips.
+1. A faintly tinted, 18px-wide match-number slot matches the team logos; the
+   kickoff date aligns with team names. Number, date, AM/PM clock and league stay on
+   one unwrapped row. The league uses remaining space and ellipsis; full league
+   and country names remain available in accessible descriptions and titles.
 2. Home and away teams form two left-aligned rows with leading crests. Full
-   names wrap naturally. Supplied scores, live minutes and phases share the
-   compact status area below the names; scheduled matches omit a redundant VS row.
-3. The forecast occupies the right column: full market name, readable selected
-   prediction, then labeled odds and estimated chance. `predictionText` retains
-   the exact selection and goal line, including Yes/No answers. Gated and missing predictions keep the same
-   authorization rules and explicit explanations as desktop.
-4. The status label sits below the teams, using the same progress/outcome rules
-   and live dot as desktop. Slip selections use their original-selection-bound
-   match observations, including refreshed states in Matches and Slip Builder.
+   names stay on one line and use ellipsis before the reserved score column; full
+   names remain in accessible labels and titles. Each supplied score aligns with its team, immediately
+   before the fixed-width status/facts column. Scheduled matches omit a redundant VS row.
+3. Below the status badge, Odds and Prob. share one compact line, each label
+   followed immediately by its value; market and prediction codes share the
+   second line. Odds and the market start at the left badge edge; the probability
+   percentage and selection finish at its right edge. These details end by the
+   away-team row. Markets reuse `compactMarketName` (1X2, DC, O/U, BTTS) and
+   selections reuse `predictionLabel` (1, X, 2, 1X, X2, 12, O/U with the exact
+   goal line, Yes/No). Full market/selection meanings remain in accessible
+   descriptions and titles. Gated and missing predictions retain authorization rules.
+4. Equal-width status badges (8rem, capped at 128px) sit at the top right, using the shared
+   `mobileStatusWidth`. The glowing dot precedes
+   Live and observed minutes (including Live 45+2′, Live 90+4′ and Live 120+1′),
+   HT during halftime, and supplied break/penalty/interruption labels. Extra
+   time adds ET before the minute; terminal phases FT/AET/Pens sit beside the
+   recorded outcome in the mobile badge. Full phase descriptions remain accessible. Paused phases
+   override stale minutes. Missing observations never invent time. The steady
+   live dot and terminal outcome rules remain shared with desktop.
 
 The single-column native list retains 6px card spacing, square themed frames,
 no card shadow and offscreen `content-visibility` optimization. Cards reflow at
@@ -145,9 +157,21 @@ Expanded slips reuse the same geometry and square row frame inside their
 existing approved disclosure/header. Saved selections retain their original
 pick, odds and chance. Selection-bound observations supply current score and
 clock independently; a saved score without an observation does not invent FT.
-Narrow effective widths reflow the forecast below the teams. Desktop rows and
-slip-header geometry are unchanged. Selection and verification are tracked in
-`dev-plan/178-team-stack-mobile-match-cards.md`.
+At narrow effective widths or enlarged text, the status occupies a row above
+the metadata; date, time and league remain on the same row. Details retain their
+right column beside the teams; at enlarged text, metric groups can reflow while
+each label stays with its value. Desktop rows remain unchanged. The mobile slip
+header moves its disclosure arrow to the left (right when collapsed, down when
+expanded), and its equally sized status badge aligns
+with the match badges beneath it, including their right inset. Selection and verification are tracked
+in `dev-plan/178-team-stack-mobile-match-cards.md` and
+`dev-plan/179-mobile-match-card-header-and-live-clock.md`.
+
+The mobile slip frame uses a 4px blue start border, doubled from 2px. Its desktop
+rail and rows retain their existing layout.
+
+The slip header has a faint themed blue background. Market and prediction codes
+use the shared 136-entry vocabulary described in `docs/betting-short-forms.md`.
 
 ## Time, images and offline behavior
 

@@ -5,11 +5,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:goal_hint/app.dart';
 import 'package:goal_hint/config/app_config.dart';
 import 'package:goal_hint/web/startup_loading.dart';
+import 'package:goal_hint/web/web_view_pull_to_refresh.dart';
 
 import 'support/fake_web_view.dart';
 
 void main() {
   final configuration = AppConfig.resolve(isDebugBuild: true, isAndroid: false);
+
+  testWidgets(
+    'a supported top pull reloads the existing browser without replacing it',
+    (tester) async {
+      final browser = FakeWebViewAdapter()..supportsPullToRefresh = true;
+      await tester.pumpWidget(
+        GoalHintApp(configuration: configuration, webViewAdapter: browser),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(WebViewPullToRefresh),
+        const Offset(0, 160),
+      );
+      await tester.pumpAndSettle();
+      expect(browser.reloads, 1);
+      expect(browser.disposed, isFalse);
+      expect(find.text('Embedded web application'), findsOneWidget);
+    },
+  );
 
   testWidgets('white branded loading stays until the first document is ready', (
     tester,

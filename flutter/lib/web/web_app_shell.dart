@@ -12,6 +12,7 @@ import 'startup_loading.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 import 'web_view_factory.dart';
+import 'web_view_pull_to_refresh.dart';
 
 class WebAppShell extends StatefulWidget {
   const WebAppShell({
@@ -227,7 +228,19 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
                       excluding: starting || error != null,
                       child: ColoredBox(
                         color: _browser.appearance?.background ?? Colors.white,
-                        child: _browser.buildView(),
+                        child: WebViewPullToRefresh(
+                          enabled:
+                              _browser.supportsPullToRefresh &&
+                              !starting &&
+                              error == null &&
+                              !_hidden,
+                          atTop: _browser.atTop,
+                          loading: _browser.loading,
+                          color: _browser.appearance?.accent,
+                          backgroundColor: _browser.appearance?.surface,
+                          onRefresh: () => unawaited(_retry()),
+                          child: _browser.buildView(),
+                        ),
                       ),
                     ),
                     if (starting) const StartupLoading(),

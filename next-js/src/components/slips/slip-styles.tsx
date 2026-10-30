@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
-import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors } from "@/components/ui/filter-chrome";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
@@ -95,9 +95,10 @@ export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   [data-criteria-dialog] { background: var(--filter-panel-background); }
+  ${mobileFilterPanel}
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
-    && { padding: 6px; }
+    && { padding-block: 6px; }
     [data-slip-label="desktop"] { display: none; }
     [data-slip-label="mobile"] { display: inline; }
     && [data-slip-builder-essentials] { grid-template-columns: 3.5rem minmax(0, 1fr); gap: 6px; }

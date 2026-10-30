@@ -6,6 +6,13 @@ platform browser adapters on Android, iOS, macOS, and Windows; Linux embedding
 remains an explicit integration gap.
 The Next.js app owns the product screens, authentication, data, and business logic.
 
+Android pull-to-refresh is implemented in the native host: pull down from the top
+of the document and release to reload the current page. Normal scrolling,
+horizontal gestures, multi-touch and keyboard input retain their web behavior.
+The existing browser and cookies remain intact. Installing a rebuilt Android
+binary is required; a shared-website update alone cannot add this native feature.
+See [implementation and verification](dev-plan/010-android-pull-to-refresh.md).
+
 Shared slip HTTPS links can target the existing browser on cold launch or while
 the app is running. Android and iOS app-link declarations are included, but
 opening an installed app also requires deployed domain associations and rebuilt

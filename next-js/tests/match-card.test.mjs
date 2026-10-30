@@ -266,9 +266,9 @@ test("Team stack cards retain the shared identity, settlement and desktop column
   assert.match(source, /<\/Pick>\s*<Result data-result-badge=/u);
 });
 
-test("the readable mobile forecast retains independent odds, probability and access messages", async () => {
+test("the compact mobile forecast retains independent odds, probability and access messages", async () => {
   const source = await cardSource;
-  assert.match(source, /predictionText\(messages, selection\)/u);
+  assert.match(source, /predictionLabel\(messages, selection\)/u);
   assert.doesNotMatch(source, /PickNumbers|CardGlyph|SubscribeHint/u);
   // Access messages remain available without restoring the old boxed panel.
   const messages = createMessages();

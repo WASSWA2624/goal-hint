@@ -42,7 +42,7 @@ def verify(origin, directory):
         if result != "live":
             label = {"upcoming": "Upcoming", "correct": "Won", "incorrect": "Lost", "pending": "Pending",
                 "void": "Void", "unavailable": "—", "postponed": "Postponed", "unknown": "Unknown"}[result]
-            match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
+            match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span>', article)
         if fixture_status != "scheduled":
             no_match(r'data-result-badge="upcoming"', article)
         no_match(r"\s(?:\$[\w-]+|tone|variant|loaded)=", article)
@@ -68,7 +68,7 @@ def verify(origin, directory):
             assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
             no_match(r"Odds", header)
             picks = re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article)
-            assert len(picks) == 1 and re.fullmatch(r"Home win|Draw|Away win|Home or draw|Away or draw|Home or away|(?:Over|Under) \d+(?:\.\d+)?|Yes|No", picks[0]), "One readable prediction outcome per card"
+            assert len(picks) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", picks[0]), "One recognized betting code per card, with the full meaning retained"
             match(r'data-pick-selection=""[^>]*title="[^\"]+"', article)
         assert len(re.findall(r'\bdata-card-odds=', article)) == 1, "One price cell serves both phone and desktop layouts"
         no_match(r'data-pick-price=""[^>]*>@', article)
@@ -81,20 +81,20 @@ def verify(origin, directory):
         ("card-limited", "upcoming", "Upcoming")]:
         article = by_id[card]
         assert article.count(f'data-result-badge="{status}"') == 1
-        match(rf'data-result-badge="{status}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
+        match(rf'data-result-badge="{status}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span>', article)
     for card in ["card-delayed", "card-limited"]:
         match(r'data-outcome="pending"', by_id[card])
         no_match(r'data-result-badge="pending"|data-pick-value[^>]*>Pending</span>', by_id[card])
     for card in ["card-unavailable", "card-missing-family"]:
-        match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span></span>', by_id[card])
+        match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span>', by_id[card])
         no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])
         match(r'data-pick-value[^>]*>No prediction</span>', by_id[card])
         match(r'data-pick-state="none"', by_id[card])
         match(r'<b data-mobile-only=""[^>]*>No prediction</b>', by_id[card])
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
-    match(r'data-pick-selection=""[^>]*>Home win</span>', by_id["card-correct"])
-    match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
+    match(r'data-pick-selection=""[^>]*>1</span>', by_id["card-correct"])
+    match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-card-odds[^>]*>1\.85</span>', by_id["card-correct"])
     match(r'data-card-odds="[^"]*"[^>]*data-pick-price=""[^>]*>1\.85</span>', by_id["card-correct"])
@@ -102,14 +102,14 @@ def verify(origin, directory):
     match(r'data-card-odds[^>]*>—</span>', by_id["card-incorrect"])
     match(r'data-pick-price=""[^>]*>—</span>', by_id["card-incorrect"])
     no_match(r'data-caption=|>likely</span>', visible)
-    for caption in ["Odds", "Est. chance"]:
+    for caption in ["Odds", "Prob."]:
         match(rf'data-stack-label="{re.escape(caption)}"', visible)
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
     no_match(r"data-pick-odds=", by_id["card-incorrect"])
     match("Odds: Unavailable", by_id["card-incorrect"])
-    match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
+    match(r'data-pick-selection=""[^>]*>U 2\.5</span>', by_id["card-long"])
     match(r'data-pick-selection=""[^>]*>No</span>', by_id["card-limited"])
     match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*><span data-mobile-only[^>]*>BIH</span><span data-desktop-only[^>]*>Bosnia &amp; Herz\.</span>',
           by_id["card-long"])
@@ -119,8 +119,8 @@ def verify(origin, directory):
     no_match(r"data-selected-odds=|Odds: 1\.85|Odds: 2\.10", by_id["card-any"])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
-    # Live: one progress label and glowing dot; the supplied minute stays with the score.
-    match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?data-match-live-dot[\s\S]*?<span data-pick-value[^>]*>Live</span></span>', by_id["card-pending"])
+    # Mobile live badges show the observed clock, with the phase beside the scores.
+    match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?data-match-live-dot[\s\S]*?data-status-clock[^>]*>Live(?:\s|<!-- -->)*67<span[^>]*data-minute-marker[^>]*>′</span>', by_id["card-pending"])
     match(r'>67<span[^>]*data-minute-marker[^>]*>′</span>', by_id["card-pending"])
     no_match(r'data-result-badge="pending"', by_id["card-pending"])
     no_match(r">(?:vs|VS)<", by_id["card-pending"])

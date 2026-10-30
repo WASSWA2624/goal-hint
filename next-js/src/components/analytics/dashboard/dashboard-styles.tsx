@@ -2,6 +2,7 @@
 
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
+import { mobileFilterPanel } from "@/components/ui/filter-chrome";
 
 export const Shell = styled.div`
   min-block-size: 100dvh;
@@ -125,6 +126,7 @@ export const Notice = styled.p<{ $tone?: "warning" | "error" | "info" }>`
   button { margin-inline-start: 8px; }
 `;
 export const FilterBar = styled.section`
+  ${mobileFilterPanel}
   position: sticky;
   inset-block-start: 53px;
   z-index: 5;

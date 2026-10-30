@@ -21,7 +21,7 @@ const PhoneSlipFallback = styled.div`
       border-radius: ${({ theme }) => theme.radius.control};
       border-start-start-radius: ${({ theme }) => theme.radius.none};
       border-end-start-radius: ${({ theme }) => theme.radius.none};
-      border-inline-start: 2px solid ${({ theme }) => theme.color.accent.blue.text};
+      border-inline-start: 4px solid ${({ theme }) => theme.color.accent.blue.text};
     }
   }
   ${media.desktop} {

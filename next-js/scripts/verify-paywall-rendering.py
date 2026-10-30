@@ -197,7 +197,7 @@ def main():
                         assert '61.7%' in response.text and '70.3%' in response.text, (viewer, "entitled original match probabilities")
                     else:
                         assert not toggles and not markup.nodes(attr="data-slip-content"), (viewer, "no unfinished public slip shell")
-                        assert markup.nodes(attr="data-best-slips-access"), (viewer, "subscription guidance remains")
+                        assert not markup.nodes(attr="data-best-slips-access"), (viewer, "no duplicate mobile access panel beneath filters")
                 checks += 1
             for path in ["/completed-slips", "/completed-slips?_rsc", "/api/completed-best-slips"]:
                 response = request(server.origin, path, headers={**headers, **({"RSC": "1"} if "_rsc" in path else {})})
@@ -221,7 +221,7 @@ def main():
                 if not extra:
                     markup = document(response.text).root
                     assert not markup.nodes(attr="data-slip-content") and not markup.nodes("summary", "data-slip-toggle")
-                    assert markup.nodes(attr="data-best-slips-access"), "Fresh access shows one list-level prompt"
+                    assert not markup.nodes(attr="data-best-slips-access"), "Fresh access relies on the shared confirmed-session header banner"
                 checks += 1
             print(f"PASS fresh access during read: {viewer} sees no unfinished slip or aggregate facts.", flush=True)
         checks += verify_private_routes(server.origin)

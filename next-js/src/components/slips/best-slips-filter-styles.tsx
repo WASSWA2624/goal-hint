@@ -1,7 +1,7 @@
 "use client";
 
 import styled, { css } from "styled-components";
-import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "@/components/ui/filter-chrome";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { media } from "@/styles/theme";
@@ -26,6 +26,7 @@ const compactControl = css`
 
 export const FiltersPanel = styled.section`
   ${filterPanelColors}
+  ${mobileFilterPanel}
   display: grid;
   gap: 5px;
   min-inline-size: 0;
@@ -35,8 +36,6 @@ export const FiltersPanel = styled.section`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   ${media.belowDesktop} {
-    padding: 4px; border: 1px solid color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.text} 28%, ${({ theme }) => theme.color.border});
-    border-radius: ${({ theme }) => theme.radius.control};
     background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.soft} 65%, ${({ theme }) => theme.color.surface});
   }
 `;

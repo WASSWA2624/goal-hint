@@ -2,6 +2,10 @@
 
 import styled from "styled-components";
 import { media } from "@/styles/theme";
+import { Surface } from "@/components/ui/layout";
+import { mobileFilterPanel } from "@/components/ui/filter-chrome";
+
+export const PerformanceFilterPanel = styled(Surface)`${mobileFilterPanel}`;
 
 export const PerformanceFilters = styled.form`
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px;

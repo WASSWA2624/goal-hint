@@ -281,7 +281,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             verify_clean_ledger_selection(card, path)
             assert card.attrs["href"].startswith("/en/matches/"), f"{path}: original fixture remains linked to analysis"
             labels = card.nodes(attr="data-pick-label")
-            assert len(labels) == 1 and re.fullmatch(r"Home win|Draw|Away win|Home or draw|Away or draw|Home or away|(?:Over|Under) \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one readable prediction outcome"
+            assert len(labels) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one recognized prediction code with its full accessible meaning"
             assert labels[0].attrs.get("title") and labels[0].attrs["title"] != labels[0].text, f"{path}: compact outcomes retain their full meaning"
             prices = card.nodes(attr="data-leg-odds")
             assert len(prices) == 1 and re.fullmatch(r"\d+\.\d{2}", prices[0].nodes("strong")[0].text), f"{path}: original selected price remains visible"
@@ -440,14 +440,7 @@ def verify_best_slips(origin, directory):
         assert all(node.attrs["data-compact-slip"] == "clean-ledger" for node in document.nodes(attr="data-compact-slip")), f"Best Slips {scenario}: selected Clean ledger disclosure serves every viewer"
         if locked:
             assert not document.nodes(attr="data-fixture-id") and not document.nodes(attr="data-slip-id"), "Aggregate access summaries expose no private picks or identities"
-            access = document.nodes(attr="data-best-slips-access")
-            assert len(access) == 1, "Locked summaries retain one shared access invitation"
-            links = {link.text.strip(): urlsplit(link.attrs["href"]) for link in access[0].nodes("a")}
-            if scenario == "locked-member":
-                assert links["Subscribe"].path == "/en/subscribe", "Signed-in viewers go to subscription"
-            else:
-                assert links["Sign up"].path == links["Sign in"].path == "/en/account", "Guests retain both account actions"
-                assert parse_qs(links["Sign in"].query)["view"] == ["login"], "Sign in preserves the login view"
+            assert not document.nodes(attr="data-best-slips-access"), "Mobile access guidance belongs in the confirmed-session header banner"
             assert "Synthetic" not in document.text, "Public summaries contain no synthetic picks"
             assert not re.search(r"synthetic-best-|synthetic-slip-|\"selections\"|\"homeTeam\"|\"awayTeam\"|\"forecast\"", response.text), "Locked HTML and flight data contain no private slip details"
         averages = []
@@ -481,7 +474,7 @@ def verify(origin, directory):
     snapshot_cards = {node.attrs["data-fixture-id"]: node for node in Document(snapshots.text).root.nodes("article", "data-fixture-id")}
     authorized = snapshot_cards["snapshot-authorized"]
     assert authorized.nodes(attr="data-card-odds")[0].text == "7.73" and "23.5%" in authorized.text, "Original saved probability and price survive the shared card"
-    assert authorized.nodes(attr="data-pick-selection")[0].text == "Home win", "The saved alternative retains its selection with readable wording"
+    assert authorized.nodes(attr="data-pick-selection")[0].text == "1", "The saved alternative retains its original selection code"
     assert authorized.nodes(attr="data-result-badge")[0].attrs["data-result-badge"] == "incorrect", "Supplied saved loss survives an unknown current fixture status"
     assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", authorized.text), "A supplied 2–1 regulation score retains its own score label"
     assert authorized.nodes(attr="data-match-state")[0].attrs["data-match-state"] == "snapshot", "No final or live phase is invented"
@@ -500,16 +493,19 @@ def verify(origin, directory):
     assert compact_row.attrs["data-fixture-id"] == "snapshot-compact-authorized", "Compact saved rows retain original fixture identity"
     assert compact_row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73", "Compact saved rows retain the original alternative price"
     assert compact_row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Compact saved rows retain original probability precision"
-    assert compact_row.nodes(attr="data-pick-label")[0].text == "Home win", "Compact saved rows retain the original selected alternative"
+    assert compact_row.nodes(attr="data-pick-label")[0].text == "1", "Compact saved rows retain the original selected alternative"
     assert compact_row.attrs["data-outcome"] == "incorrect" and compact_row.nodes(attr="data-match-status")[0].attrs["data-match-status"] == "incorrect", "Compact saved rows retain supplied settlement"
     assert compact_row.attrs.get("data-status") == "unknown" and compact_row.attrs.get("data-match-state") == "snapshot", "Compact saved settlements never invent current fixture state"
-    assert "Score after 90 minutes: 2–1" in compact_row.nodes(attr="data-saved-score")[0].text, "Compact saved regulation scores keep their own explicit meaning"
+    assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", compact_row.nodes(attr="data-stack-progress")[0].text), "Compact saved regulation scores keep their full accessible meaning"
     print("PASS compact saved slip: original alternative, price/probability and supplied regulation score/outcome.", flush=True)
     live = Document(snapshots.text).root.nodes(attr="data-live-snapshot")[0].nodes("a", "data-fixture-id")
-    assert len(live) == 2, "Both supplied live observations are rendered"
-    for row, phase in zip(live, ["67′", "HT"]):
+    clocks = [("2nd half", "67′"), ("HT", "HT"), ("1st half", "45+2′"), ("2nd half", "90+4′"),
+        ("Extra time", "ET 104′"), ("Extra time", "ET 120+1′"), ("Penalties", "Penalties")]
+    assert len(live) == len(clocks), "Every supplied live observation is rendered"
+    for row, (phase, badge) in zip(live, clocks):
         assert row.nodes(attr="data-score-home")[0].text == "1" and row.nodes(attr="data-score-away")[0].text == "0", "Live score uses the supplied progress"
-        assert row.nodes(attr="data-score-clock")[0].text == phase, "Live minute/half-time use their supplied phase"
+        assert row.nodes(attr="data-score-clock")[0].text == phase, "The supplied match phase remains beside the scores"
+        assert row.nodes(attr="data-status-clock")[0].text == f"Live {badge}", "Live badges retain observed minutes, added time and paused phases"
         assert row.attrs["data-outcome"] == "pending" and row.nodes(attr="data-match-status")[0].attrs["data-match-status"] == "live", "Running scores do not settle the original pick"
         assert row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73" and row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Current observations retain original odds and probability"
     print("PASS live slip observations: original picks/prices/chances, supplied score/minute/half-time, no early settlement.", flush=True)

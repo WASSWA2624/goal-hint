@@ -14,10 +14,11 @@ import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
+import { liveClockLabel } from "@/domain/match-clock";
 import type { MarketFamily } from "@/domain/markets";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import { matchHref } from "@/domain/navigation";
-import { predictionDescription, predictionLabel, predictionText } from "@/domain/prediction-label";
+import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
@@ -33,6 +34,7 @@ import { ProbabilityBar } from "./prediction-presentation";
 import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
 import { MatchStatus } from "./match-status";
+import { MatchNumber } from "./match-number";
 import { MatchClockText, ScoreFigures, Scoreline } from "./score-presentation";
 
 export type MatchCardProps = {
@@ -111,7 +113,7 @@ const Card = styled.article`
 const Meta = styled.header`
   ${table} { display: contents; }
 `;
-const Index = styled.span<{ $wrap: boolean }>`
+const Index = styled(MatchNumber)<{ $wrap: boolean }>`
   display: none;
   ${table} {
     display: block;
@@ -315,6 +317,7 @@ const StateChip = styled.span<{ $tone: StateTone }>`
 
 /** Mobile forecast geometry is shared; the original desktop fallback retains its subgrid. */
 const Pick = styled.div<{ $family: MarketFamily }>`
+  [data-match-metrics] { display: contents; }
   ${table} { display: grid; grid-column: 7 / span 4; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
 /** A shared value cell keeps every selected-pick fact in the same column on both layouts. */
@@ -444,18 +447,6 @@ const Open = styled(Link)`
   }
 `;
 
-function liveClockLabel(fixture: FixtureSnapshot, messages: Messages) {
-  const minute = fixture.liveClock?.minute ?? null, phase = fixture.liveClock?.phase ?? "in-play";
-  const stoppage = fixture.liveClock?.stoppageMinutes;
-  const clock = minute === null ? "" : messages.number(minute) + (stoppage ? `+${messages.number(stoppage)}` : "");
-  const visible = minute !== null ? messages.text("match.clock.minute", { minute: clock })
-    : phase === "in-play" ? messages.text("match.status.live") : messages.text(`match.clock.${phase}`);
-  const spoken = [messages.text("match.status.live"), phase === "half-time" ? messages.text("match.clock.halfTimeLabel")
-    : phase === "in-play" ? null : messages.text(`match.clock.${phase}`),
-    minute === null ? null : messages.text("match.clock.minuteLabel", { minute: messages.number(minute) }),
-    stoppage ? messages.text("match.clock.stoppageLabel", { minute: messages.number(stoppage) }) : null].filter(Boolean).join(", ");
-  return { minute, visible, spoken };
-}
 type LiveClock = ReturnType<typeof liveClockLabel>;
 
 /** `lead` names the winner of a decided final score; live phase and minute stay beside the score. */
@@ -475,7 +466,8 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
   if (snapshot) return <Center data-match-state="snapshot">{scoreline}</Center>;
-  if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true"><MatchClockText text={clock.visible} /></StateChip>
+  if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true">
+    <span data-mobile-only>{clock.phaseLabel}</span><span data-desktop-only><MatchClockText text={clock.visible} /></span></StateChip>
     <VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
     const regulationOnly = fixture.scorePeriod === "regulation" && status !== "finished-regulation";
@@ -489,7 +481,7 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
   if (status === "scheduled") return <Center data-match-state="scheduled">{scoreline}</Center>;
   return <Center data-match-state={status}>{scoreline}
     {status === "unknown" ? <VisuallyHidden>{messages.text("match.status.unknown")}</VisuallyHidden>
-      : <StateChip $tone="halted">{messages.text(`match.status.${status}`)}</StateChip>}
+      : <StateChip data-match-phase $tone="halted">{messages.text(`match.status.${status}`)}</StateChip>}
   </Center>;
 }
 
@@ -576,6 +568,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const shownFamily = best ?? eligible[0]!;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const publicChanceLabel = publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 });
+  const unlockLabel = startingPriceUgx ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(startingPriceUgx) }) : messages.text("paywall.unlockPrediction");
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
   const title = messages.text("match.title", { home, away });
@@ -602,7 +595,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
   // A live score bolds the side currently ahead.
   const liveLead = showScore && fixture.status === "live" ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
-  const clock = !offline && fixture.status === "live" ? liveClockLabel(fixture, messages) : null;
+  const clock = !offline && fixture.status === "live" ? liveClockLabel(fixture.liveClock, messages) : null;
   const showProgress = !offline && (showScore || final || clock !== null || snapshotPick !== undefined && fixture.score !== null
     || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
   const missing = gated || prediction ? null : noPickReason(fixture);
@@ -645,10 +638,10 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     />;
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
-    data-status={fixture.status} data-mobile-design="team-stack">
+    data-status={fixture.status} data-mobile-design="team-stack" data-numbered={position !== undefined ? "" : undefined}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta data-ledger-meta>
-      {position !== undefined && <Index $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
+      {position !== undefined && <Index position={position} $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
       <CardKickoff kickoff={fixture.kickoffAt} locale={locale} />
       <League title={country ?? undefined} data-ledger-competition>
         <CountryDetails data-country data-ledger-country aria-hidden="true">
@@ -663,36 +656,35 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         standing={liveLead > 0 ? "ahead" : liveLead < 0 ? "behind" : null} />
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null}
         standing={liveLead < 0 ? "ahead" : liveLead > 0 ? "behind" : null} />
+      {showProgress && <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} snapshot={snapshotPick !== undefined} />}
     </Teams>
     <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
-      <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true}>
-        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : family}</span>
+      <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
+        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : compactMarketName(shownFamily)}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
         <PickShort $family={shownFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
-        <Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={messages.text("match.estimatedChance")} aria-hidden="true"><Percent>—</Percent></Probability>
+        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-hidden="true"><Percent>—</Percent></Probability></span>
       </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><SubscriberIcon />
-        <span data-subscriber-notice data-mobile-only="">{startingPriceUgx
-          ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(startingPriceUgx) })
-          : messages.text("paywall.unlockPrediction")}</span>
+        <span data-subscriber-notice data-mobile-only="" title={unlockLabel}>{messages.text("paywall.getAccess")}<VisuallyHidden>. {unlockLabel}</VisuallyHidden></span>
         <span data-desktop-only=""><SubscriberNotice locale={locale} kind="card" /></span>
       </GatedPick>
-        <Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
-        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.estimatedChance")} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability>
+        <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
+        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true" data-no-pick={missing ?? undefined}>
-          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionText(messages, selection)}</span></span> : <>
+          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span></span> : <>
             <b data-mobile-only="">{messages.text("match.noPick")}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{messages.text("match.noPick")}</span>
           </>}
         </PickShort>
-        <Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true" data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</Odds>
-        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.estimatedChance")} aria-hidden="true">
+        <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true" data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</Odds>
+        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-hidden="true">
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
-        </Probability>
+        </Probability></span>
         {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
           {locked && `. ${messages.text("match.lockedPrediction")}`}
@@ -702,8 +694,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </Pick>
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
-      {showProgress && <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} snapshot={snapshotPick !== undefined} />}
-      <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} />
+      <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} liveClock={fixture.liveClock ?? null} />
     </Result>
     {!offline && <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />

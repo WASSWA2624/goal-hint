@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import { mobileStatusWidth } from "@/components/ui/status-badge";
 import { slipDisclosureIndicator } from "../slip-disclosure-styles";
 
 /** Minimal rules: stable metadata columns with compact, even text padding. */
@@ -67,10 +68,12 @@ export const MobileHeaderRow = styled.summary`
   /* Compact Rail is shared by every production mobile slip. Historical samples stay isolated. */
   &&:not([data-header-variant]) {
     --header-height: 2.75rem;
-    grid-template-columns: minmax(0, 1fr) 5.75rem 2rem;
-    gap: 4px 6px; padding: 6px 0 6px 8px; block-size: auto; white-space: normal;
+    grid-template-columns: 2rem minmax(0, 1fr) ${mobileStatusWidth};
+    background: ${({ theme }) => `color-mix(in srgb, ${theme.color.surface} 96%, ${theme.color.accent.blue.text})`};
+    /* Match badges end after the selection list's 6px gutter, 1px frame and 8px padding. */
+    gap: 4px 6px; padding: 6px 15px 6px 0; block-size: auto; white-space: normal;
     > h3, > h3[data-dense-identity] {
-      grid-column: 1; grid-row: 1; flex-wrap: wrap; gap: 3px 5px; align-items: baseline;
+      grid-column: 2; grid-row: 1; flex-wrap: wrap; gap: 3px 5px; align-items: baseline;
       padding: 0; font-size: 0.875rem; text-align: start; line-height: 1.3;
     }
     [data-header-slip-number] {
@@ -89,7 +92,7 @@ export const MobileHeaderRow = styled.summary`
       strong { color: ${({ theme }) => theme.color.text}; font-weight: 600; }
     }
     [data-header-metrics] {
-      grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
+      grid-column: 2 / 4; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
       align-items: baseline; gap: 4px 6px; min-inline-size: 0;
     }
     [data-header-field] {
@@ -104,21 +107,28 @@ export const MobileHeaderRow = styled.summary`
     &[data-large-odds] [data-header-field="odds"] [data-header-label] { display: inline; }
     &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.875rem; overflow-wrap: anywhere; white-space: normal; }
     [data-header-status] {
-      grid-column: 2; grid-row: 1; align-self: center; padding: 0; border: 0;
+      grid-column: 3; grid-row: 1; align-self: center; padding: 0; border: 0;
       > [data-header-label] { display: none; }
     }
-    [data-slip-status] { inline-size: 5.75rem; min-block-size: 1.5rem; font-size: 0.75rem; }
+    [data-slip-status] { inline-size: ${mobileStatusWidth}; min-block-size: 1.5rem; font-size: 0.75rem; white-space: normal; }
     [data-header-toggle] {
-      grid-column: 3; grid-row: 1 / 3; align-self: stretch; display: grid; place-items: center;
-      border-inline-start: 1px solid var(--header-rule);
+      grid-column: 1; grid-row: 1 / 3; align-self: stretch; display: grid; place-items: center;
+      border-inline-start: 0; border-inline-end: 1px solid var(--header-rule);
     }
-    [data-header-chevron] { ${slipDisclosureIndicator} inline-size: 1.25rem; block-size: 1.25rem; transform: none; --slip-chevron-size: 5px; }
+    [data-header-chevron] { ${slipDisclosureIndicator} inline-size: 1.25rem; block-size: 1.25rem; transform: none; --slip-chevron-size: 5px; --slip-chevron-rotation: -45deg; }
     &[data-header-only] [data-header-toggle] { visibility: hidden; }
     @container compact-slip (max-width: 18rem) {
       [data-label-full] { display: none; }
       [data-label-compact] { display: inline; }
     }
     @container compact-slip (max-width: 18.875rem) { overflow: visible; contain: none; }
+    @container compact-slip (max-width: 12rem) {
+      grid-template-columns: 2rem minmax(0, 1fr);
+      [data-header-status] { grid-column: 1 / -1; grid-row: 1; justify-self: end; inline-size: min(100%, ${mobileStatusWidth}); }
+      > h3 { grid-column: 2; grid-row: 2; }
+      [data-header-metrics] { grid-column: 2; grid-row: 3; }
+      [data-header-toggle] { grid-column: 1; grid-row: 2 / 4; }
+    }
   }
-  details[open] > &&:not([data-header-variant]) [data-header-chevron] { transform: none; --slip-chevron-rotation: 225deg; }
+  details[open] > &&:not([data-header-variant]) [data-header-chevron] { transform: none; --slip-chevron-rotation: 45deg; }
 `;

@@ -36,6 +36,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   bool _hasDocument = false;
   bool _loading = false;
   bool _canGoBack = false;
+  bool _atTop = true;
   bool _disposed = false;
   bool _hidden = false;
   String? _error;
@@ -66,6 +67,13 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   @override
   bool get canGoBack => _canGoBack;
+
+  @override
+  bool get supportsPullToRefresh =>
+      _controller?.platform is AndroidWebViewController;
+
+  @override
+  bool get atTop => _atTop;
 
   @override
   String? get error => _error;
@@ -162,6 +170,13 @@ class SystemWebViewAdapter extends WebViewAdapter {
         ),
       );
       if (controller.platform is AndroidWebViewController) {
+        await controller.setOnScrollPositionChange((position) {
+          if (_disposed) return;
+          final atTop = position.y <= 0;
+          if (_atTop == atTop) return;
+          _atTop = atTop;
+          _notify();
+        });
         await (controller.platform as AndroidWebViewController)
             .setOnShowFileSelector(selectAndroidFiles);
         await AndroidWebViewController.enableDebugging(kDebugMode);
@@ -290,6 +305,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
       return;
     }
     _currentUri = Uri.parse(url);
+    _atTop = true;
     _loading = true;
     _error = null;
     _notify();

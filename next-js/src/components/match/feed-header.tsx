@@ -22,10 +22,7 @@ const HeaderContent = styled.div`
   ${media.belowDesktop} { display: contents; }
 `;
 const BrandContainer = styled.div`
-  position: sticky;
-  inset-block-start: 8px;
-  z-index: 30;
-  ${desktop} { display: contents; }
+  display: contents;
 `;
 /** Phones show the brand bar; desktops align quick date presets beneath the shell header. */
 const Row = styled.div`

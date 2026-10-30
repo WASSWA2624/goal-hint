@@ -91,7 +91,7 @@ test("the shared card keeps its canonical match link when an unfinished forecast
     assert.doesNotMatch(html, prediction);
     assert.deepEqual(cardPick(html), []);
     assert.match(html, />Locked prediction</u);
-    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock prediction<\/span>/u);
+    assert.match(html, /data-subscriber-notice="true"[^>]*title="Unlock prediction"[^>]*>Get access/u);
     assert.match(html, /data-public-probability/u);
   }
   assert.equal(signedIn, guest);
@@ -139,7 +139,7 @@ test("a delivered forecast stays locked for free viewers, and completed matches 
   assert.doesNotMatch(whole, prediction);
   assert.match(whole, />Locked prediction</u);
   assert.equal(pickState(finished), "settled");
-  assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>Home or draw</u);
+  assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
   assert.notEqual(pickState(canceled), "subscriber");
   assert.match(canceled, /data-pick-selection=/u);
 });

@@ -144,7 +144,7 @@ def verify(origin, directory):
             if scenario.startswith("best-locked"):
                 assert not document.nodes("details", "data-slip-disclosure"), f"{scenario}: free viewers only see completed public slips"
                 assert not document.nodes(attr="data-fixture-id") and not document.nodes(attr="data-slip-id"), f"{scenario}: no unreleased private identities"
-                assert document.nodes(attr="data-best-slips-access"), f"{scenario}: appropriate access message"
+                assert not document.nodes(attr="data-best-slips-access"), f"{scenario}: guidance uses the shared subscription header"
                 print(f"PASS desktop slip SSR: {scenario}", flush=True)
                 continue
             disclosure = single(document.nodes("details", "data-slip-disclosure"), f"{scenario}: native locked disclosure")

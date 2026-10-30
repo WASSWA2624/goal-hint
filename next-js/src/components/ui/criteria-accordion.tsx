@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import styled, { useTheme } from "styled-components";
 import { media } from "@/styles/theme";
 import { ChevronDownIcon } from "./icons";
+import { mobileFilterPanel } from "./filter-chrome";
 
 const Disclosure = styled.details`
+  ${mobileFilterPanel}
   min-inline-size: 0;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
   border-radius: ${({ theme }) => theme.radius.surface};
@@ -23,6 +25,7 @@ const Disclosure = styled.details`
   &[open] > summary > svg { transform: rotate(180deg); }
   > div { padding: 2px 9px 9px; }
   ${media.belowDesktop} {
+    > summary, > div { padding-inline: 0; }
     > div > fieldset > legend { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   }
   ${media.desktop} {

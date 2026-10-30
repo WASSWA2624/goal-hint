@@ -11,6 +11,10 @@ class FakeWebViewAdapter extends WebViewAdapter {
   @override
   bool canGoBack = false;
   @override
+  bool supportsPullToRefresh = false;
+  @override
+  bool atTop = true;
+  @override
   String? error;
   Uri? loadedUri;
   int reloads = 0;

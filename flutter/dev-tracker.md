@@ -21,6 +21,7 @@ below for actual native execution evidence.
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Partial — shared retry/update safety and Windows/browser acceptance passed; Android/Apple/Linux reconnection remain unqualified |
 | [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity/native appearance and Windows real OS/theme/restart checks passed; Android deferred, Apple/Linux and installed launcher qualification remain open |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Partial — pinned release tooling and signing gates implemented; production hosting, credentials and remaining platform acceptance prevent release |
+| [010](dev-plan/010-android-pull-to-refresh.md) | Android pull-to-refresh | Partial — native observer and widget coverage implemented; device gesture acceptance remains unverified |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
 its implementation and required acceptance checks pass. Keep its plan state in
@@ -841,3 +842,22 @@ error. These checks do not qualify a signed app or domain association.
 See [plan 009](dev-plan/009-shared-slip-app-links.md) and
 [app-link setup](../next-js/docs/slip-app-links.md). The website remains the
 fallback while association configuration is blank or unverified.
+
+## 010 Android pull-to-refresh handoff — 30 October 2026
+
+The Android host now observes deliberate downward touch pulls starting at the
+WebView document top and reloads the existing controller on release. Normal
+scrolling, child interaction and the persistent browser session remain mounted.
+
+| Check | Actual result |
+| --- | --- |
+| `flutter analyze --no-pub` | Passed, no issues, 20.8s |
+| `flutter test --no-pub` | All 57 passed, including five gesture tests and a shell reload test |
+| Android debug APK build | Passed in 415.4s; Flutter 3.44.6 / Dart 3.12.2 / Microsoft JDK 17 |
+| Build environment | Project-local Java temporary directory and process-local Kotlin incremental setting; existing SDK XML-version warning |
+| Development origin | `http://192.168.1.148:3000` |
+| Android device gesture/session acceptance | Not performed: no Android device connected; requires an updated native installation |
+
+See [plan 010](dev-plan/010-android-pull-to-refresh.md). This is an implemented
+Android host feature with automated gesture coverage, not a claim of physical
+WebView acceptance or a signed production release.

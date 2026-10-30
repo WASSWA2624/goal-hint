@@ -3,6 +3,7 @@
 import styled, { css } from "styled-components";
 import { ButtonLink } from "@/components/ui/controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
 import { RecordDetails, RecordHead, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
@@ -37,6 +38,7 @@ export const SearchField = styled.div`
 `;
 
 export const FilterDrawer = styled.div`
+  ${mobileFilterPanel}
   min-inline-size: 0;
   ${media.belowDesktop} {
     background: ${({ theme }) => theme.color.surface};
@@ -63,7 +65,7 @@ export const FilterBody = styled.div<{ $open: boolean }>`
   > * { min-inline-size: 0; }
   > :nth-child(n + 3) { grid-column: 1 / -1; }
   ${({ $open, theme }) => css`${media.belowDesktop} {
-    padding: 12px 14px 14px; border-block-start: ${theme.border.width} solid ${theme.color.border};
+    padding: 12px 0 14px; border-block-start: ${theme.border.width} solid ${theme.color.border};
     ${!$open && css`display: none;`}
   }`}
 `;

@@ -2,6 +2,9 @@
 
 import styled from "styled-components";
 
+/** Mobile match and slip badges share a compact, fixed-width alignment column. */
+export const mobileStatusWidth = "min(8rem, 128px)";
+
 /** Uniform status geometry; each caller supplies its semantic ink and faint fill. */
 export const StatusBadge = styled.span`
   display: inline-flex; flex: none; align-items: center; justify-content: center;

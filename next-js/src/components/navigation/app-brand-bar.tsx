@@ -13,6 +13,9 @@ import { NavigationProgress } from "./navigation-progress";
 
 /** Compact app pages share the same full-bleed phone brand bar beneath the desktop-only shell. */
 const Group = styled.div`
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
   display: grid;
   min-inline-size: 0;
   margin-block-start: -8px;
@@ -36,12 +39,12 @@ const Home = styled(Link)`
   }
 `;
 
-export function AppBrandBar({ locale, showAccount = true }: { locale: string; showAccount?: boolean }) {
-  return <Group><Bar>
+export function AppBrandBar({ locale, showAccount = true, bestSlips = false }: { locale: string; showAccount?: boolean; bestSlips?: boolean }) {
+  return <Group data-mobile-app-header><Bar>
     <Home href={homeHref(locale)} prefetch={false} aria-label={createMessages(locale).text("navigation.home")}>
       <HeaderBrand alt="" />
     </Home>
     <AccountLinks locale={locale} showAccount={showAccount} />
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />
-  </Bar><SubscriptionStatusBar locale={locale} /></Group>;
+  </Bar><SubscriptionStatusBar locale={locale} bestSlips={bestSlips} /></Group>;
 }

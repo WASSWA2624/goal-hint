@@ -8,13 +8,14 @@ import { MatchStatus } from "@/components/match/match-status";
 import { MatchClockText, ScoreFigures, Scoreline } from "@/components/match/score-presentation";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { compactLeagueName } from "@/domain/compact-fixture-label";
+import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
 import { countryCode, countryDisplayName } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { snapshotCardPrediction } from "@/domain/match-card";
+import { liveClockLabel } from "@/domain/match-clock";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { matchHref } from "@/domain/navigation";
-import { predictionDescription, predictionText } from "@/domain/prediction-label";
+import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import type { SavedSlipView } from "@/domain/saved-slips";
@@ -43,12 +44,14 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
   const outcome = state?.outcome ?? prediction.status;
   const score = state ? state.score : fixture.score;
   const clock = status === "live" ? state?.liveClock : null;
-  const elapsed = clock?.minute === null || clock?.minute === undefined ? null
-    : m.number(clock.minute) + (clock.stoppageMinutes ? `+${m.number(clock.stoppageMinutes)}` : "");
-  const clockText = status === "live" ? elapsed !== null ? m.text("match.clock.minute", { minute: elapsed }) : m.text(`match.clock.${clock?.phase ?? "in-play"}`)
+  const clockText = status === "live" ? liveClockLabel(clock, m).phaseLabel
     : isPlayedFinalStatus(status) ? m.text(`match.final.${status as "finished-regulation" | "finished-extra-time" | "finished-penalties"}`) : "";
   const home = selection.homeTeam.name?.trim() || m.text("match.homeUnknown");
   const away = selection.awayTeam.name?.trim() || m.text("match.awayUnknown");
+  const scoreDescription = score ? m.text("match.scoreline", {
+    label: m.text(status === "live" ? "match.liveScore" : "match.regulationScoreNote"), home, away,
+    homeScore: m.number(score.home), awayScore: m.number(score.away),
+  }) : null;
   const league = selection.competition.name || m.text("match.competitionUnknown");
   const country = countryDisplayName(selection.competition.country), flag = countryFlagAsset(selection.competition.country);
   const family = m.text(`market.family.${selection.family}`), description = predictionDescription(m, selection.selection);
@@ -57,7 +60,8 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
     "data-ledger-row": "", "data-mobile-row": "", "data-fixture-id": selection.fixtureId,
     "data-market": selection.family, "data-outcome": outcome, "data-status": status,
     "data-match-state": state ? status : "snapshot", "data-mobile-design": "team-stack", "aria-labelledby": `${id}-${analysisLinks ? "analysis" : "teams"}`,
-    "aria-describedby": `${id}-meta ${id}-facts ${id}-result`,
+    "data-numbered": position !== undefined ? "" : undefined,
+    "aria-describedby": `${id}-meta ${id}-progress ${id}-facts ${id}-result`,
   };
   const content = <>
     <div data-ledger-meta data-mobile-meta id={`${id}-meta`}>
@@ -77,6 +81,7 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
           {flag && <Image data-country-flag src={flag} alt="" width={15} height={10} loading="lazy" unoptimized />}
           <span data-ledger-name data-short-name>{countryCode(selection.competition.country)}</span>
         </span>}
+        {country && <VisuallyHidden>, {country}</VisuallyHidden>}
       </span>
     </div>
     <h4 data-ledger-teams data-mobile-teams data-teams id={`${id}-teams`} aria-label={m.text("match.title", { home, away })}>
@@ -87,25 +92,30 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
       <span data-ledger-away data-away data-team-side="away" title={away} aria-label={away}>
         <TeamLogo name={away} url={logoSource(selection.awayTeam.logoUrl)} eager={false} size={18} /><span data-ledger-name>{away}</span>
       </span>
+      <span data-match-state={state ? status : "snapshot"} data-stack-progress id={`${id}-progress`}>
+        {score && <>
+          <Scoreline data-score data-saved-score={savedResult ? "" : undefined} aria-hidden="true" title={m.text(status === "live" ? "match.liveScore" : "match.regulationScoreNote")}>
+            <ScoreFigures home={m.number(score.home)} away={m.number(score.away)} />
+          </Scoreline>
+          <VisuallyHidden>{scoreDescription}</VisuallyHidden>
+        </>}
+        {clockText && <span data-score-clock><MatchClockText text={clockText} /></span>}
+      </span>
     </h4>
     <div data-ledger-facts data-mobile-facts id={`${id}-facts`}>
       <span data-ledger-field="market" data-mobile-field="market" title={family}><span data-field-label aria-hidden="true">Mkt</span>
-        <span data-field-value data-market-label aria-hidden="true">{family}</span><VisuallyHidden>{family}</VisuallyHidden></span>
+        <span data-field-value data-market-label aria-hidden="true">{compactMarketName(selection.family)}</span><VisuallyHidden>{family}</VisuallyHidden></span>
       <span data-ledger-field="prediction" data-mobile-field="prediction" data-pick title={`${family}: ${description}${publication}`}>
-        <span data-field-label aria-hidden="true">Pick</span><strong data-field-value data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionText(m, selection.selection)}</strong>
+        <span data-field-label aria-hidden="true">Pick</span><strong data-field-value data-pick-label title={`${family}: ${description}`} aria-hidden="true">{predictionLabel(m, selection.selection)}</strong>
         <VisuallyHidden>{description}</VisuallyHidden></span>
-      <span data-ledger-field="odds" data-mobile-field="odds" data-leg-odds><span data-field-label data-number-label>{m.text("slips.odds")}</span><strong data-field-value>{selection.odds}</strong></span>
-      <span data-ledger-field="probability" data-mobile-field="probability" data-leg-probability><span data-field-label data-number-label aria-hidden="true">{m.text("match.estimatedChance")}</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden>
-        <strong data-field-value>{formatSlipProbability(selection.probability, m)}</strong></span>
+      <span data-match-metrics>
+        <span data-ledger-field="odds" data-mobile-field="odds" data-leg-odds><span data-field-label data-number-label>{m.text("slips.odds")}</span><strong data-field-value>{selection.odds}</strong></span>
+        <span data-ledger-field="probability" data-mobile-field="probability" data-leg-probability><span data-field-label data-number-label aria-hidden="true">{m.text("match.columns.probabilityShort")}</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden>
+          <strong data-field-value>{formatSlipProbability(selection.probability, m)}</strong></span>
+      </span>
     </div>
     <span data-result data-stack-result data-mobile-result id={`${id}-result`}>
-      <span data-match-state={state ? status : "snapshot"} data-stack-progress>
-        {score && <Scoreline data-score data-saved-score={savedResult ? "" : undefined} title={m.text(status === "live" ? "match.liveScore" : "match.regulationScoreNote")}>
-          <VisuallyHidden>{m.text(status === "live" ? "match.liveScore" : "match.regulationScoreNote")}: </VisuallyHidden>
-          <ScoreFigures home={m.number(score.home)} away={m.number(score.away)} /></Scoreline>}
-        {clockText && <span data-score-clock><MatchClockText text={clockText} /></span>}
-      </span>
-      <MatchStatus status={status} outcome={outcome} messages={m} snapshot={!state && !!savedResult} />
+      <MatchStatus status={status} outcome={outcome} messages={m} snapshot={!state && !!savedResult} liveClock={clock ?? null} />
     </span>
     {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{m.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
   </>;

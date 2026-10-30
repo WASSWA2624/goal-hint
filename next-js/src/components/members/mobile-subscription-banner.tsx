@@ -27,6 +27,11 @@ const Row = styled(Container)`
   line-height: 1.5;
   strong { font-weight: 600; }
   @media (max-width: 359px) { gap: 5px; }
+  [data-best-slips-status] & { flex-wrap: wrap; padding-block: 5px; row-gap: 2px; }
+`;
+const SlipAccessNote = styled.span`
+  flex-basis: 100%; color: ${({ theme }) => theme.header.mutedText};
+  font-size: 0.6875rem; line-height: 1.4;
 `;
 const Price = styled.span`
   color: ${({ theme }) => theme.header.accent};
@@ -52,9 +57,9 @@ const Action = styled(Link)`
 `;
 
 /** Approved mobile option 01: one brief row, driven by the shared confirmed session. */
-export function MobileSubscriptionBanner({ locale, pathname, signedIn, subscription, now, wide, className }: {
+export function MobileSubscriptionBanner({ locale, pathname, signedIn, subscription, now, wide, className, bestSlips = false }: {
   locale: string; pathname: string; signedIn: boolean; subscription: SubscriptionSummary | null;
-  now: number; wide: boolean; className?: string;
+  now: number; wide: boolean; className?: string; bestSlips?: boolean;
 }) {
   const state = subscriptionBannerState(signedIn, subscription, now), links = subscriptionBannerLinks(locale, pathname);
   if (!state || !subscription || pathname === links.account || pathname === links.subscribe && state !== "active") return null;
@@ -65,7 +70,7 @@ export function MobileSubscriptionBanner({ locale, pathname, signedIn, subscript
     : { href: links.plans, label: messages.text("account.subscribe") };
 
   return <Banner className={className} aria-label={messages.text("banner.label")} data-mobile-subscription-status
-    data-subscription-status-bar data-subscription-state={state}>
+    data-subscription-status-bar data-subscription-state={state} data-best-slips-status={bestSlips || undefined}>
     <Row $wide={wide} data-mobile-subscription-row>
       <span role="status" aria-atomic="true">
         {state === "active" ? <strong>{messages.text("banner.mobile.active")}</strong> : state === "pending" ? messages.text("account.pending")
@@ -78,6 +83,7 @@ export function MobileSubscriptionBanner({ locale, pathname, signedIn, subscript
         <Separator aria-hidden="true"> / </Separator>
         <Action href={links.signIn} prefetch={false}>{messages.text("auth.signIn")}</Action>
       </Auth> : action && <Action href={action.href} prefetch={false} data-mobile-banner-action>{action.label}<ChevronRightIcon /></Action>}
+      {bestSlips && state !== "active" && <SlipAccessNote data-mobile-slip-access-note>{messages.text("banner.mobile.bestSlips")}</SlipAccessNote>}
     </Row>
   </Banner>;
 }

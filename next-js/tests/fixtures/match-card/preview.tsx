@@ -17,12 +17,20 @@ export function CardPreview({ examples, boundary, equal }: {
   const [family, setFamily] = useState<MarketFamily>("match-result");
   const [recovered, setRecovered] = useState(false);
   const [finish, setFinish] = useState<"finished-extra-time" | "finished-penalties" | null>(null);
+  const [livePhase, setLivePhase] = useState(0);
+  const liveClocks: NonNullable<FixtureSnapshot["liveClock"]>[] = [
+    { phase: "second-half", minute: 67 }, { phase: "first-half", minute: 45, stoppageMinutes: 2 },
+    { phase: "half-time", minute: 45 }, { phase: "second-half", minute: 90, stoppageMinutes: 4 },
+    { phase: "extra-time", minute: 104 }, { phase: "extra-time", minute: 120, stoppageMinutes: 1 },
+    { phase: "penalties", minute: 120 },
+  ];
   return <Stack $gap="lg">
     <Inline>
       <Button id="change-family" onClick={() => setFamily(family === "match-result" ? "total-goals" : "match-result")}>Change first example market</Button>
       <Button id="recover-logo" onClick={() => setRecovered(true)}>Replace failed example logo URL</Button>
       <Button id="show-extra-time" aria-pressed={finish === "finished-extra-time"} onClick={() => setFinish("finished-extra-time")}>Show regulation score after extra time</Button>
       <Button id="show-penalties" aria-pressed={finish === "finished-penalties"} onClick={() => setFinish("finished-penalties")}>Show regulation score after penalties</Button>
+      <Button id="next-live-phase" onClick={() => setLivePhase((livePhase + 1) % liveClocks.length)}>Next live clock example</Button>
     </Inline>
     <MatchCardList id="example-cards">
       {examples.map(({ label, fixture, selectedFamily }, index) => {
@@ -31,16 +39,16 @@ export function CardPreview({ examples, boundary, equal }: {
         } : fixture;
         const displayed: FixtureSnapshot = index === 0 && finish ? {
           ...recoveredFixture, status: finish, scorePeriod: "regulation", dataVersion: finish === "finished-extra-time" ? "11" : "12",
-        } : recoveredFixture;
+        } : fixture.fixtureId === "card-pending" ? { ...recoveredFixture, dataVersion: `${recoveredFixture.dataVersion}-clock-${livePhase}`, liveClock: liveClocks[livePhase]! } : recoveredFixture;
         return <li key={fixture.fixtureId}><Stack $gap="sm">
           <MutedText>{label}</MutedText>
           <MatchCard fixture={displayed} analysisSlug="example-home-v-example-away"
-            selectedFamily={index === 0 ? family : selectedFamily} eagerLogos={index < 2} />
+            selectedFamily={index === 0 ? family : selectedFamily} eagerLogos={index < 2} position={index + 1} />
         </Stack></li>;
       })}
       <li><Stack $gap="sm">
         <MutedText>Example: Any market chooses the highest probability without borrowing another pick&apos;s odds</MutedText>
-        <MatchCard fixture={{ ...examples[0]!.fixture, fixtureId: "card-any" }} analysisSlug="example-home-v-example-away" />
+        <MatchCard fixture={{ ...examples[0]!.fixture, fixtureId: "card-any" }} analysisSlug="example-home-v-example-away" position={examples.length + 1} />
       </Stack></li>
     </MatchCardList>
     <section id="example-rounding"><Stack $gap="sm">
