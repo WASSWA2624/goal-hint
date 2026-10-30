@@ -6,7 +6,7 @@ import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, type
 import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
-import { AppliedDetails, AppliedSummary, CustomRangeButton, DateControls, DateError, DateField, DateFields, DateHint, DateSelect, FiltersPanel,
+import { AppliedDetails, AppliedSelection, AppliedSummary, CustomRangeButton, DateControls, DateError, DateFields, DateHint, DateSelect, FiltersPanel,
   RangeButton, RangeDialog, ResetButton, ResultButton, ResultGroup, ToggleRow } from "./best-slips-filter-styles";
 
 const dateOptions = [
@@ -100,14 +100,13 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
         })}
       </ResultGroup>
       <DateControls role="group" aria-label={m.text("bestSlips.filters.slipDate")} data-slip-dates>
-        <DateField><span data-slip-date-label aria-hidden="true">{m.text("bestSlips.filters.slipDate")}</span>
         <DateSelect value={query.period} options={selectablePeriod ? selectOptions
           : [...selectOptions, { value: query.period, label: currentPeriodLabel, disabled: true }]}
           label={m.text("bestSlips.filters.slipDate")} data-slip-period-select data-slip-period={query.period}
           onValueChange={(value) => {
             const option = dateOptions.find(([period]) => period === value);
             if (option) onChange({ period: option[0], status: query.status, page: 1 });
-          }} /></DateField>
+          }} />
         <CustomRangeButton type="button" data-slip-custom-range aria-pressed={query.period === "custom"}
           aria-label={m.text("bestSlips.filters.customRange")} title={m.text("bestSlips.filters.customRange")}
           aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} onClick={(event) => openDates(event.currentTarget)}>
@@ -118,13 +117,15 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
     </ToggleRow>
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedDetails>
-      <span>{m.text("bestSlips.filters.applied")}</span>
-      {appliedQuery.period === "custom" && currentRange ? <RangeButton type="button" onClick={(event) => openDates(event.currentTarget)}
-      aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} aria-label={m.text("bestSlips.filters.editDates", { range: currentRange })}>
-      <CalendarIcon />{currentRange}
-      </RangeButton> : <span>{periodLabel}{currentRange && ` · ${currentRange}`}</span>}
-      <span aria-hidden="true">·</span><span data-applied-result>{m.text(`bestSlips.filters.${appliedQuery.status}`)}</span>
-      {updating && <span data-best-slips-updating>{m.text("bestSlips.filters.updating")}</span>}
+        <span data-applied-label>{m.text("bestSlips.filters.applied")}</span>
+        <AppliedSelection data-applied-selection>
+          {appliedQuery.period === "custom" && currentRange ? <RangeButton type="button" onClick={(event) => openDates(event.currentTarget)}
+            aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} aria-label={m.text("bestSlips.filters.editDates", { range: currentRange })}>
+            <CalendarIcon />{currentRange}
+          </RangeButton> : <span>{periodLabel}{currentRange && ` · ${currentRange}`}</span>}
+          <span aria-hidden="true">·</span><span data-applied-result>{m.text(`bestSlips.filters.${appliedQuery.status}`)}</span>
+          {updating && <span data-best-slips-updating>{m.text("bestSlips.filters.updating")}</span>}
+        </AppliedSelection>
       </AppliedDetails>
       {countSummary}
     </AppliedSummary>

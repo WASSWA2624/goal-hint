@@ -127,13 +127,16 @@ so it cannot replace a user's page change.
 ## Date and result filters
 
 Mobile uses the same filter/query component in a compact Blue Signal panel:
-one horizontal row of All/Won/Lost/Pending/Void/Cancelled controls, each with
-its count and bracketed percentage inline. Every status keeps its semantic
-colour. The row scrolls horizontally on narrow screens and reveals keyboard
-focus. Slip date has a floating label, alongside Custom date and Reset. These
+two rows of three All/Won/Lost/Pending/Void/Cancelled controls, each with its
+label above its count and bracketed percentage. Every status keeps its semantic
+colour. All six fit without horizontal scrolling. The date selector retains its
+accessible name without a visible floating label, alongside Custom date and Reset. These
 controls replace the previous separate performance strip, preserving every
-whole-cohort figure and filter. Controls keep 44px targets, tighter padding and
-shared subtle corner tokens. Pagination reuses the desktop numbered control,
+whole-cohort figure and filter. The date/action controls are 32px high and the
+status cards are 36px, with tighter padding and shared subtle corner tokens.
+Applied filters has its own full-width heading row. Applied selections are left
+aligned and the result range is right aligned on the following row; long
+selections wrap within their column. Pagination reuses the desktop numbered control,
 including the current-page blue treatment and first/last and scroll controls.
 Its mobile buttons are a compact 32px with 4px gaps and 12px labels.
 
