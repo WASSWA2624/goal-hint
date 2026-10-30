@@ -1,0 +1,446 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  #best-slips-mobile-concepts { width: 100%; }
+  #best-slips-mobile-concepts > section { min-height: 1080px; padding: 24px 8px 20px; box-sizing: border-box; }
+  #best-slips-mobile-concepts[data-viewer="guest"] > section,
+  #best-slips-mobile-concepts[data-viewer="member"] > section { min-height: 1300px; }
+  #best-slips-mobile-concepts [hidden] { display: none !important; }
+  #best-slips-mobile-concepts .gh-phone {
+    --gh-bg: light-dark(#f1f6fb, #091324);
+    --gh-surface: light-dark(#ffffff, #111f33);
+    --gh-inset: light-dark(#f6f9fc, #17283e);
+    --gh-text: light-dark(#102348, #e6eefb);
+    --gh-muted: light-dark(#51637c, #a8b8cf);
+    --gh-border: light-dark(#d9e3ee, #304057);
+    --gh-blue: light-dark(#125bc5, #8cbbff);
+    --gh-blue-soft: light-dark(#eaf2ff, #183454);
+    --gh-green: light-dark(#167248, #82d9ad);
+    --gh-green-soft: light-dark(#eaf7ef, #10372d);
+    --gh-red: light-dark(#ad3344, #ff9da7);
+    --gh-red-soft: light-dark(#fff0f1, #421e2b);
+    --gh-amber: light-dark(#8b570d, #f1c178);
+    --gh-amber-soft: light-dark(#fff6e6, #3c2d17);
+    --gh-radius-small: 2px;
+    --gh-radius-control: 4px;
+    --gh-radius-surface: 6px;
+    --gh-radius-overlay: 8px;
+    --gh-body-size: 14px;
+    width: min(100%, 390px); min-height: 994px; margin: 0 auto;
+    background: var(--gh-bg); color: var(--gh-text); border: 1px solid var(--gh-border);
+    font: 500 var(--gh-body-size)/1.5 Manrope, Arial, sans-serif;
+    position: relative; box-sizing: border-box; isolation: isolate;
+  }
+  #best-slips-mobile-concepts .gh-phone *,
+  #best-slips-mobile-concepts .gh-phone *::before,
+  #best-slips-mobile-concepts .gh-phone *::after { box-sizing: border-box; }
+  #best-slips-mobile-concepts .gh-phone :is(h1,h2,h3,p,dl,dd) { margin: 0; }
+  #best-slips-mobile-concepts .gh-phone button,
+  #best-slips-mobile-concepts .gh-phone input,
+  #best-slips-mobile-concepts .gh-phone select,
+  #best-slips-mobile-concepts .gh-phone textarea { font: inherit; color: inherit; }
+  #best-slips-mobile-concepts .gh-phone button,
+  #best-slips-mobile-concepts .gh-phone summary { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  #best-slips-mobile-concepts .gh-phone button { min-height: 44px; border: 0; background: transparent; }
+  #best-slips-mobile-concepts .gh-phone svg { width: 18px; height: 18px; flex: none; }
+  #best-slips-mobile-concepts .gh-app { min-height: 992px; display: flex; flex-direction: column; }
+  #best-slips-mobile-concepts .gh-brandbar {
+    min-height: 62px; padding: 8px 16px; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px; background: var(--gh-surface); border-bottom: 1px solid var(--gh-border);
+  }
+  #best-slips-mobile-concepts .gh-wordmark { color: var(--gh-text); font-size: 17px; font-weight: 800; letter-spacing: -.65px; }
+  #best-slips-mobile-concepts .gh-wordmark span { color: var(--gh-blue); }
+  #best-slips-mobile-concepts .gh-account { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+  #best-slips-mobile-concepts .gh-account svg { width: 17px; }
+  #best-slips-mobile-concepts .gh-memberline {
+    min-height: 30px; padding: 5px 16px; display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; color: var(--gh-muted); font-size: 11px; background: var(--gh-surface);
+  }
+  #best-slips-mobile-concepts .gh-memberline strong { color: var(--gh-green); font-weight: 600; }
+  #best-slips-mobile-concepts .gh-main { display: grid; gap: 18px; padding: 22px 16px 18px; align-content: start; flex: 1; }
+  #best-slips-mobile-concepts .gh-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #best-slips-mobile-concepts .gh-title h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -.8px; }
+  #best-slips-mobile-concepts .gh-eyebrow { display: block; color: var(--gh-muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; }
+  #best-slips-mobile-concepts .gh-title p { color: var(--gh-muted); margin-top: 6px; font-size: 12px; }
+  #best-slips-mobile-concepts .gh-icon-button { width: 44px; display: inline-grid; place-items: center; flex: none; border-radius: var(--gh-radius-control); }
+  #best-slips-mobile-concepts .gh-title > .gh-icon-button { background: var(--gh-surface); border: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-period { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+  #best-slips-mobile-concepts .gh-period label { flex: 1; min-width: 140px; color: var(--gh-muted); font-size: 11px; }
+  #best-slips-mobile-concepts .gh-period label span { display: block; margin-bottom: 4px; }
+  #best-slips-mobile-concepts .gh-select { width: 100%; min-height: 44px; background: var(--gh-surface); border: 1px solid var(--gh-border); border-radius: var(--gh-radius-control); padding: 9px 10px; font-size: 14px; }
+  #best-slips-mobile-concepts .gh-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 12px; border: 1px solid var(--gh-border) !important; border-radius: var(--gh-radius-control); background: var(--gh-surface) !important; font-weight: 600 !important; font-size: 12px !important; }
+  #best-slips-mobile-concepts .gh-primary { color: #fff !important; background: #145cc8 !important; border-color: #145cc8 !important; }
+  #best-slips-mobile-concepts .gh-phone[data-appearance="dark"] .gh-primary { color: #08172b !important; background: #8cbbff !important; border-color: #8cbbff !important; }
+  @media (prefers-color-scheme: dark) {
+    #best-slips-mobile-concepts .gh-phone:not([data-appearance="light"]) .gh-primary { color: #08172b !important; background: #8cbbff !important; border-color: #8cbbff !important; }
+  }
+  #best-slips-mobile-concepts .gh-results { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+  #best-slips-mobile-concepts .gh-result { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; padding: 8px; background: var(--gh-surface) !important; border: 1px solid var(--gh-border) !important; border-radius: var(--gh-radius-control); font-size: 12px !important; }
+  #best-slips-mobile-concepts .gh-result[aria-pressed="true"] { color: var(--gh-blue); background: var(--gh-blue-soft) !important; border-color: var(--gh-blue) !important; }
+  #best-slips-mobile-concepts .gh-result strong { font-weight: 700; font-variant-numeric: tabular-nums; }
+  #best-slips-mobile-concepts .gh-result small { display: none; }
+  #best-slips-mobile-concepts .gh-label { color: var(--gh-muted); font-size: 11px; }
+  #best-slips-mobile-concepts .gh-listhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+  #best-slips-mobile-concepts .gh-listhead strong { font-size: 14px; font-weight: 700; }
+  #best-slips-mobile-concepts .gh-reset { color: var(--gh-blue) !important; padding-inline: 6px; font-size: 12px !important; }
+  #best-slips-mobile-concepts .gh-list { display: grid; gap: 10px; }
+  #best-slips-mobile-concepts .gh-slip { background: var(--gh-surface); border: 1px solid var(--gh-border); border-left: 3px solid var(--gh-blue); border-radius: var(--gh-radius-control); min-width: 0; }
+  #best-slips-mobile-concepts .gh-summary { list-style: none; padding: 13px 12px; display: grid; gap: 13px; }
+  #best-slips-mobile-concepts .gh-summary::-webkit-details-marker { display: none; }
+  #best-slips-mobile-concepts .gh-identity { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  #best-slips-mobile-concepts .gh-slip-number { color: var(--gh-text); font-size: 14px; font-weight: 700; white-space: nowrap; }
+  #best-slips-mobile-concepts .gh-time { color: var(--gh-muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
+  #best-slips-mobile-concepts .gh-chevron { width: 16px !important; height: 16px !important; color: var(--gh-muted); }
+  #best-slips-mobile-concepts .gh-slip[open] .gh-chevron { transform: rotate(180deg); }
+  #best-slips-mobile-concepts .gh-badge { display: inline-flex; gap: 4px; align-items: center; width: fit-content; padding: 3px 5px; border-radius: var(--gh-radius-small); font-size: 11px; font-weight: 600; line-height: 1.4; color: var(--gh-muted); background: var(--gh-inset); white-space: nowrap; }
+  #best-slips-mobile-concepts .gh-badge svg { width: 12px; height: 12px; }
+  #best-slips-mobile-concepts .gh-badge[data-status="won"] { color: var(--gh-green); background: var(--gh-green-soft); }
+  #best-slips-mobile-concepts .gh-badge[data-status="lost"] { color: var(--gh-red); background: var(--gh-red-soft); }
+  #best-slips-mobile-concepts .gh-badge[data-status="not-started"],
+  #best-slips-mobile-concepts .gh-badge[data-status="in-progress"] { color: var(--gh-blue); background: var(--gh-blue-soft); }
+  #best-slips-mobile-concepts .gh-stats { display: grid; grid-template-columns: 1fr 1.4fr .65fr; gap: 8px; }
+  #best-slips-mobile-concepts .gh-stat { display: flex; flex-direction: column; gap: 3px; }
+  #best-slips-mobile-concepts .gh-stat span { color: var(--gh-muted); font-size: 11px; line-height: 1.25; }
+  #best-slips-mobile-concepts .gh-stat strong { font-size: 19px; line-height: 1.25; font-weight: 700; letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
+  #best-slips-mobile-concepts .gh-stat:first-child strong { color: var(--gh-blue); }
+  #best-slips-mobile-concepts .gh-detail { border-top: 1px solid var(--gh-border); padding: 12px; display: grid; gap: 10px; }
+  #best-slips-mobile-concepts .gh-detail p { font-size: 11px; color: var(--gh-muted); }
+  #best-slips-mobile-concepts .gh-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  #best-slips-mobile-concepts .gh-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  #best-slips-mobile-concepts .gh-pagination .gh-label { flex: 1; text-align: center; }
+  #best-slips-mobile-concepts .gh-pagination button:disabled { opacity: .4; }
+  #best-slips-mobile-concepts .gh-disclaimer { color: var(--gh-muted); font-size: 11px; line-height: 1.6; }
+  #best-slips-mobile-concepts .gh-nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 0; background: var(--gh-surface); border-top: 1px solid var(--gh-border); padding: 4px 6px 9px; }
+  #best-slips-mobile-concepts .gh-nav button { display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; padding: 8px 1px; color: var(--gh-muted); font-size: 11px; min-height: 58px; }
+  #best-slips-mobile-concepts .gh-nav button[aria-current="page"] { color: var(--gh-blue); font-weight: 700; }
+  #best-slips-mobile-concepts .gh-nav button[aria-current="page"] svg { stroke-width: 2.5; }
+  #best-slips-mobile-concepts .gh-empty { padding: 30px 16px; text-align: center; display: grid; gap: 10px; background: var(--gh-surface); border: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-empty h2 { font-size: 17px; }
+  #best-slips-mobile-concepts .gh-empty p { font-size: 12px; color: var(--gh-muted); }
+  #best-slips-mobile-concepts .gh-access { display: grid; gap: 8px; background: var(--gh-blue-soft); border-left: 3px solid var(--gh-blue); padding: 14px 12px; }
+  #best-slips-mobile-concepts .gh-access h2 { font-size: 15px; font-weight: 700; }
+  #best-slips-mobile-concepts .gh-access p { color: var(--gh-muted); font-size: 12px; }
+  #best-slips-mobile-concepts .gh-inline-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; font-size: 11px; color: var(--gh-muted); padding-block: 9px; border-block: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-inline-summary strong { color: var(--gh-text); font-size: 13px; }
+  #best-slips-mobile-concepts .gh-group-heading { display: flex; align-items: center; justify-content: space-between; color: var(--gh-muted); font-size: 11px; font-weight: 600; padding: 7px 0; }
+  #best-slips-mobile-concepts .gh-sheet-layer { position: absolute; inset: 0; z-index: 4; display: flex; align-items: flex-start; padding: 132px 10px 10px; background: light-dark(#10234855,#000a); }
+  #best-slips-mobile-concepts .gh-sheet { width: 100%; background: var(--gh-surface); border: 1px solid var(--gh-border); border-radius: var(--gh-radius-overlay); padding: 16px; display: grid; gap: 16px; box-shadow: 0 10px 35px #06174726; }
+  #best-slips-mobile-concepts .gh-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #best-slips-mobile-concepts .gh-sheet h2 { font-size: 18px; font-weight: 700; }
+  #best-slips-mobile-concepts .gh-sheet p { color: var(--gh-muted); font-size: 12px; }
+  #best-slips-mobile-concepts .gh-sheet label { display: grid; gap: 5px; font-size: 12px; color: var(--gh-muted); }
+  #best-slips-mobile-concepts .gh-sheet input,
+  #best-slips-mobile-concepts .gh-sheet textarea { min-height: 44px; width: 100%; min-width: 0; border: 1px solid var(--gh-border); background: var(--gh-inset); padding: 10px; border-radius: var(--gh-radius-control); font-size: 16px; }
+  #best-slips-mobile-concepts .gh-sheet textarea { min-height: 130px; resize: vertical; }
+  #best-slips-mobile-concepts .gh-sheet .gh-error { color: var(--gh-red); }
+  #best-slips-mobile-concepts .gh-toast { margin: 0 auto; width: min(100%,390px); min-height: 34px; padding: 7px 2px; color: light-dark(#51637c,#bdc8d8); font: 12px/1.5 Manrope,Arial,sans-serif; text-align: center; }
+  /* Layout recipes share data and controls; only review presentation differs. */
+  #best-slips-mobile-concepts .gh-ledger .gh-phone { --gh-bg: var(--gh-surface); }
+  #best-slips-mobile-concepts .gh-ledger .gh-main { gap: 15px; padding-inline: 16px; }
+  #best-slips-mobile-concepts .gh-ledger .gh-list { gap: 0; border-top: 2px solid var(--gh-text); }
+  #best-slips-mobile-concepts .gh-ledger .gh-slip { border: 0; border-bottom: 1px solid var(--gh-border); border-radius: 0; }
+  #best-slips-mobile-concepts .gh-ledger .gh-summary { padding: 16px 0; gap: 10px; }
+  #best-slips-mobile-concepts .gh-ledger .gh-stat { flex-direction: row; align-items: baseline; gap: 5px; }
+  #best-slips-mobile-concepts .gh-ledger .gh-stat strong { font-size: 15px; }
+  #best-slips-mobile-concepts .gh-ledger .gh-stat span { font-size: 11px; }
+  #best-slips-mobile-concepts .gh-ledger .gh-stats { grid-template-columns: 1fr 1.6fr .8fr; }
+  #best-slips-mobile-concepts .gh-ledger .gh-result { border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0; background: transparent !important; }
+  #best-slips-mobile-concepts .gh-ledger .gh-result[aria-pressed="true"] { border-bottom-color: var(--gh-blue) !important; }
+  #best-slips-mobile-concepts .gh-status-first .gh-results { gap: 8px; }
+  #best-slips-mobile-concepts .gh-status-first .gh-result { min-height: 75px; flex-direction: column-reverse; align-items: flex-start; gap: 2px; padding: 10px 12px; }
+  #best-slips-mobile-concepts .gh-status-first .gh-result strong { font-size: 23px; line-height: 1.2; }
+  #best-slips-mobile-concepts .gh-status-first .gh-result small { display: inline; color: var(--gh-muted); font-size: 11px; }
+  #best-slips-mobile-concepts .gh-status-first .gh-slip { border-left: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-status-first .gh-identity .gh-badge { order: -1; }
+  #best-slips-mobile-concepts .gh-daybook .gh-list { position: relative; padding-left: 17px; border-left: 1px solid var(--gh-border); gap: 12px; }
+  #best-slips-mobile-concepts .gh-daybook .gh-group-heading { padding: 4px 0; position: relative; }
+  #best-slips-mobile-concepts .gh-daybook .gh-group-heading::before { content: ""; position: absolute; left: -22px; top: 11px; width: 9px; height: 9px; background: var(--gh-blue); border-radius: 2px; }
+  #best-slips-mobile-concepts .gh-daybook .gh-slip { border-left: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-daybook .gh-time { display: none; }
+  #best-slips-mobile-concepts .gh-daybook .gh-stats { grid-template-columns: 1fr 1.4fr .6fr; }
+  #best-slips-mobile-concepts .gh-daybook .gh-stat strong { font-size: 17px; }
+  #best-slips-mobile-concepts .gh-reading .gh-main { gap: 20px; }
+  #best-slips-mobile-concepts .gh-reading .gh-list { gap: 16px; }
+  #best-slips-mobile-concepts .gh-reading .gh-summary { padding: 16px; gap: 16px; }
+  #best-slips-mobile-concepts .gh-reading .gh-slip { border-left: 1px solid var(--gh-border); border-top: 3px solid var(--gh-blue); }
+  #best-slips-mobile-concepts .gh-reading .gh-stats { grid-template-columns: 1fr 1.4fr; row-gap: 12px; }
+  #best-slips-mobile-concepts .gh-reading .gh-stat strong { font-size: 23px; }
+  #best-slips-mobile-concepts .gh-reading .gh-stat:last-child { grid-column: 1/-1; flex-direction: row-reverse; justify-content: flex-end; align-items: baseline; gap: 5px; border-top: 1px solid var(--gh-border); padding-top: 10px; }
+  #best-slips-mobile-concepts .gh-reading .gh-stat:last-child strong { font-size: 14px; }
+  #best-slips-mobile-concepts .gh-reading .gh-time { display: none; }
+  #best-slips-mobile-concepts .gh-thumb .gh-main { display: flex; flex-direction: column; }
+  #best-slips-mobile-concepts .gh-thumb .gh-thumb-controls { margin-top: auto; padding: 12px; background: var(--gh-surface); border: 1px solid var(--gh-border); border-radius: var(--gh-radius-control); display: grid; gap: 10px; }
+  #best-slips-mobile-concepts .gh-thumb .gh-list { gap: 12px; }
+  #best-slips-mobile-concepts .gh-thumb .gh-slip { border-left: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-index .gh-main { gap: 14px; }
+  #best-slips-mobile-concepts .gh-index .gh-list { gap: 8px; }
+  #best-slips-mobile-concepts .gh-index .gh-slip { border-left: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-index .gh-summary { grid-template-columns: 42px 1fr; gap: 10px; padding: 12px 10px; }
+  #best-slips-mobile-concepts .gh-index .gh-index-number { grid-row: 1/3; align-self: stretch; display: grid; place-items: center; background: var(--gh-blue-soft); color: var(--gh-blue); font-size: 22px; font-weight: 700; border-radius: var(--gh-radius-small); }
+  #best-slips-mobile-concepts .gh-index .gh-slip-number { display: none; }
+  #best-slips-mobile-concepts .gh-index .gh-stat strong { font-size: 16px; }
+  #best-slips-mobile-concepts .gh-index .gh-stat span { font-size: 11px; }
+  #best-slips-mobile-concepts .gh-focus .gh-slip { border-left: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-focus .gh-slip:first-of-type { border: 1px solid var(--gh-blue); }
+  #best-slips-mobile-concepts .gh-focus .gh-slip:first-of-type .gh-summary { background: var(--gh-blue-soft); padding: 18px 14px; gap: 20px; }
+  #best-slips-mobile-concepts .gh-focus .gh-slip:first-of-type .gh-stats { grid-template-columns: 1fr 1fr; }
+  #best-slips-mobile-concepts .gh-focus .gh-slip:first-of-type .gh-stat strong { font-size: 30px; }
+  #best-slips-mobile-concepts .gh-focus .gh-slip:first-of-type .gh-stat:last-child { grid-column: 1/-1; flex-direction: row-reverse; justify-content: flex-end; gap: 5px; align-items: baseline; }
+  #best-slips-mobile-concepts .gh-focus .gh-slip:first-of-type .gh-stat:last-child strong { font-size: 14px; }
+  #best-slips-mobile-concepts .gh-focus .gh-list { gap: 12px; }
+  #best-slips-mobile-concepts .gh-compact .gh-main { gap: 12px; padding-inline: 12px; }
+  #best-slips-mobile-concepts .gh-compact .gh-title h1 { font-size: 23px; }
+  #best-slips-mobile-concepts .gh-compact .gh-results { gap: 0; border-block: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-compact .gh-result { border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 0; background: transparent !important; justify-content: center; gap: 6px; }
+  #best-slips-mobile-concepts .gh-compact .gh-result[aria-pressed="true"] { border-bottom-color: var(--gh-blue) !important; }
+  #best-slips-mobile-concepts .gh-compact .gh-list { gap: 6px; }
+  #best-slips-mobile-concepts .gh-compact .gh-summary { padding: 10px; gap: 8px; }
+  #best-slips-mobile-concepts .gh-compact .gh-stat { flex-direction: row; align-items: baseline; gap: 4px; }
+  #best-slips-mobile-concepts .gh-compact .gh-stat strong { font-size: 14px; }
+  #best-slips-mobile-concepts .gh-compact .gh-stat span { font-size: 11px; }
+  #best-slips-mobile-concepts .gh-compact .gh-stats { grid-template-columns: 1fr 1.5fr .8fr; }
+  #best-slips-mobile-concepts .gh-refine .gh-summary { grid-template-columns: 1fr auto; gap: 13px; }
+  #best-slips-mobile-concepts .gh-refine .gh-identity { grid-column: 1/-1; }
+  #best-slips-mobile-concepts .gh-refine .gh-stats { grid-column: 1/-1; }
+  #best-slips-mobile-concepts .gh-refine .gh-slip { border-left: 1px solid var(--gh-border); }
+  #best-slips-mobile-concepts .gh-filterbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: var(--gh-surface); border: 1px solid var(--gh-border); border-radius: var(--gh-radius-control); }
+  #best-slips-mobile-concepts .gh-filterbar p { font-size: 12px; font-weight: 600; }
+  #best-slips-mobile-concepts .gh-phone button:hover { background-color: var(--gh-inset); }
+  #best-slips-mobile-concepts .gh-phone[data-appearance="light"] { color-scheme: light; }
+  #best-slips-mobile-concepts .gh-phone[data-appearance="dark"] { color-scheme: dark; }
+  @media (max-width: 370px) {
+    #best-slips-mobile-concepts > section { padding-inline: 0; min-height: 1150px; }
+    #best-slips-mobile-concepts .gh-main { padding-inline: 12px; }
+    #best-slips-mobile-concepts .gh-brandbar { padding-inline: 12px; }
+    #best-slips-mobile-concepts .gh-time { display: none; }
+    #best-slips-mobile-concepts .gh-result { font-size: 11px !important; padding-inline: 6px; }
+    #best-slips-mobile-concepts .gh-summary { padding-inline: 10px; }
+    #best-slips-mobile-concepts .gh-ledger .gh-stat,
+    #best-slips-mobile-concepts .gh-compact .gh-stat { flex-direction: column; gap: 3px; }
+  }
+</style>
+<div id="best-slips-mobile-concepts" class="viz-carousel viz-dotted-background" aria-label="Best slips mobile page concepts">
+  <section class="gh-signal" data-variant="Blue Signal" aria-label="Blue Signal mobile design"><div class="gh-phone" data-recipe="signal"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-ledger" data-variant="Open Ledger" aria-label="Open Ledger mobile design" hidden><div class="gh-phone" data-recipe="ledger"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-status-first" data-variant="Status First" aria-label="Status First mobile design" hidden><div class="gh-phone" data-recipe="status-first"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-daybook" data-variant="Daybook" aria-label="Daybook mobile design" hidden><div class="gh-phone" data-recipe="daybook"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-reading" data-variant="Easy Reading" aria-label="Easy Reading mobile design" hidden><div class="gh-phone" data-recipe="reading"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-thumb" data-variant="Thumb Reach" aria-label="Thumb Reach mobile design" hidden><div class="gh-phone" data-recipe="thumb"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-index" data-variant="Slip Index" aria-label="Slip Index mobile design" hidden><div class="gh-phone" data-recipe="index"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-focus" data-variant="Focus Stack" aria-label="Focus Stack mobile design" hidden><div class="gh-phone" data-recipe="focus"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-compact" data-variant="Compact Rail" aria-label="Compact Rail mobile design" hidden><div class="gh-phone" data-recipe="compact"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+  <section class="gh-refine" data-variant="Browse and Refine" aria-label="Browse and Refine mobile design" hidden><div class="gh-phone" data-recipe="refine"></div><p class="gh-toast" role="status" aria-live="polite"></p></section>
+</div>
+<script>
+(() => {
+  "use strict";
+  const root = document.getElementById("best-slips-mobile-concepts");
+  const today = "2026-10-30";
+  const pageSize = 2; // Deliberately small for the page concept; production keeps its existing 50.
+  const statuses = ["all", "won", "lost", "pending", "void", "cancelled"];
+  const statusLabels = { all: "All", won: "Won", lost: "Lost", pending: "Pending", void: "Void", cancelled: "Cancelled" };
+  const stateLabels = { "not-started": "Not started", "in-progress": "In progress", won: "Won", lost: "Lost", void: "Void", cancelled: "Cancelled" };
+  const statusIcons = { "not-started": "clock-3", "in-progress": "radio", won: "check", lost: "x", void: "minus", cancelled: "ban" };
+  const periodOptions = [["last7", "Last 7 days"], ["last3", "Last 3 days"], ["yesterday", "Yesterday"], ["today", "Today"], ["tomorrow", "Tomorrow"], ["next3", "Next 3 days"], ["next7", "Next 7 days"]];
+  const rows = [
+    ...["not-started", "in-progress", "won", "lost", "not-started", "won", "in-progress", "void", "lost", "cancelled", "won", "not-started"].map((status, index) => ({ day: today, rank: index + 1, status })),
+    ...["won", "lost", "won", "void", "won", "cancelled", "lost", "won"].map((status, index) => ({ day: "2026-10-29", rank: index + 1, status })),
+    ...["won", "lost", "won", "void", "won", "lost"].map((status, index) => ({ day: "2026-10-28", rank: index + 1, status })),
+    ...Array.from({ length: 3 }, (_, index) => ({ day: "2026-10-31", rank: index + 1, status: "not-started" }))
+  ].map((row, index) => ({ ...row, id: `concept-${index}`, odds: (4.5 + index % 12 * .17).toFixed(2), probability: (81.4 + index % 8 * .8).toFixed(1), matches: 3 + index % 2, published: `${String(9 + Math.floor(row.rank / 10)).padStart(2, "0")}:${String(14 + row.rank).padStart(2,"0")}` }));
+  const views = Array.from(root.querySelectorAll(".gh-phone"));
+  const settings = { appearance: "system", viewer: "subscriber" };
+  const saved = globalThis.openai?.widgetState?.privateContent;
+  if (["system", "light", "dark"].includes(saved?.appearance)) settings.appearance = saved.appearance;
+  if (["subscriber", "member", "guest"].includes(saved?.viewer)) settings.viewer = saved.viewer;
+  const states = new Map(views.map(phone => [phone, { period: phone.dataset.recipe === "daybook" ? "last3" : "today", status: "all", page: 1, from: today, to: today, open: new Set() }]));
+  if (settings.viewer !== "subscriber") for (const state of states.values()) state.period = "last7";
+  const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+  const dateLabel = day => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
+  const isComplete = row => !["not-started", "in-progress"].includes(row.status);
+  const outcome = row => isComplete(row) ? row.status : "pending";
+  const defaultPeriod = phone => settings.viewer !== "subscriber" ? "last7" : phone.dataset.recipe === "daybook" ? "last3" : "today";
+  function bounds(state) {
+    const shift = days => new Date(Date.parse(`${today}T12:00:00Z`) + days * 86400000).toISOString().slice(0,10);
+    return { last7: [shift(-6),today], last3: [shift(-2),today], yesterday: [shift(-1),shift(-1)], today: [today,today], tomorrow: [shift(1),shift(1)], next3: [today,shift(2)], next7: [today,shift(6)], custom: [state.from,state.to] }[state.period];
+  }
+  function cohortFor(state) {
+    const [from,to] = bounds(state);
+    return rows.filter(row => row.day >= from && row.day <= to && (settings.viewer === "subscriber" || isComplete(row)));
+  }
+  function countsFor(state) {
+    const cohort = cohortFor(state);
+    return Object.fromEntries(statuses.map(status => [status, status === "all" ? cohort.length : cohort.filter(row => outcome(row) === status).length]));
+  }
+  function periodLabel(state) { return state.period === "custom" ? `${dateLabel(state.from)} – ${dateLabel(state.to)}` : periodOptions.find(option => option[0] === state.period)[1]; }
+  function announce(phone, text) { phone.parentElement.querySelector(".gh-toast").textContent = text; }
+  function save() {
+    if (globalThis.openai?.setWidgetState) globalThis.openai.setWidgetState({ modelContent: { page: "Best slips", appearance: settings.appearance, viewer: settings.viewer }, privateContent: { ...settings } }).catch(() => {});
+  }
+  function icons() { if (globalThis.lucide) globalThis.lucide.createIcons({ attrs: { width: 18, height: 18 } }); }
+  function results(state, counts) {
+    return `<div class="gh-results" role="group" aria-label="Filter slips by result">${statuses.map(status => {
+      const percentage = counts.all ? (counts[status] / counts.all * 100).toFixed(0) : "0";
+      return `<button type="button" class="gh-result cursor-interaction" data-result="${status}" aria-pressed="${state.status === status}" aria-label="${statusLabels[status]}, ${counts[status]} slips${status === "all" ? "" : `, ${percentage}% of this date range`}"><span>${statusLabels[status]}${status === "all" ? "" : ` <small>${percentage}%</small>`}</span><strong>${counts[status]}</strong></button>`;
+    }).join("")}</div>`;
+  }
+  function period(state, compact = false) {
+    return `<div class="gh-period"><label><span>Slip date</span><select class="gh-select cursor-interaction" data-period aria-label="Slip date">${periodOptions.map(([value,label]) => `<option value="${value}"${state.period === value ? " selected" : ""}>${label}</option>`).join("")}${state.period === "custom" ? `<option value="custom" selected>${periodLabel(state)}</option>` : ""}</select></label><button type="button" class="gh-button cursor-interaction" data-action="dates" aria-label="Choose custom dates">${icon("calendar-days")}${compact ? "Dates" : "Custom"}</button></div>`;
+  }
+  function inlineCounts(counts) {
+    return `<div class="gh-inline-summary" aria-label="Performance in selected date range"><span><strong>${counts.all}</strong> slips</span><span><strong>${counts.won}</strong> won</span><span><strong>${counts.lost}</strong> lost</span><span><strong>${counts.pending}</strong> pending</span><span><strong>${counts.void}</strong> void</span><span><strong>${counts.cancelled}</strong> cancelled</span></div>`;
+  }
+  function access() {
+    if (settings.viewer === "subscriber") return "";
+    const guest = settings.viewer === "guest";
+    return `<aside class="gh-access" aria-label="Subscriber access"><h2>See upcoming Best slips</h2><p>${guest ? "Create an account, then subscribe to unlock upcoming slips." : "Subscribe to unlock upcoming slips."} Completed slips remain available below.</p><div class="gh-actions"><button type="button" class="gh-button gh-primary cursor-interaction" data-destination="${guest ? "Sign up" : "Subscribe"}">${guest ? "Sign up" : "Subscribe"}</button>${guest ? '<button type="button" class="gh-button cursor-interaction" data-destination="Sign in">Sign in</button>' : ""}</div></aside>`;
+  }
+  function slip(row, phone, position) {
+    const state = states.get(phone), recipe = phone.dataset.recipe;
+    const useIndex = recipe === "index";
+    const expanded = state.open.has(row.id) || recipe === "focus" && position === 0;
+    return `<details class="gh-slip" data-id="${row.id}"${expanded ? " open" : ""}><summary class="gh-summary cursor-interaction" aria-label="Slip ${row.rank}, ${dateLabel(row.day)}, ${stateLabels[row.status]}, total odds ${row.odds}, average probability ${row.probability} percent, ${row.matches} matches">${useIndex ? `<span class="gh-index-number" aria-hidden="true">${String(row.rank).padStart(2,"0")}</span>` : ""}<span class="gh-identity"><span class="gh-slip-number">Slip ${row.rank}</span><span class="gh-badge" data-status="${row.status}">${icon(statusIcons[row.status])}${stateLabels[row.status]}</span><span class="gh-time">${dateLabel(row.day)}</span><span class="gh-chevron">${icon("chevron-down")}</span></span><span class="gh-stats"><span class="gh-stat"><span>Total odds</span><strong>${row.odds}</strong></span><span class="gh-stat"><span>Avg. probability</span><strong>${row.probability}%</strong></span><span class="gh-stat"><span>Matches</span><strong>${row.matches}</strong></span></span></summary><div class="gh-detail"><p>Published ${dateLabel(row.day)} 2026 · ${row.published} EAT</p><div class="gh-actions"><button type="button" class="gh-button cursor-interaction" data-action="matches" data-row="${row.id}">${icon("list")}${row.matches} matches</button><button type="button" class="gh-button cursor-interaction" data-action="share" data-row="${row.id}">${icon("share-2")}Share slip</button></div></div></details>`;
+  }
+  function render(phone, restoreKey) {
+    const state = states.get(phone), recipe = phone.dataset.recipe, counts = countsFor(state);
+    const filtered = cohortFor(state).filter(row => state.status === "all" || outcome(row) === state.status).sort((a,b) => b.day.localeCompare(a.day) || a.rank - b.rank);
+    const pages = Math.max(1,Math.ceil(filtered.length / pageSize));
+    state.page = Math.max(1,Math.min(state.page,pages));
+    const start = (state.page - 1) * pageSize, visible = filtered.slice(start,start + pageSize);
+    const countLabel = `${filtered.length ? start + 1 : 0}–${Math.min(start + pageSize,filtered.length)} of ${filtered.length} slips`;
+    let previousDay = null;
+    const cards = visible.map((row,position) => {
+      const group = recipe === "daybook" && previousDay !== row.day ? `<h2 class="gh-group-heading"><span>${row.day === today ? "Today" : dateLabel(row.day)} · ${dateLabel(row.day)} 2026</span><span>EAT</span></h2>` : "";
+      previousDay = row.day;
+      return group + slip(row,phone,position);
+    }).join("");
+    const heading = `<header class="gh-title"><div>${recipe === "ledger" ? '<span class="gh-eyebrow">The daily selection</span>' : recipe === "daybook" ? '<span class="gh-eyebrow">Slip archive</span>' : ""}<h1>Best slips</h1><p>${recipe === "status-first" ? "A clear view of every result" : recipe === "reading" ? "Your selections, at a glance" : recipe === "focus" ? "One slip at a time" : "${DATE} · East Africa Time".replace("${DATE}",dateLabel(today) + " 2026")}</p></div>${["refine","focus"].includes(recipe) ? `<button type="button" class="gh-icon-button cursor-interaction" data-action="filters" aria-label="Filter slips">${icon("sliders-horizontal")}</button>` : ""}</header>`;
+    const listHead = `<div class="gh-listhead"><strong>${state.status === "all" ? "All slips" : `${statusLabels[state.status]} slips`}</strong><button type="button" class="gh-reset cursor-interaction" data-action="reset">Reset filters</button></div>`;
+    const list = `<div class="gh-list" aria-label="Slips in selected date range">${cards || `<div class="gh-empty" role="status"><h2>No slips found</h2><p>Try another date range or result.</p><button type="button" class="gh-button cursor-interaction" data-action="reset">Reset filters</button></div>`}</div>`;
+    const pagination = `<div class="gh-pagination" aria-label="Slip pages"><button type="button" class="gh-icon-button cursor-interaction" data-page="${state.page - 1}" aria-label="Previous page"${state.page === 1 ? " disabled" : ""}>${icon("arrow-left")}</button><span class="gh-label" aria-live="polite">${countLabel}<br>Page ${state.page} of ${pages}</span><button type="button" class="gh-icon-button cursor-interaction" data-page="${state.page + 1}" aria-label="Next page"${state.page === pages ? " disabled" : ""}>${icon("arrow-right")}</button></div>`;
+    const filters = results(state,counts), dates = period(state), notice = access();
+    const filterBar = `<div class="gh-filterbar"><div><p>${periodLabel(state)} · ${statusLabels[state.status]}</p><span class="gh-label">${filtered.length} slips</span></div><button type="button" class="gh-button cursor-interaction" data-action="filters">${icon("sliders-horizontal")}Filters</button></div>`;
+    let content;
+    if (recipe === "status-first") content = heading + notice + filters + dates + listHead + list + pagination;
+    else if (recipe === "thumb") content = heading + notice + inlineCounts(counts) + listHead + list + pagination + `<div class="gh-thumb-controls">${dates}${filters}</div>`;
+    else if (recipe === "refine") content = heading + notice + filterBar + inlineCounts(counts) + listHead + list + pagination;
+    else if (recipe === "focus") content = heading + notice + filterBar + listHead + list + pagination;
+    else if (recipe === "ledger") content = heading + notice + dates + inlineCounts(counts) + filters + listHead + list + pagination;
+    else content = heading + notice + dates + filters + listHead + list + pagination;
+    phone.dataset.appearance = settings.appearance;
+    phone.innerHTML = `<div class="gh-app"><div class="gh-brandbar"><div class="gh-wordmark" aria-label="Goal Hint">GOAL<span>HINT</span></div><button type="button" class="gh-account cursor-interaction" data-action="account">${icon("circle-user-round")}${settings.viewer === "guest" ? "Sign in" : "Account"}</button></div><div class="gh-memberline"><span>${settings.viewer === "subscriber" ? "Your daily football selections" : "Completed slips · Public access"}</span>${settings.viewer === "subscriber" ? "<strong>Subscribed</strong>" : ""}</div><main class="gh-main">${content}<p class="gh-disclaimer">Average probability refers to the predictions in a slip. Outcomes are not guaranteed.</p></main><nav class="gh-nav" aria-label="Main navigation"><button type="button" aria-current="page" class="cursor-interaction" data-destination="Best slips">${icon("layers")}Best slips</button><button type="button" class="cursor-interaction" data-destination="Matches">${icon("layout-grid")}Matches</button><button type="button" class="cursor-interaction" data-destination="Slips">${icon("ticket")}Slips</button><button type="button" class="cursor-interaction" data-action="more">${icon("ellipsis")}More</button></nav></div>`;
+    phone.querySelectorAll(".gh-slip").forEach(details => details.addEventListener("toggle", () => { if (details.open) state.open.add(details.dataset.id); else state.open.delete(details.dataset.id); }));
+    icons();
+    if (restoreKey) phone.querySelector(restoreKey)?.focus({ preventScroll: true });
+  }
+  function closeSheet(phone) {
+    const layer = phone.querySelector(".gh-sheet-layer");
+    if (!layer) return;
+    const trigger = layer._trigger;
+    phone.querySelector(".gh-app").inert = false;
+    layer.remove();
+    const restore = trigger?.isConnected ? trigger : phone.querySelector('[data-action="dates"], [data-action="filters"]');
+    restore?.focus({ preventScroll: true });
+  }
+  function showSheet(phone, title, body, trigger) {
+    closeSheet(phone);
+    const layer = document.createElement("div");
+    layer.className = "gh-sheet-layer";
+    const id = `${phone.dataset.recipe}-sheet-heading`;
+    layer.innerHTML = `<section class="gh-sheet" role="dialog" aria-modal="true" aria-labelledby="${id}"><header class="gh-sheet-head"><h2 id="${id}">${title}</h2><button type="button" class="gh-icon-button cursor-interaction" data-action="close" aria-label="Close dialog">${icon("x")}</button></header>${body}</section>`;
+    layer._trigger = trigger;
+    phone.querySelector(".gh-app").inert = true;
+    phone.append(layer);
+    layer.addEventListener("click", event => { if (event.target === layer) closeSheet(phone); });
+    layer.addEventListener("keydown", event => {
+      if (event.key === "Escape") { event.preventDefault(); closeSheet(phone); }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(layer.querySelectorAll("button:not(:disabled),input,select,textarea"));
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+    icons();
+    layer.querySelector("button").focus({ preventScroll: true });
+  }
+  function showDates(phone, trigger) {
+    const state = states.get(phone), [from,to] = bounds(state);
+    showSheet(phone,"Custom dates",`<p>Choose up to 366 days. Dates use East Africa Time.</p><label>From<input type="date" data-from value="${from}" required></label><label>To<input type="date" data-to value="${to}" required></label><p class="gh-error" role="alert" hidden></p><div class="gh-actions"><button type="button" class="gh-button gh-primary cursor-interaction" data-action="apply-dates">Apply dates</button><button type="button" class="gh-button cursor-interaction" data-action="close">Cancel</button></div>`,trigger);
+  }
+  function showFilters(phone, trigger) {
+    const state = states.get(phone);
+    showSheet(phone,"Filter slips",`${period(state)}${results(state,countsFor(state))}<button type="button" class="gh-button gh-primary cursor-interaction" data-action="close">Show slips</button>`,trigger);
+  }
+  function change(phone, field, value) {
+    const state = states.get(phone);
+    state[field] = value;
+    if (field !== "page") state.page = 1;
+    const sheetOpen = phone.querySelector(".gh-sheet-layer") !== null;
+    render(phone, sheetOpen ? '[data-action="filters"]' : field === "status" ? `[data-result="${value}"]` : field === "period" ? "[data-period]" : value === 1 ? '[aria-label="Next page"]' : '[aria-label="Previous page"]');
+    if (sheetOpen) {
+      showFilters(phone,phone.querySelector('[data-action="filters"]'));
+      phone.querySelector(field === "status" ? `.gh-sheet [data-result="${value}"]` : ".gh-sheet [data-period]")?.focus({ preventScroll: true });
+    }
+    announce(phone, `${statusLabels[state.status]} slips · ${periodLabel(state)} · Page ${state.page}`);
+  }
+  root.addEventListener("change", event => {
+    const phone = event.target.closest(".gh-phone");
+    if (phone && event.target.matches("[data-period]")) change(phone,"period",event.target.value);
+  });
+  root.addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const phone = button.closest(".gh-phone");
+    if (!phone) return;
+    const state = states.get(phone), action = button.dataset.action;
+    if (button.dataset.result) { change(phone,"status",button.dataset.result); return; }
+    if (button.dataset.page) { change(phone,"page",Number(button.dataset.page)); return; }
+    if (button.dataset.destination) { announce(phone, button.dataset.destination === "Best slips" ? "Best slips is the current page." : `${button.dataset.destination} uses the existing app flow. This sample previews Best slips.`); return; }
+    if (action === "close") closeSheet(phone);
+    else if (action === "dates") showDates(phone,button);
+    else if (action === "filters") showFilters(phone,button);
+    else if (action === "reset") {
+      Object.assign(state,{ period: defaultPeriod(phone), status: "all", page: 1, from: today, to: today });
+      render(phone,'[data-action="reset"]'); announce(phone,"Filters reset.");
+    } else if (action === "apply-dates") {
+      const fromInput = phone.querySelector("[data-from]"), toInput = phone.querySelector("[data-to]");
+      const from = fromInput.value, to = toInput.value;
+      const days = (Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000 + 1;
+      if (!fromInput.validity.valid || !toInput.validity.valid || !Number.isFinite(days) || days < 1 || days > 366) {
+        const error = phone.querySelector(".gh-error"); error.hidden = false; error.textContent = "Choose a valid range of 1 to 366 days, with From on or before To."; fromInput.setAttribute("aria-invalid","true"); toInput.setAttribute("aria-invalid","true"); fromInput.focus(); return;
+      }
+      Object.assign(state,{ from, to, period: "custom", page: 1 }); render(phone,'[data-action="dates"], [data-action="filters"]'); announce(phone,`${periodLabel(state)} applied.`);
+    } else if (action === "share") {
+      const row = rows.find(item => item.id === button.dataset.row);
+      showSheet(phone,`Share slip ${row.rank}`,`<label>Preview caption<textarea readonly data-caption>Goal Hint · Best slips\nSlip ${row.rank} · ${dateLabel(row.day)} 2026\nTotal odds ${row.odds} · Average probability ${row.probability}%\n${row.matches} matches · ${stateLabels[row.status]}</textarea></label><p>The existing sharing flow will be retained when a mobile design is selected.</p><button type="button" class="gh-button cursor-interaction" data-action="select-caption">Select caption</button>`,button);
+    } else if (action === "select-caption") { phone.querySelector("[data-caption]").select(); announce(phone,"Preview caption selected. Use your device's copy command."); }
+    else if (action === "matches") announce(phone,"Individual match layouts are reserved for the next design review.");
+    else if (action === "more") showSheet(phone,"More",["Performance","Help","Privacy","Terms","Contact"].map(label => `<button type="button" class="gh-button cursor-interaction" data-destination="${label}">${label}</button>`).join(""),button);
+    else if (action === "account") showSheet(phone,settings.viewer === "guest" ? "Your account" : "Account",`<p>${settings.viewer === "subscriber" ? "Subscription active" : settings.viewer === "member" ? "Free member" : "Sign in to your Goal Hint account."}</p><button type="button" class="gh-button cursor-interaction" data-destination="${settings.viewer === "guest" ? "Sign in" : "Account settings"}">${settings.viewer === "guest" ? "Sign in" : "Account settings"}</button>`,button);
+  });
+  function renderAll() { root.dataset.viewer = settings.viewer; views.forEach(phone => render(phone)); }
+  renderAll();
+  let lastViewer = settings.viewer;
+  if (globalThis.Tweak) {
+    const tweak = new Tweak({ container: root, onChange: () => {
+      if (settings.viewer !== lastViewer) {
+        for (const [phone,state] of states) Object.assign(state,{ period: defaultPeriod(phone), status: "all", page: 1, open: new Set() });
+        lastViewer = settings.viewer;
+      }
+      renderAll(); save();
+    }});
+    tweak.addSelect(settings,"appearance",{ label: "Appearance", options: [{ label: "Match device", value: "system" },{ label: "Light", value: "light" },{ label: "Dark", value: "dark" }] });
+    tweak.addSelect(settings,"viewer",{ label: "Preview as", options: [{ label: "Subscriber", value: "subscriber" },{ label: "Free member", value: "member" },{ label: "Guest", value: "guest" }] });
+  }
+  window.addEventListener("openai:set_globals", event => {
+    const next = event.detail?.globals?.widgetState?.privateContent;
+    if (!next) return;
+    if (["system","light","dark"].includes(next.appearance)) settings.appearance = next.appearance;
+    if (["subscriber","member","guest"].includes(next.viewer)) settings.viewer = next.viewer;
+    if (settings.viewer !== lastViewer) {
+      for (const [phone,state] of states) Object.assign(state,{ period: defaultPeriod(phone), status: "all", page: 1, open: new Set() });
+      lastViewer = settings.viewer;
+    }
+    renderAll();
+  });
+})();
+</script>
