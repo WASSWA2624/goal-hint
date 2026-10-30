@@ -5,7 +5,7 @@ import { SubscriberNotice } from "@/components/members/subscriber-notice";
 
 import Link from "@/components/navigation/navigation-link";
 import { memo, useContext, useId, useState, type ComponentProps, type ReactNode } from "react";
-import styled, { css, keyframes } from "styled-components";
+import styled, { css } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode, countryDisplayName, countryShortName } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -24,14 +24,15 @@ import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, TrophyIcon, VoidIcon } from "./match-icons";
+import { ChevronIcon, FlagIcon, GlobeIcon, TrophyIcon } from "./match-icons";
 import { cleanLedgerIdentityStyles } from "./clean-ledger-styles";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 import { providerImageSource } from "@/components/ui/provider-image";
-import { OutcomeBadge, ProbabilityBar } from "./prediction-presentation";
+import { ProbabilityBar } from "./prediction-presentation";
 import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
+import { MatchStatus } from "./match-status";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -59,11 +60,9 @@ export type MatchCardProps = {
 type TeamResult = "win" | "loss" | null;
 /** Which side is ahead on a live score; null for a level or unknown score. */
 type TeamStanding = "ahead" | "behind" | null;
-type StateTone = "final" | "halted";
+type StateTone = "final" | "halted" | "live";
 const countryFlagUrl = (fixture: FixtureSnapshot) => fixture.competition.countryFlagUrl ?? null;
 const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
-/** The live dot's halo swells and fades in its own red (`--gh-live-glow`). */
-const glow = keyframes`0%, 100% { box-shadow: 0 0 1px 0 var(--gh-live-glow); } 50% { box-shadow: 0 0 6px 2px var(--gh-live-glow); }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
 const Card = styled.article`
@@ -376,9 +375,10 @@ const StateChip = styled.span<{ $tone: StateTone }>`
   white-space: nowrap;
   ${({ $tone, theme }) => $tone === "final"
     ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
-    : css`color: ${theme.color.accent.amber.text}; background: ${theme.color.accent.amber.soft};`}
+    : $tone === "live" ? css`color: ${theme.color.live.text}; background: ${theme.color.live.soft};`
+      : css`color: ${theme.color.accent.amber.text}; background: ${theme.color.accent.amber.soft};`}
   ${table} { grid-column: 5; grid-row: 1; justify-self: center; }
-  /* Tile: plain text under the score; a final whistle muted, a halted match grey. The live minute is in the result tag. */
+  /* Plain phase text under the score keeps the status badge focused on progress or outcome. */
   ${tile} {
     padding: 0;
     background: none;
@@ -386,19 +386,8 @@ const StateChip = styled.span<{ $tone: StateTone }>`
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     letter-spacing: 0.02em;
     line-height: 1.1;
-    color: ${({ theme, $tone }) => $tone === "final" ? theme.color.mutedText : theme.color.outcome.void.text};
+    color: ${({ theme, $tone }) => $tone === "live" ? theme.color.live.text : $tone === "final" ? theme.color.mutedText : theme.color.outcome.void.text};
   }
-`;
-const LiveDot = styled.span`
-  --gh-live-glow: color-mix(in srgb, ${({ theme }) => theme.color.live.solid} 65%, transparent);
-  flex: none;
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: ${({ theme }) => theme.radius.circle};
-  background: ${({ theme }) => theme.color.live.solid};
-  animation: ${glow} 1.6s ease-in-out infinite;
-  /* Reduced motion keeps a still halo. */
-  @media (prefers-reduced-motion: reduce) { animation: none; box-shadow: 0 0 3px 1px var(--gh-live-glow); }
 `;
 
 /** Four inline facts share the selection order used by the Clean ledger slip row. */
@@ -578,50 +567,20 @@ const Percent = styled.span`
   ${tile} { font-size: 0.75rem; }
 `;
 /** Settled/live states add one compact row; scheduled cards keep the approved three-row shape. */
-const Result = styled(OutcomeBadge)`
-  /* Bright result tags on both layouts; an unavailable result uses the neutral Void colours. */
-  color: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].text};
-  background: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].fill};
-  border-color: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].border};
-  &[data-result-badge="upcoming"] {
-    color: ${({ theme }) => theme.color.verdict.upcoming.text};
-    background: ${({ theme }) => theme.color.verdict.upcoming.fill};
-    border-color: ${({ theme }) => theme.color.verdict.upcoming.border};
-  }
-  &[data-result-badge="live"] {
-    color: ${({ theme }) => theme.color.live.text};
-    background: ${({ theme }) => theme.color.live.soft};
-    border-color: color-mix(in srgb, ${({ theme }) => theme.color.live.solid} 35%, ${({ theme }) => theme.color.live.soft});
-    font-variant-numeric: tabular-nums;
-  }
+const Result = styled.span`
+  display: inline-flex; align-items: center;
   ${tile} {
     grid-column: 1;
     grid-row: 4;
     justify-self: end;
     align-self: start;
-    box-sizing: border-box;
-    block-size: 1rem;
-    padding: 0 4px;
-    gap: 3px;
-    font-size: 0.625rem;
-    letter-spacing: 0.02em;
-    line-height: 1;
-    white-space: nowrap;
-    > svg { font-size: 0.75rem; }
-    &[data-result-badge="unavailable"], &[data-result-badge="upcoming"] { display: none; }
-    &[data-result-badge="live"] {
-      gap: 5px;
-    }
   }
-  /* Table: every result badge fills the Result column, so Upcoming, Win, Loss, Pending and Void share one width. */
   ${table} {
     grid-column: 11;
     grid-row: 2;
     justify-self: stretch;
-    box-sizing: border-box;
+    justify-content: center;
     min-inline-size: 0;
-    padding: 3px 4px;
-    white-space: nowrap;
   }
 `;
 
@@ -673,8 +632,7 @@ function liveClockLabel(fixture: FixtureSnapshot, messages: Messages) {
 }
 type LiveClock = ReturnType<typeof liveClockLabel>;
 
-/** `lead` names the winner of a decided final score (1 home, -1 away), so the losing side's goals can be muted. A live
- * clock is shown in the result tag; here it is only spoken, right after the score. */
+/** `lead` names the winner of a decided final score; live phase and minute stay beside the score. */
 function MatchState({ fixture, home, away, lead, clock, messages, snapshot = false }: {
   fixture: FixtureSnapshot; home: string; away: string; lead: number; clock: LiveClock | null; messages: Messages; snapshot?: boolean;
 }) {
@@ -692,7 +650,8 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
   if (snapshot) return <Center data-match-state="snapshot">{scoreline}</Center>;
-  if (clock) return <Center data-match-state="live">{scoreline}<VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
+  if (clock) return <Center data-match-state="live">{scoreline}<StateChip $tone="live" aria-hidden="true">{clock.visible}</StateChip>
+    <VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
     const regulationOnly = fixture.scorePeriod === "regulation" && status !== "finished-regulation";
     return <Center data-match-state="final">{scoreline}
@@ -740,7 +699,6 @@ function CountryFlag({ url, country }: { url: string | null | undefined; country
   return <FlagFallback>{countryCode(country) === "INT" ? <GlobeIcon /> : <FlagIcon />}</FlagFallback>;
 }
 
-const resultIcon = { correct: <CheckIcon />, incorrect: <CrossIcon />, void: <VoidIcon /> } as const;
 
 /** Only timestamps subscribe to the device clock; the rest of a card stays unchanged. */
 function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"]; locale: string }) {
@@ -805,9 +763,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const family = messages.text(`market.family.${shownFamily}`);
   const locked = fixture.cycle?.state === "closed";
   const outcome = prediction?.status ?? "unavailable";
-  const result = cardResultStatus(fixture.status, outcome);
-  const resultLabel = result === "upcoming" ? messages.text("match.result.upcoming") : result === "unavailable" ? "—"
-    : messages.text(result === "correct" ? "match.result.won" : result === "incorrect" ? "match.result.lost" : `outcome.${result}`);
+  const result = snapshotPick ? outcome : cardResultStatus(fixture.status, outcome);
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent, snapshotPick
       ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : undefined) })
@@ -846,7 +802,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       outcome={offline ? "unavailable" : outcome} headingLevel={headingLevel} pickState={pickState}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
       {...(!offline ? { analysisHref: matchHref(fixture.fixtureId, analysisSlug, locale) } : {})}
-      {...(snapshotPick && fixture.score ? { matchState: "snapshot", savedScore: true } : {})}
+      {...(snapshotPick ? { matchState: "snapshot", savedScore: true } : {})}
       offline={offline} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
       market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.locked")}</span></> : <>
@@ -857,8 +813,6 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </>}
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
-      {...(offline ? { statusContent: <span data-match-label>Saved</span> } : !prediction && fixture.status !== "live"
-        ? { statusContent: <><span data-match-label>{messages.text(`match.status.${fixture.status}`)}</span><span data-outcome-label>{resultLabel}</span></> } : {})}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
         : gated ? <SubscriberNotice locale={locale} kind="card" /> : !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
     />;
@@ -915,18 +869,14 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
         </Probability>
         {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionDescription(messages, selection),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
-          {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {resultLabel}
-        </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}
-          {result === "upcoming" && `. ${messages.text("match.outcome")}: ${resultLabel}`}</VisuallyHidden>}
+          {locked && `. ${messages.text("match.lockedPrediction")}`}
+        </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}
       </PredictionCell>}
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
-    <Result aria-hidden="true" $outcome={offline ? "unavailable" : result === "upcoming" ? "pending" : result} data-result-badge={offline ? "saved" : clock ? "live" : result}
+    <Result data-result-badge={offline ? "saved" : result}
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
-      {offline ? <span>Saved</span> : clock ? <><LiveDot /><span data-pick-value="">{clock.visible}</span></> : <>
-        {result !== "upcoming" && settledOutcome(result) && resultIcon[result as keyof typeof resultIcon]}
-        <span data-pick-value="">{resultLabel}</span>
-      </>}
+      <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} />
     </Result>
     {!offline && <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />

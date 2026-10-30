@@ -3,6 +3,7 @@
 import { useId, type ReactNode } from "react";
 import Link from "@/components/navigation/navigation-link";
 import { TeamLogo } from "@/components/match/team-logo";
+import { MatchStatus } from "@/components/match/match-status";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { snapshotCardPrediction } from "@/domain/match-card";
@@ -10,7 +11,7 @@ import { canonicalMatchSlug } from "@/domain/match-slug";
 import { matchHref } from "@/domain/navigation";
 import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import type { SavedSlipView } from "@/domain/saved-slips";
-import type { SlipMatchState } from "@/domain/slip-match-state";
+import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-match-state";
 import type { SlipStatus } from "@/domain/slip-status";
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
 import { slipSelectionCard } from "@/domain/slip-card";
@@ -24,23 +25,24 @@ import { SlipHeaderDate, SlipStatusBadge, type SlipHeaderPublication } from "../
 import { useRefreshedSlipMatchStates } from "../slip-match-refresh";
 import { slipHeaderState } from "../slip-header-outcome";
 
-function SelectionRow({ selection, position, locale, result, analysisLinks, showLogos }: {
+function SelectionRow({ selection, position, locale, result, matchStates, analysisLinks, showLogos }: {
   selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
+  matchStates: readonly SlipMatchState[] | undefined;
 }) {
   const messages = createMessages(locale), id = useId();
   const { fixture, snapshotPick } = slipSelectionCard(selection, result);
   const prediction = snapshotCardPrediction(snapshotPick);
+  const state = slipMatchStateForSelection(selection, matchStates), status = state?.status ?? "unknown";
+  const outcome = state?.outcome ?? prediction.status;
   const home = selection.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = selection.awayTeam.name?.trim() || messages.text("match.awayUnknown");
   const family = messages.text(`market.family.${selection.family}`);
   const description = predictionDescription(messages, selection.selection);
-  const outcomeLabel = prediction.status === "correct" ? messages.text("match.result.won")
-    : prediction.status === "incorrect" ? messages.text("match.result.lost") : messages.text(`outcome.${prediction.status}`);
   const kickoff = fixture.kickoffAt!;
   const rowProps = { "aria-labelledby": `${id}-${analysisLinks ? "analysis" : "teams"}`,
-    "aria-describedby": `${id}-meta ${id}-kickoff ${id}-pick ${id}-odds ${id}-probability${result ? ` ${id}-result` : ""}`,
-    "data-fixture-id": selection.fixtureId, "data-market": selection.family, "data-outcome": prediction.status,
-    "data-status": fixture.status, "data-match-state": "snapshot" };
+    "aria-describedby": `${id}-meta ${id}-kickoff ${id}-pick ${id}-odds ${id}-probability ${id}-result`,
+    "data-fixture-id": selection.fixtureId, "data-market": selection.family, "data-outcome": outcome,
+    "data-status": status, "data-match-state": state ? status : "snapshot" };
   const content = <>
       <span data-leg-number aria-hidden="true">{messages.number(position)}</span>
       <h4 data-teams id={`${id}-teams`}>
@@ -61,10 +63,10 @@ function SelectionRow({ selection, position, locale, result, analysisLinks, show
       </span>
       <span data-leg-odds id={`${id}-odds`}><span data-number-label>{messages.text("slips.odds")}</span><strong>{selection.odds}</strong></span>
       <span data-leg-probability id={`${id}-probability`}><span data-number-label>{messages.text("slips.probability")}</span><strong>{formatSlipProbability(selection.probability, messages)}</strong></span>
-      {result && <span data-result id={`${id}-result`}>
-        <span data-outcome-label>{outcomeLabel}</span>
+      <span data-result id={`${id}-result`}>
+        <MatchStatus status={status} outcome={outcome} messages={messages} snapshot={!state && result?.fixtureId === selection.fixtureId} />
         {fixture.score && <span data-saved-score title={messages.text("match.regulationScoreNote")}><VisuallyHidden>{messages.text("match.regulationScoreNote")}: </VisuallyHidden>{messages.number(fixture.score.home)}–{messages.number(fixture.score.away)}</span>}
-      </span>}
+      </span>
       {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
   </>;
   return <li data-compact-selection={selection.fixtureId} data-slip-selection={selection.fixtureId}>
@@ -130,8 +132,8 @@ export function CompactSlip({ slip, index, locale, variant = "clean-ledger", ini
       <ul aria-labelledby={headingId}>
         {slip.selections.map((selection, selectionIndex) => {
           const result = results?.find((item) => item.fixtureId === selection.fixtureId);
-          return variant === "clean-ledger" ? <CleanLedgerSelection key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} {...(result ? { result } : {})} />
-            : <SelectionRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} showLogos={showLogos} result={result} />;
+          return variant === "clean-ledger" ? <CleanLedgerSelection key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} {...(currentStates ? { matchStates: currentStates } : {})} {...(result ? { result } : {})} />
+            : <SelectionRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} showLogos={showLogos} result={result} matchStates={currentStates} />;
         })}
       </ul>
   </CompactSlipDisclosure>;

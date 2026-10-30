@@ -26,7 +26,7 @@ export const MatchRow = styled.div`
   [data-leg-probability] { grid-area: probability; }
   [data-number-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
   [data-leg-odds] strong, [data-leg-probability] strong { font-size: 0.8125rem; }
-  [data-result] { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 5px; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  [data-result] { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 5px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   &[data-outcome="correct"] [data-outcome-label] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
   &[data-outcome="incorrect"] [data-outcome-label] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   &[data-outcome="void"] [data-outcome-label] { color: ${({ theme }) => theme.color.outcome.void.text}; }

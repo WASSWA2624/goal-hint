@@ -58,7 +58,7 @@ def single(nodes, message):
 
 
 def verify_frame(document, path, total="21.95", average="72.4%", count=3):
-    wrapper = single(document.nodes(attr="data-desktop-design"), f"{path}: one selected desktop layout")
+    wrapper = single(document.nodes(attr="data-production-desktop-slip"), f"{path}: one selected desktop layout")
     assert wrapper.attrs["data-desktop-design"] == "aligned-ledger", f"{path}: selected variant 01"
     disclosure = single(wrapper.nodes("details", "data-slip-disclosure"), f"{path}: native disclosure")
     assert "open" not in disclosure.attrs, f"{path}: desktop starts collapsed before hydration"
@@ -73,7 +73,8 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         children = [child for child in row.children if isinstance(child, Element)]
         ordered = [next((field for field in fields if field in child.attrs), None) for child in children]
         assert [field for field in ordered if field] == list(fields), f"{path}: one-line logical field order"
-        date = single(row.nodes("time", "data-row-date"), f"{path}: date")
+        date_cell = single(row.nodes(attr="data-row-date"), f"{path}: date cell")
+        date = date_cell if date_cell.tag == "time" else single(date_cell.nodes("time"), f"{path}: date")
         clock = single(row.nodes("time", "data-row-time"), f"{path}: kickoff")
         assert re.fullmatch(r"\d{1,2}-[A-Z][a-z]{2}", date.text.strip()), f"{path}: short hyphenated date omits weekday"
         assert re.fullmatch(r"\d{2}:\d{2} EAT", clock.text.strip()), f"{path}: 24-hour reporting timezone"
@@ -90,7 +91,8 @@ def verify_frame(document, path, total="21.95", average="72.4%", count=3):
         assert row.nodes(attr="data-centre") and row.nodes(attr="data-score") and row.nodes(attr="data-clock"), f"{path}: dedicated score and clock anchors"
         assert single(row.nodes(attr="data-row-odds"), f"{path}: original odds").nodes("strong"), f"{path}: numerical price"
         assert single(row.nodes(attr="data-row-probability"), f"{path}: original probability").nodes("strong"), f"{path}: numerical forecast"
-        assert row.nodes(attr="data-match-label") and row.nodes(attr="data-outcome-label"), f"{path}: match state and selection outcome are separate"
+        status = single(row.nodes(attr="data-match-status"), f"{path}: one clear match status")
+        assert ("data-match-label" in status.attrs) != ("data-outcome-label" in status.attrs), f"{path}: show progress or outcome once"
     return rows
 
 
@@ -98,7 +100,7 @@ def verify_desktop(document, path, saved=False):
     rows = verify_frame(document, path)
     assert all(row.attrs.get("data-status") == "unknown" for row in rows), f"{path}: no invented fixture observation"
     assert all(row.attrs.get("data-match-state") == ("snapshot" if saved else "unknown") for row in rows), f"{path}: no invented live/final state"
-    assert rows[1].nodes(attr="data-row-date")[0].text.strip() == "30-Oct" and rows[1].nodes(attr="data-row-time")[0].text.strip() == "00:00 EAT", f"{path}: EAT midnight rollover"
+    assert rows[1].nodes(attr="data-row-date")[0].nodes("time")[0].text.strip() == "30-Oct" and rows[1].nodes(attr="data-row-time")[0].text.strip() == "00:00 EAT", f"{path}: EAT midnight rollover"
     assert rows[1].nodes(attr="data-row-odds")[0].nodes("strong")[0].text == "7.73", f"{path}: original alternative price"
     assert rows[1].nodes(attr="data-row-probability")[0].nodes("strong")[0].text == "61.7%", f"{path}: original forecast precision"
     assert rows[1].nodes(attr="data-pick-label")[0].text == "U 2.5", f"{path}: original alternative selection"
@@ -108,11 +110,11 @@ def verify_desktop(document, path, saved=False):
         scores = [row.nodes(attr="data-score")[0].text for row in rows]
         assert "2-1" in scores[0] and "4-0" in scores[1] and "VS" in scores[2], f"{path}: supplied regulation scores only"
         assert all(not row.nodes(attr="data-clock")[0].text.strip() for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
-        assert all(row.nodes(attr="data-match-label")[0].text.strip() == "Saved result" for row in rows), f"{path}: saved observation is identified as a snapshot"
+        assert all(not row.nodes(attr="data-match-label") for row in rows), f"{path}: saved outcomes have no redundant progress label"
         assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Won", "Lost", "Void"], f"{path}: explicit saved selection labels"
     else:
         assert all("VS" in row.nodes(attr="data-score")[0].text and row.nodes(attr="data-match-label")[0].text.strip() == "Unknown" for row in rows), f"{path}: original snapshot has no assumed upcoming/live state"
-        assert all(row.nodes(attr="data-outcome-label")[0].text.strip() == "Pending" for row in rows), f"{path}: no invented selection settlement"
+        assert all(not row.nodes(attr="data-outcome-label") for row in rows), f"{path}: unknown matches do not show prediction Pending"
 
 
 def verify_states(document):
@@ -122,8 +124,8 @@ def verify_states(document):
     assert [row.nodes(attr="data-clock")[0].text.strip() for row in rows] == ["", "30′", "HT", "FT", "FT"], "states: supplied minute, halftime and final labels"
     for row, score in zip(rows, ["VS", "1-0", "1-1", "2-1", "0-1"]):
         assert score in row.nodes(attr="data-score")[0].text, "states: actual supplied score"
-    assert [row.nodes(attr="data-match-label")[0].text.strip() for row in rows] == ["Upcoming", "Live", "HT", "Finished", "Finished"], "states: match states are distinct from selection results"
-    assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Pending", "Pending", "Pending", "Won", "Lost"], "states: fixed final status content"
+    assert [row.nodes(attr="data-match-status")[0].text.strip() for row in rows] == ["Upcoming", "Live", "Live", "Won", "Lost"], "states: progress takes precedence until the final outcome"
+    assert [bool(row.nodes(attr="data-match-live-dot")) for row in rows] == [False, True, True, False, False], "states: only live fixtures have a glowing dot, including halftime"
 
 
 def verify(origin, directory):
@@ -139,6 +141,12 @@ def verify(origin, directory):
         elif scenario == "states":
             verify_states(document)
         elif scenario in {"locked", "locked-member", "best-locked", "best-locked-member"}:
+            if scenario.startswith("best-locked"):
+                assert not document.nodes("details", "data-slip-disclosure"), f"{scenario}: free viewers only see completed public slips"
+                assert not document.nodes(attr="data-fixture-id") and not document.nodes(attr="data-slip-id"), f"{scenario}: no unreleased private identities"
+                assert document.nodes(attr="data-best-slips-access"), f"{scenario}: appropriate access message"
+                print(f"PASS desktop slip SSR: {scenario}", flush=True)
+                continue
             disclosure = single(document.nodes("details", "data-slip-disclosure"), f"{scenario}: native locked disclosure")
             assert "open" not in disclosure.attrs
             assert not document.nodes(attr="data-fixture-id") and not document.nodes(attr="data-slip-id"), f"{scenario}: no private identities"

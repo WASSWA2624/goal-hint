@@ -63,8 +63,11 @@ The renderer reuses `selectedCardPrediction`, `selectedCardPrice` and
 Upcoming and VS without inventing a score. Running clocks use supplied phases,
 minutes and stoppage time; paused phases retain their phase label. Finished,
 postponed, canceled, abandoned and awarded fixtures keep their stored status.
-Win, Loss, Pending, Void and unavailable outcomes stay distinct from the match
-score and progress.
+One shared status label shows Upcoming before kickoff and Live during play,
+including half-time. Only terminal fixtures show the recorded prediction outcome
+(Won, Lost, Pending, Void or unavailable). Postponed and unknown fixtures retain
+their match status. Saved results can show their recorded outcome without
+inventing a current fixture observation; anonymous offline cards retain Saved.
 
 ### Desktop: shared Aligned ledger (64rem and above)
 
@@ -81,7 +84,13 @@ and the slip builder:
 6. Market family and authorized prediction, or the locked/no-prediction content.
 7. Exact available odds.
 8. Estimated probability, including only explicitly public chance on a lock.
-9. Match progress and the independent prediction outcome.
+9. One larger, bold status: match progress until completion, then prediction outcome.
+
+Every status uses the same centered, 5.75rem-wide badge, with a faint semantic
+background, fine border and subtle shared radius. Match and slip status badges
+reuse the same base component. Live adds the slip header's steady dot and softly
+reversing halo; reduced motion keeps a still glow. The supplied minute and phase
+stay above the score.
 
 The shared grid uses square edges, quiet dividers, compact row padding and the
 active light/dark palette. Coarse pointers retain 44px effective row/analysis
@@ -103,18 +112,20 @@ status; missing kickoff or score never receives an invented time or value.
 
 ### Phone and tablet: Clean ledger (below 64rem)
 
-The existing compact three-row cards remain consistent with slip selections:
+The compact cards remain consistent with slip selections:
 
 1. Kickoff date and AM/PM clock precede the league crest/short label and country
    flag/code. Full competition and country names remain available to assistive
    technology and in labels/tooltips.
 2. The home name/crest and away crest/name mirror around VS or the supplied
    score. Long names use the shared compact labels while retaining complete
-   accessible names. Match progress and independent outcomes keep their existing
-   presentation.
+   accessible names. Supplied live minutes and phases stay beside the score.
 3. Market, selected prediction, exact available odds and estimated probability
    share one inline facts row. Gated and missing predictions keep the same
    authorization rules and explicit explanations as desktop.
+4. A larger status label follows the facts, using the same progress/outcome rules
+   and live dot as desktop. Slip selections use their original-selection-bound
+   match observations, including refreshed states in Matches and Slip Builder.
 
 The single-column native list retains 6px card spacing, square themed frames,
 no card shadow and offscreen `content-visibility` optimization. Cards reflow at

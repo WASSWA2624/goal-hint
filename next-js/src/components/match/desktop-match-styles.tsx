@@ -132,11 +132,10 @@ export const alignedLedgerStyles = css`
   [data-match-state="live"] [data-clock], [data-match-state="halftime"] [data-clock] { color: ${({ theme }) => theme.color.live.text}; }
 
   [data-row-status] {
-    display: grid; grid-template-columns: 1fr; align-content: center; justify-items: center; gap: 0;
-    min-inline-size: 0; inline-size: 100%; min-block-size: 26px; line-height: 12px;
+    display: flex; align-items: center; justify-content: center;
+    min-inline-size: 0; inline-size: 100%; min-block-size: 26px;
+    font-size: 0.8125rem; line-height: 1.25rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
-  [data-match-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
-  [data-outcome-label] { color: var(--review-outcome-text); font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 
   [data-row-analysis] {
     position: absolute; inset: 0; z-index: 1; color: inherit; text-decoration: none;

@@ -4,6 +4,7 @@ import { useId } from "react";
 import Image from "next/image";
 import Link from "@/components/navigation/navigation-link";
 import { TeamLogo } from "@/components/match/team-logo";
+import { MatchStatus } from "@/components/match/match-status";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { compactLeagueName, compactMarketName, compactTeamName } from "@/domain/compact-fixture-label";
@@ -17,6 +18,7 @@ import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import type { SavedSlipView } from "@/domain/saved-slips";
 import type { SlipSelection } from "@/domain/slip-builder";
 import { slipSelectionCard } from "@/domain/slip-card";
+import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-match-state";
 import { useMessages } from "@/i18n/use-messages";
 import { formatSlipProbability } from "../slip-format";
 import { CleanLedgerRow } from "./clean-ledger-styles";
@@ -28,26 +30,26 @@ function logoSource(url: string | null | undefined): string | undefined {
 }
 
 /** Production and review share the original selected snapshot, compact labels and three-row order. */
-export function CleanLedgerSelection({ selection, locale, result, analysisLinks = false, position }: {
-  selection: SlipSelection; locale: string; result?: SavedSlipView["results"][number]; analysisLinks?: boolean; position?: number;
+export function CleanLedgerSelection({ selection, locale, result, matchStates, analysisLinks = false, position }: {
+  selection: SlipSelection; locale: string; result?: SavedSlipView["results"][number]; matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; position?: number;
 }) {
   const m = useMessages(locale), id = useId();
   const savedResult = result?.fixtureId === selection.fixtureId ? result : undefined;
   const { fixture, snapshotPick } = slipSelectionCard(selection, savedResult);
   const prediction = snapshotCardPrediction(snapshotPick), kickoff = fixture.kickoffAt!;
+  const state = slipMatchStateForSelection(selection, matchStates), status = state?.status ?? "unknown";
+  const outcome = state?.outcome ?? prediction.status;
   const home = selection.homeTeam.name?.trim() || m.text("match.homeUnknown");
   const away = selection.awayTeam.name?.trim() || m.text("match.awayUnknown");
   const league = selection.competition.name || m.text("match.competitionUnknown");
   const country = countryDisplayName(selection.competition.country), flag = countryFlagAsset(selection.competition.country);
   const family = m.text(`market.family.${selection.family}`), description = predictionDescription(m, selection.selection);
-  const outcome = prediction.status === "correct" ? m.text("match.result.won")
-    : prediction.status === "incorrect" ? m.text("match.result.lost") : m.text(`outcome.${prediction.status}`);
   const publication = selection.forecast ? ` · ${m.text("match.published")}: ${m.reportingInstant(utcInstantFromEpochMilliseconds(selection.forecast.publishedAt))}` : "";
   const props = {
     "data-ledger-row": "", "data-mobile-row": "", "data-fixture-id": selection.fixtureId,
-    "data-market": selection.family, "data-outcome": prediction.status, "data-status": fixture.status,
-    "data-match-state": "snapshot", "aria-labelledby": `${id}-${analysisLinks ? "analysis" : "teams"}`,
-    "aria-describedby": `${id}-meta ${id}-facts${savedResult ? ` ${id}-result` : ""}`,
+    "data-market": selection.family, "data-outcome": outcome, "data-status": status,
+    "data-match-state": state ? status : "snapshot", "aria-labelledby": `${id}-${analysisLinks ? "analysis" : "teams"}`,
+    "aria-describedby": `${id}-meta ${id}-facts ${id}-result`,
   };
   const content = <>
     <div data-ledger-meta data-mobile-meta id={`${id}-meta`}>
@@ -88,9 +90,9 @@ export function CleanLedgerSelection({ selection, locale, result, analysisLinks 
       <span data-ledger-field="probability" data-mobile-field="probability" data-leg-probability><span data-field-label data-number-label aria-hidden="true">Prob.</span><VisuallyHidden>{m.text("slips.probability")}: </VisuallyHidden>
         <strong data-field-value>{formatSlipProbability(selection.probability, m)}</strong></span>
     </div>
-    {savedResult && <span data-result data-mobile-result id={`${id}-result`}><span data-outcome-label>{outcome}</span>
+    <span data-result data-mobile-result id={`${id}-result`}><MatchStatus status={status} outcome={outcome} messages={m} snapshot={!state && !!savedResult} />
       {fixture.score && <span data-saved-score title={m.text("match.regulationScoreNote")}><VisuallyHidden>{m.text("match.regulationScoreNote")}: </VisuallyHidden>
-        {m.number(fixture.score.home)}–{m.number(fixture.score.away)}</span>}</span>}
+        {m.number(fixture.score.home)}–{m.number(fixture.score.away)}</span>}</span>
     {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{m.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
   </>;
   return <li data-compact-selection={selection.fixtureId} data-slip-selection={selection.fixtureId}>

@@ -37,11 +37,11 @@ def verify(origin, directory):
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
         outcome = match(r'data-outcome="(correct|incorrect|pending|void|unavailable)"', article).group(1)
         fixture_status = match(r'data-status="([^"]+)"', tag).group(1)
-        result = "upcoming" if fixture_status == "scheduled" else "live" if fixture_status == "live" else outcome
+        result = "upcoming" if fixture_status == "scheduled" else fixture_status if fixture_status in {"live", "postponed", "unknown"} else outcome
         assert article.count(f'data-result-badge="{result}"') == 1, "One truthful fixture/prediction result"
         if result != "live":
-            label = {"upcoming": "Upcoming", "correct": "Win", "incorrect": "Loss", "pending": "Pending",
-                "void": "Void", "unavailable": "—"}[result]
+            label = {"upcoming": "Upcoming", "correct": "Won", "incorrect": "Lost", "pending": "Pending",
+                "void": "Void", "unavailable": "—", "postponed": "Postponed", "unknown": "Unknown"}[result]
             match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
         if fixture_status != "scheduled":
             no_match(r'data-result-badge="upcoming"', article)
@@ -76,7 +76,7 @@ def verify(origin, directory):
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
-    for card, status, label in [("card-correct", "correct", "Win"), ("card-incorrect", "incorrect", "Loss"),
+    for card, status, label in [("card-correct", "correct", "Won"), ("card-incorrect", "incorrect", "Lost"),
         ("card-delayed", "upcoming", "Upcoming"),
         ("card-limited", "upcoming", "Upcoming")]:
         article = by_id[card]
@@ -119,8 +119,9 @@ def verify(origin, directory):
     no_match(r"data-selected-odds=|Odds: 1\.85|Odds: 2\.10", by_id["card-any"])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
-    # Live: the result tag shows the minute instead of Pending.
-    match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?<span data-pick-value[^>]*>67′</span></span>', by_id["card-pending"])
+    # Live: one progress label and glowing dot; the supplied minute stays with the score.
+    match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?data-match-live-dot[\s\S]*?<span data-pick-value[^>]*>Live</span></span>', by_id["card-pending"])
+    match(r'>67′</span>', by_id["card-pending"])
     no_match(r'data-result-badge="pending"', by_id["card-pending"])
     no_match(r">(?:vs|VS)<", by_id["card-pending"])
     checks = {

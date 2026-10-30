@@ -20,7 +20,7 @@ export const CleanLedgerRow = styled.div`
   [data-field-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
   [data-field-value] { font-size: 0.75rem; }
   [data-ledger-field="prediction"] strong { color: ${({ theme }) => theme.color.link}; }
-  [data-result] { display: flex; justify-content: flex-end; gap: 6px; font-size: 0.625rem; font-weight: 700; }
+  [data-result] { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   &[data-outcome="correct"] [data-result] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
   &[data-outcome="incorrect"] [data-result] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   &[data-outcome="void"] [data-result] { color: ${({ theme }) => theme.color.outcome.void.text}; }

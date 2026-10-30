@@ -1,6 +1,8 @@
 "use client";
 
-import styled, { keyframes } from "styled-components";
+import styled from "styled-components";
+import { LiveDot } from "@/components/ui/live-dot";
+import { StatusBadge as BaseStatusBadge } from "@/components/ui/status-badge";
 import { getReportingDate, toUtcIsoString, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import type { SavedSlipView } from "@/domain/saved-slips";
 import type { SlipStatus } from "@/domain/slip-status";
@@ -37,32 +39,15 @@ export function SlipHeaderDate({ publicationDay, publishedAt, locale }: SlipHead
   </PublicationTime> : null;
 }
 
-const progressGlow = keyframes`
-  from { transform: scale(0.8); opacity: 0.25; }
-  to { transform: scale(1.8); opacity: 0.65; }
+const ProgressDot = styled(LiveDot)`
+  margin-inline-end: 5px;
 `;
 
-/** A steady core with a separate halo that reverses direction at each endpoint. */
-const ProgressDot = styled.span`
-  position: relative; flex: none; inline-size: 5px; block-size: 5px; margin-inline-end: 5px;
-  border-radius: ${({ theme }) => theme.radius.circle}; background: currentColor;
-  &::before {
-    content: ""; position: absolute; inset: 0; border-radius: inherit;
-    background: currentColor; box-shadow: 0 0 5px 2px currentColor;
-    transform: scale(1.1); opacity: 0.45;
-    animation: ${progressGlow} 2s ease-in-out infinite alternate;
-    @media (prefers-reduced-motion: reduce) { animation: none; }
-  }
-`;
-
-const StatusBadge = styled.span`
+const StatusBadge = styled(BaseStatusBadge)`
   --slip-status-ink: ${({ theme }) => theme.color.outcome.pending.text};
   --slip-status-fill: ${({ theme }) => theme.color.outcome.pending.background};
-  display: inline-flex; flex: none; align-items: center; justify-content: center;
-  inline-size: 5.75rem; min-block-size: 1.5rem; padding: 3px 5px; box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--slip-status-ink) 30%, transparent); border-radius: ${({ theme }) => theme.radius.small};
-  background: var(--slip-status-fill); color: var(--slip-status-ink);
-  font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.2; text-align: center; white-space: nowrap;
+  --status-ink: var(--slip-status-ink);
+  --status-fill: var(--slip-status-fill);
   &[data-slip-status-value="not-started"] { --slip-status-ink: ${({ theme }) => theme.color.mutedText}; --slip-status-fill: ${({ theme }) => theme.color.surfaceMuted}; }
   &[data-slip-status-value="in-progress"] {
     --slip-status-ink: ${({ theme }) => theme.color.accent.blue.text};

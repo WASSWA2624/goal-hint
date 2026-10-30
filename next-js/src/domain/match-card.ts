@@ -1,6 +1,6 @@
 import { isMarketSelection, presentMarketProbabilities, type AcceptedMarket, type MarketFamily, type MarketSelection, type ProbabilityLabelKey } from "./markets.ts";
 import type { FixtureSnapshot, liveClockPhases } from "./fixture-snapshot.ts";
-import { isPlayedFinalStatus, selectionOccurred, type SettlementOutcomeStatus } from "./market-settlement.ts";
+import { isCompletedFixtureStatus, isPlayedFinalStatus, selectionOccurred, type SettlementOutcomeStatus } from "./market-settlement.ts";
 import { recommendationMarket, type DisplayedMarketPick } from "./recommendation-view.ts";
 import type { UtcInstant } from "./calendar.ts";
 
@@ -72,9 +72,9 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
     updateDelayed: forecast.updateDelayed === true };
 }
 
-/** Upcoming describes the fixture, without changing the selected market's audited settlement. */
+/** Show fixture progress until completion, without changing the market's audited settlement. */
 export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable") {
-  return status === "scheduled" ? "upcoming" : outcome;
+  return status === "scheduled" ? "upcoming" : isCompletedFixtureStatus(status) ? outcome : status;
 }
 
 /**

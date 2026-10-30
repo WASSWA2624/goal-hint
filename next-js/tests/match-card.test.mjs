@@ -40,7 +40,7 @@ test("display never settles live or final scores or invents missing forecasts", 
   for (const status of ["scheduled", "live", "postponed", "awarded", "unknown"]) assert.equal(hasFinalScoreStatus(status), false);
 });
 
-test("scheduled results show Upcoming with or without a pick, without altering market settlement", () => {
+test("cards show fixture progress until completion without altering market settlement", () => {
   const scheduled = cardFixture({ status: "scheduled", score: null }, "ai", null);
   const prediction = selectedCardPrediction(scheduled);
   assert.equal(prediction.status, "pending");
@@ -49,7 +49,12 @@ test("scheduled results show Upcoming with or without a pick, without altering m
   assert.equal(selectedCardPrediction(noPick), null);
   assert.equal(cardResultStatus(noPick.status, "unavailable"), "upcoming");
   assert.equal(createMessages().text("match.result.upcoming"), "Upcoming");
-  for (const status of ["live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"]) {
+  for (const status of ["scheduled", "live", "postponed", "unknown"]) {
+    for (const outcome of ["pending", "correct", "incorrect", "void", "unavailable"]) {
+      assert.equal(cardResultStatus(status, outcome), status === "scheduled" ? "upcoming" : status, `${status}: ${outcome}`);
+    }
+  }
+  for (const status of ["finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded"]) {
     for (const outcome of ["pending", "correct", "incorrect", "void", "unavailable"]) {
       assert.equal(cardResultStatus(status, outcome), outcome, `${status}: ${outcome}`);
     }
@@ -257,10 +262,9 @@ test("Clean ledger cards share the slip identity layout and retain separate sett
   assert.match(source, /<Teams data-ledger-teams>/u);
   assert.ok(source.indexOf("<Meta data-ledger-meta>") < source.indexOf("<Teams data-ledger-teams>"));
   const result = await styledBlock("Result");
-  assert.match(result.all, /theme\.color\.verdict\[/u);
   assert.match(result.tile, /\$\{table\} \{\s*grid-column: 11;\s*grid-row: 2;/u);
   assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 4;/u);
-  assert.match(source, /<\/Pick>\s*<Result aria-hidden="true"/u);
+  assert.match(source, /<\/Pick>\s*<Result data-result-badge=/u);
 });
 
 test("Clean ledger keeps market, compact pick, odds and probability in one mobile facts row", async () => {
