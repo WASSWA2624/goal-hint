@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
-import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
@@ -93,6 +93,7 @@ export const CriteriaPanel = styled(Surface)`
 `;
 export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
+  ${desktopStickyFilters}
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   [data-criteria-dialog] { background: var(--filter-panel-background); }
   ${mobileFilterPanel}

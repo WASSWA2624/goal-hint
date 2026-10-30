@@ -3,6 +3,7 @@
 import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
+import { desktopStickyFilters } from "@/components/ui/filter-chrome";
 import { controlFeedback, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
@@ -39,6 +40,7 @@ const toolbarFieldControl = css`
 /** Desktop-only exports keep the existing phone filter components independent. */
 export const Panel = styled.form`
   ${filterPanelColors}
+  ${desktopStickyFilters}
   display: grid;
   gap: 6px;
   inline-size: 100%;

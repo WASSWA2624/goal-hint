@@ -24,6 +24,15 @@ export const mobileFilterPanel = css`
   }
 `;
 
+/** Desktop toolbars stay below the app header and above scrolling result cards. */
+export const desktopStickyFilters = css`
+  ${media.desktop} {
+    position: sticky;
+    inset-block-start: var(--app-header-height, 3rem);
+    z-index: 15;
+  }
+`;
+
 export const filterControlColors = css`
   background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
   border-color: var(--filter-field-border, ${({ theme }) => theme.color.controlBorder});

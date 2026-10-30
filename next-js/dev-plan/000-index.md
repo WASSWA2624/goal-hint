@@ -10,6 +10,9 @@ plan is in `next-js/dev-plan/`. Run npm and Python commands from `next-js/`.
 Paths starting with `next-js/` or `prompts/`, and the specification
 `app-write-up.md`, are relative to the repository root.
 
+The desktop filter follow-up is tracked in
+[183 — Sticky desktop filter sections](183-sticky-desktop-filter-sections.md).
+
 ## How to run a prompt
 
 1. Start with **001** and run one file at a time. Read this index, the current specification, applicable repository instructions and the prompt before editing code.

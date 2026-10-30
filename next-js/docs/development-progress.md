@@ -5417,3 +5417,30 @@ were synthetic; no real payment, provider message, live database change or
 production deployment was performed. Local captures are ignored under
 `output/playwright/stepwise-payments/`. See
 [stepwise-payments.md](stepwise-payments.md) for the final journey and safeguards.
+
+## 183 — Sticky desktop filter sections — 30 October 2026
+
+Best Slips, Matches and Slip Builder reuse `desktopStickyFilters` from the
+shared filter chrome. At the existing desktop breakpoint, their complete
+panels stay below the shell header using its header-height variable, above
+the result cards and below the navigation. Best Slips adds an opaque page
+fill; the other panels keep their existing theme surfaces. Date/result controls,
+applied summaries and Builder criteria remain grouped. Mobile flow is unchanged.
+
+Changed-file ESLint with zero warnings and strict TypeScript checking passed
+under Node 24.18.1. Playwright verified all three screens at 1440x900 and
+1024x768 in both themes after a 600px scroll: each panel stayed at 48px below
+the header, remained above the cards, fit in the viewport and introduced no
+horizontal page overflow. The three date dialogs opened above the panels,
+closed with Escape and restored focus. The Best Slips date dropdown also
+remained unobscured and restored focus. At 375px, Best Slips and Builder
+filters remained static and Matches retained its separate mobile controls;
+none introduced page overflow.
+
+Best Slips and Matches used the running local demo's existing long lists.
+Builder had no generated results in the anonymous view, so its scroll checks
+used temporary browser-only space inside the same parent; that space was
+removed afterwards. Reviewed Light/Dark captures and command logs are ignored
+under `output/playwright/desktop-filters-*`. No account, data, native binary,
+dependency or production deployment change was required. See
+[plan 183](../dev-plan/183-sticky-desktop-filter-sections.md).
