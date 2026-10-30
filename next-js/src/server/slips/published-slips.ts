@@ -6,7 +6,8 @@ import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability
 import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
-import { savedSlipOutcome, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
+import { savedSlipOutcome, savedSlipStatus, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
+import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
 import { serializeSlipCriteria, type BuiltSlip } from "../../domain/slip-builder.ts";
@@ -155,15 +156,17 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const snapshots = await readSnapshots(tx, rowsOfSlips);
         if (snapshots.length !== value.count || rowsOfSlips.some((row, index) => row.rank !== index + 1)) fail("unavailable");
         const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), await databaseTime(tx));
-        const statistics = { total: snapshots.length, won: 0, lost: 0, pending: 0, void: 0 };
-        snapshots.forEach((snapshot) => {
-          statistics[savedSlipOutcome(snapshot.slip, results)]++;
+        const statistics = { total: snapshots.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
+        const statuses = snapshots.map((snapshot) => {
+          const outcome = savedSlipOutcome(snapshot.slip, results), status = savedSlipStatus(snapshot.slip, results, outcome);
+          statistics[slipStatusCategory(status)]++;
+          return { outcome, status };
         });
         return { day: parseReportingDate(day), state: "generated", slips: bestSlipViews(snapshots.map((snapshot) =>
           ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true,
           slipMatchStatesFromResults(snapshots.flatMap((snapshot) => snapshot.slip.selections), results)).map((view, index) => ({ ...view,
             id: rowsOfSlips[index]!.id, publicationDay: parseReportingDate(value.day), publishedAt: value.publishedAt,
-            outcome: savedSlipOutcome(view.slip!, results) })),
+            ...statuses[index]! })),
           searchLimited: value.searchLimited, partialCoverage: value.partialCoverage, statistics };
       });
     },
@@ -181,7 +184,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         if (!allDates && publications.length > publicationLimit) fail("unavailable");
         const hasOlder = allDates && publications.length > publicationLimit;
         const selected = publications.slice(0, publicationLimit), parents = new Map(selected.map((row) => [row.id, publication(row)]));
-        const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0 };
+        const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const views: BestSlipView[] = [];
         let total = 0;
         const offset = (query.page - 1) * bestSlipsQueryRules.pageSize;
@@ -210,15 +213,16 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             .sort((left, right) => right.parent.day.localeCompare(left.parent.day) || left.row.rank - right.row.rank);
           for (const { row, snapshot, parent } of ordered) {
             const slipResults = snapshot.slip.selections.flatMap((selection) => resultsByFixture.get(selection.fixtureId) ?? []);
-            const outcome = savedSlipOutcome(snapshot.slip, slipResults);
-            statistics.total++; statistics[outcome]++;
+            const outcome = savedSlipOutcome(snapshot.slip, slipResults), status = savedSlipStatus(snapshot.slip, slipResults, outcome);
+            const category = slipStatusCategory(status);
+            statistics.total++; statistics[category]++;
             if (cursor && (parent.day > cursor.day || parent.day === cursor.day && row.rank <= cursor.rank)) continue;
-            if (query.status !== "all" && outcome !== query.status) continue;
+            if (query.status !== "all" && category !== query.status) continue;
             const position = total++;
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
             const slip: BestSlip = { ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability };
             const [view] = bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, slipResults));
-            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome });
+            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome, status });
           }
         }
         const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;

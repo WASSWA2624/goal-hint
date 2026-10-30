@@ -25,3 +25,8 @@ test('optional coverage and void counts do not change ordinary won, lost and pen
   assert.deepEqual(predictedPerformanceSummary({ total: 10, won: 6, lost: 3, pending: 1 }),
     { total: 10, won: .6, lost: .3, pending: .1 });
 });
+
+test('distinct cancelled slips remain in the denominator without being counted as void twice', () => {
+  assert.deepEqual(predictedPerformanceSummary({ total: 8, won: 2, lost: 1, pending: 1, void: 1, cancelled: 3 }),
+    { total: 8, won: .25, lost: .125, pending: .125 });
+});

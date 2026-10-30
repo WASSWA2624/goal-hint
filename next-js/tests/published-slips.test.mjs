@@ -111,7 +111,7 @@ test('first qualified publication preserves quotes, model evidence and original 
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
   assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
   assert.deepEqual(gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' }).slips,
-    publicViews.map((view, index) => ({ ...view, id: f.rows[index].id, publicationDay: today, publishedAt: now, outcome: 'pending' })));
+    publicViews.map((view, index) => ({ ...view, id: f.rows[index].id, publicationDay: today, publishedAt: now, outcome: 'pending', status: 'in-progress' })));
   assert.doesNotMatch(JSON.stringify(publicViews), /original-1|home-win|selections|cycleId|revisionId|fixtureId/);
 });
 
@@ -142,9 +142,11 @@ test('pagination uses the whole publication-period denominator and retains void 
 
 test('daily slip performance includes every published slip and updates from original-cycle results', async () => {
   const f = fixture(); await f.publish({ slips: [slip(1), slip(2), slip(3), slip(4)] });
-  assert.deepEqual((await f.store.day(today)).statistics, { total: 4, won: 0, lost: 0, pending: 4, void: 0 });
+  assert.deepEqual((await f.store.day(today)).statistics, { total: 4, won: 0, lost: 0, pending: 4, void: 0, cancelled: 0 });
   f.outcomes.set(fixtureId(1), 'won'); f.outcomes.set(fixtureId(2), 'lost'); f.outcomes.set(fixtureId(3), 'void');
-  assert.deepEqual((await f.store.day(today)).statistics, { total: 4, won: 1, lost: 1, pending: 1, void: 1 });
+  const day = await f.store.day(today);
+  assert.deepEqual(day.statistics, { total: 4, won: 1, lost: 1, pending: 1, void: 0, cancelled: 1 });
+  assert.equal(day.slips.find((view) => view.outcome === 'void').status, 'cancelled');
 });
 
 test('a lost leg settles aggregate loss immediately while active selections and quotes stay private', async () => {
@@ -152,7 +154,7 @@ test('a lost leg settles aggregate loss immediately while active selections and 
   const mixed = { ...first, selections: [{ ...first.selections[0], odds: '2.00' }, { ...second.selections[0], odds: '2.50' }] };
   const f = fixture(); await f.publish({ slips: [mixed] });
   f.outcomes.set(fixtureId(1), 'lost');
-  assert.deepEqual((await f.store.day(today)).statistics, { total: 1, won: 0, lost: 1, pending: 0, void: 0 });
+  assert.deepEqual((await f.store.day(today)).statistics, { total: 1, won: 0, lost: 1, pending: 0, void: 0, cancelled: 0 });
   const history = await f.store.history(query);
   assert.deepEqual(history.records, []); assert.equal(history.statistics.lost, 1); assert.equal(history.statistics.pending, 0);
   assert.equal(history.statistics.returnsSampleCount, 0); assert.equal(history.statistics.meanQuotedOdds, null);

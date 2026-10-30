@@ -234,7 +234,7 @@ test('filtered API rejects malformed or reversed criteria before accessing priva
   let reads = 0;
   const handler = createBestSlipsHandler({ now: () => now, access: async () => { reads++; return full; },
     browse: async () => { reads++; throw new Error('must not read'); } });
-  for (const search of ['period=unknown', 'status=void', 'period=custom&from=2026-02-30&to=2026-03-01',
+  for (const search of ['period=unknown', 'status=unknown', 'period=custom&from=2026-02-30&to=2026-03-01',
     'period=custom&from=2026-10-29&to=2026-10-28', 'period=today&period=yesterday', 'page=0', 'period=all&cursor=broken']) {
     const response = await handler(new Request(`https://goalhint.com/api/best-slips?${search}`));
     assert.equal(response.status, 400, search);

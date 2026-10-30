@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { CalendarIcon, ResetIcon } from "@/components/ui/icons";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
+import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
-import { AppliedSummary, DateButton, DateError, DateFields, DateGroup, DateHint, FiltersPanel,
+import { AppliedDetails, AppliedSummary, DateButton, DateError, DateFields, DateGroup, DateHint, FiltersPanel,
   RangeButton, RangeDialog, ResetButton, ResultButton, ResultGroup, ToggleRow } from "./best-slips-filter-styles";
 
 const dateOptions = [
@@ -14,12 +15,13 @@ const dateOptions = [
   ["next3", "feed.date.next-3-days"], ["next7", "feed.date.next-7-days"], ["next30", "feed.date.next-30-days"],
   ["custom", "bestSlips.filters.customRange"],
 ] as const satisfies readonly (readonly [BestSlipsQuery["period"], TextKey])[];
-const results = ["all", "won", "lost", "pending"] as const;
+const results = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
 type DateDraft = Readonly<{ from: string; to: string }>;
 
 /** Desktop-only compact date/result controls; custom dates stay a local draft until Apply. */
-export function BestSlipsFilters({ query, today, locale, entitled = false, busy = false, onChange }: {
+export function BestSlipsFilters({ query, today, locale, entitled = false, busy = false, statistics, countSummary, onChange }: {
   query: BestSlipsQuery; today: ReportingDate; locale: string; entitled?: boolean; busy?: boolean; onChange: (query: BestSlipsQuery) => void;
+  statistics?: PerformanceSummaryCounts | null | undefined; countSummary?: ReactNode;
 }) {
   const m = createMessages(locale), prefix = useId();
   const [open, setOpen] = useState(false), [dates, setDates] = useState<DateDraft>({ from: today, to: today });
@@ -75,18 +77,29 @@ export function BestSlipsFilters({ query, today, locale, entitled = false, busy 
       </DateButton>)}
     </DateGroup>
       <ResultGroup role="group" aria-label={m.text("bestSlips.filters.result")}>
-        {results.map((status) => <ResultButton key={status} type="button" $status={status} aria-pressed={query.status === status}
-          onClick={() => changeStatus(status)} data-slip-result={status}>{m.text(`bestSlips.filters.${status}`)}</ResultButton>)}
+        {results.map((status) => {
+          const count = statistics ? m.number(status === "all" ? statistics.total : statistics[status] ?? 0) : "—";
+          return <ResultButton key={status} type="button" $status={status} aria-pressed={query.status === status}
+            aria-label={m.text("bestSlips.filters.resultCount", { result: m.text(`bestSlips.filters.${status}`), count })}
+            title={statistics ? m.text("bestSlips.filters.countScope") : m.text("bestSlips.filters.countUnavailable")}
+            onClick={() => changeStatus(status)} data-slip-result={status}>
+            <span>{m.text(status === "all" ? "bestSlips.filters.allShort" : `bestSlips.filters.${status}`)}</span>
+            <strong data-slip-result-count={status}>{count}</strong>
+          </ResultButton>;
+        })}
       </ResultGroup>
       <ResetButton type="button" onClick={() => onChange(defaultBestSlipsQuery(entitled))}><ResetIcon />{m.text("slips.reset")}</ResetButton>
     </ToggleRow>
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
+      <AppliedDetails>
       <span>{m.text("bestSlips.filters.applied")}</span>
       {query.period === "custom" && currentRange ? <RangeButton type="button" onClick={(event) => openDates(event.currentTarget)}
       aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} aria-label={m.text("bestSlips.filters.editDates", { range: currentRange })}>
       <CalendarIcon />{currentRange}
       </RangeButton> : <span>{periodLabel}{currentRange && ` · ${currentRange}`}</span>}
       <span aria-hidden="true">·</span><span data-applied-result>{m.text(`bestSlips.filters.${query.status}`)}</span>
+      </AppliedDetails>
+      {countSummary}
     </AppliedSummary>
     {open && <RangeDialog id={dialogId} group="best-slips-dates" open={open} title={m.text("bestSlips.filters.customRange")}
       onApply={applyDates} onCancel={closeDates} onReset={() => {

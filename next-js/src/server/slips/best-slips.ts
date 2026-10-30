@@ -17,6 +17,7 @@ export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): Be
     ...(view.publicationDay !== undefined ? { publicationDay: view.publicationDay } : {}),
     ...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {}),
     ...(view.outcome !== undefined ? { outcome: view.outcome } : {}),
+    ...(view.status !== undefined ? { status: view.status } : {}),
     ...((access.tier === "full" || view.publicationDay !== undefined && view.publicationDay < result.day) && view.slip ? { slip: view.slip,
       ...(view.matchStates ? { matchStates: view.slip.selections.flatMap((selection) => {
         const state = slipMatchStateForSelection(selection, view.matchStates); return state ? [state] : [];

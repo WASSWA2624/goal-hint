@@ -57,10 +57,11 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
   return <SlipStack>
     <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
-    {desktop && <BestSlipsFilters query={browse.query} today={result.day} locale={locale} entitled={browse.entitled} busy={browse.loading} onChange={browse.change} />}
+    {desktop && <BestSlipsFilters query={browse.query} today={result.day} locale={locale} entitled={browse.entitled} busy={browse.loading}
+      statistics={content?.statistics} countSummary={content && (!requiresSubscription || content.slips.length > 0)
+        ? <BestSlipsSummary result={content} period={period} locale={locale} /> : null} onChange={browse.change} />}
     {requiresSubscription && <BestSlipsAccess signedIn={signedIn} locale={locale} />}
-    {content?.statistics && <PerformanceSummary counts={content.statistics} locale={locale} kind="slips" period={period} />}
-    {desktop && content && (!requiresSubscription || content.slips.length > 0) && <BestSlipsSummary result={content} period={period} locale={locale} />}
+    {!desktop && content?.statistics && <PerformanceSummary counts={content.statistics} locale={locale} kind="slips" period={period} />}
     {browse.loading ? <CriteriaPanel role="status" aria-busy="true">{m.text("bestSlips.filters.loading")}</CriteriaPanel>
     : browse.failed ? <CriteriaPanel role="alert"><Stack $gap="sm"><p>{m.text("bestSlips.filters.dataUnavailable")}</p>
       <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton></Stack></CriteriaPanel>
@@ -82,11 +83,13 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
         {view.slip ? <SlipTable index={view.rank - 1} locale={locale}
         {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
         {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
+        {...(view.status ? { status: view.status } : {})}
         shareSource={{ source: "best", day: view.publicationDay ?? content.day, slipId: view.slip.id }}
         slip={view.slip} {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
           totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}
           {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
-          {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})} collapsible={false}>
+          {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
+          {...(view.status ? { status: view.status } : {})} collapsible={false}>
         {null}
       </SummaryDisclosure>}</div>)}</SlipList>
       </SlipMatchRefreshProvider>

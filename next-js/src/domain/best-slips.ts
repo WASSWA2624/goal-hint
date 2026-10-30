@@ -7,6 +7,7 @@ import type { SlipBuildState } from "./slip-page.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-state.ts";
 import type { BestSlipsQuery } from "./best-slips-query.ts";
+import type { SlipStatus } from "./slip-status.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
 
@@ -21,6 +22,7 @@ export type BestSlipSummary = Readonly<{
 export type BestSlipView = BestSlipSummary & Readonly<{
   slip?: BestSlip; matchStates?: readonly SlipMatchState[];
   id?: string; publicationDay?: ReportingDate; publishedAt?: number; outcome?: "won" | "lost" | "pending" | "void";
+  status?: SlipStatus;
 }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];

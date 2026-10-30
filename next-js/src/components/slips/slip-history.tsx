@@ -20,7 +20,7 @@ export function SlipHistory({ slips, locale, statistics, period }: {
     <Note>{m.text("slips.historyHint")}</Note>
     {slips?.length ? <SlipStack>{slips.map((item, index) => <div key={item.id}>
       <SlipTable slip={item.slip} index={index} locale={locale} results={item.results}
-        publishedAt={Date.parse(item.savedAt)} outcome={item.outcome} />
+        publishedAt={Date.parse(item.savedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
     </div>)}</SlipStack> : <EmptyState headingLevel={3} title={m.text(slips === null ? "slips.historyUnavailable" : "slips.historyEmpty")} />}
   </Results>;
 }

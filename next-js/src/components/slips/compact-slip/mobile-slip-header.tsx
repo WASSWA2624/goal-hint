@@ -3,24 +3,25 @@
 import { useId } from "react";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipStatus } from "@/domain/slip-status";
 import { createMessages } from "@/i18n/messages";
 import { formatSlipProbability } from "../slip-format";
 import { MobileHeaderRow } from "./mobile-slip-header-styles";
 import { SlipHeaderDate, SlipStatusBadge, type SlipHeaderPublication } from "../slip-header-meta";
 
 /** Shared by full slips, aggregate-only summaries and the design comparison. */
-export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount, index, locale, outcome = "pending",
+export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount, index, locale, outcome = "pending", status = outcome,
   headingId, headerOnly = false, showRank = false, className, variant, publicationDay, publishedAt }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
-  outcome?: SavedSlipView["outcome"]; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string;
+  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string;
 } & SlipHeaderPublication) {
   const m = createMessages(locale), id = useId(), noteId = `${id}-probability-note`;
-  const label = m.text(`slips.header.${outcome}`);
+  const label = m.text(`slips.header.${status}`);
   const statusCaption = m.text("slips.header.status");
   const number = m.number(index + 1), slipTitle = m.text("slips.slipTitle", { number });
   return <MobileHeaderRow as={headerOnly ? "header" : "summary"} className={className} data-slip-summary data-mobile-slip-header
       data-slip-toggle={headerOnly ? undefined : ""} data-header-summary data-header-variant={variant}
-      data-header-outcome={outcome} data-header-only={headerOnly ? "" : undefined} data-large-odds={totalOdds.length > 5 ? "" : undefined}
+      data-header-outcome={outcome} data-header-status-value={status} data-header-only={headerOnly ? "" : undefined} data-large-odds={totalOdds.length > 5 ? "" : undefined}
       data-header-publication={publicationDay || publishedAt !== undefined ? "" : undefined}
       aria-describedby={noteId}>
       <h3 id={headingId ?? `${id}-heading`} data-header-identity data-dense-identity={index >= 99 ? "" : undefined}>
@@ -48,7 +49,7 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
         {!variant && <>
           <span data-header-label aria-hidden="true">{statusCaption}</span>
         </>}
-        {variant ? <span data-status-full>{label}</span> : <SlipStatusBadge outcome={outcome} locale={locale} />}
+        {variant ? <span data-status-full>{label}</span> : <SlipStatusBadge outcome={outcome} status={status} locale={locale} />}
       </span>
       <span data-header-chevron aria-hidden="true" />
       <span id={noteId} hidden>{m.text("slips.averageHint")}</span>

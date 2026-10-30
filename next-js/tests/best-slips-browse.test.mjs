@@ -5,6 +5,7 @@ import { bestSlipsQueryRules, parseBestSlipsQuery } from '../src/domain/best-sli
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
 import { createPublishedSlips } from '../src/server/slips/published-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
+import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { liveRecord, now, today as dayString } from './helpers/live-refresh-fixtures.mjs';
 
@@ -56,8 +57,11 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
       resultBatches.push(selections.length);
       const results = selections.map((selection) => {
         const outcome = outcomes.get(selection.fixtureId);
+        const active = ['pending', 'not-started', 'in-progress', 'unknown'].includes(outcome);
         return { fixtureId: selection.fixtureId, family: selection.family, selection: selection.selection, forecast: selection.forecast,
-          completed: outcome !== 'pending', status: outcome === 'pending' ? 'scheduled' : outcome === 'void' ? 'canceled' : 'finished-regulation',
+          completed: !active, status: outcome === 'pending' || outcome === 'not-started' ? 'scheduled'
+            : outcome === 'in-progress' ? 'live' : outcome === 'unknown' ? 'unknown'
+              : outcome === 'void' ? 'canceled' : outcome === 'void-abandoned' ? 'abandoned' : 'finished-regulation',
           regulationVerified: true, regulationHome: outcome === 'lost' ? 0 : 2, regulationAway: 1 };
       });
       return replacementCycles ? [...results.map((result) => ({ ...result, forecast: { ...result.forecast, cycleId: uuid(999999) },
@@ -71,13 +75,39 @@ const query = (input = {}) => parseBestSlipsQuery(input, today);
 test('publication browsing filters original outcomes before pagination and retains whole-period counts', async () => {
   const f = fixture(7, 8), result = await f.store.browse(query({ period: 'last7', status: 'won', page: '2' }), today);
   assert.equal(result.browse.total, 14); assert.deepEqual(result.slips, []); assert.equal(result.browse.hasMore, false);
-  assert.deepEqual(result.statistics, { total: 56, won: 14, lost: 14, pending: 14, void: 14 });
+  assert.deepEqual(result.statistics, { total: 56, won: 14, lost: 14, pending: 14, void: 0, cancelled: 14 });
   const pending = await f.store.browse(query({ period: 'last7', status: 'pending' }), today);
   assert.equal(pending.slips.length, 14); assert.ok(pending.slips.every((view) => view.outcome === 'pending' && view.slip && view.matchStates.length));
   assert.equal(pending.slips[0].publicationDay, today); assert.equal(pending.slips.at(-1).publicationDay, addReportingDays(today, -6));
   assert.equal(pending.slips[0].publishedAt, Date.parse(`${today}T00:00:01+03:00`));
   const future = await f.store.browse(query({ period: 'next7' }), today);
   assert.equal(future.browse.total, 0); assert.equal(future.state, 'generated');
+});
+
+test('void, cancelled and pending progress categories filter before pagination with one whole-period denominator', async () => {
+  const f = fixture(7, 28);
+  const statuses = ['won', 'lost', 'void-abandoned', 'void', 'not-started', 'in-progress', 'unknown'];
+  [...f.outcomes.keys()].forEach((id, index) => f.outcomes.set(id, statuses[index % statuses.length]));
+  for (const status of ['void', 'cancelled', 'pending']) {
+    const result = await f.store.browse(query({ period: 'last7', status, page: '2' }), today);
+    assert.deepEqual(result.statistics, { total: 196, won: 28, lost: 28, pending: 84, void: 28, cancelled: 28 });
+    assert.equal(result.browse.total, status === 'pending' ? 84 : 28);
+    assert.equal(result.slips.length, status === 'pending' ? 20 : 8);
+    assert.ok(result.slips.every((view) => status === 'pending'
+      ? ['not-started', 'in-progress', 'pending'].includes(view.status) && view.outcome === 'pending'
+      : view.status === status && view.outcome === 'void'));
+    assert.equal(result.statistics.total, ['won', 'lost', 'pending', 'void', 'cancelled'].reduce((sum, key) => sum + result.statistics[key], 0));
+  }
+  const current = await f.store.browse(query(), today), gated = gateBestSlips(current, free);
+  assert.deepEqual(gated.slips.map((view) => view.status), current.slips.map((view) => view.status));
+  assert.doesNotMatch(JSON.stringify(gated), /private-original|selections|fixtureId|cycleId|revisionId|home-win/);
+  let accessChecks = 0;
+  const response = await createBestSlipsHandler({ now: () => now, browse: async () => current,
+    access: async () => ++accessChecks === 1 ? full : free })(new Request('https://goalhint.test/api/best-slips?period=today'));
+  const expired = await response.json();
+  assert.equal(response.status, 200); assert.equal(expired.entitled, false);
+  assert.deepEqual(expired.slips.map((view) => view.status), current.slips.map((view) => view.status));
+  assert.doesNotMatch(JSON.stringify(expired), /private-original|selections|fixtureId|cycleId|revisionId|home-win/);
 });
 
 test('exact custom ranges resolve forecast results in bounded batches without truncating older publications', async () => {

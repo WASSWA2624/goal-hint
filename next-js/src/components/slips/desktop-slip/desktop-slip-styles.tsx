@@ -10,7 +10,7 @@ export const DesktopSlipBase = styled.div`
   min-inline-size: 0; position: relative;
 
   &&& [data-slip-summary] {
-    grid-template-columns: minmax(0, 1fr) auto auto auto 4.5rem;
+    grid-template-columns: minmax(0, 1fr) auto auto auto 5.75rem;
     grid-template-areas: "identity odds count average status"; grid-template-rows: auto;
     min-block-size: 2.25rem; block-size: auto;
     column-gap: 14px; row-gap: 0; padding: 4px 32px 4px 12px;
@@ -28,11 +28,11 @@ export const DesktopSlipBase = styled.div`
   &&& [data-summary-status] { grid-area: status; justify-self: end; }
   &&& [data-summary-action-space] { grid-area: action; inline-size: 4.5rem; }
   &&&[data-shareable] [data-slip-summary] {
-    grid-template-columns: minmax(0, 1fr) auto auto auto 4.5rem 4.5rem;
+    grid-template-columns: minmax(0, 1fr) auto auto auto 4.5rem 5.75rem;
     grid-template-areas: "identity odds count average action status";
   }
   [data-slip-header-action] {
-    position: absolute; inset-inline-end: calc(32px + 4.5rem + 14px); inset-block-start: 4px; z-index: 2;
+    position: absolute; inset-inline-end: calc(32px + 5.75rem + 14px); inset-block-start: 4px; z-index: 2;
   }
 
   ${desktopMatchBaseStyles}
@@ -41,7 +41,7 @@ export const DesktopSlipBase = styled.div`
   }
   @media (max-width: 79.99rem) {
     &&& [data-slip-summary] { column-gap: 9px; padding-inline-start: 8px; }
-    [data-slip-header-action] { inset-inline-end: calc(32px + 4.5rem + 9px); }
+    [data-slip-header-action] { inset-inline-end: calc(32px + 5.75rem + 9px); }
   }
 `;
 

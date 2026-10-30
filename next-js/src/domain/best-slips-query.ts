@@ -2,7 +2,7 @@ import { addReportingDays, parseReportingDate, validateReportingDateRange, type 
 import { bestSlipsRules } from "./best-slips.ts";
 
 export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next3", "next7", "next30", "all", "custom"] as const;
-export const bestSlipsStatuses = ["all", "won", "lost", "pending"] as const;
+export const bestSlipsStatuses = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
 export type BestSlipsPeriod = typeof bestSlipsPeriods[number];
 export type BestSlipsStatus = typeof bestSlipsStatuses[number];
 export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: 20, scanDays: 31, maximumPage: 9999 });

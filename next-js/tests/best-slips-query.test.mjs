@@ -36,7 +36,7 @@ test('custom ranges accept same-day and a full leap year, while serialization re
 });
 
 test('invalid or repeated values fail before reading publications', () => {
-  for (const input of [{ period: 'unknown' }, { status: 'void' }, { page: '0' }, { page: '1.5' }, { page: '10000' },
+  for (const input of [{ period: 'unknown' }, { status: 'unknown' }, { page: '0' }, { page: '1.5' }, { page: '10000' },
     { period: ['today', 'all'] }, new URLSearchParams('status=won&status=lost'), { period: 'custom' },
     { period: 'custom', from: '2026-02-30', to: today }, { period: 'custom', from: today, to: '2026-10-28' },
     { period: 'custom', from: '2024-01-01', to: '2025-01-01' }]) {
@@ -46,6 +46,14 @@ test('invalid or repeated values fail before reading publications', () => {
   invalid({ period: 'custom' }, 'invalid-date');
   invalid({ period: 'custom', from: today, to: '2026-10-28' }, 'invalid-range');
   invalid({ period: 'custom', from: '2024-01-01', to: '2025-01-01' }, 'range-too-large');
+});
+
+test('void and cancelled result filters survive parsing and serialization', () => {
+  for (const status of ['void', 'cancelled']) {
+    const query = parseBestSlipsQuery({ period: 'last30', status, page: '2' }, today);
+    assert.equal(query.status, status);
+    assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(query), today), query);
+  }
 });
 
 test('All dates cursors retain within-publication ranks and reject arbitrary cursor data', () => {

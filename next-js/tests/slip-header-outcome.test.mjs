@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { slipOutcome } from '../src/domain/slip-outcome.ts';
-import { slipHeaderOutcome } from '../src/components/slips/slip-header-outcome.ts';
+import { slipHeaderOutcome, slipHeaderState } from '../src/components/slips/slip-header-outcome.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 
 const { slip: original } = slipForecastFixture({ fixtureId: '10000000-0000-4000-8000-000000000001' });
@@ -62,4 +62,23 @@ test('shared headers preserve approved aggregate fallbacks without guessing a re
   assert.equal(slipHeaderOutcome(slip), 'pending');
   assert.equal(slipHeaderOutcome(slip, [], undefined, 'won'), 'pending');
   assert.equal(slipHeaderOutcome(slip, [result(0, 'correct'), result(1, 'void'), result(2, 'correct')]), 'void');
+});
+
+test('header progress follows matching live observations and a verified loss still takes precedence', () => {
+  const states = slip.selections.map((selection) => ({ fixtureId: selection.fixtureId, family: selection.family,
+    selection: selection.selection, status: 'scheduled', score: null, liveClock: null, outcome: 'pending' }));
+  assert.deepEqual(slipHeaderState(slip, undefined, states), { outcome: 'pending', status: 'not-started' });
+  const live = [{ ...states[0], status: 'live' }, ...states.slice(1)];
+  assert.deepEqual(slipHeaderState(slip, undefined, live, 'pending', 'not-started'), { outcome: 'pending', status: 'in-progress' });
+  const lost = [{ ...states[0], status: 'finished-regulation', outcome: 'incorrect' }, ...states.slice(1)];
+  assert.deepEqual(slipHeaderState(slip, undefined, lost, 'pending', 'in-progress'), { outcome: 'lost', status: 'lost' });
+});
+
+test('header cancellation distinguishes all-cancelled slips from mixed void settlements', () => {
+  const canceled = slip.selections.map((selection) => ({ fixtureId: selection.fixtureId, family: selection.family,
+    selection: selection.selection, status: 'canceled', score: null, liveClock: null, outcome: 'void' }));
+  assert.deepEqual(slipHeaderState(slip, undefined, canceled), { outcome: 'void', status: 'cancelled' });
+  const mixed = [{ ...canceled[0], status: 'finished-regulation', outcome: 'correct' }, ...canceled.slice(1)];
+  assert.deepEqual(slipHeaderState(slip, undefined, mixed), { outcome: 'void', status: 'void' });
+  assert.deepEqual(slipHeaderState(slip, undefined, undefined, 'void', 'cancelled'), { outcome: 'void', status: 'cancelled' });
 });

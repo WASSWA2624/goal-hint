@@ -1,16 +1,9 @@
 "use client";
 
-import styled from "styled-components";
 import { useEffect, useRef } from "react";
 import type { BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
 import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
-
-const Summary = styled(FiltersRow)`
-  justify-content: space-between;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-`;
 
 export function BestSlipsSummary({ result, period, locale }: { result: BestSlipsResult; period: string; locale: string }) {
   const m = createMessages(locale), browse = result.browse;
@@ -18,11 +11,11 @@ export function BestSlipsSummary({ result, period, locale }: { result: BestSlips
   const first = result.slips.length ? ((browse?.query.page ?? 1) - 1) * (browse?.pageSize ?? result.slips.length) + 1 : 0;
   const dates = browse?.total === null ? browse.from && browse.to
     ? m.text("bestSlips.filters.allDatesRange", { from: m.reportingDateMedium(browse.from), to: m.reportingDateMedium(browse.to) }) : period : null;
-  return <Summary data-best-slips-summary aria-live="polite">
+  return <span data-best-slips-summary>
     <span>{total === null ? m.text("bestSlips.filters.shown", { count: m.number(result.slips.length) })
       : m.text("bestSlips.filters.showing", { first: m.number(first), last: m.number(result.slips.length ? first + result.slips.length - 1 : 0), total: m.number(total) })}</span>
-    {dates && <span>{dates}</span>}
-  </Summary>;
+    {dates && <span> · {dates}</span>}
+  </span>;
 }
 
 export function BestSlipsPagination({ previous, next, canPrevious, canNext, page, busy, locale }: {

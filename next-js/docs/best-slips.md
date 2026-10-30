@@ -49,10 +49,15 @@ Native expansion works before hydration.
 Shared slip headers place the actual publication date/time after the slip
 number, followed by Top ranked, with no separate date/status row above the card.
 Saved history uses its recorded save time. Date-only metadata never invents a
-publication time. Desktop spells out Average match probability; Share precedes
-a fixed-width, square Won/Lost/Pending badge and the far-right disclosure
-arrow. Void remains a truthful exceptional outcome. Header outcomes follow the
-same original-cycle observations as the selection rows. Completed history and
+publication time. Desktop uses Average probability; Share precedes
+a fixed-width, square status badge and the far-right disclosure arrow.
+Header statuses follow the same original-cycle observations as the selection
+rows: Not started requires recorded scheduled/void-cancelled legs; In progress
+means an original leg has started while the slip remains unsettled. Won/Lost
+retain adjudicated outcomes, including an early loss. Cancelled requires every
+original leg to be cancelled and void; mixed void outcomes remain Void. Pending
+is the honest fallback when recorded progress is unknown. These labels never
+change stored settlement outcomes. Completed history and
 performance use these same headers without repeating their date or status.
 On desktop, Best slips, builder results and completed-slip history use Subtle
 dividers: a slim single-row header and one line per selection, initially
@@ -88,8 +93,14 @@ so it cannot replace a user's page change.
 ## Desktop date and result filters
 
 The desktop filter section has one toolbar with two distinct segmented toggle
-groups: dates and All slips/Won/Lost/Pending. Reset stays on the same row as a
-separate outlined icon action. The applied-filter summary sits below it.
+groups: dates and All/Won/Lost/Pending/Void/Cancelled. Result toggles show their
+whole-date-range counts before result filtering or pagination. Pending groups
+Not started, In progress and unknown Pending slips; Void excludes Cancelled so
+the five categories add up to All. Unavailable counts use a dash rather than
+inventing zeros. Reset stays on the same row as a
+separate outlined icon action. The applied-filter summary and displayed slip
+range share one row below it. There is no separate desktop Overall Performance
+panel or repeated date; mobile retains its compact performance strip.
 The section uses the shared Matches palette, square controls, quiet horizontal
 edges, and no vertical panel borders. Date selection uses a solid brand fill;
 result selection uses neutral, green, red, or amber, with matching resting
@@ -101,10 +112,10 @@ Dates select the slip's publication day in EAT. Buttons appear in this order:
 Last 30 days, Last 7 days, Last 3 days, Yesterday, Today, Tomorrow, Next 3 days,
 Next 7 days, Next 30 days, and Custom range. The custom-range popup retains its
 existing controls; its current dates remain editable in the summary row.
-Below 1280px, day ranges use short labels such as Last 30d to keep both groups
+Below 1440px, day ranges use short labels such as Last 30d to keep both groups
 and Reset together. Full labels remain the accessible button names and hover
 titles. Date controls can scroll horizontally only if their container becomes
-too narrow; result controls and Reset remain visible.
+too narrow, with a thin scrollbar; result controls and Reset remain visible.
 Past periods include today; future periods start tomorrow. Custom bounds are
 inclusive and limited to 366 days. Reset restores Today and All slips for
 subscribers, or Yesterday and All slips for visitors and expired members. Dates
@@ -127,7 +138,8 @@ all-history total. A scan with no matching outcomes still offers continuation
 when older publications remain. Date/result changes reset pagination.
 
 Outcome filtering uses the original recorded forecast cycles, including a loss
-before every other selection settles. Void remains visible under All slips.
+before every other selection settles. Void and Cancelled have their own filters
+and remain visible under All slips.
 Statistics cover the whole selected explicit date range, independent of the
 result filter and current page. All dates omits partial-period statistics.
 Locked current/future rows include only approved aggregates, the publication

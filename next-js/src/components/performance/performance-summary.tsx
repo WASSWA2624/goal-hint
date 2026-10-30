@@ -114,9 +114,10 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
     { key: "filteredOut", tone: "unavailable" as const, label: m.text("performance.filteredOut"), count: counts.filteredOut ?? 0 },
   ].filter(({ count }) => count > 0);
   const voidOutcome = { key: "void", tone: "void" as const, label: m.text("performance.void"), count: counts.void ?? 0 };
-  const extras = [voidOutcome, ...coverage.filter(({ key }) => showCoverage || key !== "unavailable")]
+  const cancelledOutcome = { key: "cancelled", tone: "void" as const, label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 };
+  const extras = [voidOutcome, cancelledOutcome, ...coverage.filter(({ key }) => showCoverage || key !== "unavailable")]
     .filter(({ count }) => count > 0);
-  const segments = [...outcomes, voidOutcome, ...coverage];
+  const segments = [...outcomes, voidOutcome, cancelledOutcome, ...coverage];
   return <Panel role="group" aria-label={label} data-performance-summary={kind}>
     <Content>
       <Header tabIndex={0} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>

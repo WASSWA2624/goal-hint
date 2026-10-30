@@ -4,6 +4,7 @@ import type { BuiltSlip } from "@/domain/slip-builder";
 import { memo } from "react";
 import type { SavedSlipView } from "@/domain/saved-slips";
 import type { SlipMatchState } from "@/domain/slip-match-state";
+import type { SlipStatus } from "@/domain/slip-status";
 import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import styled from "styled-components";
@@ -22,12 +23,13 @@ const PhoneSlipFallback = styled.div`
 
 /** One responsive slip renderer preserves the selected phone and desktop presentations. */
 export const SlipTable = memo(function SlipTable({ slip, index, locale, results, matchStates, shareSource, sharedSlip, initiallyOpen = false,
-  publicationDay, publishedAt, outcome }: {
+  publicationDay, publishedAt, outcome, status }: {
   slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[];
-  shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SavedSlipView["outcome"];
+  shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication) {
   const desktop = useDesktopLayout();
-  const publication = { ...(publicationDay ? { publicationDay } : {}), ...(publishedAt !== undefined ? { publishedAt } : {}), ...(outcome ? { outcome } : {}) };
+  const publication = { ...(publicationDay ? { publicationDay } : {}), ...(publishedAt !== undefined ? { publishedAt } : {}),
+    ...(outcome ? { outcome } : {}), ...(status ? { status } : {}) };
   if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} initiallyOpen={initiallyOpen}
     {...publication}
     {...(shareSource ? { shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} {...(results ? { results } : {})}

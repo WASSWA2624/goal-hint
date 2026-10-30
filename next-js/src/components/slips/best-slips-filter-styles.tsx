@@ -85,8 +85,10 @@ export const DateGroup = styled.div`
   ${toggleGroup}
   flex: 0 1 auto;
   overflow-x: auto;
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) => theme.color.border} transparent;
+  &::-webkit-scrollbar { block-size: 3px; }
+  &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
 `;
 
 export const DateButton = styled(FilterButton)`
@@ -106,7 +108,7 @@ export const DateButton = styled(FilterButton)`
   &:focus-visible { outline-offset: -3px; }
   &[aria-pressed="true"]:focus-visible { outline-color: ${({ theme }) => theme.color.onBrand}; }
   ${media.hover} { &[aria-pressed="true"]:hover { background: ${({ theme }) => theme.color.brandHover}; } }
-  @media (max-width: 79.99rem) {
+  @media (max-width: 89.99rem) {
     padding-inline: 5px;
     [data-label-full] { display: none; }
     [data-label-compact] { display: inline; }
@@ -117,7 +119,8 @@ export const DateButton = styled(FilterButton)`
 export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   ${({ theme, $status }) => {
     const tone = $status === "all" ? { text: theme.color.text, background: theme.color.surfaceMuted }
-      : theme.color.outcome[$status === "won" ? "correct" : $status === "lost" ? "incorrect" : "pending"];
+      : $status === "cancelled" ? { text: theme.color.accent.orange.text, background: theme.color.accent.orange.soft }
+        : theme.color.outcome[$status === "won" ? "correct" : $status === "lost" ? "incorrect" : $status === "void" ? "void" : "pending"];
     return css`
       --result-text: ${tone.text};
       --result-background: ${tone.background};
@@ -125,13 +128,15 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   }}
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-block-size: 28px;
-  padding: 3px 8px;
+  padding: 3px 6px;
+  white-space: nowrap;
   border: 1px solid transparent;
   color: var(--result-text);
   background: color-mix(in srgb, var(--result-background) 55%, ${({ theme }) => theme.color.surface});
   &::before { content: ""; inline-size: 5px; block-size: 5px; background: currentColor; }
+  > strong { font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
   &[aria-pressed="true"] {
     color: ${({ theme }) => theme.color.surface};
     background: var(--result-text);
@@ -178,12 +183,22 @@ export const AppliedSummary = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 6px;
+  justify-content: space-between;
+  gap: 3px 12px;
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: 0.6875rem;
   line-height: 1.4;
   [data-applied-result] { color: ${({ theme }) => theme.color.text}; }
+  [data-best-slips-summary] { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+`;
+
+export const AppliedDetails = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  min-inline-size: 0;
 `;
 
 export const RangeDialog = styled(CriteriaDialog)`

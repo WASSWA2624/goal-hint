@@ -8,6 +8,7 @@ import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 import type { SlipMatchProgress } from "./slip-match-state.ts";
 import { slipOutcome } from "./slip-outcome.ts";
+import { slipStatus, type SlipStatus } from "./slip-status.ts";
 export { slipOutcome } from "./slip-outcome.ts";
 export { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 
@@ -50,6 +51,7 @@ export const savedSlipCompletedStatuses: readonly SettlementStatus[] = Object.fr
 ]);
 export type SavedSlipView = Readonly<{
   id: string; savedAt: string; slip: BuiltSlip; outcome: "won" | "lost" | "pending" | "void";
+  status?: SlipStatus;
   results: readonly Readonly<{ fixtureId: string; home: number | null; away: number | null; outcome: "correct" | "incorrect" | "pending" | "void" }>[];
 }>;
 export type SavedSlipHistoryQuery = Pick<SlipCriteria, "dateFrom" | "dateTo" | "timeFrom" | "timeTo">;
@@ -68,7 +70,8 @@ export function savedSlipView(id: string, savedAt: string, snapshot: unknown, re
   const legs = savedSlipLegResults(slip, results);
   if (legs.some((leg) => leg === null)) return null;
   const finished = legs.filter((leg) => leg !== null);
-  return { id, savedAt, slip, results: finished, outcome: slipOutcome(legs) };
+  const outcome = slipOutcome(legs);
+  return { id, savedAt, slip, results: finished, outcome, status: savedSlipStatus(slip, results, outcome) };
 }
 
 /** Aggregate outcomes can establish a loss before every leg completes, without releasing active selections. */
@@ -76,12 +79,28 @@ export function savedSlipOutcome(slip: BuiltSlip, results: readonly SavedSlipRes
   return slipOutcome(savedSlipLegResults(slip, results));
 }
 
+/** Keeps cancelled/active presentation tied to the same original identities as settlement, including legacy saves. */
+export function savedSlipStatus(slip: BuiltSlip, results: readonly SavedSlipResult[], outcome = savedSlipOutcome(slip, results)): SlipStatus {
+  const legs = savedSlipLegResults(slip, results);
+  const states = slip.selections.flatMap((selection, index) => {
+    const result = matchingSavedSlipResult(selection, results);
+    return result ? [{ fixtureId: selection.fixtureId, family: selection.family, selection: selection.selection,
+      ...(selection.forecast ? { forecast: selection.forecast } : {}), status: result.status, score: null, liveClock: null,
+      outcome: legs[index]?.outcome ?? "pending" as const }] : [];
+  });
+  return slipStatus(slip, states, outcome);
+}
+
+function matchingSavedSlipResult(item: BuiltSlip["selections"][number], results: readonly SavedSlipResult[]) {
+  return results.find((candidate) => candidate.fixtureId === item.fixtureId && (item.forecast
+    ? candidate.forecast?.cycleId === item.forecast.cycleId && candidate.forecast.revisionId === item.forecast.revisionId
+      && candidate.forecast.publishedAt === item.forecast.publishedAt && candidate.family === item.family && candidate.selection === item.selection
+    : candidate.forecast === undefined));
+}
+
 function savedSlipLegResults(slip: BuiltSlip, results: readonly SavedSlipResult[]) {
   return slip.selections.map((item) => {
-    const result = results.find((candidate) => candidate.fixtureId === item.fixtureId && (item.forecast
-      ? candidate.forecast?.cycleId === item.forecast.cycleId && candidate.forecast.revisionId === item.forecast.revisionId
-        && candidate.forecast.publishedAt === item.forecast.publishedAt && candidate.family === item.family && candidate.selection === item.selection
-      : candidate.forecast === undefined));
+    const result = matchingSavedSlipResult(item, results);
     if (!result || (item.forecast ? result.completed !== true : !savedSlipCompletedStatuses.includes(result.status))) return null;
     const score = isPlayedFinalStatus(result.status) && result.regulationVerified && result.regulationHome !== null && result.regulationAway !== null
       ? { verified: true as const, period: "regulation-including-stoppage-time" as const, home: result.regulationHome, away: result.regulationAway } : null;
