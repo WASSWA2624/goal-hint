@@ -10,7 +10,7 @@ export const slipDisclosureIndicator = css`
   &::after {
     content: ""; display: block;
     inline-size: var(--slip-chevron-size, 6px); block-size: var(--slip-chevron-size, 6px);
-    border-inline-end: 1.5px solid currentColor; border-block-end: 1.5px solid currentColor;
+    border-inline-end: 3px solid currentColor; border-block-end: 3px solid currentColor;
     transform: rotate(var(--slip-chevron-rotation, 45deg));
   }
 `;

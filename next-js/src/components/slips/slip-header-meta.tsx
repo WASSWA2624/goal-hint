@@ -31,7 +31,7 @@ export function SlipHeaderDate({ publicationDay, publishedAt, locale }: SlipHead
     const day = getReportingDate(instant), parts = m.reportingDayParts(day);
     return <PublicationTime data-slip-publication-date dateTime={toUtcIsoString(instant)}>
       <span data-slip-date-layout="mobile"><span data-slip-weekday>{parts.weekday}</span>{" "}<strong data-slip-generated-at>
-        {parts.day} {parts.month} {day.slice(0, 4)} · {m.reportingTime(instant)} EAT</strong></span>
+        {parts.day} {parts.month} · {m.reportingTime(instant)} EAT</strong></span>
       <span data-slip-date-layout="desktop">{formatSlipPublicationDate(day, locale)} · {m.reportingTime(instant)} EAT</span>
     </PublicationTime>;
   }
@@ -39,7 +39,7 @@ export function SlipHeaderDate({ publicationDay, publishedAt, locale }: SlipHead
   const parts = m.reportingDayParts(publicationDay);
   return <PublicationTime data-slip-publication-date dateTime={publicationDay}>
     <span data-slip-date-layout="mobile"><span data-slip-weekday>{parts.weekday}</span>{" "}<strong>
-      {parts.day} {parts.month} {publicationDay.slice(0, 4)} · EAT</strong></span>
+      {parts.day} {parts.month} · EAT</strong></span>
     <span data-slip-date-layout="desktop">{formatSlipPublicationDate(publicationDay, locale)} · EAT</span>
   </PublicationTime>;
 }

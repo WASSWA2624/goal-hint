@@ -19,6 +19,8 @@ const PhoneSlipFallback = styled.div`
   ${media.belowDesktop} {
     [data-compact-slip="clean-ledger"] {
       border-radius: ${({ theme }) => theme.radius.control};
+      border-start-start-radius: ${({ theme }) => theme.radius.none};
+      border-end-start-radius: ${({ theme }) => theme.radius.none};
       border-inline-start: 2px solid ${({ theme }) => theme.color.accent.blue.text};
     }
   }

@@ -48,7 +48,7 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
         </span>}
         {variant && publication}
         {!variant && (publicationDay || publishedAt !== undefined) && <span data-header-generation>
-          <span data-header-identity-separator aria-hidden="true">|</span>{publication}
+          {publication}
         </span>}
         {index === 0 && showRank && (variant && (publicationDay || publishedAt !== undefined)
           ? <span data-rank>{m.text("slips.topRanked")}</span> : <VisuallyHidden> · {m.text("slips.topRanked")}</VisuallyHidden>)}

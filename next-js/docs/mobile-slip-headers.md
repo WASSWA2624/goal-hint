@@ -13,8 +13,9 @@ history and performance slips. Access-limited summaries use the same behavior.
 
 `SlipCard` and `SlipCardSummary` choose the same `CompactSlipDisclosure` and
 `MobileSlipHeader` for Clean ledger. The shared phone frame has a thin blue rail
-and `theme.radius.control` corners. Header padding is 6px vertically and 8px
-on the starting edge; the arrow column owns the ending space. The first line groups a subtly blue-styled Slip N with a pipe and
+with square leading corners and `theme.radius.control` trailing corners.
+Header padding is 6px vertically and 8px on the starting edge; the arrow column
+owns the ending space. The first line groups a subtly blue-styled Slip N with
 the generation timestamp. The uniform status badge sits on the right before
 the chevron. The arrow has its own separated column spanning the header; the
 bottom line keeps labelled odds, probability and match count to its left, with
@@ -22,12 +23,14 @@ no figure below the arrow. On narrow cards the identity/date group wraps.
 Figures use 14px text and supporting labels 11px. The full
 localized title and mean-probability explanation remain accessible.
 
-The mobile indicator is a 20px circle with a visible border and blue background,
+The mobile indicator is a 20px circle with a prominent 3px chevron, visible border and blue background,
 centered in a 32px column with balanced edge spacing. The full native summary
 remains the click/tap and keyboard target; no nested button competes with it.
 
 When timestamp metadata exists, the header shows the actual EAT
-weekday followed by a bold date/time, for example Fri **30 Oct 2026 · 09:16 EAT**.
+weekday followed by a bold date/time, for example Fri **30 Oct · 09:16 EAT**.
+The mobile label omits the year and has no pipe after the slip number; the
+machine-readable timestamp and desktop year remain intact.
 Best slips use the persisted immutable daily snapshot timestamp; builder slips
 use their generation result's `asOf` without changing desktop headers. History
 retains its recorded save timestamp. Date-only records do not invent a clock.

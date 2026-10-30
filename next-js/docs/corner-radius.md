@@ -32,7 +32,8 @@ reusable components define the appropriate explicit token for their role.
 
 Round the outside of a joined group and keep its internal seams straight.
 Shared desktop slips use `none` for the approved square Blue Signal frame and
-its full-height rail; mobile slips keep their existing `surface` corners.
+its full-height rail. Mobile slips use square leading corners for the blue rail
+and `control` corners on the trailing edge.
 Headers and edge rows with their own fills must follow the parent's exposed
 corners using logical corner properties, `inherit`, or an inset radius reduced
 by the border width. Do not hide overflow on a general panel just to round it:

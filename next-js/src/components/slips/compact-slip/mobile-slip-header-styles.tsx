@@ -88,7 +88,6 @@ export const MobileHeaderRow = styled.summary`
       [data-slip-weekday] { font-weight: 400; }
       strong { color: ${({ theme }) => theme.color.text}; font-weight: 600; }
     }
-    [data-header-identity-separator] { color: ${({ theme }) => theme.color.mutedText}; font-weight: 400; }
     [data-header-metrics] {
       grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
       align-items: baseline; gap: 4px 6px; min-inline-size: 0;
