@@ -138,11 +138,12 @@ and Next 7 days. The Custom range button immediately follows the select.
 Custom dates cover longer periods; the Last/Next
 30 days API values remain supported for existing callers. The custom-range popup retains its
 existing controls; its current dates remain editable in the summary row.
-The native date select keeps its full preset labels and supports keyboard
-navigation. A slim divider and spacing distinguish it from the status toggles;
-the select and Custom date button have a subtle 4px radius. Native option text
-matches the control's desktop size. Compact widths, toggle gaps and padding
-accommodate larger range totals without a long date-button strip.
+The date select uses the shared `SelectMenu` with a themed options panel,
+consistent row spacing, a selected checkmark and separate hover/focus states.
+Arrow keys, Home/End, type-ahead, Enter, Escape and outside-click dismissal keep
+it accessible. A slim divider and spacing distinguish it from the status
+toggles; the select and Custom date button retain their subtle 4px radius.
+Compact widths, toggle gaps and padding accommodate larger range totals.
 Only desktop Best Slips uses a 4px page-top and inter-section gap, including
 between an access prompt and the first slip. Its prompt also has compact local
 padding and internal gaps; shared page, builder and mobile spacing is preserved.

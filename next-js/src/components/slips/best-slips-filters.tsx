@@ -99,9 +99,9 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
       <DateControls role="group" aria-label={m.text("bestSlips.filters.slipDate")} data-slip-dates>
         <DateSelect value={query.period} options={selectablePeriod ? selectOptions
           : [...selectOptions, { value: query.period, label: currentPeriodLabel, disabled: true }]}
-          aria-label={m.text("bestSlips.filters.slipDate")} data-slip-period-select data-slip-period={query.period}
-          onChange={(event) => {
-            const option = dateOptions.find(([period]) => period === event.target.value);
+          label={m.text("bestSlips.filters.slipDate")} data-slip-period-select data-slip-period={query.period}
+          onValueChange={(value) => {
+            const option = dateOptions.find(([period]) => period === value);
             if (option) onChange({ period: option[0], status: query.status, page: 1 });
           }} />
         <CustomRangeButton type="button" data-slip-custom-range aria-pressed={query.period === "custom"}

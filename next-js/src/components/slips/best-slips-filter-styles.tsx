@@ -3,7 +3,7 @@
 import styled, { css } from "styled-components";
 import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "@/components/ui/filter-chrome";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { CompactSelect } from "@/components/match/filter-parts";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { media } from "@/styles/theme";
 import type { BestSlipsStatus } from "@/domain/best-slips-query";
 
@@ -99,19 +99,13 @@ export const DateControls = styled.div`
   @media (max-width: 79.99rem) { margin-inline-start: 2px; padding-inline-start: 8px; gap: 6px; }
 `;
 
-export const DateSelect = styled(CompactSelect)`
+export const DateSelect = styled(SelectMenu)`
   flex: none;
-  min-block-size: 34px;
-  padding-inline: 8px 24px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  box-shadow: 0 1px 2px color-mix(in srgb, ${({ theme }) => theme.color.text} 6%, transparent);
-  > select { font-size: inherit; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; }
-  @supports (-webkit-touch-callout: none) { > select { font-size: 16px; } }
-  option { font: inherit; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
-  @media (pointer: coarse) { min-block-size: 44px; }
+  > [data-select-trigger] {
+    font-weight: ${({ theme }) => theme.typography.weight.medium};
+    box-shadow: 0 1px 2px color-mix(in srgb, ${({ theme }) => theme.color.text} 6%, transparent);
+    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  }
 `;
 
 export const CustomRangeButton = styled(FilterButton)`
