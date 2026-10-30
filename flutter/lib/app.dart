@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'config/app_config.dart';
+import 'config/app_branding.dart';
 import 'web/web_app_shell.dart';
 import 'web/native_appearance.dart';
 import 'web/web_appearance.dart';
@@ -13,15 +14,20 @@ class GoalHintApp extends StatefulWidget {
     super.key,
     required AppConfig this.configuration,
     this.webViewAdapter,
+    this.branding = const AppBranding(),
   }) : configurationError = null;
 
-  const GoalHintApp.configurationError(String message, {super.key})
-    : configuration = null,
-      webViewAdapter = null,
-      configurationError = message;
+  const GoalHintApp.configurationError(
+    String message, {
+    super.key,
+    this.branding = const AppBranding(),
+  }) : configuration = null,
+       webViewAdapter = null,
+       configurationError = message;
 
   final AppConfig? configuration;
   final String? configurationError;
+  final AppBranding branding;
   final WebViewAdapter? webViewAdapter;
 
   @override
@@ -82,7 +88,9 @@ class _GoalHintAppState extends State<GoalHintApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Goal Hint',
+      title: widget.branding.name,
+      builder: (context, child) =>
+          AppBrandingScope(branding: widget.branding, child: child!),
       navigatorKey: _navigatorKey,
       initialRoute: '/',
       // The engine's cold-link route overrides initialRoute. Resolve only the
@@ -122,7 +130,7 @@ class _GoalHintAppState extends State<GoalHintApp> with WidgetsBindingObserver {
                 child: Scaffold(
                   body: SafeArea(
                     child: NativeErrorView(
-                      title: 'Unable to start Goal Hint',
+                      title: 'Unable to start ${widget.branding.name}',
                       message: widget.configurationError!,
                       action: const Text(
                         'Contact the app provider for a corrected build.',

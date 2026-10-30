@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../config/app_branding.dart';
+import '../config/brand_tokens.dart';
 
 /// Native launch feedback only; product appearance continues to come from web.
 class StartupLoading extends StatelessWidget {
@@ -14,35 +16,36 @@ class StartupLoading extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
-              'assets/branding/goal-hint-mark.png',
+              AppBrandingScope.of(context).logoAsset,
               width: 96,
               height: 96,
               excludeFromSemantics: true,
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Goal Hint',
+            Text(
+              AppBrandingScope.of(context).name,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF061747),
+              style: const TextStyle(
+                color: BrandTokens.navy,
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 28),
             if (!MediaQuery.disableAnimationsOf(context)) ...[
-              const SizedBox(
+              SizedBox(
                 width: 28,
                 height: 28,
                 child: CircularProgressIndicator(
-                  color: Color(0xFF00A9EE),
+                  color: BrandTokens.cyan,
                   strokeWidth: 2.5,
-                  semanticsLabel: 'Loading Goal Hint',
+                  semanticsLabel:
+                      'Loading ${AppBrandingScope.of(context).name}',
                 ),
               ),
               const SizedBox(height: 16),
             ],
-            const Text('Loading…', style: TextStyle(color: Color(0xFF061747))),
+            const Text('Loading…', style: TextStyle(color: BrandTokens.navy)),
           ],
         ),
       ),

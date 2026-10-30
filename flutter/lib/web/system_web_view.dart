@@ -8,10 +8,12 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../config/app_config.dart';
+import '../config/app_branding.dart';
 import 'android_file_selector.dart';
 import 'navigation_policy.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
+import 'web_view_failure.dart';
 
 /// Hosts the existing website in the platform's normal, persistent WebView.
 class SystemWebViewAdapter extends WebViewAdapter {
@@ -39,7 +41,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   bool _atTop = true;
   bool _disposed = false;
   bool _hidden = false;
-  String? _error;
+  WebViewFailure? _failure;
   int _historyRequest = 0;
   WebAppearance? _appearance;
   late final _appearanceQuery = webAppearanceQuery(configuration.origin);
@@ -76,7 +78,10 @@ class SystemWebViewAdapter extends WebViewAdapter {
   bool get atTop => _atTop;
 
   @override
-  String? get error => _error;
+  String? get error => _failure?.message(const AppBranding().name);
+
+  @override
+  WebViewFailure? get failure => _failure;
 
   @override
   WebAppearance? get appearance => _appearance;
@@ -89,7 +94,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   Future<void> _initialize() async {
     _loading = true;
-    _error = null;
+    _failure = null;
     _notify();
     try {
       // Keep native browser construction from blocking the first branded frame.
@@ -108,7 +113,11 @@ class SystemWebViewAdapter extends WebViewAdapter {
           onNavigationRequest: _navigate,
           onPageStarted: _pageStarted,
           onPageFinished: (url) async {
-            if (navigationPolicy.evaluate(url) == NavigationAction.allow) {
+            if (_disposed || !sameWebDocument(Uri.parse(url), _currentUri)) {
+              return;
+            }
+            if (_failure == null &&
+                navigationPolicy.evaluate(url) == NavigationAction.allow) {
               await _normalizeLinkTargets();
               try {
                 await _flushBrowserStore();
@@ -116,7 +125,10 @@ class SystemWebViewAdapter extends WebViewAdapter {
                 // A storage failure must not hide a usable document. Explicit
                 // suspension still reports failures to its caller.
               }
-              if (_error == null) _hasDocument = true;
+              if (_disposed || !sameWebDocument(Uri.parse(url), _currentUri)) {
+                return;
+              }
+              if (_failure == null) _hasDocument = true;
             }
             if (_disposed) return;
             _loading = false;
@@ -133,17 +145,12 @@ class SystemWebViewAdapter extends WebViewAdapter {
             unawaited(_refreshHistory());
           },
           onWebResourceError: (problem) {
-            final address = problem.url;
-            if (address != null &&
-                navigationPolicy.evaluate(address) != NavigationAction.allow) {
-              // Rejected external/unsafe navigation must not hide the owned page.
-              return;
-            }
-            // WK reports deliberate navigation cancellation as NSURLErrorCancelled.
-            final cancelled =
-                controller.platform is WebKitWebViewController &&
-                problem.errorCode == -999;
-            if (problem.isForMainFrame == true && !cancelled) _loadFailed();
+            final failure = documentFailure(
+              problem,
+              _currentUri,
+              webKit: controller.platform is WebKitWebViewController,
+            );
+            if (failure != null) _loadFailed(failure);
           },
           onHttpError: (problem) {
             // Android supplies the failed URI but not a main-frame flag. WK's
@@ -153,8 +160,8 @@ class SystemWebViewAdapter extends WebViewAdapter {
             if (status != null &&
                 status >= 500 &&
                 uri != null &&
-                _sameDocument(uri, _currentUri)) {
-              _loadFailed();
+                sameWebDocument(uri, _currentUri)) {
+              _loadFailed(WebViewFailure.unavailable);
             }
           },
           onHttpAuthRequest: (request) => request.onCancel(),
@@ -190,7 +197,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
       _notify();
     } catch (_) {
       _loading = false;
-      _error = 'The web view could not be started on this device.';
+      _failure = WebViewFailure.browser;
       _notify();
     } finally {
       _initialization = null;
@@ -217,7 +224,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   Future<void> reload() async {
     if (_disposed || !_ready) return;
     // A failed native document may have a browser-internal error-page URL.
-    if (_error != null) {
+    if (_failure != null) {
       await load(_currentUri);
     } else {
       await _load(() => _controller!.reload());
@@ -229,7 +236,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
     if (_disposed || !_ready) return;
     try {
       if (await _controller!.canGoBack()) {
-        await _controller!.goBack();
+        await _load(() => _controller!.goBack());
         await _refreshHistory();
       }
     } catch (_) {
@@ -265,7 +272,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   Future<void> _load(Future<void> Function() operation) async {
     _loading = true;
-    _error = null;
+    _failure = null;
     _notify();
     try {
       await operation();
@@ -284,6 +291,15 @@ class SystemWebViewAdapter extends WebViewAdapter {
     }
     switch (action) {
       case NavigationAction.allow:
+        if (request.isMainFrame) {
+          // A failed redirect can be reported before its page-start callback.
+          _currentUri = Uri.parse(request.url);
+          if (_failure != null) {
+            _failure = null;
+            _loading = true;
+            _notify();
+          }
+        }
         return NavigationDecision.navigate;
       case NavigationAction.external:
         // A child-frame request must never launch another application.
@@ -306,8 +322,9 @@ class SystemWebViewAdapter extends WebViewAdapter {
     }
     _currentUri = Uri.parse(url);
     _atTop = true;
-    _loading = true;
-    _error = null;
+    // Some engines emit a late start/finish for their built-in error document.
+    // Only an explicit new navigation or retry clears the failure above.
+    _loading = _failure == null;
     _notify();
   }
 
@@ -326,10 +343,11 @@ class SystemWebViewAdapter extends WebViewAdapter {
     }
   }
 
-  void _loadFailed() {
+  void _loadFailed([WebViewFailure failure = WebViewFailure.connection]) {
     if (_disposed) return;
     _loading = false;
-    _error = 'Goal Hint could not be loaded. Check your connection and retry.';
+    _failure = failure;
+    _hasDocument = false;
     _notify();
   }
 
@@ -356,9 +374,6 @@ class SystemWebViewAdapter extends WebViewAdapter {
     }
   }
 
-  static bool _sameDocument(Uri first, Uri second) =>
-      first.replace(fragment: '') == second.replace(fragment: '');
-
   void _notify() {
     if (_disposed) return;
     _syncAppearance();
@@ -370,7 +385,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
       !_disposed &&
           !_hidden &&
           !_loading &&
-          _error == null &&
+          _failure == null &&
           _hasDocument &&
           _controller != null &&
           navigationPolicy.evaluate(_currentUri.toString()) ==

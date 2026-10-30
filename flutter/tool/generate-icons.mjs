@@ -40,6 +40,21 @@ async function output(path, bytes) {
   await writeFile(target, bytes);
 }
 
+// Native feedback uses the same identity and palette as the shared website.
+const tokens = JSON.parse(await readFile(resolve(root, 'next-js/assets/brand/brand-tokens.json'), 'utf8'));
+const colors = Object.entries(tokens.colors).map(([name, value]) => {
+  if (!/^[a-zA-Z]+$/.test(name) || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+    throw new Error('Invalid canonical brand color.');
+  }
+  return `  static const ${name} = Color(0xFF${value.slice(1).toUpperCase()});`;
+});
+await output('lib/config/brand_tokens.dart', Buffer.from(
+  `// Generated from next-js/assets/brand/brand-tokens.json.\n` +
+  `// Run node flutter/tool/generate-icons.mjs after updating the shared brand.\n` +
+  `import 'package:flutter/painting.dart';\n\n` +
+  `abstract final class BrandTokens {\n  static const name = ${JSON.stringify(tokens.name)};\n${colors.join('\n')}\n}\n`
+));
+
 async function png(size, input = artwork) {
   return sharp(input, { density: Math.max(72, 72 * size / 512) })
     .resize(size, size).flatten({ background: '#FFFFFF' }).removeAlpha().png().toBuffer();
@@ -143,5 +158,5 @@ if (check && stale.length) {
   console.error(`Native branding is missing or stale:\n${stale.join('\n')}`);
   process.exitCode = 1;
 } else {
-  console.log(`${check ? 'Verified' : 'Generated'} ${outputs} native Goal Hint assets from the shared web artwork.`);
+  console.log(`${check ? 'Verified' : 'Generated'} ${outputs} native ${tokens.name} assets from the shared web artwork.`);
 }

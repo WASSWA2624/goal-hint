@@ -6,12 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/app_config.dart';
+import '../config/app_branding.dart';
 import 'navigation_policy.dart';
 import 'native_appearance.dart';
+import 'native_recovery_view.dart';
 import 'startup_loading.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 import 'web_view_factory.dart';
+import 'web_view_failure.dart';
 import 'web_view_pull_to_refresh.dart';
 
 class WebAppShell extends StatefulWidget {
@@ -40,7 +43,9 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
   bool _hidden = false;
   bool _browserHidden = false;
   Future<void> _lifecycle = Future<void>.value();
-  String? _startupError;
+  WebViewFailure? _startupFailure;
+  WebViewFailure? _recoveryFailure;
+  bool _retrying = false;
   WebAppearance? _reportedAppearance;
 
   @override
@@ -58,12 +63,28 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
           navigationPolicy: NavigationPolicy(widget.configuration.origin),
           openExternal: _openExternal,
         );
-    _browser.addListener(_reportAppearance);
+    _recoveryFailure = _browser.failure;
+    _browser.addListener(_browserChanged);
     _reportAppearance();
     // Paint native loading feedback before constructing the browser engine.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_start());
     });
+  }
+
+  void _browserChanged() {
+    _reportAppearance();
+    if (!mounted) return;
+    final failure = _browser.failure;
+    if (failure != null && failure != _recoveryFailure) {
+      setState(() => _recoveryFailure = failure);
+    } else if (failure == null &&
+        !_browser.loading &&
+        _browser.hasDocument &&
+        !_initializing &&
+        _recoveryFailure != null) {
+      setState(() => _recoveryFailure = null);
+    }
   }
 
   void _reportAppearance() {
@@ -127,22 +148,30 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _initializing = false;
-          _startupError =
-              'Unable to start the embedded browser on this device.';
+          _startupFailure = WebViewFailure.browser;
         });
       }
     }
   }
 
   Future<void> _retry() async {
-    if (_startupError != null || !_browser.ready) {
-      setState(() {
-        _startupError = null;
-        _initializing = true;
-      });
-      await _start();
-    } else {
-      await _browser.reload();
+    if (_retrying || _initializing || _browser.loading) return;
+    setState(() => _retrying = true);
+    try {
+      if (_startupFailure != null || !_browser.ready) {
+        setState(() {
+          _recoveryFailure ??= _startupFailure;
+          _startupFailure = null;
+          _initializing = true;
+        });
+        await _start();
+      } else {
+        await _browser.reload();
+      }
+    } on Exception {
+      if (mounted) setState(() => _recoveryFailure = WebViewFailure.connection);
+    } finally {
+      if (mounted) setState(() => _retrying = false);
     }
   }
 
@@ -182,7 +211,7 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _browser.removeListener(_reportAppearance);
+    _browser.removeListener(_browserChanged);
     _browser.dispose();
     super.dispose();
   }
@@ -191,9 +220,9 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: _browser,
     builder: (context, _) {
-      final error = _startupError ?? _browser.error;
+      final failure = _startupFailure ?? _browser.failure ?? _recoveryFailure;
       final starting =
-          (!_browser.hasDocument || _initializing) && error == null;
+          (!_browser.hasDocument || _initializing) && failure == null;
       return NativeChrome(
         launching: starting,
         appearance: _browser.appearance,
@@ -224,45 +253,47 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
                   fit: StackFit.expand,
                   children: [
                     // Retain the native view/profile while loading or retrying.
-                    ExcludeSemantics(
-                      excluding: starting || error != null,
-                      child: ColoredBox(
-                        color: _browser.appearance?.background ?? Colors.white,
-                        child: WebViewPullToRefresh(
-                          enabled:
-                              _browser.supportsPullToRefresh &&
-                              !starting &&
-                              error == null &&
-                              !_hidden,
-                          atTop: _browser.atTop,
-                          loading: _browser.loading,
-                          color: _browser.appearance?.accent,
-                          backgroundColor: _browser.appearance?.surface,
-                          onRefresh: () => unawaited(_retry()),
-                          child: _browser.buildView(),
+                    Visibility(
+                      key: const ValueKey('native-browser-surface'),
+                      visible: failure == null,
+                      maintainState: true,
+                      child: ExcludeSemantics(
+                        excluding: starting,
+                        child: ColoredBox(
+                          color:
+                              _browser.appearance?.background ?? Colors.white,
+                          child: WebViewPullToRefresh(
+                            enabled:
+                                _browser.supportsPullToRefresh &&
+                                !starting &&
+                                failure == null &&
+                                !_hidden,
+                            atTop: _browser.atTop,
+                            loading: _browser.loading,
+                            color: _browser.appearance?.accent,
+                            backgroundColor: _browser.appearance?.surface,
+                            onRefresh: () => unawaited(_retry()),
+                            child: _browser.buildView(),
+                          ),
                         ),
                       ),
                     ),
                     if (starting) const StartupLoading(),
-                    if (!starting && _browser.loading && error == null)
-                      const Align(
+                    if (!starting && _browser.loading && failure == null)
+                      Align(
                         alignment: Alignment.topCenter,
                         child: LinearProgressIndicator(
-                          semanticsLabel: 'Loading Goal Hint',
+                          semanticsLabel:
+                              'Loading ${AppBrandingScope.of(context).name}',
                         ),
                       ),
-                    if (error != null)
+                    if (failure != null)
                       ColoredBox(
                         color: Theme.of(context).scaffoldBackgroundColor,
-                        child: NativeErrorView(
-                          title: 'Unable to load Goal Hint',
-                          message: error,
-                          action: OutlinedButton(
-                            onPressed: _initializing
-                                ? null
-                                : () => unawaited(_retry()),
-                            child: const Text('Retry'),
-                          ),
+                        child: NativeRecoveryView(
+                          failure: failure,
+                          busy: _retrying || _initializing || _browser.loading,
+                          onRetry: () => unawaited(_retry()),
                         ),
                       ),
                   ],

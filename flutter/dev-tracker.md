@@ -22,6 +22,7 @@ below for actual native execution evidence.
 | [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity/native appearance and Windows real OS/theme/restart checks passed; Android deferred, Apple/Linux and installed launcher qualification remain open |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Partial — pinned release tooling and signing gates implemented; production hosting, credentials and remaining platform acceptance prevent release |
 | [010](dev-plan/010-android-pull-to-refresh.md) | Android pull-to-refresh | Partial — native observer and widget coverage implemented; device gesture acceptance remains unverified |
+| [011](dev-plan/011-branded-native-recovery.md) | Branded native recovery | Partial — shared UI and native Windows recovery verified; Android/iOS device acceptance remains unverified |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
 its implementation and required acceptance checks pass. Keep its plan state in
@@ -861,3 +862,35 @@ scrolling, child interaction and the persistent browser session remain mounted.
 See [plan 010](dev-plan/010-android-pull-to-refresh.md). This is an implemented
 Android host feature with automated gesture coverage, not a claim of physical
 WebView acceptance or a signed production release.
+
+## 011 Branded native recovery handoff — 30 October 2026
+
+A bundled, branded recovery surface now replaces failed native documents. It
+uses the configured logo/name, active web appearance or canonical brand fallback,
+status icons, a primary retry action and an icon-led checklist. App identity is
+supplied by `AppBrandingScope`; the existing artwork generator synchronizes its
+default name and palette from the website's brand tokens. Build-time
+`APP_DISPLAY_NAME` and embedding-time branding overrides are supported.
+
+The native browser is retained offstage during failure and retry. Recovery is
+cleared only when a usable document completes. Main-frame errors are classified
+without rendering engine addresses/descriptions, subresource errors are ignored,
+and retry uses the original URL/controller/profile. Connection guidance suggests
+Wi-Fi/data, airplane mode, data balance and another network without claiming to
+measure the user's balance or connectivity.
+
+| Check | Actual result |
+| --- | --- |
+| Final `flutter analyze --no-pub` | Passed, no issues, 17.4s |
+| Full `flutter test --no-pub` | All 65 passed; privacy, retry latching, classification (including normalized root URLs), name/logo overrides, dynamic color contrast, small screens, 200% text and reduced motion included |
+| Windows native recovery integration | Passed against a loopback-only synthetic server: cold unreachable page, aborted connection, 503, retry to the intended route and the same controller; final native run 8s after its build |
+| Branded visual review | Flutter-rendered mobile 375x812/320x568 and desktop 1280x800 previews reviewed; light/dark themes, bundled logo, square controls and scrollable guidance |
+| Canonical branding synchronization | `node flutter/tool/generate-icons.mjs --check` passed for all 46 assets/configuration outputs |
+| Normal-entry Windows Debug build | Passed, 74.4s, development origin `http://192.168.1.148:3000` |
+| Normal-entry Android Debug APK | Passed, 29.9s, same development origin; existing process-local JDK/temp/Kotlin build settings |
+| Android/iOS physical-device acceptance and Apple builds | Not performed: no Android device connected and no Apple build host available |
+
+No dependency or cookie/profile change was required. iOS/macOS share the updated
+system-WebView handling and recovery UI, but their native execution is not
+qualified here. Installed apps require rebuilt native binaries. This is not a
+signed production release. See [plan 011](dev-plan/011-branded-native-recovery.md).

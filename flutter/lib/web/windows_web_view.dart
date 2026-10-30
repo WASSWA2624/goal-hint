@@ -10,9 +10,11 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../config/app_config.dart';
+import '../config/app_branding.dart';
 import 'navigation_policy.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
+import 'web_view_failure.dart';
 
 /// WebView2 host; web sessions live only in its persistent browser profile.
 class WindowsWebViewAdapter extends WebViewAdapter {
@@ -34,7 +36,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   bool _loading = true;
   bool _hasDocument = false;
   bool _canGoBack = false;
-  String? _error;
+  WebViewFailure? _failure;
   bool _disposed = false;
   bool _hidden = false;
   WebAppearance? _appearance;
@@ -60,7 +62,9 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   @override
   bool get canGoBack => _canGoBack;
   @override
-  String? get error => _error;
+  String? get error => _failure?.message(const AppBranding().name);
+  @override
+  WebViewFailure? get failure => _failure;
   @override
   WebAppearance? get appearance => _appearance;
 
@@ -75,7 +79,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
       );
       final nativeEnvironment = WindowsWebViewEnvironment.static();
       if (await nativeEnvironment.getAvailableVersion() == null) {
-        _fail('Install Microsoft Edge WebView2 Runtime, then retry.');
+        _fail(WebViewFailure.browser);
         return;
       }
       final support = await getApplicationSupportDirectory();
@@ -107,14 +111,13 @@ class WindowsWebViewAdapter extends WebViewAdapter {
               return;
             }
             _currentUri = Uri.tryParse(address.toString());
-            _loading = true;
-            _error = null;
+            _loading = _failure == null;
             _notify();
           },
           onLoadStop: (_, address) async {
             if (_disposed) return;
             _remember(address);
-            if (_error == null &&
+            if (_failure == null &&
                 address != null &&
                 navigationPolicy.evaluate(address.toString()) ==
                     NavigationAction.allow) {
@@ -134,6 +137,11 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             }
             final decision = navigationPolicy.evaluate(address);
             if (decision == NavigationAction.allow) {
+              if (action.isForMainFrame && _failure != null) {
+                _failure = null;
+                _loading = true;
+                _notify();
+              }
               return NavigationActionPolicy.ALLOW;
             }
             if (action.isForMainFrame) {
@@ -160,10 +168,15 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             }
             return true;
           },
-          onReceivedError: (_, request, _) {
-            if (request.isForMainFrame == true) {
+          onReceivedError: (_, request, error) {
+            if (request.isForMainFrame == true &&
+                error.type != WebResourceErrorType.CANCELLED) {
               _fail(
-                'Unable to load Goal Hint. Check your connection and retry.',
+                error.type == WebResourceErrorType.TIMEOUT
+                    ? WebViewFailure.timeout
+                    : _secureErrors.contains(error.type)
+                    ? WebViewFailure.secureConnection
+                    : WebViewFailure.connection,
               );
             }
           },
@@ -172,7 +185,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             if (request.isForMainFrame != true) return;
             final status = response.statusCode ?? 0;
             if (status >= 500) {
-              _fail('Goal Hint is temporarily unavailable. Please retry.');
+              _fail(WebViewFailure.unavailable);
             } else if (status >= 400 &&
                 navigationPolicy.evaluate(request.url.toString()) ==
                     NavigationAction.allow) {
@@ -194,10 +207,10 @@ class WindowsWebViewAdapter extends WebViewAdapter {
           ),
         ),
       );
-      _error = null;
+      _failure = null;
       _notify();
     } catch (_) {
-      _fail('Unable to start the browser. Please retry.');
+      _fail(WebViewFailure.browser);
     }
   }
 
@@ -213,13 +226,13 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   Future<void> load(Uri uri) async {
     if (_disposed) return;
     if (navigationPolicy.evaluate(uri.toString()) != NavigationAction.allow) {
-      _fail('This address cannot be opened inside Goal Hint.');
+      _fail(WebViewFailure.browser);
       return;
     }
     _pendingUri = uri;
     if (!ready) return;
     _loading = true;
-    _error = null;
+    _failure = null;
     _notify();
     try {
       await _controller?.loadUrl(
@@ -229,7 +242,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
       // resume the engine, so apply the remembered visibility after loading.
       if (_hidden && !_disposed) await _controller?.pause();
     } catch (_) {
-      _fail('Unable to load Goal Hint. Check your connection and retry.');
+      _fail(WebViewFailure.connection);
     }
   }
 
@@ -237,23 +250,26 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   Future<void> reload() async {
     if (_disposed) return;
     if (!ready) await initialize();
-    if (_controller == null) {
-      await load(_pendingUri ?? configuration.origin);
+    if (_controller == null || _failure != null) {
+      await load(_currentUri ?? _pendingUri ?? configuration.origin);
       return;
     }
     _loading = true;
-    _error = null;
+    _failure = null;
     _notify();
     try {
       await _controller!.reload();
     } catch (_) {
-      _fail('Unable to reload Goal Hint. Please retry.');
+      _fail(WebViewFailure.connection);
     }
   }
 
   @override
   Future<void> goBack() async {
     if (_disposed || !_canGoBack) return;
+    _failure = null;
+    _loading = true;
+    _notify();
     try {
       await _controller?.goBack();
       if (!_disposed) await _updateHistory();
@@ -300,9 +316,19 @@ class WindowsWebViewAdapter extends WebViewAdapter {
     }
   }
 
-  void _fail(String message) {
+  static final _secureErrors = {
+    WebResourceErrorType.FAILED_SSL_HANDSHAKE,
+    WebResourceErrorType.SECURE_CONNECTION_FAILED,
+    WebResourceErrorType.SERVER_CERTIFICATE_HAS_BAD_DATE,
+    WebResourceErrorType.SERVER_CERTIFICATE_HAS_UNKNOWN_ROOT,
+    WebResourceErrorType.SERVER_CERTIFICATE_NOT_YET_VALID,
+    WebResourceErrorType.SERVER_CERTIFICATE_UNTRUSTED,
+  };
+
+  void _fail(WebViewFailure failure) {
     if (_disposed) return;
-    _error = message;
+    _failure = failure;
+    _hasDocument = false;
     _loading = false;
     _notify();
   }
@@ -318,7 +344,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
       !_disposed &&
           !_hidden &&
           !_loading &&
-          _error == null &&
+          _failure == null &&
           _hasDocument &&
           _controller != null &&
           _currentUri != null &&

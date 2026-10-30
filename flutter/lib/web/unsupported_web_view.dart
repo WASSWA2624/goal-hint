@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'web_view_adapter.dart';
+import 'web_view_failure.dart';
 
 /// Keep unverified targets explicit instead of silently opening another app.
 class UnsupportedWebViewAdapter extends WebViewAdapter {
@@ -13,6 +14,8 @@ class UnsupportedWebViewAdapter extends WebViewAdapter {
   @override
   String get error =>
       'The embedded browser is not available on this platform yet.';
+  @override
+  WebViewFailure get failure => WebViewFailure.browser;
   @override
   Widget buildView() => const SizedBox.shrink();
   @override

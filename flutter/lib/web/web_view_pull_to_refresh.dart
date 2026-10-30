@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../config/app_branding.dart';
 
 /// Observes a top-of-document touch pull without competing with the WebView's
 /// own scrolling, links, horizontal gestures or pinch zoom.
@@ -139,7 +140,7 @@ class _WebViewPullToRefreshState extends State<WebViewPullToRefresh> {
                   color: widget.color,
                   backgroundColor: widget.backgroundColor,
                   semanticsLabel: _refreshing
-                      ? 'Refreshing Goal Hint'
+                      ? 'Refreshing ${AppBrandingScope.of(context).name}'
                       : 'Pull to refresh',
                 ),
               ),

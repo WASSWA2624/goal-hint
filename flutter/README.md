@@ -6,6 +6,21 @@ platform browser adapters on Android, iOS, macOS, and Windows; Linux embedding
 remains an explicit integration gap.
 The Next.js app owns the product screens, authentication, data, and business logic.
 
+Native document failures use a bundled recovery page with the configured logo,
+app name, active theme, a retry action and relevant connection guidance. Engine
+addresses and technical error descriptions are hidden, including during retry.
+The same browser/profile and intended page are retained. See
+[branded recovery](dev-plan/011-branded-native-recovery.md) for behavior and checks.
+
+`AppBranding` centralizes native feedback identity. Its default name and fallback
+colors come from the website's canonical brand tokens through
+`node flutter/tool/generate-icons.mjs` (use `--check` to verify synchronization).
+Use `--dart-define=APP_DISPLAY_NAME=...` to override the feedback name, or supply
+`branding` when embedding `GoalHintApp`. The logo reference is configured once
+and points to a bundled asset, so branding also works offline. Native bundle/app
+IDs and installed launcher names retain their platform configuration. Shipping
+this host change requires rebuilt native apps; a website update alone is insufficient.
+
 Android pull-to-refresh is implemented in the native host: pull down from the top
 of the document and release to reload the current page. Normal scrolling,
 horizontal gestures, multi-touch and keyboard input retain their web behavior.

@@ -3,24 +3,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'web_appearance.dart';
-
-const _navy = Color(0xFF061747);
-const _paper = Color(0xFFEFF7FF);
+import '../config/app_branding.dart';
+import '../config/brand_tokens.dart';
 
 /// Only native feedback is styled here. The web owns its theme and preference.
 ThemeData nativeTheme(Brightness brightness, {WebAppearance? appearance}) {
+  final primary =
+      appearance?.accent ??
+      (brightness == Brightness.light
+          ? BrandTokens.navy
+          : BrandTokens.cyanOnDark);
   final scheme = ColorScheme.fromSeed(
-    seedColor: appearance?.accent ?? _navy,
+    seedColor: appearance?.accent ?? BrandTokens.navy,
     brightness: brightness,
-    primary: appearance?.accent,
-    surface: appearance?.surface,
-    onSurface: appearance?.foreground,
+    primary: primary,
+    onPrimary: primary.computeLuminance() > 0.179 ? Colors.black : Colors.white,
+    surface:
+        appearance?.surface ??
+        (brightness == Brightness.light ? BrandTokens.white : null),
+    onSurface:
+        appearance?.foreground ??
+        (brightness == Brightness.light ? BrandTokens.navy : null),
   );
   return ThemeData(
     colorScheme: scheme,
     scaffoldBackgroundColor:
         appearance?.background ??
-        (brightness == Brightness.light ? _paper : scheme.surface),
+        (brightness == Brightness.light ? BrandTokens.paper : scheme.surface),
     outlinedButtonTheme: const OutlinedButtonThemeData(
       style: ButtonStyle(
         shape: WidgetStatePropertyAll(RoundedRectangleBorder()),
@@ -89,13 +98,13 @@ class _NativeChromeState extends State<NativeChrome> {
         ? Colors.white
         : appearance?.surface ?? theme.colorScheme.surface;
     final foreground = widget.launching
-        ? _navy
+        ? BrandTokens.navy
         : appearance?.foreground ?? theme.colorScheme.onSurface;
     final chrome = widget.launching
         ? Colors.white
         : appearance?.chrome ?? theme.scaffoldBackgroundColor;
     final darkChrome = chrome.computeLuminance() < 0.179;
-    final navigation = appearance?.chrome ?? _navy;
+    final navigation = appearance?.chrome ?? BrandTokens.navy;
     final navigationIcons = widget.launching
         ? Brightness.dark
         : navigation.computeLuminance() < 0.179
@@ -152,11 +161,15 @@ class NativeErrorView extends StatelessWidget {
     super.key,
     required this.title,
     required this.message,
+    this.icon = Icons.info_outline,
+    this.guidance,
     this.action,
   });
 
   final String title;
   final String message;
+  final IconData icon;
+  final Widget? guidance;
   final Widget? action;
 
   @override
@@ -164,18 +177,76 @@ class NativeErrorView extends StatelessWidget {
     child: SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
+        constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  AppBrandingScope.of(context).logoAsset,
+                  width: 40,
+                  height: 40,
+                  excludeFromSemantics: true,
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    AppBrandingScope.of(context).name,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 36),
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.07),
+              child: Icon(
+                icon,
+                size: 32,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Semantics(
+              header: true,
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            if (action != null) ...[const SizedBox(height: 16), action!],
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                height: 1.5,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (action != null) ...[const SizedBox(height: 24), action!],
+            if (guidance != null) ...[
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                color: Theme.of(context).colorScheme.surface,
+                child: guidance!,
+              ),
+            ],
           ],
         ),
       ),

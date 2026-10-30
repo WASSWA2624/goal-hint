@@ -16,8 +16,15 @@ node flutter/tool/generate-icons.mjs --check
 
 The [generator](../tool/generate-icons.mjs) uses the web project's pinned Sharp
 dependency and needs no additional Flutter runtime package. `--check` compares
-all 45 outputs without writing; it fails on missing/stale files. Catalog sizes
+all 46 outputs without writing; it fails on missing/stale files. Catalog sizes
 and Android's circular 66dp safe zone are validated during generation. It supplies:
+
+- Native feedback's default name and palette in `lib/config/brand_tokens.dart`,
+  derived from the web application's canonical `brand-tokens.json` alongside the
+  bundled artwork. `AppBranding` supplies the name and logo reference to startup,
+  recovery and accessibility labels. It supports `APP_DISPLAY_NAME` at build
+  time and a branding override on `GoalHintApp`. The active web appearance still
+  controls themed recovery colors; native package IDs are separate metadata.
 
 - Android density-specific legacy icons, transparent adaptive foregrounds with
   the mark within the 66dp safe zone of the 108dp layer, and monochrome layers.

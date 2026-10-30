@@ -27,6 +27,33 @@ const light = WebAppearance(
 );
 
 void main() {
+  test('dynamic primary colors keep retry text readable in both themes', () {
+    for (final brightness in Brightness.values) {
+      for (final accent in const [
+        Color(0xFF00A9EE),
+        Color(0xFF0064FF),
+        Color(0xFF707070),
+      ]) {
+        final palette = nativeTheme(
+          brightness,
+          appearance: WebAppearance(
+            brightness: brightness,
+            background: light.background,
+            surface: light.surface,
+            foreground: light.foreground,
+            accent: accent,
+            chrome: light.chrome,
+          ),
+        ).colorScheme;
+        final a = palette.primary.computeLuminance();
+        final b = palette.onPrimary.computeLuminance();
+        expect(
+          (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05)),
+          greaterThanOrEqualTo(4.5),
+        );
+      }
+    }
+  });
   final configuration = AppConfig.resolve(isDebugBuild: true, isAndroid: false);
 
   testWidgets(

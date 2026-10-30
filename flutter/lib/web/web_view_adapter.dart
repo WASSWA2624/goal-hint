@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'web_appearance.dart';
+import 'web_view_failure.dart';
 
 /// The native browser boundary. Routes, accounts and data remain in Next.js.
 abstract class WebViewAdapter extends ChangeNotifier {
@@ -9,6 +10,8 @@ abstract class WebViewAdapter extends ChangeNotifier {
   bool get loading;
   bool get canGoBack;
   String? get error;
+  WebViewFailure? get failure =>
+      error == null ? null : WebViewFailure.connection;
   WebAppearance? get appearance => null;
   bool get supportsPullToRefresh => false;
   bool get atTop => false;

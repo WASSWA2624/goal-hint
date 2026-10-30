@@ -6,6 +6,7 @@ import 'package:goal_hint/app.dart';
 import 'package:goal_hint/config/app_config.dart';
 import 'package:goal_hint/web/startup_loading.dart';
 import 'package:goal_hint/web/web_view_pull_to_refresh.dart';
+import 'package:goal_hint/web/native_recovery_view.dart';
 
 import 'support/fake_web_view.dart';
 
@@ -98,14 +99,56 @@ void main() {
       GoalHintApp(configuration: configuration, webViewAdapter: browser),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Unable to load Goal Hint'), findsOneWidget);
-    expect(find.text('Embedded web application'), findsOneWidget);
-    await tester.tap(find.text('Retry'));
+    expect(find.text('Connection interrupted'), findsOneWidget);
+    expect(find.text('Embedded web application'), findsNothing);
+    expect(
+      find.text('Embedded web application', skipOffstage: false),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
     expect(browser.reloads, 1);
     expect(browser.disposed, isFalse);
-    expect(find.text('Unable to load Goal Hint'), findsNothing);
+    expect(find.byType(NativeRecoveryView), findsNothing);
   });
+
+  testWidgets(
+    'failed documents remain hidden throughout retry and repeated failures',
+    (tester) async {
+      final browser = _RecoveringBrowser()
+        ..error =
+            'http://192.168.1.148:3000/private?token=secret net::ERR_CONNECTION_ABORTED';
+      await tester.pumpWidget(
+        GoalHintApp(configuration: configuration, webViewAdapter: browser),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('192.168.'), findsNothing);
+      expect(find.textContaining('ERR_CONNECTION'), findsNothing);
+      expect(find.textContaining('secret'), findsNothing);
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      expect(find.text('Reconnecting…'), findsOneWidget);
+      expect(find.text('Embedded web application'), findsNothing);
+      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      expect(button.onPressed, isNull);
+      expect(browser.reloads, 1);
+      browser.error = 'Still unreachable';
+      browser.loading = false;
+      browser.publish();
+      await tester.pumpAndSettle();
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.byType(NativeRecoveryView), findsOneWidget);
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      browser.finishDocument();
+      await tester.pumpAndSettle();
+      expect(find.byType(NativeRecoveryView), findsNothing);
+      expect(find.text('Embedded web application'), findsOneWidget);
+      expect(browser.reloads, 2);
+      expect(browser.disposed, isFalse);
+      expect(browser.loadedUri, configuration.origin);
+    },
+  );
 
   testWidgets('native back uses browser history before leaving the shell', (
     tester,
@@ -182,6 +225,19 @@ void main() {
       expect(browser.disposed, isTrue);
     },
   );
+}
+
+class _RecoveringBrowser extends FakeWebViewAdapter {
+  void publish() => notifyListeners();
+
+  @override
+  Future<void> reload() async {
+    reloads++;
+    error = null;
+    loading = true;
+    hasDocument = false;
+    notifyListeners();
+  }
 }
 
 class _DelayedLifecycleBrowser extends FakeWebViewAdapter {
