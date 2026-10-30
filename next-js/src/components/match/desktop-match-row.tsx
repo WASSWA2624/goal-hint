@@ -15,6 +15,7 @@ import type { OutcomeTone } from "@/styles/theme";
 import { TeamLogo } from "./team-logo";
 import { TruncatedText } from "./truncated-text";
 import { MatchStatus } from "./match-status";
+import { MatchClockText, ScoreFigures, Scoreline } from "./score-presentation";
 
 type RowTeam = Readonly<Pick<FixtureSnapshot["homeTeam"], "name" | "logoUrl">>;
 type RowCompetition = Readonly<Pick<FixtureSnapshot["competition"], "name" | "country" | "logoUrl">>;
@@ -56,7 +57,6 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
   const flag = offline ? null : countryFlagAsset(competition.country);
   const detailsHref = offline ? undefined : analysisHref;
   const iso = kickoffAt === null ? undefined : toUtcIsoString(kickoffAt);
-  const scoreText = score ? `${m.number(score.home)}-${m.number(score.away)}` : status === "live" || final ? "–" : "VS";
   const scoreDescription = suppliedScoreDescription ?? (score ? m.text("match.scoreline", {
     label: m.text(status === "live" ? "match.liveScore" : "match.regulationScoreNote"), home, away,
     homeScore: m.number(score.home), awayScore: m.number(score.away),
@@ -66,8 +66,10 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
   const kickoffTitle = kickoffAt === null ? undefined : m.reportingInstant(kickoffAt);
   const analysisTitle = [...new Set([m.text("match.analysisLabel", { home, away }), kickoffTitle, scoreTitle, clockTitle,
     marketDescription, m.text(`match.status.${status}`)].filter(Boolean))].join(" · ");
-  const scoreContent = <span data-score id={`${id}-score`} aria-label={scoreDescription} data-saved-score={savedScore && score ? "" : undefined}
-    title={scoreTitle}>{scoreText}</span>;
+  const scoreProps = { id: `${id}-score`, "aria-label": scoreDescription, title: scoreTitle };
+  const scoreContent = score ? <Scoreline data-score {...scoreProps} data-saved-score={savedScore ? "" : undefined}>
+    <ScoreFigures home={m.number(score.home)} away={m.number(score.away)} /></Scoreline>
+    : <span data-score {...scoreProps}>{status === "live" || final ? "–" : "VS"}</span>;
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   const descriptionIds = ["date", "time", "country", "league", "score", "clock", "market", "odds", "probability", "status", ...(details ? ["details"] : [])]
     .map((name) => `${id}-${name}`).join(" ");
@@ -90,7 +92,7 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
       <span data-centre>{scoreContent}
         <span data-clock id={`${id}-clock`} aria-hidden={!clockText || undefined}
           title={clockTitle}>
-          {clockText}{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
+          <MatchClockText text={clockText} />{regulationOnly && <VisuallyHidden>. {m.text("match.regulationScoreNote")}</VisuallyHidden>}
         </span></span>
       <span data-away><TeamLogo name={away} url={offline ? undefined : awayTeam.logoUrl ?? undefined} eager={eagerLogos} size={14} /><TruncatedText text={away} href={detailsHref} /></span>
     </Heading>

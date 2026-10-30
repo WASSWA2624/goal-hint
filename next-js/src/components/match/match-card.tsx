@@ -33,6 +33,7 @@ import { ProbabilityBar } from "./prediction-presentation";
 import { DesktopMatchRow } from "./desktop-match-row";
 import { MatchCardLayoutContext } from "./match-card-layout";
 import { MatchStatus } from "./match-status";
+import { MatchClockText, ScoreFigures, Scoreline } from "./score-presentation";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
@@ -340,28 +341,13 @@ const Versus = styled.span`
   }
   ${table} { grid-column: 5; grid-row: 2; justify-self: center; }
 `;
-const Score = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.9375rem;
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  /* A live score is red throughout, dash included. */
-  [data-status="live"] &, [data-status="live"] & > span:nth-child(2) { color: ${({ theme }) => theme.color.live.solid}; }
+const Score = styled(Scoreline)`
   ${table} { grid-column: 5; grid-row: 2; justify-self: center; }
   /* A score takes the same compact central slot as VS. */
   ${tile} {
-    gap: 3px;
-    font-size: 0.8125rem;
-    line-height: 1.3;
     color: ${({ theme }) => theme.color.text};
-    > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-size: inherit; }
     > [data-loss] { color: ${({ theme }) => theme.color.mutedText}; }
-    [data-status="live"] &, [data-status="live"] & > span:nth-child(2) { color: ${({ theme }) => theme.color.live.solid}; }
+    [data-status="live"] & { color: ${({ theme }) => theme.color.live.text}; }
   }
 `;
 const StateChip = styled.span<{ $tone: StateTone }>`
@@ -387,6 +373,7 @@ const StateChip = styled.span<{ $tone: StateTone }>`
     letter-spacing: 0.02em;
     line-height: 1.1;
     color: ${({ theme, $tone }) => $tone === "live" ? theme.color.live.text : $tone === "final" ? theme.color.mutedText : theme.color.outcome.void.text};
+    ${({ $tone }) => $tone !== "halted" && css`transform: translateY(-2px);`}
   }
 `;
 
@@ -639,8 +626,7 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
   const { status, score } = fixture;
   const final = hasFinalScoreStatus(status);
   const scoreline = score && (snapshot || status === "live" || final) ? <>
-    <Score aria-hidden="true"><span data-loss={lead < 0 || undefined}>{messages.number(score.home)}</span>
-      <span>–</span><span data-loss={lead > 0 || undefined}>{messages.number(score.away)}</span></Score>
+    <Score data-score aria-hidden="true"><ScoreFigures home={messages.number(score.home)} away={messages.number(score.away)} lead={lead} /></Score>
     <VisuallyHidden>{messages.text("match.scoreline", { label: messages.text(snapshot ? "match.regulationScoreNote" : final ? "match.finalScore" : "match.liveScore"),
       home, away, homeScore: messages.number(score.home), awayScore: messages.number(score.away) })}</VisuallyHidden>
   </> : <>
@@ -650,12 +636,12 @@ function MatchState({ fixture, home, away, lead, clock, messages, snapshot = fal
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
   if (snapshot) return <Center data-match-state="snapshot">{scoreline}</Center>;
-  if (clock) return <Center data-match-state="live">{scoreline}<StateChip $tone="live" aria-hidden="true">{clock.visible}</StateChip>
+  if (clock) return <Center data-match-state="live">{scoreline}<StateChip data-score-clock $tone="live" aria-hidden="true"><MatchClockText text={clock.visible} /></StateChip>
     <VisuallyHidden>{clock.spoken}</VisuallyHidden></Center>;
   if (final && (status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties")) {
     const regulationOnly = fixture.scorePeriod === "regulation" && status !== "finished-regulation";
     return <Center data-match-state="final">{scoreline}
-      <StateChip $tone="final" title={regulationOnly ? messages.text("match.regulationScoreNote") : undefined}>
+      <StateChip data-score-clock $tone="final" title={regulationOnly ? messages.text("match.regulationScoreNote") : undefined}>
         <span aria-hidden="true">{messages.text(`match.final.${status}`)}{regulationOnly && "*"}</span>
         <VisuallyHidden>{messages.text(`match.status.${status}`)}{regulationOnly && `. ${messages.text("match.regulationScoreNote")}`}</VisuallyHidden>
       </StateChip>

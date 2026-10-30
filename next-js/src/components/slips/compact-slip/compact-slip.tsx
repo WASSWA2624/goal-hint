@@ -4,6 +4,7 @@ import { useId, type ReactNode } from "react";
 import Link from "@/components/navigation/navigation-link";
 import { TeamLogo } from "@/components/match/team-logo";
 import { MatchStatus } from "@/components/match/match-status";
+import { ScoreFigures, Scoreline } from "@/components/match/score-presentation";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { snapshotCardPrediction } from "@/domain/match-card";
@@ -65,7 +66,8 @@ function SelectionRow({ selection, position, locale, result, matchStates, analys
       <span data-leg-probability id={`${id}-probability`}><span data-number-label>{messages.text("slips.probability")}</span><strong>{formatSlipProbability(selection.probability, messages)}</strong></span>
       <span data-result id={`${id}-result`}>
         <MatchStatus status={status} outcome={outcome} messages={messages} snapshot={!state && result?.fixtureId === selection.fixtureId} />
-        {fixture.score && <span data-saved-score title={messages.text("match.regulationScoreNote")}><VisuallyHidden>{messages.text("match.regulationScoreNote")}: </VisuallyHidden>{messages.number(fixture.score.home)}–{messages.number(fixture.score.away)}</span>}
+        {fixture.score && <Scoreline data-saved-score title={messages.text("match.regulationScoreNote")}><VisuallyHidden>{messages.text("match.regulationScoreNote")}: </VisuallyHidden>
+          <ScoreFigures home={messages.number(fixture.score.home)} away={messages.number(fixture.score.away)} /></Scoreline>}
       </span>
       {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
   </>;

@@ -108,7 +108,7 @@ def verify_desktop(document, path, saved=False):
     if saved:
         assert [row.attrs["data-outcome"] for row in rows] == ["correct", "incorrect", "void"], f"{path}: original saved outcomes"
         scores = [row.nodes(attr="data-score")[0].text for row in rows]
-        assert "2-1" in scores[0] and "4-0" in scores[1] and "VS" in scores[2], f"{path}: supplied regulation scores only"
+        assert "2–1" in scores[0] and "4–0" in scores[1] and "VS" in scores[2], f"{path}: supplied regulation scores only"
         assert all(not row.nodes(attr="data-clock")[0].text.strip() for row in rows), f"{path}: saved result does not invent FT or elapsed minutes"
         assert all(not row.nodes(attr="data-match-label") for row in rows), f"{path}: saved outcomes have no redundant progress label"
         assert [row.nodes(attr="data-outcome-label")[0].text.strip() for row in rows] == ["Won", "Lost", "Void"], f"{path}: explicit saved selection labels"
@@ -122,7 +122,7 @@ def verify_states(document):
     assert [row.attrs["data-match-state"] for row in rows] == ["upcoming", "live", "halftime", "finished", "finished"], "states: supplied fixture phases"
     assert [row.attrs["data-outcome"] for row in rows] == ["pending", "pending", "pending", "correct", "incorrect"], "states: original selection outcomes"
     assert [row.nodes(attr="data-clock")[0].text.strip() for row in rows] == ["", "30′", "HT", "FT", "FT"], "states: supplied minute, halftime and final labels"
-    for row, score in zip(rows, ["VS", "1-0", "1-1", "2-1", "0-1"]):
+    for row, score in zip(rows, ["VS", "1–0", "1–1", "2–1", "0–1"]):
         assert score in row.nodes(attr="data-score")[0].text, "states: actual supplied score"
     assert [row.nodes(attr="data-match-status")[0].text.strip() for row in rows] == ["Upcoming", "Live", "Live", "Won", "Lost"], "states: progress takes precedence until the final outcome"
     assert [bool(row.nodes(attr="data-match-live-dot")) for row in rows] == [False, True, True, False, False], "states: only live fixtures have a glowing dot, including halftime"

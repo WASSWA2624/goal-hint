@@ -119,9 +119,9 @@ export const alignedLedgerStyles = css`
     min-inline-size: 0; inline-size: 100%; block-size: 20px;
     color: ${({ theme }) => theme.color.text}; font-variant-numeric: tabular-nums;
   }
-  [data-score] { display: block; inline-size: 2.1rem; text-align: center; font-size: 0.8125rem; line-height: 16px; }
+  [data-score] { inline-size: 100%; text-align: center; }
   [data-clock] {
-    position: absolute; inset-block-start: -8px; inset-inline-start: 50%; transform: translateX(-50%);
+    position: absolute; inset-block-start: -5px; inset-inline-start: 50%; transform: translateX(-50%);
     color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 10px;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }

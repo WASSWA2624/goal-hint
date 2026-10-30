@@ -121,7 +121,7 @@ def verify(origin, directory):
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
     # Live: one progress label and glowing dot; the supplied minute stays with the score.
     match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?data-match-live-dot[\s\S]*?<span data-pick-value[^>]*>Live</span></span>', by_id["card-pending"])
-    match(r'>67′</span>', by_id["card-pending"])
+    match(r'>67<span[^>]*data-minute-marker[^>]*>′</span>', by_id["card-pending"])
     no_match(r'data-result-badge="pending"', by_id["card-pending"])
     no_match(r">(?:vs|VS)<", by_id["card-pending"])
     checks = {

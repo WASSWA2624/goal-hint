@@ -92,6 +92,13 @@ reuse the same base component. Live adds the slip header's steady dot and softly
 reversing halo; reduced motion keeps a still glow. The supplied minute and phase
 stay above the score.
 
+Actual score figures use a shared 16px presentation and wider en dash. Live
+scores use the theme's red, while only the minute prime has a subtle glow.
+Clock text sits closer to the separator; FT and HT stay steady. Reduced motion
+keeps a still prime. The score slot, row height, team/metadata typography and
+desktop columns retain their existing geometry. Compact saved-result scores
+use the same figures without inventing a live clock or final phase.
+
 The shared grid uses square edges, quiet dividers, compact row padding and the
 active light/dark palette. Coarse pointers retain 44px effective row/analysis
 targets. No separate desktop `#` column is introduced: one-based feed positions

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "@/components/navigation/navigation-link";
 import { TeamLogo } from "@/components/match/team-logo";
 import { MatchStatus } from "@/components/match/match-status";
+import { ScoreFigures, Scoreline } from "@/components/match/score-presentation";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { compactLeagueName, compactMarketName, compactTeamName } from "@/domain/compact-fixture-label";
@@ -91,8 +92,8 @@ export function CleanLedgerSelection({ selection, locale, result, matchStates, a
         <strong data-field-value>{formatSlipProbability(selection.probability, m)}</strong></span>
     </div>
     <span data-result data-mobile-result id={`${id}-result`}><MatchStatus status={status} outcome={outcome} messages={m} snapshot={!state && !!savedResult} />
-      {fixture.score && <span data-saved-score title={m.text("match.regulationScoreNote")}><VisuallyHidden>{m.text("match.regulationScoreNote")}: </VisuallyHidden>
-        {m.number(fixture.score.home)}–{m.number(fixture.score.away)}</span>}</span>
+      {fixture.score && <Scoreline data-saved-score title={m.text("match.regulationScoreNote")}><VisuallyHidden>{m.text("match.regulationScoreNote")}: </VisuallyHidden>
+        <ScoreFigures home={m.number(fixture.score.home)} away={m.number(fixture.score.away)} /></Scoreline>}</span>
     {analysisLinks && <VisuallyHidden id={`${id}-analysis`}>{m.text("match.analysisLabel", { home, away })}</VisuallyHidden>}
   </>;
   return <li data-compact-selection={selection.fixtureId} data-slip-selection={selection.fixtureId}>
