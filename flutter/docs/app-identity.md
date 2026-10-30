@@ -138,7 +138,8 @@ key and restored the original Windows appearance settings. Ignored captures are
 under `next-js/output/identity-006/`; [the tracker](../dev-tracker.md) records the
 individual checks and remaining acceptance work.
 
-Further Android device checks are explicitly deferred by the owner. Apple native
+Targeted Android recovery appearance, retry and restart checks now pass in
+[012](../dev-plan/012-recovery-theme-and-desktop-update.md). Broader Android checks and Apple native
 compilation/runtime, macOS decoration execution and Linux embedding/appearance
 remain unqualified on this Windows host. These platform gaps keep
 [006](../dev-plan/006-app-identity-and-theme.md) Partial.

@@ -56,8 +56,8 @@ and system-bar styling, desktop caption integration, reusable launcher artwork,
 and white branded startup. Windows real OS light/dark, web preference,
 reload and separate-process restart checks passed. See
 [native identity](docs/app-identity.md) and the tracker for exact evidence.
-Android checks remain deferred; Apple/Linux execution and installed launcher
-qualification remain open, keeping 006 Partial. Step 007 adds a pinned release
+Targeted Android recovery theme, retry and restart checks now pass; broader
+Android and Apple/Linux acceptance remain open, keeping 006 Partial. Step 007 adds a pinned release
 toolchain, Windows bundle/install tooling and explicit Android release-signing
 gates. See [builds and release acceptance](docs/releases.md),
 [Windows packaging](docs/windows-release.md) and [Android signing](docs/android-release.md).
@@ -83,7 +83,8 @@ Windows follow-up acceptance is reproducible through the
 cookie/cache and operator input/window/handler evidence from synthetic account
 storage and unavailable production services. The tracker records actual passes,
 interrupted attempts and remaining checks; a harness or successful build alone
-does not qualify a Windows release. Android device checks remain deferred.
+does not qualify a Windows release. See [012](dev-plan/012-recovery-theme-and-desktop-update.md)
+and the tracker for the installed Windows/Android build 6 checks.
 
 ## Toolchain and setup
 

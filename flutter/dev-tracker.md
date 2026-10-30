@@ -19,10 +19,11 @@ below for actual native execution evidence.
 | [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Partial — available Windows/Android lifecycle and cold reopen passed; manual, Apple and Linux qualification remains |
 | [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Partial — shared cache and Windows cold/recovery checks passed; owner stopped further Android checks, Apple/Linux remain unqualified |
 | [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Partial — shared retry/update safety and Windows/browser acceptance passed; Android/Apple/Linux reconnection remain unqualified |
-| [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity/native appearance and Windows real OS/theme/restart checks passed; Android deferred, Apple/Linux and installed launcher qualification remain open |
+| [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — Windows appearance and targeted Android recovery/theme/restart checks passed; broader Android and Apple/Linux qualification remains open |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Partial — pinned release tooling and signing gates implemented; production hosting, credentials and remaining platform acceptance prevent release |
 | [010](dev-plan/010-android-pull-to-refresh.md) | Android pull-to-refresh | Partial — native observer and widget coverage implemented; device gesture acceptance remains unverified |
-| [011](dev-plan/011-branded-native-recovery.md) | Branded native recovery | Partial — shared UI, Windows recovery and Android installation verified; Android fault scenarios and iOS acceptance remain unverified |
+| [011](dev-plan/011-branded-native-recovery.md) | Branded native recovery | Partial — Windows recovery and Android connection failure/theme/retry verified; broader Android faults and iOS acceptance remain unverified |
+| [012](dev-plan/012-recovery-theme-and-desktop-update.md) | Recovery theme and desktop update | Partial — installed Windows/Android build 6, local Windows shortcuts and Android theme/restart verified; Apple execution remains unqualified |
 
 Set a step to **Partial** when implementation begins and **Completed** only after
 its implementation and required acceptance checks pass. Keep its plan state in
@@ -905,3 +906,49 @@ The normal MainActivity is foreground and the shared Best Slips page loaded.
 No uninstall, app-data clearing, display/lock changes or test-target installation
 was performed. Wireless pairing was retained. This verifies replacement install
 and normal launch, not the still-unperformed Android network-fault scenarios.
+
+## 012 Recovery theme and local desktop handoff — 30 October 2026
+
+Native recovery now restores an origin-scoped, bounded mirror of public colors
+and the website's Light/Dark/System preference before startup. System continues
+following the OS. The offline Appearance menu queues only an explicit choice
+for the owned website's public theme key; normal account state and cookies stay
+in the existing browser profile. The canonical inverse mark keeps the football
+visible on dark surfaces, and recovery system bars follow the effective theme.
+Known hosting suspension documents are classified as service unavailable for
+HTTP 200/403 and provider redirects, with Retry retaining the intended app URL.
+
+| Check | Actual result |
+| --- | --- |
+| Final `flutter analyze --no-pub` | Passed, no issues, 7.2s |
+| Final `flutter test --no-pub --reporter expanded` | All 68 passed, including restart persistence, ordered public-appearance writes, strict schemas and native Light/Dark/System selection |
+| Windows native recovery integration | Passed: cold unreachable load, aborted load, 503, HTTP 200/403 suspension and provider redirect; retry restores the intended route with the same controller; offline Light choice reaches the real WebView public theme key; build 40.8s, test 9s |
+| Canonical artwork | All 47 generated assets/configuration outputs passed `node flutter/tool/generate-icons.mjs --check` |
+| Normal Windows Debug build | Passed, 44.6s, `lib/main.dart`, `APP_ENV=development`, `DEV_APP_ORIGIN=http://localhost:3000` |
+| Installed Windows | Development installer installed **1.0.0+6**; executable SHA-256 matches the normal build; desktop shortcut launched the local Best Slips page; both light and dark web surfaces observed |
+| Existing Windows entry points | Start menu, desktop and existing taskbar `.lnk` files now target the installed local build, retaining `com.goalhint.goal_hint`; original links backed up under ignored output; earlier production installation/profile preserved |
+| Normal Android Debug build | Passed, 26.2s, `lib/main.dart`, existing LAN origin `http://192.168.1.148:3000`; process-local JDK/temp/Kotlin settings |
+| Android USB update | `adb install -r --no-incremental` succeeded on TECNO CL8; installed version **1.0.0 / build 6**; installed base APK SHA-256 exactly matches the build; normal MainActivity loaded Best Slips |
+| Installed Android recovery | Debug-inspector offline simulation scoped to the app WebView displayed branded Light recovery matching the saved web choice; Dark selection showed inverse artwork with readable system bars; restoring Light and network access followed by Retry returned to Best Slips and acknowledged the pending choice |
+| Installed Android restart | Force-stop/reopen reported a cold launch; Light preference and public appearance remained persisted, with no pending update, and the light Best Slips page loaded |
+| Development delivery archives | Windows localhost and Android LAN ZIPs regenerated from clean source revision `f6275ce0`; manifests identify build 6 and checksums match; earlier ZIPs backed up |
+
+The physical Android checks used its installed normal application, not a test
+entry point. Wi-Fi/mobile-data, VPN, lock and security settings were not changed.
+Inspector cache/service-worker bypasses and offline emulation were removed, its
+temporary ADB forward was removed, and the phone was left in the healthy app in
+Light mode. The installed application's data was never cleared. Captures and
+command logs remain ignored under `next-js/output/native-recovery-theme/` and
+`next-js/output/recovery-theme-*`.
+
+The initial Android packaging attempt inherited an unsuitable Java setting;
+using the same process-local JDK as the successful build corrected verification.
+An inspector read during navigation timed out; its cleanup restored overrides,
+and subsequent native recovery, appearance acknowledgement and cold restart
+were verified directly. Neither issue required changing application source.
+
+Keep the Next.js development server running for both installed hosts. Windows
+now uses localhost instead of the unavailable remote hosting account. This is a
+development installation, not a signed production release. Real Android network
+loss, the wider native fault matrix and Apple build/runtime acceptance remain
+unqualified; Apple execution still requires a suitable macOS toolchain.
