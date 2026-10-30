@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { DesktopSlip, DesktopSlipDisclosure } from "@/components/slips/desktop-slip/desktop-slip";
 import { BestSlips } from "@/components/slips/best-slips";
-import { SlipTable } from "@/components/slips/slip-table";
+import { SlipCard } from "@/components/slips/slip-card";
 import { SlipBuilder } from "@/components/slips/slip-builder";
 import { parseReportingDate } from "@/domain/calendar";
 import type { BestSlipsResult } from "@/domain/best-slips";
@@ -49,7 +49,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
           {createMessages("en").text(scenario === "locked-member" ? "account.subscribe" : "auth.signInToAccess")}
         </ButtonLink>
       </DesktopSlipDisclosure> : scenario === "states" ? <DesktopSlip slip={stateSlip} matchStates={matchStates} index={0} locale="en" />
-        : scenario === "responsive" ? <SlipTable slip={desktopSlip} index={0} locale="en" />
+        : scenario === "responsive" ? <SlipCard slip={desktopSlip} index={0} locale="en" />
         : <DesktopSlip slip={desktopSlip} index={0} locale="en" {...(scenario === "saved" ? { results: savedResults } : {})} />}
     </section>
   </Stack></Container></PageMain>;

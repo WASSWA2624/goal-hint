@@ -1,5 +1,6 @@
 import "server-only";
 import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
+import { completedFixtureStatuses } from "../../domain/market-settlement.ts";
 
 import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
 import { isAnyProbability, probabilityFraction, type FeedQuery } from "../../domain/feed-query.ts";
@@ -13,13 +14,14 @@ import type { FeedSearch } from "./feed-search.ts";
 
 type Tx = Prisma.TransactionClient;
 /** Shared indexed fixture cohort; aliases f/l/c denote fixture, competition and applicable cycle. */
-export function publicFixtureScope(competitionIds: readonly number[]) {
+export function publicFixtureScope(competitionIds: readonly number[], completedOnly = false) {
   return Prisma.sql`f.provider='api-football' AND (EXISTS (SELECT 1 FROM FootballCompetitionProvider cp WHERE cp.competitionId=l.id AND cp.provider='api-football' AND cp.externalId IN (${Prisma.join(competitionIds)}))
       OR (c.state IN ('closed','void') AND (c.lockedSetId IS NOT NULL OR c.currentSetId IS NOT NULL))
-      OR (c.state='void' AND EXISTS (SELECT 1 FROM PredictionSet p WHERE p.cycleId=c.id)))`;
+      OR (c.state='void' AND EXISTS (SELECT 1 FROM PredictionSet p WHERE p.cycleId=c.id)))
+      ${completedOnly ? Prisma.sql`AND f.status IN (${Prisma.join(completedFixtureStatuses)})` : Prisma.empty}`;
 }
-export function publicFixtureCohortScope(range: ReportingDateRange, competitionIds: readonly number[]) {
-  return Prisma.sql`${publicFixtureScope(competitionIds)} AND f.kickoff>=${new Date(range.window.startInclusive)} AND f.kickoff<${new Date(range.window.endExclusive)}`;
+export function publicFixtureCohortScope(range: ReportingDateRange, competitionIds: readonly number[], completedOnly = false) {
+  return Prisma.sql`${publicFixtureScope(competitionIds, completedOnly)} AND f.kickoff>=${new Date(range.window.startInclusive)} AND f.kickoff<${new Date(range.window.endExclusive)}`;
 }
 /** Displayed revision for the applicable cycle: current while open, locked when closed, latest retained when void. */
 export const displayedSet = Prisma.sql`CASE
@@ -30,7 +32,7 @@ export const displayedSet = Prisma.sql`CASE
 /** `providerOdds` is the caller's effective odds flag (publicPolicy.features.providerOdds unless an isolated test
  * overrides it), so the SQL join and filter always follow the same rule as the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
-  providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null) {
+  providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null, completedOnly = false) {
   const markets = Prisma.join(query.markets);
   const hasDecision = Prisma.sql`rp.feedRecommendation IS NOT NULL`;
   const recommendedFamily = Prisma.sql`NULLIF(JSON_UNQUOTE(JSON_EXTRACT(rp.feedRecommendation,'$.family')),'null')`;
@@ -60,7 +62,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const inWindows = (windows: { start: number; end: number }[]) => windows.length
     ? Prisma.sql`(${Prisma.join(windows.map((window) => Prisma.sql`(f.kickoff>=${new Date(window.start)} AND f.kickoff<${new Date(window.end)})`), " OR ")})`
     : Prisma.sql`FALSE`;
-  const scope = days ? Prisma.sql`${publicFixtureScope(competitionIds)} AND ${inWindows(days)}` : publicFixtureCohortScope(range, competitionIds);
+  const scope = days ? Prisma.sql`${publicFixtureScope(competitionIds, completedOnly)} AND ${inWindows(days)}` : publicFixtureCohortScope(range, competitionIds, completedOnly);
   const filters: Prisma.Sql[] = [scope];
   if (timeWindows) filters.push(inWindows(timeWindows));
   if (query.leagues.length > 0) filters.push(Prisma.sql`l.id IN (${Prisma.join(query.leagues)})`);

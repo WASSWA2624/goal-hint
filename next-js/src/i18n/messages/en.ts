@@ -243,6 +243,8 @@ export const en = {
   "paywall.slips": "Slip predictions are for subscribers",
   "paywall.slipsDescription": "Explore the slip settings. Subscribe to generate predictions and odds.",
   "paywall.subscribersOnly": "Subscribers only",
+  "paywall.completedMatches": "Completed matches are public",
+  "paywall.unfinishedMatch": "Subscribe to view upcoming and in-progress matches, including matches from previous days that are still unfinished.",
   "paywall.picksOnly": "Predictions only",
   "access.required": "Subscriber access is required.",
   "detail.subscriberMetadataDescription": "Subscriber access includes Goal Hint predictions for this match.",

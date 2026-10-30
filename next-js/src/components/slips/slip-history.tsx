@@ -6,7 +6,7 @@ import { createMessages } from "@/i18n/messages";
 import { EmptyState } from "@/components/ui/feedback";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { HeadingRow, Note, Results, SlipStack } from "./slip-styles";
-import { SlipTable } from "./slip-table";
+import { SlipCard } from "./slip-card";
 
 /** Completed slips carry no owner identity and can be read by every visitor. */
 export function SlipHistory({ slips, locale, statistics, period }: {
@@ -19,7 +19,7 @@ export function SlipHistory({ slips, locale, statistics, period }: {
     <HeadingRow><h2 id="completed-slips">{m.text("slips.history")}</h2></HeadingRow>
     <Note>{m.text("slips.historyHint")}</Note>
     {slips?.length ? <SlipStack>{slips.map((item, index) => <div key={item.id}>
-      <SlipTable slip={item.slip} index={index} locale={locale} results={item.results}
+      <SlipCard slip={item.slip} index={index} locale={locale} results={item.results}
         publishedAt={Date.parse(item.savedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
     </div>)}</SlipStack> : <EmptyState headingLevel={3} title={m.text(slips === null ? "slips.historyUnavailable" : "slips.historyEmpty")} />}
   </Results>;

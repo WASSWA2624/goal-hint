@@ -31,7 +31,7 @@ Open `http://127.0.0.1:3107/?theme=porcelain-blue`; use any palette ID from
 `.tmp/light-theme-review/`. Add `--reuse` to serve the previous build.
 
 The fixture reuses `MatchFeedPage`, `PublicShell`, `MatchCard`,
-`PerformanceSummary` and `SlipTable`. All records and the background feed refresh
+`PerformanceSummary` and `SlipCard`. All records and the background feed refresh
 are synthetic. Interface links and filters retain their production destinations;
 the fixture is intended for visual review rather than functional navigation.
 

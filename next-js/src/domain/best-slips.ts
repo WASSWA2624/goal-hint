@@ -23,13 +23,15 @@ export type BestSlipView = BestSlipSummary & Readonly<{
   slip?: BestSlip; matchStates?: readonly SlipMatchState[];
   id?: string; publicationDay?: ReportingDate; publishedAt?: number; outcome?: "won" | "lost" | "pending" | "void";
   status?: SlipStatus;
+  /** Server proof that every original selection and its canonical fixture are complete. */
+  completed?: boolean;
 }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
-  /** Current/future prediction access, freshly checked at the response boundary. */
+  /** Unfinished prediction access, freshly checked at the response boundary. */
   entitled?: boolean;
   searchLimited: boolean; partialCoverage: boolean;
-  /** All slips in this daily publication, including those with active original cycles. */
+  /** The complete eligible date cohort before result filtering or pagination; public counts exclude unfinished slips. */
   statistics?: PerformanceSummaryCounts | null;
   browse?: Readonly<{
     query: BestSlipsQuery; total: number | null; pageSize: number; hasMore: boolean; nextCursor: string | null;
@@ -51,7 +53,7 @@ export function bestSlipBuilder(model: JointSlipModel) {
   }) satisfies typeof buildSlips;
 }
 
-/** Public aggregate allowlist: the displayed arithmetic mean is distinct from the joint estimate used for ranking. */
+/** Aggregate projection allowlist; viewer access and completion eligibility are enforced by the slip service. */
 export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean, matchStates?: readonly SlipMatchState[]): readonly BestSlipView[] {
   return [...slips].sort(compareBestSlips).map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
     totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, averageProbability: slip.averageProbability,

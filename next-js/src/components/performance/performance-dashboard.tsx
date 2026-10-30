@@ -15,7 +15,7 @@ import { Button, ButtonLink, SelectInput, TextInput, TextLink } from "@/componen
 import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
-import { SlipTable } from "@/components/slips/slip-table";
+import { SlipCard } from "@/components/slips/slip-card";
 import { PerformanceSummary } from "./performance-summary";
 import { EvidenceList, MarketGrid, MetricList, PerformanceFilters, PerformanceTable, TableFrame } from "./performance-styles";
 
@@ -169,7 +169,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
       {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {history?.records.length ? history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
-        <SlipTable slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
+        <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
       </article>) : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
@@ -9,6 +9,7 @@ import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
+import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { marketSelections, type MarketFamily, type MarketSelection } from "@/domain/markets";
@@ -22,7 +23,9 @@ import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCrit
 import { guardSlipDateTime, guardSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
-import { SlipTable } from "./slip-table";
+import { slipPageSize } from "@/domain/slip-pagination";
+import { SlipCard } from "./slip-card";
+import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { SlipInputWarning, SlipNumericInput } from "./slip-numeric-input";
@@ -115,6 +118,8 @@ type Props = Readonly<{
 export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
+  const [pagination, setPagination] = useState({ result, page: 1 });
+  if (pagination.result !== result) setPagination({ result, page: 1 });
   const desktop = useDesktopLayout();
   const recheckAccess = useCallback(() => { startTransition(() => router.refresh()); }, [router]);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
@@ -319,6 +324,9 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   }
   const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
+  const pageCount = Math.ceil((data?.slips.length ?? 0) / slipPageSize);
+  const page = Math.min(pagination.page, Math.max(1, pageCount)), offset = (page - 1) * slipPageSize;
+  const shownSlips = useMemo(() => data?.slips.slice(offset, offset + slipPageSize) ?? [], [data?.slips, offset]);
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
@@ -459,17 +467,20 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     <Results data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
       {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
         requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
-      {subscriberOnly ? accessRequired : generated ? <>
+      {subscriberOnly ? accessRequired : pending && !generated ? <SlipLoading locale={locale} label={messages.text("slips.building")} /> : generated ? <>
         {data.jointProbabilities && <Note>{messages.text("slips.jointRanking")}</Note>}
-        <SlipMatchRefreshProvider slips={data.slips} enabled={desktop && !pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
+        <SlipMatchRefreshProvider slips={shownSlips} enabled={desktop && !pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
-        <SlipList $phoneGap={9} data-slip-list>{data.slips.map((slip, index) => {
+        <SlipList $phoneGap={9} data-slip-list>{shownSlips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
-          return <SlipTable key={slip.id} slip={slip} index={index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
+          return <SlipCard key={slip.id} slip={slip} index={offset + index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
             shareSource={{ source: "builder", criteria: serializeSlipCriteria(criteria).toString(), slipId: slip.id }}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>
         </SlipMatchRefreshProvider>
+        {pageCount > 1 && <NumberedPagination page={page} pages={pageCount} disabled={pending}
+          labels={numberedPaginationLabels(messages, messages.text("slips.generated"))}
+          onPage={(next) => setPagination({ result, page: next })} />}
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={emptyState ? messages.text(`slips.state.${emptyState}.description`) : <SlipStatusCopy

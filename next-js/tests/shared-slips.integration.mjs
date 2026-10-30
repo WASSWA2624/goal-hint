@@ -34,7 +34,7 @@ test('shared slips survive retries and source/account expiry under insert-only M
   assert.doesNotMatch(JSON.stringify(first.shared), /accountId|ownerKey|fingerprint|256700/u);
   await root.query('UPDATE MemberAccount SET erasedAt=?, phone=NULL WHERE id=?', [new Date(at + 1000), member.accountId]);
   const readLater = createSharedSlips(database, config, () => at + 366 * 86400000);
-  assert.deepEqual(await readLater.read(first.shared.id), first.shared);
+  assert.deepEqual(await readLater.read(first.shared.id, true), first.shared);
   await assert.rejects(root.query('UPDATE SharedSlip SET createdAt=createdAt WHERE id=?', [first.shared.id]), /immutable/u);
   await assert.rejects(root.query('DELETE FROM SharedSlip WHERE id=?', [first.shared.id]), /permanent/u);
   await assert.rejects(database.query(tx => tx.$executeRaw`UPDATE SharedSlip SET createdAt=createdAt WHERE id=${first.shared.id}`));

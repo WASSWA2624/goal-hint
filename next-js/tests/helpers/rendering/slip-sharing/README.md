@@ -1,6 +1,6 @@
 # Slip sharing rendering fixture
 
-This isolated acceptance application uses the production `SlipTable` and sharing
+This isolated acceptance application uses the production `SlipCard` and sharing
 drawer with synthetic, schema-valid public snapshots. It never reads a database,
 creates real public links, or contacts a WhatsApp recipient.
 

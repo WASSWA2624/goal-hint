@@ -65,7 +65,7 @@ export const alignedLedgerStyles = css`
   --review-centre-width: 3.5rem;
 
   [data-desktop-row] {
-    --desktop-columns: 3.15rem 4.45rem var(--review-country-width) var(--review-league-width) minmax(0, 1fr) 6.5rem 6rem 5.25rem var(--review-status-width);
+    --desktop-columns: var(--review-date-width, 3.15rem) 4.45rem var(--review-country-width) var(--review-league-width) minmax(0, 1fr) 6.5rem 6rem 5.25rem var(--review-status-width);
     --review-outcome-text: ${({ theme }) => theme.color.outcome.pending.text};
     --review-outcome-fill: ${({ theme }) => theme.color.outcome.pending.background};
     --review-outcome-border: ${({ theme }) => theme.color.outcome.pending.border};

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
+import { isCompletedFixtureStatus, isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import type { SlipMatchWatch } from "../../domain/slip-match-refresh.ts";
 import { savedSlipCompletedStatuses, type SavedSlipResult } from "../../domain/saved-slips.ts";
@@ -58,7 +58,7 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
 const emptyResult = (selection: SlipMatchWatch): SavedSlipResult => ({ fixtureId: selection.fixtureId,
   family: selection.family, selection: selection.selection,
   ...(selection.forecast ? { forecast: selection.forecast } : {}), completed: false, status: "unknown",
-  regulationVerified: false, regulationHome: null, regulationAway: null });
+  fixtureCompleted: false, regulationVerified: false, regulationHome: null, regulationAway: null });
 
 type HistoricalResult = Readonly<{ result: StoredFixtureResult | null; terminalVoid: boolean; completed?: boolean }>;
 /** Pure projection of already validated, sealed records. The saved choice never changes to the cutoff's later choice. */
@@ -66,7 +66,8 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number;
 }>): SavedSlipResult {
-  const base = emptyResult(selection), { fixture, cycle, revision, asOf } = input;
+  const { fixture, cycle, revision, asOf } = input;
+  const base = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(resultStatus.parse(fixture.status)) };
   if (!selection.forecast || !cycle || cycle.id !== selection.forecast.cycleId || cycle.fixtureId !== selection.fixtureId ||
     cycle.openedAt > asOf || !slipRevisionMatches(selection, revision) || revision.publishedAt > asOf) return base;
   if (cycle.state === "void" && cycle.voidedAt !== null && cycle.voidedAt <= asOf) {
@@ -216,7 +217,8 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
     if (!reference) {
       const status = resultStatus.parse(fixture.status), coherent = result !== null && result.observedAt <= asOf && result.fixtureId === fixture.id &&
         fixtureResultMatchesCanonical(fixture, result, fixture.lifecycleState?.issue ?? null);
-      projected.push(resultProjection(emptyResult(selection), status, coherent ? result : null, savedSlipCompletedStatuses.includes(status)));
+      projected.push(resultProjection({ ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(status) },
+        status, coherent ? result : null, savedSlipCompletedStatuses.includes(status)));
       continue;
     }
     if (!cycles.has(reference.cycleId)) cycles.set(reference.cycleId, await storedCycle(tx, reference.cycleId));

@@ -131,11 +131,11 @@ test('public projection shares the original arithmetic mean separately from rank
   assert.doesNotMatch(JSON.stringify(publicView), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|oddsBasis/);
   assert.equal(bestSlipViews(slips, true)[0].slip, slips[0]);
   const gated = gateBestSlips({ day: today, state: 'generated', slips: bestSlipViews(slips, true), searchLimited: false, partialCoverage: false }, free);
-  assert.deepEqual(gated.slips, publicView);
+  assert.deepEqual(gated.slips, []);
 });
 
-test('every non-entitled tier retains public aggregates while the gate strips unapproved view fields', () => {
-  const slips = generate().slips, views = bestSlipViews(slips, true), expected = bestSlipViews(slips, false);
+test('non-entitled tiers hide unfinished slips while the gate strips unapproved view fields', () => {
+  const slips = generate().slips, views = bestSlipViews(slips, true), expected = [];
   const input = { day: today, state: 'generated', searchLimited: false, partialCoverage: false,
     slips: views.map(view => ({ ...view, fixtureId: 'private-fixture', prediction: 'home-win', internalId: view.slip.id })) };
   for (const access of [free, { ...free, signedIn: true }, { ...free, mode: 'free' }]) {
@@ -156,15 +156,15 @@ function service(overrides = {}) {
     read: async (criteria, clock, locale, build) => ({ state: 'generated', data: build(criteria, records, clock.now()), asOf: now,
       examined: records.length, searchLimited: false, partialCoverage: false, retryAfterSeconds: null }), ...overrides });
 }
-test('off mode shares daily aggregate odds and probabilities while keeping active matches entitled', async () => {
+test('off mode still withholds unfinished slips from non-subscribers', async () => {
   const read = service(), publicResult = await read(free), signedInResult = await read({ ...free, signedIn: true }), paidResult = await read(full);
-  assert.equal(publicResult.slips.length, 10); assert.ok(!publicResult.slips[0].slip);
+  assert.deepEqual(publicResult.slips, []);
   assert.equal(paidResult.slips[0].slip.selections.length, 2);
   assert.equal(publicResult.day, today);
-  assert.deepEqual(publicResult.statistics, { total: 10, won: 0, lost: 0, pending: 10, void: 0 });
-  assert.deepEqual(publicResult.statistics, paidResult.statistics);
+  assert.deepEqual(publicResult.statistics, { total: 0, won: 0, lost: 0, pending: 0, void: 0 });
+  assert.deepEqual(paidResult.statistics, { total: 10, won: 0, lost: 0, pending: 10, void: 0 });
   assert.deepEqual(publicResult, signedInResult);
-  assert.deepEqual(publicResult.slips, paidResult.slips.map(({ slip, ...summary }) => { assert.ok(slip); return summary; }));
+  assert.ok(paidResult.slips.every(view => view.slip));
 });
 
 test('missing approved odds or joint model performs no cohort read and returns an honest empty state', async () => {
@@ -191,15 +191,11 @@ test('API rechecks access after generation, strips expired selections, and disab
   assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
   assert.equal(response.headers.get('set-cookie'), null);
   const payload = await response.json();
-  assert.deepEqual(Object.keys(payload.slips[0]), ['rank', 'matchCount', 'totalOdds', 'estimatedProbability', 'averageProbability']);
-  assert.equal(payload.slips[0].totalOdds, '4.84');
-  assert.equal(payload.slips[0].estimatedProbability, generate().slips[0].estimatedProbability);
-  assert.equal(payload.slips[0].averageProbability, generate().slips[0].averageProbability);
-  assert.notEqual(payload.slips[0].averageProbability, payload.slips[0].estimatedProbability);
+  assert.deepEqual(payload.slips, []);
   assert.doesNotMatch(JSON.stringify(payload), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|oddsBasis/);
 });
 
-test('anonymous API visitors receive the same ranked original aggregates without match data', async () => {
+test('anonymous API visitors receive no unfinished slip aggregates or match data', async () => {
   const read = service(), expected = await read(free);
   const handler = createBestSlipsHandler({ read, access: async () => free });
   const response = await handler(new Request('https://goalhint.com/api/best-slips'));
@@ -213,19 +209,17 @@ test('filtered API reads receive normalized dates/results and recheck access bef
   const handler = createBestSlipsHandler({ now: () => now, access: async () => checks++ ? free : full,
     read: async () => { throw new Error('must use the filtered reader'); },
     browse: async (viewer, query) => {
-      assert.equal(viewer.tier, 'full'); received = query;
-      const result = await service()(full);
+      received = query;
+      const result = await service()(viewer);
       return { ...result, slips: result.slips.map((view, index) => ({ ...view, id: `publication-${index}`,
         publicationDay: today, outcome: 'won' })),
         browse: { query, total: result.slips.length, pageSize: 20, hasMore: false, nextCursor: null, from: today, to: today } };
     } });
   const response = await handler(new Request('https://goalhint.com/api/best-slips?period=today&status=won&page=1'));
-  assert.equal(response.status, 200); assert.equal(checks, 2);
+  assert.equal(response.status, 200); assert.equal(checks, 3);
   assert.deepEqual(received, { period: 'today', status: 'won', page: 1 });
   const data = await response.json();
-  assert.equal(data.browse.query.status, 'won'); assert.equal(data.slips[0].outcome, 'won');
-  assert.equal(data.slips[0].publicationDay, today);
-  assert.equal(data.slips[0].slip, undefined); assert.equal(data.slips[0].matchStates, undefined);
+  assert.equal(data.browse.query.status, 'won'); assert.deepEqual(data.slips, []);
   assert.doesNotMatch(JSON.stringify(data), /private-fixture|home-win|selections|kickoffAt|homeTeam|awayTeam|forecast|oddsBasis/);
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });

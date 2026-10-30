@@ -42,9 +42,9 @@ export function DesktopSlip({ slip, index, locale, results, matchStates, initial
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}
     headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} {...(shareSource ? { source: shareSource } : {})}
       {...(sharedSlip ? { sharedSlip } : {})} locale={locale} /> : undefined}>
-    <ul aria-labelledby={headingId}>{slip.selections.map((selection) => {
+    <ul aria-labelledby={headingId}>{slip.selections.map((selection, selectionIndex) => {
       const result = results?.find((item) => item.fixtureId === selection.fixtureId);
-      return <DesktopSlipRow key={selection.fixtureId} selection={selection} locale={locale} analysisLinks {...(result ? { result } : {})}
+      return <DesktopSlipRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks {...(result ? { result } : {})}
         {...(currentStates ? { matchStates: currentStates } : {})} />;
     })}</ul>
   </DesktopSlipDisclosure>;

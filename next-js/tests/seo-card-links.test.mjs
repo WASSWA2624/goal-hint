@@ -74,7 +74,7 @@ function render({ cards = [], details = [] }) {
 const anchors = (html) => [...html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/gu)].map((match) => match[1].replaceAll("&amp;", "&"));
 const pickState = (html) => html.match(/data-pick-state="([a-z]+)"/u)?.[1];
 
-test("every card links its canonical match page, so crawlers and free viewers reach upcoming matches", () => {
+test("the shared card keeps its canonical match link when an unfinished forecast is gated", () => {
   const locked = gateFixture(upcoming("card-gated"), anonymous);
   assert.equal(locked.forecast.gated, true);
   const { cards: [guest, signedIn, subscriber] } = render({ cards: [
@@ -85,7 +85,7 @@ test("every card links its canonical match page, so crawlers and free viewers re
     assert.match(anchors(html)[0], /^\/en\/matches\/card-gated\/[a-z0-9-]+$/u);
     assert.doesNotMatch(html, /return=|\/en\/account|\/en\/subscribe/u);
   }
-  // A locked card still carries no prediction, price or meter; only the public chance and the subscribe line.
+  // Standalone locked cards carry no prediction, price, meter or public chance value.
   for (const html of [guest, signedIn]) {
     assert.equal(pickState(html), "subscriber");
     assert.doesNotMatch(html, prediction);
@@ -130,15 +130,18 @@ test("a market filter outside the published families shows the subscriber's no-p
   assert.doesNotMatch(unfiltered, prediction);
 });
 
-test("a delivered forecast stays locked for free viewers, and finished matches stay open", () => {
+test("a delivered forecast stays locked for free viewers, and completed matches including cancellation stay open", () => {
   // Fail closed: a whole forecast handed to a free viewer's card still renders locked, without its pick.
-  const { cards: [whole, finished] } = render({ cards: [{ fixture: upcoming("card-whole"), gated: true, analysisSlug: slug },
-    { fixture: gateFixture(cardFixture({ fixtureId: "card-final" }), anonymous), gated: true, analysisSlug: slug }] });
+  const { cards: [whole, finished, canceled] } = render({ cards: [{ fixture: upcoming("card-whole"), gated: true, analysisSlug: slug },
+    { fixture: gateFixture(cardFixture({ fixtureId: "card-final" }), anonymous), gated: true, analysisSlug: slug },
+    { fixture: gateFixture(scenarios.canceled.feed.records[0], anonymous), gated: true, analysisSlug: slug }] });
   assert.equal(pickState(whole), "subscriber");
   assert.doesNotMatch(whole, prediction);
   assert.match(whole, />Locked prediction</u);
   assert.equal(pickState(finished), "settled");
   assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
+  assert.notEqual(pickState(canceled), "subscriber");
+  assert.match(canceled, /data-pick-selection=/u);
 });
 
 test("the match page locks the verdict, markets and analysis only over a published forecast", () => {

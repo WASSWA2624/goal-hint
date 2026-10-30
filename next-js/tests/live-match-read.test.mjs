@@ -53,13 +53,17 @@ test('reader withholds corrupt, future, oversized, duplicate and foreign occurre
   }
   assert.equal(await storedLiveMatchSnapshot({ async $queryRaw() { throw new Error('private database diagnostic'); } }, scope), null);
 });
-test('public detail schema and paywall keep match observations separate from the original premium forecast', () => {
+test('public detail withholds unfinished match observations and releases them once the fixture completes', () => {
   const detail = liveDetail(), liveMatch = liveMatchViewSnapshot({ fixtureId: detail.fixture.fixtureId, cycleId: detail.fixture.cycleId,
     kickoffAt: detail.fixture.kickoffAt, collectedAt: detail.asOf, statistics: { ...liveMatchViewSnapshot().statistics, retrievedAt: detail.asOf - 20_000 },
     events: { ...liveMatchViewSnapshot().events, retrievedAt: detail.asOf - 10_000, providerUpdatedAt: null } });
   const full = matchDetailResponseSchema.parse({ ...detail, liveMatch });
   const free = matchDetailResponseSchema.parse(gateDetailResponse(full, { tier: 'free', signedIn: false }));
-  assert.deepEqual(free.liveMatch, full.liveMatch); assert.equal(free.snapshot.gated, true); assert.equal(free.fixture.forecast.gated, true);
+  assert.equal(free.liveMatch, null); assert.equal(free.snapshot.gated, true); assert.equal(free.fixture.forecast.gated, true);
+  assert.deepEqual(free.snapshot.probabilities, []); assert.deepEqual(free.fixture.forecast.probabilities, []);
+  const completed = matchDetailResponseSchema.parse(gateDetailResponse({ ...full,
+    fixture: { ...full.fixture, status: 'finished-regulation' } }, { tier: 'free', signedIn: false }));
+  assert.deepEqual(completed.liveMatch, full.liveMatch); assert.deepEqual(completed.snapshot, full.snapshot);
   assert.equal(full.snapshot.revisionId, detail.snapshot.revisionId); assert.deepEqual(full.snapshot.markets, detail.snapshot.markets);
   for (const replacement of [{ ...liveMatch, cycleId: randomUUID() }, { ...liveMatch, fixtureId: randomUUID() },
     { ...liveMatch, kickoffAt: liveMatch.kickoffAt - 1 }, { ...liveMatch, collectedAt: detail.asOf + 1 }]) {

@@ -33,6 +33,7 @@ export const paginationControlStyles = css`
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     &:focus-visible { outline-color: ${({ theme }) => theme.color.onAction}; }
   }
-  &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
+  &:disabled { cursor: not-allowed; }
+  &:disabled:not([aria-current="page"]) { color: ${({ theme }) => theme.color.disabledText}; }
   svg { font-size: 1.125rem; }
 `;

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { savedSlipSnapshotSchema } from "../../domain/saved-slips.ts";
+import { savedSlipCompleted, savedSlipSnapshotSchema } from "../../domain/saved-slips.ts";
 import { modelIndependentSlip, type BuiltSlip } from "../../domain/slip-builder.ts";
 import { sharedSlipIdSchema, sharedSlipRules, sharedSlipSchema, sharedSlipUrl, type SharedSlip } from "../../domain/shared-slips.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
@@ -12,6 +12,9 @@ import type { MemberIdentity } from "../members/member-sessions.ts";
 import { takeMemberLimit } from "../members/rate-limit.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import { bindSlipForecasts } from "./slip-forecast.ts";
+import { readSlipForecastResults } from "./slip-forecast.ts";
+import { readWithSlipAccess } from "./slip-access.ts";
+import type { ViewerAccess } from "../members/viewer-access.ts";
 
 type Row = { id: string; createdAt: Date; snapshotJson: unknown; validIntegrity: unknown };
 export type SharedSlipWrite = Readonly<{ state: "shared"; shared: SharedSlip }> | Readonly<{ state: "forbidden" | "busy" | "changed" | "too-large" }>;
@@ -24,7 +27,7 @@ function publicRecord(row: Row): SharedSlip {
 
 /** Sharing is explicit publication. Only a random public token and immutable snapshot leave this service. */
 export function createSharedSlips(database: DatabaseRuntime, config: Pick<AnalyticsConfig, "key">, now = Date.now,
-  { bindForecasts = bindSlipForecasts, identity = () => randomBytes(16).toString("hex") } = {}) {
+  { bindForecasts = bindSlipForecasts, resolveResults = readSlipForecastResults, identity = () => randomBytes(16).toString("hex") } = {}) {
   return Object.freeze({
     async publish(member: MemberIdentity, input: BuiltSlip, source: "builder" | "best"): Promise<SharedSlipWrite> {
       const proposed = savedSlipSnapshotSchema.parse(modelIndependentSlip(input)) as BuiltSlip;
@@ -58,18 +61,24 @@ export function createSharedSlips(database: DatabaseRuntime, config: Pick<Analyt
         return { state: "shared", shared: publicRecord({ id, createdAt: at, snapshotJson: snapshot, validIntegrity: 1 }) };
       }, { isolationLevel: "ReadCommitted", timeout: 30_000 });
     },
-    async read(id: string): Promise<SharedSlip | null> {
+    async read(id: string, entitled = false): Promise<SharedSlip | null> {
       if (!sharedSlipIdSchema.safeParse(id).success) return null;
-      const rows = await database.query((tx) => tx.$queryRaw<Row[]>`SELECT id,createdAt,snapshotJson,
-        integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity FROM SharedSlip WHERE id=${id} LIMIT 1`);
-      return rows[0] ? publicRecord(rows[0]) : null;
+      return database.transaction(async (tx) => {
+        const rows = await tx.$queryRaw<Row[]>`SELECT id,createdAt,snapshotJson,
+          integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity FROM SharedSlip WHERE id=${id} LIMIT 1`;
+        if (!rows[0]) return null;
+        const shared = publicRecord(rows[0]);
+        if (!entitled && !savedSlipCompleted(shared.slip, await resolveResults(tx, shared.slip.selections, now()))) return null;
+        return shared;
+      }, { isolationLevel: "RepeatableRead", timeout: 30_000 });
     },
   });
 }
 
-export async function readSharedSlip(id: string): Promise<SharedSlip | null> {
+export async function readSharedSlip(id: string, access?: ViewerAccess): Promise<SharedSlip | null> {
   if (!sharedSlipIdSchema.safeParse(id).success) return null;
   const { database, config } = await getAnalyticsServices();
   if (!database) throw new Error("Shared slip storage is unavailable.");
-  return createSharedSlips(database, config).read(id);
+  const read = (viewer: ViewerAccess) => createSharedSlips(database, config).read(id, viewer.tier === "full");
+  return access ? read(access) : readWithSlipAccess(read);
 }

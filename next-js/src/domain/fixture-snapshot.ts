@@ -168,7 +168,7 @@ export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine
 export const publicChanceSchema = z.array(z.strictObject({ family: marketFamilySchema, probability: z.number().gt(0).lt(1) })).max(4);
 export const gatedForecastSchema = z.strictObject({ gated: z.literal(true), runId: identity, revisionId: identity, publishedAt: instant,
   runSequence: publicForecastSchema.shape.runSequence, provisional: publicForecastSchema.shape.provisional,
-  updateDelayed: publicForecastSchema.shape.updateDelayed, families: publishedFamiliesSchema, probabilities: publicChanceSchema,
+  updateDelayed: publicForecastSchema.shape.updateDelayed, families: publishedFamiliesSchema, probabilities: publicChanceSchema.max(0),
 });
 const wireFixtureBaseSchema = fixtureSnapshotBaseSchema.extend({ forecast: z.union([publicForecastSchema, gatedForecastSchema]).nullable() });
 function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.RefinementCtx) {

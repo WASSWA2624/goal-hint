@@ -13,14 +13,13 @@ import type { BestSlipsResult } from "@/domain/best-slips";
 import { defaultBestSlipsQuery, resolveBestSlipsDates } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
-import { CompactSlipDisclosure } from "./compact-slip/compact-slip";
-import { DesktopSlipDisclosure } from "./desktop-slip/desktop-slip";
-import { SlipTable } from "./slip-table";
+import { SlipCard, SlipCardSummary } from "./slip-card";
+import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
 import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
 import { BestSlipsAccess } from "./best-slips-access";
-import { FilterButton } from "./best-slips-filter-styles";
+import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
 export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
@@ -30,12 +29,11 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
   const browse = useBestSlipsBrowse(result, desktop, recheckAccess), content = browse.result;
   const dates = resolveBestSlipsDates(desktop ? browse.query : defaultBestSlipsQuery(browse.entitled), result.day);
-  const requiresSubscription = !browse.entitled && (dates.to === null || dates.to >= result.day);
+  const requiresSubscription = !browse.entitled;
   const period = dates.from && dates.to
     ? dates.from === dates.to ? `${m.reportingDateMedium(dates.from)} · EAT`
       : m.text("bestSlips.filters.dateRange", { from: m.reportingDateMedium(dates.from), to: m.reportingDateMedium(dates.to) })
     : m.text("bestSlips.filters.allDates");
-  const SummaryDisclosure = desktop ? DesktopSlipDisclosure : CompactSlipDisclosure;
   const watchedSlips = useMemo(() => content?.slips.flatMap((view) => view.slip ? [view.slip] : []) ?? [], [content]);
   const initialStates = useMemo(() => content?.slips.flatMap((view) => view.matchStates ?? []) ?? [], [content]);
   const pageRefreshMs = desktop && browse.entitled && watchedSlips.length ? 60_000 : 20_000;
@@ -46,24 +44,29 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
     const refresh = () => {
       // A later refresh can replace a navigation that has not committed yet.
       if (refreshInFlight.current || document.visibilityState !== "visible" || !navigator.onLine
-        || document.querySelector("[data-navigation-pending]") || browse.loading) return;
+        || document.querySelector("[data-navigation-pending]") || browse.loading || browse.updating) return;
       refreshInFlight.current = true;
       startRefresh(() => router.refresh());
     };
     const timer = setInterval(refresh, pageRefreshMs);
     document.addEventListener("visibilitychange", refresh);
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
-  }, [refreshing, router, pageRefreshMs, browse.loading]);
-  return <SlipStack>
+  }, [refreshing, router, pageRefreshMs, browse.loading, browse.updating]);
+  return <SlipStack data-best-slips-page>
     <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
-    {desktop && <BestSlipsFilters query={browse.query} today={result.day} locale={locale} entitled={browse.entitled} busy={browse.loading}
-      statistics={content?.statistics} countSummary={content && (!requiresSubscription || content.slips.length > 0)
+    {desktop && <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
+      entitled={browse.entitled} busy={browse.loading || browse.updating} updating={browse.updating}
+      statistics={content?.statistics} countSummary={content?.state === "generated"
         ? <BestSlipsSummary result={content} period={period} locale={locale} /> : null} onChange={browse.change} />}
     {requiresSubscription && <BestSlipsAccess signedIn={signedIn} locale={locale} />}
     {!desktop && content?.statistics && <PerformanceSummary counts={content.statistics} locale={locale} kind="slips" period={period} />}
-    {browse.loading ? <CriteriaPanel role="status" aria-busy="true">{m.text("bestSlips.filters.loading")}</CriteriaPanel>
-    : browse.failed ? <CriteriaPanel role="alert"><Stack $gap="sm"><p>{m.text("bestSlips.filters.dataUnavailable")}</p>
+    {browse.failed && content && <FiltersRow role="alert" data-best-slips-update-failed>
+      <Note>{m.text("bestSlips.filters.updateFailed")}</Note>
+      <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton>
+    </FiltersRow>}
+    {browse.loading ? <SlipLoading locale={locale} />
+    : browse.failed && !content ? <CriteriaPanel role="alert"><Stack $gap="sm"><p>{m.text("bestSlips.filters.dataUnavailable")}</p>
       <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton></Stack></CriteriaPanel>
     : content && content.slips.length === 0 && requiresSubscription && content.state !== "data-unavailable" ? null
     : content && content.slips.length === 0 && content.browse && content.state === "generated" ? <CriteriaPanel role="status"><Stack $gap="sm">
@@ -77,25 +80,26 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
       <TextLink href={matchesHref(locale)} prefetch={false}>{m.text("bestSlips.browseMatches")}</TextLink>
     </Stack></CriteriaPanel> : content && <>
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
-      <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={recheckAccess}
+      <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={browse.revokeAccess}
         accessFallback={requiresSubscription ? null : <BestSlipsAccess signedIn={signedIn} locale={locale} />}>
       <SlipList data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
-        {view.slip ? <SlipTable index={view.rank - 1} locale={locale}
+        {view.slip ? <SlipCard index={view.rank - 1} locale={locale}
         {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
         {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
         {...(view.status ? { status: view.status } : {})}
         shareSource={{ source: "best", day: view.publicationDay ?? content.day, slipId: view.slip.id }}
-        slip={view.slip} {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SummaryDisclosure key={view.rank} locale={locale} index={view.rank - 1}
+        slip={view.slip} {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SlipCardSummary key={view.rank} locale={locale} index={view.rank - 1}
           totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}
           {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
           {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
           {...(view.status ? { status: view.status } : {})} collapsible={false}>
         {null}
-      </SummaryDisclosure>}</div>)}</SlipList>
+      </SlipCardSummary>}</div>)}</SlipList>
       </SlipMatchRefreshProvider>
     </>}
-    {desktop && (browse.loading || browse.canPrevious || content?.browse?.hasMore) && <BestSlipsPagination previous={browse.previous} next={browse.next}
-      canPrevious={browse.canPrevious} canNext={content?.browse?.hasMore ?? false} page={browse.query.page} busy={browse.loading} locale={locale} />}
+    {content?.browse?.total !== null && content?.browse?.total !== undefined && <BestSlipsPagination onPage={browse.goToPage}
+      total={content.browse.total} page={browse.displayQuery.page}
+      busy={browse.loading || browse.updating || browse.retained} locale={locale} />}
     <Note>{m.text("bestSlips.disclaimer")}</Note>
   </SlipStack>;
 }

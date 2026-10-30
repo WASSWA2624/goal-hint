@@ -17,10 +17,12 @@ export function createBestSlipsHandler({ read = readBestSlips, browse = readBest
       const queryFor = (entitled: boolean) => parsed && defaultPeriod ? { ...parsed, period: defaultBestSlipsQuery(entitled).period } : parsed;
       let query = queryFor(viewer.tier === "full"), result = query ? await browse(viewer, query) : await read(viewer);
       let finalViewer = await access(request);
-      if (defaultPeriod && viewer.tier !== finalViewer.tier) {
+      if (viewer.tier !== finalViewer.tier) {
         query = queryFor(finalViewer.tier === "full");
         result = query ? await browse(finalViewer, query) : await read(finalViewer);
-        finalViewer = await access(request);
+        const checked = await access(request);
+        if (checked.tier !== finalViewer.tier) return Response.json({ error: "access-changed" }, { status: 503, headers: privateMatchHeaders });
+        finalViewer = checked;
       }
       return Response.json(gateBestSlips(result, finalViewer), {
         status: query && result.state === "data-unavailable" ? 503 : 200, headers: privateMatchHeaders,

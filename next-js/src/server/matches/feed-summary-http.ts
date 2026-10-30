@@ -24,13 +24,17 @@ export function createMatchFeedSummaryHandler(source: SummaryReader,
       const initialQuery = parseMatchFeedQuery(parameters, getReportingDate(asOf), { asOf,
         ...(initialAccess.tier === "free" ? { providerOdds: true } : {}) });
       if (initialAccess.tier === "free" && usesSubscriberFeedOracle(initialQuery)) throw new MatchFeedError("subscription-required");
-      const data = await source(parameters, {}, { now: () => asOf });
+      let data = await source(parameters, { completedOnly: initialAccess.tier === "free" }, { now: () => asOf });
       if (!data.performance) throw new MatchFeedError("unavailable");
       // A long audit must not retain an expired viewer's private filter access.
       const access = await resolveAccess(request);
       const at = utcInstantFromEpochMilliseconds(data.asOf);
       const query = parseMatchFeedQuery(parameters, getReportingDate(at), { asOf: at, providerOdds: true });
       if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
+      if (initialAccess.tier === "full" && access.tier === "free") {
+        data = await source(parameters, { completedOnly: true }, { now: () => asOf });
+        if (!data.performance) throw new MatchFeedError("unavailable");
+      }
       return Response.json(feedPerformanceReplySchema.parse({ performance: data.performance,
         paginationVersion: data.paginationVersion, asOf: data.asOf, access: { tier: access.tier, signedIn: access.signedIn } }), { headers: privateMatchHeaders });
     } catch (error) { return publicMatchFailure(error, privateMatchHeaders); }

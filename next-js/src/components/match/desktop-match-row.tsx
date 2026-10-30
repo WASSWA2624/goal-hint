@@ -32,13 +32,15 @@ export type DesktopMatchRowProps = Readonly<{
   eagerLogos?: boolean; offline?: boolean; preview?: boolean;
   /** Feed timestamps follow the device; slips retain their reporting-zone default. */
   messages?: Messages;
+  /** Optional content before the kickoff date, such as a slip-local match ordinal. */
+  datePrefix?: ReactNode;
 }>;
 
 /** One approved desktop match row for live feed records and immutable slip selections. */
 export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTeam, competition, status, score, liveClock,
   outcome, market, marketFamily, marketDescription, odds, probability, analysisHref, headingLevel = 4, titleNote, position,
   matchState: suppliedMatchState, savedScore = false, scoreDescription: suppliedScoreDescription, regulationOnly = false, statusContent, details,
-  pickState, eagerLogos = false, offline = false, preview = false, messages }: DesktopMatchRowProps) {
+  pickState, eagerLogos = false, offline = false, preview = false, messages, datePrefix }: DesktopMatchRowProps) {
   const m = messages ?? createMessages(locale), id = useId();
   const final = isPlayedFinalStatus(status), clock = !offline && status === "live" ? liveClock : null;
   const halftime = status === "live" && clock?.phase === "half-time";
@@ -74,8 +76,12 @@ export function DesktopMatchRow({ fixtureId, locale, kickoffAt, homeTeam, awayTe
     .map((name) => `${id}-${name}`).join(" ");
   return <div data-desktop-row data-desktop-design="aligned-ledger" data-desktop-preview-row={preview || undefined}
     data-fixture-id={preview ? undefined : fixtureId} data-market={marketFamily} data-outcome={outcome} data-pick-state={pickState}
-    data-status={status} data-match-state={matchState} role="group" tabIndex={-1} aria-labelledby={`${id}-teams`} aria-describedby={descriptionIds}>
-    {kickoffAt === null ? <span data-row-date data-kickoff-unknown id={`${id}-date`}>{m.text("match.kickoffUnknown")}</span>
+    data-status={status} data-match-state={matchState} data-numbered-date={datePrefix ? "" : undefined}
+    role="group" tabIndex={-1} aria-labelledby={`${id}-teams`} aria-describedby={descriptionIds}>
+    {datePrefix ? <span data-row-date data-kickoff-unknown={kickoffAt === null ? "" : undefined} id={`${id}-date`}>
+      {datePrefix}{kickoffAt === null ? <span>{m.text("match.kickoffUnknown")}</span>
+        : <time data-match-kickoff dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt)}</time>}
+    </span> : kickoffAt === null ? <span data-row-date data-kickoff-unknown id={`${id}-date`}>{m.text("match.kickoffUnknown")}</span>
       : <time data-row-date id={`${id}-date`} dateTime={iso} title={kickoffTitle}>{m.shortKickoffDate(kickoffAt)}</time>}
     {kickoffAt === null ? <span data-row-time id={`${id}-time`} hidden>—</span>
       : <time data-row-time id={`${id}-time`} dateTime={iso}>{m.reportingTime(kickoffAt)} {m.timeZone(kickoffAt)}</time>}

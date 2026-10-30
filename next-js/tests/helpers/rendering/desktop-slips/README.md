@@ -18,7 +18,7 @@ Routes:
   Lost and Void. A saved result alone never invents FT or elapsed minutes.
 - `/states`: five explicit supplied states: upcoming/VS, live/1-0/30′,
   halftime/1-1/HT, finished/2-1/Won and finished/0-1/Lost.
-- `/responsive`: actual shared `SlipTable`; SSR retains one mobile selection
+- `/responsive`: actual shared `SlipCard`; SSR retains one mobile selection
   set and desktop hydration switches to Aligned ledger at 64rem.
 - `/best-full` and `/builder`: actual BestSlips and SlipBuilder components,
   each with two slips and the same explicit observations for gap/alignment checks.

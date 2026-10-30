@@ -40,6 +40,12 @@ export function isPlayedFinalStatus(status: SettlementStatus): boolean {
   return status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties";
 }
 
+/** A postponed fixture can still be played; only terminal occurrences are public completed results. */
+export const completedFixtureStatuses = ["finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded"] as const satisfies readonly SettlementStatus[];
+export function isCompletedFixtureStatus(status: SettlementStatus): boolean {
+  return completedFixtureStatuses.some((completed) => completed === status);
+}
+
 export type SettlementReason =
   | "missing-selection"
   | "unsupported-market-selection"

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { savedSlipSnapshotSchema, savedSlipView } from '../src/domain/saved-slips.ts';
+import { savedSlipCompleted, savedSlipSnapshotSchema, savedSlipView } from '../src/domain/saved-slips.ts';
 import { cycleFromRows, revisionFromRows } from '../src/server/predictions/history-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { bindSlipForecasts, projectSlipForecastResult, readSlipForecastResults, slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
@@ -40,12 +40,14 @@ test('server binding preserves the exact published revision and refuses source d
   assert.equal(await bindSlipForecasts(tx, f.slip, f.at), null);
 });
 
-test('a formally void original cycle remains public and void while its replacement is live', () => {
+test('a formally void original cycle retains its adjudication but remains private while its replacement is live', () => {
   const f = slipForecastFixture(), selection = bound(f), input = projection(f);
   const cycle = { ...input.cycle, state: 'void', voidedAt: input.asOf - 1000, voidReason: 'formal-postponement' };
   const outcome = projectSlipForecastResult(selection, { ...input, cycle,
     fixture: { ...f.fixture, activeCycleId: randomUUID(), status: 'live' } });
   assert.equal(outcome.completed, true);
+  assert.equal(outcome.fixtureCompleted, false);
+  assert.equal(savedSlipCompleted({ ...f.slip, selections: [selection] }, [outcome]), false);
   const view = savedSlipView('saved', '', { ...f.slip, selections: [selection] }, [outcome]);
   assert.equal(view.outcome, 'void'); assert.equal(view.slip.selections[0].probability, 0.7);
   assert.equal(view.slip.selections[0].odds, '2.00');

@@ -15,7 +15,7 @@ function slip(last = 1) {
       competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '5.00', oddsBasis: 'bookmaker' }] };
 }
 function fixture() {
-  const parents = [], rows = [], legs = [], bound = [], outcomes = new Map();
+  const parents = [], rows = [], legs = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map();
   let at = now, corrupted = false, ignored = false, afterMembership = () => {};
   const statement = (query, values) => Array.isArray(query) ? { text: query.join('?'), values } : { text: query.sql, values: query.values };
   const tx = {
@@ -53,13 +53,14 @@ function fixture() {
     },
     async resolveResults(_tx, selections) {
       return selections.map(item => ({ fixtureId: item.fixtureId, family: item.family, selection: item.selection, forecast: item.forecast,
-        completed: outcomes.has(item.fixtureId), status: outcomes.get(item.fixtureId) === 'void' ? 'canceled' : 'finished-regulation',
+        completed: outcomes.has(item.fixtureId), fixtureCompleted: fixtureCompletion.get(item.fixtureId) ?? outcomes.has(item.fixtureId),
+        status: outcomes.get(item.fixtureId) === 'void' ? 'canceled' : 'finished-regulation',
         regulationVerified: true, regulationHome: outcomes.get(item.fixtureId) === 'lost' ? 0 : 2, regulationAway: 1 }));
     },
   });
   const publish = (changes = {}) => store.publish({ day: today, slips: [slip()], model,
     searchLimited: false, partialCoverage: false, verifyModel: () => true, verifyPublicOdds: () => true, ...changes });
-  return { store, publish, parents, rows, legs, bound, outcomes, advance(value) { at = value; }, corrupt() { corrupted = true; },
+  return { store, publish, parents, rows, legs, bound, outcomes, fixtureCompletion, advance(value) { at = value; }, corrupt() { corrupted = true; },
     ignoreInsert() { ignored = true; }, afterMembership(callback) { afterMembership = callback; } };
 }
 const query = { from: today, to: today, page: 1, pageSize: 1 };
@@ -110,8 +111,7 @@ test('first qualified publication preserves quotes, model evidence and original 
   assert.equal(day.slips[0].slip.totalOdds, '5.00');
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
   assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
-  assert.deepEqual(gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' }).slips,
-    publicViews.map((view, index) => ({ ...view, id: f.rows[index].id, publicationDay: today, publishedAt: now, outcome: 'pending', status: 'in-progress' })));
+  assert.deepEqual(gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' }).slips, []);
   assert.doesNotMatch(JSON.stringify(publicViews), /original-1|home-win|selections|cycleId|revisionId|fixtureId/);
 });
 
@@ -138,6 +138,20 @@ test('pagination uses the whole publication-period denominator and retains void 
   assert.equal(page.statistics.roi, 1.5); assert.equal(page.statistics.void, 1);
   assert.equal((await f.store.history({ ...query, page: 3 })).records[0].outcome, 'void');
   assert.equal((await f.store.history({ ...query, page: 4 })).records.length, 0);
+});
+
+test('public performance and daily counts filter canonical unfinished fixtures before pagination', async () => {
+  const f = fixture(); await f.publish({ slips: [slip(1), slip(2), slip(3)] });
+  f.outcomes.set(fixtureId(1), 'won'); f.outcomes.set(fixtureId(2), 'lost'); f.outcomes.set(fixtureId(3), 'void');
+  f.fixtureCompletion.set(fixtureId(2), false);
+  const first = await f.store.history(query, true), second = await f.store.history({ ...query, page: 2 }, true);
+  assert.equal(first.total, 2); assert.equal(first.statistics.total, 2); assert.equal(first.records[0].rank, 1);
+  assert.equal(second.records[0].rank, 3); assert.equal(second.statistics.lost, 0);
+  const day = await f.store.day(today, true);
+  assert.deepEqual(day.slips.map(view => view.rank), [1, 3]); assert.equal(day.statistics.total, 2);
+  assert.ok(day.slips.every(view => view.completed));
+  const full = await f.store.history(query);
+  assert.equal(full.total, 3); assert.equal(full.statistics.total, 3);
 });
 
 test('daily slip performance includes every published slip and updates from original-cycle results', async () => {

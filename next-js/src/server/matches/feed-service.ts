@@ -40,11 +40,13 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
 
 /** Lists and deferred counts must describe the same committed cohort. */
 export async function storedFeedPaginationVersion(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
-  sourceRange: ReportingDateRange, competitionIds: readonly number[]): Promise<string> {
+  sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false): Promise<string> {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-  return evidenceFingerprint({ contract: "feed-pagination-v4", query: feedQueryKey(query, today),
+  return evidenceFingerprint({ contract: "feed-pagination-v5", completedOnly, query: feedQueryKey(query, today),
     scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
 }
+
+export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean }>;
 
 /** `providerOdds` defaults to publicPolicy.features.providerOdds (off until odds display rights are recorded);
  * isolated tests may enable it to exercise the odds filter and prices. */
@@ -55,7 +57,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
-  return Object.freeze({ async query(input: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}): Promise<StoredMatchFeedResponse> {
+  return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}): Promise<StoredMatchFeedResponse> {
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -69,9 +71,9 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const read = () => database.transaction(async (tx) => {
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
-        const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds);
-        const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale);
-        const sql = feedSql(query, range, competitionIds, providerOdds, search);
+        const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds, context.completedOnly);
+        const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
+        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
         // Start with the indexed date cohort. Choosing the competition/season
         // join first scans its entire archive before applying the date window.
         // Options cover the entire date cohort, independently of applied filters/page.
@@ -121,7 +123,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 16, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 17, completedOnly: context.completedOnly === true, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

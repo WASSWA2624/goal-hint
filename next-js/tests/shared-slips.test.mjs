@@ -19,6 +19,7 @@ const config = { key: (purpose, value) => createHash('sha256').update('synthetic
 function fixture({ entitled = true, session: suppliedSession, blocked = false, limit = 1 } = {}) {
   const rows = new Map();
   let rate = 0, inserts = 0, ids = 0, binds = 0;
+  let resultFor = () => ({ status: 'scheduled', completed: false, fixtureCompleted: false });
   const session = suppliedSession === undefined ? { accountId: member.accountId, authenticatedAt: new Date(now - 1000),
     expiresAt: new Date(now + 3600000), passwordResetAt: null, codeEnteredAt: new Date(now - 1000) } : suppliedSession;
   const tx = {
@@ -43,8 +44,11 @@ function fixture({ entitled = true, session: suppliedSession, blocked = false, l
   };
   const database = { transaction: async run => run(tx), query: async run => run(tx) };
   const service = createSharedSlips(database, config, () => now, { identity: () => String(++ids).padStart(32, '0'),
-    bindForecasts: async (_tx, slip) => { binds++; return slip; } });
-  return { database, service, tx, rows, counts: () => ({ inserts, rate, binds }) };
+    bindForecasts: async (_tx, slip) => { binds++; return slip; },
+    resolveResults: async (_tx, selections) => selections.map(selection => ({ fixtureId: selection.fixtureId,
+      family: selection.family, selection: selection.selection, ...(selection.forecast ? { forecast: selection.forecast } : {}),
+      regulationVerified: true, regulationHome: 2, regulationAway: 0, ...resultFor(selection) })) });
+  return { database, service, tx, rows, results(project) { resultFor = project; }, counts: () => ({ inserts, rate, binds }) };
 }
 
 test('sharing requests accept only bounded server identities, never submitted odds or snapshots', () => {
@@ -59,13 +63,13 @@ test('sharing requests accept only bounded server identities, never submitted od
   assert.equal(sharedSlipSchema.safeParse({ ...shared, accountId: member.accountId }).success, false);
 });
 
-test('public snapshots are immutable, deduplicated per owner, and expose no private ownership', async () => {
+test('subscriber snapshots are immutable, deduplicated per owner, and expose no private ownership', async () => {
   const f = fixture();
   const first = await f.service.publish(member, { ...original, estimatedProbability: 0.3 }, 'best');
   assert.equal(first.state, 'shared');
   const second = await f.service.publish(member, original, 'best');
   assert.deepEqual(second, first); assert.deepEqual(f.counts(), { inserts: 1, rate: 1, binds: 0 });
-  const shared = await f.service.read(first.shared.id);
+  const shared = await f.service.read(first.shared.id, true);
   assert.deepEqual(shared, first.shared);
   assert.equal(shared.slip.totalOdds, '2.00');
   assert.doesNotMatch(JSON.stringify(shared), /private-account|private-session|256700|ownerKey|fingerprint|estimatedProbability/u);
@@ -99,7 +103,7 @@ test('new record throttling leaves existing permanent links readable and reusabl
   const first = await f.service.publish(member, original, 'best');
   const busy = await f.service.publish(member, { ...original, id: 'another-trusted-slip' }, 'best');
   assert.equal(busy.state, 'busy'); assert.equal(f.counts().inserts, 1);
-  assert.deepEqual(await f.service.read(first.shared.id), first.shared);
+  assert.deepEqual(await f.service.read(first.shared.id, true), first.shared);
   assert.deepEqual(await f.service.publish(member, original, 'best'), first);
 });
 
@@ -134,7 +138,7 @@ test('publish HTTP denies foreign origin, missing entitlement and fabricated sna
   assert.equal(f.counts().inserts, 0);
 });
 
-test('publish HTTP resolves trusted builder and sealed editorial sources; public reads need only a token', async () => {
+test('publish HTTP resolves trusted sources and completed shared snapshots remain readable without a subscription', async () => {
   for (const body of [{ source: 'best', day: today, slipId: original.id },
     { source: 'builder', criteria: serializeSlipCriteria(defaultSlipCriteria(today)).toString(), slipId: original.id }]) {
     const f = fixture();
@@ -142,8 +146,40 @@ test('publish HTTP resolves trusted builder and sealed editorial sources; public
     assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /no-store/u);
     const shared = sharedSlipSchema.parse(await response.json());
     assert.deepEqual(shared.slip, original);
-    const read = createReadSharedSlipHandler(id => f.service.read(id));
-    assert.deepEqual(await (await read(shared.id)).json(), shared);
-    assert.equal((await read('b'.repeat(32))).status, 404);
+    f.results(() => ({ status: 'finished-regulation', completed: true, fixtureCompleted: true }));
+    const read = createReadSharedSlipHandler({ read: (id, viewer) => f.service.read(id, viewer.tier === 'full'), access: async () => ({ tier: 'free', signedIn: false, mode: 'off' }) });
+    const readRequest = new Request('https://example.test/api/slips/share/' + shared.id);
+    assert.deepEqual(await (await read(readRequest, shared.id)).json(), shared);
+    assert.equal((await read(readRequest, 'b'.repeat(32))).status, 404);
   }
+});
+
+
+test('shared tokens do not release scheduled, live or partially completed slips to guests', async () => {
+  const f = fixture(), first = original.selections[0];
+  const mixed = { ...original, id: 'mixed-private-slip', totalOdds: '4.00', selections: [first, { ...first,
+    fixtureId: '10000000-0000-4000-8000-000000000098' }] };
+  const written = await f.service.publish(member, mixed, 'best');
+  assert.equal(written.state, 'shared');
+  assert.equal(await f.service.read(written.shared.id), null);
+  assert.deepEqual(await f.service.read(written.shared.id, true), written.shared);
+  f.results(selection => selection.fixtureId === first.fixtureId
+    ? { status: 'finished-regulation', completed: true, fixtureCompleted: true, regulationHome: 0, regulationAway: 2 }
+    : { status: 'live', completed: false, fixtureCompleted: false });
+  assert.equal(await f.service.read(written.shared.id), null, 'an early loss cannot release the remaining live prediction');
+  f.results(() => ({ status: 'canceled', completed: true, fixtureCompleted: true }));
+  assert.deepEqual(await f.service.read(written.shared.id), written.shared);
+});
+
+test('shared HTTP rechecks access after the read and discards unfinished data after expiry', async () => {
+  const f = fixture(), written = await f.service.publish(member, original, 'best');
+  let checks = 0;
+  const reads = [];
+  const read = createReadSharedSlipHandler({
+    read: (id, viewer) => { reads.push(viewer.tier); return f.service.read(id, viewer.tier === 'full'); },
+    access: async () => ({ tier: checks++ === 0 ? 'full' : 'free', signedIn: true, mode: 'off' }),
+  });
+  const response = await read(new Request('https://example.test/api/slips/share/' + written.shared.id), written.shared.id);
+  assert.equal(response.status, 404); assert.equal(checks, 3); assert.deepEqual(reads, ['full', 'free']);
+  assert.doesNotMatch(await response.text(), /home-win|fixtureId|probability/);
 });

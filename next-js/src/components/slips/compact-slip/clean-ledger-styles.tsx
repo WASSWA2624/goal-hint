@@ -11,6 +11,7 @@ export const CleanLedgerRow = styled.div`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
   @media (hover: hover) { &[href]:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   [data-country-flag] { flex: none; inline-size: 1.5em; block-size: 1em; object-fit: contain; }
+  [data-ledger-kickoff] > time { display: inline-flex; align-items: center; gap: 6px; }
   [data-ledger-facts] {
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: baseline; gap: 8px;
     min-inline-size: 0; font-variant-numeric: tabular-nums;

@@ -30,7 +30,7 @@ selection. Feed fixtures are passed directly through the existing `MatchCard`
 projection; they are never converted into artificial slip selections or a
 manufactured forecast distribution.
 
-The responsive switch follows the existing `SlipTable` pattern: server HTML
+The responsive switch follows the existing `SlipCard` pattern: server HTML
 contains one original card for each fixture. After hydration, the list selects
 Aligned ledger at 64rem and above; phones and tablets retain Clean ledger below
 that boundary. A fixture is never duplicated into hidden mobile and desktop
@@ -47,14 +47,16 @@ one pick. Missing prices remain unavailable; another family's price never fills
 the cell. `markets`, `selectedFamily` and the existing default-family policy
 retain their normal behavior.
 
-A card locks only when an unfinished fixture has a published eligible forecast
-that the viewer cannot access. It shows the authorized public probability when
-supplied, no selected outcome or price, and the existing unlock/subscribe copy.
-A fixture with no published eligible prediction remains visible with its actual
-`noPickReason`; `forecast: null` does not become a fabricated locked prediction.
-Gated and ordinary cards retain canonical match-detail navigation. The match
-page owns its panels' authorization and the existing feed access banner stays
-separate.
+Public match lists contain only canonically completed fixtures. The completed
+cohort is selected before filtering, summary counts and pagination; subscriber
+lists keep every eligible fixture. Public cache identities include this scope.
+An unfinished direct match link displays a subscription notice; its server
+projection withholds forecast chances, picks, prices, revision history and live
+observations, even for an old kickoff date. Completed results can be public on
+the same day. Canonical terminal statuses include played finals, cancellations,
+abandonments and awarded fixtures; postponed and unknown fixtures remain
+restricted. Reusable locked-card primitives still identify a published eligible
+family without inventing a probability or confusing it with `noPickReason`.
 
 The renderer reuses `selectedCardPrediction`, `selectedCardPrice` and
 `cardResultStatus`; it does not add settlement rules. Scheduled fixtures show

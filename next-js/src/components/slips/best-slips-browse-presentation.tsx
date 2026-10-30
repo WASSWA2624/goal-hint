@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import type { BestSlipsResult } from "@/domain/best-slips";
+import { bestSlipsQueryRules } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
-import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
 
 export function BestSlipsSummary({ result, period, locale }: { result: BestSlipsResult; period: string; locale: string }) {
   const m = createMessages(locale), browse = result.browse;
@@ -18,25 +18,11 @@ export function BestSlipsSummary({ result, period, locale }: { result: BestSlips
   </span>;
 }
 
-export function BestSlipsPagination({ previous, next, canPrevious, canNext, page, busy, locale }: {
-  previous: () => void; next: () => void; canPrevious: boolean; canNext: boolean; page: number; busy: boolean; locale: string;
+export function BestSlipsPagination({ onPage, total, page, busy, locale }: {
+  onPage: (page: number) => void; total: number; page: number; busy: boolean; locale: string;
 }) {
   const m = createMessages(locale);
-  const before = useRef<HTMLButtonElement>(null), after = useRef<HTMLButtonElement>(null);
-  const direction = useRef<"previous" | "next" | null>(null), wasBusy = useRef(busy);
-  useEffect(() => {
-    const active = document.activeElement;
-    if (wasBusy.current && !busy && direction.current && (active === document.body || active === before.current || active === after.current)) {
-      const preferred = direction.current === "previous" ? before.current : after.current;
-      const fallback = direction.current === "previous" ? after.current : before.current;
-      if (preferred && !preferred.disabled) preferred.focus({ preventScroll: true });
-      else if (fallback && !fallback.disabled) fallback.focus({ preventScroll: true });
-    }
-    wasBusy.current = busy;
-  }, [busy, canPrevious, canNext]);
-  return <FiltersRow as="nav" aria-label={m.text("bestSlips.filters.title")} data-best-slips-pagination>
-    <FilterButton ref={before} type="button" disabled={!canPrevious || busy} onClick={() => { direction.current = "previous"; previous(); }}>{m.text("bestSlips.filters.previous")}</FilterButton>
-    <span>{m.text("bestSlips.filters.page", { page: m.number(page) })}</span>
-    <FilterButton ref={after} type="button" disabled={!canNext || busy} onClick={() => { direction.current = "next"; next(); }}>{m.text("bestSlips.filters.next")}</FilterButton>
-  </FiltersRow>;
+  const pages = Math.min(bestSlipsQueryRules.maximumPage, Math.ceil(total / bestSlipsQueryRules.pageSize));
+  return pages > 1 ? <div data-best-slips-pagination><NumberedPagination page={page} pages={pages} disabled={busy}
+    onPage={onPage} labels={numberedPaginationLabels(m, m.text("slips.generated"))} /></div> : null;
 }

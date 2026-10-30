@@ -6,7 +6,7 @@ import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability
 import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
-import { savedSlipOutcome, savedSlipStatus, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
+import { savedSlipCompleted, savedSlipOutcome, savedSlipStatus, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
@@ -19,6 +19,7 @@ import { provenTrue } from "../shared/authority-proof.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { addReportingDays } from "../../domain/calendar.ts";
 import { bindSlipForecasts, readSlipForecastResults } from "./slip-forecast.ts";
+import { readWithSlipAccess } from "./slip-access.ts";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/u), instant = z.number().int().positive();
 const modelSchema = z.strictObject({ id: hash, calibrationReference: z.string().trim().min(1).max(512),
@@ -143,7 +144,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         return "published";
       });
     },
-    async day(day: string): Promise<BestSlipsResult | null> {
+    async day(day: string, completedOnly = false): Promise<BestSlipsResult | null> {
       parseReportingDate(day);
       return transaction(async (tx) => {
         const rows = await tx.$queryRaw<PublicationRow[]>`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
@@ -156,22 +157,24 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const snapshots = await readSnapshots(tx, rowsOfSlips);
         if (snapshots.length !== value.count || rowsOfSlips.some((row, index) => row.rank !== index + 1)) fail("unavailable");
         const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), await databaseTime(tx));
-        const statistics = { total: snapshots.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const statuses = snapshots.map((snapshot) => {
           const outcome = savedSlipOutcome(snapshot.slip, results), status = savedSlipStatus(snapshot.slip, results, outcome);
-          statistics[slipStatusCategory(status)]++;
-          return { outcome, status };
+          return { outcome, status, completed: savedSlipCompleted(snapshot.slip, results) };
         });
-        return { day: parseReportingDate(day), state: "generated", slips: bestSlipViews(snapshots.map((snapshot) =>
+        const views = bestSlipViews(snapshots.map((snapshot) =>
           ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true,
           slipMatchStatesFromResults(snapshots.flatMap((snapshot) => snapshot.slip.selections), results)).map((view, index) => ({ ...view,
             id: rowsOfSlips[index]!.id, publicationDay: parseReportingDate(value.day), publishedAt: value.publishedAt,
-            ...statuses[index]! })),
+            ...statuses[index]! }));
+        const slips = completedOnly ? views.filter((view) => view.completed) : views;
+        const statistics = { total: slips.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
+        for (const view of slips) statistics[slipStatusCategory(view.status)]++;
+        return { day: parseReportingDate(day), state: "generated", slips,
           searchLimited: value.searchLimited, partialCoverage: value.partialCoverage, statistics };
       });
     },
     /** Date/result browsing reuses original-cycle adjudication and keeps active rows behind the caller's access gate. */
-    async browse(input: BestSlipsQuery, today: ReportingDate): Promise<BestSlipsResult> {
+    async browse(input: BestSlipsQuery, today: ReportingDate, completedOnly = false): Promise<BestSlipsResult> {
       const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), today), dates = resolveBestSlipsDates(query, today);
       const cursor = query.cursor === undefined ? null : parseBestSlipsCursor(query.cursor), allDates = query.period === "all";
       return transaction(async (tx) => {
@@ -213,6 +216,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             .sort((left, right) => right.parent.day.localeCompare(left.parent.day) || left.row.rank - right.row.rank);
           for (const { row, snapshot, parent } of ordered) {
             const slipResults = snapshot.slip.selections.flatMap((selection) => resultsByFixture.get(selection.fixtureId) ?? []);
+            const completed = savedSlipCompleted(snapshot.slip, slipResults);
+            if (completedOnly && !completed) continue;
             const outcome = savedSlipOutcome(snapshot.slip, slipResults), status = savedSlipStatus(snapshot.slip, slipResults, outcome);
             const category = slipStatusCategory(status);
             statistics.total++; statistics[category]++;
@@ -222,7 +227,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
             const slip: BestSlip = { ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability };
             const [view] = bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, slipResults));
-            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome, status });
+            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome, status, completed });
           }
         }
         const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;
@@ -238,7 +243,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };
       });
     },
-    async history(input: PublishedSlipHistoryQuery): Promise<PublishedSlipHistory> {
+    async history(input: PublishedSlipHistoryQuery, completedOnly = false): Promise<PublishedSlipHistory> {
       const query = parsePublishedSlipHistoryQuery(input);
       return transaction(async (tx) => {
         const asOf = await databaseTime(tx);
@@ -260,6 +265,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const samples = [], records = [];
         for (const [index, row] of rows.entries()) {
           const parent = parents.get(row.publicationId)!, snapshot = snapshots[index]!;
+          if (completedOnly && !savedSlipCompleted(snapshot.slip, results)) continue;
           const publishedAt = new Date(parent.publishedAt).toISOString();
           const view = savedSlipView(row.id, publishedAt, snapshot.slip, results);
           samples.push({ id: row.id, publishedAt: parent.publishedAt, rank: row.rank,
@@ -301,6 +307,6 @@ export async function readPublishedSlipHistory(query: PublishedSlipHistoryQuery)
       const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
       await ensureDemoSlipDates(database, Array.from({ length: range.dayCount }, (_, index) => addReportingDays(range.startDate, index)));
     }
-    return await createPublishedSlips(database).history(query);
+    return await readWithSlipAccess((viewer) => createPublishedSlips(database).history(query, viewer.tier === "free"));
   } catch { return null; }
 }

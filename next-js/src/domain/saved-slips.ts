@@ -2,7 +2,7 @@ import { z } from "zod";
 import { storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { isMarketSelection, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { marketFamilySchema } from "./fixture-snapshot.ts";
-import { isPlayedFinalStatus, settleMarketSelection, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
+import { completedFixtureStatuses, isCompletedFixtureStatus, isPlayedFinalStatus, settleMarketSelection, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipCriteria, type SlipForecastReference } from "./slip-builder.ts";
 import { slipForecastReferenceSchema } from "./slip-forecast-reference.ts";
 import type { PerformanceSummaryCounts } from "./performance-summary.ts";
@@ -42,13 +42,13 @@ export type SavedSlipResult = Readonly<{
   selection?: MarketSelection;
   /** A terminal original cycle stays complete even when a replacement fixture is active. */
   completed?: boolean;
+  /** Current canonical fixture completion, independent of adjudication of an older prediction cycle. */
+  fixtureCompleted?: boolean;
   cycleEligibility?: CycleEligibility;
   /** Validated current/original-cycle presentation facts; never part of the persisted slip. */
   progress?: SlipMatchProgress;
 }>;
-export const savedSlipCompletedStatuses: readonly SettlementStatus[] = Object.freeze([
-  "finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded",
-]);
+export const savedSlipCompletedStatuses: readonly SettlementStatus[] = completedFixtureStatuses;
 export type SavedSlipView = Readonly<{
   id: string; savedAt: string; slip: BuiltSlip; outcome: "won" | "lost" | "pending" | "void";
   status?: SlipStatus;
@@ -96,6 +96,15 @@ function matchingSavedSlipResult(item: BuiltSlip["selections"][number], results:
     ? candidate.forecast?.cycleId === item.forecast.cycleId && candidate.forecast.revisionId === item.forecast.revisionId
       && candidate.forecast.publishedAt === item.forecast.publishedAt && candidate.family === item.family && candidate.selection === item.selection
     : candidate.forecast === undefined));
+}
+
+/** Public slips require every original selection to be complete and every canonical fixture to have ended. */
+export function savedSlipCompleted(slip: BuiltSlip, results: readonly SavedSlipResult[]): boolean {
+  return slip.selections.length > 0 && slip.selections.every((selection) => {
+    const result = matchingSavedSlipResult(selection, results);
+    return result !== undefined && (result.fixtureCompleted ?? isCompletedFixtureStatus(result.status))
+      && (!selection.forecast || result.completed === true);
+  });
 }
 
 function savedSlipLegResults(slip: BuiltSlip, results: readonly SavedSlipResult[]) {

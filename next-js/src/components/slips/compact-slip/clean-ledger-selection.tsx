@@ -20,6 +20,7 @@ import { slipSelectionCard } from "@/domain/slip-card";
 import { useMessages } from "@/i18n/use-messages";
 import { formatSlipProbability } from "../slip-format";
 import { CleanLedgerRow } from "./clean-ledger-styles";
+import { SlipMatchNumber } from "../slip-match-number";
 
 function logoSource(url: string | null | undefined): string | undefined {
   if (url?.startsWith("/") && !url.startsWith("//") && !/[\\\u0000-\u0020]/u.test(url)) return url;
@@ -27,8 +28,8 @@ function logoSource(url: string | null | undefined): string | undefined {
 }
 
 /** Production and review share the original selected snapshot, compact labels and three-row order. */
-export function CleanLedgerSelection({ selection, locale, result, analysisLinks = false }: {
-  selection: SlipSelection; locale: string; result?: SavedSlipView["results"][number]; analysisLinks?: boolean;
+export function CleanLedgerSelection({ selection, locale, result, analysisLinks = false, position }: {
+  selection: SlipSelection; locale: string; result?: SavedSlipView["results"][number]; analysisLinks?: boolean; position?: number;
 }) {
   const m = useMessages(locale), id = useId();
   const savedResult = result?.fixtureId === selection.fixtureId ? result : undefined;
@@ -50,10 +51,13 @@ export function CleanLedgerSelection({ selection, locale, result, analysisLinks 
   };
   const content = <>
     <div data-ledger-meta data-mobile-meta id={`${id}-meta`}>
-      <time data-ledger-kickoff data-mobile-kickoff data-kickoff dateTime={toUtcIsoString(kickoff)} title={m.reportingInstant(kickoff)}>
-        <span data-date data-mobile-date>{m.shortKickoffDate(kickoff)}</span><span data-clock data-mobile-clock>{m.shortKickoffTime(kickoff)}</span>
-        <VisuallyHidden> {m.timeZone(kickoff)}</VisuallyHidden>
-      </time>
+      <span data-ledger-kickoff data-mobile-kickoff>
+        {position !== undefined && <SlipMatchNumber position={position} locale={locale} />}
+        <time data-kickoff dateTime={toUtcIsoString(kickoff)} title={m.reportingInstant(kickoff)}>
+          <span data-date data-mobile-date>{m.shortKickoffDate(kickoff)}</span><span data-clock data-mobile-clock>{m.shortKickoffTime(kickoff)}</span>
+          <VisuallyHidden> {m.timeZone(kickoff)}</VisuallyHidden>
+        </time>
+      </span>
       <span data-ledger-competition data-mobile-competition>
         <span data-ledger-league data-mobile-league data-competition title={league} aria-label={league}>
           <TeamLogo name={league} url={logoSource(selection.competition.logoUrl)} eager={false} size={12} />

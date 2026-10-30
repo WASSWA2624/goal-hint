@@ -11,6 +11,7 @@ import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 import { createSharedSlips, readSharedSlip } from "./shared-slips.ts";
+import { readWithSlipAccess } from "./slip-access.ts";
 
 /** The browser submits only a server selection identity and its bounded source, never a claimed snapshot. */
 export function createShareSlipHandler({ members = getMemberServices, services = getAnalyticsServices,
@@ -47,15 +48,19 @@ export function createShareSlipHandler({ members = getMemberServices, services =
       }
       if (!slip) return json({ error: "changed" }, 409);
       const result = await share(database, config, now).publish(member, slip, input.source);
+      if ((await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
       return result.state === "shared" ? json(result.shared) : json({ error: result.state },
         result.state === "busy" ? 429 : result.state === "changed" ? 409 : result.state === "too-large" ? 413 : 403);
     } catch { return json({ error: "unavailable" }, 503); }
   };
 }
 
-export function createReadSharedSlipHandler(read = readSharedSlip) {
-  return async (id: string): Promise<Response> => {
-    try { const shared = await read(id); return shared ? json(shared) : json({ error: "not-found" }, 404); }
+export function createReadSharedSlipHandler({ read = readSharedSlip, access = viewerAccessFromRequest } = {}) {
+  return async (request: Request, id: string): Promise<Response> => {
+    try {
+      const shared = await readWithSlipAccess((viewer) => read(id, viewer), () => access(request));
+      return shared ? json(shared) : json({ error: "not-found" }, 404);
+    }
     catch { return json({ error: "unavailable" }, 503); }
   };
 }

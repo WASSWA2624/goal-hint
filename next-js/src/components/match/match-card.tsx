@@ -15,6 +15,7 @@ import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice, snapshotCardPrediction, type CardSnapshotPick } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
+import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import { matchHref } from "@/domain/navigation";
 import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
@@ -788,7 +789,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
   const best = snapshotPick?.family ?? bestCardFamily(fixture, eligible);
   const gated = snapshotPick ? requiresAccess || gatedForecast !== null
-    : !hasFinalScoreStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null);
+    : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null);
   const shownFamily = best ?? eligible[0]!;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const publicChanceLabel = publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 });

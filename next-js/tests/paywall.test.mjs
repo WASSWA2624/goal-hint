@@ -13,7 +13,7 @@ import { sameCardFixture } from '../src/domain/match-card.ts';
 import { cheapestActivePlan } from '../src/domain/subscription-offer.ts';
 import { createMessages } from '../src/i18n/messages.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
-import { isPlayedFinalStatus } from '../src/domain/market-settlement.ts';
+import { isCompletedFixtureStatus } from '../src/domain/market-settlement.ts';
 import { subscriberHref } from '../src/domain/subscriber-navigation.ts';
 import { scenarios, today, sentinel, now } from './helpers/paywall-fixtures.mjs';
 
@@ -23,21 +23,23 @@ function walk(value) {
   if (!value || typeof value !== 'object') return;
   for (const [key, item] of Object.entries(value)) { assert.equal(premiumKeys.has(key), false, key); walk(item); }
 }
-for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: exposes probabilities, unlocks finished history, and preserves raw data`, () => {
+for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: only completed fixtures unlock predictions and history, preserving raw data`, () => {
   const raw = JSON.stringify(scenario);
-  const feed = matchFeedResponseSchema.parse(gateFeedResponse(scenario.feed, free));
+  const feed = gateFeedResponse(scenario.feed, free);
   const details = [scenario.detail, scenario.prior].map(value => matchDetailResponseSchema.parse(gateDetailResponse(value, free)));
-  if (isPlayedFinalStatus(scenario.detail.fixture.status)) {
+  if (isCompletedFixtureStatus(scenario.detail.fixture.status)) {
+    assert.equal(matchFeedResponseSchema.safeParse(feed).success, true);
     assert.deepEqual(feed.records, scenario.feed.records);
     assert.deepEqual(details[0].snapshot, scenario.detail.snapshot);
     assert.deepEqual(details[1].history, scenario.prior.history);
     assert.equal('odds' in details[0], true);
   } else {
-    for (const value of [feed, ...details]) {
+    assert.equal(matchFeedResponseSchema.safeParse(feed).success, false, 'an unfinished row cannot enter a public list');
+    for (const value of details) {
       assert.doesNotMatch(JSON.stringify(value), /SENTINEL-|7\.73|"home-win"/);
-      for (const record of 'records' in value ? value.records : [value.fixture]) { walk(record.forecast); assert.deepEqual(record.prices, []); if (record.forecast) assert.equal(record.forecast.probabilities[0].probability, sentinel.probability); }
+      for (const record of [value.fixture]) { walk(record.forecast); assert.deepEqual(record.prices, []); if (record.forecast) assert.deepEqual(record.forecast.probabilities, []); }
     }
-    for (const value of details) { walk(value.snapshot); assert.deepEqual(value.history, { gated: true }); assert.equal('odds' in value, false); }
+    for (const value of details) { walk(value.snapshot); if (value.snapshot) assert.deepEqual(value.snapshot.probabilities, []); assert.deepEqual(value.history, { gated: true }); assert.equal('odds' in value, false); }
   }
   assert.deepEqual(gateFeedResponse(scenario.feed, full).records, scenario.feed.records);
   assert.deepEqual(gateDetailResponse(scenario.prior, full).snapshot, scenario.prior.snapshot);
@@ -120,14 +122,14 @@ test('public offer uses the cheapest active purchase, retains owner ordering for
 });
 
 
-test('finished analysis is public only with verified canonical final status', async () => {
+test('completed analysis is public only with verified canonical terminal status', async () => {
   const fixture = scenarios['finished-regulation'];
-  for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties']) {
+  for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded']) {
     const insights = await createGatedReads({ resolveAccess: async () => free, readInsights: async () => fixture.insights, readStatus: async () => status }).insights(fixture.detail.fixture.fixtureId);
     assert.equal(insights.sections.news.items.some(item => item.kind === 'analysis'), true);
   }
-  const insights = await createGatedReads({ resolveAccess: async () => free, readInsights: async () => fixture.insights, readStatus: async () => { throw Error('unavailable'); } }).insights(fixture.detail.fixture.fixtureId);
-  assert.equal(insights.sections.news.items.some(item => item.kind === 'analysis'), false);
+  await assert.rejects(createGatedReads({ resolveAccess: async () => free, readInsights: async () => fixture.insights,
+    readStatus: async () => { throw Error('unavailable'); } }).insights(fixture.detail.fixture.fixtureId), (error) => error.code === 'subscription-required');
 });
 
 test('locked destinations preserve safe return paths and distinguish guests from members', () => {

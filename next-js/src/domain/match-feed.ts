@@ -4,7 +4,7 @@ import { feedQueryRules, maximumCompetitionScope } from "./feed-query.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { fixtureSnapshotSchema, storedFixtureSnapshotSchema, fixtureCycleSchema, fixturePriceSchema, fixtureUpdateSchema, unavailableMarketSchema } from "./fixture-snapshot.ts";
 import { contentAccessSchema } from "./content-access.ts";
-import { isPlayedFinalStatus } from "./market-settlement.ts";
+import { isCompletedFixtureStatus } from "./market-settlement.ts";
 
 export { matchFeedRules } from "./match-feed-rules.ts";
 const date = z.string().refine((value) => { try { parseReportingDate(value); return true; } catch { return false; } });
@@ -68,7 +68,7 @@ function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records">
 export const storedMatchFeedResponseSchema = storedFeedBaseSchema.superRefine(refineFeed);
 export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.shape,
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), access: contentAccessSchema,
-}).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) => isPlayedFinalStatus(record.status) || ((!record.forecast || "gated" in record.forecast) && record.prices.length === 0)), "Free active responses cannot contain subscriber predictions.");
+}).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) => isCompletedFixtureStatus(record.status)), "Free match lists contain completed fixtures only.");
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;
 export type StoredMatchFeedRecord = z.infer<typeof storedMatchFeedRecordSchema>;
 export type MatchFeedResponse = z.infer<typeof matchFeedResponseSchema>;

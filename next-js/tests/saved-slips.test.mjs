@@ -164,6 +164,30 @@ test('selected saved-slip performance covers the complete cohort while only rece
   assert.ok(queries[0].values.includes(Date.parse(`${today}T11:01:00Z`)), 'end minute is inclusive');
   assert.ok(queries[1].values.includes(rows[30].id), 'subsequent batch uses the prior keyset cursor');
   assert.doesNotMatch(JSON.stringify(history), /accountId|tokenHash/);
+  offset = 0;
+  const publicHistory = await service.history({ dateFrom: today, dateTo: today, timeFrom: '13:00', timeTo: '14:00' }, true);
+  assert.deepEqual(publicHistory.statistics, { total: 90, won: 30, lost: 30, pending: 0, void: 30 });
+  assert.equal(publicHistory.records.length, 20);
+});
+
+test('public completed saves scan past excluded canonical fixtures without hiding older valid results', async () => {
+  const rows = Array.from({ length: 25 }, (_, index) => ({ id: `saved-${String(index).padStart(3, '0')}`,
+    createdAt: new Date(now - index), snapshotJson: { ...slip, selections: [{ ...slip.selections[0],
+      fixtureId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}` }] } }));
+  let offset = 0;
+  const queries = [];
+  const service = createSavedSlips({ transaction: async read => read({ $queryRaw: async query => {
+    queries.push(query);
+    const batch = rows.slice(offset, offset + 20); offset += batch.length;
+    return batch;
+  } }) }, { key: () => 'key' }, () => now, { resolveResults: async (_tx, selections) => selections.map(selection => ({
+    fixtureId: selection.fixtureId, status: 'finished-regulation', fixtureCompleted: Number(selection.fixtureId.slice(-12)) >= 20,
+    completed: true, regulationVerified: true, regulationHome: 2, regulationAway: 0,
+  })) });
+  const records = await service.completed(true);
+  assert.deepEqual(records.map(record => record.id), rows.slice(20).map(row => row.id));
+  assert.equal(queries.length, 2); assert.ok(queries[1].values.includes(rows[19].id));
+  assert.match(queries[0].sql, /WHERE f.id IS NULL OR f.status NOT IN/);
 });
 
 test('save endpoint requires same-origin authenticated subscription and accepts only server-rebuilt selections', async () => {

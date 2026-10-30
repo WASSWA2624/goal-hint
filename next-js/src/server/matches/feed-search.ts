@@ -29,7 +29,7 @@ type Identity = { score: number; covered: number; direct: number; anchor: number
  * (away) into a full match of "Barcelona vs Real Madrid", which feedSql decides per fixture.
  * Explicit bounds fail closed rather than returning a truncated search cohort on a shared host. */
 export async function storedFeedSearch(tx: Prisma.TransactionClient, search: string, range: ReportingDateRange,
-  competitionIds: readonly number[], locale?: string): Promise<FeedSearch | null> {
+  competitionIds: readonly number[], locale?: string, completedOnly = false): Promise<FeedSearch | null> {
   if (!search) return null;
   const prepared = prepareFootballSearch(search, locale);
   const words = prepared.tokens.length, full = 2 ** Math.min(words, feedSearchRules.maximumWords) - 1;
@@ -43,7 +43,7 @@ export async function storedFeedSearch(tx: Prisma.TransactionClient, search: str
         FROM FootballFixture f JOIN FootballSeason s ON s.id=f.seasonId
         JOIN FootballCompetition l ON l.id=s.competitionId
         LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id
-        WHERE ${publicFixtureCohortScope(range, competitionIds)}
+        WHERE ${publicFixtureCohortScope(range, competitionIds, completedOnly)}
       ), teams AS (
         SELECT homeTeamId AS id FROM cohort UNION SELECT awayTeamId AS id FROM cohort
       ), competitions AS (

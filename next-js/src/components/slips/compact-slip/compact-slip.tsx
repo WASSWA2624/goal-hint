@@ -92,8 +92,8 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
           <strong>{formatSlipProbability(averageProbability, messages)}</strong></span>
         <span data-summary-count><span aria-hidden="true">{messages.plural("slips.selections", selectionCount)}</span>
           <VisuallyHidden>{messages.text("slips.selectionCount")}: {messages.number(selectionCount)}</VisuallyHidden></span>
-        {hasHeaderAction && <span data-summary-action-space aria-hidden="true" />}
         <span data-summary-status><SlipStatusBadge outcome={outcome} status={status} locale={locale} /></span>
+        {hasHeaderAction && <span data-summary-action-space aria-hidden="true" />}
         {collapsible && <span data-toggle-chevron aria-hidden="true" />}
   </>;
   const header = variant === "clean-ledger"
@@ -130,7 +130,7 @@ export function CompactSlip({ slip, index, locale, variant = "clean-ledger", ini
       <ul aria-labelledby={headingId}>
         {slip.selections.map((selection, selectionIndex) => {
           const result = results?.find((item) => item.fixtureId === selection.fixtureId);
-          return variant === "clean-ledger" ? <CleanLedgerSelection key={selection.fixtureId} selection={selection} locale={locale} analysisLinks={analysisLinks} {...(result ? { result } : {})} />
+          return variant === "clean-ledger" ? <CleanLedgerSelection key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} {...(result ? { result } : {})} />
             : <SelectionRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} showLogos={showLogos} result={result} />;
         })}
       </ul>

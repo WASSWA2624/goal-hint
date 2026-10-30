@@ -181,6 +181,9 @@ test("saved slips persist privately, settle only completed fixtures and erase un
     const selected = await service.history(query);
     assert.deepEqual(selected.statistics, { total: 4, won: 1, lost: 2, pending: 1, void: 0 });
     assert.equal(selected.records.length, 2);
+    const publicSelected = await service.history(query, true);
+    assert.deepEqual(publicSelected.statistics, { total: 2, won: 1, lost: 1, pending: 0, void: 0 });
+    assert.deepEqual((await service.completed(true)).map(item => item.slip.id).sort(), [won.id, lost.id].sort());
     assert.equal((await service.history({ ...query, timeFrom: '14:00', timeTo: '14:00' })).statistics.total, 0);
     assert.equal((await service.history({ ...query, dateFrom: '2026-10-20', dateTo: '2026-10-20' })).statistics.total, 0);
     assert.deepEqual(completed.find(item => item.slip.id === won.id).slip, boundSnapshot(won));
@@ -217,6 +220,7 @@ test("saved slips persist privately, settle only completed fixtures and erase un
       assert.equal(completed.find(item => item.slip.id === uncertain.id).outcome, 'void');
       assert.equal(completed.find(item => item.slip.id === mixed.id).outcome, 'lost');
       assert.equal(completed.find(item => item.slip.id === uncertain.id).results[0].outcome, 'void');
+      assert.equal((await service.completed(true)).length, completed.length);
     }
   });
 
@@ -229,6 +233,7 @@ test("saved slips persist privately, settle only completed fixtures and erase un
       assert.equal(completed.find(item => item.slip.id === uncertain.id).outcome, 'void');
       assert.equal(completed.find(item => item.slip.id === mixed.id).outcome, 'lost');
       assert.equal(completed.find(item => item.slip.id === uncertain.id).slip.selections[0].forecast.cycleId, forecasts[1].cycle.id);
+      assert.deepEqual((await service.completed(true)).map(item => item.slip.id).sort(), [won.id, lost.id].sort());
     }
   });
 

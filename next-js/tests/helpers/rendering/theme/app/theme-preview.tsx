@@ -7,7 +7,7 @@ import { MatchCardList } from "@/components/match/match-card-list";
 import { RailNumber, RailStep, StepRail } from "@/components/members/subscribe-styles";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
-import { SlipTable } from "@/components/slips/slip-table";
+import { SlipCard } from "@/components/slips/slip-card";
 import { Button, SelectInput, TextInput } from "@/components/ui/controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { BodyText, Inline, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
@@ -56,7 +56,7 @@ export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; 
       <MatchCardList>{fixtures.map((fixture, index) => <li key={fixture.fixtureId}><MatchCard fixture={fixture} position={index + 1}
         selectedFamily={(["match-result", "total-goals", "both-teams-to-score"] as const)[index]!} analysisSlug="synthetic-preview" /></li>)}</MatchCardList>
     </Stack></section>
-    <section id="theme-slips"><Stack $gap="sm"><SectionHeading>Slip card</SectionHeading><SlipTable slip={slip} index={0} locale="en" /></Stack></section>
+    <section id="theme-slips"><Stack $gap="sm"><SectionHeading>Slip card</SectionHeading><SlipCard slip={slip} index={0} locale="en" /></Stack></section>
     <CriteriaDialog id="theme-dialog" title="Synthetic criteria" open={dialogOpen} onCancel={() => setDialogOpen(false)} onApply={() => setDialogOpen(false)}
       applyLabel="Apply" cancelLabel="Cancel" closeLabel="Close dialog"><TextInput label="Example dialog field" defaultValue="Synthetic" /></CriteriaDialog>
   </Stack>;

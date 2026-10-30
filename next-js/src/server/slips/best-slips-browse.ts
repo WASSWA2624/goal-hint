@@ -10,8 +10,8 @@ import type { ViewerAccess } from "../members/viewer-access.ts";
 import { gateBestSlips } from "./best-slips.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
-type BestSlipsBrowseReader = (query: BestSlipsQuery, today: ReportingDate, locale: string) => Promise<BestSlipsResult>;
-const readPublishedBestSlips: BestSlipsBrowseReader = async (query, today) => {
+type BestSlipsBrowseReader = (query: BestSlipsQuery, today: ReportingDate, locale: string, completedOnly: boolean) => Promise<BestSlipsResult>;
+const readPublishedBestSlips: BestSlipsBrowseReader = async (query, today, _locale, completedOnly) => {
   const database = getDatabase();
   if (isDevelopmentDemo()) {
     const dates = resolveBestSlipsDates(query, today);
@@ -22,7 +22,7 @@ const readPublishedBestSlips: BestSlipsBrowseReader = async (query, today) => {
     for (let day = from; day <= to; day = addReportingDays(day, 1)) days.push(day);
     await ensureDemoSlipDates(database, days);
   }
-  return createPublishedSlips(database).browse(query, today);
+  return createPublishedSlips(database).browse(query, today, completedOnly);
 };
 
 export function createBestSlipsBrowseService({ read = readPublishedBestSlips, providerOdds = publicPolicy.features.providerOdds, now = Date.now }: {
@@ -35,7 +35,7 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
-    try { return gateBestSlips(await read(query, day, _locale), access); }
+    try { return gateBestSlips(await read(query, day, _locale, access.tier === "free"), access, access.tier === "free"); }
     catch { return { ...empty, state: "data-unavailable" }; }
   };
 }

@@ -69,7 +69,11 @@ export const StatusCopy = styled.span`
 export const SlipStack = styled(Stack)`
   gap: 10px;
   ${media.belowDesktop} { &[data-slip-builder-page] { gap: 6px; } }
-  ${media.desktop} { gap: 12px; &[data-slip-builder-page] { gap: 6px; } }
+  ${media.desktop} {
+    gap: 12px;
+    &[data-slip-builder-page] { gap: 6px; }
+    &[data-best-slips-page] { gap: 4px; }
+  }
 `;
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
 export const SlipList = styled.div<{ $phoneGap?: number }>`

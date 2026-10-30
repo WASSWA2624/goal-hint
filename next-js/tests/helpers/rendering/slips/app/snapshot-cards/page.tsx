@@ -1,6 +1,6 @@
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
-import { SlipTable } from "@/components/slips/slip-table";
+import { SlipCard } from "@/components/slips/slip-card";
 import { PageHeading, PageMain, Stack } from "@/components/ui/layout";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { slipSelectionCard } from "@/domain/slip-card";
@@ -26,7 +26,7 @@ export default function Page() {
       <MatchCard {...props} fixture={{ ...props.fixture, fixtureId: id }} locale="en" analysisSlug="synthetic-preview" position={index + 1} />
     </li>)}</MatchCardList>
     <section data-compact-snapshot>
-      <SlipTable locale="en" index={0} slip={{ id: "compact-snapshot", totalOdds: selection.odds,
+      <SlipCard locale="en" index={0} slip={{ id: "compact-snapshot", totalOdds: selection.odds,
         oddsBasis: selection.oddsBasis, averageProbability: selection.probability,
         selections: [{ ...selection, fixtureId: "snapshot-compact-authorized" }] }}
         results={[{ fixtureId: "snapshot-compact-authorized", home: 2, away: 1, outcome: "incorrect" }]} />

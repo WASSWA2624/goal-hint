@@ -4,7 +4,7 @@ import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/
 import { matchDetailResponseSchema } from "../../domain/match-detail.ts";
 import { matchFeedResponseSchema } from "../../domain/match-feed.ts";
 import { matchInsightsSchema } from "../../domain/match-insights.ts";
-import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
+import { isCompletedFixtureStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { gateDetailResponse, gateFeedResponse, gateInsights, usesSubscriberFeedOracle } from "../../domain/paywall.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
 import { parseMatchFeedQuery } from "../matches/feed-service.ts";
@@ -29,26 +29,35 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
 } = {}) {
   return {
     async feed(...[parameters, context = {}, clock]: Parameters<typeof readPublicMatchFeed>) {
-      const access = await contentAccess(resolveAccess), at = clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
+      let access = await contentAccess(resolveAccess);
+      const at = clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
       const query = parseMatchFeedQuery(parameters, getReportingDate(at), { ...context,
         ...(access.tier === "free" ? { providerOdds: true } : {}), asOf: at });
       if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
-      const result = gateFeedResponse(await readFeed(parameters, context, clock ?? { now: () => at }), access);
+      const initiallyFull = access.tier === "full";
+      let response = await readFeed(parameters, { ...context, completedOnly: !initiallyFull }, clock ?? { now: () => at });
+      access = await contentAccess(resolveAccess);
+      if (initiallyFull && access.tier === "free") {
+        if (usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
+        response = await readFeed(parameters, { ...context, completedOnly: true }, clock ?? { now: () => at });
+      }
+      const result = gateFeedResponse(response, access);
       try { return access.tier === "free" ? matchFeedResponseSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
     },
     async detail(...args: Parameters<typeof readPublicMatchDetail>) {
-      const access = await contentAccess(resolveAccess), result = gateDetailResponse(await readDetail(...args), access);
+      const response = await readDetail(...args), access = await contentAccess(resolveAccess), result = gateDetailResponse(response, access);
       try { return access.tier === "free" ? matchDetailResponseSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
     },
     async insights(...[id, clock]: Parameters<typeof readPublicMatchInsights>) {
-      const access = await contentAccess(resolveAccess);
       const response = await readInsights(id, clock);
+      const access = await contentAccess(resolveAccess);
       // Status comes from the current canonical fixture, never from a selected historical revision.
       let finished = false;
       if (access.tier === "free") {
-        try { finished = isPlayedFinalStatus(await readStatus(id)); } catch { /* Withhold analysis when status cannot be verified. */ }
+        try { finished = isCompletedFixtureStatus(await readStatus(id)); } catch { /* Withhold analysis when status cannot be verified. */ }
+        if (!finished) throw new MatchFeedError("subscription-required");
       }
       const result = gateInsights(response, access, finished);
       try { return access.tier === "free" ? matchInsightsSchema.parse(result) : result; }
@@ -56,7 +65,9 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
     },
     async slips(...args: Parameters<typeof readPublicSlipBuild>) {
       if ((await contentAccess(resolveAccess)).tier === "free") throw new MatchFeedError("subscription-required");
-      return readSlips(...args);
+      const response = await readSlips(...args);
+      if ((await contentAccess(resolveAccess)).tier === "free") throw new MatchFeedError("subscription-required");
+      return response;
     },
   };
 }

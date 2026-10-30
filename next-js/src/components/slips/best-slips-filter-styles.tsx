@@ -3,6 +3,7 @@
 import styled, { css } from "styled-components";
 import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "@/components/ui/filter-chrome";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { CompactSelect } from "@/components/match/filter-parts";
 import { media } from "@/styles/theme";
 import type { BestSlipsStatus } from "@/domain/best-slips-query";
 
@@ -28,11 +29,10 @@ export const FiltersPanel = styled.section`
   display: grid;
   gap: 5px;
   min-inline-size: 0;
-  padding: 6px 8px;
+  padding: 0;
   color: ${({ theme }) => theme.color.text};
-  background: var(--filter-panel-background);
-  border-block: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-inline: 0;
+  background: transparent;
+  border: 0;
   border-radius: 0;
 `;
 
@@ -61,11 +61,17 @@ export const ToggleRow = styled.div`
   align-items: center;
   gap: 10px;
   min-inline-size: 0;
+  @media (max-width: 79.99rem) { gap: 6px; }
 `;
 
 export const ResultGroup = styled.div`
   ${toggleGroup}
-  flex: none;
+  flex: 0 1 auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) => theme.color.border} transparent;
+  &::-webkit-scrollbar { block-size: 3px; }
+  &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
 `;
 
 export const FilterButton = styled.button`
@@ -81,38 +87,44 @@ export const FilterButton = styled.button`
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
 `;
 
-export const DateGroup = styled.div`
-  ${toggleGroup}
-  flex: 0 1 auto;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: ${({ theme }) => theme.color.border} transparent;
-  &::-webkit-scrollbar { block-size: 3px; }
-  &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
+export const DateControls = styled.div`
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  margin-inline-start: 8px;
+  padding-inline-start: 14px;
+  border-inline-start: 1px solid ${({ theme }) => theme.color.border};
+  @media (max-width: 79.99rem) { margin-inline-start: 2px; padding-inline-start: 8px; gap: 6px; }
 `;
 
-export const DateButton = styled(FilterButton)`
-  min-block-size: 28px;
-  padding: 3px 8px;
+export const DateSelect = styled(CompactSelect)`
   flex: none;
-  border: 1px solid transparent;
-  color: ${({ theme }) => theme.color.mutedText};
-  background: transparent;
+  min-block-size: 34px;
+  padding-inline: 8px 24px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  box-shadow: 0 1px 2px color-mix(in srgb, ${({ theme }) => theme.color.text} 6%, transparent);
+  > select { font-size: inherit; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; }
+  @supports (-webkit-touch-callout: none) { > select { font-size: 16px; } }
+  option { font: inherit; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; }
+  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  @media (pointer: coarse) { min-block-size: 44px; }
+`;
+
+export const CustomRangeButton = styled(FilterButton)`
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-block-size: 34px;
+  padding: 4px 8px;
+  border-radius: 4px;
   white-space: nowrap;
-  [data-label-compact] { display: none; }
-  &[aria-pressed="true"] {
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
-    border-color: ${({ theme }) => theme.color.brand};
-  }
-  &:focus-visible { outline-offset: -3px; }
-  &[aria-pressed="true"]:focus-visible { outline-color: ${({ theme }) => theme.color.onBrand}; }
-  ${media.hover} { &[aria-pressed="true"]:hover { background: ${({ theme }) => theme.color.brandHover}; } }
-  @media (max-width: 89.99rem) {
-    padding-inline: 5px;
-    [data-label-full] { display: none; }
-    [data-label-compact] { display: inline; }
-  }
+  > svg { color: ${({ theme }) => theme.color.brand}; }
+  > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
 `;
 
@@ -127,6 +139,7 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
     `;
   }}
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 5px;
   min-block-size: 28px;
@@ -137,6 +150,9 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   background: color-mix(in srgb, var(--result-background) 55%, ${({ theme }) => theme.color.surface});
   &::before { content: ""; inline-size: 5px; block-size: 5px; background: currentColor; }
   > strong { font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+  [data-slip-result-percent] { font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+  &:focus-visible { outline-offset: -3px; }
+  &[aria-pressed="true"]:focus-visible { outline-color: ${({ theme }) => theme.color.surface}; }
   &[aria-pressed="true"] {
     color: ${({ theme }) => theme.color.surface};
     background: var(--result-text);
@@ -146,6 +162,7 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
     &:hover:not([aria-pressed="true"]) { background: var(--result-background); border-color: var(--result-text); }
     &[aria-pressed="true"]:hover { background: var(--result-text); }
   }
+  @media (max-width: 79.99rem) { gap: 3px; padding-inline: 4px; }
   @media (pointer: coarse) { min-block-size: 44px; }
 `;
 
