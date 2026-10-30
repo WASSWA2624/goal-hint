@@ -9,7 +9,7 @@ import styled, { css } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode, countryDisplayName, countryShortName } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
-import { compactLeagueName, compactMarketName, compactTeamName } from "@/domain/compact-fixture-label";
+import { compactLeagueName, compactMarketName } from "@/domain/compact-fixture-label";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
@@ -17,7 +17,7 @@ import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPre
 import type { MarketFamily } from "@/domain/markets";
 import { isCompletedFixtureStatus } from "@/domain/market-settlement";
 import { matchHref } from "@/domain/navigation";
-import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
+import { predictionDescription, predictionLabel, predictionText } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
@@ -25,7 +25,7 @@ import { resolveLocale } from "@/i18n/locales";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ChevronIcon, FlagIcon, GlobeIcon, TrophyIcon } from "./match-icons";
-import { cleanLedgerIdentityStyles } from "./clean-ledger-styles";
+import { teamStackStyles } from "./team-stack-styles";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 import { providerImageSource } from "@/components/ui/provider-image";
@@ -82,18 +82,14 @@ const Card = styled.article`
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
   [data-mobile-only] { display: none; }
-  /* Clean ledger: kickoff and competition, mirrored teams, then four inline prediction facts. */
+  /* The selected phone layout is also used by the slip's original selections. */
   ${tile} {
-    ${cleanLedgerIdentityStyles}
+    ${teamStackStyles}
     container: match-card / inline-size;
     font-family: ${({ theme }) => theme.typography.family};
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "meta" "teams" "pick";
-    gap: 4px;
-    padding: 6px 8px;
     /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
-    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
+    border-radius: ${({ theme }) => theme.radius.none};
     [data-mobile-only] { display: inline; }
     [data-desktop-only] { display: none; }
   }
@@ -112,25 +108,7 @@ const Card = styled.article`
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
 `;
 
-/** The league shortens first; enlarged text can wrap metadata without clipping the kickoff. */
-const narrowTile = "@container match-card (max-width: 18rem)";
-const enlargedTile = "@container match-card (max-width: 12rem)";
 const Meta = styled.header`
-  ${tile} {
-    grid-area: meta;
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    align-items: center;
-    gap: 5px;
-    min-inline-size: 0;
-    color: ${({ theme }) => theme.color.mutedText};
-    font-size: 0.625rem;
-    font-weight: ${({ theme }) => theme.typography.weight.body};
-    line-height: 1.3;
-    white-space: nowrap;
-    ${narrowTile} { column-gap: 4px; }
-    ${enlargedTile} { && { grid-template-columns: minmax(0, 1fr); row-gap: 3px; } }
-  }
   ${table} { display: contents; }
 `;
 const Index = styled.span<{ $wrap: boolean }>`
@@ -261,41 +239,13 @@ const Teams = styled.div`
   --gh-logo-size: 16px;
   --gh-logo-radius: 0;
   --gh-logo-font: 0.5rem;
-  /* Text-height crests sit next to VS or the live/final score. */
-  ${tile} {
-    --gh-logo-size: 0.8125rem;
-    --gh-logo-font: 0.5rem;
-    --gh-logo-radius: 0;
-    --gh-logo-ring: none;
-    --gh-logo-fill: ${({ theme }) => theme.color.surfaceMuted};
-    --gh-logo-ink: ${({ theme }) => theme.color.mutedText};
-    grid-area: teams;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: 6px;
-    min-inline-size: 0;
-  }
-  /* Desktop cells share the league row; elapsed/final status shares the country row above it. */
   ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: contents; }
 `;
 const Team = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-inline-size: 0;
-  /* Tile: each crest sits next to the score; the home name packs towards it from the left. */
-  ${tile} {
-    grid-column: 3;
-    gap: 4px;
-    &[data-team-side="home"] { grid-column: 1; flex-direction: row-reverse; justify-content: flex-start; }
-    &[data-result="loss"] { color: ${({ theme }) => theme.color.mutedText}; }
-  }
-  /* Both crests sit beside the score; the home name aligns towards it. */
+  display: flex; align-items: center; gap: 6px; min-inline-size: 0;
+  ${tile} { &[data-result="loss"] { color: ${({ theme }) => theme.color.mutedText}; } }
   ${table} {
-    grid-column: 6;
-    grid-row: 2;
-    gap: 8px;
+    grid-column: 6; grid-row: 2; gap: 8px;
     &[data-team-side="home"] { grid-column: 4; flex-direction: row-reverse; text-align: end; }
   }
 `;
@@ -303,16 +253,6 @@ const TeamName = styled.span`
   flex: 1;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   ${ellipsis}
-  ${tile} {
-    flex: 0 1 auto;
-    font-size: 0.8125rem;
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    line-height: 1.2;
-    white-space: nowrap;
-    [data-result="loss"] > & { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-    /* Live: only the side ahead keeps the bold name. */
-    [data-standing="behind"] > & { font-weight: ${({ theme }) => theme.typography.weight.body}; }
-  }
   ${table} {
     white-space: nowrap;
     font-weight: ${({ theme }) => theme.typography.weight.body};
@@ -320,11 +260,7 @@ const TeamName = styled.span`
   }
 `;
 const Center = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  ${tile} { grid-column: 2; justify-content: center; gap: 1px; }
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
   ${table} { display: contents; }
 `;
 const Versus = styled.span`
@@ -377,36 +313,8 @@ const StateChip = styled.span<{ $tone: StateTone }>`
   }
 `;
 
-/** Four inline facts share the selection order used by the Clean ledger slip row. */
+/** Mobile forecast geometry is shared; the original desktop fallback retains its subgrid. */
 const Pick = styled.div<{ $family: MarketFamily }>`
-  ${tile} {
-    grid-area: pick;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    grid-template-areas: "market pick odds probability";
-    align-items: baseline;
-    column-gap: 8px;
-    min-inline-size: 0;
-    padding: 0;
-    background: none;
-    border: 0;
-    line-height: 1.25;
-    white-space: nowrap;
-    &[data-pick-state="subscriber"] {
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      grid-template-areas: "market pick probability";
-    }
-    /* At enlarged text sizes, preserve each fact rather than clipping numeric values. */
-    ${narrowTile} {
-      column-gap: 5px;
-    }
-    ${enlargedTile} {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas: "market pick" "odds probability";
-      row-gap: 3px;
-      &[data-pick-state="subscriber"] { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "market probability" "pick pick"; }
-    }
-  }
   ${table} { display: grid; grid-column: 7 / span 4; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
 /** A shared value cell keeps every selected-pick fact in the same column on both layouts. */
@@ -424,29 +332,12 @@ const PickCell = styled.span`
 `;
 const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
   grid-column: 1;
-  ${tile} {
-    grid-area: market;
-    overflow: hidden;
-    [data-pick-state="none"] > & { display: none; }
-    gap: 4px;
-    &::before { content: "Mkt"; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
-    > [data-pick-value] {
-      ${ellipsis}
-      color: ${({ theme }) => theme.color.text};
-      font-size: 0.75rem;
-      font-weight: 400;
-      line-height: 1.25;
-    }
-    [data-pick-state="subscriber"] > & > [data-pick-value] { color: ${({ theme }) => theme.color.mutedText}; }
-  }
   ${table} {
-    justify-self: start;
-    padding: 2px 8px;
+    justify-self: start; padding: 2px 8px;
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
     border-inline-start: 3px solid ${({ theme, $family }) => theme.color.market[$family].solid};
-    font-size: 0.75rem;
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
 `;
 const GatedPick = styled.span`
@@ -478,45 +369,17 @@ const Prediction = styled.span<{ $available: boolean }>`
 const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean }>`
   grid-column: 2;
   color: ${({ theme, $available }) => $available ? theme.color.text : theme.color.mutedText};
-  > [data-pick-value] {
-    max-inline-size: 100%;
-    font-size: 0.8125rem;
-    font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    line-height: 1.25;
-  }
+  > [data-pick-value] { max-inline-size: 100%; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.25; }
   ${tile} {
-    grid-area: pick;
-    align-items: baseline;
-    gap: 4px;
-    color: ${({ theme, $available }) => $available ? theme.color.text : theme.color.mutedText};
-    &::before { content: "Pick"; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
-    > [data-pick-value] {
-      ${ellipsis}
-      color: ${({ theme, $available }) => $available ? theme.color.link : theme.color.mutedText};
-      font-size: 0.75rem;
-      line-height: 1.25;
-    }
-    /* Missing predictions keep their reason; unavailable numbers remain explicit dashes. */
     [data-pick-state="none"] & {
-      grid-column: 1 / span 2;
-      &::before { content: none; }
-      > b { flex: none; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-      > [data-pick-value] {
-        font-size: 0.625rem;
-        font-weight: ${({ theme }) => theme.typography.weight.medium};
-        letter-spacing: 0;
-      }
+      > b { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
       > b + [data-pick-value]::before { content: "· "; }
-      ${enlargedTile} { grid-column: 1 / -1; }
     }
   }
   ${table} {
-    display: flex;
-    align-items: flex-start;
-    min-inline-size: 0;
+    display: flex; align-items: flex-start; min-inline-size: 0;
     > [data-pick-value] {
-      max-inline-size: 100%;
-      padding: 4px 7px;
+      max-inline-size: 100%; padding: 4px 7px;
       background: ${({ theme }) => theme.color.surface};
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
       border-inline-start: 3px solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
@@ -527,47 +390,23 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
 const Odds = styled(PickCell)`
   grid-column: 3;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  ${tile} {
-    grid-area: odds; display: flex; align-items: baseline; gap: 4px; font-size: 0.75rem;
-    &::before { content: "Odds"; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
-    [data-pick-state="subscriber"] > & { display: none; }
-  }
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 `;
 const Probability = styled(PickCell)`
-  grid-column: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  ${tile} {
-    grid-area: probability; display: inline-flex; align-items: baseline; gap: 4px;
-    &::before { content: "Prob."; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
-    [data-probability-meter] { display: none; }
-  }
+  grid-column: 4; display: inline-flex; align-items: center; gap: 6px;
+  ${tile} { [data-probability-meter] { display: none; } }
 `;
 const Percent = styled.span`
-  font-size: 0.8125rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  ${tile} { font-size: 0.75rem; }
+  font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 `;
-/** Settled/live states add one compact row; scheduled cards keep the approved three-row shape. */
+/** The shared phone layout places progress/outcome below the teams. */
 const Result = styled.span`
   display: inline-flex; align-items: center;
-  ${tile} {
-    grid-column: 1;
-    grid-row: 4;
-    justify-self: end;
-    align-self: start;
-  }
+  /* Before hydration, keep the original desktop score and status grid slots. */
   ${table} {
-    grid-column: 11;
-    grid-row: 2;
-    justify-self: stretch;
-    justify-content: center;
-    min-inline-size: 0;
+    display: contents;
+    > [data-match-status] { grid-column: 11; grid-row: 2; justify-self: center; min-inline-size: 0; }
   }
 `;
 
@@ -584,7 +423,7 @@ const Open = styled(Link)`
   /* The link covers the tile, so its press tint lands at once over everything, chips included, in place of the
    * browser's tap overlay, inside the card's border. */
   ${tile} {
-    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
+    border-radius: ${({ theme }) => theme.radius.none};
     -webkit-tap-highlight-color: transparent;
     &:active { background: color-mix(in srgb, ${({ theme }) => theme.color.text} 8%, transparent); }
   }
@@ -661,7 +500,7 @@ function CardTeam({ team, side, name, eager, result, standing }: {
   return <Team data-team-side={side} data-ledger-home={side === "home" ? "" : undefined} data-ledger-away={side === "away" ? "" : undefined}
     data-result={result ?? undefined} data-standing={standing ?? undefined} aria-label={name}>
     <TeamLogo key={`${team.id}:${url ?? "missing"}`} name={team.name} url={url} eager={eager} />
-    <TeamName data-team-name="" title={name}><span data-mobile-only data-ledger-name>{compactTeamName(name)}</span><span data-desktop-only>{name}</span></TeamName>
+    <TeamName data-team-name="" title={name}><span data-mobile-only data-ledger-name>{name}</span><span data-desktop-only>{name}</span></TeamName>
   </Team>;
 }
 
@@ -764,6 +603,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   // A live score bolds the side currently ahead.
   const liveLead = showScore && fixture.status === "live" ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
   const clock = !offline && fixture.status === "live" ? liveClockLabel(fixture, messages) : null;
+  const showProgress = !offline && (showScore || final || clock !== null || snapshotPick !== undefined && fixture.score !== null
+    || fixture.status !== "scheduled" && fixture.status !== "unknown" && fixture.status !== result);
   const missing = gated || prediction ? null : noPickReason(fixture);
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
@@ -804,7 +645,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     />;
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
-    data-status={fixture.status} data-mobile-design="clean-ledger">
+    data-status={fixture.status} data-mobile-design="team-stack">
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta data-ledger-meta>
       {position !== undefined && <Index $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
@@ -820,36 +661,35 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     <Teams data-ledger-teams>
       <CardTeam team={fixture.homeTeam} side="home" name={home} eager={eagerLogos} result={lead > 0 ? "win" : lead < 0 ? "loss" : null}
         standing={liveLead > 0 ? "ahead" : liveLead < 0 ? "behind" : null} />
-      <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} snapshot={snapshotPick !== undefined} />
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null}
         standing={liveLead < 0 ? "ahead" : liveLead > 0 ? "behind" : null} />
     </Teams>
-    <Pick $family={shownFamily} data-pick-state={pickState} data-result={result}>
-      <MarketName $family={shownFamily} aria-hidden={gated ? undefined : true}>
-        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : compactMarketName(shownFamily)}</span>
+    <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
+      <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true}>
+        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : family}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
-        <PickShort $family={shownFamily} $available={false}><span data-pick-value="">Unavailable offline</span></PickShort>
-        <Odds aria-hidden="true">—</Odds><Probability aria-hidden="true"><Percent>—</Percent></Probability>
-      </PredictionCell> : gated ? <><GatedPick><SubscriberIcon />
+        <PickShort $family={shownFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
+        <Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={messages.text("match.estimatedChance")} aria-hidden="true"><Percent>—</Percent></Probability>
+      </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><SubscriberIcon />
         <span data-subscriber-notice data-mobile-only="">{startingPriceUgx
           ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(startingPriceUgx) })
           : messages.text("paywall.unlockPrediction")}</span>
         <span data-desktop-only=""><SubscriberNotice locale={locale} kind="card" /></span>
       </GatedPick>
-        <Odds aria-hidden="true">—</Odds>
-        <Probability aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability>
+        <Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
+        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.estimatedChance")} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
-        <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
-          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionLabel(messages, selection)}</span></span> : <>
+        <PickShort $family={shownFamily} $available={prediction !== null} data-ledger-field="prediction" aria-hidden="true" data-no-pick={missing ?? undefined}>
+          {selection ? <span data-pick-value=""><span data-pick-selection="" title={predictionDescription(messages, selection)}>{predictionText(messages, selection)}</span></span> : <>
             <b data-mobile-only="">{messages.text("match.noPick")}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
             <span data-pick-value="" data-desktop-only="">{messages.text("match.noPick")}</span>
           </>}
         </PickShort>
-        <Odds aria-hidden="true" data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</Odds>
-        <Probability aria-hidden="true">
+        <Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true" data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</Odds>
+        <Probability data-ledger-field="probability" data-stack-label={messages.text("match.estimatedChance")} aria-hidden="true">
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability>
@@ -860,8 +700,9 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </PredictionCell>}
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
-    <Result data-result-badge={offline ? "saved" : result}
+    <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
+      {showProgress && <MatchState fixture={fixture} home={home} away={away} lead={lead} clock={clock} messages={messages} snapshot={snapshotPick !== undefined} />}
       <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} />
     </Result>
     {!offline && <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>

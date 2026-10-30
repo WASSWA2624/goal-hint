@@ -235,47 +235,41 @@ test("every no-pick reason has visitor text for the card's hidden label", () => 
   }
 });
 
-test("compact mobile team labels retain complete accessible names and desktop names", async () => {
+test("mobile and desktop cards retain complete visible and accessible team names", async () => {
   const source = await cardSource;
   assert.doesNotMatch(source, /validTeamCode|[Tt]eam\.code\b/u);
   assert.match(source, /data-standing=\{standing \?\? undefined\} aria-label=\{name\}/u);
   assert.match(source, /<TeamName data-team-name="" title=\{name\}>/u);
-  assert.match(source, /data-mobile-only data-ledger-name>\{compactTeamName\(name\)\}/u);
+  assert.match(source, /data-mobile-only data-ledger-name>\{name\}/u);
   assert.match(source, /data-desktop-only>\{name\}<\/span>/u);
 });
 
-/** One styled component's template from the card source, and the part of it inside its `${tile} {` block. */
+/** A component template and its responsive entry point, when present. */
 async function styledBlock(name) {
   const match = (await cardSource).match(new RegExp(`const ${name} = styled(?:\\.[a-z]+|\\([A-Za-z]+\\))(?:<[^>]*>)?\`([^\`]*)\`;`, "u"));
   assert.ok(match, `${name} styles`);
   const tileStart = match[1].indexOf("${tile} {");
-  assert.ok(tileStart >= 0, `${name} has tile rules`);
-  return { all: match[1], tile: match[1].slice(tileStart) };
+  return { all: match[1], tile: tileStart < 0 ? match[1] : match[1].slice(tileStart) };
 }
 
-test("Clean ledger cards share the slip identity layout and retain separate settlement and desktop columns", async () => {
+test("Team stack cards retain the shared identity, settlement and desktop columns", async () => {
   const source = await cardSource;
   const card = (await styledBlock("Card")).tile.split("${table}")[0];
-  assert.match(source, /data-mobile-design="clean-ledger"/u);
-  assert.match(card, /\$\{cleanLedgerIdentityStyles\}/u);
+  assert.match(source, /data-mobile-design="team-stack"/u);
+  assert.match(card, /\$\{teamStackStyles\}/u);
   assert.match(source, /<Meta data-ledger-meta>/u);
   assert.match(source, /<Teams data-ledger-teams>/u);
   assert.ok(source.indexOf("<Meta data-ledger-meta>") < source.indexOf("<Teams data-ledger-teams>"));
   const result = await styledBlock("Result");
-  assert.match(result.tile, /\$\{table\} \{\s*grid-column: 11;\s*grid-row: 2;/u);
+  assert.match(result.tile, /grid-column: 11;\s*grid-row: 2;/u);
   assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 4;/u);
   assert.match(source, /<\/Pick>\s*<Result data-result-badge=/u);
 });
 
-test("Clean ledger keeps market, compact pick, odds and probability in one mobile facts row", async () => {
+test("the readable mobile forecast retains independent odds, probability and access messages", async () => {
   const source = await cardSource;
-  const pick = (await styledBlock("Pick")).tile.split("${table}")[0];
-  assert.match(pick, /grid-template-areas: "market pick odds probability";/u);
-  assert.match(source, /compactMarketName\(shownFamily\)/u);
-  assert.match(source, /predictionLabel\(messages, selection\)/u);
+  assert.match(source, /predictionText\(messages, selection\)/u);
   assert.doesNotMatch(source, /PickNumbers|CardGlyph|SubscribeHint/u);
-  assert.match((await styledBlock("Odds")).tile, /grid-area: odds;/u);
-  assert.match((await styledBlock("Probability")).tile, /grid-area: probability;/u);
   // Access messages remain available without restoring the old boxed panel.
   const messages = createMessages();
   assert.deepEqual(["details.odds", "paywall.locked", "paywall.unlockPrediction"].map((key) => messages.text(key)),
@@ -291,14 +285,6 @@ test("Clean ledger kickoff precedes league metadata and uses the shared date and
   assert.match(source, /messages\.shortKickoffTime\(kickoff\)/u);
   assert.match(source, /title=\{messages\.reportingInstant\(kickoff\)\}/u);
   assert.match(source, /compactLeagueName\(competition\)/u);
-});
-
-test("long team names stay on one line with full-name tooltip and accessible labels", async () => {
-  const styles = await styledBlock("TeamName");
-  const tile = styles.tile.split("${table}")[0];
-  assert.match(tile, /white-space: nowrap;/u);
-  assert.doesNotMatch(tile, /-webkit-line-clamp|text-wrap: balance|white-space: normal/u);
-  assert.match(await cardSource, /<TeamName data-team-name="" title=\{name\}>/u);
 });
 
 test("hovering any ellipsized text shows its full value, even under the full-card link", async () => {

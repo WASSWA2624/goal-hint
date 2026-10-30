@@ -41,8 +41,8 @@ const List = styled.ul`
     /* Keep framed cards separate and every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
     gap: 6px;
-    > li { content-visibility: auto; contain-intrinsic-block-size: auto 84px; }
-    > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.phoneCardFrame.radius}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
+    > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto 112px; }
+    > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.radius.none}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
   ${media.desktop} {
@@ -73,7 +73,7 @@ export function MatchListDivider({ title, note }: { title: string; note?: string
   return <Divider data-list-divider=""><h2>{title}</h2>{note && <p>{note}</p>}</Divider>;
 }
 
-/** Shared Clean ledger cards below 64rem and the slip/builder's Aligned ledger rows above it. */
+/** Shared Team stack cards below 64rem and the slip/builder's Aligned ledger rows above it. */
 export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardListProps) {
   const desktop = useDesktopLayout();
   const messages = createMessages(locale);

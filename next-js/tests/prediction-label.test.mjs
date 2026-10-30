@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { predictionDescription, predictionLabel, predictionOutcome } from "../src/domain/prediction-label.ts";
+import { predictionDescription, predictionLabel, predictionOutcome, predictionText } from "../src/domain/prediction-label.ts";
 import { marketSelections } from "../src/domain/markets.ts";
 import { createMessages } from "../src/i18n/messages.ts";
 
@@ -10,10 +10,16 @@ const expected = {
   "home-or-draw": "1X", "away-or-draw": "X2", "home-or-away": "12",
   "over-2.5": "O 2.5", "under-2.5": "U 2.5", yes: "Yes", no: "No",
 };
+const words = {
+  "home-win": "Home win", draw: "Draw", "away-win": "Away win",
+  "home-or-draw": "Home or draw", "away-or-draw": "Away or draw", "home-or-away": "Home or away",
+  "over-2.5": "Over 2.5", "under-2.5": "Under 2.5", yes: "Yes", no: "No",
+};
 
 test("every published core selection has a compact label and a clear independent definition", () => {
   for (const selection of Object.values(marketSelections).flat()) {
     assert.equal(predictionLabel(messages, selection), expected[selection], selection);
+    assert.equal(predictionText(messages, selection), words[selection], selection);
     const definition = predictionDescription(messages, selection);
     assert.ok(definition.length > 0);
     assert.doesNotMatch(definition, /market\.selection\.|\{(?:home|away|line)\}/u);

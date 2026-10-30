@@ -1,6 +1,6 @@
 # Shared match-card presentation
 
-Matches, betting slips and the slip builder share the approved Clean ledger
+Matches, betting slips and the slip builder share the approved Team stack
 presentation on phones/tablets and Aligned ledger rows on desktop. Presentation
 components receive visitor-facing facts; they do not fetch providers, settle
 predictions, start polling, access Redux or persist data. Examples remain in
@@ -18,7 +18,7 @@ Import directly from the owning module under `@/components/match`:
 | `desktop-match-row` | `DesktopMatchRow`: the shared desktop renderer for feed fixtures and slip selections. Inputs are supplied teams/competition, kickoff, score, match status/clock and already-authorized market, odds, probability and outcome. It selects no forecast and fabricates no missing facts. |
 | `desktop-match-styles` | `desktopMatchBaseStyles` and `alignedLedgerStyles`: one row geometry reused by `MatchCardList`, production desktop slips and their approved design review. |
 | `truncated-text` | Full desktop names remain in the DOM. Only clipped text becomes a keyboard-accessible tooltip trigger; focus, hover and Escape retain access to the full value. |
-| `clean-ledger-styles` | Shared phone/tablet identity geometry used by match cards and slip selections: kickoff/competition, mirrored teams, and compact inline facts. |
+| `team-stack-styles` | Shared phone/tablet geometry used by match cards and slip selections: kickoff/competition above left-aligned stacked teams, with market/pick and labeled odds/chance alongside. |
 | `team-logo` | Shared team/league image treatment, reserved dimensions and initials fallback. Its container controls size through `--gh-logo-size`; missing or failed media retains the supplied name. |
 | Domain `prediction-label` | Generic full-word prediction wording and extended market-rule descriptions, without participant-name substitution or lost goal lines. |
 
@@ -32,7 +32,7 @@ manufactured forecast distribution.
 
 The responsive switch follows the existing `SlipCard` pattern: server HTML
 contains one original card for each fixture. After hydration, the list selects
-Aligned ledger at 64rem and above; phones and tablets retain Clean ledger below
+Aligned ledger at 64rem and above; phones and tablets retain Team stack below
 that boundary. A fixture is never duplicated into hidden mobile and desktop
 copies. Source order remains list, visual and keyboard order. Memoized cards
 continue to use `sameCardFixture`; unchanged observations and header/filter
@@ -117,20 +117,21 @@ Heading levels and the similar-result title note remain intact. The group
 describes its date, time, competition, score, market, odds, probability and
 status; missing kickoff or score never receives an invented time or value.
 
-### Phone and tablet: Clean ledger (below 64rem)
+### Phone and tablet: Team stack (below 64rem)
 
 The compact cards remain consistent with slip selections:
 
 1. Kickoff date and AM/PM clock precede the league crest/short label and country
    flag/code. Full competition and country names remain available to assistive
    technology and in labels/tooltips.
-2. The home name/crest and away crest/name mirror around VS or the supplied
-   score. Long names use the shared compact labels while retaining complete
-   accessible names. Supplied live minutes and phases stay beside the score.
-3. Market, selected prediction, exact available odds and estimated probability
-   share one inline facts row. Gated and missing predictions keep the same
+2. Home and away teams form two left-aligned rows with leading crests. Full
+   names wrap naturally. Supplied scores, live minutes and phases share the
+   compact status area below the names; scheduled matches omit a redundant VS row.
+3. The forecast occupies the right column: full market name, readable selected
+   prediction, then labeled odds and estimated chance. `predictionText` retains
+   the exact selection and goal line, including Yes/No answers. Gated and missing predictions keep the same
    authorization rules and explicit explanations as desktop.
-4. A larger status label follows the facts, using the same progress/outcome rules
+4. The status label sits below the teams, using the same progress/outcome rules
    and live dot as desktop. Slip selections use their original-selection-bound
    match observations, including refreshed states in Matches and Slip Builder.
 
@@ -139,6 +140,14 @@ no card shadow and offscreen `content-visibility` optimization. Cards reflow at
 narrow effective widths or enlarged text without clipping. The phone/tablet
 analysis link remains a full-card target with the contextual accessible team
 names and native keyboard and new-tab behavior.
+
+Expanded slips reuse the same geometry and square row frame inside their
+existing approved disclosure/header. Saved selections retain their original
+pick, odds and chance. Selection-bound observations supply current score and
+clock independently; a saved score without an observation does not invent FT.
+Narrow effective widths reflow the forecast below the teams. Desktop rows and
+slip-header geometry are unchanged. Selection and verification are tracked in
+`dev-plan/178-team-stack-mobile-match-cards.md`.
 
 ## Time, images and offline behavior
 
@@ -285,7 +294,7 @@ The domain/state contract tests cover family independence, supplied
 outcomes, binding/validation, all sources/notices, boundary/group rounding,
 Unicode initials, structural URL checks, actual EAT times and atomic version
 replacement. Additional checks cover market labels, no-pick descriptions,
-full team identity and single-line name truncation. Browser checks verify the
+full team identity and desktop name truncation. Browser checks verify the
 three-row geometry with the corner result tag and natural height growth with enlarged text.
 `tests/team-name.test.mjs` covers
 provider code validation against the stored pattern; `tests/country-code.test.mjs`

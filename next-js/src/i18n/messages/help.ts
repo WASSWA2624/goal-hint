@@ -30,7 +30,7 @@ export const helpMessages = {
   "help.cards.fixture.title": "Fixture and live clock",
   "help.cards.fixture.body": "The card shows the country and league, the match date and local kickoff time, followed by the teams. Upcoming matches show vs instead of an invented score. On mobile, a live match shows a bold score with the elapsed minutes under it, including supplied stoppage time. If the minute is unavailable, the match phase appears there instead.",
   "help.cards.prediction.title": "Prediction cells",
-  "help.cards.prediction.body": "The prediction line shows the market, selected prediction, its odds and estimated probability. The result (Upcoming, Pending, Win, Loss or Void) has its own column on wide screens and a tag in the top-right corner of each card on mobile. Match result means home win, draw or away win. A dash means that information is unavailable.",
+  "help.cards.prediction.body": "On phones, the teams are stacked on the left, with the market, prediction, odds and estimated chance on the right. Match progress or the prediction outcome appears below the teams. Wide screens keep the result in its own column. Match result means home win, draw or away win. A dash means that information is unavailable.",
   "help.cards.analysis.title": "Match analysis",
   "help.cards.analysis.body": "Select a card for available market probabilities, supporting analysis, team information, source timestamps and prediction history. Coverage varies; missing information remains unavailable. Search and market controls on the match page help you explore the available analysis.",
   "help.predictions.title": "Understand forecasts",

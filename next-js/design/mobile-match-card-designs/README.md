@@ -1,7 +1,9 @@
 # Compact mobile match cards
 
-Ten review-only options for a future shared mobile match card in Matches,
-Cards and Slips. No option is selected or applied to production.
+Ten comparison options for the shared mobile match card in Matches, Cards and
+Slips. The user selected **02 · Team stack**; implementation is tracked in
+[`178-team-stack-mobile-match-cards.md`](../../dev-plan/178-team-stack-mobile-match-cards.md).
+The gallery remains an illustrative comparison, independent of production data.
 
 ## Review of the current cards
 
@@ -100,5 +102,5 @@ syntax checks; the literal inline fragment passed its size/structure checks.
 Run without `--serve` to regenerate the standalone document; `--port` chooses
 another local port. Generated documents, fonts and browser captures remain in
 ignored `output/`. Production routes, components, business logic and Flutter
-are unchanged. Implement the chosen card in the existing shared mobile
-presentation after selection.
+were unchanged by the gallery itself. The selected Team stack is implemented
+in the shared mobile presentation separately; the ten samples remain available.

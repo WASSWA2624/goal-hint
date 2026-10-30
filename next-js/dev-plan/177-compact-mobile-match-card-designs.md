@@ -43,4 +43,5 @@ Preserve the approved slip layouts and desktop presentation.
 
 ## Decision
 
-Await the user's choice among the ten options. No production variant selected.
+The user selected **02 · Team stack**. Production integration and verification
+are tracked in `178-team-stack-mobile-match-cards.md`.

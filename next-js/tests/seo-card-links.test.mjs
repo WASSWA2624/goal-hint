@@ -139,7 +139,7 @@ test("a delivered forecast stays locked for free viewers, and completed matches 
   assert.doesNotMatch(whole, prediction);
   assert.match(whole, />Locked prediction</u);
   assert.equal(pickState(finished), "settled");
-  assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
+  assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>Home or draw</u);
   assert.notEqual(pickState(canceled), "subscriber");
   assert.match(canceled, /data-pick-selection=/u);
 });

@@ -69,7 +69,8 @@ test('Best slips gates every sidecar with its released slip and strips foreign f
   const full = gateBestSlips(input, { tier: 'full', signedIn: true, mode: 'off' });
   assert.deepEqual(full.slips[0].matchStates, [state]);
   const free = gateBestSlips(input, { tier: 'free', signedIn: false, mode: 'off' });
-  assert.equal('matchStates' in free.slips[0], false); assert.equal('slip' in free.slips[0], false);
+  // The existing completed-only public policy omits this unfinished slip entirely.
+  assert.deepEqual(free.slips, []);
   assert.doesNotMatch(JSON.stringify(free), /fixtureId|forecast|home-win|liveClock|unrelated-private/);
   const aggregate = gateBestSlips({ ...input, slips: [{ ...views[0], slip: undefined }] }, { tier: 'full', signedIn: true, mode: 'off' });
   assert.equal('matchStates' in aggregate.slips[0], false);

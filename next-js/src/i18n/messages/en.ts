@@ -843,6 +843,7 @@ export const en = {
   "match.columns.dateTime": "Date & Time",
   "match.columns.probability": "Probability",
   "match.columns.probabilityShort": "Prob.",
+  "match.estimatedChance": "Est. chance",
   "match.columns.league": "League",
   "match.columns.home": "Home team",
   "match.columns.away": "Away team",

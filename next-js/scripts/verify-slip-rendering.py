@@ -281,7 +281,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             verify_clean_ledger_selection(card, path)
             assert card.attrs["href"].startswith("/en/matches/"), f"{path}: original fixture remains linked to analysis"
             labels = card.nodes(attr="data-pick-label")
-            assert len(labels) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one compact prediction outcome"
+            assert len(labels) == 1 and re.fullmatch(r"Home win|Draw|Away win|Home or draw|Away or draw|Home or away|(?:Over|Under) \d+(?:\.\d+)?|Yes|No", labels[0].text), f"{path}: one readable prediction outcome"
             assert labels[0].attrs.get("title") and labels[0].attrs["title"] != labels[0].text, f"{path}: compact outcomes retain their full meaning"
             prices = card.nodes(attr="data-leg-odds")
             assert len(prices) == 1 and re.fullmatch(r"\d+\.\d{2}", prices[0].nodes("strong")[0].text), f"{path}: original selected price remains visible"
@@ -481,7 +481,7 @@ def verify(origin, directory):
     snapshot_cards = {node.attrs["data-fixture-id"]: node for node in Document(snapshots.text).root.nodes("article", "data-fixture-id")}
     authorized = snapshot_cards["snapshot-authorized"]
     assert authorized.nodes(attr="data-card-odds")[0].text == "7.73" and "23.5%" in authorized.text, "Original saved probability and price survive the shared card"
-    assert authorized.nodes(attr="data-pick-selection")[0].text == "1", "The saved alternative remains selected with its shared short form"
+    assert authorized.nodes(attr="data-pick-selection")[0].text == "Home win", "The saved alternative retains its selection with readable wording"
     assert authorized.nodes(attr="data-result-badge")[0].attrs["data-result-badge"] == "incorrect", "Supplied saved loss survives an unknown current fixture status"
     assert re.search(r"Score after 90 minutes: .+ 2, .+ 1", authorized.text), "A supplied 2–1 regulation score retains its own score label"
     assert authorized.nodes(attr="data-match-state")[0].attrs["data-match-state"] == "snapshot", "No final or live phase is invented"
@@ -500,11 +500,19 @@ def verify(origin, directory):
     assert compact_row.attrs["data-fixture-id"] == "snapshot-compact-authorized", "Compact saved rows retain original fixture identity"
     assert compact_row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73", "Compact saved rows retain the original alternative price"
     assert compact_row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Compact saved rows retain original probability precision"
-    assert compact_row.nodes(attr="data-pick-label")[0].text == "1", "Compact saved rows retain the original selected alternative"
+    assert compact_row.nodes(attr="data-pick-label")[0].text == "Home win", "Compact saved rows retain the original selected alternative"
     assert compact_row.attrs["data-outcome"] == "incorrect" and compact_row.nodes(attr="data-match-status")[0].attrs["data-match-status"] == "incorrect", "Compact saved rows retain supplied settlement"
     assert compact_row.attrs.get("data-status") == "unknown" and compact_row.attrs.get("data-match-state") == "snapshot", "Compact saved settlements never invent current fixture state"
     assert "Score after 90 minutes: 2–1" in compact_row.nodes(attr="data-saved-score")[0].text, "Compact saved regulation scores keep their own explicit meaning"
     print("PASS compact saved slip: original alternative, price/probability and supplied regulation score/outcome.", flush=True)
+    live = Document(snapshots.text).root.nodes(attr="data-live-snapshot")[0].nodes("a", "data-fixture-id")
+    assert len(live) == 2, "Both supplied live observations are rendered"
+    for row, phase in zip(live, ["67′", "HT"]):
+        assert row.nodes(attr="data-score-home")[0].text == "1" and row.nodes(attr="data-score-away")[0].text == "0", "Live score uses the supplied progress"
+        assert row.nodes(attr="data-score-clock")[0].text == phase, "Live minute/half-time use their supplied phase"
+        assert row.attrs["data-outcome"] == "pending" and row.nodes(attr="data-match-status")[0].attrs["data-match-status"] == "live", "Running scores do not settle the original pick"
+        assert row.nodes(attr="data-leg-odds")[0].nodes("strong")[0].text == "7.73" and row.nodes(attr="data-leg-probability")[0].nodes("strong")[0].text == "23.5%", "Current observations retain original odds and probability"
+    print("PASS live slip observations: original picks/prices/chances, supplied score/minute/half-time, no early settlement.", flush=True)
     for scenario, (state, count) in SCENARIOS.items():
         document = inspect(origin, f"/cases/{scenario}", directory, scenario, state, count,
             selections_per_slip=1 if scenario == "manual-home-win" else 2)

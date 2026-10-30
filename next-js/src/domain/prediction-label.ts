@@ -144,6 +144,13 @@ export function predictionLabel(messages: LabelMessages, selection: string, cont
   return formatPrediction(compactMessages(messages), selection, context);
 }
 
+/** Readable card wording retains the selection's rules and lines; boolean picks stay Yes/No. */
+export function predictionText(messages: LabelMessages, selection: string, context: PredictionLabelContext = {}): string {
+  const words: LabelMessages = { text: (key, values) => messages.text(key === "market.selection.yes"
+    ? "market.selection.answer.yes" : key === "market.selection.no" ? "market.selection.answer.no" : key, values) };
+  return formatPrediction(words, selection, context);
+}
+
 /** Human-readable meaning for tooltips, screen readers and the prediction key. */
 export function predictionDescription(messages: LabelMessages, selection: string, context: PredictionLabelContext = {}): string {
   const descriptions: LabelMessages = { text: (key, values) => messages.text(key === "market.selection.yes"

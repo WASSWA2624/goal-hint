@@ -21,7 +21,7 @@ def verify(origin, directory):
     no_match("data-match-table-header", visible, "Matches no longer renders the former desktop-only column labels.")
     assert 0 <= html.find("data-styled=") < html.find("<main")
     for tag, _, article in articles:
-        match(r'data-mobile-design="clean-ledger"', tag)
+        match(r'data-mobile-design="team-stack"', tag)
         no_match(r'\baria-describedby=', tag)
         no_match(r'<(?:ul|ol)\b|\bid="[^"]*-notes"|\baria-describedby="[^"]*-notes', article)
         no_match("Update delayed|Limited news coverage|Partial coverage|Prediction update in progress|"
@@ -68,7 +68,7 @@ def verify(origin, directory):
             assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
             no_match(r"Odds", header)
             picks = re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article)
-            assert len(picks) == 1 and re.fullmatch(r"1|X|2|1X|X2|12|[OU] \d+(?:\.\d+)?|Yes|No", picks[0]), "One compact prediction outcome per card"
+            assert len(picks) == 1 and re.fullmatch(r"Home win|Draw|Away win|Home or draw|Away or draw|Home or away|(?:Over|Under) \d+(?:\.\d+)?|Yes|No", picks[0]), "One readable prediction outcome per card"
             match(r'data-pick-selection=""[^>]*title="[^\"]+"', article)
         assert len(re.findall(r'\bdata-card-odds=', article)) == 1, "One price cell serves both phone and desktop layouts"
         no_match(r'data-pick-price=""[^>]*>@', article)
@@ -93,8 +93,8 @@ def verify(origin, directory):
         match(r'<b data-mobile-only=""[^>]*>No prediction</b>', by_id[card])
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
-    match(r'data-pick-selection=""[^>]*>1</span>', by_id["card-correct"])
-    match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
+    match(r'data-pick-selection=""[^>]*>Home win</span>', by_id["card-correct"])
+    match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-card-odds[^>]*>1\.85</span>', by_id["card-correct"])
     match(r'data-card-odds="[^"]*"[^>]*data-pick-price=""[^>]*>1\.85</span>', by_id["card-correct"])
@@ -102,14 +102,14 @@ def verify(origin, directory):
     match(r'data-card-odds[^>]*>—</span>', by_id["card-incorrect"])
     match(r'data-pick-price=""[^>]*>—</span>', by_id["card-incorrect"])
     no_match(r'data-caption=|>likely</span>', visible)
-    for caption in ["Mkt", "Pick", "Odds", "Prob."]:
-        match(rf'content:"{re.escape(caption)}"', html)
+    for caption in ["Odds", "Est. chance"]:
+        match(rf'data-stack-label="{re.escape(caption)}"', visible)
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
     no_match(r"data-pick-odds=", by_id["card-incorrect"])
     match("Odds: Unavailable", by_id["card-incorrect"])
-    match(r'data-pick-selection=""[^>]*>U 2\.5</span>', by_id["card-long"])
+    match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
     match(r'data-pick-selection=""[^>]*>No</span>', by_id["card-limited"])
     match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*><span data-mobile-only[^>]*>BIH</span><span data-desktop-only[^>]*>Bosnia &amp; Herz\.</span>',
           by_id["card-long"])
@@ -127,7 +127,7 @@ def verify(origin, directory):
     checks = {
         "card-correct": ["Final score: Example Home FC 2, Example Away FC 1", "Match result prediction: Home win, estimated probability 54%", ">FT<", "AI prediction"],
         "card-pending": ['data-live-minute="67"', "Live, 2nd half, 67 minutes played", "Live score: Example Home FC 2, Example Away FC 0"],
-        "card-delayed": ['data-match-state="scheduled"', "Oct 9, 2026, 00:18 EAT"],
+        "card-delayed": ["Oct 9, 2026, 00:18 EAT"],
         "card-incorrect": ["API-Football fallback"], "card-limited": ["AI prediction"],
         "card-partial": ["API-Football fallback"], "card-void": ['data-outcome="void"'],
     }
@@ -150,7 +150,7 @@ def verify(origin, directory):
             no_match(r'(?<![\w-])src=', tag)
         else:
             match('loading="eager"', tag)
-    print(f"Match card SSR verification passed: {len(articles)} single-copy Clean ledger fallbacks for the shared responsive match renderer, compact kickoff/market labels, exact selected prices, every outcome/source, live minute and no former desktop column header.")
+    print(f"Match card SSR verification passed: {len(articles)} single-copy Team stack fallbacks, readable predictions, exact selected prices, every outcome/source, live minute and no former desktop column header.")
 
 
 def main():

@@ -69,6 +69,9 @@ export const CompactCard = styled.article`
   li { min-inline-size: 0; }
   li + li { border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
 
+  &[data-compact-slip="clean-ledger"] [data-slip-content] > ul { gap: 6px; padding: 6px; }
+  &[data-compact-slip="clean-ledger"] [data-slip-content] > ul > li + li { border-block-start: 0; }
+
   &[data-compact-slip="clean-ledger"] [data-slip-summary]:not([data-mobile-slip-header]) { padding-block: 4px; row-gap: 2px; }
   @container compact-slip (max-width: 12rem) {
     &[data-compact-slip="clean-ledger"] [data-slip-summary]:not([data-mobile-slip-header]) {
