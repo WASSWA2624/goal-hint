@@ -79,7 +79,7 @@ def main():
                     f"/api/matches/{fixture_id}{query}", f"/api/matches/{fixture_id}?revision={scenario['revision']}",
                     f"/api/matches/{fixture_id}/insights?section=news"]
                 for url in paths:
-                    # Without a current forecast every viewer gets the same no-prediction card and verdict; only real forecasts lock.
+                    # Desktop visitors get the match shell and one access panel; every unfinished forecast stays redacted.
                     # Pages always show the current verdict (a cycle or revision query only selects history); the API returns the selection.
                     shown = scenario["prior"] if url.startswith("/api/") and ("cycle=" in url or "revision=" in url) else detail
                     forecastless = shown["snapshot"] is None and shown["fixture"]["forecast"] is None
@@ -119,7 +119,7 @@ def main():
                                 if not free_fixture:
                                     assert not states and 'data-fixture-id=' not in text, (viewer, url, "unfinished row returned")
                             if not full and not free_fixture and not url.startswith("/en/matches?q="):
-                                assert 'data-match-access-required' in text and 'Completed matches are public' in text
+                                assert 'data-match-access-required' in text and 'Completed-match predictions are free for everyone.' in text
                                 assert 'data-public-probability' not in text and 'data-featured-pick=' not in text
                                 assert 'return=%2Fen%2Fmatches%2F' in text
                             if url.startswith("/en/matches?q="):

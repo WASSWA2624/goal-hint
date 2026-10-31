@@ -3,6 +3,8 @@
 import { Suspense, use, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { MatchDetails } from "@/components/match/details/match-details";
+import { useOpenByDefault } from "@/components/match/details/use-match-view";
+import { hasMatchPredictionAccess } from "@/domain/match-detail-tabs";
 import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
@@ -36,6 +38,7 @@ function DeferredPreview({ promise, resolve }: { promise: Promise<InsightsPrevie
 const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf: 0, fixture: { ...detail.fixture, syncedAt: 0 } });
 
 function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, historyRequested = false, showAccount = false, offer = null }: LiveDetailProps) {
+  const desktop = useOpenByDefault();
   const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf);
   const [deferredPreview, setDeferredPreview] = useState<{ promise: Promise<InsightsPreview | null> | undefined; value: InsightsPreview | null } | null>(null);
   const resolvePreview = useCallback((value: InsightsPreview | null) => setDeferredPreview({ promise: previewPromise, value }), [previewPromise]);
@@ -80,8 +83,9 @@ function LiveDetail({ initial, today, locale, children, preview: initialPreview 
   useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
     refresh, rollover: () => router.refresh() });
   const sections = preview ? gateInsights(preview, data.access, isCompletedFixtureStatus(data.fixture.status)).sections : null;
-  const currentPreview = preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
-  if (data.access.tier === "free" && !isCompletedFixtureStatus(data.fixture.status)) {
+  const allowed = hasMatchPredictionAccess(data);
+  const currentPreview = !allowed ? null : preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
+  if (!desktop && !allowed) {
     const messages = createMessages(locale);
     return <EmptyState headingLevel={1} data-match-access-required title={messages.text("paywall.completedMatches")}
       description={messages.text("paywall.unfinishedMatch")}

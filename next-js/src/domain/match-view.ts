@@ -7,6 +7,8 @@ import { isMarketFamily, type MarketFamily } from "./markets.ts";
  */
 export const matchSections = ["stats", "h2h", "form", "lineups", "players", "news", "injuries", "context", "referee", "history"] as const;
 export type MatchSection = (typeof matchSections)[number];
+export const matchDetailTabs = ["stats", "h2h", "standings", "lineups", "markets", "events", "venue", "analysis"] as const;
+export type MatchDetailTab = (typeof matchDetailTabs)[number];
 export const marketCategories = ["popular", "results", "goals", "btts", "double-chance", "draw-no-bet", "handicaps", "corners",
   "cards", "halves", "correct-score", "clean-sheets", "specials"] as const;
 export type MarketCategory = (typeof marketCategories)[number];
@@ -16,6 +18,8 @@ export type TeamFocus = "both" | "home" | "away";
 export type VenueFocus = "all" | "home" | "away";
 
 export type MatchView = Readonly<{
+  /** Desktop information tab; null resolves legacy section/market links. */
+  panel: MatchDetailTab | null;
   /** All Markets & Odds starts expanded; `mk=closed` collapses it. */
   marketsOpen: boolean;
   marketCategory: MarketCategory;
@@ -32,11 +36,11 @@ export type MatchView = Readonly<{
   competition: string | null;
 }>;
 
-export const defaultMatchView: MatchView = Object.freeze({ marketsOpen: true, marketCategory: "popular", marketSearch: "", market: null,
+export const defaultMatchView: MatchView = Object.freeze({ panel: null, marketsOpen: true, marketCategory: "popular", marketSearch: "", market: null,
   section: null, tab: null, item: null, page: 1, team: "both", venue: "all", window: 5, competition: null });
 
 /** Keys owned by the view; everything else in the URL belongs to other features. */
-export const matchViewKeys = Object.freeze(["mk", "mcat", "mq", "market", "section", "tab", "item", "page", "team", "venue", "window", "comp"] as const);
+export const matchViewKeys = Object.freeze(["panel", "mk", "mcat", "mq", "market", "section", "tab", "item", "page", "team", "venue", "window", "comp"] as const);
 const sectionKeys = ["tab", "item", "page", "team", "venue", "window", "comp"] as const;
 const identifier = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/u;
 
@@ -58,6 +62,7 @@ export function parseMatchView(input: Parameters): MatchView {
   const search = (get("mq") ?? "").normalize("NFC").replace(/[\u0000-\u001f\u007f]/gu, "").slice(0, 80);
   const item = get("item"), tab = get("tab"), market = get("market"), competition = get("comp");
   return {
+    panel: oneOf<MatchDetailTab | "">([...matchDetailTabs, ""], get("panel"), "") || null,
     marketsOpen: get("mk") !== "closed",
     marketCategory: oneOf(marketCategories, get("mcat"), "popular"),
     marketSearch: search,
@@ -78,6 +83,7 @@ export function parseMatchView(input: Parameters): MatchView {
 export function serializeMatchView(view: MatchView, base: URLSearchParams = new URLSearchParams()): URLSearchParams {
   const result = new URLSearchParams();
   for (const [key, value] of base) if (!(matchViewKeys as readonly string[]).includes(key)) result.append(key, value);
+  if (view.panel) result.set("panel", view.panel);
   if (!view.marketsOpen) result.set("mk", "closed");
   if (view.marketCategory !== defaultMatchView.marketCategory) result.set("mcat", view.marketCategory);
   if (view.marketSearch) result.set("mq", view.marketSearch);
@@ -98,7 +104,7 @@ export function serializeMatchView(view: MatchView, base: URLSearchParams = new 
 /** Opening another section resets the previous section's own tabs, items and filters. */
 export function openSection(view: MatchView, section: MatchSection | null): MatchView {
   const reset = Object.fromEntries(sectionKeys.map((key) => [key === "comp" ? "competition" : key, defaultMatchView[key === "comp" ? "competition" : key]]));
-  return { ...view, ...reset, section };
+  return { ...view, ...reset, section, panel: null };
 }
 
 /** Opens one item, opening its section first (with fresh section filters) when needed. */

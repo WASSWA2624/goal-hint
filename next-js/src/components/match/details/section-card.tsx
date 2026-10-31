@@ -11,9 +11,10 @@ import { Card, CardHeader, Crumbs, HiddenHeading, LinkButton, Panel, PanelHeadin
  * reader opens the section or arrives at it from a link (each increase scrolls to it and focuses it), and the
  * header's toggle.
  */
-export type SectionDisclosure = Readonly<{ open: boolean; byDefault: boolean; reveal: number; toggle: () => void }>;
+export type SectionDisclosure = Readonly<{ open: boolean; byDefault: boolean; reveal: number; toggle: () => void; embedded?: boolean; hideHeading?: boolean }>;
 const DisclosureContext = createContext<SectionDisclosure | null>(null);
 export const DisclosureProvider = DisclosureContext.Provider;
+export function useEmbeddedSection() { return useContext(DisclosureContext)?.embedded === true; }
 function useDisclosure(): SectionDisclosure {
   const value = useContext(DisclosureContext);
   if (!value) throw new Error("Section disclosure is missing.");
@@ -29,7 +30,7 @@ export function SectionCard({ section, icon, title, meta, itemLabel, children }:
   section: MatchSection; icon: ReactNode; title: string; meta?: ReactNode; itemLabel?: string | null; children: ReactNode;
 }) {
   const { view, update, messages } = useDetails();
-  const { open, byDefault, reveal, toggle } = useDisclosure();
+  const { open, byDefault, reveal, toggle, embedded, hideHeading } = useDisclosure();
   const panelId = `section-${section}`, headingId = `${panelId}-title`;
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -43,6 +44,9 @@ export function SectionCard({ section, icon, title, meta, itemLabel, children }:
     wasOpen.current = open;
   }, [open]);
   const closeItem = () => update((current) => ({ ...current, item: null }));
+  if (embedded) return <section data-section={section} data-embedded-section aria-labelledby={hideHeading ? undefined : headingId} aria-label={hideHeading ? title : undefined}>
+    {!hideHeading && <h3 id={headingId}>{title}</h3>}{children}
+  </section>;
   return <Card data-section={section} data-open={open || undefined} data-open-by-default={byDefault || undefined} aria-labelledby={headingId}>
     <CardHeader icon={icon} title={title} meta={meta} open={open} controls={panelId} onToggle={toggle}
       headingId={headingId} buttonRef={button} />

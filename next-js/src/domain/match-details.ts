@@ -178,3 +178,13 @@ export function pitchRows<T extends { grid: string | null }>(players: readonly T
   }
   return [...rows.entries()].sort(([a], [b]) => a - b).map(([, entries]) => entries.sort((a, b) => a.column - b.column).map((entry) => entry.player));
 }
+
+/** Rotate the provider's goalkeeper-first formation onto its own half of a horizontal pitch. */
+export function horizontalPitchPositions<T extends { grid: string | null }>(players: readonly T[], side: "home" | "away") {
+  const rows = pitchRows(players);
+  return rows?.flatMap((row, line) => row.map((player, column) => {
+    const x = 7 + 35 * line / Math.max(1, rows.length - 1);
+    const y = 100 * (column + .5) / row.length;
+    return { player, x: side === "home" ? x : 100 - x, y: side === "home" ? y : 100 - y };
+  })) ?? null;
+}

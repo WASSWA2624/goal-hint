@@ -45,7 +45,7 @@ export function DetailOutcome({ status, ...props }: Omit<ComponentPropsWithoutRe
  * A scoreboard under a home/away colour band, with competition, date and time on one line above the teams.
  * Phones run it full bleed with the crests above the names; desktop frames it and sets each crest beside its name.
  */
-const Box = styled.section`
+const Box = styled.section<{ $touchline: boolean }>`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-areas: "ctx ctx ctx" "home vs away";
@@ -63,6 +63,7 @@ const Box = styled.section`
     padding: 15px 24px 18px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: ${({ theme }) => theme.radius.none};
+    min-block-size: ${({ $touchline }) => $touchline ? "128px" : "auto"};
   }
   ${desktopContentPadding(true)}
 `;
@@ -115,7 +116,7 @@ const Team = styled.div<{ $side: "home" | "away" }>`
   }
 `;
 /** Name over recent form; phones keep both as direct items of the centred team stack. */
-const TeamText = styled.div<{ $side: "home" | "away" }>`
+const TeamText = styled.div<{ $side: "home" | "away"; $touchline: boolean }>`
   display: contents;
   > strong { font-size: ${size("emphasis")}; line-height: 1.2; overflow-wrap: anywhere; }
   ${desktop} {
@@ -123,8 +124,9 @@ const TeamText = styled.div<{ $side: "home" | "away" }>`
     flex: 1;
     justify-items: ${({ $side }) => $side === "home" ? "end" : "start"};
     gap: 5px;
+    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; }
     min-inline-size: 0;
-    > strong { min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1.375rem; }
+    > strong { min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: ${({ $touchline }) => $touchline ? "1.625rem" : "1.375rem"}; }
   }
 `;
 const Versus = styled.div`
@@ -162,7 +164,7 @@ const Versus = styled.div`
  * Fixture scoreboard: competition, device-local kickoff, teams with recent form, and the score and clock once
  * the match is under way. It reads no view state, so section and filter changes skip it.
  */
-export const MatchBanner = memo(function MatchBanner() {
+export const MatchBanner = memo(function MatchBanner({ touchline = false }: { touchline?: boolean }) {
   const { data, preview, messages, locale, home, away } = useStableDetails();
   const fixture = data.fixture, context = preview?.sections.context;
   const played = fixture.score && (fixture.status === "live" || fixture.status.startsWith("finished") || fixture.status === "awarded");
@@ -174,7 +176,7 @@ export const MatchBanner = memo(function MatchBanner() {
     ? fixture.liveClock.minute !== null ? messages.text("match.clock.minute", { minute: messages.number(fixture.liveClock.minute) }) : messages.text(`match.clock.${fixture.liveClock.phase}`)
     : messages.text(`match.status.${fixture.status}`);
   const competition = [fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ");
-  return <Box id="current-match-summary" aria-labelledby="match-banner-title">
+  return <Box $touchline={touchline} id="current-match-summary" aria-labelledby="match-banner-title">
     <Context title={competition}>
       {fixture.competition.logoUrl && <CompetitionLogo src={providerImageSource(fixture.competition.logoUrl, 16)} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
       {competition}{"\u00a0· "}
@@ -186,12 +188,12 @@ export const MatchBanner = memo(function MatchBanner() {
       {messages.text("match.title", { home, away })}
     </h1>
     <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager />
-      <TeamText $side="home"><strong title={home}>{home}</strong>{form("home")}</TeamText></Team>
+      <TeamText $side="home" $touchline={touchline}>{touchline && <small>{messages.text("touchline.home")}</small>}<strong title={home}>{home}</strong>{!touchline && form("home")}</TeamText></Team>
     <Versus>
       {played ? <b data-score>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{fixture.status.startsWith("finished") || fixture.status === "awarded" ? "–" : messages.text("details.versus")}</b>}
       {(played || fixture.status !== "scheduled") && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />
-      <TeamText $side="away"><strong title={away}>{away}</strong>{form("away")}</TeamText></Team>
+      <TeamText $side="away" $touchline={touchline}>{touchline && <small>{messages.text("touchline.away")}</small>}<strong title={away}>{away}</strong>{!touchline && form("away")}</TeamText></Team>
   </Box>;
 });

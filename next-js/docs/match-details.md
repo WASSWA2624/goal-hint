@@ -1,7 +1,8 @@
 # Match details screen
 
-`/{locale}/matches/{fixtureId}/{slug}` shows one fixture as an overview of compact cards. Every card
-opens its complete section inside the page, and rows inside a section open nested item panels:
+`/{locale}/matches/{fixtureId}/{slug}` uses the approved Touchline design on desktop:
+home and away teams, one featured prediction or access panel, then eight information tabs.
+Phones retain their section drawers. Rows can open nested item panels:
 
 **Match details → section → item** (for example `Match details / Head to Head / Arsenal v Liverpool`).
 
@@ -11,8 +12,36 @@ opens its complete section inside the page, and rows inside a section open neste
 | --- | --- |
 | Phones (< 22rem) | One column. Phone header with back and search; banner, featured pick, 2×2 market tiles, All Markets & Odds, then cards. |
 | Phones and tablets (22–64rem) | Market tiles 2×2 (4 across from 48rem); cards two-up. An opened section spans the full width in place. Referee spans the row when it would otherwise sit beside an empty cell. The opened history drops its own frame inside the card. |
-| Small desktop (64–80rem) | Desktop header and "Back to Predictions"; cards three-up. |
-| Wide desktop (≥ 80rem) | Reference grid: All Markets & Odds on the left over three rows; Team Comparison and Head to Head; Team Form, Lineups and Players; News, Injuries, Match Context and Referee. An opened section moves to the top of the grid at full width. |
+| Desktop (≥ 64rem) | Touchline scoreboard, featured prediction, and sticky horizontal tabs. Comparison and recent results share a two-column workspace from 75rem. Other tabs own their content without repeated summary cards. |
+
+The tabs are Statistics & form, Head-to-head, Standings, Lineups, Other markets,
+Match events, Venue & officials, and Analysis & news. Arrow keys and Home/End
+move through the tab list. The selected tab, filters and item are addressable;
+refresh and Back/Forward restore them. Legacy section and market links resolve
+to their corresponding tab. Revision history is in the Analysis tab.
+
+The featured selection is excluded from the desktop market list. Its reasons
+and uncertainty belong to Analysis. Current match statistics and event lists
+are presented in their respective tabs. Venue omits competition, score,
+standings and recent results already owned elsewhere. Desktop lineups share one
+horizontal pitch: home players defend the left goal, away players defend the
+right, with both formations beside the team names. Provider formation rows are
+rotated onto each team's own half. Full names, shirt numbers and player profiles
+remain visible; the position detail mode adds stored positions to the same
+markers. The pitch replaces the repeated starter list only when every visible
+starter has a supplied formation coordinate. Otherwise complete starter lists
+remain visible. Substitutes sit below their team's half; team-sheet timestamps
+and unavailable profile/manager fields are in one expandable details disclosure.
+The compact scoreboard, prediction attribution and tab spacing bring the active
+content higher on desktop while retaining readable names and controls.
+
+Desktop visitors and unsubscribed members can open the match shell and one
+account-appropriate access panel, with existing registration, sign-in,
+subscription and referral destinations. Earned referral entitlement uses the
+same full-access tier as paid entitlement. Completed fixtures are public.
+Unfinished predictions and section insights remain redacted/denied by the
+existing server services; restricted tabs return focus to the shared access
+panel and make no insight requests. Phone access presentation is unchanged.
 
 ## URL state
 
@@ -23,9 +52,10 @@ it. Unknown or invalid values fall back to defaults. Revision-history parameters
 
 | Key | Meaning |
 | --- | --- |
+| `panel` | Desktop tab: `stats`, `h2h`, `standings`, `lineups`, `markets`, `events`, `venue`, `analysis` |
 | `section` | `stats`, `h2h`, `form`, `lineups`, `players`, `news`, `injuries`, `context`, `referee`, `history` |
 | `item` | Item inside the open section: a fixture id, `home-{playerId}`/`away-{playerId}`, a news id or a metric |
-| `tab` | Section tab: player position group, injury status or news type |
+| `tab` | Section control: lineup detail mode, player position group, injury status or news type |
 | `team`, `venue`, `window`, `comp`, `page` | Section filters and page |
 | `market`, `mcat`, `mq`, `mk=closed` | Market panel, category, search text, collapsed All Markets & Odds |
 
@@ -63,9 +93,16 @@ and anchors), so a match URL with view state never becomes a 404.
   ([match-detail-api.md](match-detail-api.md), [provider-odds.md](provider-odds.md)).
 - Only the four published families exist; other categories (draw no bet, handicaps, corners, cards,
   halves, correct score, clean sheets, specials) say no markets are published.
-- Venue, weather, standings, referee and officiating statistics are not collected.
+- A full competition table, weather, pitch dimensions/surface and officiating statistics are not collected.
+  Venue, referee assignment and partial home/away positions display only when
+  their verified stored projections exist; missing fields are explicit. A
+  two-team standings projection is labeled partial and never presented as a
+  complete league table.
 - Player season statistics, ratings, portraits and managers are not collected; players, lineups and
   injuries come only from permitted evidence in the prediction's snapshot (often empty while AI and
   research are disabled).
 - Form and head-to-head use stored verified regulation results only, so a new database shows few or
   none until results accumulate.
+  Desktop head-to-head filters exact team pairs across competitions, shows up
+  to 20 available meetings, and offers a three-year history window. Dates include
+  the year. Sample records from the design studio are never production data.

@@ -59,8 +59,8 @@ function Event({ event, home, away, m }: { event: LiveMatchEvent; home: string; 
 }
 
 /** Public match observations use their own clocks and never replace a pre-match forecast. */
-export function LiveMatchPanel({ snapshot, asOf, home, away, locale, historical = false, fixtureStatus }: {
-  snapshot: LiveMatchSnapshot | null; asOf: number; home: string; away: string; locale?: string; historical?: boolean; fixtureStatus?: SettlementStatus;
+export function LiveMatchPanel({ snapshot, asOf, home, away, locale, historical = false, fixtureStatus, section = "all" }: {
+  snapshot: LiveMatchSnapshot | null; asOf: number; home: string; away: string; locale?: string; historical?: boolean; fixtureStatus?: SettlementStatus; section?: "all" | "statistics" | "events";
 }) {
   const m = useMessages(locale);
   const status = fixtureStatus ?? snapshot?.status;
@@ -69,13 +69,13 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, locale, historical 
   const stale = (source: LiveMatchStatistics | LiveMatchEvents) => !retained && source.retrievedAt !== null
     && asOf - source.retrievedAt > snapshot!.staleAfterMs;
   return <Frame aria-labelledby="match-observations-title" data-live-match><Stack $gap="sm">
-    <SectionHeading id="match-observations-title">{m.text("liveMatch.title")}</SectionHeading>
+    <SectionHeading id="match-observations-title">{m.text(section === "all" ? "liveMatch.title" : section === "events" ? "liveMatch.events" : "liveMatch.statistics")}</SectionHeading>
     <MutedText>{m.text("liveMatch.separate")}</MutedText>
     {!snapshot ? <MutedText>{m.text("liveMatch.notCollected")}</MutedText> : <>
       <strong>{m.text(historical ? "liveMatch.retained" : status === "live" && snapshot.status === "live" ? "liveMatch.live"
         : status !== undefined && isPlayedFinalStatus(status) && isPlayedFinalStatus(snapshot.status) ? "liveMatch.final" : "liveMatch.retained")}</strong>
-      <section aria-labelledby="match-statistics-title"><Stack $gap="sm">
-        <h3 id="match-statistics-title">{m.text("liveMatch.statistics")}</h3>
+      {section !== "events" && <section aria-labelledby={section === "all" ? "match-statistics-title" : "match-observations-title"}><Stack $gap="sm">
+        {section === "all" && <h3 id="match-statistics-title">{m.text("liveMatch.statistics")}</h3>}
         <SourceStatus source={snapshot.statistics} kind={m.text("liveMatch.statistics")} stale={stale(snapshot.statistics)} m={m} />
         {snapshot.statistics.items.length > 0 && <Stats>
           <thead><tr><th scope="col">{m.text("liveMatch.statistic")}</th><th scope="col">{home}</th><th scope="col">{away}</th></tr></thead>
@@ -85,15 +85,15 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, locale, historical 
               ? m.number(value / 100, { style: "percent", maximumFractionDigits: 1 }) : m.number(value)}</td>)}
           </tr>)}</tbody>
         </Stats>}
-      </Stack></section>
-      <section aria-labelledby="match-events-title"><Stack $gap="sm">
-        <h3 id="match-events-title">{m.text("liveMatch.events")}</h3>
+      </Stack></section>}
+      {section !== "statistics" && <section aria-labelledby={section === "all" ? "match-events-title" : "match-observations-title"}><Stack $gap="sm">
+        {section === "all" && <h3 id="match-events-title">{m.text("liveMatch.events")}</h3>}
         <SourceStatus source={snapshot.events} kind={m.text("liveMatch.events")} stale={stale(snapshot.events)} m={m} />
         {snapshot.events.state === "available" && snapshot.events.items.length === 0 && <MutedText>{m.text("liveMatch.noEvents")}</MutedText>}
-        {snapshot.events.items.length > 0 && <details><summary>{m.text("liveMatch.eventCount", { count: m.number(snapshot.events.items.length) })}</summary>
+        {snapshot.events.items.length > 0 && <details open={section === "events" || undefined}><summary>{m.text("liveMatch.eventCount", { count: m.number(snapshot.events.items.length) })}</summary>
           <Events>{snapshot.events.items.map((event) => <Event key={event.sequence} event={event} home={home} away={away} m={m} />)}</Events>
         </details>}
-      </Stack></section>
+      </Stack></section>}
     </>}
     <MutedText>{m.text("liveMatch.provider")}</MutedText>
   </Stack></Frame>;

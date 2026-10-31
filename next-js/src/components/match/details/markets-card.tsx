@@ -8,7 +8,8 @@ import { predictionDescription } from "@/domain/prediction-label";
 import { detailAnalysis } from "@/domain/detail-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
-import { exclusiveFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
+import { exclusiveFamily, featuredFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
+import { openDetailTab } from "@/domain/match-detail-tabs";
 import { marketCategories, parseMatchView, type MarketCategory } from "@/domain/match-view";
 import type { MarketFamily } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
@@ -20,7 +21,7 @@ import {
   Card, CardHeader, SubscriberRow, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, RowButton, RowList, Standing,
   desktop, focusRing, size, useDetails, useRevealOnOpen, useStableDetails,
 } from "./details-ui";
-import { useReturnFocus } from "./section-card";
+import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
 
 const Search = styled.label`
@@ -168,6 +169,7 @@ export function Explanation() {
 
 /** All outcomes, source, timing, settlement and explanation for one market of the applicable revision. */
 function MarketPanel({ family }: { family: MarketFamily }) {
+  const embedded = useEmbeddedSection();
   const { data, messages, update } = useStableDetails();
   const snapshot = fullDetailSnapshot(data);
   const { item, outcome, reason } = marketRow(data, family);
@@ -203,8 +205,8 @@ function MarketPanel({ family }: { family: MarketFamily }) {
         <dt>{messages.text("details.bookmakerSource")}</dt><dd>{messages.text("details.notAvailable")}</dd>
         {snapshot.applicability !== "historical" && <><dt>{messages.text("match.outcome")}</dt><dd><DetailOutcome status={outcome?.status ?? "pending"} /></dd></>}
       </Facts>
-      <SubHeading>{messages.text("details.explanation")}</SubHeading>
-      <Explanation />
+      {embedded ? <LinkButton type="button" onClick={() => update(current => openDetailTab(current, "analysis"))}>{messages.text("touchline.why")}</LinkButton>
+        : <><SubHeading>{messages.text("details.explanation")}</SubHeading><Explanation /></>}
       <Note>{messages.text("detail.probabilityDisclosure")}</Note>
     </> : <>
       <Note>{messages.text(`detail.unavailable.${reason}`)}</Note>
@@ -241,7 +243,7 @@ function useMarketSearch(value: string) {
 }
 
 /** All Markets & Odds: open initially, with categories, search and a nested panel per market. */
-export const MarketsCard = memo(function MarketsCard() {
+export const MarketsCard = memo(function MarketsCard({ embedded = false }: { embedded?: boolean }) {
   const { data, messages, view, update } = useDetails();
   const list = useRef<HTMLUListElement>(null);
   useReturnFocus(list, view.market);
@@ -249,17 +251,19 @@ export const MarketsCard = memo(function MarketsCard() {
   const snapshot = fullDetailSnapshot(data);
   // As on the verdict, only a published forecast is locked.
   if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
-  const published = snapshot?.markets.length ?? 0;
+  const featured = embedded ? featuredFamily(data) : null;
+  const published = snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0;
   const label = (family: MarketFamily) => marketName(messages, family);
-  const shown = visibleMarkets(view.marketCategory, query, label);
+  const shown = visibleMarkets(view.marketCategory, query, label).filter(family => family !== featured);
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
-  return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-labelledby="section-markets-title">
-    <CardHeader icon={<MarketsIcon />} title={messages.text("details.allMarkets")} open={view.marketsOpen} controls="section-markets"
+  return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-labelledby={embedded ? "touchline-panel-title" : "section-markets-title"}
+    style={embedded ? { padding: 0, border: 0 } : undefined}>
+    {!embedded && <CardHeader icon={<MarketsIcon />} title={messages.text("details.allMarkets")} open={view.marketsOpen} controls="section-markets"
       meta={messages.text("details.publishedCount", { count: messages.number(published), total: messages.number(publicPolicy.markets.length) })}
       onToggle={() => update((current) => ({ ...current, marketsOpen: !current.marketsOpen, market: current.marketsOpen ? null : current.market }))}
-      headingId="section-markets-title" />
+      headingId="section-markets-title" />}
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
-      {view.marketsOpen && (view.market ? <MarketPanel family={view.market} /> : <Body>
+      {view.marketsOpen && (view.market && view.market !== featured ? <MarketPanel family={view.market} /> : <Body>
         <Tools>
           <Search><SearchIcon aria-hidden="true" /><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
             aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>

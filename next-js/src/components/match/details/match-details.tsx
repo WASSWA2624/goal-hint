@@ -27,6 +27,8 @@ import { InjuriesSection, LineupsSection, PlayersSection } from "./squad-section
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
 import { DisclosureProvider } from "./section-card";
 import { useMatchView, useOpenByDefault } from "./use-match-view";
+import { TouchlineFeatured } from "./touchline-featured";
+import { TouchlineTabs } from "./touchline-tabs";
 
 
 /** One column at every width; desktop sections align with the full-width app frame. */
@@ -207,7 +209,7 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
   useEffect(() => {
     if (opened.current) return;
     opened.current = true;
-    if (historyRequested && view.section === null) go({ ...view, section: "history" }, "replace");
+    if (historyRequested && view.section === null) go({ ...view, section: "history", panel: null }, "replace");
   }, [go, historyRequested, view]);
   const value = useMemo(() => ({ data, preview, locale, messages, go, update, home, away, fixtureId: fixture.fixtureId, history, showAccount, offer }),
     [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, update, showAccount, offer]);
@@ -217,14 +219,14 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
     [market, marketCategory, marketSearch, marketsOpen]);
   const scoped = { view, closed, byDefault };
   return <DetailsProvider value={value}>
-    <Page data-match-detail data-fixture-id={fixture.fixtureId} data-detail-revision={data.snapshot?.revisionId ?? ""}>
+    <Page data-match-detail data-match-design={byDefault ? "touchline" : "phone"} data-fixture-id={fixture.fixtureId} data-detail-revision={data.snapshot?.revisionId ?? ""}>
       <PhoneHeader />
       <DesktopBackLink />
-      <MatchBanner />
-      <Verdict />
-      {data.liveMatch !== undefined && <LiveMatchPanel snapshot={data.liveMatch} asOf={data.asOf} home={home} away={away} locale={locale}
+      <MatchBanner touchline={byDefault} />
+      {byDefault ? <TouchlineFeatured /> : <Verdict />}
+      {!byDefault && data.liveMatch !== undefined && <LiveMatchPanel snapshot={data.liveMatch} asOf={data.asOf} home={home} away={away} locale={locale}
         historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} />}
-      <Grid>
+      {byDefault ? <TouchlineTabs view={view} /> : <Grid>
         <ViewProvider value={markets}><MarketsCard /></ViewProvider>
         <AnalysisDrawer />
         <SectionView section="stats" {...scoped}><StatsSection /></SectionView>
@@ -237,8 +239,8 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
         <SectionView section="context" {...scoped}><ContextSection /></SectionView>
         <SectionView section="referee" {...scoped}><RefereeSection /></SectionView>
         <SectionView section="history" {...scoped}><HistorySection /></SectionView>
-      </Grid>
-      <Note>{messages.text("details.disclaimer")}</Note>
+      </Grid>}
+      {!byDefault && <Note>{messages.text("details.disclaimer")}</Note>}
     </Page>
   </DetailsProvider>;
 });
