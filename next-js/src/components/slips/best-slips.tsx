@@ -77,7 +77,7 @@ export function BestSlips({ result, locale }: { result: BestSlipsResult; locale:
     </Stack></CriteriaPanel> : content && <>
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
       <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={browse.revokeAccess}>
-      <SlipList $phoneGap={6} data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
+      <SlipList $phoneGap={9} data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
         {view.slip ? <SlipCard index={view.rank - 1} locale={locale}
         {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
         {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}

@@ -4,10 +4,20 @@ Full Best Slips and Slip Builder cards share one lazy-loaded drawer on desktop
 and phones. Ordinary slips remain collapsed. The Share action is a sibling of
 the native disclosure; header taps toggle selections and Share does not. Closing
 restores trigger focus. On phones, an icon-only Share control sits beside the
-narrower status badge. The header has no disclosure arrow or reserved arrow
+narrower status text. The icon is a compact 1.5rem square with control-radius
+corners and zero padding. Mobile status text has no border or background; a
+reserved live-dot slot aligns all labels. Internal vertical gaps are tighter,
+with 1.5 times the previous gap between cards (Best Slips 9px, Builder 13.5px).
+The header has no disclosure arrow or reserved arrow
 column; tapping it still toggles the slip, and its left blue strip remains.
 Shared-slip pages retain their current expanded default.
 Aggregate-only previews expose no sharing action.
+
+Slip Share stays visible but disabled without a signed-in member's current
+subscription, including on completed/shared slips. One private session store
+serves all triggers and disables them at expiry even offline; losing access
+closes an open drawer. The existing server access checks remain authoritative.
+App and referral invitation sharing require no subscription.
 
 The drawer prepares the existing immutable snapshot and branded PNGs. It clearly
 separates **Share link**, **Share image(s)** and **WhatsApp link**. The WhatsApp URL

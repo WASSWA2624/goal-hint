@@ -4,6 +4,7 @@ import {
   getAdminSessionSnapshot, getServerAdminSessionSnapshot,
   getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
   getSubscriptionSnapshot, getServerSubscriptionSnapshot,
+  getSlipSharingSnapshot,
 } from "../src/components/members/member-session.ts";
 
 test("header identity requests are private, deduplicated and refreshed after another tab signs out", async (t) => {
@@ -24,6 +25,7 @@ test("header identity requests are private, deduplicated and refreshed after ano
   });
   assert.equal(getServerMemberSessionSnapshot(), null);
   assert.equal(getMemberSessionSnapshot(), null);
+  assert.equal(getSlipSharingSnapshot(), false);
   assert.equal(getAdminSessionSnapshot(), false);
   assert.equal(getServerAdminSessionSnapshot(), false);
   let updates = 0;
@@ -84,6 +86,7 @@ test("header identity requests are private, deduplicated and refreshed after ano
   responses.shift()(Response.json({ phone: null, administrator: true }));
   await owner;
   assert.equal(getAdminSessionSnapshot(), true, "owner sessions do not require a member phone");
+  assert.equal(getSlipSharingSnapshot(), false, "an administrator role alone is not a member subscription");
   const signedOut = refreshMemberSession();
   await Promise.resolve();
   responses.shift()(Response.json({ phone: null, administrator: false }));
@@ -96,6 +99,25 @@ test("header identity requests are private, deduplicated and refreshed after ano
   browser.dispatchEvent(new Event("focus"));
   await Promise.resolve();
   assert.equal(requests.length, beforeUnmount, "unmounted headers remove their browser listeners");
+});
+
+test("slip sharing requires a signed-in member and current access, not pending, expired or malformed access", async (t) => {
+  const previousFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = previousFetch; });
+  const active = { activeUntil: new Date(Date.now() + 60_000).toISOString(), paymentPending: false, canSubscribe: true };
+  for (const [phone, subscription, expected] of [
+    [null, active, false],
+    ["+256700000001", null, false],
+    ["+256700000001", { ...active, activeUntil: null, paymentPending: true }, false],
+    ["+256700000001", { ...active, activeUntil: new Date(Date.now() - 1).toISOString() }, false],
+    ["+256700000001", { ...active, activeUntil: "invalid" }, false],
+    ["+256700000001", active, true],
+    [null, null, false],
+  ]) {
+    globalThis.fetch = async () => Response.json({ phone, subscription });
+    await refreshMemberSession();
+    assert.equal(getSlipSharingSnapshot(), expected);
+  }
 });
 
 test("subscription changes update all headers, poll approval and expire without navigation", async (t) => {
@@ -120,6 +142,7 @@ test("subscription changes update all headers, poll approval and expire without 
   });
   await refreshMemberSession();
   assert.deepEqual(getSubscriptionSnapshot(), summary);
+  assert.equal(getSlipSharingSnapshot(), false, "a pending payment does not permit slip sharing");
   assert.equal(getServerSubscriptionSnapshot(), null, "subscription details never enter public server HTML");
   const stable = getSubscriptionSnapshot();
   await refreshMemberSession();
@@ -132,6 +155,7 @@ test("subscription changes update all headers, poll approval and expire without 
   assert.equal(calls, 3, "the shared pending timer discovers approval");
   assert.deepEqual(getSubscriptionSnapshot(), summary);
   assert.equal(updates, 2, "approval notifies even when the phone is unchanged");
+  assert.equal(getSlipSharingSnapshot(), true, "an activated subscription enables slip sharing");
 
   failure = true;
   await refreshMemberSession();
@@ -139,6 +163,7 @@ test("subscription changes update all headers, poll approval and expire without 
   t.mock.timers.tick(40_000);
   assert.equal(getSubscriptionSnapshot().activeUntil, null, "expiry clears at the exact instant even when the network is unavailable");
   assert.equal(getSubscriptionSnapshot().expired, true, "a confirmed active period becomes expired without a working network");
+  assert.equal(getSlipSharingSnapshot(), false, "slip sharing disables exactly at expiry, even offline");
   await refreshMemberSession();
   assert.equal(updates, 3);
 
@@ -153,6 +178,7 @@ test("subscription changes update all headers, poll approval and expire without 
   summary = { ...summary, activeUntil: new Date(now + 120_000).toISOString(), paymentPending: false };
   await refreshMemberSession();
   assert.equal(getSubscriptionSnapshot().expired, undefined, "renewed access clears a stale expiry flag");
+  assert.equal(getSlipSharingSnapshot(), true, "renewal enables sharing again");
   unsubscribe();
   const beforeUnmount = calls;
   t.mock.timers.tick(60_000);

@@ -6,6 +6,11 @@ creates real public links, or contacts a WhatsApp recipient.
 
 Create with `create_fixture("slip-sharing")` from `scripts/lib/rendering.py`.
 The normal fixture helper supplies the root layout, theme, brand assets, and flags.
+The session endpoint defaults to a synthetic active subscriber. Set the
+`fixture-sharing-viewer` cookie to `guest` or `member` to check visible disabled
+Share controls without a valid subscription; `eligible` enables them. Builder
+and Best Slips include every slip status and an aggregate-only preview to check
+mobile label alignment and gaps.
 
 - `/` or `/builder`: custom-builder source and three selections.
 - `/best`: editorial source and the same three selections.

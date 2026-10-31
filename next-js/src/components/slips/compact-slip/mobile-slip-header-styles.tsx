@@ -1,7 +1,6 @@
 "use client";
 
 import styled from "styled-components";
-import { mobileStatusWidth } from "@/components/ui/status-badge";
 
 /** Minimal rules: stable metadata columns with compact, even text padding. */
 export const MobileHeaderRow = styled.summary`
@@ -67,16 +66,16 @@ export const MobileHeaderRow = styled.summary`
   /* Compact Rail is shared by every production mobile slip. Historical samples stay isolated. */
   &&:not([data-header-variant]) {
     --header-height: 2.75rem;
-    grid-template-columns: minmax(0, 1fr) ${mobileStatusWidth};
+    grid-template-columns: minmax(0, 1fr) min(6rem, 96px) 1.5rem;
     background: ${({ theme }) => `color-mix(in srgb, ${theme.color.surface} 96%, ${theme.color.accent.blue.text})`};
     /* Match badges end after the selection list's 6px gutter, 1px frame and 8px padding. */
-    gap: 4px 6px; padding: 6px 15px 6px 9px; block-size: auto; white-space: normal;
+    gap: 2px 6px; padding: 3px 6px 3px 9px; block-size: auto; white-space: normal;
     > h3, > h3[data-dense-identity] {
-      grid-column: 1; grid-row: 1; flex-wrap: wrap; gap: 3px 5px; align-items: baseline;
+      grid-column: 1; grid-row: 1; flex-wrap: wrap; gap: 1px 5px; align-items: baseline;
       padding: 0; font-size: 0.875rem; text-align: start; line-height: 1.3;
     }
     [data-header-slip-number] {
-      display: inline-flex; align-items: baseline; gap: 3px; flex: none; padding: 2px 4px;
+      display: inline-flex; align-items: baseline; gap: 3px; flex: none; padding: 1px 4px;
       border-radius: ${({ theme }) => theme.radius.small};
       color: ${({ theme }) => theme.color.accent.blue.text}; background: ${({ theme }) => theme.color.accent.blue.soft};
       white-space: nowrap; font-weight: 700;
@@ -92,10 +91,10 @@ export const MobileHeaderRow = styled.summary`
     }
     [data-header-metrics] {
       grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) auto;
-      align-items: baseline; gap: 4px 6px; min-inline-size: 0;
+      align-items: baseline; gap: 2px 6px; min-inline-size: 0; padding-inline-end: 9px;
     }
     [data-header-field] {
-      align-self: auto; flex-wrap: wrap; gap: 2px 4px; padding: 0; border: 0;
+      align-self: auto; flex-wrap: wrap; gap: 1px 4px; padding: 0; border: 0;
       align-items: baseline; justify-content: flex-start; white-space: normal;
     }
     [data-header-field] strong { font-size: 0.875rem; font-weight: 700; }
@@ -109,32 +108,29 @@ export const MobileHeaderRow = styled.summary`
       grid-column: 2; grid-row: 1; align-self: center; padding: 0; border: 0;
       > [data-header-label] { display: none; }
     }
-    [data-slip-status] { inline-size: ${mobileStatusWidth}; min-block-size: 1.5rem; font-size: 0.75rem; white-space: normal; }
+    [data-slip-status] {
+      display: grid; grid-template-columns: 10px minmax(0, 1fr);
+      inline-size: min(6rem, 96px); min-block-size: 1.5rem; padding: 0;
+      border: 0; background: none; justify-content: start; text-align: start;
+      font-size: 0.75rem; white-space: normal;
+      [data-slip-progress-dot] { grid-column: 1; grid-row: 1; justify-self: start; margin-inline-end: 0; }
+      [data-status-full] { grid-column: 2; grid-row: 1; }
+    }
     @container compact-slip (max-width: 18rem) {
       [data-label-full] { display: none; }
       [data-label-compact] { display: inline; }
     }
     @container compact-slip (max-width: 18.875rem) { overflow: visible; contain: none; }
     @container compact-slip (max-width: 12rem) {
-      grid-template-columns: minmax(0, 1fr);
-      [data-header-status] { grid-column: 1 / -1; grid-row: 1; justify-self: end; inline-size: min(100%, ${mobileStatusWidth}); }
-      > h3 { grid-column: 1; grid-row: 2; }
-      [data-header-metrics] { grid-column: 1; grid-row: 3; }
-    }
-  }
-  /* Reserve a sibling icon's touch target beside the narrower slip-only badge. */
-  &&:not([data-header-variant])[data-header-action] {
-    grid-template-columns: minmax(0, 1fr) min(6rem, 96px) 44px;
-    grid-template-rows: minmax(44px, auto) auto;
-    padding-inline-end: 6px;
-    > h3 { align-self: center; }
-    [data-header-status] { align-self: start; min-block-size: 44px; }
-    [data-header-metrics] { grid-column: 1 / -1; padding-inline-end: 9px; }
-    [data-slip-status] { inline-size: min(6rem, 96px); }
-    @container compact-slip (max-width: 12rem) {
       [data-header-status] { grid-column: 2; grid-row: 1; }
       > h3 { grid-column: 1 / -1; grid-row: 2; }
       [data-header-metrics] { grid-column: 1 / -1; grid-row: 3; }
     }
+  }
+  /* Keep the sibling Share icon and status on the same compact row. */
+  &&:not([data-header-variant])[data-header-action] {
+    grid-template-rows: minmax(1.5rem, auto) auto;
+    > h3 { align-self: center; }
+    [data-header-status] { align-self: start; min-block-size: 1.5rem; }
   }
 `;

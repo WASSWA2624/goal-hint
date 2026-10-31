@@ -524,7 +524,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         {data.jointProbabilities && <Note>{messages.text("slips.jointRanking")}</Note>}
         <SlipMatchRefreshProvider slips={shownSlips} enabled={desktop && !pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
-        <SlipList $phoneGap={9} data-slip-list>{shownSlips.map((slip, index) => {
+        <SlipList $phoneGap={13.5} data-slip-list>{shownSlips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
           return <SlipCard key={slip.id} slip={slip} index={offset + index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
             {...(!desktop ? { publishedAt: result.asOf } : {})}

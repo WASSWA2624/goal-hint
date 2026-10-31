@@ -16,6 +16,9 @@ export const getAdminSessionSnapshot = (): boolean => administrator;
 export const getServerAdminSessionSnapshot = (): false => false;
 export const getSubscriptionSnapshot = (): SubscriptionSummary | null => subscription;
 export const getServerSubscriptionSnapshot = (): null => null;
+/** Slip publication and re-sharing require the member's current, unexpired access period. */
+export const getSlipSharingSnapshot = (): boolean => phone !== null
+  && !!subscription?.activeUntil && Date.parse(subscription.activeUntil) > Date.now();
 
 function readSubscription(value: unknown): SubscriptionSummary | null {
   if (!value || typeof value !== "object" || !("activeUntil" in value) || !("paymentPending" in value) || !("canSubscribe" in value)

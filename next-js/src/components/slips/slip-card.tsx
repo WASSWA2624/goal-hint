@@ -18,7 +18,7 @@ import type { SlipHeaderPublication } from "./slip-header-meta";
 const PhoneSlipFallback = styled.div`
   position: relative; min-inline-size: 0;
   [data-phone-shareable] { position: relative; }
-  [data-phone-share-action] { position: absolute; inset-block-start: 6px; inset-inline-end: 6px; }
+  [data-phone-share-action] { position: absolute; inset-block-start: 3px; inset-inline-end: 6px; }
   ${media.belowDesktop} {
     [data-compact-slip="clean-ledger"] {
       border-radius: ${({ theme }) => theme.radius.control};
