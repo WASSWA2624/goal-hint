@@ -4,7 +4,7 @@ import Link from "@/components/navigation/navigation-link";
 import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
-import { Container } from "@/components/ui/layout";
+import { Container, desktopContentPadding } from "@/components/ui/layout";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
@@ -87,8 +87,9 @@ export const HeaderContent = styled(Container)`
   ${compactHeaderRow}
   min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
   padding-inline: 8px;
-  ${desktop} { flex-wrap: nowrap; gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 20px; }
+  ${desktop} { flex-wrap: nowrap; gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
+  ${desktopContentPadding()}
 `;
 
 export const HeaderActions = styled.div`

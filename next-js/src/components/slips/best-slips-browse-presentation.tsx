@@ -6,8 +6,10 @@ import { bestSlipsQueryRules } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import styled from "styled-components";
 import { media } from "@/styles/theme";
+import { desktopContentPadding } from "@/components/ui/layout";
 
 const Pagination = styled.div`
+  ${desktopContentPadding()}
   [aria-current="page"] { background: ${({ theme }) => theme.color.accent.blue.text}; color: ${({ theme }) => theme.color.accent.blue.soft}; }
   ${media.belowDesktop} {
     > nav { --pagination-min-cell: 2rem; --pagination-cell-height: var(--pagination-min-cell); --pagination-gap: 4px; font-size: .75rem; }

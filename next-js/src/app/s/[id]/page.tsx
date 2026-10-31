@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PublicShell } from "@/app/_components/public-shell";
 import { SlipCard } from "@/components/slips/slip-card";
 import { ButtonLink } from "@/components/ui/controls";
-import { Inline, PageHeading, Stack, MutedText } from "@/components/ui/layout";
+import { DesktopContent, Inline, PageHeading, Stack, MutedText } from "@/components/ui/layout";
 import { publicPolicy } from "@/domain/public-policy";
 import { sharedSlipPath } from "@/domain/shared-slips";
 import { readSharedSlip } from "@/server/slips/shared-slips";
@@ -24,10 +24,10 @@ export default async function SharedSlipPage({ params }: Props) {
   const shared = await readSharedSlip((await params).id);
   if (!shared) notFound();
   return <PublicShell locale={publicPolicy.defaultLocale} current="slips" app compact>
-    <Stack $gap="md">
+    <DesktopContent><Stack $gap="md">
       <Inline><PageHeading>{messages.text("slipShare.sharedTitle")}</PageHeading><MutedText>{messages.text("slipShare.createdWith", { name: publicPolicy.name })}</MutedText></Inline>
       <SlipCard slip={shared.slip} index={0} locale={publicPolicy.defaultLocale} sharedSlip={shared} initiallyOpen />
       <Inline><ButtonLink href="/en/slips" prefetch={false}>{messages.text("slipShare.buildOwn")}</ButtonLink><ButtonLink href="/en" variant="secondary" prefetch={false}>{messages.text("bestSlips.title")}</ButtonLink></Inline>
-    </Stack>
+    </Stack></DesktopContent>
   </PublicShell>;
 }

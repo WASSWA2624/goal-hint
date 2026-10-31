@@ -26,10 +26,25 @@ export const desktopSectionFrame = css`
   ${media.desktop} { border-radius: ${({ theme }) => theme.radius.none}; }
 `;
 
+/** One content rail inside full-width desktop sections; account for a panel's own border. */
+export const desktopContentPadding = (bordered = false) => css`
+  ${media.desktop} {
+    padding-inline: ${({ theme }) => bordered
+      ? `calc(${theme.layout.gutter} - ${theme.border.width})` : theme.layout.gutter};
+  }
+`;
+
+/** Insets a card collection without narrowing its section background or changing mobile spacing. */
+export const DesktopContent = styled.div`
+  min-inline-size: 0;
+  ${desktopContentPadding()}
+`;
+
 /** Text-only desktop sections retain content padding inside the full-width page frame. */
 export const DesktopInset = styled.div`
   min-inline-size: 0;
   ${media.desktop} { padding: ${({ theme }) => theme.space.md}; }
+  ${desktopContentPadding()}
 `;
 
 export const Stack = styled.div<{ $gap?: "sm" | "md" | "lg" | "xl" }>`
@@ -60,6 +75,7 @@ export const Surface = styled.section`
   ${media.tablet} { padding: ${({ theme }) => theme.space.md}; }
   ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; }
   ${desktopSectionFrame}
+  ${desktopContentPadding(true)}
 `;
 
 /** Section anchors land below the sticky header (3.5rem on phones, about 4rem on desktop). */

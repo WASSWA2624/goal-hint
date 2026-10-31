@@ -11,6 +11,7 @@ import { detailRecordNotices } from "@/domain/detail-presentation";
 import { featuredFamily, liveStanding, marketRow, resultOutlook, selectedDetailPrice } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { media } from "@/styles/theme";
+import { desktopContentPadding } from "@/components/ui/layout";
 import { DetailOutcome } from "./match-banner";
 import { Note, Standing, desktop, focusRing, size, useStableDetails, type Messages } from "./details-ui";
 import { marketName, percent, pickLabel } from "./labels";
@@ -31,6 +32,7 @@ const Box = styled.section`
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: ${({ theme }) => theme.radius.none};
   }
+  ${desktopContentPadding(true)}
 `;
 const Eyebrow = styled.div`
   display: flex;

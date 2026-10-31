@@ -4,7 +4,7 @@ import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
-import { desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
+import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
 const compactControlHeight = "2rem";
@@ -73,11 +73,15 @@ export const SlipStack = styled(Stack)`
     gap: 12px;
   }
   &[data-slip-builder-page], &[data-best-slips-page] { ${joinedDesktopSections} }
+  &[data-slip-builder-page], &[data-best-slips-page] {
+    > p, > [data-best-slips-update-failed] { ${desktopContentPadding()} }
+  }
 `;
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
 export const SlipList = styled.div<{ $phoneGap?: number }>`
   display: grid; min-inline-size: 0; gap: ${({ $phoneGap = 10 }) => $phoneGap}px;
   ${media.desktop} { gap: 4.5px; }
+  ${desktopContentPadding()}
 `;
 export const SlipHeading = styled(PageHeading)`font-size: 1.25rem; ${media.desktop} { font-size: 1.5rem; }`;
 export const HeadingRow = styled.div`
@@ -89,7 +93,7 @@ export const Note = styled.p`color: ${({ theme }) => theme.color.mutedText}; fon
 export const CriteriaPanel = styled(Surface)`
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   ${media.desktop} { && { padding: 10px; } }
-  && { ${desktopSectionFrame} }
+  && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
 `;
 export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
@@ -97,7 +101,7 @@ export const BuilderPanel = styled(CriteriaPanel)`
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   [data-criteria-dialog] { background: var(--filter-panel-background); }
   ${mobileFilterPanel}
-  && { ${desktopSectionFrame} }
+  && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
     && { padding-block: 6px; }
@@ -355,5 +359,6 @@ export const ClearLink = styled(ButtonLink)`
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;
 export const Results = styled.section`
   display: grid; gap: 9px; min-inline-size: 0;
+  > ${HeadingRow}, > ${Note}, > nav { ${desktopContentPadding()} }
   &[aria-busy="true"] { opacity: 0.65; }
 `;

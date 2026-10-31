@@ -3,6 +3,7 @@
 import styled, { css } from "styled-components";
 import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, focusRing, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { desktopContentPadding } from "@/components/ui/layout";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { media } from "@/styles/theme";
 import type { BestSlipsStatus } from "@/domain/best-slips-query";
@@ -36,7 +37,8 @@ export const FiltersPanel = styled.section`
   background: transparent;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
-  ${media.desktop} { padding: 8px; background: ${({ theme }) => theme.color.page}; }
+  ${media.desktop} { padding-block: 8px; background: ${({ theme }) => theme.color.page}; }
+  ${desktopContentPadding()}
   ${media.belowDesktop} {
     background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.soft} 65%, ${({ theme }) => theme.color.surface});
   }

@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { desktopContentPadding } from "@/components/ui/layout";
 import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
 import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { feedHeading } from "@/domain/feed-presentation";
@@ -178,6 +179,7 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
 
 /** The mobile count follows the filters and aligns with their right edge. */
 const ResultsBar = styled(Toolbar)`
+  ${desktopContentPadding()}
   ${desktop} { flex-wrap: nowrap; gap: 8px 16px; }
   ${media.belowDesktop} { display: flex; justify-content: flex-end; padding-inline: 6px; }
 `;

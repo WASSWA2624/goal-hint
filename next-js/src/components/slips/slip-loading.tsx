@@ -3,6 +3,7 @@
 import styled, { keyframes } from "styled-components";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
+import { desktopContentPadding } from "@/components/ui/layout";
 
 const shimmer = keyframes`
   from { background-position: 200% 0; }
@@ -10,6 +11,7 @@ const shimmer = keyframes`
 `;
 const Loading = styled.div`
   display: grid; gap: 6px; min-inline-size: 0;
+  ${desktopContentPadding()}
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; }
 `;
 const Placeholder = styled.div`

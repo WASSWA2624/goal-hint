@@ -4,6 +4,7 @@ import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters } from "@/components/ui/filter-chrome";
+import { desktopContentPadding } from "@/components/ui/layout";
 import { controlFeedback, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
@@ -51,6 +52,7 @@ export const Panel = styled.form`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   [data-criteria-dialog] { background: var(--filter-panel-background); }
+  ${desktopContentPadding(true)}
 `;
 
 export const SearchRow = styled.div`

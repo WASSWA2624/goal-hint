@@ -2,6 +2,7 @@
 
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
+import { desktopContentPadding } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedPageHref, type FeedPaginationError } from "@/domain/feed-pagination";
@@ -12,6 +13,7 @@ import { media } from "@/styles/theme";
 
 const desktop = media.desktop;
 const Bar = styled.div`
+  ${desktopContentPadding()}
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;

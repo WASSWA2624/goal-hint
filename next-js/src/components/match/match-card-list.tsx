@@ -5,6 +5,7 @@ import styled, { css } from "styled-components";
 import { createMessages } from "@/i18n/messages";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
+import { DesktopContent } from "@/components/ui/layout";
 import { alignedLedgerStyles, desktopMatchBaseStyles } from "./desktop-match-styles";
 import { MatchCardLayoutContext } from "./match-card-layout";
 
@@ -77,7 +78,7 @@ export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardL
   const messages = createMessages(locale);
   const indexLabel = rowNumberMaximum !== undefined && Number.isSafeInteger(rowNumberMaximum) && rowNumberMaximum > 0
     ? messages.number(Math.min(rowNumberMaximum, 9_999)) : "";
-  return <MatchCardLayoutContext.Provider value={desktop}><Board $indexLength={indexLabel.length} data-match-board>
+  return <MatchCardLayoutContext.Provider value={desktop}><DesktopContent data-match-section><Board $indexLength={indexLabel.length} data-match-board>
     <List role="list" {...props} />
-  </Board></MatchCardLayoutContext.Provider>;
+  </Board></DesktopContent></MatchCardLayoutContext.Provider>;
 }

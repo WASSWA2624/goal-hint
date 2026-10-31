@@ -5531,3 +5531,54 @@ therefore uses the isolated preview; live data loading and authenticated flows
 remain unverified in this pass. Preview scripts, screenshots and logs are ignored
 under `output/playwright/full-width-*`. The owned preview/browser are closed
 after verification. See [plan 185](../dev-plan/185-full-width-desktop-sections.md).
+
+## 186 — Aligned desktop content — 31 October 2026
+
+Desktop sections retain their full-width backgrounds and square structural
+frames. A shared 16px content gutter now aligns match boards and slip card
+frames with filter controls, performance headings, notes and pagination. The
+header uses the same gutter as the subscription bar. Bordered sections account
+for their border width so their content starts at the same horizontal position.
+
+`desktopContentPadding` reuses `theme.layout.gutter`; `DesktopContent` wraps
+collections and standalone shared slips. The inset stays outside each card.
+Generated slips, Best Slips, history, shared slips and loading placeholders
+follow the same alignment. Performance, match details, empty states and owner/
+analytics content also share the content gutter. Offline matches inherit the
+shared match-list wrapper. Phone/tablet media rules retain their existing
+spacing and control geometry.
+
+- Changed-file ESLint with zero warnings and strict TypeScript checking passed
+  under Node 24.18.1.
+- All 151 relevant existing theme, match-card, performance, slip-card, builder,
+  Best Slips client and shared-slip tests passed without skips.
+- Sixty-six isolated browser cases passed at 1024px, 1440px and 1920px in both
+  themes. They cover Matches, Builder results, Best Slips, Performance, match
+  details, owner overview, Analytics, reading content, shared slips, history and
+  slip loading. Section frames remain full width, card frames and measured
+  controls/headings share the 16px inset, and no horizontal overflow appeared.
+- Eighty-eight original-versus-current comparisons passed at 320px, 375px,
+  768px and 1023px in both themes. Measured root, text, control, summary, match
+  board, slip-card and loading geometry/styles remained identical. Representative
+  desktop screenshots were visually reviewed.
+
+Previews render the real shared layout, full Best Slips filters, native desktop
+slip disclosures, the match list and Builder/result styles, the complete match
+detail component with an existing synthetic snapshot, and the owner workspace.
+Matches/Builder controls, match rows and owner reports use sample content;
+shared/history previews exercise the same wrappers with sample slip summaries.
+These checks establish layout acceptance without private records or changes to
+account state.
+
+The running server rendered Builder at 1440px with full-width square toolbar/
+result sections and no overflow; its first controls aligned at 16px. This was
+a server-rendered check without waiting for the enhanced form to hydrate.
+Matches and Best Slips navigation each timed out at 15 seconds, so their final
+geometry verification uses the isolated previews. Live loading, generated
+records and authenticated interactions remain outside this pass's acceptance.
+
+Preview scripts, captures and logs are ignored under
+`output/playwright/aligned-content-*`; the live Builder capture uses the
+existing `full-width-live-builder.png` filename. The owned preview and browser
+are closed after verification. See
+[plan 186](../dev-plan/186-aligned-desktop-content.md).

@@ -3,6 +3,7 @@
 import { useId, type ComponentPropsWithRef, type ReactNode } from "react";
 import styled from "styled-components";
 import { media, type OutcomeTone } from "@/styles/theme";
+import { desktopContentPadding } from "./layout";
 
 export type StatusTextProps = Omit<
   ComponentPropsWithRef<"span">,
@@ -75,6 +76,7 @@ const EmptyContainer = styled.section`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   overflow-wrap: anywhere;
   ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; border-radius: ${({ theme }) => theme.radius.none}; font-size: inherit; }
+  ${desktopContentPadding(true)}
 `;
 
 const EmptyTitle = styled.h2`

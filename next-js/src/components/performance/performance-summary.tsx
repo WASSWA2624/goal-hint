@@ -1,7 +1,7 @@
 "use client";
 
 import styled from "styled-components";
-import { desktopSectionFrame } from "@/components/ui/layout";
+import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts } from "@/domain/performance-summary";
@@ -23,6 +23,7 @@ const Content = styled.div`
   display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 1px;
   block-size: 100%; min-inline-size: 0; padding: 3px 8px 5px; box-sizing: border-box;
   ${media.desktop} { display: flex; align-items: center; gap: 12px; padding: 3px 12px 5px; }
+  ${desktopContentPadding(true)}
 `;
 const Header = styled.header`
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;

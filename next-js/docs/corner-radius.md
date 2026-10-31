@@ -25,6 +25,12 @@ The desktop app container has no outer gutter or width cap; sections own their
 content padding. Reading pages and compact forms retain local content insets.
 Phone and tablet gutters, corners and spacing retain their existing styles.
 
+Desktop content uses the shared `theme.layout.gutter` (16px) inside those
+full-width frames. Reuse `desktopContentPadding` for section content and
+`DesktopContent` around card collections or standalone shared slips. Bordered
+panels account for their border width when aligning their content. Keep the
+page gutter outside individual cards to avoid doubling nested card padding.
+
 Use a semantic token directly, for example:
 
 ```tsx

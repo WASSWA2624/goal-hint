@@ -3,7 +3,7 @@
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters, mobileFilterPanel } from "@/components/ui/filter-chrome";
-import { desktopSectionFrame } from "@/components/ui/layout";
+import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
 
 export const Shell = styled.div`
   min-block-size: 100dvh;
@@ -139,6 +139,7 @@ export const FilterBar = styled.section`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
+  ${desktopContentPadding(true)}
   ${media.belowDesktop} { position: static; }
 `;
 export const Field = styled.label`
@@ -264,6 +265,7 @@ export const Panel = styled.section<{ $busy?: boolean }>`
   transition: opacity 120ms;
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   ${media.desktop} { padding: 18px 20px; }
+  ${desktopContentPadding(true)}
 `;
 export const PanelHeader = styled.div`
   display: flex;

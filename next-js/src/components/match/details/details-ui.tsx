@@ -14,6 +14,7 @@ import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, type MatchView } from "@/domain/match-view";
 import { createMessages } from "@/i18n/messages";
 import { media, type AccentName } from "@/styles/theme";
+import { desktopContentPadding } from "@/components/ui/layout";
 import type { ViewNavigation, ViewUpdate } from "./use-match-view";
 
 export type Messages = ReturnType<typeof createMessages>;
@@ -71,9 +72,9 @@ export const Card = styled.section`
   /* Server-rendered open by the desktop default: phones show the row alone until they hydrate and close it. */
   ${media.belowDesktop} { &[data-open-by-default] { padding-block-end: 0; > div[id] { display: none; } } }
   ${desktop} {
-    padding-inline: 18px;
     &[data-open] { padding-block-end: 16px; }
   }
+  ${desktopContentPadding(true)}
 `;
 
 /** A subscriber drawer keeps the established row height and rule, with one plain line. */

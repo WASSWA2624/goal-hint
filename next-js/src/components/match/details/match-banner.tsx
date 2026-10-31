@@ -11,6 +11,7 @@ import { toUtcIsoString } from "@/domain/calendar";
 import { matchArchiveHref } from "@/domain/navigation";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { ShieldIcon } from "@/components/ui/icons";
+import { desktopContentPadding } from "@/components/ui/layout";
 import { BothTeamsIcon, GoalsIcon, ResultIcon } from "./details-icons";
 import { Crest, FormLetters, desktop, focusRing, scrollClearance, size, useStableDetails, type Messages } from "./details-ui";
 
@@ -63,6 +64,7 @@ const Box = styled.section`
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: ${({ theme }) => theme.radius.none};
   }
+  ${desktopContentPadding(true)}
 `;
 /**
  * Competition, round, date and time on one centred line above the teams. Each separator is glued to the item

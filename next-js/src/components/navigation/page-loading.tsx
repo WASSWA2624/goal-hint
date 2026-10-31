@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { HeaderBrand } from "@/components/ui/brand";
-import { Container, desktopSectionFrame, PageMain, Stack } from "@/components/ui/layout";
+import { Container, DesktopContent, desktopSectionFrame, PageMain, Stack } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 import { FallbackStyleProvider } from "@/styles/provider";
 import { Header, HeaderContent, ShellFrame } from "./shell-styles";
@@ -28,7 +28,7 @@ export function PageLoading({ label }: { label: string }) {
     <PageMain id="main-content" tabIndex={-1} $app $compact>
       <Container $wide><Stack>
         <LoadingStatus role="status">{label}</LoadingStatus>
-        <Stack aria-hidden="true"><Placeholder /><Placeholder /><Placeholder /></Stack>
+        <DesktopContent><Stack aria-hidden="true"><Placeholder /><Placeholder /><Placeholder /></Stack></DesktopContent>
       </Stack></Container>
     </PageMain>
   </ShellFrame></FallbackStyleProvider>;
