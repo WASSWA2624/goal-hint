@@ -952,3 +952,24 @@ now uses localhost instead of the unavailable remote hosting account. This is a
 development installation, not a signed production release. Real Android network
 loss, the wider native fault matrix and Apple build/runtime acceptance remain
 unqualified; Apple execution still requires a suitable macOS toolchain.
+
+
+## 013 Native shared-slip handoff — 31 October 2026
+
+Completed in source: the existing owned-document share bridge now accepts
+canonical shared-slip links and bounded generated PNG bytes using the installed
+share_plus 13.3.1 API. It preserves referral compatibility and host ownership,
+nonce, lifecycle, cancellation and concurrency checks. No new dependency or
+separate native business logic was introduced.
+
+All 13 focused bridge/shared-link/platform tests passed; Flutter analysis found
+no issues. The injected JavaScript template completed a browser PNG/channel
+handshake with cancellation. The web sharing fixture verified link/file payloads,
+copying, downloads and desktop/phone return journeys with simulated native/social
+outcomes. No messages were sent. See [plan 013](dev-plan/013-native-slip-sharing.md)
+and [web verification](../next-js/dev-plan/203-phone-slip-sharing.md).
+
+New signed builds, installed social-app/file handoffs, WebView downloads,
+temporary cache handling and physical-device app links remain **Unverified**.
+The earlier Android Gradle dependency-resolution problem remains an outstanding
+release check; this task did not rebuild or reinstall either native application.

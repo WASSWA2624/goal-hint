@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import { media } from "@/styles/theme";
 import { Button } from "@/components/ui/controls";
 
 export const ShareTrigger = styled(Button)`
@@ -32,6 +33,7 @@ export const DrawerHeader = styled.header`
 export const DrawerButton = styled(Button)`
   && { min-block-size: 34px; min-inline-size: 34px; padding: 6px 8px; font-size: .75rem; line-height: 1.3; border-radius: ${({ theme }) => theme.radius.control}; }
   svg { inline-size: 15px; block-size: 15px; }
+  ${media.belowDesktop} { && { min-block-size: 44px; min-inline-size: 44px; } }
   @media (pointer: coarse) { && { min-block-size: 44px; min-inline-size: 44px; } }
 `;
 
@@ -53,7 +55,7 @@ export const DrawerBody = styled.div`
 
 export const DrawerFooter = styled.footer`
   flex: none; padding: 12px 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
-  [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-block-end: 9px; }
+  [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-block-end: 9px; }
   [data-share-primary] { inline-size: 100%; }
   [data-share-feedback] { font-size: .6875rem; margin: 10px 0 0; color: ${({ theme }) => theme.color.mutedText}; }
 `;

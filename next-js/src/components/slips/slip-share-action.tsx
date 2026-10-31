@@ -19,7 +19,7 @@ export function SlipShareAction({ source, sharedSlip, locale }: { source?: Share
   }
   return <>
     <ShareTrigger ref={trigger} type="button" variant="quiet" data-share-slip aria-haspopup="dialog" aria-expanded={open}
-      aria-controls={open ? id : undefined} onClick={() => setOpen(true)}><ShareIcon />{m.text("slipShare.share")}</ShareTrigger>
+      aria-controls={open ? id : undefined} onClick={(event) => { event.stopPropagation(); setOpen(true); }}><ShareIcon />{m.text("slipShare.share")}</ShareTrigger>
     {open && <SlipShareDrawer id={id} {...(source ? { source } : {})} {...(cached ? { initialShared: cached } : {})}
       locale={locale} onPrepared={setCached} onClose={close} />}
   </>;

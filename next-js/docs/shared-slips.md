@@ -1,8 +1,9 @@
 # Shared slip links
 
-Desktop sharing creates an explicit, immutable public snapshot at `/s/<token>`.
-Anyone with the link can read that snapshot and share it again without signing
-in. No account ID, phone, session, owner digest, or rate-limit data appears in
+Desktop and phone sharing create an immutable snapshot at `/s/<token>`.
+Unfinished selections require authenticated eligible access on the receiving
+device. Completed slips are readable without access. The token does not grant
+entitlement. No account ID, phone, session, owner digest, or rate-limit data appears in
 the public response. The source slip's selections, original prices, and forecast
 references are retained independently of future changes or account erasure.
 
@@ -37,6 +38,19 @@ check the stored JSON integrity seal and schema before projecting the public
 allowlist. The sharing API is never cached or indexed. Shared pages are not
 indexed and contain the original snapshot rather than claiming current scores.
 
+The landing distinguishes access-required, missing/invalid and temporarily
+unavailable states. Restricted HTML/RSC responses contain no snapshot or selection
+aggregates. Social metadata is generic for every viewer and never reads a slip.
+Pages and APIs are private/no-store, unframed and noindex. Access is rechecked
+before releasing a snapshot, including races where a subscription expires.
+
+Sign-in and Get access links retain only canonical `/s/<32 lowercase hex>` return
+paths; external addresses, escapes, queries and fragments are rejected. Required
+verification/recovery steps retain that path. Ordinary sign-ins still finish at
+home and administrators retain their dashboard. The subscription page provides
+an explicit Return to shared slip link before/after approval; returning early
+shows the same gate without bypassing permissions.
+
 The selected drawer creates the record when sharing is opened. Saving the image,
 copying its caption, and handing off to WhatsApp use the shared response. Native
 file sharing depends on browser support; the desktop manual attachment path
@@ -54,8 +68,8 @@ do not retry a partial import. The ordinary application role requires only
 
 There is no expiry, prune job, update path, or delete path for a shared record.
 Database triggers reject updates and deletion. Private member saves keep their
-existing account-erasure behavior; explicit public shares remain independently
-readable. The owner digest stays private and does not contain a raw account ID.
+existing account-erasure behavior; shared records remain independently stored, with the same completion/access
+read checks. The owner digest stays private and does not contain a raw account ID.
 
 Creating source files does not migrate a deployed database or grant database
 privileges. Without the migration/grants the API fails closed with `503`.

@@ -6,6 +6,7 @@ import type { SavedSlipView } from "@/domain/saved-slips";
 import type { SlipMatchState } from "@/domain/slip-match-state";
 import type { SlipStatus } from "@/domain/slip-status";
 import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
+import { SlipShareAction } from "./slip-share-action";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import styled from "styled-components";
 import { media } from "@/styles/theme";
@@ -15,7 +16,9 @@ import type { SlipHeaderPublication } from "./slip-header-meta";
 
 /** Keep desktop content visually collapsed until hydration selects its native disclosure. */
 const PhoneSlipFallback = styled.div`
-  min-inline-size: 0;
+  position: relative; min-inline-size: 0;
+  [data-phone-share-action] { display: flex; justify-content: flex-end; padding-inline: 6px; border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
+  [data-phone-share-action] [data-share-slip] { min-block-size: 44px; }
   ${media.belowDesktop} {
     [data-compact-slip="clean-ledger"] {
       border-radius: ${({ theme }) => theme.radius.control};
@@ -46,7 +49,10 @@ export const SlipCard = memo(function SlipCard({ slip, index, locale, results, m
     {...(matchStates ? { matchStates } : {})} />;
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" initiallyOpen={initiallyOpen} showRank={!sharedSlip}
     {...publication}
-    {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})} /></PhoneSlipFallback>;
+    {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})}
+    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} locale={locale}
+      {...(shareSource ? { source: shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} /> : undefined} />
+  </PhoneSlipFallback>;
 });
 
 /** Aggregate-only previews use the same responsive header and disclosure as complete slip cards. */

@@ -1,24 +1,77 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:share_plus/share_plus.dart';
 
-/// A narrow public-link bridge; identity, attribution and rewards stay in web.
+/// Generated PNG bytes only: no filesystem paths, remote URLs or arbitrary types.
+class NativeSlipImage {
+  const NativeSlipImage(this.name, this.bytes);
+  final String name;
+  final Uint8List bytes;
+
+  static NativeSlipImage? parse(Object? value, String token) {
+    if (value is! Map ||
+        value.length != 2 ||
+        value['name'] is! String ||
+        value['data'] is! String) {
+      return null;
+    }
+    final name = value['name'] as String, encoded = value['data'] as String;
+    if (!RegExp('^goal-hint-$token(?:-[0-9]{2,3})?\\.png\$').hasMatch(name) ||
+        encoded.length > 5592408) {
+      return null;
+    }
+    try {
+      final bytes = base64Decode(encoded);
+      if (bytes.length < 33 ||
+          bytes.length > 4 * 1024 * 1024 ||
+          base64Encode(bytes) != encoded ||
+          bytes.take(8).join(',') != '137,80,78,71,13,10,26,10' ||
+          ascii.decode(bytes.sublist(12, 16), allowInvalid: true) != 'IHDR') {
+        return null;
+      }
+      final header = ByteData.sublistView(bytes);
+      if (header.getUint32(8) != 13 ||
+          header.getUint32(16) != 1080 ||
+          header.getUint32(20) < 1 ||
+          header.getUint32(20) > 8192) {
+        return null;
+      }
+      return NativeSlipImage(name, bytes);
+    } on FormatException {
+      return null;
+    }
+  }
+}
+
+/// One document-bound public-link/PNG bridge; account and access rules stay in web.
 class NativeInvitationRequest {
-  const NativeInvitationRequest(this.id, this.title, this.text, this.url);
+  const NativeInvitationRequest(
+    this.id,
+    this.title,
+    this.text,
+    this.url, [
+    this.images = const [],
+  ]);
 
   final String id;
   final String title;
   final String text;
   final String url;
+  final List<NativeSlipImage> images;
 
   static NativeInvitationRequest? parse(String message, String? nonce) {
-    if (nonce == null || message.length > 2048) return null;
+    if (nonce == null || message.length > 16 * 1024 * 1024 + 8192) return null;
     try {
       final data = jsonDecode(message);
       if (data is! Map ||
-          data.length != 5 ||
+          (data.length != 5 && data.length != 6) ||
+          data.keys.any(
+            (key) =>
+                !['id', 'nonce', 'title', 'text', 'url', 'files'].contains(key),
+          ) ||
           data['nonce'] != nonce ||
           data['id'] is! String ||
           !RegExp(r'^[0-9]{1,10}$').hasMatch(data['id']) ||
@@ -26,19 +79,47 @@ class NativeInvitationRequest {
           data['title'] != 'Goal Hint' ||
           data['text'] is! String ||
           (data['text'] as String).trim().isEmpty ||
-          (data['text'] as String).length > 512 ||
+          (data['text'] as String).length > 4096 ||
           RegExp(r'[\x00-\x08\x0b-\x1f\x7f]').hasMatch(data['text']) ||
           data['url'] is! String ||
           !RegExp(
-            r'^https://goalhint\.com/r/[a-f0-9]{32}$',
+            r'^https://goalhint\.com/(?:r|s)/[a-f0-9]{32}$',
           ).hasMatch(data['url'])) {
         return null;
+      }
+      final slip = (data['url'] as String).contains('/s/');
+      if (!slip &&
+          ((data['text'] as String).length > 512 ||
+              data.containsKey('files'))) {
+        return null;
+      }
+      final images = <NativeSlipImage>[];
+      if (data.containsKey('files')) {
+        final files = data['files'];
+        if (!slip || files is! List || files.isEmpty || files.length > 32) {
+          return null;
+        }
+        var bytes = 0;
+        for (final file in files) {
+          final image = NativeSlipImage.parse(
+            file,
+            (data['url'] as String).split('/').last,
+          );
+          if (image == null ||
+              images.any((existing) => existing.name == image.name)) {
+            return null;
+          }
+          bytes += image.bytes.length;
+          if (bytes > 12 * 1024 * 1024) return null;
+          images.add(image);
+        }
       }
       return NativeInvitationRequest(
         data['id'],
         data['title'],
         data['text'],
         data['url'],
+        images,
       );
     } on FormatException {
       return null;
@@ -64,16 +145,17 @@ class NativeInvitationShare {
   if (window.top !== window || location.origin !== ${jsonEncode(origin.origin)}) return;
   const nonce = ${jsonEncode(_nonce)}, pending = new Map();
   let counter = 0;
-  const bridge = Object.freeze({version: 1, share(data) {
+  function send(data, files) {
     if (navigator.userActivation && !navigator.userActivation.isActive) return Promise.reject(new DOMException('Click Share to continue.', 'NotAllowedError'));
     if (pending.size) return Promise.reject(new DOMException('Sharing is in progress.', 'InvalidStateError'));
     const id = String(++counter);
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => { pending.delete(id); reject(new Error('Sharing timed out.')); }, 120000);
       pending.set(id, {resolve, reject, timeout});
-      GoalHintInvitationShare.postMessage(JSON.stringify({id, nonce, title: data.title, text: data.text, url: data.url}));
+      GoalHintInvitationShare.postMessage(JSON.stringify({id, nonce, title: data.title, text: data.text, url: data.url, ...(files ? {files} : {})}));
     });
-  }});
+  }
+  const bridge = Object.freeze({version: 1, share(data) { return send(data); }, shareFiles(data) { return send(data, data.files); }});
   window.addEventListener('goalhint:native-share-result', event => {
     if (event.detail?.nonce !== nonce) return;
     const request = pending.get(event.detail.id);
@@ -116,7 +198,20 @@ class NativeInvitationShare {
       final outcome = await (share ?? SharePlus.instance.share)(
         ShareParams(
           title: request.title,
-          text: '${request.text}\n${request.url}',
+          text: request.text.contains(request.url)
+              ? request.text
+              : '${request.text}\n${request.url}',
+          files: request.images.isEmpty
+              ? null
+              : request.images
+                    .map(
+                      (image) =>
+                          XFile.fromData(image.bytes, mimeType: 'image/png'),
+                    )
+                    .toList(),
+          fileNameOverrides: request.images.isEmpty
+              ? null
+              : request.images.map((image) => image.name).toList(),
           sharePositionOrigin: anchor,
         ),
       );

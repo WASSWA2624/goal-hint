@@ -6,7 +6,7 @@ import { SubscribeFlow, SubscribeIntro, SubscribeLayout } from "@/components/mem
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { SubscriptionSummaryCard } from "@/components/members/subscription-summary-card";
 import { ButtonLink } from "@/components/ui/controls";
-import { memberReturnPath } from "@/domain/member-navigation";
+import { memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { SubscriptionStatus } from "@/domain/subscription-summary";
@@ -54,7 +54,8 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const activeUntil = subscription?.activeUntil ?? null;
     const administrator = !!member && !member.blocked && member.administrator;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
-      <SubscribeIntro locale={locale} /><MemberNavigationRecovery /><ApprovalRefresh waiting={false} refreshAt={activeUntil} />
+      <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
+      {sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}<ApprovalRefresh waiting={false} refreshAt={activeUntil} />
       {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href={adminLandingPath} prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
         : settings?.paywallMode === "off" ? <>{activeUntil && <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={false} returnTo={returnTo} />}<p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>

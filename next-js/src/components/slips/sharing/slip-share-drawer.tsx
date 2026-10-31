@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChatIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon } from "@/components/ui/icons";
+import { ChatIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
+import { shareInvitation, type NativeShareImage } from "@/components/members/invitation-share";
+import { prepareNativeSlipImages, shareSlipImages } from "./slip-share-native";
 import { publicPolicy } from "@/domain/public-policy";
 import { sharedSlipSchema, type SharedSlip, type ShareSlipSource } from "@/domain/shared-slips";
 import { slipShareCaption, whatsAppShareUrl } from "@/domain/slip-share-caption";
@@ -9,7 +11,7 @@ import { createMessages, type TextKey } from "@/i18n/messages";
 import { createSlipShareDownload, downloadSlipShare } from "./slip-share-download";
 import { Drawer, DrawerBody, DrawerButton, DrawerFooter, DrawerHeader } from "./slip-share-styles";
 
-type Prepared = { shared: SharedSlip; files: File[]; download: File; caption: string; imageUrls: string[] };
+type Prepared = { shared: SharedSlip; files: File[]; download: File; caption: string; imageUrls: string[]; nativeFiles: readonly NativeShareImage[] | null };
 
 export function SlipShareDrawer({ id, source, initialShared, locale, onPrepared, onClose }: {
   id: string; source?: ShareSlipSource; initialShared?: SharedSlip; locale: string;
@@ -20,7 +22,7 @@ export function SlipShareDrawer({ id, source, initialShared, locale, onPrepared,
   const [attempt, setAttempt] = useState(0), [prepared, setPrepared] = useState<Prepared | null>(null);
   const [error, setError] = useState<TextKey | null>(null), [feedback, setFeedback] = useState<TextKey | null>(null);
   const [page, setPage] = useState(0);
-  const [manualCopy, setManualCopy] = useState(false), [sharing, setSharing] = useState(false), [webFallback, setWebFallback] = useState(false);
+  const [manualCopy, setManualCopy] = useState<"link" | "caption" | null>(null), [sharing, setSharing] = useState(false);
   const [imageProgress, setImageProgress] = useState<{ done: number; total: number } | null>(null);
   const captionField = useRef<HTMLTextAreaElement>(null);
 
@@ -65,9 +67,10 @@ export function SlipShareDrawer({ id, source, initialShared, locale, onPrepared,
         });
         const caption = slipShareCaption(shared, locale);
         const download = await createSlipShareDownload(files, shared.id, caption);
+        const nativeFiles = await prepareNativeSlipImages(files).catch(() => null);
         if (active) {
           imageUrls = files.map((file) => URL.createObjectURL(file));
-          setPrepared({ shared, files, download, caption, imageUrls });
+          setPrepared({ shared, files, download, caption, imageUrls, nativeFiles });
         }
       } catch { if (active) setError("slipShare.error"); }
       finally { window.clearTimeout(timeout); }
@@ -78,37 +81,33 @@ export function SlipShareDrawer({ id, source, initialShared, locale, onPrepared,
 
   function saveImage() {
     if (!prepared) return;
-    downloadSlipShare(prepared.download);
-    setFeedback(prepared.files.length > 1 ? "slipShare.savedArchive" : "slipShare.saved");
+    try { downloadSlipShare(prepared.download); setFeedback(prepared.files.length > 1 ? "slipShare.savedArchive" : "slipShare.saved"); }
+    catch { setFeedback("slipShare.shareError"); }
   }
 
-  async function copyCaption() {
+  async function copy(kind: "link" | "caption") {
     if (!prepared) return;
-    try { await navigator.clipboard.writeText(prepared.caption); setFeedback("slipShare.copied"); }
-    catch { setManualCopy(true); setFeedback("slipShare.copyManually"); }
+    try { await navigator.clipboard.writeText(kind === "link" ? prepared.shared.url : prepared.caption); setFeedback(kind === "link" ? "slipShare.linkCopied" : "slipShare.copied"); }
+    catch { setManualCopy(kind); setFeedback("slipShare.copyManually"); }
   }
 
   function openWhatsApp() {
     if (!prepared) return;
-    // Open within this click's activation; preparing files earlier avoids blocked popups.
-    window.open(whatsAppShareUrl(prepared.caption), "_blank", "noopener,noreferrer");
-    downloadSlipShare(prepared.download);
-    setFeedback(prepared.files.length > 1 ? "slipShare.attachImages" : "slipShare.attachImage");
+    try { window.open(whatsAppShareUrl(prepared.caption), "_blank", "noopener,noreferrer"); setFeedback("slipShare.whatsAppHint"); }
+    catch { setFeedback("slipShare.linkFallback"); }
   }
 
-  async function share() {
+  async function share(kind: "link" | "image") {
     if (!prepared || sharing) return;
-    setFeedback(null); setWebFallback(false);
-    const data: ShareData = { files: prepared.files, title: publicPolicy.name, text: prepared.caption };
-    let native = false;
-    try { native = typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare(data); }
-    catch { /* Unsupported browser capability data uses the desktop path. */ }
-    if (!native) { openWhatsApp(); return; }
-    setSharing(true);
-    try { await navigator.share(data); setFeedback("slipShare.handedOff"); }
-    catch (failure) {
-      if (!(failure instanceof DOMException && failure.name === "AbortError")) setFeedback("slipShare.shareError");
-      setWebFallback(true);
+    setFeedback(null); setSharing(true);
+    const link = { title: publicPolicy.name, text: prepared.caption, url: prepared.shared.url };
+    try {
+      const result = kind === "image" ? await shareSlipImages(link, prepared.files, prepared.nativeFiles) : await shareInvitation(link);
+      if (result === "handed-off") setFeedback("slipShare.handedOff");
+      else if (result !== "cancelled") {
+        setFeedback(kind === "image" ? "slipShare.imageFallback" : "slipShare.linkFallback");
+        if (kind === "link") setManualCopy("link");
+      }
     } finally { setSharing(false); }
   }
 
@@ -143,15 +142,17 @@ export function SlipShareDrawer({ id, source, initialShared, locale, onPrepared,
             <a href={prepared.shared.url} target="_blank" rel="noopener noreferrer">{prepared.shared.url.replace(/^https:\/\//u, "")}</a>
             <a href={publicPolicy.origin} target="_blank" rel="noopener noreferrer">{new URL(publicPolicy.origin).host}</a></div>
           <p data-share-public-note>{m.text("slipShare.publicHint")}</p>
-          {manualCopy && <label>{m.text("slipShare.caption")}<textarea ref={captionField} readOnly value={prepared.caption} onFocus={(event) => event.currentTarget.select()} /></label>}
+          {manualCopy && <label>{m.text(manualCopy === "link" ? "slipShare.link" : "slipShare.caption")}<textarea ref={captionField} readOnly value={manualCopy === "link" ? prepared.shared.url : prepared.caption} onFocus={(event) => event.currentTarget.select()} /></label>}
         </>}
     </DrawerBody>
     <DrawerFooter>
       <div data-share-secondary><DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={saveImage}><DownloadIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.saveImages" : "slipShare.saveImage")}</DrawerButton>
-        <DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={() => { void copyCaption(); }}><CopyIcon />{m.text("slipShare.copyCaption")}</DrawerButton></div>
-      <DrawerButton type="button" data-share-primary disabled={!prepared || sharing} onClick={() => { void share(); }}><ChatIcon />{m.text("slipShare.whatsApp")}</DrawerButton>
+        <DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={() => { void copy("caption"); }}><CopyIcon />{m.text("slipShare.copyCaption")}</DrawerButton></div>
+      <div data-share-secondary><DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={() => { void copy("link"); }}><CopyIcon />{m.text("slipShare.copyLink")}</DrawerButton>
+        <DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={openWhatsApp}><ChatIcon />{m.text("slipShare.whatsAppLink")}</DrawerButton></div>
+      <div data-share-secondary><DrawerButton type="button" variant="secondary" disabled={!prepared || sharing} onClick={() => { void share("link"); }}><ShareIcon />{m.text("slipShare.shareLink")}</DrawerButton>
+        <DrawerButton type="button" disabled={!prepared || sharing} onClick={() => { void share("image"); }}><ShareIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.shareImages" : "slipShare.shareImage")}</DrawerButton></div>
       {feedback && <p data-share-feedback role="status">{m.text(feedback)}</p>}
-      {webFallback && <DrawerButton type="button" variant="quiet" onClick={openWhatsApp}>{m.text("slipShare.openWhatsApp")}</DrawerButton>}
     </DrawerFooter>
   </Drawer>;
 }

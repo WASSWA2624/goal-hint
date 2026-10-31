@@ -15,7 +15,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
     <nav aria-label="Sharing acceptance scenarios">{scenarios.map(item => <a key={item} href={`/${item}`} style={{ marginInlineEnd: 14 }}>{item}</a>)}</nav>
     <h1>{scenario === "best" ? "Best Slips" : scenario === "shared" ? "Shared slip" : "Slip Builder"}</h1>
     <section data-sharing-scenario={scenario}>
-      <SlipCard slip={fixtureSlip(scenario)} index={0} locale="en" initiallyOpen
+      <SlipCard slip={fixtureSlip(scenario)} index={0} locale="en" initiallyOpen={scenario === "shared"}
         {...(scenario === "shared" ? { sharedSlip: fixtureShared(scenario) } : { shareSource: fixtureSource(scenario) })} />
     </section>
   </Stack></Container></PageMain>;

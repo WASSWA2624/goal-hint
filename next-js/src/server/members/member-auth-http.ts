@@ -1,7 +1,7 @@
 import "server-only";
 import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
-import { memberReturnPath } from "../../domain/member-navigation.ts";
+import { memberReturnPath, sharedSlipReturnPath } from "../../domain/member-navigation.ts";
 import { adminLandingPath } from "../../domain/admin-navigation.ts";
 import { noCredit, type SubscriptionSummary } from "../../domain/subscription-summary.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
@@ -70,8 +70,8 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
         : await services.auth.changePassword(body.password, binding);
       if (result.status !== "authenticated") return failure(result);
-      // Authentication finishes at home; restricted sessions complete their required step first.
-      const returnTo = ["register", "login", "verify", "reset"].includes(action) ? "/en" : memberReturnPath(body.return);
+      // Shared-slip journeys return to their canonical token; ordinary sign-ins still finish at home.
+      const returnTo = ["register", "login", "verify", "reset"].includes(action) ? sharedSlipReturnPath(body.return) ?? "/en" : memberReturnPath(body.return);
       const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
       const next = result.requiresPasswordChange ? restrictedPath("new-password")
         : result.requiresVerification ? restrictedPath("verify")

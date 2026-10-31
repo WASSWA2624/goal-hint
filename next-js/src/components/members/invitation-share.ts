@@ -1,8 +1,10 @@
 import type { ReferralInvitation } from "../../domain/referral-invitation.ts";
 
+export type NativeShareImage = Readonly<{ name: string; data: string }>;
+
 declare global {
   interface Window {
-    goalHintNativeShare?: Readonly<{ version: 1; share: (data: ReferralInvitation) => Promise<"handed-off" | "cancelled"> }>;
+    goalHintNativeShare?: Readonly<{ version: 1; shareFiles?: (data: ReferralInvitation & { files: readonly NativeShareImage[] }) => Promise<"handed-off" | "cancelled">; share: (data: ReferralInvitation) => Promise<"handed-off" | "cancelled"> }>;
   }
 }
 
@@ -24,7 +26,10 @@ export function invitationShareAvailable(): boolean {
 /** Called directly by a click; no network or clipboard work consumes its activation. */
 export async function shareInvitation(data: ReferralInvitation): Promise<"handed-off" | "cancelled" | "failed"> {
   try {
-    if (window.goalHintNativeShare?.version === 1) return await window.goalHintNativeShare.share(data);
+    if (window.goalHintNativeShare?.version === 1) {
+      if (data.text.length > (data.url.includes("/r/") ? 512 : 4096)) return "failed";
+      return await window.goalHintNativeShare.share(data);
+    }
     if (!invitationShareAvailable() || typeof navigator.canShare === "function" && !navigator.canShare(data)) return "failed";
     await navigator.share(data);
     return "handed-off";

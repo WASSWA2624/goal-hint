@@ -183,3 +183,16 @@ test('shared HTTP rechecks access after the read and discards unfinished data af
   assert.equal(response.status, 404); assert.equal(checks, 3); assert.deepEqual(reads, ['full', 'free']);
   assert.doesNotMatch(await response.text(), /home-win|fixtureId|probability/);
 });
+
+
+test('recipient landings distinguish missing and restricted tokens without leaking any snapshot', async () => {
+  const f = fixture(), written = await f.service.publish(member, original, 'best');
+  assert.deepEqual(await f.service.landing('../account'), { state: 'missing' });
+  assert.deepEqual(await f.service.landing('b'.repeat(32)), { state: 'missing' });
+  const restricted = await f.service.landing(written.shared.id);
+  assert.deepEqual(restricted, { state: 'restricted' });
+  assert.doesNotMatch(JSON.stringify(restricted), /fixtureId|home-win|totalOdds|probability|selections|ownerKey/);
+  assert.deepEqual(await f.service.landing(written.shared.id, true), { state: 'available', shared: written.shared });
+  f.results(() => ({ status: 'finished-regulation', completed: true, fixtureCompleted: true }));
+  assert.deepEqual(await f.service.landing(written.shared.id), { state: 'available', shared: written.shared });
+});

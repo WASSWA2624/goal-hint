@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goal_hint/web/native_invitation_share.dart';
@@ -133,4 +134,88 @@ void main() {
       },
     );
   });
+
+  test(
+    'shared links and bounded generated PNGs reuse the owned native sheet',
+    () async {
+      final bridge = NativeInvitationShare(),
+          token = nonce(bridge.installScript(origin));
+      final slipUrl = 'https://goalhint.com/s/${'b' * 32}';
+      final bytes = Uint8List(33);
+      bytes.setAll(0, [137, 80, 78, 71, 13, 10, 26, 10]);
+      bytes.setAll(12, ascii.encode('IHDR'));
+      final header = ByteData.sublistView(bytes);
+      header.setUint32(8, 13);
+      header.setUint32(16, 1080);
+      header.setUint32(20, 1200);
+      final image = {
+        'name': 'goal-hint-${'b' * 32}.png',
+        'data': base64Encode(bytes),
+      };
+      final valid = {
+        ...request(token),
+        'url': slipUrl,
+        'files': [image],
+      };
+      expect(
+        NativeInvitationRequest.parse(
+          jsonEncode(valid),
+          token,
+        )?.images.single.bytes,
+        bytes,
+      );
+      for (final data in [
+        {...valid, 'url': url},
+        {...valid, 'url': '$slipUrl?x=1'},
+        {...valid, 'files': []},
+        {...valid, 'files': List.filled(33, image)},
+        {
+          ...valid,
+          'files': [image, image],
+        },
+        {
+          ...valid,
+          'files': [
+            {...image, 'name': '../private.png'},
+          ],
+        },
+        {
+          ...valid,
+          'files': [
+            {...image, 'data': base64Encode(Uint8List(33))},
+          ],
+        },
+        {
+          ...valid,
+          'files': [
+            {...image, 'path': '/private/file'},
+          ],
+        },
+      ]) {
+        expect(NativeInvitationRequest.parse(jsonEncode(data), token), isNull);
+      }
+      await bridge.handle(
+        jsonEncode(valid),
+        ownsDocument: () async => true,
+        evaluate: (_) async {},
+        anchor: anchor,
+        share: (params) async {
+          expect(params.files?.single.mimeType, 'image/png');
+          expect(await params.files!.single.readAsBytes(), bytes);
+          expect(params.fileNameOverrides, [image['name']]);
+          expect(params.text, contains(slipUrl));
+          expect(params.sharePositionOrigin, anchor);
+          return const ShareResult('', ShareResultStatus.dismissed);
+        },
+      );
+      header.setUint32(20, 8193);
+      expect(
+        NativeSlipImage.parse({
+          ...image,
+          'data': base64Encode(bytes),
+        }, 'b' * 32),
+        isNull,
+      );
+    },
+  );
 }

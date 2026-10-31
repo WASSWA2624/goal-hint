@@ -20,6 +20,7 @@ Read [the app specification](../../app-write-up.md), [the shell requirements](..
 | 010 | [Android pull-to-refresh](010-android-pull-to-refresh.md) | 003 |
 | 011 | [Branded native recovery](011-branded-native-recovery.md) | 003, 006 |
 | 012 | [Recovery theme and desktop update](012-recovery-theme-and-desktop-update.md) | 006, 007, 011 |
+| 013 | [Native shared-slip handoff](013-native-slip-sharing.md) | 003, 009, existing referral bridge |
 
 Run Flutter commands from `flutter/` and web commands from `next-js/`. Paths in a feature plan are relative to the application it identifies; links explicitly cross project boundaries when needed. Keep general task prompts under repository-root `prompts/` and each application's numbered development plan in its own `dev-plan/` directory.
 

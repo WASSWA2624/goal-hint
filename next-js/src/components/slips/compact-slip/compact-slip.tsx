@@ -80,10 +80,10 @@ function SelectionRow({ selection, position, locale, result, matchStates, analys
 /** Aggregate-only previews and complete slips share exactly the same compact header and disclosure. */
 export function CompactSlipDisclosure({ totalOdds, averageProbability, selectionCount, index, locale, variant = "clean-ledger",
   initiallyOpen = false, collapsible = true, showRank = true, slipId, headingId, outcome = "pending", status = outcome, publicationDay, publishedAt,
-  fullProbabilityLabel = false, hasHeaderAction = false, children }: {
+  fullProbabilityLabel = false, hasHeaderAction = false, action, children }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
   variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; fullProbabilityLabel?: boolean; hasHeaderAction?: boolean; children: ReactNode;
+  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; fullProbabilityLabel?: boolean; hasHeaderAction?: boolean; action?: ReactNode; children: ReactNode;
 } & SlipHeaderPublication) {
   const messages = createMessages(locale), id = useId();
   const summary = <>
@@ -115,21 +115,22 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
       {header}
       <div data-slip-content>{children}</div>
     </>}
+    {action && <div data-phone-share-action>{action}</div>}
   </CompactCard>;
 }
 
 /** Original selection snapshots are reused by Best slips, generated slips and completed history. */
 export function CompactSlip({ slip, index, locale, variant = "clean-ledger", initiallyOpen = false, results, matchStates, analysisLinks = true, collapsible = true, showLogos = false, showRank = true,
-  publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus }: {
+  publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus, action }: {
   slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"];
   matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; collapsible?: boolean; showLogos?: boolean; showRank?: boolean;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
+  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; action?: ReactNode;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
   const { outcome, status } = slipHeaderState(slip, results, currentStates, suppliedOutcome, suppliedStatus);
   return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length}
-    index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId} outcome={outcome} status={status}
+    index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId} outcome={outcome} status={status} action={action}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}>
       <ul aria-labelledby={headingId}>
         {slip.selections.map((selection, selectionIndex) => {

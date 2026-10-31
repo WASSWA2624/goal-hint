@@ -4,9 +4,14 @@ export const memberLoginPath = "/en/account?view=login";
  * free-tier limits as a visitor, never on the sign-in form. */
 export const signedOutPath = "/en/matches";
 
-/** Only an English feed or a canonical match path can be a member return destination. No queries, fragments or escapes. */
+/** Only an English feed, canonical match or shared-slip path can be a member return destination. No queries, fragments or escapes. */
 export function memberReturnPath(value: unknown): string | null {
-  return typeof value === "string" && value.length <= 512 && (["/en", "/en/matches", "/en/slips"].includes(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
+  return typeof value === "string" && value.length <= 512 && (["/en", "/en/matches", "/en/slips"].includes(value) || sharedSlipReturnPath(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
+}
+
+/** Shared tokens are opaque, canonical paths only; no queries, escapes or external origins. */
+export function sharedSlipReturnPath(value: unknown): string | null {
+  return typeof value === "string" && /^\/s\/[a-f0-9]{32}$/u.test(value) ? value : null;
 }
 
 /** Every draft version shares the prefix, so sign-out also clears a draft an older release left in the tab. */
