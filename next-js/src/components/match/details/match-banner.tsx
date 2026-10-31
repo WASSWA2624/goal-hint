@@ -61,7 +61,7 @@ const Box = styled.section`
     margin-inline: 0;
     padding: 15px 24px 18px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.radius.surface};
+    border-radius: ${({ theme }) => theme.radius.none};
   }
 `;
 /**

@@ -13,7 +13,7 @@ import { createMessages, type Messages } from "@/i18n/messages";
 import { marketName, pickLabel } from "@/components/match/details/labels";
 import { Button, ButtonLink, SelectInput, TextInput, TextLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
-import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
+import { BodyText, DesktopInset, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SlipCard } from "@/components/slips/slip-card";
 import { PerformanceSummary } from "./performance-summary";
@@ -130,7 +130,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
   const leagueOutOfRange = Boolean(report && report.leagues.page > Math.max(1, leaguePages));
   const leagueHref = (page: number) => performancePageHref({ ...filters, leaguePage: page }, history?.page ?? 1, locale);
   return <PerformanceSections $gap="lg" data-performance-dashboard>
-    <div><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></div>
+    <DesktopInset><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></DesktopInset>
     <PerformanceFilterPanel><Stack $gap="sm">
       <PerformanceFilters action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
         <TextInput label={m.text("performance.from")} name="from" type="date" required defaultValue={filters.from} />
@@ -147,7 +147,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       </PerformanceFilters>
       <MutedText>{m.text("performance.periodHint")}</MutedText><MutedText>{m.text("performance.pickFilterHint")}</MutedText>
     </Stack></PerformanceFilterPanel>
-    <section aria-labelledby="individual-performance"><Stack>
+    <DesktopInset as="section" aria-labelledby="individual-performance"><Stack>
       <SectionHeading id="individual-performance">{m.text("performance.pickHeading")}</SectionHeading><MutedText>{m.text("performance.pickBasis")}</MutedText>
       {report ? <>
         <Inline><strong>{m.text("performance.fixtureCount")}: {m.number(report.cohort.fixtureCount)}</strong>
@@ -155,16 +155,16 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
         {report.cohort.fixtureCount === 0 ? <EmptyState headingLevel={3} title={m.text("performance.noPredictions")} />
           : <MarketGrid>{cells.map((cell) => <PredictionCard key={cell.family} cell={cell} locale={locale} />)}</MarketGrid>}
       </> : <EmptyState headingLevel={3} title={m.text("performance.dataUnavailable")} />}
-    </Stack></section>
-    {report && <section aria-labelledby="league-performance"><Stack>
+    </Stack></DesktopInset>
+    {report && <DesktopInset as="section" aria-labelledby="league-performance"><Stack>
       <SectionHeading id="league-performance">{m.text("performance.leagueHeading")}</SectionHeading><MutedText>{m.text("performance.leagueBasis")}</MutedText>
       {report.leagues.records.length ? report.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
         : <EmptyState headingLevel={3} title={m.text(leagueOutOfRange ? "performance.leaguePageUnavailable" : "performance.noLeagueGroups")}
           {...(leagueOutOfRange ? { action: <ButtonLink href={leagueHref(1)}>{m.text("performance.firstLeaguePage")}</ButtonLink> } : {})} />}
       {leaguePages > 1 && !leagueOutOfRange && <NumberedPagination page={report.leagues.page} pages={leaguePages}
         labels={numberedPaginationLabels(m, m.text("performance.leaguePagination"))} href={leagueHref} />}
-    </Stack></section>}
-    <section aria-labelledby="published-performance"><Stack>
+    </Stack></DesktopInset>}
+    <DesktopInset as="section" aria-labelledby="published-performance"><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
       {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
@@ -174,7 +174,7 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       </article>) : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
-    </Stack></section>
-    <MutedText>{m.text("performance.noGuarantee")}</MutedText>
+    </Stack></DesktopInset>
+    <DesktopInset><MutedText>{m.text("performance.noGuarantee")}</MutedText></DesktopInset>
   </PerformanceSections>;
 }

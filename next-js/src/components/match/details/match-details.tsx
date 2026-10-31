@@ -29,7 +29,7 @@ import { DisclosureProvider } from "./section-card";
 import { useMatchView, useOpenByDefault } from "./use-match-view";
 
 
-/** One column at every width; desktop keeps it to the site's reading width, centred. */
+/** One column at every width; desktop sections align with the full-width app frame. */
 const Page = styled.article`
   display: grid;
   gap: 8px;
@@ -38,8 +38,7 @@ const Page = styled.article`
   ${desktop} {
     gap: 12px;
     inline-size: 100%;
-    max-inline-size: ${({ theme }) => theme.layout.maxWidth};
-    margin-inline: auto;
+    > ${Note} { padding-inline: ${({ theme }) => theme.space.md}; }
   }
 `;
 const PhoneHeaderGroup = styled.div`
@@ -100,6 +99,7 @@ const BackLink = styled(Link)`
     align-items: center;
     gap: 4px;
     justify-self: start;
+    padding-inline: ${({ theme }) => theme.space.md};
     color: ${({ theme }) => theme.color.mutedText};
     font-size: ${size("body")};
     text-decoration: none;

@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import { desktopSectionFrame } from "@/components/ui/layout";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts } from "@/domain/performance-summary";
@@ -15,6 +16,7 @@ const Panel = styled.div`
   border: 1px solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.surface}; line-height: 1.35;
   ${media.desktop} { block-size: 2.25rem; }
+  ${desktopSectionFrame}
   @media (pointer: coarse) { block-size: max(44px, 2.75rem); ${media.desktop} { block-size: max(44px, 2.25rem); } }
 `;
 const Content = styled.div`
@@ -91,6 +93,7 @@ const Distribution = styled.div`
   position: absolute; inset-inline: 0; inset-block-end: 0; display: flex; block-size: 2px;
   overflow: hidden; border-end-start-radius: ${({ theme }) => theme.radius.surface}; border-end-end-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.border};
+  ${desktopSectionFrame}
 `;
 const Segment = styled.span<{ $tone: OutcomeTone }>`
   flex-basis: 0; min-inline-size: 2px;

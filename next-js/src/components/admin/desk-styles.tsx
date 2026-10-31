@@ -4,6 +4,7 @@ import { useId, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
+import { desktopSectionFrame } from "@/components/ui/layout";
 
 /**
  * The admin "review desk": themed panels on the page colour, a main column with an optional side panel on desktop, and
@@ -37,7 +38,7 @@ export const DeskHead = styled.div`
   min-block-size: ${({ theme }) => theme.control.minHeight};
   min-inline-size: 0;
   h1 { font-size: 1.375rem; line-height: 1.25; }
-  ${media.desktop} { h1 { font-size: 1.625rem; } }
+  ${media.desktop} { padding-inline: 16px; h1 { font-size: 1.625rem; } }
 `;
 /** The h1 and its one-line description. */
 export const DeskTitle = styled.div`
@@ -84,6 +85,7 @@ export const Panel = styled.section`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.surface};
+  ${desktopSectionFrame}
 `;
 /** Panel padding for content that is not a list or a drawer. */
 export const PanelBody = styled.div`

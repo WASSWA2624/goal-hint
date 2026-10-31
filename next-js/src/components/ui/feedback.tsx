@@ -74,7 +74,7 @@ const EmptyContainer = styled.section`
   border-radius: ${({ theme }) => theme.radius.surface};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   overflow-wrap: anywhere;
-  ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; font-size: inherit; }
+  ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; border-radius: ${({ theme }) => theme.radius.none}; font-size: inherit; }
 `;
 
 const EmptyTitle = styled.h2`

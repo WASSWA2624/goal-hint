@@ -87,6 +87,7 @@
 | ☑ Completed | [076-compact-mobile-subscription.md](dev-plan/076-compact-mobile-subscription.md) | One-line phone expiry verified at 320/360/375/414 px in both themes; full accessible wording and enlarged-text wrapping retained. |
 | ☑ Completed | [183-sticky-desktop-filter-sections.md](dev-plan/183-sticky-desktop-filter-sections.md) | Best Slips, Matches and Builder remain below the header; 1440/1024px Light/Dark, dialogs, focus, dropdown and 375px mobile checks passed. |
 | ☑ Completed | [184-joined-desktop-sections.md](dev-plan/184-joined-desktop-sections.md) | Desktop section gaps removed; live primary-page and isolated Performance/Analytics layout checks passed in both themes; mobile spacing preserved. |
+| ☑ Completed | [185-full-width-desktop-sections.md](dev-plan/185-full-width-desktop-sections.md) | Full-width desktop frames and square section edges; 48 isolated desktop cases, 64 unchanged mobile/tablet comparisons, lint, types and 141 tests passed. Live server requests timed out; see progress log. |
 
 ## Partial rows
 

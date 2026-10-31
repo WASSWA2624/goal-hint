@@ -36,7 +36,7 @@ export const FiltersPanel = styled.section`
   background: transparent;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
-  ${media.desktop} { background: ${({ theme }) => theme.color.page}; }
+  ${media.desktop} { padding: 8px; background: ${({ theme }) => theme.color.page}; }
   ${media.belowDesktop} {
     background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.soft} 65%, ${({ theme }) => theme.color.surface});
   }

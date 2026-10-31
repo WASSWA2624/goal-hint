@@ -18,6 +18,13 @@ brand exports expose the matching `--gh-radius-*` CSS variables.
 | `pill` | 999px | Controls whose function deliberately calls for a capsule |
 | `circle` | 50% | Avatars, radio controls, live dots, loading spinners and explicitly round disclosure indicators |
 
+On desktop (64rem and wider), viewport-aligned page sections use `none`:
+filter panels, performance summaries, match boards, loading placeholders and
+owner/analytics panels. Reuse `desktopSectionFrame` from the shared layout.
+The desktop app container has no outer gutter or width cap; sections own their
+content padding. Reading pages and compact forms retain local content insets.
+Phone and tablet gutters, corners and spacing retain their existing styles.
+
 Use a semantic token directly, for example:
 
 ```tsx

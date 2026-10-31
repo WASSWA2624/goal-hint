@@ -10,6 +10,7 @@ export const Container = styled.div<{ $wide?: boolean }>`
   margin-inline: auto;
   padding-inline: ${({ theme }) => theme.layout.gutter};
   min-inline-size: 0;
+  ${media.desktop} { max-inline-size: none; }
 `;
 
 /** Phones and tablets step each gap down; desktop keeps the full space tokens. */
@@ -18,6 +19,17 @@ const compactGap = { sm: "8px", md: "12px", lg: "16px", xl: "24px" } as const;
 /** Adjacent desktop sections meet at their edges; spacing inside each section stays local. */
 export const joinedDesktopSections = css`
   ${media.desktop} { row-gap: 0; }
+`;
+
+/** Viewport-aligned desktop sections have straight edges; inset controls keep their own corners. */
+export const desktopSectionFrame = css`
+  ${media.desktop} { border-radius: ${({ theme }) => theme.radius.none}; }
+`;
+
+/** Text-only desktop sections retain content padding inside the full-width page frame. */
+export const DesktopInset = styled.div`
+  min-inline-size: 0;
+  ${media.desktop} { padding: ${({ theme }) => theme.space.md}; }
 `;
 
 export const Stack = styled.div<{ $gap?: "sm" | "md" | "lg" | "xl" }>`
@@ -47,6 +59,7 @@ export const Surface = styled.section`
   border-radius: ${({ theme }) => theme.radius.surface};
   ${media.tablet} { padding: ${({ theme }) => theme.space.md}; }
   ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; }
+  ${desktopSectionFrame}
 `;
 
 /** Section anchors land below the sticky header (3.5rem on phones, about 4rem on desktop). */
@@ -69,6 +82,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
   ${media.desktop} {
     padding-block: ${({ theme, $app }) => $app ? `14px ${theme.space.xl}` : theme.space.xl};
     ${({ $app, $compactTop }) => ($app || $compactTop) && css`padding-block-start: 0;`}
+    ${({ $app }) => $app && css`> ${Container} { padding-inline: 0; }`}
   }
   ${({ $app }) => !$app && anchorClearance}
   ${({ $dashboard }) => $dashboard && css`

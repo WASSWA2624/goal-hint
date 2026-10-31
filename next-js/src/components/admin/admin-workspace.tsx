@@ -301,7 +301,7 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
   min-inline-size: 0;
   padding: 20px 16px calc(40px + 3.5rem + 1px + env(safe-area-inset-bottom));
   &:focus { outline: none; }
-  ${media.desktop} { grid-column: 3; padding: 24px 28px 48px; }
+  ${media.desktop} { grid-column: 3; padding: 24px 0 48px; }
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
 `;
@@ -312,6 +312,7 @@ const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>
   min-inline-size: 0;
   max-inline-size: ${({ $wide }) => $wide ? "100%" : "76rem"};
   margin-inline: auto;
+  ${media.desktop} { inline-size: 100%; max-inline-size: none; }
   ${({ $wide }) => !$wide && css`${media.desktop} { gap: 20px; }`}
   ${({ $joined }) => $joined && joinedDesktopSections}
   ${({ $fixed }) => $fixed && css`${media.desktop} {

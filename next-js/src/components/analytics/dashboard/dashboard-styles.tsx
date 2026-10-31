@@ -3,6 +3,7 @@
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters, mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { desktopSectionFrame } from "@/components/ui/layout";
 
 export const Shell = styled.div`
   min-block-size: 100dvh;
@@ -112,12 +113,13 @@ export const PageTitle = styled.div`
   gap: 4px 16px;
   h1 { font-size: 1.25rem; }
   p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-  ${media.desktop} { h1 { font-size: 1.625rem; } }
+  ${media.desktop} { padding-inline: 16px; h1 { font-size: 1.625rem; } }
 `;
 export const Notice = styled.p<{ $tone?: "warning" | "error" | "info" }>`
   padding: 10px 14px;
   border-inline-start: 4px solid;
   border-radius: ${({ theme }) => theme.radius.surface};
+  ${desktopSectionFrame}
   font-size: ${({ theme }) => theme.typography.scale.body};
   ${({ theme, $tone = "info" }) => {
     const tone = $tone === "error" ? theme.color.outcome.incorrect : $tone === "warning" ? theme.color.outcome.pending : theme.color.outcome.void;
@@ -136,6 +138,7 @@ export const FilterBar = styled.section`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.surface};
+  ${desktopSectionFrame}
   ${media.belowDesktop} { position: static; }
 `;
 export const Field = styled.label`
@@ -257,6 +260,7 @@ export const Panel = styled.section<{ $busy?: boolean }>`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.surface};
+  ${desktopSectionFrame}
   transition: opacity 120ms;
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   ${media.desktop} { padding: 18px 20px; }

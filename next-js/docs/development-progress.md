@@ -5486,3 +5486,48 @@ Previews, scripts, captures and logs are ignored under `output/playwright/` with
 the `joined-` prefix. The owned preview server and browser were closed. No data,
 dependency, native binary or production deployment changed. See
 [plan 184](../dev-plan/184-joined-desktop-sections.md).
+
+## 185 — Full-width desktop sections — 31 October 2026
+
+Desktop containers now use the available viewport width. Application pages
+remove their outer horizontal gutter, while owner workspaces remove the page
+column's side padding and width cap. Match details also drop their separate
+reading-width cap. Filter controls, summaries, notices, headings and text
+sections retain internal padding; reading pages and compact forms retain local
+content insets. Best Slips adds 8px inside its desktop filter frame.
+
+Shared `desktopSectionFrame` geometry gives desktop surfaces, Overall
+Performance, match boards, loading placeholders and owner/analytics panels
+straight edges. The match scoreboard and verdict follow the same geometry.
+Phone/tablet rules and control/menu/dialog corners retain their existing
+styles. The theme acceptance fixture now expects the desktop section corners.
+
+- Changed-file ESLint with zero warnings and strict TypeScript checking passed
+  under Node 24.18.1, including a final lint check after the match-detail text
+  padding adjustment.
+- All 141 relevant existing theme, match-card, performance, slip-card, builder
+  and Best Slips client tests passed without skips.
+- Forty-eight isolated browser cases passed at 1024px, 1440px and 1920px in
+  Light/Dark across Matches, Builder, Best Slips, Performance, match details,
+  owner overview, Analytics and reading content. Checks cover outer edges,
+  square frames, internal padding and horizontal overflow. Owner sections align
+  with their available column beside the sidebar. Reading content retains its
+  intentional inset.
+- Sixty-four original-versus-current comparisons at 320px, 375px, 768px and
+  1023px in both themes found identical measured geometry and spacing/corner
+  styles for the selected page, text, controls and section frames. Representative
+  desktop Light/Dark screenshots were visually reviewed.
+
+The isolated preview uses the real shared layout and styled components,
+the complete Best Slips filter controls, Performance's unavailable-data view,
+the complete match-detail component with an existing synthetic stored snapshot,
+and the actual owner workspace. Matches and Builder use sample controls/rows
+inside their real filter and result frames; owner reports use sample content
+and stubbed navigation. This verifies layout without account or data changes.
+
+The running data-backed development server timed out while navigating to Best
+Slips, Matches and Builder (15-second bounded requests). Final browser coverage
+therefore uses the isolated preview; live data loading and authenticated flows
+remain unverified in this pass. Preview scripts, screenshots and logs are ignored
+under `output/playwright/full-width-*`. The owned preview/browser are closed
+after verification. See [plan 185](../dev-plan/185-full-width-desktop-sections.md).

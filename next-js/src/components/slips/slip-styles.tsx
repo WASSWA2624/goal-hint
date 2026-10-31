@@ -4,7 +4,7 @@ import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
-import { joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
+import { desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
 const compactControlHeight = "2rem";
@@ -89,6 +89,7 @@ export const Note = styled.p`color: ${({ theme }) => theme.color.mutedText}; fon
 export const CriteriaPanel = styled(Surface)`
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   ${media.desktop} { && { padding: 10px; } }
+  && { ${desktopSectionFrame} }
 `;
 export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
@@ -96,6 +97,7 @@ export const BuilderPanel = styled(CriteriaPanel)`
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
   [data-criteria-dialog] { background: var(--filter-panel-background); }
   ${mobileFilterPanel}
+  && { ${desktopSectionFrame} }
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
     && { padding-block: 6px; }
