@@ -10,6 +10,7 @@ import { AccountFacts, AccountPageHead, AccountPanel, AccountWorkspace } from "@
 import { AccountDevices, AccountPaymentHistory, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
 import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
 import { AccountActivity } from "@/components/members/account-activity";
+import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
@@ -63,16 +64,18 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const member = currentMember;
     const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
     if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></AccountCardBody></AccountCard></PublicShell>;
-    if (authView === "forgot") return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
+    if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
+    if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
     const verification = await resolved.auth?.verificationSession(token).catch(() => null);
     if (verification) return <PublicShell locale={locale} showAccount><AccountVerificationForm locale={locale} phone={verification.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     const now = new Date();
-    const [view, paymentView, subscription, dashboard] = member && !member.blocked ? await Promise.all([
+    const [view, paymentView, subscription, dashboard, referrals] = member && !member.blocked ? await Promise.all([
       member.codeEnteredAt && (summarySection || section === "devices") ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
       settings && (summarySection || section === "payments") ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
-    ]) : [null, null, null, null];
+      summarySection || section === "referrals" ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
+    ]) : [null, null, null, null, null];
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
@@ -102,6 +105,8 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
         {summarySection && <AccountSubscriptionPanel locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} {...(last ? { lastEnd: last.endsAt } : {})} />}
+        {summarySection && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
+        {section === "referrals" && <AccountReferrals locale={locale} summary={referrals} />}
         {section === "overview" && <>
           <AccountPanel title={messages.text("account.signInDetails")} data-account-sign-in
             actions={<AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.editPhone")}</AccountActionLink>}>
@@ -129,7 +134,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         </>}
         {(section === "phone" || section === "password") && <AccountPanel narrow title={messages.text(section === "phone" ? "account.phonePanel" : "account.passwordPanel")}>
           {section === "phone" && <AccountFine style={{ marginBlockEnd: 16 }}>+{formatPhone(member.phone)}</AccountFine>}
-          <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} returnTo={returnTo} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
+          <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
         </AccountPanel>}
         {section === "devices" && <AccountDevices locale={locale} devices={view?.devices.map(device => ({ at: device.lastSeenAt.toISOString(), current: device.tokenHash === member.tokenHash })) ?? null} />}
         {section === "notifications" && <AccountPanel narrow title={messages.text("account.notificationsLabel")}><AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} /></AccountPanel>}

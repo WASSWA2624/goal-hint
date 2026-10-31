@@ -1,7 +1,7 @@
 import { resolveLocale } from "../i18n/locales.ts";
 import { memberReturnPath } from "./member-navigation.ts";
 
-export const accountSections = ["overview", "subscription", "payments", "phone", "password", "devices", "notifications", "activity"] as const;
+export const accountSections = ["overview", "subscription", "referrals", "payments", "phone", "password", "devices", "notifications", "activity"] as const;
 export type AccountSection = typeof accountSections[number];
 export function accountSection(value: unknown): AccountSection {
   return accountSections.find(section => section === value) ?? "overview";

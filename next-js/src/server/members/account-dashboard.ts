@@ -29,7 +29,7 @@ export function createAccountDashboard({ database, now = Date.now }: { database:
         const accountId = member.accountId;
         // Separate bounded reads by each event time include old reports decided/reversed recently.
         // A single lexicographic order by nullable dates would hide newer submissions behind older reversals.
-        const [active, paymentGroups, accessGroups] = await Promise.all([
+        const [active, paymentGroups, accessGroups, rewards] = await Promise.all([
           tx.accessCode.findFirst({ where: { accountId, revokedAt: null, startsAt: { lte: at }, endsAt: { gt: at } },
             orderBy: [{ startsAt: "desc" }, { id: "desc" }], select: { planName: true } }),
           Promise.all((["submittedAt", "decidedAt", "reversedAt"] as const).map(field => tx.paymentSubmission.findMany({
@@ -37,9 +37,11 @@ export function createAccountDashboard({ database, now = Date.now }: { database:
             orderBy: [{ [field]: "desc" }, { id: "desc" }], take: accountActivityLimit, select: paymentSelect,
           }))),
           Promise.all((["createdAt", "revokedAt"] as const).map(field => tx.accessCode.findMany({
-            where: { accountId, [field]: { lte: at } }, orderBy: [{ [field]: "desc" }, { id: "desc" }],
+            where: { accountId, source: { not: "referral" }, [field]: { lte: at } }, orderBy: [{ [field]: "desc" }, { id: "desc" }],
             take: accountActivityLimit, select: accessSelect,
           }))),
+          tx.memberReferral.findMany({ where: { inviterId: accountId, status: "rewarded", rewardedAt: { lte: at } },
+            orderBy: [{ rewardedAt: "desc" }, { id: "desc" }], take: accountActivityLimit, select: { id: true, rewardedAt: true } }),
         ]);
         const activity = new Map<string, AccountActivity>();
         for (const row of paymentGroups.flat()) {
@@ -57,6 +59,10 @@ export function createAccountDashboard({ database, now = Date.now }: { database:
           const id = `access:${row.id}`;
           activity.set(id, { id, kind: "access", status: removed ? "removed" : "added", planName: row.planName,
             startsAt: row.startsAt.toISOString(), endsAt: row.endsAt.toISOString(), at: eventAt.toISOString() });
+        }
+        for (const row of rewards) if (row.rewardedAt) {
+          const id = `referral:${row.id}`;
+          activity.set(id, { id, kind: "referral", status: "rewarded", planName: "Earned access", at: row.rewardedAt.toISOString() });
         }
         return { activePlanName: active?.planName ?? null, activity: [...activity.values()]
           .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).slice(0, accountActivityLimit) };

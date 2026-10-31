@@ -92,7 +92,7 @@ test("current authenticated uploads reserve rate buckets under the account lock"
 test("stale profile changes cannot recreate the account password throttle after deletion", async () => {
   const f = fixture(), auth = createMemberAuth({ database: f.database, config: f.config, now: () => instant, adminPhone: () => false });
   await f.removeAccount();
-  assert.equal((await auth.changePassword("new synthetic password", "old synthetic password", { member: f.member })).status, "unauthorized");
+  assert.equal((await auth.changePassword("new synthetic password", { member: f.member })).status, "unauthorized");
   assert.equal((await auth.changePhone("256700000222", "old synthetic password", { member: f.member })).status, "unauthorized");
   assert.equal(f.buckets.size, 0);
   assert.deepEqual(f.events, ["account-lock", "account-lock"]);
@@ -103,10 +103,10 @@ test("current-password attempts retain their account throttle and refusal respon
   f.account.passwordHash = await hashPassword("current synthetic password");
   f.account.phoneVerifiedAt = new Date(instant);
   for (let attempt = 0; attempt < 10; attempt++) {
-    const result = await auth.changePassword("new synthetic password", "incorrect current password", { member: f.member });
+    const result = await auth.changePhone("256700000222", "incorrect current password", { member: f.member });
     assert.equal(result.status, "unauthorized");
     assert.equal(result.message, "Your current password is incorrect.");
   }
-  assert.equal((await auth.changePassword("new synthetic password", "current synthetic password", { member: f.member })).status, "busy");
+  assert.equal((await auth.changePhone("256700000222", "current synthetic password", { member: f.member })).status, "busy");
   assert.equal(f.buckets.get(f.config.key("member-current-password-account", f.member.accountId)).count, 11);
 });

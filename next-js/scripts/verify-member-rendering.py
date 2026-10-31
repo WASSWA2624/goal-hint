@@ -274,7 +274,7 @@ def subscriber_dashboard(origin):
         for section in ["overview", "phone", "password", "payments", "devices"]:
             html = visible_html(request(origin, f"/en/account?state={state}&section={section}").text)
             no_match(r'data-account-workspace|data-account-details|data-account-activity|data-active-package', html)
-    headings = {"overview": "Account", "subscription": "Subscription", "payments": "Payments", "phone": "Change phone",
+    headings = {"overview": "Account", "subscription": "Subscription", "referrals": "Referrals", "payments": "Payments", "phone": "Change phone",
         "password": "Change password", "devices": "Devices", "notifications": "Notifications", "activity": "Activity"}
     for section, heading in headings.items():
         html = visible_html(request(origin, f"/en/account?state=active&section={section}&return=%2Fen%2Fslips").text)
@@ -285,11 +285,28 @@ def subscriber_dashboard(origin):
         match(r'href="/en/account\?section=password&amp;return=%2Fen%2Fslips"', html)
         if section in ["phone", "password"]:
             match(rf'action="/api/account/{section}"', body)
-            match(r'name="currentPassword"', body)
+            if section == "phone":
+                match(r'name="currentPassword"', body)
+            else:
+                no_match(r'name="currentPassword"|view=forgot', body)
         if section == "devices":
             match(r'action="/api/account/devices"', body)
         if section == "notifications":
             match(r'data-account-notifications', body)
+        if section == "referrals":
+            match(r'data-account-referrals', body)
+            match(r'Copy link', body)
+            match(r'https://goalhint.com/r/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', body)
+            match(r'Awaiting verification', body)
+            match(r'2 days 5 hours', body)
+            no_match(r'phoneKey|inviterId|private-digest', body)
+    empty = visible_html(request(origin, "/en/account?state=referral-empty&section=referrals").text)
+    match(r'No referrals yet', empty)
+    failed = visible_html(request(origin, "/en/account?state=referral-unavailable&section=referrals").text)
+    match(r'Referral details are temporarily unavailable', failed)
+    for view in ["forgot", "reset"]:
+        response = request(origin, f"/en/account?state=active&view={view}")
+        assert response.status == 307 and response.headers["location"] == "/en/account?section=password"
     for query in ["section=unknown", "section=phone&section=password"]:
         html = visible_html(request(origin, f"/en/account?state=active&{query}").text)
         match(r'data-account-section="overview"', html)
@@ -331,9 +348,9 @@ def main():
                 login_html = authentication_form(visible_html(response.text), "login", "Sign in")
                 no_match(r'Analytics sign-in|Admin sign-in|Owner username', login_html)
                 phone_field(login_html)
-                notice = match(r'<details\b([^>]*)>([\s\S]*?Signing in signs out your other device\.[\s\S]*?)</details>', login_html)
+                notice = match(r'<details\b([^>]*)>([\s\S]*?You can stay signed in on two devices\.[\s\S]*?)</details>', login_html)
                 no_match(r'\bopen(?:\s|=|$)', notice.group(1))
-                match(r'<summary[^>]*aria-label="Signing in signs out your other device\."', notice.group(2))
+                match(r'<summary[^>]*aria-label="You can stay signed in on two devices\.', notice.group(2))
                 match(r'<button[^>]*type="submit"[^>]*>Sign in</button>', login_html)
                 match(r'18\+', login_html)
                 match(r'href="/en/terms"[^>]*>Terms', login_html)
@@ -352,10 +369,10 @@ def main():
         match(r'autoComplete="new-password"', register.text)
         register_html = authentication_form(visible_html(register.text), "register", "Sign up")
         phone_field(register_html)
-        no_match(r'Use 8–128 characters|Use the number you pay from|By signing in|Signing in signs out your other device', register_html)
+        no_match(r'Use 8–128 characters|Use the number you pay from|By signing in|You can stay signed in on two devices', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
-        for state in ["signed-out", "signed-in", "unverified"]:
+        for state in ["signed-out", "unverified"]:
             forgot = visible_html(request(server.origin, f"/en/account?state={state}&view=forgot&return=%2Fen%2Fmatches").text)
             delivery_step(forgot)
             for text in ["Reset password", "Registered number", "SMS", "WhatsApp"]:

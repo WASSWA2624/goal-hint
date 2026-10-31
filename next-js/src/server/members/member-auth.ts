@@ -19,6 +19,7 @@ import { decide, settingsServiceFor } from "./settings.ts";
 import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 import { createVerificationCodes } from "./verification-codes.ts";
 import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts";
+import { awardReferralRegistration, recordReferralRegistration, rememberRegistrationPhone } from "./referrals.ts";
 
 export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: 128 });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
@@ -138,7 +139,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     },
 
     /** Public registration never replaces an existing identity or provisions an administrator. */
-    async register(phoneInput: unknown, password: unknown, binding: AuthBinding, address: string): Promise<AuthSuccess | AuthFailure> {
+    async register(phoneInput: unknown, password: unknown, binding: AuthBinding, address: string, referralCode?: string | null): Promise<AuthSuccess | AuthFailure> {
       const phone = validMobilePhone(phoneInput), at = new Date(now());
       if (!phone || binding.member || !validMemberPassword(password)) return invalid("Enter a valid mobile number and a password of 8–128 characters.");
       if (!await limit({ purpose: "register-address", value: safeAddress(address), maximum: 10, windowMs: 3_600_000 })
@@ -151,6 +152,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           const existing = await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
           if (existing) return conflict();
           const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at } });
+          await recordReferralRegistration(tx, config, account, at, referralCode);
           const trial = await grantRegistrationTrial(tx, account.id, at);
           return rotate(tx, account, binding, at, trial);
         });
@@ -179,11 +181,13 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     async verifyAccount(code: unknown, token: string | undefined, address: string, whatsappNotifications = false): Promise<AuthSuccess | AuthFailure> {
       if (typeof whatsappNotifications !== "boolean") return invalid("Choose a valid WhatsApp update preference.");
       if (!await limit({ purpose: "verification-check-address", value: safeAddress(address), maximum: 30, windowMs: 15 * 60_000 })) return busy();
-      return decide(database, async tx => {
+      return accessCodeTransaction(database, async tx => {
         const at = new Date(now()), account = await pendingAccount(tx, token, at);
         if (!account || !await codes.consume(tx, account, "account", code, at)) return refused();
         const verified = await tx.memberAccount.update({ where: { id: account.id }, data: { phoneVerifiedAt: at, lastSignInAt: at,
           ...(whatsappNotifications ? { whatsappNotificationsAt: at } : {}) } });
+        await awardReferralRegistration(tx, config, verified, at);
+        await rememberRegistrationPhone(tx, config, verified.phone!, at);
         await enqueueMemberMessage(tx, { accountId: account.id, targetType: "member", targetId: account.id, decision: "welcome", at });
         const trial = await tx.accessCode.findFirst({ where: { accountId: account.id, source: "trial", revokedAt: null, endsAt: { gt: at } }, orderBy: { createdAt: "asc" } });
         return rotate(tx, verified, { member: null }, at, trial);
@@ -274,18 +278,24 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       } catch (error) { if (error instanceof DatabaseOperationError && error.code === "constraint") return conflict(); throw error; }
     },
 
-    /** Password changes share the recovery cooldown and revoke every other device. */
-    async changePassword(password: unknown, current: unknown, binding: AuthBinding): Promise<AuthSuccess | AuthFailure> {
-      const at = new Date(now());
+    /** The authenticated session authorizes a password change; rotate it and revoke every other device. */
+    async changePassword(password: unknown, binding: AuthBinding): Promise<AuthSuccess | AuthFailure> {
       if (!binding.member) return refused();
       if (adminPhone(binding.member.phone)) return invalid("Administrator credentials are managed in the environment.");
       if (!validMemberPassword(password)) return invalid("Use a password of 8–128 characters.");
-      const checked = await currentPassword(binding.member, current);
-      if (typeof checked !== "string") return checked;
+      // Check authorization/cooldown and reserve a bounded hash attempt before doing password work outside the lock.
+      const permission = await database.transaction(async tx => {
+        const at = new Date(now()), account = await currentAccount(tx, binding, at);
+        if (!account || account.phone !== binding.member!.phone) return refused();
+        if (!canChangePassword(account, at)) return passwordLimit();
+        return await takeMemberLimit(tx, config, { purpose: "password-change-account", value: account.id, maximum: 10, windowMs: 15 * 60_000 }, at) ? null : busy();
+      }, { isolationLevel: "ReadCommitted" });
+      if (permission) return permission;
       const passwordHash = await hashPassword(password);
       return decide<AuthSuccess | AuthFailure>(database, async (tx) => {
+        const at = new Date(now());
         const account = await currentAccount(tx, binding, at);
-        if (!account || account.phone !== binding.member!.phone || account.passwordHash !== checked) return refused();
+        if (!account || account.phone !== binding.member!.phone) return refused();
         if (!canChangePassword(account, at)) return passwordLimit();
         await tx.memberAccount.update({ where: { id: account.id }, data: { passwordHash, passwordChangedAt: at, lastSignInAt: at } });
         await tx.memberVerification.updateMany({ where: { accountId: account.id, consumedAt: null }, data: { consumedAt: at } });

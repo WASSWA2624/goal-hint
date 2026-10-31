@@ -21,6 +21,7 @@ import type { PaymentNotifications } from "./payment-notifications.ts";
 import { createQueuedPaymentNotifications } from "./payment-notification-outbox.ts";
 import { acceptedTerms } from "./member-terms.ts";
 import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit } from "./wallet.ts";
+import { rechainRewardPeriods } from "./referral-periods.ts";
 
 export const generateCode = () => Array.from({ length: 12 }, () => accessCodeAlphabet[randomInt(32)]).join("");
 export const newSalt = () => randomBytes(16);
@@ -67,8 +68,9 @@ export async function lockMemberAccount(tx: Prisma.TransactionClient, id: string
 }
 
 /** The account lock serializes confirmation and renewal. */
-export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot, now: Date, termsVersion: string | null) {
-  const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
+export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot & { source?: string }, now: Date, termsVersion: string | null) {
+  const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null,
+    ...(code.source !== "referral" ? { source: { not: "referral" } } : {}) }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
   const startsAt = new Date(Math.max(now.getTime(), latest?.endsAt.getTime() ?? 0));
   return { activatedAt: now, startsAt, endsAt: new Date(startsAt.getTime() + (code.durationDays + (code.extensionDays ?? 0)) * subscriptionDayMs), termsVersion };
 }
@@ -90,13 +92,14 @@ const audit = (tx: Prisma.TransactionClient, accountId: string, id: string, acti
   details: Record<string, unknown> = {}, targetType: "access-code" | "member" | "payment" | "member-session" = "access-code") =>
   writeOwnerAudit(tx, { at, actor, action, accountId, targetType, targetId: id, details });
 
-async function createAccessPeriod(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: Creation, actor: string, at: Date,
+export async function createAccessPeriod(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: Creation, actor: string, at: Date,
   devices: Devices): Promise<AccessGrant> {
   if (!account.phone) throw new Error("An erased account cannot receive access.");
   // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
   const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null);
   const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
     codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
+  if (fields.source !== "referral") await rechainRewardPeriods(tx, account.id, at);
   await audit(tx, account.id, code.id, "code_created", actor, at, { source: fields.source, reference, durationDays: code.durationDays,
     extensionDays: code.extensionDays, startsAt: code.startsAt, endsAt: code.endsAt });
   const devicesUnlocked = await grantDevices(tx, { accountId: account.id, codeId: code.id, at, maximum: devices.maximum, prefer: devices.prefer ?? [], actor });
@@ -129,13 +132,14 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
   const create = createAccessPeriod;
 
   async function rechain(tx: Prisma.TransactionClient, accountId: string, at: Date) {
-    const codes = await tx.accessCode.findMany({ where: { accountId, revokedAt: null, endsAt: { gt: at } } });
+    const codes = await tx.accessCode.findMany({ where: { accountId, revokedAt: null, endsAt: { gt: at }, source: { not: "referral" } } });
     for (const code of chainPeriods(codes, at)) {
       const old = codes.find((row) => row.id === code.id)!;
       if (+old.startsAt !== +code.startsAt || +old.endsAt !== +code.endsAt) {
         await tx.accessCode.update({ where: { id: code.id }, data: { startsAt: code.startsAt, endsAt: code.endsAt } });
       }
     }
+    await rechainRewardPeriods(tx, accountId, at);
   }
 
   async function revoke(tx: Prisma.TransactionClient, code: AccessCode, reason: string, actor: string, at: Date, replacement?: string,
@@ -301,13 +305,14 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (!initial) return rollback(refused());
         await lockMemberAccount(tx, initial.accountId);
         const code = await tx.accessCode.findUniqueOrThrow({ where: { id } });
-        if (code.revokedAt || code.extensionDays + days > 65_535) return rollback(refused());
+        if (code.revokedAt || code.source === "referral" || code.extensionDays + days > 65_535) return rollback(refused());
         const at = new Date(now());
-        const periods = await tx.accessCode.findMany({ where: { accountId: code.accountId, revokedAt: null } });
+        const periods = await tx.accessCode.findMany({ where: { accountId: code.accountId, revokedAt: null, source: { not: "referral" } } });
         for (const period of extendPeriods(periods, id, days)) {
           if (period.id !== id && period.startsAt < code.endsAt) continue;
           await tx.accessCode.update({ where: { id: period.id }, data: { extensionDays: period.extensionDays, startsAt: period.startsAt, endsAt: period.endsAt } });
         }
+        await rechainRewardPeriods(tx, code.accountId, at);
         await audit(tx, code.accountId, id, "code_extended", actor, at, { days });
         return { status: "saved" };
       });
@@ -329,17 +334,26 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         destination = await tx.memberAccount.findUniqueOrThrow({ where: { id: destination.id } });
         if (!old || old.blockedAt || old.erasedAt || destination.blockedAt || destination.erasedAt) return rollback(refused());
         const codes = await tx.accessCode.findMany({ where: { accountId, revokedAt: null, endsAt: { gt: at } } });
-        const days = remainingDays(codes, at), credit = await lockedCredit(tx, accountId) ?? 0;
+        const rewards = codes.filter(code => code.source === "referral");
+        const days = remainingDays(codes.filter(code => code.source !== "referral"), at), credit = await lockedCredit(tx, accountId) ?? 0;
         // Reports never change account, so a waiting top-up would be credited to the old number: decide it first.
         if (await tx.paymentSubmission.count({ where: { accountId, purpose: "topup", status: { in: ["pending", "superseded"] } } })) {
           return rollback(invalid("Approve or reject the waiting credit top-up first, so its credit moves too."));
         }
-        if (days === 0 && credit === 0) return rollback(invalid("There is no remaining access or credit to move."));
+        if (days === 0 && credit === 0 && !rewards.length) return rollback(invalid("There is no remaining access or credit to move."));
         if (days !== 0 && !validDays(days)) return rollback(invalid("Remaining access must be between 1 and 366 days."));
         // The new number's signed-in devices get the remaining days; the old number's devices lock with its last period.
         const grant = days ? await create(tx, destination, { source: "number-change", planName: "Transferred access", durationDays: days, priceUgx: 0 }, actor, at,
           { maximum: await unlockedDeviceLimit(tx) }) : null;
-        for (const code of codes) await revoke(tx, code, "number-change", actor, at, grant?.id, { verifiedBy: input.verifiedBy });
+        for (const code of codes.filter(code => code.source !== "referral")) await revoke(tx, code, "number-change", actor, at, grant?.id, { verifiedBy: input.verifiedBy });
+        // Move earned periods intact: do not round a partial day up or turn it into paid access.
+        if (rewards.length) {
+          await tx.memberSession.updateMany({ where: { accountId, accessCodeId: { in: rewards.map(code => code.id) } }, data: { codeEnteredAt: null, accessCodeId: null } });
+          for (const code of rewards) await tx.accessCode.update({ where: { id: code.id }, data: { accountId: destination.id } });
+          await rechainRewardPeriods(tx, destination.id, at);
+          await grantDevices(tx, { accountId: destination.id, codeId: rewards.at(-1)!.id, at,
+            maximum: await unlockedDeviceLimit(tx), actor });
+        }
         // The move is recorded before its own ledger rows: credit at or before the old account's newest entry moved with the
         // person, which is how a later reversal finds who holds it.
         await tx.accountMove.create({ data: { fromAccountId: accountId, toAccountId: destination.id, fromEntryNumber: await lastEntryNumber(tx, accountId),
@@ -463,8 +477,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       const due = await database.query(async (tx) => {
         const peek = await tx.memberAccount.findUnique({ where: { id: accountId }, select: { autoRenew: true, autoRenewPlanId: true } });
         if (!peek?.autoRenew || !peek.autoRenewPlanId) return false;
-        const end = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
-        return !!end && renewalDue(end.endsAt, new Date(now()), walletRules.renewLeadMs, maxLapseMs)
+        const end = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true, source: true } });
+        const at = new Date(now());
+        return !!end && !(end.source === "referral" && end.endsAt > at) && renewalDue(end.endsAt, at, walletRules.renewLeadMs, maxLapseMs)
           && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${accountId}:${+end.endsAt}` }, select: { id: true } });
       });
       if (!due) return "skipped";
@@ -473,8 +488,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         const account = await lockMemberAccount(tx, accountId);
         if (!account || account.blockedAt || account.erasedAt || !account.phone || !account.autoRenew || !account.autoRenewPlanId) return "skipped";
         const at = new Date(now());
-        const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
-        if (!latest || !renewalDue(latest.endsAt, at, walletRules.renewLeadMs, maxLapseMs) || !await salesOpen(tx)) return "skipped";
+        const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true, source: true } });
+        if (!latest || latest.source === "referral" && latest.endsAt > at
+          || !renewalDue(latest.endsAt, at, walletRules.renewLeadMs, maxLapseMs) || !await salesOpen(tx)) return "skipped";
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: account.autoRenewPlanId } });
         const balance = await lockedCredit(tx, accountId);
         if (!plan?.active || balance === null || balance < plan.priceUgx) return "skipped";
@@ -549,7 +565,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
           account: { select: { blockedAt: true, erasedAt: true, creditUgx: true, autoRenew: true,
             autoRenewPlan: { select: { priceUgx: true, active: true } },
             codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: { startsAt: "asc" },
-              select: { startsAt: true, endsAt: true, revokedAt: true } },
+              select: { startsAt: true, endsAt: true, revokedAt: true, source: true } },
             _count: { select: { codes: { where: { revokedAt: null, startsAt: { lte: at }, endsAt: { lte: at } } } } },
             submissions: { orderBy: [{ submittedAt: "desc" }, { id: "desc" }], take: 1, select: { status: true } },
           } },
@@ -560,7 +576,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         // Renewal also needs open sales and a period end not yet renewed (a renewal the owner revoked is not bought again);
         // those are read only when the rest would renew.
         const end = session.account.codes.reduce<Date | null>((latest, code) => !latest || code.endsAt > latest ? code.endsAt : latest, null);
-        const covered = autoRenew && !!autoRenewPlan?.active && creditUgx >= autoRenewPlan.priceUgx && !!end;
+        const covered = autoRenew && !!autoRenewPlan?.active && creditUgx >= autoRenewPlan.priceUgx && !!end
+          && !session.account.codes.some(code => code.source === "referral" && code.endsAt > at);
         const renewsFromCredit = covered && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${session.accountId}:${+end!}` }, select: { id: true } })
           && await salesOpen(tx);
         // The newest report decides, unless an older report of the other purpose still waits (a plan and a top-up may both).

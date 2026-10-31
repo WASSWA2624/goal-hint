@@ -13,6 +13,7 @@ import { createPaymentReview } from "./payment-review.ts";
 import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts";
 import { deleteSubscriber } from "./delete-subscriber.ts";
 import { countedManualWhere, countedPaymentWhere } from "./revenue.ts";
+import { rememberRegistrationPhone } from "../members/referrals.ts";
 
 export function revenueBounds(now: number) {
   const today = getReportingDate(utcInstantFromEpochMilliseconds(now));
@@ -107,6 +108,8 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             if (action === "block") deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
             break;
           case "erase": {
+            if (account.phone) await rememberRegistrationPhone(tx, config ?? await getAnalyticsConfig(), account.phone, at);
+            await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
             await tx.savedSlip.deleteMany({ where: { accountId: id } });
             await tx.slipConfiguration.deleteMany({ where: { accountId: id } });
             const rows = await tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true } });
@@ -123,7 +126,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
               await writeOwnerAudit(tx, { at, actor, action: "credit_forfeited", accountId: id, targetType: "member", targetId: id, details: { amountUgx: credit, walletEntryId: entry.id } });
             }
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, whatsappNotificationsAt: null,
-              ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
+              ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false, referralCode: null } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
             await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });

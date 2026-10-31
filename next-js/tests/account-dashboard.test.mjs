@@ -12,12 +12,13 @@ function fixture() {
   const member = { accountId: "one", tokenHash: "session-one", phone: "256700000101", blocked: false, codeEnteredAt: null };
   const account = { phone: member.phone, passwordHash: "private-password", phoneVerifiedAt: ago(1), blockedAt: null, erasedAt: null };
   const session = { accountId: member.accountId, authenticatedAt: ago(1), passwordResetAt: null, expiresAt: later(1), account };
-  const payments = [], periods = [], queries = [], transactions = [];
+  const payments = [], periods = [], rewards = [], queries = [], transactions = [];
   const matches = (row, where) => Object.entries(where).every(([key, value]) => {
     if (value && typeof value === "object" && !(value instanceof Date)) {
       if ("in" in value) return value.in.includes(row[key]);
       if ("lte" in value) return row[key] != null && row[key] <= value.lte;
       if ("gt" in value) return row[key] != null && row[key] > value.gt;
+      if ("not" in value) return row[key] !== value.not;
     }
     return row[key] === value;
   });
@@ -39,7 +40,7 @@ function fixture() {
   const tx = { memberSession: { async findUnique(query) {
     queries.push({ name: "session", ...query });
     return query.where.tokenHash === "session-one" ? project(session, query.select) : null;
-  } }, accessCode: table(periods, "access"), paymentSubmission: table(payments, "payment") };
+  } }, accessCode: table(periods, "access"), paymentSubmission: table(payments, "payment"), memberReferral: table(rewards, "referral") };
   const database = { async transaction(run, options) { transactions.push(options); return run(tx); } };
   const service = createAccountDashboard({ database, now: () => +at });
   function payment(id, fields = {}) {
@@ -53,7 +54,7 @@ function fixture() {
       codeHash: "private-code", codeSalt: "private-salt", note: "private-note", createdBy: "private-actor", ...fields };
     periods.push(row); return row;
   }
-  return { member, account, session, service, period, payment, queries, transactions };
+  return { member, account, session, service, period, payment, rewards, queries, transactions };
 }
 
 test("current package uses the active snapshot, excluding queued, ended, revoked and other accounts", async () => {
@@ -142,12 +143,24 @@ test("safe projections are bounded, scoped and deterministic, with no private ro
   assert.equal(view.activity[0].reference, "PABCD");
   assert.equal(view.activity[0].purpose, "topup");
   for (const query of f.queries.filter(query => query.name !== "session")) {
-    assert.equal(query.where.accountId, f.member.accountId);
+    assert.equal(query.name === "referral" ? query.where.inviterId : query.where.accountId, f.member.accountId);
     if (query.take !== undefined) assert.equal(query.take, accountActivityLimit);
     assert.ok(!JSON.stringify(query.select).match(/phone|Hash|Salt|note|By|screenshot|transactionRef/));
   }
   assert.doesNotMatch(JSON.stringify(view), /private-|phone|Hash|Salt|screenshot|transactionRef|note|createdBy|accountId/);
   assert.deepEqual((await f.service.read(f.member)).activity, view.activity);
+});
+
+test("referral awards appear once in activity without invitee identity or duplicate access entries", async () => {
+  const f = fixture();
+  f.period("reward-period", { source: "referral", planName: "Earned access" });
+  f.rewards.push({ id: "reward", inviterId: f.member.accountId, rewardedAt: ago(1), status: "rewarded", phoneKey: "private-digest" },
+    { id: "foreign", inviterId: "other", rewardedAt: at, status: "rewarded" },
+    { id: "pending", inviterId: f.member.accountId, rewardedAt: null, status: "pending" });
+  const view = await f.service.read(f.member);
+  assert.equal(view.activePlanName, "Earned access");
+  assert.deepEqual(view.activity.map(row => [row.kind, row.id]), [["referral", "referral:reward"]]);
+  assert.doesNotMatch(JSON.stringify(view), /private|phoneKey|inviterId|accountId/);
 });
 
 test("missing decision timestamps retain the known submission event; empty and failed reads remain distinct", async () => {

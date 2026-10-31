@@ -2,11 +2,10 @@
 
 import { useState, type FormEvent } from "react";
 import styled from "styled-components";
-import { Button, TextInput, TextLink } from "@/components/ui/controls";
+import { Button, TextInput } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { passwordChangeWindowMs } from "@/domain/member-verification";
 import { formatPhone } from "@/domain/phone";
-import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
 import { AccountHelpLinks, type AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
@@ -70,10 +69,10 @@ const TaskForm = styled.div`
 `;
 
 /**
- * A focused workspace form. Account changes require the current password and a new phone must also be verified.
+ * Password changes use the authenticated session; phone changes still require the current password and verification.
  */
-export function AccountSecurityForm({ task, locale, contact, returnTo = null, cancelHref }: {
-  task: "phone" | "password"; locale: string; contact: AdminContact; returnTo?: string | null; cancelHref: string;
+export function AccountSecurityForm({ task, locale, contact, cancelHref }: {
+  task: "phone" | "password"; locale: string; contact: AdminContact; cancelHref: string;
 }) {
   const m = createMessages(locale);
   const [newPhone, setNewPhone] = useState(""), [current, setCurrent] = useState(""), [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
@@ -83,7 +82,7 @@ export function AccountSecurityForm({ task, locale, contact, returnTo = null, ca
     if (task === "password" && password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string }>(task, { currentPassword: current, ...(task === "phone" ? { phone: newPhone } : { password }) });
+      const result = await accountRequest<{ next: string }>(task, task === "phone" ? { currentPassword: current, phone: newPhone } : { password });
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
@@ -91,9 +90,8 @@ export function AccountSecurityForm({ task, locale, contact, returnTo = null, ca
   return <TaskForm data-account-sign-in>
     <MemberForm method="post" action={`/api/account/${task}`} onSubmit={save} data-analytics-ignore aria-busy={busy}>
       {task === "phone" ? <><PhoneInput name="phone" label={m.text("account.newPhone")} value={newPhone} onValueChange={setNewPhone} required />{currentField}</>
-        : <>{currentField}<NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} /></>}
+        : <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />}
       {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneVerification")}</AccountNote>}
-      <AccountNote><TextLink href={`/${resolveLocale(locale)}/account?${new URLSearchParams({ view: "forgot", ...(returnTo ? { return: returnTo } : {}) })}`} prefetch={false}>{m.text("account.forgotPassword")}</TextLink></AccountNote>
       {error && <AccountError role="alert">{error}</AccountError>}
       <AccountSectionActions>
         <Button type="submit" disabled={busy}>{m.text(busy ? "account.working" : task === "phone" ? "account.savePhone" : "account.savePassword")}</Button>

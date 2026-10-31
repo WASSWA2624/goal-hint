@@ -155,10 +155,10 @@ export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; acti
   const locked = action.busy || code.status === "revoked";
   function cancel() { setConfirming(false); revokeTrigger.current?.focus(); }
   return <CodeTools ref={tools} tabIndex={-1} role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
-    <ExtendForm method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
+    {code.source !== "referral" && <ExtendForm method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
       <ExtendField>Extend by<input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} />days</ExtendField>
       <ActionButton type="submit" disabled={locked}>Extend</ActionButton>
-    </ExtendForm>
+    </ExtendForm>}
     <TextAction ref={revokeTrigger} type="button" $tone="danger" disabled={locked} aria-expanded={confirming} aria-controls={confirming ? `${id}-revoke` : undefined}
       onClick={() => setConfirming(value => !value)}>Revoke</TextAction>
     {confirming && <RevokeConfirmation id={`${id}-revoke`} role="group" aria-labelledby={`${id}-revoke-title`} onKeyDown={event => { if (event.key === "Escape" && !action.busy) { event.preventDefault(); cancel(); } }}>

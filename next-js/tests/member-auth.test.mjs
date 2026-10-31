@@ -1,102 +1,21 @@
 import assert from "node:assert/strict";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { createMemberAuthFixture as fixture } from "./helpers/member-auth-fixture.mjs";
 import { hashPassword, verifyPassword } from "../src/server/analytics/analytics-password.ts";
 import { grantRegistrationTrial } from "../src/server/members/access-codes.ts";
-import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
-import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberAuthHandler } from "../src/server/members/member-auth-http.ts";
-import { createMemberSessions, issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
+import { issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, parseMemberAdminPhones, verifyMemberAdminCredential } from "../src/server/members/member-admin.ts";
 import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
 
 const phone = "256700000001", replacement = "256700000002", password = "correct horse 47";
-const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").update(`${purpose}\0${value}`).digest("hex");
 const browser = () => ({ member: null });
 const DAY = 86_400_000, address = "198.51.100.1";
 const wrongCode = (code) => `${code[0] === "0" ? "1" : "0"}${code.slice(1)}`;
 
-/** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
-function fixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
-  let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
-  const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), sent = [], messages = [];
-  function matches(row, where = {}) {
-    return Object.entries(where).every(([name, value]) => {
-      if (name === "OR") return value.some((part) => matches(row, part));
-      if (name === "AND") return [].concat(value).every((part) => matches(row, part));
-      if (name === "NOT") return !matches(row, value);
-      const actual = row[name];
-      if (value && typeof value === "object" && !(value instanceof Date)) return Object.entries(value).every(([operator, target]) =>
-        operator === "gt" ? actual > target : operator === "gte" ? actual >= target : operator === "lt" ? actual < target : operator === "lte" ? actual <= target : operator === "not" ? actual !== target
-          : operator === "in" ? target.includes(actual) : false);
-      return actual instanceof Date && value instanceof Date ? +actual === +value : actual === value;
-    });
-  }
-  function table(rows, id, defaults = {}) {
-    return {
-      async findUnique({ where, include }) { const row = [...rows.values()].find((row) => matches(row, where)); return row ? { ...row, ...(include?.account ? { account: accounts.get(row.accountId) } : {}) } : null; },
-      async upsert({ where, create, update }) { return await this.findUnique({ where }) ? this.update({ where, data: update }) : this.create({ data: create }); },
-      async findUniqueOrThrow(query) { const row = await this.findUnique(query); assert.ok(row); return row; },
-      async findMany({ where, orderBy, take } = {}) {
-        let values = [...rows.values()].filter((row) => matches(row, where));
-        if (orderBy) values.sort((a, b) => { for (const part of [].concat(orderBy)) for (const [field, direction] of Object.entries(part)) {
-          const comparison = a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : 0; if (comparison) return direction === "desc" ? -comparison : comparison;
-        } return 0; });
-        if (take) values = values.slice(0, take);
-        return values.map((row) => ({ ...row }));
-      },
-      async findFirst(query) { return (await this.findMany(query))[0] ?? null; },
-      async count({ where } = {}) { return [...rows.values()].filter((row) => matches(row, where)).length; },
-      async create({ data }) { const row = { ...defaults, ...data }; assert.ok(!rows.has(row[id])); rows.set(row[id], row); return { ...row }; },
-      async update({ where, data }) { const row = [...rows.values()].find((row) => matches(row, where)); assert.ok(row); for (const [name, value] of Object.entries(data)) row[name] = value && typeof value === "object" && "increment" in value ? row[name] + value.increment : value; return { ...row }; },
-      async updateMany({ where, data }) { let count = 0; for (const row of rows.values()) if (matches(row, where)) { Object.assign(row, data); count++; } return { count }; },
-      async deleteMany({ where }) { let count = 0; for (const [identifier, row] of rows) if (matches(row, where)) { rows.delete(identifier); count++; } return { count }; },
-    };
-  }
-  const settings = { ...defaultSubscriptionSettings, trialDays, updatedAt: new Date(time), updatedBy: "synthetic-owner" };
-  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, blockedAt: null, erasedAt: null }),
-    memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
-    memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
-    paymentSubmission: { async findMany() { return []; } },
-    accessCode: table(accessCodes, "id", { revokedAt: null, extensionDays: 0 }),
-    subscriptionSettings: { async findUnique() { return settings; }, async findUniqueOrThrow() { return settings; } },
-    ownerAuditEvent: { async create({ data }) { sent.push(data); return data; } },
-    rateLimitBucket: { async findUniqueOrThrow({ where }) { return buckets.get(where.key); } },
-    async $queryRaw() { return []; },
-    async $executeRaw(strings, ...values) {
-      if (strings.join("").includes("RateLimitBucket")) {
-        const [bucketKey, started] = values, existing = buckets.get(bucketKey);
-        buckets.set(bucketKey, { count: existing?.started.getTime() === started.getTime() ? existing.count + 1 : 1, started });
-      } else if (!strings.join("").includes("SubscriptionSettings")) throw new Error("Unexpected SQL in auth fixture");
-      return 1;
-    },
-  };
-  const database = { async query(run) { return run(tx); }, transaction(run) {
-    const result = queue.then(async () => {
-      const snapshots = [accounts, sessions, challenges, buckets, accessCodes].map((rows) => structuredClone(rows));
-      const auditCount = sent.length;
-      try { return await run(tx); } catch (error) { sent.length = auditCount; [accounts, sessions, challenges, buckets, accessCodes].forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
-    });
-    queue = result.catch(() => {}); return result;
-  } };
-  const adminPhones = new Set(admins), adminPhone = (phone) => adminPhones.has(phone);
-  const delivery = { async send(message) { messages.push(message); await send?.(message); } };
-  const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash, delivery });
-  const service = restart();
-  const sessionService = createMemberSessions({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash });
-  async function account(fields = {}) {
-    return tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash: await hashPassword(password), phoneVerifiedAt: new Date(time), createdAt: new Date(time), lastSignInAt: new Date(time), ...fields } });
-  }
-  async function authenticate() {
-    await account();
-    const logged = await service.login(phone, password, "198.51.100.1"); assert.equal(logged.status, "authenticated");
-    const member = await sessionService.verify(logged.token); assert.ok(member);
-    return { member, token: logged.token };
-  }
-  return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, sessionService, account, authenticate, adminPhones, restart,
-    now: () => time, advance: (ms) => { time += ms; } };
-}
+
 
 test("enabled welcome content queues only after successful account verification and stores no OTP", async () => {
   const { defaultMessageTemplates } = await import("../src/domain/message-templates.ts");
@@ -282,15 +201,34 @@ test("registered accounts marked for recovery reject login and retain verified s
   assert.equal((await f.service.login(phone, "restored member password", address)).status, "authenticated");
 });
 
-test("normal password changes check the current password and rotate the current device", async () => {
+test("signed-in password changes need no current password and retain only the current device", async () => {
   const f = fixture(), binding = await f.authenticate();
   const other = await f.service.login(phone, password, "198.51.100.2");
-  assert.equal((await f.service.changePassword("new secret password", "wrong", binding)).status, "unauthorized");
   assert.ok(await f.sessionService.verify(other.token));
-  const changed = await f.service.changePassword("new secret password", password, binding);
+  const changed = await f.service.changePassword("new secret password", binding);
   assert.equal(changed.status, "authenticated"); assert.equal(await f.sessionService.verify(binding.token), null);
   assert.equal(await f.sessionService.verify(other.token), null, "A password change still revokes every old session");
   assert.ok(await f.sessionService.verify(changed.token));
+  assert.equal(f.messages.length, 0, "A signed-in password change sends no verification code");
+  assert.equal((await f.service.login(phone, password, address)).status, "unauthorized");
+  assert.equal((await f.service.login(phone, "new secret password", address, changed.token)).status, "authenticated");
+});
+
+test("concurrent password changes authorize one new password and revoke both old device sessions", async () => {
+  const f = fixture(), first = await f.authenticate();
+  const second = await f.service.login(phone, password, "198.51.100.2");
+  const attempts = ["first concurrent password", "second concurrent password"];
+  const results = await Promise.all([
+    f.service.changePassword(attempts[0], { member: first.member }),
+    f.service.changePassword(attempts[1], { member: await f.sessionService.verify(second.token) }),
+  ]);
+  assert.deepEqual(results.map(row => row.status).sort(), ["authenticated", "unauthorized"]);
+  const winner = results.findIndex(row => row.status === "authenticated");
+  assert.ok(await f.sessionService.verify(results[winner].token));
+  assert.equal(await f.sessionService.verify(first.token), null); assert.equal(await f.sessionService.verify(second.token), null);
+  assert.equal(f.sessions.size, 1); assert.equal(f.messages.length, 0);
+  assert.equal((await f.service.login(phone, attempts[1 - winner], address)).status, "unauthorized");
+  assert.equal((await f.service.login(phone, attempts[winner], address, results[winner].token)).status, "authenticated");
 });
 
 test("a third login signs out only the oldest session and denies its profile writes", async () => {
@@ -309,7 +247,7 @@ test("a third login signs out only the oldest session and denies its profile wri
   assert.ok(await f.sessionService.verify(second.token)); assert.ok(await f.sessionService.verify(third.token));
   assert.ok(await f.sessionService.verify(other.token));
   assert.equal([...f.sessions.values()].filter(row => row.accountId === first.member.accountId).length, 2);
-  assert.equal((await f.service.changePassword("stale device password", password, first)).status, "unauthorized");
+  assert.equal((await f.service.changePassword("stale device password", first)).status, "unauthorized");
   assert.equal((await f.service.changePhone("256700000003", password, first)).status, "unauthorized");
   const response = await createMemberAuthHandler("password", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
     authRequest("password", { password: "stale HTTP password", currentPassword: password }, first.token));
@@ -476,7 +414,7 @@ test("unverified passwords only reopen verification and cannot access authentica
   assert.equal(logged.requiresVerification, true); assert.equal(await f.sessionService.verify(logged.token), null);
   assert.deepEqual(await f.service.verificationSession(logged.token), { phone });
   assert.equal(f.messages.length, 0);
-  assert.equal((await f.service.changePassword("replacement secret", password, browser())).status, "unauthorized");
+  assert.equal((await f.service.changePassword("replacement secret", browser())).status, "unauthorized");
   assert.equal((await f.service.changePhone(replacement, password, browser())).status, "unauthorized");
   assert.equal((await f.service.requestVerification("email", logged.token, address)).status, "invalid");
   assert.equal((await f.service.requestVerification("sms", undefined, address)).status, "unauthorized");
@@ -641,9 +579,9 @@ test("requesting a newer reset code revokes earlier reset authorization and neve
 
 test("password changes are limited across profile and code recovery for exactly 24 hours", async () => {
   const f = fixture(), binding = await f.authenticate();
-  const first = await f.service.changePassword("first new password", password, binding);
+  const first = await f.service.changePassword("first new password", binding);
   let active = { member: await f.sessionService.verify(first.token), token: first.token };
-  const second = await f.service.changePassword("second new password", "first new password", active);
+  const second = await f.service.changePassword("second new password", active);
   assert.equal(second.status, "busy"); assert.match(second.message, /24 hours/iu);
   await f.service.requestPasswordReset(phone, address, "sms");
   const reset = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
@@ -651,15 +589,32 @@ test("password changes are limited across profile and code recovery for exactly 
   const login = await f.service.login(phone, "first new password", address);
   assert.equal(login.status, "authenticated"); active = { member: await f.sessionService.verify(login.token), token: login.token };
   f.advance(DAY - 1);
-  assert.equal((await f.service.changePassword("second new password", "first new password", active)).status, "busy");
+  assert.equal((await f.service.changePassword("second new password", active)).status, "busy");
   f.advance(1);
-  assert.equal((await f.service.changePassword("second new password", "first new password", active)).status, "authenticated");
+  assert.equal((await f.service.changePassword("second new password", active)).status, "authenticated");
 });
 
 const authRequest = (action, body, token, headers = {}) => new Request(`https://goal.test/api/account/${action}`, { method: "POST",
   headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", ...(token ? { Cookie: `goal-hint-member=${token}` } : {}), ...headers },
   body: JSON.stringify(body) });
 const responseToken = response => /^goal-hint-member=([^;]+)/u.exec(response.headers.getSetCookie()[0] ?? "")?.[1];
+
+test("signed-in users change passwords in Account and cannot request or confirm recovery codes", async () => {
+  const f = fixture(), logged = await f.authenticate();
+  const source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  for (const [action, body] of [["forgot", { phone, channel: "sms" }], ["reset-code", { phone, code: "123456" }]]) {
+    const response = await createMemberAuthHandler(action, source)(authRequest(action, body, logged.token));
+    assert.equal(response.status, 409); assert.equal(response.headers.get("set-cookie"), null);
+    assert.match((await response.json()).message, /Change password in Account/);
+  }
+  assert.equal(f.messages.length, 0); assert.equal(f.challenges.size, 0);
+  assert.ok(await f.sessionService.verify(logged.token));
+  const changed = await f.service.changePassword("another strong password", { member: logged.member });
+  assert.equal(changed.status, "authenticated"); assert.equal(f.messages.length, 0);
+  await f.sessionService.signOut(changed.token);
+  assert.equal((await createMemberAuthHandler("forgot", source)(authRequest("forgot", { phone, channel: "sms" }))).status, 200);
+  assert.equal(f.messages.length, 1, "Signed-out recovery retains phone verification");
+});
 
 test("HTTP login reports when another device was signed out and rejects its stale cookie", async () => {
   const f = fixture(); await f.account();

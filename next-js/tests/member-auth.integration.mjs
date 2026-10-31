@@ -41,7 +41,7 @@ test("channel verification and self-service recovery limits persist on isolated 
   assert.notEqual(proof.codeHash, messages.at(-1).code); assert.match(proof.codeHash, /^[a-f0-9]{64}$/u);
   assert.equal(+proof.expiresAt - +proof.createdAt, DAY);
   const logged = await auth.login(phone, password, address);
-  assert.equal(logged.status, "authenticated"); assert.equal(await sessions.verify(verified.token), null);
+  assert.equal(logged.status, "authenticated"); assert.ok(await sessions.verify(verified.token), "Two logins can coexist before recovery revokes both");
   assert.equal((await auth.requestPasswordReset(phone, address, "sms")).status, "requested");
   const resetCode = messages.at(-1).code;
   const claims = await Promise.all([auth.verifyPasswordReset(phone, resetCode, address), auth.verifyPasswordReset(phone, resetCode, address)]);
@@ -54,10 +54,10 @@ test("channel verification and self-service recovery limits persist on isolated 
   assert.equal(await sessions.verify(logged.token), null);
   assert.equal(await sessions.verify(verified.token), null);
   assert.equal((await auth.resetPassword("another password", recovery.token, address)).status, "unauthorized");
-  const limited = await auth.changePassword("another password", "self service password", { member: await sessions.verify(saved.token) });
+  const limited = await auth.changePassword("another password", { member: await sessions.verify(saved.token) });
   assert.equal(limited.status, "busy"); assert.match(limited.message, /24 hours/iu);
   time += DAY;
-  const changed = await auth.changePassword("replacement password", "self service password", { member: await sessions.verify(saved.token) });
+  const changed = await auth.changePassword("replacement password", { member: await sessions.verify(saved.token) });
   assert.equal(changed.status, "authenticated"); assert.ok(await sessions.verify(changed.token));
   assert.equal(await sessions.verify(saved.token), null);
   assert.equal((await restart().login(phone, "replacement password", address)).status, "authenticated");
@@ -114,7 +114,7 @@ test("two active logins and concurrent oldest-session eviction preserve paid-dev
   assert.equal(third.otherDeviceSignedOut, true); assert.equal(await sessions.verify(first.token), null);
   assert.deepEqual(await access(first.token), { tier: "free", signedIn: false, mode: "test" });
   assert.ok(await sessions.verify(second.token)); assert.ok(await sessions.verify(third.token));
-  assert.equal((await auth.changePassword("stale device password", password, { member: original })).status, "unauthorized");
+  assert.equal((await auth.changePassword("stale device password", { member: original })).status, "unauthorized");
   time++;
   const completed = [];
   await Promise.all(Array.from({ length: 3 }, (_, index) => auth.login(phone, password, `198.51.100.${index + 10}`).then(result => completed.push(result))));

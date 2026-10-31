@@ -1,4 +1,5 @@
 import "server-only";
+import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
 import { memberReturnPath } from "../../domain/member-navigation.ts";
 import { adminLandingPath } from "../../domain/admin-navigation.ts";
@@ -38,8 +39,8 @@ function failure(result: AuthFailure) {
   return json({ error: result.status, message: result.message }, status, result.status === "busy" ? { "Retry-After": "60" } : {});
 }
 
-/** Auth remains available when subscription sales are off. Profile changes require the current password;
- * verification is required before member access, and recovery grants a bounded reset-only cookie. All writes are same-origin. */
+/** Auth remains available when sales are off. A verified session authorizes password changes; phone changes check its password.
+ * Verification precedes member access; signed-out recovery grants a bounded reset-only cookie. All writes are same-origin. */
 export function createMemberAuthHandler(action: AuthAction, source: MemberServicesSource = getMemberServices) {
   return async (request: Request): Promise<Response> => {
     if (!isSameOrigin(request)) return json({ error: "forbidden", message: "This request must come from Goal Hint." }, 403);
@@ -53,18 +54,21 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       if (!services.auth || !services.sessions) return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503);
       const memberName = memberCookieName(services.config.production), currentToken = readCookie(request, memberName);
       const binding: AuthBinding = { member: await services.sessions.verify(currentToken) }, address = clientAddress(request.headers);
+      if ((action === "forgot" || action === "reset-code") && binding.member)
+        return json({ error: "signed-in", message: "Use Change password in Account while signed in." }, 409);
       if (action === "forgot" || action === "verification") {
         const result = action === "forgot" ? await services.auth.requestPasswordReset(body.phone, address, body.channel)
           : await services.auth.requestVerification(body.channel, currentToken, address);
         return result.status === "requested" ? json(result) : failure(result);
       }
       const result = action === "login" ? await services.auth.login(body.phone, body.password, address, currentToken)
-        : action === "register" ? await services.auth.register(body.phone, body.password, binding, address)
+        : action === "register" ? await services.auth.register(body.phone, body.password, binding, address,
+          readReferralAttribution(services.config, readCookie(request, referralCookieName(services.config.production)), Date.now())?.code)
         : action === "verify" ? await services.auth.verifyAccount(body.code, currentToken, address, body.whatsappNotifications === true)
         : action === "reset-code" ? await services.auth.verifyPasswordReset(body.phone, body.code, address)
         : action === "phone" ? await services.auth.changePhone(body.phone, body.currentPassword, binding)
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
-        : await services.auth.changePassword(body.password, body.currentPassword, binding);
+        : await services.auth.changePassword(body.password, binding);
       if (result.status !== "authenticated") return failure(result);
       // Authentication finishes at home; restricted sessions complete their required step first.
       const returnTo = ["register", "login", "verify", "reset"].includes(action) ? "/en" : memberReturnPath(body.return);
@@ -79,6 +83,8 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         ...(result.trial ? { trial: result.trial } : {}),
         ...(typeof result.otherDeviceSignedOut === "boolean" ? { otherDeviceSignedOut: result.otherDeviceSignedOut } : {}) });
       response.headers.append("Set-Cookie", cookie(services.config, memberName, result.token, result.requiresPasswordChange ? 900 : memberSessionRules.cookieSeconds, "Lax"));
+      if (action === "register" && readCookie(request, referralCookieName(services.config.production)) !== undefined)
+        response.headers.append("Set-Cookie", cookie(services.config, referralCookieName(services.config.production), "", 0, "Lax"));
       response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.session, "", 0));
       if (result.administrator && !result.requiresPasswordChange && !result.requiresVerification)
         response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds));

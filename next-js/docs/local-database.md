@@ -356,3 +356,30 @@ On 20 October 2026, a browser login with the existing application credentials
 listed `goal_hint_db`, including its member, session, payment and settings tables.
 Application database health returned `ready`, and `/en/account` displayed its
 account form again. XAMPP's separate MariaDB service continues to use port 3306.
+
+## 31 October 2026 authorized migration update
+
+The owner requested all pending migrations and current database readiness. The
+existing administrator configuration was recovered through the native-path
+workflow above, using same-user limited temporary helpers. Native file handles,
+SQL port/UUID/datadir and disabled recovery mode matched the existing instance.
+No administrator password, server directory or startup configuration changed.
+
+A private, access-restricted pre-migration logical backup included routines,
+triggers and events. Its SHA-256 and restore on a separate disposable MySQL
+server matched all 109 base tables and 47 completed migration records. The
+backup and private grants record remain outside the repository.
+
+All eight pending migrations, from `20261028120000_compact_feed_recommendation`
+through `20261031120000_referral_rewards`, applied successfully. Required
+SharedSlip, SlipConfiguration and MemberReferral application permissions were
+added and checked; the application still has no DDL privileges. MemberReferral
+allows SELECT/INSERT/UPDATE, not DELETE. The migration role remains separate.
+
+Final checks found 112 base tables, 55 completed migrations and zero pending or
+unfinished migrations. `npm run db:verify` passed without schema drift and
+`npm run db:health` reported ready. A rollback-only application-role smoke test
+verified referral registration/verification/award and password/session rotation;
+no synthetic accounts/referrals remained and no external messages were sent.
+Temporary administration tasks were removed; the normal startup task remains.
+This update applies to the configured local MySQL instance, not remote production.

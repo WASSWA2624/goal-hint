@@ -6,6 +6,7 @@ import { DatabaseOperationError, type DatabaseRuntime } from "../database/client
 import { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
 import { decide } from "../members/settings.ts";
+import { rememberRegistrationPhone } from "../members/referrals.ts";
 
 const unavailable = (): CodeOutcome => ({ status: "refused", message: "This account is unavailable." });
 const unique = (values: readonly (string | null)[]) => [...new Set(values.filter((value): value is string => value !== null))];
@@ -125,6 +126,8 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
             : "This account's access or credit moved between numbers, so it can't be deleted. Erase its personal data instead." });
         }
 
+        for (const phone of scope.exclusivePhones) await rememberRegistrationPhone(tx, config, phone, new Date());
+        await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
         await tx.savedSlip.deleteMany({ where: { accountId: id } }); // Fixture links cascade; the fixtures remain shared.
         await tx.memberSession.deleteMany({ where: { accountId: id } });
         await tx.memberVerification.deleteMany({ where: { OR: [

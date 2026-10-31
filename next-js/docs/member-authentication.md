@@ -6,6 +6,16 @@ Phone fields throughout the app share a country selector with flags and a separa
 
 Verification shows one step at a time: choose SMS or WhatsApp, then enter the delivered six-digit code. The code step shows only the registered number's last three digits. Contact support and Back to log in stay visible side by side on small screens. Existing-code entry and returning to delivery selection support resuming or requesting another code. Completing signup, member login, account verification or password reset redirects to the home page (`/en`), including flows begun from protected content or Subscribe. Pending verification and password-change sessions finish their required step before reaching home. Signed-in profile changes retain their existing destinations.
 
+## Password changes and recovery
+
+Forgot password is available only while signed out. A signed-in recovery link
+opens Account → Change password, which uses the authenticated session and asks
+only for a new password and confirmation, without a current password or code. Recovery request/code-confirmation APIs reject authenticated
+cookies before sending or consuming a code. Signed-out and reset-only sessions
+retain the existing delivered-code recovery flow. Saving a password rotates the
+current cookie, keeps that device signed in and revokes every other session.
+Phone changes still require the current password and number verification.
+
 ## Two active sessions
 
 A phone-number account can have two authenticated, unexpired sessions. A successful third login immediately deletes the oldest active session on the server inside the existing account-locked transaction. Age follows authentication time, then creation time and token hash for deterministic ties; ordinary activity does not change login age. Re-signing in from the same browser replaces its token before counting the other session. Expired and restricted sessions do not consume active slots. Login proceeds directly to its destination with no eviction prompt or popup; sign-out returns to the matches. Actionable inline errors, verification instructions and trial-access details remain part of their respective forms.
@@ -24,12 +34,12 @@ Pasting accepts only a complete six-digit ASCII code after trimming surrounding 
 
 ## Password recovery
 
-1. Forgot password opens the recovery page. The user enters their registered number and chooses SMS or WhatsApp.
+1. While signed out, Forgot password opens the recovery page. The user enters their registered number and chooses SMS or WhatsApp. Signed-in recovery deep links redirect to Account → Change password; signed-in recovery-code requests and confirmation are rejected.
 2. The acknowledgement is generic for missing or ineligible accounts. Eligible accounts receive a six-digit code through the selected channel. The same 24-hour expiry, three-request rolling allowance, newest-only rule, and guess limit apply independently to recovery.
 3. A valid code is consumed atomically and grants a reset-only cookie for 15 minutes. The user chooses a new password. This cookie cannot access member or administrator content.
 4. Saving the password invalidates outstanding codes and all existing sessions, and issues a new member cookie.
 
-Profile password changes and password recovery share a rolling 24-hour limit: a member can save a new password only once during that period. The restriction is checked under the account lock, including concurrent requests. Members manage their passwords through Forgot password or the signed-in Change password form. Recovery does not create an admin request, and administrators cannot issue member passwords or bypass this restriction.
+Profile password changes and password recovery share a rolling 24-hour limit: a member can save a new password only once during that period. The restriction is checked under the account lock, including concurrent requests. Signed-in members use Change password with a new password and confirmation, without their current password or a verification code. Saving issues a fresh current-device cookie and revokes all previous sessions. Signed-out members use verified recovery. Recovery does not create an admin request, and administrators cannot issue member passwords or bypass this restriction.
 
 Production and development delivery setup, country/channel coverage and server-only API credentials are described in [yoola-messaging.md](yoola-messaging.md). Development uses real delivery with configured credentials; automated tests inject synthetic delivery.
 
@@ -54,7 +64,7 @@ All writes require same-origin requests. Responses are private and not cached; c
 | `POST /api/account/forgot` | `{phone,channel,return?}` | Generic recovery acknowledgement |
 | `POST /api/account/reset-code` | `{phone,code,return?}` | Reset-only cookie |
 | `POST /api/account/reset` | `{password,return?}` with reset-only cookie | New member cookie |
-| `POST /api/account/password` | `{password,currentPassword}` | Rotated member cookie |
+| `POST /api/account/password` | `{password}` with authenticated member cookie | Fresh current-device cookie; all previous sessions revoked |
 | `POST /api/account/phone` | `{phone,currentPassword}` | Restricted cookie for a changed phone |
 | `GET /api/account/session` | — | Verified phone, otherwise null |
 | `POST /api/account/sign-out` | — | Clear cookie and end session |

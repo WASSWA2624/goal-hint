@@ -1694,6 +1694,7 @@ model MemberAccount {
   autoRenew        Boolean             @default(false)
   autoRenewPlanId  String?             @db.Char(36)
   autoRenewTermsVersion String?        @db.VarChar(16)
+  referralCode     String?             @unique @db.Char(32)
   sessions         MemberSession[]
   submissions      PaymentSubmission[]
   codes            AccessCode[]
@@ -1704,9 +1705,30 @@ model MemberAccount {
   autoRenewPlan    SubscriptionPlan?   @relation("AutoRenewPlan", fields: [autoRenewPlanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   paymentNotifications PaymentNotificationOutbox[]
   slipConfigurations SlipConfiguration[]
+  registration     MemberReferral?     @relation("ReferralRegistration")
+  referrals        MemberReferral[]    @relation("ReferralInviter")
 
   @@index([autoRenew])
   @@index([autoRenewPlanId])
+}
+
+// One registration identity per canonical phone digest, retained without its number.
+// Attribution is immutable at signup; each verified eligible registration links at most one reward.
+model MemberReferral {
+  id           String         @id @db.Char(36)
+  phoneKey     String         @unique @db.Char(64)
+  accountId    String?        @unique @db.Char(36)
+  inviterId    String?        @db.Char(36)
+  registeredAt DateTime       @db.DateTime(3)
+  rewardedAt   DateTime?      @db.DateTime(3)
+  status       String         @default("pending") @db.VarChar(12)
+  accessCodeId String?        @unique @db.Char(36)
+  account      MemberAccount? @relation("ReferralRegistration", fields: [accountId], references: [id], onDelete: SetNull, onUpdate: Restrict)
+  inviter      MemberAccount? @relation("ReferralInviter", fields: [inviterId], references: [id], onDelete: SetNull, onUpdate: Restrict)
+  accessCode   AccessCode?    @relation(fields: [accessCodeId], references: [id], onDelete: SetNull, onUpdate: Restrict)
+
+  @@index([inviterId, registeredAt])
+  @@index([inviterId, rewardedAt])
 }
 
 // Private builder filters belong to the account, independently of paid access or session lifetime.
@@ -1915,6 +1937,7 @@ model AccessCode {
   plan                SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sessions            MemberSession[]
   walletEntry         WalletEntry?
+  referralReward      MemberReferral?
 
   @@unique([id, accountId])
   @@index([accountId, endsAt])

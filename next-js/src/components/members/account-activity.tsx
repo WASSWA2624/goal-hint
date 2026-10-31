@@ -12,7 +12,7 @@ export function AccountActivity({ locale, dashboard, title = "account.activity" 
       : !dashboard.activity.length ? <AccountFine>{m.text("account.activityEmpty")}</AccountFine>
       : <AccountActivityList>{dashboard.activity.map(entry => <li key={entry.id}>
         <p><strong>{m.text(`account.activity.${entry.status}`)}</strong> · {entry.kind === "payment" && entry.purpose === "topup"
-          ? m.text("account.activityCredit") : entry.planName}{entry.kind === "payment" && <> · {entry.reference}</>}</p>
+          ? m.text("account.activityCredit") : entry.kind === "referral" ? m.plural("paywall.days", 1) : entry.planName}{entry.kind === "payment" && <> · {entry.reference}</>}</p>
         <time dateTime={entry.at}>{date(entry.at)}</time>
         {entry.kind === "access" && entry.status === "added" && <AccountFine>{m.text("account.activityPeriod", { start: date(entry.startsAt), end: date(entry.endsAt) })}</AccountFine>}
       </li>)}</AccountActivityList>}
