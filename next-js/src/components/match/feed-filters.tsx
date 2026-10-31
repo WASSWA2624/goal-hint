@@ -528,7 +528,7 @@ const ApplyButton = styled.button`
   cursor: pointer;
   &:disabled { opacity: 0.5; cursor: default; }
   > svg { flex: none; font-size: 0.875rem; }
-  ${media.hover} { &:hover { filter: brightness(0.95); } }
+  ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.filterHoverBrightness}); } }
   ${focusRing}
 `;
 const OutlineButton = styled(QuietButton)`

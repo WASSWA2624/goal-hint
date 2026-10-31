@@ -94,11 +94,21 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       position: absolute;
       inset: 0;
       z-index: 1;
-      border-inline-start: 3px solid ${({ theme }) => theme.color.accent.blue.text};
-      border-radius: ${({ theme }) => theme.radius.none};
+      border-inline-start: ${({ theme }) => theme.border.accentWidth} solid ${({ theme }) => theme.color.accent.blue.text};
+      border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
       pointer-events: none;
     }
-    [data-compact-slip] { border-color: ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.none}; }
+    [data-compact-slip] { border-color: ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.frame.desktopCardRadius}; }
+    [data-slip-content] {
+      border-end-start-radius: ${({ theme }) => theme.frame.desktopCardRadius};
+      border-end-end-radius: ${({ theme }) => theme.frame.desktopCardRadius};
+    }
+    [data-slip-content] > ul,
+    [data-slip-content] > ul > li:last-child,
+    [data-slip-content] > ul > li:last-child > :is(a, div) {
+      border-end-start-radius: inherit;
+      border-end-end-radius: inherit;
+    }
 
     &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
     &&& [data-compact-slip] > header[data-slip-summary] {

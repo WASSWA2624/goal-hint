@@ -77,7 +77,7 @@ const Card = styled.article`
   font-size: 0.75rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
-  transition: background-color 160ms ease, box-shadow 160ms ease;
+  transition: background-color ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing}, box-shadow ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing};
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
     outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth});
@@ -339,7 +339,7 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
     justify-self: start; padding: 2px 8px;
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
-    border-inline-start: 3px solid ${({ theme, $family }) => theme.color.market[$family].solid};
+    border-inline-start: ${({ theme }) => theme.border.accentWidth} solid ${({ theme, $family }) => theme.color.market[$family].solid};
     font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
 `;
@@ -385,7 +385,7 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
       max-inline-size: 100%; padding: 4px 7px;
       background: ${({ theme }) => theme.color.surface};
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-      border-inline-start: 3px solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
+      border-inline-start: ${({ theme }) => theme.border.accentWidth} solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
     }
   }
 `;

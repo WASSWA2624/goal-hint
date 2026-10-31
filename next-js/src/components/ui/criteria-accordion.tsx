@@ -19,7 +19,7 @@ const Disclosure = styled.details`
     > span { display: grid; gap: 3px; min-inline-size: 0; }
     strong { font-size: 0.875rem; }
     small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere; }
-    > svg { flex: none; font-size: 1rem; transition: transform 120ms ease; }
+    > svg { flex: none; font-size: 1rem; transition: transform ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing}; }
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   }
   &[open] > summary > svg { transform: rotate(180deg); }

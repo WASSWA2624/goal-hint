@@ -31,7 +31,7 @@ test("standalone and delayed styled shells receive a complete theme while existi
       }
     });
     const [{createElement:h,useContext,use,Suspense},{renderToStaticMarkup,renderToPipeableStream},
-      {ThemeProvider,ThemeContext},{FallbackStyleProvider},{lightTheme,darkTheme,isGoalHintTheme},{SkipLink}]=await Promise.all([
+      {ThemeProvider,ThemeContext,ServerStyleSheet},{FallbackStyleProvider},{lightTheme,darkTheme,isGoalHintTheme},{SkipLink,ShellFrame}]=await Promise.all([
       import('react'),import('react-dom/server'),import('styled-components'),import('./src/styles/provider.tsx'),
       import('./src/styles/theme.ts'),import('./src/components/navigation/shell-styles.tsx')]);
     function ThemeProbe(){const theme=useContext(ThemeContext);return h(SkipLink,{'href':'#main','data-mode':theme.mode,
@@ -50,6 +50,22 @@ test("standalone and delayed styled shells receive a complete theme while existi
       assert.ok(html.includes('data-height="'+theme.control.minHeight+'"'));
       assert.ok(html.includes('data-color="'+theme.color.text+'"'));
     }
+    const [{GlobalStyle},{BodyText},{HeaderBrand}]=await Promise.all([
+      import('./src/styles/global-style.tsx'),import('./src/components/ui/layout.tsx'),import('./src/components/ui/brand.tsx')]);
+    const custom={...lightTheme, typography:{...lightTheme.typography,headingFamily:'Georgia'},
+      header:{...lightTheme.header,desktopHeight:'4rem',brandVariant:'inverse'},
+      layout:{...lightTheme.layout,readingMaxWidth:'42ch'},motion:{...lightTheme.motion,feedback:'500ms'}};
+    const sheet=new ServerStyleSheet();
+    try {
+      const markup=renderToStaticMarkup(sheet.collectStyles(h(ThemeProvider,{theme:custom},
+        h(GlobalStyle),h(ShellFrame,null,h('h1',null,'Heading'),h(BodyText,null,'Reading sample'),h(HeaderBrand)))));
+      const styles=sheet.getStyleTags();
+      assert.match(styles,/font-family:Georgia/);
+      assert.match(styles,/max-inline-size:42ch/);
+      assert.match(styles,/--app-header-height:4rem/);
+      assert.match(styles,/background-color 500ms/);
+      assert.match(markup,/src="data:image/);
+    } finally { sheet.seal(); }
     let resolve;const ready=new Promise(r=>{resolve=r;});
     function Delayed(){use(ready);return fallback();}
     const stream=new PassThrough();let html='';stream.setEncoding('utf8').on('data',chunk=>{html+=chunk;});

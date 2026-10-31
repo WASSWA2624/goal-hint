@@ -48,7 +48,7 @@ const AuthLink = styled(Link)<{ $primary?: boolean }>`
   @media (max-width: 359px) {
     &[data-header-auth="register"] { > svg { display: block; } > span { display: none; } }
   }
-  ${media.hover} { &:hover { filter: brightness(1.1); background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.header.controlHover}; } }
+  ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.headerHoverBrightness}); background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.header.controlHover}; } }
 `;
 const Disclosure = styled.details`
   position: relative;

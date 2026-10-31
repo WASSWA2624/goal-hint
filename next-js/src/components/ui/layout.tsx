@@ -131,7 +131,7 @@ export const SectionHeading = styled.h2`
 `;
 
 export const BodyText = styled.p`
-  max-inline-size: 65ch;
+  max-inline-size: ${({ theme }) => theme.layout.readingMaxWidth};
 `;
 
 /** Secondary notes step down on phones and tablets; desktop keeps the surrounding size. */

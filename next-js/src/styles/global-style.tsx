@@ -14,6 +14,7 @@ export const GlobalStyle = createGlobalStyle`
     font-size: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    scrollbar-color: ${({ theme }) => theme.scrollbarColor};
   }
 
   /* Keep owner columns and navigation aligned when moving between short and long screens. */
@@ -60,6 +61,7 @@ export const GlobalStyle = createGlobalStyle`
   h4,
   h5,
   h6 {
+    font-family: ${({ theme }) => theme.typography.headingFamily};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     line-height: ${({ theme }) => theme.typography.lineHeight.heading};
   }
@@ -127,6 +129,14 @@ export const GlobalStyle = createGlobalStyle`
     text-transform: none;
   }
 
+  :where(a, button, input, select, textarea, summary) {
+    transition: background-color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing},
+      border-color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing},
+      color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing},
+      box-shadow ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing};
+  }
+  button:not(:disabled):active { filter: ${({ theme }) => theme.interaction.pressedFilter}; }
+
   input::placeholder,
   textarea::placeholder {
     color: ${({ theme }) => theme.color.mutedText};
@@ -150,17 +160,17 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   ::selection {
-    background: ${({ theme }) => theme.color.brand};
-    color: ${({ theme }) => theme.color.onBrand};
+    background: ${({ theme }) => theme.color.selection.background};
+    color: ${({ theme }) => theme.color.selection.text};
   }
 
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
-      animation-duration: 0.01ms !important;
+      animation-duration: ${({ theme }) => theme.motion.reducedDuration} !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: ${({ theme }) => theme.motion.reducedDuration} !important;
       scroll-behavior: auto !important;
     }
   }

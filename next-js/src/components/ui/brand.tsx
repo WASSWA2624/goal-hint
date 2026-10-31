@@ -59,7 +59,7 @@ export function HeaderBrand({ alt = "Goal Hint", height, className }: {
 }) {
   const theme = useTheme();
   return <HeaderImage
-    src={theme.mode === "dark" ? inverseHeaderBrandSource : "/brand/goal-hint-header-primary.svg"}
+    src={theme.header.brandVariant === "inverse" ? inverseHeaderBrandSource : "/brand/goal-hint-header-primary.svg"}
     alt={alt}
     width={10490}
     height={1500}

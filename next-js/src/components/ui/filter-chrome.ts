@@ -45,7 +45,7 @@ export const filterButtonColors = css`
 `;
 
 export const controlFeedback = css`
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: border-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing}, background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   ${media.hover} { &:hover:not([aria-pressed="true"]):not([aria-expanded="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
   &:focus-within { border-color: ${({ theme }) => theme.color.brand}; }
 `;

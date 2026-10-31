@@ -234,7 +234,7 @@ const MenuBar = styled.details`
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > svg { flex: none; font-size: 1.125rem; color: ${({ theme }) => theme.color.mutedText}; }
-    > svg:last-child { margin-inline-start: auto; transition: transform 0.15s ease; }
+    > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
     small {
       color: ${({ theme }) => theme.color.mutedText};
       font-size: ${({ theme }) => theme.typography.scale.caption};
@@ -265,7 +265,7 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
   min-inline-size: 0;
   padding: 20px 16px calc(40px + 3.5rem + 1px + env(safe-area-inset-bottom));
   &:focus { outline: none; }
-  ${media.desktop} { grid-column: 3; padding: 24px 0 48px; }
+  ${media.desktop} { grid-column: 3; padding: ${({ theme }) => `${theme.space.lg} 0 calc(${theme.space.lg} * 2)`}; }
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
 `;

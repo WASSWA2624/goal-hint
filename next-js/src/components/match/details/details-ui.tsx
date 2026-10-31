@@ -112,7 +112,7 @@ const HeadButton = styled.button`
     > span[data-title] { flex-shrink: 1; white-space: normal; }
     > small { display: none; }
   }
-  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.9375rem; transform: rotate(90deg); transition: transform 160ms ease; }
+  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.9375rem; transform: rotate(90deg); transition: transform ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing}; }
   > small + svg:last-child { margin-inline-start: 0; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(-90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }
   ${media.hover} { &:hover > span[data-title] { color: ${({ theme }) => theme.color.accent.blue.text}; } }

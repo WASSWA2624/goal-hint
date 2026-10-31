@@ -188,7 +188,7 @@ export const PlainDrawer = styled.details`
     color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; margin-inline-start: auto; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; transition: transform 0.15s ease; }
+    > svg { flex: none; margin-inline-start: auto; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   }
   &[open] > summary > svg { transform: rotate(180deg); }

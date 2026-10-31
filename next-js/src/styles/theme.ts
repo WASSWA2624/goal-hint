@@ -74,6 +74,7 @@ export interface GoalHintTheme {
     readonly accent: Readonly<Record<AccentName, AccentColors>>;
     readonly cardHeader: string;
     readonly rowHover: string;
+    readonly selection: Readonly<{ background: string; text: string }>;
   };
   readonly gradient: {
     /** Flat primary action fills paired with `onAction`. */
@@ -84,6 +85,9 @@ export interface GoalHintTheme {
   };
   /** Shared, theme-adaptive colors for desktop and phone headers and navigation. */
   readonly header: {
+    readonly brandVariant: "primary" | "inverse";
+    readonly desktopHeight: string;
+    readonly desktopBackground: string;
     readonly background: string;
     readonly gradient: string;
     readonly navigationBackground: string;
@@ -114,6 +118,7 @@ export interface GoalHintTheme {
   };
   readonly typography: {
     readonly family: string;
+    readonly headingFamily: string;
     /** Desktop (lg and up) sizes. */
     readonly size: {
       readonly body: string;
@@ -166,6 +171,7 @@ export interface GoalHintTheme {
   readonly radius: Readonly<typeof brandTokens.shape.radius>;
   readonly border: {
     readonly width: string;
+    readonly accentWidth: string;
     readonly focusWidth: string;
     readonly focusOffset: string;
   };
@@ -173,7 +179,18 @@ export interface GoalHintTheme {
     readonly maxWidth: string;
     readonly wideMaxWidth: string;
     readonly gutter: string;
+    readonly readingMaxWidth: string;
   };
+  readonly frame: Readonly<{ desktopCardRadius: string }>;
+  readonly motion: Readonly<{
+    fast: string; feedback: string; disclosure: string; surface: string; easing: string;
+    reducedDuration: string;
+  }>;
+  readonly interaction: Readonly<{
+    pressedFilter: string; headerHoverBrightness: number; filterHoverBrightness: number; toolHoverBrightness: number;
+  }>;
+  /** `auto` preserves native scrollbars; review directions can supply thumb and track colors. */
+  readonly scrollbarColor: string;
   readonly control: {
     /** Desktop (lg and up) control height. */
     readonly minHeight: string;
@@ -252,9 +269,11 @@ export const lightTheme: GoalHintTheme = {
     },
     cardHeader: "#E8EDF5",
     rowHover: "#F0F4FC",
+    selection: { background: "#2457C5", text: "#FFFFFF" },
   },
   typography: {
     family: "var(--font-manrope), Arial, sans-serif",
+    headingFamily: "inherit",
     size: { body: "1rem", small: "0.875rem", h1: "2rem", h2: "1.5rem", h3: "1.125rem" },
     scale: {
       micro: "0.625rem",
@@ -278,10 +297,15 @@ export const lightTheme: GoalHintTheme = {
   radius: brandTokens.shape.radius,
   border: {
     width: "1px",
+    accentWidth: "3px",
     focusWidth: "3px",
     focusOffset: "3px",
   },
-  layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px" },
+  layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px", readingMaxWidth: "65ch" },
+  frame: { desktopCardRadius: brandTokens.shape.radius.none },
+  motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms" },
+  interaction: { pressedFilter: "none", headerHoverBrightness: 1.1, filterHoverBrightness: 0.95, toolHoverBrightness: 0.96 },
+  scrollbarColor: "auto",
   control: { minHeight: "2.75rem", compactHeight: "2.25rem" },
   gradient: {
     action: "#2457C5",
@@ -290,6 +314,9 @@ export const lightTheme: GoalHintTheme = {
     page: "#F0F3F8",
   },
   header: {
+    brandVariant: "primary",
+    desktopHeight: "3rem",
+    desktopBackground: "#E8EDF5",
     background: "#FFFFFF",
     gradient: "#FFFFFF",
     navigationBackground: "#FFFFFF",
@@ -378,6 +405,7 @@ export const darkTheme: GoalHintTheme = {
     },
     cardHeader: "#0B2238",
     rowHover: "#10304A",
+    selection: { background: "#00B9F2", text: "#03111F" },
   },
   gradient: {
     action: "#0066F5",
@@ -387,6 +415,8 @@ export const darkTheme: GoalHintTheme = {
   },
   header: {
     ...lightTheme.header,
+    brandVariant: "inverse",
+    desktopBackground: "#0D253B",
     background: "#081B2C",
     gradient: "#081B2C",
     navigationBackground: "#081B2C",

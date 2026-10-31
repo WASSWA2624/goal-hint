@@ -54,7 +54,7 @@ export const compactHeaderIconControl = css`
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.controlFill};
   background: color-mix(in srgb, ${({ theme }) => theme.header.accent} 9%, transparent);
-  transition: background-color 140ms ease, color 140ms ease;
+  transition: background-color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing}, color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing};
   ${media.desktop} { inline-size: 2rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; } }
   &:active, &:focus-visible { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; }

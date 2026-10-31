@@ -38,7 +38,8 @@ export const DeskHead = styled.div`
   min-block-size: ${({ theme }) => theme.control.minHeight};
   min-inline-size: 0;
   h1 { font-size: 1.375rem; line-height: 1.25; }
-  ${media.desktop} { padding-inline: 16px; h1 { font-size: 1.625rem; } }
+  ${media.desktop} { h1 { font-size: 1.625rem; } }
+  ${desktopContentPadding()}
 `;
 /** The h1 and its one-line description. */
 export const DeskTitle = styled.div`
@@ -107,7 +108,7 @@ export const PanelHead = styled.div`
   padding: 8px 14px;
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   h2, h3 { font-size: 0.9375rem; line-height: 1.35; }
-  ${media.desktop} { padding-inline: 16px; }
+  ${desktopContentPadding(true)}
 `;
 /** Small uppercase zone name above a desk zone: PROOF, EXPECTED PAYMENT, DECISION. */
 export const ZoneLabel = styled.p`
@@ -228,7 +229,7 @@ export const Drawer = styled.details<{ $tone?: "danger"; $plain?: boolean }>`
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > svg { flex: none; font-size: 1rem; }
-    > svg:last-child { margin-inline-start: auto; transition: transform 0.15s ease; }
+    > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
   }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
@@ -423,7 +424,7 @@ const ResponsiveToggle = styled.button`
   text-align: start;
   cursor: pointer;
   > svg { flex: none; font-size: 1rem; }
-  > svg:last-child { margin-inline-start: auto; transition: transform 0.15s ease; }
+  > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }

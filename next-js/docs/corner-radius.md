@@ -47,6 +47,10 @@ Round the outside of a joined group and keep its internal seams straight.
 Shared desktop slips use `none` for the approved square Blue Signal frame and
 its full-height rail. Mobile slips use square leading corners for the blue rail
 and `control` corners on the trailing edge.
+Desktop review themes can select a restrained corner through
+`theme.frame.desktopCardRadius`, taking its value from this same radius scale.
+The current application's default remains `none`; theme card frames and their
+full-height rails consume the shared setting together.
 The approved Team stack mobile match cards use `none`, including their framed
 rows inside expanded slips. Their existing slip headers retain their own corners.
 Headers and edge rows with their own fills must follow the parent's exposed

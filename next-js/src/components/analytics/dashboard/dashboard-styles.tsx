@@ -180,7 +180,7 @@ export const ToolButton = styled.button<{ $variant?: "primary" | "secondary" | "
   ${({ theme, $variant }) => $variant === "primary" && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; border-color: ${theme.gradient.action};`}
   ${({ $variant }) => $variant === "quiet" && css`border-color: transparent; background: transparent;`}
   &:disabled { cursor: not-allowed; opacity: 0.55; }
-  @media (hover: hover) { &:hover:not(:disabled) { filter: brightness(0.96); } }
+  @media (hover: hover) { &:hover:not(:disabled) { filter: brightness(${({ theme }) => theme.interaction.toolHoverBrightness}); } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
 export const Chips = styled.ul`
@@ -224,7 +224,7 @@ export const Cards = styled.section<{ $busy?: boolean }>`
   gap: 1px;
   background: ${({ theme }) => theme.color.border};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  transition: opacity 120ms;
+  transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   ${media.tablet} { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   ${media.desktop} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -262,7 +262,7 @@ export const Panel = styled.section<{ $busy?: boolean }>`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
-  transition: opacity 120ms;
+  transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   ${media.desktop} { padding: 18px 20px; }
   ${desktopContentPadding(true)}

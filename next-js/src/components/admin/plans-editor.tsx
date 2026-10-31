@@ -249,7 +249,7 @@ const HeaderEnd = styled.div`margin-inline-start: auto;`;
 const PlanRecordMeta = styled(RecordItemMeta)`grid-column: 1 / -1;`;
 const ListPanel = styled(Panel)<{ $busy: boolean }>`
   container-type: inline-size;
-  transition: opacity 120ms;
+  transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
 `;
 const ListNotice = styled.div`

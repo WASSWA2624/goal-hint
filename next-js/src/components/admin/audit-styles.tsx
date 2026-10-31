@@ -53,7 +53,7 @@ export const FilterToggle = styled.button`
   font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: start; cursor: pointer;
   > svg { flex: none; font-size: 1.125rem; }
   > span { margin-inline-start: 4px; }
-  > svg:last-child { margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; transition: transform 0.15s ease; }
+  > svg:last-child { margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
@@ -118,7 +118,7 @@ export const AuditEvent = styled.details`
     min-block-size: 64px; padding: 8px 12px 8px 14px; list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
-    > svg:last-child { font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; transition: transform 0.15s ease; }
+    > svg:last-child { font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
   }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
   ${media.hover} { > summary:hover { background: ${({ theme }) => theme.color.rowHover}; } }

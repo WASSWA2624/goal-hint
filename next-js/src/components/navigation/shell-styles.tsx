@@ -27,14 +27,15 @@ const headerFocus = css`
 
 export const ShellFrame = styled.div`
   --app-mobile-tab-height: ${mobileTabHeight};
-  --app-header-height: 3rem;
-  --app-header-border-width: 1px;
+  --app-header-height: ${({ theme }) => theme.header.phoneHeight};
+  --app-header-border-width: ${({ theme }) => theme.border.width};
   --app-header-content-height: calc(var(--app-header-height) - var(--app-header-border-width));
   display: flex;
   flex-direction: column;
   min-block-size: 100dvh;
 
   > main { flex: 1; }
+  ${media.desktop} { --app-header-height: ${({ theme }) => theme.header.desktopHeight}; }
 `;
 
 export const SkipLink = styled.a`
@@ -80,7 +81,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
   display: ${({ $app }) => $app ? "none" : "block"};
   ${compactHeaderSurface}
   box-shadow: ${({ theme }) => theme.header.shadow};
-  ${desktop} { display: block; background: ${({ theme }) => theme.color.surfaceMuted}; }
+  ${desktop} { display: block; background: ${({ theme }) => theme.header.desktopBackground}; }
 `;
 
 export const HeaderContent = styled(Container)`
