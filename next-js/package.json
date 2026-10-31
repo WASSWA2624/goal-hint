@@ -9,6 +9,7 @@
   },
   "packageManager": "npm@11.16.0",
   "scripts": {
+    "design:match-details": "node scripts/preview-match-details.mjs",
     "design:desktop": "python scripts/preview-desktop-themes.py --serve --port 3110",
     "dev": "python scripts/development.py",
     "dev:live": "python scripts/development.py --live",
