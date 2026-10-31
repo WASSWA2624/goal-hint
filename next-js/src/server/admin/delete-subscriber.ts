@@ -7,6 +7,7 @@ import { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
 import { decide } from "../members/settings.ts";
 import { rememberRegistrationPhone } from "../members/referrals.ts";
+import { scrubReferralReviewEvidence } from "../members/referral-reviews.ts";
 
 const unavailable = (): CodeOutcome => ({ status: "refused", message: "This account is unavailable." });
 const unique = (values: readonly (string | null)[]) => [...new Set(values.filter((value): value is string => value !== null))];
@@ -155,6 +156,7 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         }
         if (auditIds.length) await tx.ownerAuditEvent.deleteMany({ where: { id: { in: auditIds } } });
         await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: scope.paymentIds } } });
+        await scrubReferralReviewEvidence(tx, id);
         await tx.accessCode.deleteMany({ where: { accountId: id } });
         await tx.paymentSubmission.deleteMany({ where: { accountId: id } });
         await tx.memberAccount.delete({ where: { id } });

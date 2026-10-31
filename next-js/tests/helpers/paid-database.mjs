@@ -36,12 +36,13 @@ export async function paidDatabase({ seedPlans = false } = {}) {
     await root.query(await readFile(new URL("../../prisma/migrations/20261031040514_saved_slip_configurations/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261031120000_referral_rewards/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261031104143_account_notifications/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261031135652_referral_review/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "SavedSlip", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);
     // The credit ledger is append-only: SELECT and INSERT only; permanent deletion removes its rows by cascade.
-    const appendOnly = new Set(["WalletEntry", "AccountMove"]);
-    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "SavedSlip", "WalletEntry", "AccountMove", "PaymentNotificationOutbox", "SlipConfiguration", "MemberReferral", "MemberNotification"])
+    const appendOnly = new Set(["WalletEntry", "AccountMove", "ReferralReviewEvent"]);
+    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "SavedSlip", "WalletEntry", "AccountMove", "PaymentNotificationOutbox", "SlipConfiguration", "MemberReferral", "MemberNotification", "ReferralReviewCase", "ReferralReviewEvidence", "ReferralReviewEvent", "ReferralGrantReversal"])
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"}${deletable.has(table) ? ", DELETE" : ""} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
     const url = `mysql://paid_application:${password}@127.0.0.1:${instance.port}/${instance.databaseName}`;
     database = createDatabase(parseRuntimePolicy(costTestEnvironment(url, instance.url)));

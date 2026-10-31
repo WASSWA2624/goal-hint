@@ -2,14 +2,14 @@
 
 Updated: 31 October 2026 (Africa/Kampala). Task IDs refer to the [audit prompt](prompts/goal-hint-feature-audit.md), with subsequent user-approved scope changes preserved.
 
-Latest batch verification: **191 focused tests and six genuine MySQL cases passed**, zero final failures/skips; production Next transport checks, TypeScript and lint passed. Local migration/schema verification passed and health is **ready**. [Security evidence and limitations](next-js/dev-plan/206-registration-referral-security.md) preserve actual results; [earlier audit evidence](next-js/dev-plan/201-invite-friends.md#remaining-work-audit--31-october-2026) and other implementation notes remain historical.
+Implementation and actual verification evidence: [referral reviews](next-js/dev-plan/207-approved-referral-reviews.md), [phone polling](next-js/dev-plan/208-phone-builder-polling.md), [data/release checks and decision recommendations](next-js/dev-plan/209-release-data-verification.md). Earlier completed work remains in its implementation notes.
 
 | Work group | Status | Remaining gap / next action |
 |---|---|---|
 | Notifications and subscription reminders — 8, 9 | Decision needed | Decide whether prediction/result alerts are required, with their audience and triggers. |
 | Prediction/slip sharing and related mobile fixes — 5, 12 | Decisions needed | Decide individual-prediction sharing and whether to change shared-page expansion. |
-| Registration/referral security — 7 | Workflow pending; decision needed | Implement the [approved manual review/reversal policy](next-js/docs/referral-fraud-review-proposal.md); decide whether to shorten the retained 24-hour account/recovery OTP lifetimes. |
+| Registration/referral security — 7 | Decision needed | Decide optional purpose-specific OTP shortening; registration/phone verification and password recovery retain their approved 24-hour lifetimes. |
 | Match details and prediction-performance data verification — 10, 11 | Unable to verify; decisions needed | Verify provider accuracy/freshness and player coverage/display rights; approve evaluation, cohorts and market/reporting windows before publishing withheld metrics. |
-| Other mobile gaps and release verification — remaining 12 | Partial; release Unverified | Add phone builder polling. Qualify production proxy chain/ingress, deployment/migrations/grants, workers/existing delivery and account/access journeys; verify Android packaging and signed physical-device installation, sharing, downloads and deep links. |
+| Other mobile gaps and release verification — remaining 12 | Unverified | Restore hosting/admin access (suspended HTTP 403; SSH rejected), then qualify ingress, deployment/migrations/grants, workers/delivery and account/access journeys. Resolve Android toolchain/signing prerequisites; verify signed installation and physical-device/WebView polling, sharing, downloads and deep links. |
 
-Recommended next batch: **approved manual referral review and unused-reward reversal workflow (task 7)**.
+Recommended next batch: **production recovery and release qualification**, once hosting and administrative access are restored.

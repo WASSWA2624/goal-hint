@@ -1752,6 +1752,70 @@ model MemberReferral {
   @@index([inviterId, rewardedAt])
 }
 
+// Review identity/accounting is retained without personal narrative. Account/grant ids are audit references,
+// deliberately not deletion-blocking account foreign keys. Supplementary evidence lives separately for erasure/retention.
+model ReferralReviewCase {
+  id           String   @id @db.Char(36)
+  grantId      String   @db.Char(36)
+  referralId   String   @db.Char(36)
+  accountId    String   @db.Char(36)
+  reason       String   @db.VarChar(24)
+  status       String   @default("open") @db.VarChar(16)
+  revision     Int      @default(1) @db.UnsignedInt
+  openedAt     DateTime @db.DateTime(3)
+  updatedAt    DateTime @db.DateTime(3)
+  closedAt     DateTime? @db.DateTime(3)
+  evidence     ReferralReviewEvidence?
+  events       ReferralReviewEvent[]
+  reversal     ReferralGrantReversal?
+
+  @@index([status, updatedAt, id])
+  @@index([accountId, updatedAt])
+  @@index([grantId])
+  @@index([closedAt])
+}
+
+model ReferralReviewEvidence {
+  caseId          String @id @db.Char(36)
+  summary         String? @db.VarChar(300)
+  evidenceRef     String? @db.VarChar(160)
+  appealStatement String? @db.VarChar(500)
+  purgedAt        DateTime? @db.DateTime(3)
+  review          ReferralReviewCase @relation(fields: [caseId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+}
+
+// Append-only: decisions contain only controlled codes, actor ids and amounts; never supplementary prose or evidence.
+model ReferralReviewEvent {
+  id        String @id @db.Char(36)
+  caseId    String @db.Char(36)
+  action    String @db.VarChar(24)
+  actor     String @db.VarChar(64)
+  at        DateTime @db.DateTime(3)
+  beforeMs  Int? @db.UnsignedInt
+  afterMs   Int? @db.UnsignedInt
+  review    ReferralReviewCase @relation(fields: [caseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([caseId, action])
+  @@index([caseId, at, id])
+}
+
+// One financial reversal per exact grant, independently of how many review cases target it.
+// A successful appeal may attach exactly one compensating grant without editing the original award.
+model ReferralGrantReversal {
+  grantId         String @id @db.Char(36)
+  caseId          String @unique @db.Char(36)
+  accountId       String @db.Char(36)
+  holderAccountId String @db.Char(36)
+  reversedMs      Int @db.UnsignedInt
+  appliedAt       DateTime @db.DateTime(3)
+  restoredGrantId String? @unique @db.Char(36)
+  restoredAt      DateTime? @db.DateTime(3)
+  review          ReferralReviewCase @relation(fields: [caseId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([accountId])
+  @@index([holderAccountId])
+}
+
 // Private builder filters belong to the account, independently of paid access or session lifetime.
 // NULL means non-default; the composite unique key permits many NULLs but only one TRUE per account.
 model SlipConfiguration {

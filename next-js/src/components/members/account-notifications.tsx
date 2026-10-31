@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/controls";
 import { CardIcon, ClockIcon, GiftIcon, ShieldIcon } from "@/components/ui/icons";
 import { accountSectionHref } from "@/domain/account-navigation";
 import { accountNotificationRules, notificationSection, type AccountNotificationPage } from "@/domain/account-notifications";
+import { referralReviewReasonLabel } from "@/domain/referral-review-labels";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -58,9 +59,10 @@ export function AccountNotifications({ locale, page, older = false }: { locale: 
         const section = notificationSection(item.kind), Icon = section === "payments" ? CardIcon : section === "referrals" ? GiftIcon : item.kind === "access-activated" ? ShieldIcon : ClockIcon;
         return <li key={item.id} data-notification-id={item.id} data-unread={!item.read ? "true" : undefined}>
           <Icon /><div data-notice-body><h3>{m.text(`notifications.${item.kind}`)}</h3>
+            {item.reason && <AccountFine>Reason: {referralReviewReasonLabel[item.reason]}</AccountFine>}
             {item.kind === "access-expiring" && item.expiresAt && <AccountFine>{m.text("notifications.expiry", { date: formatSubscriptionExpiry(new Date(item.expiresAt)) })}</AccountFine>}
             <time dateTime={item.occurredAt}>{formatSubscriptionExpiry(new Date(item.occurredAt))}</time>
-            <AccountActionLink href={accountSectionHref(locale, section)} prefetch={false}>{m.text(`notifications.view.${section}`)}</AccountActionLink>
+            <AccountActionLink href={`${accountSectionHref(locale, section)}${item.relatedCaseId ? `#review-${item.relatedCaseId}` : ""}`} prefetch={false}>{m.text(`notifications.view.${section}`)}</AccountActionLink>
           </div><div data-notice-actions>
             {!item.read && <NotificationButton type="button" variant="quiet" disabled={disabled} onClick={() => void update("read", item.id)}>{m.text("notifications.read")}</NotificationButton>}
             <NotificationButton type="button" variant="quiet" disabled={disabled} onClick={() => void update("dismiss", item.id)}>{m.text("notifications.dismiss")}</NotificationButton>

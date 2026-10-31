@@ -18,6 +18,7 @@ import { createSlipConfigurations, type SlipConfigurationsService } from "../sli
 import { createAccountDashboard, type AccountDashboardService } from "./account-dashboard.ts";
 import { createReferrals, type ReferralsService } from "./referrals.ts";
 import { createAccountNotifications, type AccountNotificationsService } from "./account-notifications.ts";
+import { createReferralReviews, type ReferralReviews } from "./referral-reviews.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
 export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null;
@@ -26,6 +27,7 @@ export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: Setti
   dashboard?: AccountDashboardService | null;
   referrals?: ReferralsService | null;
   notifications?: AccountNotificationsService | null;
+  referralReviews?: ReferralReviews | null;
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
@@ -43,6 +45,7 @@ export async function getMemberServices(): Promise<MemberServices> {
     dashboard: database && keyed ? createAccountDashboard({ database }) : null,
     referrals: database && keyed ? createReferrals({ database }) : null,
     notifications: database && keyed ? createAccountNotifications({ database }) : null,
+    referralReviews: database && keyed ? createReferralReviews({ database, config }) : null,
     offer: database ? () => readOffer(database) : null };
 }
 

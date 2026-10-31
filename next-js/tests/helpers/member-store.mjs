@@ -62,6 +62,7 @@ export function memberStore({ instant, settings = {} }) {
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
   let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [],
     paymentScreenshot: [], walletEntry: [], accountMove: [], paymentNotificationOutbox: [], savedSlip: [], memberVerification: [],
+    referralReviewCase: [], referralReviewEvidence: [], referralReviewEvent: [], referralGrantReversal: [],
     subscriptionSettings: [{ ...defaultSubscriptionSettings, id: 1, updatedAt: new Date(instant), ...settings }] };
   let committed = structuredClone(state), tail = Promise.resolve(), transactions = 0, abortCommit = null, inTransaction = false;
   const raw = [];

@@ -403,3 +403,27 @@ administrator task was removed; GoalHintMySQL84 remains intact. Private restore
 artifacts are excluded from Git. See [batch verification](../dev-plan/202-essential-account-notifications.md)
 for the isolated restore limitation. Remote production is not covered by this
 local update.
+
+## 31 October 2026 approved referral-review migration
+
+The authorized workflow added `20261031135652_referral_review` after an encrypted,
+authenticated logical checkpoint and separate disposable MySQL restore matched
+all 113 prior table counts and 56 completed migrations. The existing SharedSlip
+SIGNAL delimiter needed one normalization in restore input; the original backup
+was retained unchanged. A failed disposable initialization was retried on a fresh
+owned instance before applying any migration.
+
+The new case, supplementary evidence and reversal tables allow application
+SELECT/INSERT/UPDATE; review events allow SELECT/INSERT only. Seven zero-row
+mutation probes passed and five prohibited history mutations were denied. The
+application still has no DDL/grant privileges. All 116 application tables are
+readable, with **57 completed migrations, none pending/unfinished**, matching
+schema verification and **ready** database health.
+
+Two local in-app maintenance runs each checked one eligible account without
+failure; the repeat notice count stayed 3. No genuine reward was reversed and no
+external delivery was attempted. Existing credentials, native server UUID/data,
+normal startup task, stashes and detached worktrees remain intact; temporary
+administration tasks were removed. See [plan 207](../dev-plan/207-approved-referral-reviews.md)
+for actual tests and [the runbook](referral-reviews.md) for retention/grants.
+Production deployment and unattended worker/device qualification remain separate.

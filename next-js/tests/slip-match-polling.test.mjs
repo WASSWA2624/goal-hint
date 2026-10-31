@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readSlipMatchObservations, SlipMatchPollingError, slipMatchPollingRules, startSlipMatchPolling } from '../src/domain/slip-match-polling.ts';
 import { slipMatchRefreshRules, slipMatchSelectionKey } from '../src/domain/slip-match-refresh.ts';
+import { slipMatchPollingEnvironment } from '../src/components/slips/slip-match-polling-environment.ts';
 
 const at = Date.parse('2026-10-28T17:00:00Z');
 const state = (changes = {}) => ({ fixtureId: '00000000-0000-4000-8000-000000000001', family: 'match-result', selection: 'home-win',
@@ -38,7 +39,7 @@ function clock() {
   };
 }
 
-test('desktop observations refresh immediately and serially every twenty seconds without rebuilding slips', async () => {
+test('desktop and phone observations refresh immediately and serially every twenty seconds without rebuilding slips', async () => {
   const c = clock(), calls = [], accepted = [];
   const phases = [state({ status: 'scheduled', score: null, liveClock: null }), state(),
     state({ score: { home: 1, away: 1 }, liveClock: { phase: 'half-time', minute: null } }),
@@ -57,7 +58,7 @@ test('desktop observations refresh immediately and serially every twenty seconds
   stop(); assert.equal(c.timers.size, 0); await c.advance(60_000); assert.equal(calls.length, 4);
 });
 
-test('disabled mobile polling installs no timers, listeners or requests', async () => {
+test('disabled polling installs no timers, listeners or requests', async () => {
   const c = clock(); let reads = 0;
   const stop = startSlipMatchPolling({ enabled: false, read: async () => { reads++; return data(); }, accept: () => {}, revoke: () => {} }, c.env);
   await c.advance(120_000); await c.visible(false); await c.visible(true);
@@ -170,4 +171,44 @@ test('transport fails closed on malformed, oversized, or incoherent responses an
   await assert.rejects(readSlipMatchObservations('{}', allowed, signal, async () => new Response('', { status: 429, headers: { 'retry-after': '90' } })),
     (error) => error instanceof SlipMatchPollingError && error.status === 429 && error.retryAfterMs === 90_000);
   assert.deepEqual((await readSlipMatchObservations('{}', allowed, signal, async () => Response.json(data(at, [])))).states, []);
+});
+
+test('phone pagehide/freeze, persisted restore, connectivity and navigation share one cancellable browser loop', async t => {
+  const descriptors = new Map(['window', 'document', 'navigator', 'MutationObserver'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  t.after(() => { for (const [name, descriptor] of descriptors) {
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name];
+  } });
+  const c = clock(), browser = new EventTarget(), page = new EventTarget(), network = { onLine: true }, observers = [];
+  let navigating = false;
+  browser.setTimeout = c.env.schedule; browser.clearTimeout = c.env.cancel;
+  page.visibilityState = 'visible'; page.documentElement = {}; page.querySelector = () => navigating ? {} : null;
+  class Observer {
+    constructor(callback) { this.callback = callback; this.active = true; observers.push(this); }
+    observe() {}
+    disconnect() { this.active = false; }
+  }
+  for (const [name, value] of Object.entries({ window: browser, document: page, navigator: network, MutationObserver: Observer }))
+    Object.defineProperty(globalThis, name, { value, configurable: true });
+  const requests = [], accepted = [];
+  const stop = startSlipMatchPolling({ enabled: true, read: signal => new Promise(resolve => requests.push({ signal, resolve })),
+    accept: value => accepted.push(value), revoke: () => assert.fail('unexpected withdrawal') }, slipMatchPollingEnvironment());
+  const event = async (target, name, fields = {}) => { const message = new Event(name); Object.assign(message, fields); target.dispatchEvent(message); await flush(); };
+  assert.equal(requests.length, 1);
+  await event(browser, 'pagehide'); assert.equal(requests[0].signal.aborted, true); assert.equal(c.timers.size, 0);
+  await c.advance(60_000); assert.equal(requests.length, 1);
+  await event(browser, 'pageshow', { persisted: true }); assert.equal(requests.length, 2);
+  await event(browser, 'pageshow', { persisted: true }); await event(page, 'visibilitychange'); assert.equal(requests.length, 2);
+  await event(page, 'freeze'); assert.equal(requests[1].signal.aborted, true);
+  await event(page, 'resume'); assert.equal(requests.length, 3);
+  navigating = true; observers[0].callback(); await flush(); assert.equal(requests[2].signal.aborted, true);
+  navigating = false; observers[0].callback(); await flush(); assert.equal(requests.length, 4);
+  page.visibilityState = 'hidden'; await event(page, 'visibilitychange'); assert.equal(requests[3].signal.aborted, true);
+  network.onLine = false; await event(browser, 'offline'); page.visibilityState = 'visible'; await event(page, 'visibilitychange');
+  assert.equal(requests.length, 4);
+  network.onLine = true; await event(browser, 'online'); assert.equal(requests.length, 5);
+  requests[4].resolve(data(at + 2)); requests[0].resolve(data(at + 100)); await flush();
+  assert.deepEqual(accepted.map(item => item.asOf), [at + 2]);
+  stop(); assert.equal(observers[0].active, false); assert.equal(c.timers.size, 0);
+  await event(browser, 'pageshow', { persisted: true }); await event(page, 'resume'); await c.advance(60_000);
+  assert.equal(requests.length, 5);
 });

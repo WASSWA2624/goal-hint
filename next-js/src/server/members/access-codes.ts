@@ -22,6 +22,7 @@ import { createQueuedPaymentNotifications } from "./payment-notification-outbox.
 import { acceptedTerms } from "./member-terms.ts";
 import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit } from "./wallet.ts";
 import { rechainRewardPeriods } from "./referral-periods.ts";
+import { transferReferralReviewClaims } from "./referral-review-transfer.ts";
 
 export const generateCode = () => Array.from({ length: 12 }, () => accessCodeAlphabet[randomInt(32)]).join("");
 export const newSalt = () => randomBytes(16);
@@ -93,10 +94,13 @@ const audit = (tx: Prisma.TransactionClient, accountId: string, id: string, acti
   writeOwnerAudit(tx, { at, actor, action, accountId, targetType, targetId: id, details });
 
 export async function createAccessPeriod(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: Creation, actor: string, at: Date,
-  devices: Devices): Promise<AccessGrant> {
+  devices: Devices, exactRewardMs?: number): Promise<AccessGrant> {
   if (!account.phone) throw new Error("An erased account cannot receive access.");
+  if (exactRewardMs !== undefined && (fields.source !== "referral" || !Number.isSafeInteger(exactRewardMs) || exactRewardMs <= 0 || exactRewardMs > subscriptionDayMs))
+    throw new RangeError("An exact restoration must be a bounded unused earned day.");
   // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
   const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null);
+  if (exactRewardMs !== undefined) period.endsAt = new Date(+period.startsAt + exactRewardMs);
   const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
     codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
   if (fields.source !== "referral") await rechainRewardPeriods(tx, account.id, at);
@@ -358,6 +362,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         // person, which is how a later reversal finds who holds it.
         await tx.accountMove.create({ data: { fromAccountId: accountId, toAccountId: destination.id, fromEntryNumber: await lastEntryNumber(tx, accountId),
           movedAt: new Date(now()) } });
+        await transferReferralReviewClaims(tx, accountId, destination.id);
         // Credit follows the person, a debt included; both accounts are already locked in sorted order.
         if (credit) {
           await appendWalletEntry(tx, accountId, { kind: "transfer", amountUgx: -credit, actor: "admin", at, note: "Moved to the account's new number", allowNegative: true });

@@ -12,15 +12,17 @@ const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").up
 export function createMemberAuthFixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
   const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), referrals = new Map(), notifications = new Map(), payments = new Map(), sent = [], messages = [];
+  const reviewCases = new Map(), reviewEvidence = new Map(), reviewEvents = new Map(), reversals = new Map();
   function matches(row, where = {}) {
     return Object.entries(where).every(([name, value]) => {
       if (name === "OR") return value.some((part) => matches(row, part));
       if (name === "AND") return [].concat(value).every((part) => matches(row, part));
       if (name === "NOT") return !matches(row, value);
+      if (name === "evidence") return matches(reviewEvidence.get(row.id) ?? {}, value);
       const actual = row[name];
       if (value && typeof value === "object" && !(value instanceof Date)) return Object.entries(value).every(([operator, target]) =>
         operator === "gt" ? actual > target : operator === "gte" ? actual >= target : operator === "lt" ? actual < target : operator === "lte" ? actual <= target : operator === "not" ? actual !== target
-          : operator === "in" ? target.includes(actual) : false);
+          : operator === "in" ? target.includes(actual) : operator === "notIn" ? !target.includes(actual) : false);
       return actual instanceof Date && value instanceof Date ? +actual === +value : actual === value;
     });
   }
@@ -56,6 +58,10 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberReferral: table(referrals, "id", { rewardedAt: null, accessCodeId: null, inviterId: null, accountId: null, status: "pending" }),
     memberNotification: table(notifications, "id", { expiresAt: null, readAt: null, dismissedAt: null, withdrawnAt: null }),
+    referralReviewCase: table(reviewCases, "id", { revision: 1, closedAt: null }),
+    referralReviewEvidence: table(reviewEvidence, "caseId", { summary: null, evidenceRef: null, appealStatement: null, purgedAt: null }),
+    referralReviewEvent: table(reviewEvents, "id", { beforeMs: null, afterMs: null }),
+    referralGrantReversal: table(reversals, "grantId", { restoredGrantId: null, restoredAt: null }),
     memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
     paymentSubmission: table(payments, "id", { decidedAt: null }),
     accessCode: table(accessCodes, "id", { revokedAt: null, extensionDays: 0 }),
@@ -73,9 +79,10 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
   };
   const database = { async query(run) { return run(tx); }, transaction(run) {
     const result = queue.then(async () => {
-      const snapshots = [accounts, sessions, challenges, buckets, accessCodes, referrals, notifications].map((rows) => structuredClone(rows));
+      const stores = [accounts, sessions, challenges, buckets, accessCodes, referrals, notifications, reviewCases, reviewEvidence, reviewEvents, reversals];
+      const snapshots = stores.map((rows) => structuredClone(rows));
       const auditCount = sent.length;
-      try { return await run(tx); } catch (error) { sent.length = auditCount; [accounts, sessions, challenges, buckets, accessCodes, referrals, notifications].forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
+      try { return await run(tx); } catch (error) { sent.length = auditCount; stores.forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
     });
     queue = result.catch(() => {}); return result;
   } };
@@ -94,5 +101,6 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
     return { member, token: logged.token };
   }
   return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, referrals, notifications, payments, sessionService, account, authenticate, adminPhones, restart,
+    reviewCases, reviewEvidence, reviewEvents, reversals, config: { key },
     now: () => time, advance: (ms) => { time += ms; } };
 }

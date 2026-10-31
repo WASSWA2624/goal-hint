@@ -1,6 +1,6 @@
-# Referral fraud review — proposed policy
+# Referral fraud review — approved policy
 
-Status: **Approved by the owner on 31 October 2026 for subsequent implementation. The workflow is not enabled yet.**
+Status: **Approved by the owner on 31 October 2026 and implemented in the application. Production deployment and unattended worker qualification remain separate release checks.**
 
 1. Keep granting one free day for each eligible verified new registration,
    independently of payment. Existing duplicate/self-referral protections apply.
@@ -33,17 +33,24 @@ Status: **Approved by the owner on 31 October 2026 for subsequent implementation
    affected member privately with a concise reason and support route.
 6. Retention: keep case decisions and access-accounting events under
    the existing account/audit retention and erasure rules; keep supplementary
-   evidence for 90 days after final appeal closure, then remove it. Confirm the
-   retention enforcement and member-facing wording before enabling this workflow.
+   evidence for 90 days after final closure, then remove it. The initial decision
+   closes the review for retention; an appeal reopens it without an invented
+   submission deadline. Its final decision restarts the 90-day period. A late
+   appeal stores only fresh supplementary information and cannot recreate purged
+   original material. Maintenance locks and rechecks case state before removal.
 
-The owner's approval authorizes a subsequent implementation with case storage,
-administrator permissions, transaction/race tests and member notification text.
-This technical security batch does not activate that policy or reverse rewards.
-The subsequent implementation must handle existing audited number transfers
+The workflow now provides administrator case management, private member appeals,
+exact unused-time accounting, append-only events and in-app notifications.
+Existing audited number transfers carry appeal claims to the current holder
 without rewriting original referral attribution or touching unrelated access.
+Blocked/erased accounts do not receive restored access or an automatic unblock;
+an unresolved restoration retains its claim. See the [operator runbook](referral-reviews.md)
+for routes, permissions, maintenance and the distinction between local tests and
+release qualification. No reward is reversed merely because this workflow exists:
+an authorized administrator must explicitly confirm corroborated findings.
 
 The 24-hour OTP currently covers registration/changed-phone ownership checks and
-signed-out password recovery. Keep that approved lifetime in this batch. A
+signed-out password recovery. That approved lifetime remains unchanged. A
 separate decision is whether to shorten either purpose independently, including
 SMS/WhatsApp wording and delivery-delay handling; changing the provider's OTP
 product alone must not silently change the application's expiry contract.

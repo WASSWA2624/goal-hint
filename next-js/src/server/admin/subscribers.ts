@@ -14,6 +14,7 @@ import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts"
 import { deleteSubscriber } from "./delete-subscriber.ts";
 import { countedManualWhere, countedPaymentWhere } from "./revenue.ts";
 import { rememberRegistrationPhone } from "../members/referrals.ts";
+import { scrubReferralReviewEvidence } from "../members/referral-reviews.ts";
 
 export function revenueBounds(now: number) {
   const today = getReportingDate(utcInstantFromEpochMilliseconds(now));
@@ -131,6 +132,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
             await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });
             await tx.memberNotification.deleteMany({ where: { accountId: id } });
+            await scrubReferralReviewEvidence(tx, id);
             break;
           }
           default: return rollback({ status: "invalid", message: "Unknown subscriber action." });

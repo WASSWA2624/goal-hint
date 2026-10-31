@@ -34,6 +34,17 @@ reconnection and a persisted browser-cache `pageshow` resume safely. The initial
 `pageshow` does not trigger a duplicate hydration request. Unmount and query
 changes cancel the consumer; late results cannot commit to a different view.
 
+Slip Builder results use the existing private observation-only POST on desktop,
+phones and tablets. One serial loop per immutable submitted cohort refreshes
+status, score, clock and outcome every twenty seconds without generating new
+slips or remounting native disclosures. Draft edits retain that cohort until
+Build; reset, configuration loading, paging and navigation clean up obsolete
+work. Access is rechecked before and after server reads; 401/403 clears released
+observations and stops the loop. The shared browser adapter also handles
+pagehide/freeze/resume alongside visibility, connectivity and persisted restore.
+Installed WebView lifecycle behavior still requires physical-device qualification;
+see [phone polling verification](../dev-plan/208-phone-builder-polling.md).
+
 A feed batch reads its entire loaded prefix, at most ten pages, and commits
 atomically. Every boundary must have a consistent cohort marker and total,
 contiguous pages and no overlap. A changed cohort may replace ordered membership

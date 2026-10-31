@@ -12,6 +12,7 @@ import { AccountNotificationPreferences } from "@/components/members/account-not
 import { AccountNotifications } from "@/components/members/account-notifications";
 import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
+import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
 import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
@@ -25,6 +26,7 @@ import { publicSupportContactSettings } from "@/domain/public-subscription-setti
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { accountSection, accountSectionHref } from "@/domain/account-navigation";
 import { notificationCursor } from "@/domain/account-notifications";
+import { referralReviewCursor } from "@/domain/referral-reviews";
 import { formatPhone } from "@/domain/phone";
 import { formatCredit } from "@/domain/wallet";
 import { codeStatus } from "@/domain/subscription-period";
@@ -80,6 +82,8 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     ]) : [null, null, null, null, null];
     const notifications = member && !member.blocked && section === "notifications"
       ? await resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null;
+    const referralReviews = member && !member.blocked && section === "referrals"
+      ? await resolved.referralReviews?.member(member, referralReviewCursor(parameters.reviewBefore) ? parameters.reviewBefore as string : undefined).catch(() => null) ?? null : null;
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
@@ -110,7 +114,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
         {summarySection && <AccountSubscriptionPanel locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} {...(last ? { lastEnd: last.endsAt } : {})} />}
         {summarySection && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
-        {section === "referrals" && <AccountReferrals locale={locale} summary={referrals} />}
+        {section === "referrals" && <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} older={!!referralReviewCursor(parameters.reviewBefore)} /></>}
         {section === "overview" && <>
           <AccountPanel title={messages.text("account.signInDetails")} data-account-sign-in
             actions={<AccountActionLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false}>{messages.text("account.editPhone")}</AccountActionLink>}>

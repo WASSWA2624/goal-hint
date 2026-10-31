@@ -5,7 +5,7 @@ import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
 import { joinedDesktopSections } from "@/components/ui/layout";
 import {
-  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GridIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
+  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, GridIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain/admin-navigation";
@@ -16,7 +16,7 @@ import { watchPendingPaymentTitle } from "./pending-title";
 import { adminSidebarSize, clampSidebarWidth, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
 
 const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
-  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon,
+  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, referrals: GiftIcon,
   plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, forecasts: ChartIcon, analytics: ChartIcon,
 };
 

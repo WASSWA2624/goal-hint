@@ -7,6 +7,8 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, lockMemberAccount } from "./access-codes.ts";
 import { isMemberAdminPhone } from "./member-admin.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
+import { purgeReferralReviewEvidence } from "./referral-reviews.ts";
+import { referralReviewReasons, type ReferralReviewReason } from "../../domain/referral-reviews.ts";
 
 async function authorized(tx: Prisma.TransactionClient, member: MemberIdentity, at: Date) {
   if (member.blocked || member.administrator) return false;
@@ -71,11 +73,22 @@ export function createAccountNotifications({ database, now = Date.now }: { datab
         const rows = summary ? [] : await tx.memberNotification.findMany({ where: { ...where,
           ...(cursor ? { OR: [{ occurredAt: { lt: cursor.at } }, { occurredAt: cursor.at, id: { lt: cursor.id } }] } : {}) },
           orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: accountNotificationRules.pageSize + 1,
-          select: { id: true, kind: true, occurredAt: true, expiresAt: true, readAt: true } });
+          select: { id: true, kind: true, occurredAt: true, expiresAt: true, readAt: true, eventKey: true } });
         const page = rows.slice(0, accountNotificationRules.pageSize), last = page.at(-1);
-        return { unread, items: page.filter(row => accountNotificationKinds.includes(row.kind as AccountNotificationKind)).map(row => ({
-          id: row.id, kind: row.kind as AccountNotificationKind, occurredAt: row.occurredAt.toISOString(), expiresAt: row.expiresAt?.toISOString() ?? null, read: !!row.readAt,
-        })), next: rows.length > page.length && last ? `${last.occurredAt.toISOString()}_${last.id}` : null };
+        const reviewIds = page.filter(row => row.eventKey.startsWith("referral-review:")).map(row => row.eventKey.split(":")[1]).filter(notificationId);
+        const reviews = reviewIds.length ? await tx.referralReviewCase.findMany({ where: { id: { in: reviewIds } },
+          select: { id: true, grantId: true, accountId: true, reason: true, reversal: { select: { holderAccountId: true } } } }) : [];
+        const grantOwners = reviews.length ? await tx.accessCode.findMany({ where: { id: { in: reviews.map(row => row.grantId) } }, select: { id: true, accountId: true } }) : [];
+        const ownerByGrant = new Map(grantOwners.map(row => [row.id, row.accountId]));
+        const ownedReviews = new Map(reviews.filter(row => (row.reversal?.holderAccountId ?? ownerByGrant.get(row.grantId) ?? row.accountId) === member.accountId)
+          .map(row => [row.id, row]));
+        return { unread, items: page.filter(row => accountNotificationKinds.includes(row.kind as AccountNotificationKind)).map(row => {
+          const review = ownedReviews.get(row.eventKey.split(":")[1] ?? "");
+          return {
+            id: row.id, kind: row.kind as AccountNotificationKind, occurredAt: row.occurredAt.toISOString(), expiresAt: row.expiresAt?.toISOString() ?? null, read: !!row.readAt,
+            ...(review && referralReviewReasons.includes(review.reason as ReferralReviewReason) ? { relatedCaseId: review.id, reason: review.reason as ReferralReviewReason } : {}),
+          };
+        }), next: rows.length > page.length && last ? `${last.occurredAt.toISOString()}_${last.id}` : null };
       });
     },
     async update(member: MemberIdentity, action: "read" | "dismiss" | "read-all", id?: unknown): Promise<boolean> {
@@ -98,6 +111,7 @@ export function createAccountNotifications({ database, now = Date.now }: { datab
     },
     async run() {
       const at = new Date(now()), result = { checked: 0, failed: 0 };
+      await purgeReferralReviewEvidence(database, now);
       // Retention also applies to accounts that cannot currently open their inbox.
       await database.query(tx => tx.memberNotification.deleteMany({ where: { occurredAt: { lt: new Date(+at - accountNotificationRules.retentionMs) } } }));
       let cursor = "";
