@@ -26,14 +26,14 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   };
   const dark = theme.mode === "dark";
   const phone = window.innerWidth < 1024;
-  const checkRadius = (selector: string, expected: string) => {
+  const checkRadius = (selector: string, expected: string | Record<"borderTopLeftRadius" | "borderTopRightRadius" | "borderBottomLeftRadius" | "borderBottomRightRadius", string>) => {
     const elements = [...document.querySelectorAll(selector)].filter(visible);
     assert(elements.length > 0, `Missing visible radius example ${selector}`);
     for (const element of elements) {
       const style = getComputedStyle(element);
       const target = element.id ? `#${element.id}` : element.getAttribute("data-slip-id") ?? element.tagName.toLowerCase();
       for (const corner of ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"] as const) {
-        assert(Number.parseFloat(style[corner]) === Number.parseFloat(expected), `${target}: unexpected ${corner} ${style[corner]}`);
+        assert(Number.parseFloat(style[corner]) === Number.parseFloat(typeof expected === "string" ? expected : expected[corner]), `${target}: unexpected ${corner} ${style[corner]}`);
       }
     }
   };
@@ -42,7 +42,10 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   checkRadius("#theme-controls, #theme-admin-panel, #theme-performance [data-performance-summary]", phone ? theme.radius.surface : theme.radius.none);
   checkRadius("#theme-large-action, #theme-admin-record, [data-subscribe-layout=stepwise]", theme.radius.surface);
   if (!phone) checkRadius("#theme-matches [data-match-board]", theme.radius.none);
-  checkRadius("#theme-slips [data-slip-id]", phone ? theme.radius.surface : theme.radius.none);
+  checkRadius("#theme-slips [data-slip-id]", phone ? {
+    borderTopLeftRadius: theme.radius.none, borderBottomLeftRadius: theme.radius.none,
+    borderTopRightRadius: theme.radius.control, borderBottomRightRadius: theme.radius.control,
+  } : theme.frame.desktopCardRadius);
   checkRadius("#theme-joined-controls", theme.radius.control);
   checkRadius("#theme-joined-controls > button", theme.radius.none);
   const dateFace = document.querySelector("[data-slip-period-select]");
@@ -76,7 +79,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     assert(!!percentage && visible(percentage) === wideSummary, `${outcome} percentage shows only in the desktop summary layout`);
   }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
-  check(headerSelector, phone ? theme.header.background : theme.color.surfaceMuted);
+  check(headerSelector, phone ? theme.header.background : theme.header.desktopBackground);
   const header = document.querySelector(headerSelector);
   if (header) {
     const amount = lightness(getComputedStyle(header).backgroundColor);
@@ -96,7 +99,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
     check("#theme-matches [data-fixture-id], #theme-slips [data-slip-id]", theme.phoneCardFrame.border, "borderTopColor");
-    check("#theme-slips [data-slip-summary]", theme.color.surface);
+    check("#theme-slips [data-slip-summary]", `color-mix(in srgb, ${theme.color.surface} 96%, ${theme.color.accent.blue.text})`);
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {
     // Matches and slips use the same aligned match-row treatment, without the former table header or stripes.

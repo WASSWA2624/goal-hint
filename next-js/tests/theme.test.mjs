@@ -15,15 +15,29 @@ registerHooks({
   },
 });
 const { darkTheme, lightTheme } = await import("../src/styles/theme.ts");
-const { default: reviewPalettes } = await import("../design/light-theme-samples/palettes.json");
+const { porcelainBlueDirection, cobaltNightDirection } = await import("../src/styles/theme-presets.ts");
 
-const luminance = (hex) => {
-  assert.match(hex, /^#[0-9a-f]{6}$/i);
-  const channels = [1, 3, 5].map((offset) => {
-    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+const channels = (color, backdrop = "#FFFFFF") => {
+  const mix = /^color-mix\(in srgb, (#[0-9a-f]{6}) ([\d.]+)%, (#[0-9a-f]{6})\)$/iu.exec(color);
+  if (mix) {
+    const amount = Number(mix[2]) / 100, first = channels(mix[1]), second = channels(mix[3]);
+    return first.map((value, index) => value * amount + second[index] * (1 - amount));
+  }
+  const alpha = /^rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)%\)$/u.exec(color);
+  if (alpha) {
+    const amount = Number(alpha[4]) / 100, background = channels(backdrop);
+    return alpha.slice(1, 4).map((value, index) => Number(value) * amount + background[index] * (1 - amount));
+  }
+  assert.match(color, /^#[0-9a-f]{6}$/iu);
+  return [1, 3, 5].map(offset => Number.parseInt(color.slice(offset, offset + 2), 16));
+};
+const composite = (color, backdrop) => "#" + channels(color, backdrop).map(value => Math.round(value).toString(16).padStart(2, "0")).join("");
+const luminance = color => {
+  const values = channels(color).map(channel => {
+    const value = channel / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
 };
 const contrast = (foreground, background) => {
   const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
@@ -51,8 +65,8 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(theme.header.text, background, `${theme.mode} desktop table headings`);
     }
     for (const background of [theme.header.background, theme.header.controlFill, theme.header.controlHover]) {
-      readable(theme.header.text, background, `${theme.mode} title bar`);
-      readable(theme.header.accent, background, `${theme.mode} current navigation`);
+      readable(theme.header.text, composite(background, theme.header.background), `${theme.mode} title bar`);
+      readable(theme.header.accent, composite(background, theme.header.background), `${theme.mode} current navigation`);
     }
     readable(theme.header.onAccent, theme.header.accent, `${theme.mode} selected header controls`);
     for (const background of [theme.header.fieldFill, theme.header.fieldFillActive]) {
@@ -85,7 +99,7 @@ test("page, cards, navigation and table chrome share the selected theme", () => 
       assert.ok(theme.mode === "light" ? brightness >= 0.8 : brightness <= 0.08,
         `${theme.mode} neutral surface ${color} belongs to the selected palette`);
     }
-    assert.equal(theme.phoneCardFrame.radius, theme.radius.surface);
+    assert.ok(Number.parseFloat(theme.phoneCardFrame.radius) <= Number.parseFloat(theme.radius.surface), "Phone frames use a restrained corner within the shared surface scale");
     assert.equal(theme.phoneCardFrame.shadow, "none");
   }
   for (const colors of Object.values(darkTheme.color.verdict)) {
@@ -93,29 +107,31 @@ test("page, cards, navigation and table chrome share the selected theme", () => 
   }
 });
 
-test("the light theme uses the approved Porcelain Blue palette", () => {
-  const palette = reviewPalettes.find(({ id }) => id === "porcelain-blue");
-  assert.ok(palette, "The approved review palette must remain available");
-  const { colors } = palette;
-  for (const name of ["page", "surface", "surfaceMuted", "text", "mutedText", "border", "controlBorder", "brand", "brandHover", "brandSoft", "onBrand", "rowHover"]) {
-    assert.equal(lightTheme.color[name], colors[name], `Approved light ${name}`);
+test("active themes use the approved Porcelain Blue and Cobalt Night palettes", () => {
+  for (const [theme, direction] of [[lightTheme, porcelainBlueDirection], [darkTheme, cobaltNightDirection]]) {
+    const p = direction.palette;
+    for (const [name, expected] of Object.entries({ page: p.page, surface: p.surface, surfaceMuted: p.muted,
+      text: p.text, mutedText: p.secondary, controlBorder: p.control, brandSoft: p.soft, rowHover: p.soft })) {
+      assert.equal(theme.color[name], expected, `${direction.name}: ${name}`);
+    }
+    const link = theme.mode === "dark" ? p.headerAccent : p.accent;
+    assert.equal(theme.color.link, link);
+    assert.equal(theme.color.focus, link);
+    assert.equal(theme.gradient.action, p.accent);
+    assert.equal(theme.gradient.actionHover, p.hover);
+    assert.equal(theme.color.cardHeader, p.muted);
+    assert.equal(theme.gradient.tableHeader, p.muted);
+    for (const [name, expected] of Object.entries({ background: p.header, gradient: p.header,
+      navigationBackground: p.header, desktopBackground: p.header, text: p.headerText,
+      mutedText: p.headerMuted, placeholder: p.headerMuted, accent: p.headerAccent })) {
+      assert.equal(theme.header[name], expected, `${direction.name} header: ${name}`);
+    }
   }
-  assert.equal(lightTheme.color.link, colors.brand);
-  assert.equal(lightTheme.color.focus, colors.brand);
-  assert.equal(lightTheme.gradient.action, colors.brand);
-  assert.equal(lightTheme.gradient.actionHover, colors.brandHover);
-  assert.equal(lightTheme.color.cardHeader, colors.tableHeader);
-  assert.equal(lightTheme.gradient.tableHeader, colors.tableHeader);
-  for (const [name, expected] of Object.entries({
-    background: colors.header, gradient: colors.header, navigationBackground: colors.header,
-    text: colors.headerText, mutedText: colors.headerMuted, placeholder: colors.headerMuted,
-    accent: colors.brand, border: colors.headerBorder,
-  })) assert.equal(lightTheme.header[name], expected, `Approved light header ${name}`);
 });
 
 test("Porcelain Blue separates page and card surfaces with quiet decorative frames", () => {
   assert.ok(luminance(lightTheme.color.surface) > luminance(lightTheme.color.page));
-  assert.ok(luminance(lightTheme.color.page) > luminance(lightTheme.color.surfaceMuted));
+  assert.ok(luminance(lightTheme.color.surfaceMuted) > luminance(lightTheme.color.page));
   assert.equal(lightTheme.phoneCardFrame.border, lightTheme.color.border);
   for (const background of [lightTheme.color.page, lightTheme.color.surface]) {
     assert.ok(contrast(lightTheme.phoneCardFrame.border, background) <
@@ -133,18 +149,14 @@ test("dark decorative frames stay quiet while form controls retain visible bound
     contrast(darkTheme.color.controlBorder, darkTheme.color.surface), "Labeled buttons should have quieter outlines than editable controls");
 });
 
-test("performance outcomes use readable light tints and prominent text on strong dark fills", () => {
+test("performance outcomes keep the approved quiet semantic fills and readable labels", () => {
   for (const theme of [lightTheme, darkTheme]) {
     for (const outcome of ["correct", "incorrect", "pending"]) {
       const colors = theme.color.performanceOutcome[outcome];
       readable(colors.text, colors.background, `${theme.mode} ${outcome} performance`, theme.mode === "dark" ? 7 : 4.5);
-      if (theme.mode === "light") {
-        assert.equal(colors.background, theme.color.outcome[outcome].background);
-        assert.equal(colors.text, theme.color.outcome[outcome].text);
-        assert.ok(contrast(colors.background, theme.color.surface) < 1.3, `Light ${outcome} performance should use a restrained tint`);
-      } else {
-        assert.ok(contrast(colors.background, theme.color.surface) >= 4.5, `Dark ${outcome} performance fill should stand out from the surrounding surface`);
-      }
+      assert.equal(colors.background, theme.color.outcome[outcome].background);
+      assert.equal(colors.text, theme.color.outcome[outcome].text);
+      assert.ok(contrast(colors.background, theme.color.surface) < 2, `${theme.mode} ${outcome} performance uses a restrained fill`);
     }
   }
 });

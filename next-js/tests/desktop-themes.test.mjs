@@ -4,7 +4,7 @@ import test from "node:test";
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    return nextResolve(specifier === "@/styles/theme" ? new URL("../src/styles/theme.ts", import.meta.url).href : specifier, context);
+    return nextResolve(specifier.startsWith("@/styles/") ? new URL(`../src/${specifier.slice(2)}.ts`, import.meta.url).href : specifier, context);
   },
   load(url, context, nextLoad) {
     return nextLoad(url, url.endsWith(".json")
@@ -12,7 +12,14 @@ registerHooks({
   },
 });
 const { desktopThemes, previewScreens } = await import("../design/desktop-themes/catalog.ts");
-const { isGoalHintTheme } = await import("../src/styles/theme.ts");
+const { isGoalHintTheme, lightTheme, darkTheme } = await import("../src/styles/theme.ts");
+
+test("the live application uses the exact approved Porcelain Blue and Cobalt Night review objects", () => {
+  assert.strictEqual(lightTheme, desktopThemes.find(theme => theme.id === "porcelain-blue").theme);
+  assert.strictEqual(darkTheme, desktopThemes.find(theme => theme.id === "cobalt-night").theme);
+  assert.equal(lightTheme.mode, "light");
+  assert.equal(darkTheme.mode, "dark");
+});
 
 function contrast(a, b) {
   const luminance = color => {

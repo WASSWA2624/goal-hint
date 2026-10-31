@@ -1,8 +1,9 @@
 # Desktop Theme Studio
 
 Ten desktop look-and-feel directions, with twelve screens in every theme.
-The review uses the actual application components and approved layouts; no
-production theme or mobile interface is changed.
+The review uses the actual application components and approved layouts.
+**01 · Porcelain Blue** and **08 · Cobalt Night** are now the application's
+light and dark themes. Their review pages reuse the exact production objects.
 
 From `next-js/`, run:
 

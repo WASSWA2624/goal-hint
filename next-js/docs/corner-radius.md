@@ -4,9 +4,11 @@ The Best slips date selector and Custom date button set the visual reference:
 subtle 4px corners. The app uses a small semantic scale instead of a single
 radius for every component.
 
-`assets/brand/brand-tokens.json` owns `shape.radius`, exposed as `theme.radius`
-in styled-components. Light and dark themes share the same geometry. Public
-brand exports expose the matching `--gh-radius-*` CSS variables.
+`assets/brand/brand-tokens.json` owns the primitive `shape.radius` scale. The
+selected theme maps those values to semantic roles exposed as `theme.radius`
+in styled-components. Porcelain Blue and Cobalt Night share 4px controls and
+8px surfaces, overlays, and desktop slip frames. Public brand exports retain
+the primitive `--gh-radius-*` CSS variables.
 
 | Token | Value | Use |
 | --- | --- | --- |
@@ -44,13 +46,13 @@ that override the shared components. Native inputs receive global defaults;
 reusable components define the appropriate explicit token for their role.
 
 Round the outside of a joined group and keep its internal seams straight.
-Shared desktop slips use `none` for the approved square Blue Signal frame and
-its full-height rail. Mobile slips use square leading corners for the blue rail
+Shared desktop slips use `theme.frame.desktopCardRadius` for the outer card and
+its full-height rail; the approved application themes use 8px. Mobile slips use square leading corners for the blue rail
 and `control` corners on the trailing edge.
 Desktop review themes can select a restrained corner through
 `theme.frame.desktopCardRadius`, taking its value from this same radius scale.
-The current application's default remains `none`; theme card frames and their
-full-height rails consume the shared setting together.
+Theme card frames, hover backgrounds, and their full-height rails consume the
+shared setting together.
 The approved Team stack mobile match cards use `none`, including their framed
 rows inside expanded slips. Their existing slip headers retain their own corners.
 Headers and edge rows with their own fills must follow the parent's exposed

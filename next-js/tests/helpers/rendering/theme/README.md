@@ -1,5 +1,10 @@
 # Theme rendering acceptance fixture
 
+The active application modes are Porcelain Blue (light) and Cobalt Night (dark).
+Use reduced motion when asserting exact colors immediately after a toggle, so
+intentional palette transitions do not produce intermediate-color failures.
+Check normal motion separately; the approved feedback duration is 160ms.
+
 Run `npm run test:theme:rendering -- --serve` from `next-js/`. The script builds an
 isolated production fixture and prints its local browser URL. It reuses the real
 root layout, style provider, public shell, navigation, phone header, match cards,

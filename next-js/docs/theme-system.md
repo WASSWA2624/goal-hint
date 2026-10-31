@@ -1,10 +1,19 @@
 # Application theme contract
 
-`src/styles/theme.ts` defines `GoalHintTheme`, the shared visual contract used by
-public screens, slips, matches, account workspaces, and owner dashboards.
-The desktop review catalog creates ten complete values of this same contract.
-Choosing a direction must select its theme object; it must not require copying
-screen-specific CSS from the review.
+`src/styles/theme.ts` exposes the active application themes used by public
+screens, slips, matches, account workspaces, and owner dashboards:
+
+- Light mode uses **01 · Porcelain Blue**.
+- Dark mode uses **08 · Cobalt Night**.
+
+`theme-presets.ts` owns the approved definitions and shared construction logic.
+`theme-foundation.ts` defines `GoalHintTheme` and the semantic foundations. The
+desktop review catalog reuses the exact approved production objects and builds
+the other review directions from these foundations. Appearance changes belong
+in the shared definitions rather than screen-specific CSS.
+
+The existing saved light/dark preference, operating-system preference, server
+fallback, and native appearance metadata all consume the same active exports.
 
 | Visual decision | Theme group |
 | --- | --- |
@@ -34,7 +43,7 @@ surface hierarchy; use tonal fills and spacing to separate sections before
 adding another framed panel.
 Keep the approved composition unless a deliberate theme adjustment calls for a
 change. Preserve default token values when replacing an existing literal so
-the current application retains its appearance before a new direction is chosen.
+unrelated layouts retain their established geometry.
 
 The desktop directions use quiet, single-pixel decorative edges and accent rails, with subtle
 surface separation. Editable fields retain thin, visible boundaries and clear
