@@ -11,6 +11,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const snapshot = scenarios.snapshots[name as keyof typeof scenarios.snapshots] as LiveMatchSnapshot | null;
   return <PublicShell locale="en" current="live" today={parseReportingDate("2026-10-25")} app compact>
     <p>Synthetic display fixture. No real match or provider request.</p>
-    <LiveMatchPanel snapshot={snapshot} asOf={scenarios.asOf} home="Synthetic Home Club" away="Synthetic Away Club" locale="en" />
+    <LiveMatchPanel snapshot={snapshot} asOf={scenarios.asOf} home="Synthetic Home Club" away="Synthetic Away Club" locale="en"
+      section={query.section === "events" ? "events" : "all"} />
   </PublicShell>;
 }

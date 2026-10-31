@@ -7,8 +7,10 @@ pre-match forecast, its probabilities or its publication clock.
 
 The new panel separates current/final match data from the existing Team
 Comparison section, which continues to describe pre-match evidence and previous
-results. Match data remains public across subscription tiers under the existing
-verified football public-display rights. The provider-spending switch is
+results. Match data follows the match detail's completion and entitlement
+boundaries: completed fixtures are public; unfinished observations require paid
+or earned access. Existing verified football public-display rights still apply.
+The provider-spending switch is
 independent: collection is enabled only by the private runner configuration.
 `allowLiveMatch: false` disables stored reads in an isolated service or emergency
 binding. `publicPolicy.features.liveMatchDetails` is the source-owned display
@@ -37,6 +39,28 @@ event timeline. “No match events have been reported” appears only for a comp
 confirmed event response containing no events. Data is bounded to 16 recognized
 statistics and 500 normalized events; no raw response, private receipt or
 forecast provenance is added to this public envelope.
+
+## Visual event timeline
+
+The Events tab uses one shared two-sided timeline: home incidents left, away
+incidents right, minutes on the centre line. Team names and available crests
+identify each side. The latest recorded event appears first. The provider's
+chronological sequence is reversed, rather than adding stoppage minutes to the
+base minute; this preserves period boundaries and distinct same-minute incidents.
+See the provider's [event endpoint guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide).
+
+Football symbols distinguish normal goals, own goals, scored/missed penalties,
+yellow/red cards, second-yellow dismissals, substitutions and VAR reviews.
+Readable labels accompany symbols. Substitutions show the replacement as On
+and the departing player as Off. VAR decisions, assists and supplied comments
+remain visible. Unknown card details use a neutral card symbol; unknown minutes
+remain a dash with a time-unavailable label. No running score, half-time marker
+or added-time announcement is inferred from an incomplete event stream.
+
+The desktop tab has one heading and an expanded timeline. Source timestamps and
+attribution are in Event data & source; partial/delayed notices remain visible.
+Phones reuse the same timeline inside the existing match-events disclosure.
+Both modes distinguish a confirmed empty response from unavailable coverage.
 
 ## Occurrence and storage safety
 

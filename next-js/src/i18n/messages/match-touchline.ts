@@ -15,7 +15,7 @@ export const matchTouchlineMessages = {
   "touchline.hint.standings": "Verified competition positions available for these teams.",
   "touchline.hint.lineups": "Formations, players, substitutes and reported availability.",
   "touchline.hint.markets": "Additional selections, estimated probabilities and available decimal odds.",
-  "touchline.hint.events": "Goals, cards and substitutions recorded for this match.",
+  "touchline.hint.events": "Goals, cards, substitutions and VAR decisions, latest first.",
   "touchline.hint.venue": "The ground, playing conditions and match officials.",
   "touchline.hint.analysis": "The published reasoning, uncertainties and attributable reports.",
   "touchline.featured": "Featured prediction",

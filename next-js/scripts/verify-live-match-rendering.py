@@ -32,7 +32,7 @@ def main():
             if state in ["live", "stale", "final"]:
                 assert "57%" in html and "43%" in html and 'data-match-statistic="corners"' in html
                 assert "<td>0</td>" in html and "Synthetic Player" in html and "Synthetic Assist" in html
-                assert "45+2′" in html and "Goal" in html and "Yellow Card" in html
+                assert "45+2′" in html and "Goal" in html and "Yellow card" in html
                 assert "Data retrieved" in html
             if state == "live":
                 assert "Live match data" in html and "Provider updated" in html and "Updates are delayed" not in html
@@ -47,7 +47,27 @@ def main():
                 assert "No match events have been reported" not in html
             elif state == "final":
                 assert "Final match data" in html and "Updates are delayed" not in html
-        print("PASS 7 production match-data states: live, partial, delayed, confirmed-empty, unsupported coverage, retained-final and missing snapshot.", flush=True)
+        for state in ["live", "partial", "stale", "empty", "unavailable", "final", "missing"]:
+            response = request(server.origin, f"/en/live-match?state={state}&section=events")
+            assert response.status == 200, ("events", state, response.status)
+            html = visible_html(response.text)
+            assert "Statistics" not in html and "data-match-statistic" not in html, state
+            if state == "missing":
+                assert "Match events are currently unavailable" in html and "data-match-event-timeline" not in html
+                continue
+            assert "Event data &amp; source" in html and "Source: API-Football" in html
+            if state in ["live", "partial", "stale", "final"]:
+                assert html.index('data-match-event="2"') < html.index('data-match-event="1"'), state
+                assert 'data-event-symbol="yellow-card"' in html and 'data-event-symbol="goal"' in html
+            if state == "empty":
+                assert "No match events have been reported" in html and "data-match-event-timeline" not in html
+            elif state == "unavailable":
+                assert "Events coverage has not been confirmed" in html and "No match events have been reported" not in html
+            elif state == "stale":
+                assert "Updates are delayed" in html
+            elif state == "final":
+                assert "Final match data" in html and "Updates are delayed" not in html
+        print("PASS 14 production match-data states: combined panel and dedicated events, including source chronology, delayed/empty/unavailable data and retained finals.", flush=True)
         if args.serve:
             server.serve()
 

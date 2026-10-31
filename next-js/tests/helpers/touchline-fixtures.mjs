@@ -4,6 +4,7 @@ import { fixtureForReview } from "../../design/match-details-desktop/sample.mjs"
 import { validateMarketSnapshot, marketRules } from "../../src/domain/markets.ts";
 import { storedMatchInsightsSchema } from "../../src/domain/match-insights.ts";
 import { storedMatchDetailResponseSchema } from "../../src/domain/match-detail.ts";
+import { sampleMatchObservations } from "./match-event-fixtures.mjs";
 
 const sample = fixtureForReview(new URLSearchParams({ viewer: "subscriber" }));
 const accepted = validateMarketSnapshot(Object.fromEntries(Object.entries({
@@ -57,6 +58,7 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
   sections.context.standings = { home: { rank: 2, points: 23, played: 10, group: "Premier League" }, away: { rank: 3, points: 21, played: 10, group: "Premier League" }, retrievedAt: now };
   sections.referee = { state: "available", name: "Chris Morgan", retrievedAt: now };
   sections.news.items = [{ id: "training", kind: "report", publisher: "Synthetic club report", title: "Both squads complete their final training session", details: [], url: null, publishedAt: now, retrievedAt: now }];
+  if (["live", "finished-regulation"].includes(name)) value.detail.liveMatch = sampleMatchObservations(value.detail);
   value.insights = storedMatchInsightsSchema.parse(value.insights);
   value.detail = storedMatchDetailResponseSchema.parse(value.detail); value.prior = storedMatchDetailResponseSchema.parse(value.prior);
   value.feed.records = [value.detail.fixture];

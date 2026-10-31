@@ -106,5 +106,6 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
 function Observations({ kind }: { kind: "statistics" | "events" }) {
   const { data, home, away, locale } = useStableDetails();
   return <LiveMatchPanel snapshot={data.liveMatch ?? null} asOf={data.asOf} home={home} away={away} locale={locale}
-    historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} section={kind} />;
+    homeLogoUrl={data.fixture.homeTeam.logoUrl ?? null} awayLogoUrl={data.fixture.awayTeam.logoUrl ?? null}
+    historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} section={kind} embedded={kind === "events"} />;
 }

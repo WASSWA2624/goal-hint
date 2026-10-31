@@ -225,7 +225,7 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
       <MatchBanner touchline={byDefault} />
       {byDefault ? <TouchlineFeatured /> : <Verdict />}
       {!byDefault && data.liveMatch !== undefined && <LiveMatchPanel snapshot={data.liveMatch} asOf={data.asOf} home={home} away={away} locale={locale}
-        historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} />}
+        homeLogoUrl={fixture.homeTeam.logoUrl ?? null} awayLogoUrl={fixture.awayTeam.logoUrl ?? null} historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} />}
       {byDefault ? <TouchlineTabs view={view} /> : <Grid>
         <ViewProvider value={markets}><MarketsCard /></ViewProvider>
         <AnalysisDrawer />
