@@ -227,15 +227,21 @@ test("shared sign-in cannot provision missing ordinary accounts or authenticate 
   assert.equal(ordinary.accounts.size, 0); assert.equal(ordinary.sessions.size, 0);
 });
 
-test("administrator password logins also allow only the latest device", async () => {
+test("administrator password logins allow two sessions and evict the oldest on the third", async () => {
   const configured = "configured administrator password", f = fixture({ admins: [phone], adminHash: await hashPassword(configured) });
   const first = await f.service.login(phone, configured, address);
   assert.equal((await f.service.login(phone, "wrong administrator password", "198.51.100.2")).status, "unauthorized");
   assert.equal((await f.sessionService.verify(first.token)).administrator, true);
+  f.advance(1);
   const second = await f.service.login(phone, configured, "198.51.100.2");
-  assert.equal(second.otherDeviceSignedOut, true);
+  assert.equal(second.otherDeviceSignedOut, false);
+  assert.equal((await f.sessionService.verify(first.token)).administrator, true);
+  f.advance(1);
+  const third = await f.service.login(phone, configured, "198.51.100.3");
+  assert.equal(third.otherDeviceSignedOut, true);
   assert.equal(await f.sessionService.verify(first.token), null);
-  assert.equal((await f.sessionService.verify(second.token)).administrator, true); assert.equal(f.sessions.size, 1);
+  assert.equal((await f.sessionService.verify(second.token)).administrator, true);
+  assert.equal((await f.sessionService.verify(third.token)).administrator, true); assert.equal(f.sessions.size, 2);
 });
 
 test("forgot password sends to a registered number and gives unknown/admin numbers the same generic response", async () => {
@@ -278,22 +284,31 @@ test("registered accounts marked for recovery reject login and retain verified s
 
 test("normal password changes check the current password and rotate the current device", async () => {
   const f = fixture(), binding = await f.authenticate();
+  const other = await f.service.login(phone, password, "198.51.100.2");
   assert.equal((await f.service.changePassword("new secret password", "wrong", binding)).status, "unauthorized");
+  assert.ok(await f.sessionService.verify(other.token));
   const changed = await f.service.changePassword("new secret password", password, binding);
   assert.equal(changed.status, "authenticated"); assert.equal(await f.sessionService.verify(binding.token), null);
+  assert.equal(await f.sessionService.verify(other.token), null, "A password change still revokes every old session");
   assert.ok(await f.sessionService.verify(changed.token));
 });
 
-test("a successful login signs out the previous device and denies its profile writes", async () => {
+test("a third login signs out only the oldest session and denies its profile writes", async () => {
   const f = fixture(), first = await f.authenticate();
   await f.account({ phone: replacement });
   const other = await f.service.login(replacement, password, "198.51.100.9");
+  f.advance(1);
   const second = await f.service.login(phone, password, "198.51.100.2");
   assert.equal(second.status, "authenticated"); assert.notEqual(second.token, first.token);
-  assert.equal(other.otherDeviceSignedOut, false); assert.equal(second.otherDeviceSignedOut, true);
+  assert.equal(other.otherDeviceSignedOut, false); assert.equal(second.otherDeviceSignedOut, false);
+  assert.ok(await f.sessionService.verify(first.token)); assert.ok(await f.sessionService.verify(second.token));
+  f.advance(1);
+  const third = await f.service.login(phone, password, "198.51.100.3");
+  assert.equal(third.status, "authenticated"); assert.equal(third.otherDeviceSignedOut, true);
   assert.equal(await f.sessionService.verify(first.token), null);
-  assert.ok(await f.sessionService.verify(second.token)); assert.ok(await f.sessionService.verify(other.token));
-  assert.equal([...f.sessions.values()].filter(row => row.accountId === first.member.accountId).length, 1);
+  assert.ok(await f.sessionService.verify(second.token)); assert.ok(await f.sessionService.verify(third.token));
+  assert.ok(await f.sessionService.verify(other.token));
+  assert.equal([...f.sessions.values()].filter(row => row.accountId === first.member.accountId).length, 2);
   assert.equal((await f.service.changePassword("stale device password", password, first)).status, "unauthorized");
   assert.equal((await f.service.changePhone("256700000003", password, first)).status, "unauthorized");
   const response = await createMemberAuthHandler("password", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
@@ -303,15 +318,21 @@ test("a successful login signs out the previous device and denies its profile wr
   assert.ok(await f.sessionService.verify(second.token), "Signing out an old cookie cannot sign out the replacement device");
 });
 
-test("the login notification distinguishes the current browser from another active device", async () => {
+test("same-browser login rotates its token without evicting the other session; stale cookies use the cap", async () => {
   const f = fixture(); await f.account();
   const first = await f.service.login(phone, password, address);
   assert.equal(first.otherDeviceSignedOut, false);
-  const refreshed = await f.service.login(phone, password, address, first.token);
-  assert.equal(refreshed.otherDeviceSignedOut, false); assert.equal(await f.sessionService.verify(first.token), null);
-  const replacement = await f.service.login(phone, password, "198.51.100.2", first.token);
-  assert.equal(replacement.otherDeviceSignedOut, true, "A stale local cookie must not hide another device's active session");
-  assert.equal(await f.sessionService.verify(refreshed.token), null); assert.ok(await f.sessionService.verify(replacement.token));
+  f.advance(1);
+  const second = await f.service.login(phone, password, "198.51.100.2");
+  f.advance(1);
+  const refreshed = await f.service.login(phone, password, "198.51.100.2", second.token);
+  assert.equal(refreshed.otherDeviceSignedOut, false); assert.equal(await f.sessionService.verify(second.token), null);
+  assert.ok(await f.sessionService.verify(first.token)); assert.equal(f.sessions.size, 2);
+  f.advance(1);
+  const third = await f.service.login(phone, password, "198.51.100.3", second.token);
+  assert.equal(third.otherDeviceSignedOut, true, "A stale local cookie must not hide another device's active session");
+  assert.equal(await f.sessionService.verify(first.token), null);
+  assert.ok(await f.sessionService.verify(refreshed.token)); assert.ok(await f.sessionService.verify(third.token));
 });
 
 test("expired and restricted sessions do not trigger an incorrect other-device notification", async () => {
@@ -320,23 +341,62 @@ test("expired and restricted sessions do not trigger an incorrect other-device n
   const expired = "e".repeat(43), at = new Date(f.now());
   await f.tx.memberSession.create({ data: { tokenHash: memberTokenHash(expired), accountId: account.id,
     authenticatedAt: at, createdAt: at, lastSeenAt: at, expiresAt: at } });
+  await f.tx.memberSession.create({ data: { tokenHash: "r".repeat(64), accountId: account.id,
+    authenticatedAt: at, passwordResetAt: at, createdAt: at, lastSeenAt: at, expiresAt: new Date(+at + DAY) } });
   const login = await f.service.login(phone, password, address);
   assert.equal(login.status, "authenticated"); assert.equal(login.otherDeviceSignedOut, false);
   assert.equal(await f.sessionService.verify(expired), null);
   assert.equal(f.sessions.has(pending.session.tokenHash), false); assert.equal(f.sessions.size, 1);
 });
 
-test("concurrent successful logins leave only the last committed device authenticated", async () => {
+test("concurrent successful logins retain exactly the two newest sessions", async () => {
   const f = fixture(), first = await f.authenticate(), committed = [];
+  f.advance(1);
+  const create = f.tx.memberSession.create;
+  f.tx.memberSession.create = async input => { const row = await create(input); f.advance(1); return row; };
   await Promise.all(Array.from({ length: 5 }, (_, index) => f.service.login(phone, password, `198.51.100.${index + 2}`).then(result => committed.push(result))));
   assert.ok(committed.every(result => result.status === "authenticated"));
-  assert.equal(f.sessions.size, 1); assert.equal(await f.sessionService.verify(first.token), null);
-  for (const result of committed.slice(0, -1)) assert.equal(await f.sessionService.verify(result.token), null);
-  assert.ok(await f.sessionService.verify(committed.at(-1).token));
+  assert.equal(f.sessions.size, 2); assert.equal(await f.sessionService.verify(first.token), null);
+  for (const result of committed.slice(0, -2)) assert.equal(await f.sessionService.verify(result.token), null);
+  for (const result of committed.slice(-2)) assert.ok(await f.sessionService.verify(result.token));
+});
+
+test("recent activity does not make the oldest login newer", async () => {
+  const f = fixture(), first = await f.authenticate();
+  f.advance(1);
+  const second = await f.service.login(phone, password, "198.51.100.2");
+  f.advance(DAY);
+  assert.ok(await f.sessionService.verify(first.token));
+  assert.ok(f.sessions.get(first.member.tokenHash).lastSeenAt > f.sessions.get(memberTokenHash(second.token)).lastSeenAt);
+  const third = await f.service.login(phone, password, "198.51.100.3");
+  assert.equal(await f.sessionService.verify(first.token), null);
+  assert.ok(await f.sessionService.verify(second.token)); assert.ok(await f.sessionService.verify(third.token));
+});
+
+test("an exactly expired login frees its slot without evicting the other active session", async () => {
+  const f = fixture(), first = await f.authenticate();
+  const second = await f.service.login(phone, password, "198.51.100.2");
+  f.sessions.get(first.member.tokenHash).expiresAt = new Date(f.now());
+  const third = await f.service.login(phone, password, "198.51.100.3");
+  assert.equal(third.otherDeviceSignedOut, false); assert.equal(await f.sessionService.verify(first.token), null);
+  assert.ok(await f.sessionService.verify(second.token)); assert.ok(await f.sessionService.verify(third.token));
+  assert.equal(f.sessions.size, 2);
+});
+
+test("equal login times use creation time then token hash, and excess legacy sessions are removed", async () => {
+  const f = fixture(), account = await f.account(), at = new Date(f.now());
+  for (const [tokenHash, createdAt] of [["a".repeat(64), at], ["b".repeat(64), at], ["c".repeat(64), new Date(+at - 1)]]) {
+    await f.tx.memberSession.create({ data: { tokenHash, accountId: account.id, authenticatedAt: at,
+      createdAt, lastSeenAt: at, expiresAt: new Date(+at + DAY) } });
+  }
+  const login = await f.service.login(phone, password, address);
+  assert.equal(login.otherDeviceSignedOut, true);
+  assert.deepEqual([...f.sessions.keys()].sort(), ["b".repeat(64), memberTokenHash(login.token)].sort());
 });
 
 test("failed and blocked logins preserve the existing device", async () => {
   const f = fixture(), active = await f.authenticate();
+  const other = await f.service.login(phone, password, "198.51.100.2");
   const wrong = await f.service.login(phone, "wrong password", address, active.token);
   assert.equal(wrong.status, "unauthorized"); assert.ok(await f.sessionService.verify(active.token));
   const account = f.accounts.get(active.member.accountId);
@@ -348,15 +408,18 @@ test("failed and blocked logins preserve the existing device", async () => {
   for (let attempt = 0; attempt < 9; attempt++) await f.service.login(phone, "wrong password", address);
   assert.equal((await f.service.login(phone, password, address)).status, "busy");
   assert.ok(await f.sessionService.verify(active.token), "Throttled logins cannot sign out the current device");
+  assert.ok(await f.sessionService.verify(other.token)); assert.equal(f.sessions.size, 2);
 });
 
 test("a failed replacement transaction restores the active device and issues no cookie", async () => {
   const f = fixture(), active = await f.authenticate();
+  f.advance(1);
+  const other = await f.service.login(phone, password, "198.51.100.2");
   f.tx.memberSession.create = async () => { throw new Error("Synthetic session insert failure"); };
   const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
     authRequest("login", { phone, password }, undefined));
   assert.equal(response.status, 503); assert.equal(response.headers.get("set-cookie"), null);
-  assert.ok(await f.sessionService.verify(active.token)); assert.equal(f.sessions.size, 1);
+  assert.ok(await f.sessionService.verify(active.token)); assert.ok(await f.sessionService.verify(other.token)); assert.equal(f.sessions.size, 2);
 });
 
 test("subscription access moves to a new login when the unlocked-device cap is one", async () => {
@@ -366,16 +429,19 @@ test("subscription access moves to a new login when the unlocked-device cap is o
   await f.tx.memberSession.update({ where: { tokenHash: first.member.tokenHash }, data: { codeEnteredAt: new Date(f.now()), accessCodeId: codeId } });
   const second = await f.service.login(phone, password, "198.51.100.2"), member = await f.sessionService.verify(second.token);
   assert.equal(second.status, "authenticated"); assert.ok(member.codeEnteredAt); assert.equal(member.accessCodeId, codeId);
-  assert.equal(await f.sessionService.verify(first.token), null); assert.equal(f.sessions.size, 1);
+  assert.equal((await f.sessionService.verify(first.token)).codeEnteredAt, null, "Paid-device eviction does not sign out the account session");
+  assert.equal(f.sessions.size, 2);
 });
 
 test("restricted session requests cannot evict the authenticated device under a flood", async () => {
   const f = fixture(), active = await f.authenticate();
+  const second = await f.service.login(phone, password, "198.51.100.2");
   for (let attempt = 0; attempt < 12; attempt++) await f.database.transaction(tx => issueMemberSession(tx, active.member.accountId, new Date(f.now())));
   assert.ok(await f.sessionService.verify(active.token));
+  assert.ok(await f.sessionService.verify(second.token));
   assert.equal(f.sessions.size, 10);
   const authenticated = [...f.sessions.values()].filter(row => row.authenticatedAt);
-  assert.equal(authenticated.length, 1); assert.equal(authenticated[0].tokenHash, active.member.tokenHash);
+  assert.equal(authenticated.length, 2);
 });
 
 async function pending(f) {
@@ -604,10 +670,15 @@ test("HTTP login reports when another device was signed out and rejects its stal
   assert.equal(firstBody.next, "/en"); assert.equal(firstBody.otherDeviceSignedOut, false);
   const firstToken = responseToken(first), sameBrowser = await login(firstToken);
   assert.equal((await sameBrowser.json()).otherDeviceSignedOut, false);
-  const replacement = await login();
-  assert.equal((await replacement.json()).otherDeviceSignedOut, true);
+  f.advance(1);
+  const second = await login();
+  assert.equal((await second.json()).otherDeviceSignedOut, false);
+  assert.ok(await f.sessionService.verify(responseToken(sameBrowser)));
+  f.advance(1);
+  const third = await login();
+  assert.equal((await third.json()).otherDeviceSignedOut, true);
   assert.equal(await f.sessionService.verify(responseToken(sameBrowser)), null);
-  assert.ok(await f.sessionService.verify(responseToken(replacement)));
+  assert.ok(await f.sessionService.verify(responseToken(second))); assert.ok(await f.sessionService.verify(responseToken(third)));
 });
 
 test("successful login goes home while administrator and restricted sessions keep their required destinations", async () => {

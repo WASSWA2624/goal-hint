@@ -8,7 +8,7 @@ import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import type { AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
-import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPrimary, AccountSingleDeviceInfo } from "./account-styles";
+import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPrimary, AccountSessionInfo } from "./account-styles";
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
 import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
@@ -43,9 +43,9 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
           placeholder={m.text("account.passwordPlaceholder")} disabled={busy} />
         {view === "login" && <AccountActions>
           <TextLink href={href("forgot")} prefetch={false}>{m.text("account.forgotPassword")}</TextLink>
-          <AccountSingleDeviceInfo><summary aria-label={m.text("account.singleDeviceNotice")} title={m.text("account.singleDeviceNotice")}><InfoIcon /></summary>
-            <p role="note">{m.text("account.singleDeviceNotice")}</p>
-          </AccountSingleDeviceInfo>
+          <AccountSessionInfo><summary aria-label={m.text("account.sessionLimitNotice")} title={m.text("account.sessionLimitNotice")}><InfoIcon /></summary>
+            <p role="note">{m.text("account.sessionLimitNotice")}</p>
+          </AccountSessionInfo>
         </AccountActions>}
         {error && <AccountError role="alert">{error}</AccountError>}
         <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : view === "login" ? "auth.signIn" : "auth.signUp")}</AccountPrimary>

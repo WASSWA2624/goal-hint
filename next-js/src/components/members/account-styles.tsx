@@ -36,7 +36,7 @@ export const AccountError = styled.p`
 export const AccountActions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
 `;
-export const AccountSingleDeviceInfo = styled.details`
+export const AccountSessionInfo = styled.details`
   position: relative; color: ${({ theme }) => theme.color.link};
   > summary { display: grid; place-items: center; inline-size: 44px; min-block-size: 44px; cursor: pointer; list-style: none; }
   > summary::-webkit-details-marker { display: none; }

@@ -11,8 +11,8 @@ import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
 import { developmentMemberToken } from "../demo/member.ts";
 
 export const memberSessionRules = Object.freeze({ expiryMs: 90 * 86_400_000, touchAfterMs: 86_400_000,
-  // This storage cap covers restricted flows; an authenticated login always replaces every other session.
-  cookieSeconds: 400 * 86_400, maximumSessions: 10 });
+  // Restricted verification/recovery flows have a separate storage cap.
+  cookieSeconds: 400 * 86_400, maximumActiveSessions: 2, maximumSessions: 10 });
 export const memberTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 export const validMemberToken = (token: unknown): token is string => typeof token === "string" && /^[A-Za-z0-9_-]{43}$/u.test(token);
 export const memberCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-member`;
@@ -21,15 +21,19 @@ export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; ph
   codeEnteredAt: Date | null; accessCodeId: string | null; expiresAt: Date; administrator?: boolean; whatsappNotificationsAt?: Date | null }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
 
-/** The caller holds the account lock. A full login replaces every prior session atomically; restricted sessions only use the pending cap. */
+/** Caller holds the account lock. A full login rotates its browser token and evicts the oldest excess active logins atomically. */
 export async function issueMemberSession(tx: Prisma.TransactionClient, accountId: string, at: Date, previous?: string, authenticated = false) {
   const previousHash = validMemberToken(previous) ? memberTokenHash(previous) : null;
   let otherDeviceSignedOut = false;
   if (authenticated) {
-    const ended = await tx.memberSession.deleteMany({ where: { accountId, authenticatedAt: { not: null }, passwordResetAt: null,
-      expiresAt: { gt: at }, ...(previousHash ? { tokenHash: { not: previousHash } } : {}) } });
-    otherDeviceSignedOut = ended.count > 0;
-    await tx.memberSession.deleteMany({ where: previousHash ? { OR: [{ accountId }, { tokenHash: previousHash }] } : { accountId } });
+    if (previousHash) await tx.memberSession.deleteMany({ where: { tokenHash: previousHash } });
+    await tx.memberSession.deleteMany({ where: { accountId, OR: [{ expiresAt: { lte: at } },
+      { authenticatedAt: null }, { passwordResetAt: { not: null } }] } });
+    const active = await tx.memberSession.findMany({ where: { accountId, authenticatedAt: { not: null }, passwordResetAt: null,
+      expiresAt: { gt: at } }, orderBy: [{ authenticatedAt: "asc" }, { createdAt: "asc" }, { tokenHash: "asc" }], select: { tokenHash: true } });
+    const evict = active.slice(0, Math.max(0, active.length - memberSessionRules.maximumActiveSessions + 1));
+    if (evict.length) otherDeviceSignedOut = (await tx.memberSession.deleteMany({ where: { accountId,
+      tokenHash: { in: evict.map(row => row.tokenHash) } } })).count > 0;
   } else {
     if (previousHash) await tx.memberSession.deleteMany({ where: { tokenHash: previousHash } });
     await tx.memberSession.deleteMany({ where: { accountId, expiresAt: { lte: at } } });

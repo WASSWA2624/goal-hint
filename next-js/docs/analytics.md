@@ -105,7 +105,7 @@ neutralised; percentages as 0–100, durations in seconds).
 - Everyone signs in at `/en/account?view=login` through `/api/account/login`.
   Administrator roles come from current server configuration after the password is
   verified. Administrators go to `/admin`; ordinary users go to `/en`.
-- Account passwords, throttling, verification, HttpOnly cookies and one-device
+- Account passwords, throttling, verification, HttpOnly cookies and two-session
   sessions follow [member authentication](member-authentication.md). Removing an
   administrator number or rotating its environment credential withdraws its access.
 - Legacy dashboard login endpoints redirect with HTTP 303 to the shared form without

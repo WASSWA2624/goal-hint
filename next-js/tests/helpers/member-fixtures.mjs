@@ -4,7 +4,7 @@ import { createMemberSessions, issueMemberSession } from "../../src/server/membe
 
 let testHash;
 /** Seed legacy authenticated rows for subscription/device-grant tests, including several sessions on one account.
- * This deliberately bypasses the one-device password-login policy; actual authentication is covered by member-auth tests. */
+ * This deliberately bypasses the two-session password-login limit; actual authentication is covered by member-auth tests. */
 export function createAuthenticatedTestSessions({ database, config, now = Date.now }) {
   const sessions = createMemberSessions({ database, config, now });
   return { ...sessions, async signIn(phone, _address, previous) {
