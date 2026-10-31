@@ -5,7 +5,8 @@ import { fixtureMemberSessions } from "./fixture-admin";
 export const subscriptionScenarios = ["free", "active", "manual", "trial", "pending", "pending-renewal", "expired", "off", "off-active", "registration-trial"] as const;
 export type SubscriptionScenario = (typeof subscriptionScenarios)[number];
 // Route modules can compile independently; anchor API and HTML expiry to the same UTC day.
-export const fixtureSubscriptionEnd = new Date(Math.floor(Date.now() / 86_400_000) * 86_400_000 + 7 * 86_400_000 + 10 * 3_600_000).toISOString();
+// The seven-day period starts yesterday, so it is active even before 10:00 UTC today.
+export const fixtureSubscriptionEnd = new Date(Math.floor(Date.now() / 86_400_000) * 86_400_000 + 6 * 86_400_000 + 10 * 3_600_000).toISOString();
 const registrationTrialStart = Math.floor(Date.now() / 86_400_000) * 86_400_000;
 export const fixtureRegistrationTrial = Object.freeze({ days: 2,
   startsAt: new Date(registrationTrialStart).toISOString(), endsAt: new Date(registrationTrialStart + 2 * 86_400_000).toISOString() });

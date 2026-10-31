@@ -229,6 +229,48 @@ def subscription_discovery(origin):
             "creditUgx": 0, "autoRenew": False, "renewsFromCredit": False}
 
 
+def subscriber_dashboard(origin):
+    """Real Account markup handles subscription states and safe activity independently."""
+    for state, package in [("active", "Weekly"), ("trial", "Free trial"), ("off-active", "Weekly"),
+            ("queued", "Weekly"), ("free", None), ("expired", None), ("pending", None)]:
+        html = visible_html(request(origin, f"/en/account?state={state}").text)
+        summary = match(r'<section\b[^>]*data-subscription-summary[^>]*>([\s\S]*?)</section>', html).group(1)
+        if package:
+            match(rf'Current package:\s*<strong[^>]*>{re.escape(package)}</strong>', summary)
+        else:
+            no_match("Current package:", summary)
+        activity = match(r'<section\b[^>]*data-account-activity[^>]*>([\s\S]*?)</section>', html).group(1)
+        match("Recent activity", activity)
+        assert html.index("data-subscription-summary") < html.index("data-account-activity") < html.index("Change phone")
+        no_match(r'Best slips|Custom Filters|saved-slip-configurations|codeHash|passwordHash|payerPhone|transactionRef', activity)
+        if state == "queued":
+            match("Next package", summary)
+            no_match(r'Current package:\s*<strong[^>]*>Next package', summary)
+        if state == "free":
+            match("No activity yet", activity)
+        elif state == "pending":
+            match("Payment submitted", activity)
+        else:
+            match("Access added", activity)
+            match(r'<time dateTime="[^"]+">[^<]*\d{4}[^<]* EAT</time>', activity)
+    history = visible_html(request(origin, "/en/account?state=history").text)
+    activity = match(r'<section\b[^>]*data-account-activity[^>]*>([\s\S]*?)</section>', history).group(1)
+    assert len(re.findall(r'<li\b', activity)) == 10
+    for label in ["Payment reversed", "Payment approved", "Payment declined", "Payment replaced", "Payment submitted", "Account credit"]:
+        match(label, activity)
+    unavailable = visible_html(request(origin, "/en/account?state=dashboard-unavailable").text)
+    match("Recent activity is temporarily unavailable", unavailable)
+    match("You have access until", unavailable)
+    no_match("No activity yet", unavailable)
+    unavailable = visible_html(request(origin, "/en/account?state=subscription-unavailable").text)
+    match("Subscription details are unavailable", unavailable)
+    match("Access added", unavailable)
+    for state in ["signed-out", "blocked", "unverified", "password-reset"]:
+        html = visible_html(request(origin, f"/en/account?state={state}").text)
+        no_match(r'data-account-activity|data-active-package', html)
+    print("Subscriber dashboard: current package, queued/expired/closed states, bounded activity, private guards and unavailable reads pass.", flush=True)
+
+
 def main():
     options = parse_args("member account", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
@@ -239,6 +281,10 @@ def main():
     else:
         directory = create_fixture("members")
         print(f"Building member acceptance fixture: {directory}", flush=True)
+        # Root typecheck validates production source; keep the isolated acceptance
+        # build from repeating that whole-source check on memory-constrained hosts.
+        config = directory / "next.config.mjs"
+        config.write_text(config.read_text().replace("agentRules: false,", "agentRules: false, typescript: { ignoreBuildErrors: true },"))
         build_fixture(directory, env=env, timeout=240)
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Sign in"), ("signed-out", "Phone number"),
@@ -323,6 +369,7 @@ def main():
         verify_synthetic_api(server.origin)
         unified_login(server.origin)
         subscription_discovery(server.origin)
+        subscriber_dashboard(server.origin)
         print("Member HTML and synthetic APIs: private subscription status, visible expiry and renewal summaries, shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
         if options.serve:
             server.serve()

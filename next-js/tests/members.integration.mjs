@@ -17,6 +17,7 @@ import { createMemberSessions as createRestrictedMemberSessions, memberSessionRu
 import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
+import { createAccountDashboard } from "../src/server/members/account-dashboard.ts";
 import { createViewerAccess } from "../src/server/members/viewer-access.ts";
 import { remainingDays, subscriptionDayMs as day } from "../src/domain/subscription-period.ts";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
@@ -277,6 +278,27 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(stored.codes[0].sessions[0].accessCodeId, stored.codes[0].id);
       assert.equal(stored.codes[0].extensionDays, 0);
       assert.deepEqual((await database.query((client) => client.ownerAuditEvent.findUniqueOrThrow({ where: { id: event.id } }))).details, { reference: "C-0000", days: 2 });
+    });
+
+    await t.test("subscriber dashboard reads safe own-account snapshots through the application role", async () => {
+      const config = { production: false, key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      const sessions = createMemberSessions({ database, config, now: () => +now });
+      const signedIn = await sessions.signIn("256700000451", "unknown");
+      const member = await sessions.verify(signedIn.token);
+      const other = await account("256700000452");
+      await code(member.accountId, { planId: weekly, planName: "Purchased snapshot" });
+      await code(member.accountId, { startsAt: week, endsAt: new Date(+week + day), planName: "Queued package" });
+      await code(other, { planName: "Private package" });
+      await submission(member.accountId, weekly);
+      await submission(other, weekly, { planName: "Private payment" });
+      const dashboard = createAccountDashboard({ database, now: () => +now });
+      const view = await dashboard.read(member);
+      assert.equal(view.activePlanName, "Purchased snapshot");
+      assert.equal(view.activity.length, 3);
+      assert.ok(view.activity.some(row => row.kind === "payment" && row.status === "pending"));
+      assert.doesNotMatch(JSON.stringify(view), /Private|codeHash|payerPhone|decidedBy|passwordHash/);
+      await app.query("DELETE FROM MemberSession WHERE tokenHash = ?", [member.tokenHash]);
+      assert.equal(await dashboard.read(member), null);
     });
 
     await t.test("settings and plans services keep canonical numbers, the owner password on eight fields, mode requirements and an audit of every change", async () => {

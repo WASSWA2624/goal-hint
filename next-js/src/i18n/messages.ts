@@ -6,8 +6,9 @@ import { predictionMessages } from "./messages/predictions.ts";
 import { slipsMessages } from "./messages/slips.ts";
 import { slipSharingMessages } from "./messages/slip-sharing.ts";
 import { slipConfigurationMessages } from "./messages/slip-configurations.ts";
+import { accountDashboardMessages } from "./messages/account-dashboard.ts";
 
-const catalog = { ...en, ...predictionMessages, ...slipsMessages, ...slipSharingMessages, ...slipConfigurationMessages };
+const catalog = { ...en, ...predictionMessages, ...slipsMessages, ...slipSharingMessages, ...slipConfigurationMessages, ...accountDashboardMessages };
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
   days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; shortTimes: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;

@@ -55,6 +55,16 @@ export const AccountBlockActions = styled.div`
 export const AccountFine = styled.p`
   font-size: 0.8125rem; line-height: 1.5; color: ${({ theme }) => theme.color.mutedText};
 `;
+export const AccountActivitySection = styled(AccountBlock)`
+  display: block; padding-block: 14px;
+  h2 { margin: 0 0 10px; font-size: 1em; font-weight: 800; }
+`;
+export const AccountActivityList = styled.ol`
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 12px;
+  li { min-inline-size: 0; }
+  li > p { font-size: 0.875rem; }
+  time { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.8125rem; }
+`;
 const actionText = css`
   min-block-size: 44px; padding: 0; border: 0; background: none;
   color: ${({ theme }) => theme.color.link}; font-size: 0.875rem; font-weight: 700; text-decoration: none;

@@ -1,0 +1,15 @@
+export const accountDashboardMessages = {
+  "account.currentPackage": "Current package: {plan}",
+  "account.activity": "Recent activity",
+  "account.activityEmpty": "No activity yet.",
+  "account.activityUnavailable": "Recent activity is temporarily unavailable.",
+  "account.activity.pending": "Payment submitted",
+  "account.activity.superseded": "Payment replaced",
+  "account.activity.approved": "Payment approved",
+  "account.activity.rejected": "Payment declined",
+  "account.activity.reversed": "Payment reversed",
+  "account.activity.added": "Access added",
+  "account.activity.removed": "Access removed",
+  "account.activityCredit": "Account credit",
+  "account.activityPeriod": "{start} – {end}",
+} as const;

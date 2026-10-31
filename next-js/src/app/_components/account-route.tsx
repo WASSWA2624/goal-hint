@@ -7,6 +7,7 @@ import { AccountAuthForm, type AccountAuthView } from "@/components/members/acco
 import { AccountBlock, AccountBlockActions, AccountBlockText, AccountFlash, AccountLogOut, AccountSheet } from "@/components/members/account-overview";
 import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
 import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
+import { AccountActivity } from "@/components/members/account-activity";
 import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
@@ -61,11 +62,12 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const verification = await resolved.auth?.verificationSession(token).catch(() => null);
     if (verification) return <PublicShell locale={locale} showAccount><AccountVerificationForm locale={locale} phone={verification.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     const now = new Date();
-    const [view, paymentView, subscription] = member && !member.blocked ? await Promise.all([
+    const [view, paymentView, subscription, dashboard] = member && !member.blocked ? await Promise.all([
       member.codeEnteredAt ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
       settings ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null,
-    ]) : [null, null, null];
+      resolved.dashboard?.read(member).catch(() => null) ?? null,
+    ]) : [null, null, null, null];
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
@@ -101,6 +103,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         <ApprovalRefresh waiting={waiting} refreshAt={activeUntil} />
         <AccountBlock data-subscription-summary={!subscription ? "unavailable" : activeUntil ? "active" : "inactive"}>
           <AccountBlockText>
+            {activeUntil && dashboard?.activePlanName && <p data-active-package>{richText(messages.text("account.currentPackage"), { plan: <strong>{dashboard.activePlanName}</strong> })}</p>}
             <p>{access}</p>
             {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
           </AccountBlockText>
@@ -112,6 +115,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
         {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
         {credit && hasCredit && <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} active={!!activeUntil} />}
+        <AccountActivity locale={locale} dashboard={dashboard} />
         <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} devices={view ? view.devices.map((device) => formatPeriodEnd(device.lastSeenAt)) : null} />
         <AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} />
         <AccountLogOut locale={locale} />
