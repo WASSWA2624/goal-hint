@@ -4,15 +4,18 @@ Every signed-in account can keep up to ten named filter configurations, includin
 while access is expired or subscription sales are closed. **Custom Filters** in
 the builder's Actions opens the shared criteria dialog, using the existing
 filter toolbar styling. The body contains the chooser and optional default.
-The footer contains **Create New Filter**, **Rename Selected Filter**,
-**Update Selected Filter** and **Delete Selected Filter**;
-the top-right X closes the parent. On desktop, these actions open a
+The footer contains **Create**, **Rename**, **Update**, **Delete** and
+**Use Selected Filter**, with the last action at the far right. Choosing an
+option selects the saved record to manage; it does not change the main draft,
+applied configuration ID, URL or generated results. **Use Selected Filter**
+applies the selected values and returns to the builder. The top-right X closes
+the parent. On desktop, the four management actions open a
 smaller native child dialog above the visible, inactive parent. The child names
 the affected filter and offers its specific action and Cancel. Its errors stay
 inside the child. Cancel, Escape and successful writes return to the parent and
 restore focus; background controls remain inert until the child closes. The two
 dialogs share the existing criteria-dialog styling and are centered in the
-viewport. The wider desktop parent fits its four actions on one row. Clicking
+viewport. The wider desktop parent fits its five actions on one row. Clicking
 outside either dialog does nothing; Escape, explicit close/cancel controls and
 completed actions handle dismissal. Child action labels are Create, Rename,
 Update and Delete.
@@ -20,8 +23,10 @@ Phones and tablets keep inline editors. Resizing preserves the pending form.
 Persistent explanatory text is omitted. This is the only management interface on desktop and
 phone; the account page has no saved-filter panel. Deleting a configuration does
 not change an open builder draft. The main builder is the single place to view
-and edit filter values; **Update Selected Filter** replaces the saved values with
-that current draft.
+and edit filter values; **Update** replaces the selected record's saved values
+with that current draft without applying the record. Creation, renaming and
+default changes likewise leave the draft and its applied ID alone. Deleting a
+record only clears the applied ID if that record was the one applied.
 All desktop filter and action buttons share one row, including at 1024px.
 
 Names are trimmed, Unicode-normalized and unique per account without case
@@ -37,7 +42,7 @@ An optional default fills a fresh builder visit with no query. Explicit query
 filters and Reset take precedence. A slow default read does not overwrite filters
 the member has started editing. Loading updates the builder draft and canonical
 URL with the configuration ID **without `build=1`**, clears previous results,
-and keeps the dialog open. It requires no server
+and closes the dialog after Use Selected Filter. It requires no server
 navigation or generation. Generation still requires the explicit Build slips
 action and entitlement. Configuration controls sit outside the generation form;
 a hidden configuration ID preserves the selection through generation.

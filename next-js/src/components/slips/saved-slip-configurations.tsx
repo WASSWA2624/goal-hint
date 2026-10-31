@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { Button, SelectInput, TextInput } from "@/components/ui/controls";
 import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
@@ -43,8 +43,8 @@ const EditorPanel = styled.section`
 `;
 type EditorAction = "create" | "rename" | "update" | "delete";
 type Editor = { action: EditorAction; target: SlipConfiguration | null };
-type Props = { id: string; locale: string; currentParameters: string | null; selectedId: string | null; open: boolean;
-  onClose: () => void; onSelectionChange: (id: string | null) => void; onLoad: (configuration: SlipConfiguration) => void;
+type Props = { id: string; locale: string; currentParameters: string | null; appliedId: string | null; open: boolean;
+  onClose: () => void; onAppliedConfigurationRemoved: () => void; onLoad: (configuration: SlipConfiguration) => void;
   applyDefault?: boolean; pending?: boolean; canApplyDefault?: () => boolean };
 
 class ConfigurationRequestError extends Error {
@@ -66,11 +66,12 @@ async function requestConfigurations(body?: SlipConfigurationMutation, signal?: 
 }
 
 /** One builder-only dialog manages saves; editable filter values live in the main builder. */
-export function SavedSlipConfigurations({ id, locale, currentParameters, selectedId, open, onClose, onSelectionChange,
+export function SavedSlipConfigurations({ id, locale, currentParameters, appliedId, open, onClose, onAppliedConfigurationRemoved,
   onLoad, applyDefault = false, pending = false, canApplyDefault }: Props) {
   const m = createMessages(locale);
   const desktop = useDesktopLayout();
   const [configurations, setConfigurations] = useState<SlipConfiguration[]>([]);
+  const [selection, setSelection] = useState(appliedId);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [reload, setReload] = useState(0);
   const [error, setError] = useState<TextKey | null>(null), [notice, setNotice] = useState<TextKey | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null), [name, setName] = useState(""), [isDefault, setDefault] = useState(false);
@@ -79,10 +80,17 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
   const chooseField = useRef<HTMLSelectElement>(null), cancelEditorButton = useRef<HTMLButtonElement>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null), closeButton = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
-  const latest = useRef({ currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault });
+  const latest = useRef({ currentParameters, appliedId, onLoad, onAppliedConfigurationRemoved, canApplyDefault });
   const defaultAttempted = useRef(false), requestVersion = useRef(0);
-  useEffect(() => { latest.current = { currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault }; },
-    [currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault]);
+  useEffect(() => { latest.current = { currentParameters, appliedId, onLoad, onAppliedConfigurationRemoved, canApplyDefault }; },
+    [currentParameters, appliedId, onLoad, onAppliedConfigurationRemoved, canApplyDefault]);
+  const receiveConfigurations = useCallback((records: SlipConfiguration[], createdName?: string) => {
+    setConfigurations(records);
+    setSelection(previous => createdName !== undefined ? records.find(item => item.name === createdName)?.id ?? null
+      : records.some(item => item.id === previous) ? previous : null);
+    const applied = latest.current.appliedId;
+    if (applied && !records.some(item => item.id === applied)) latest.current.onAppliedConfigurationRemoved();
+  }, []);
   useEffect(() => {
     if (editor) (editor.action === "create" || editor.action === "rename" ? nameField.current : cancelEditorButton.current)?.focus();
   }, [editor, desktop]);
@@ -101,20 +109,19 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
     const controller = new AbortController(), version = ++requestVersion.current, initial = latest.current.currentParameters;
     void requestConfigurations(undefined, controller.signal).then(records => {
       if (controller.signal.aborted || version !== requestVersion.current) return;
-      setConfigurations(records); setError(null); setLoading(false);
-      if (latest.current.selectedId && !records.some(item => item.id === latest.current.selectedId)) latest.current.onSelectionChange(null);
+      receiveConfigurations(records); setError(null); setLoading(false);
       if (!defaultAttempted.current) {
         defaultAttempted.current = true;
         const configured = records.find(item => item.isDefault);
         if (applyDefault && configured && latest.current.currentParameters === initial && latest.current.canApplyDefault?.() !== false
-          && !window.location.search) latest.current.onLoad(configured);
+          && !window.location.search) { setSelection(configured.id); latest.current.onLoad(configured); }
       }
     }).catch(failure => { if (!controller.signal.aborted && version === requestVersion.current) {
       setError(failure instanceof ConfigurationRequestError && failure.code === "forbidden" ? "slipConfigs.error.forbidden" : "slipConfigs.error.unavailable"); setLoading(false);
     } });
     return () => controller.abort();
-  }, [reload, applyDefault]);
-  const selected = configurations.find(item => item.id === selectedId);
+  }, [reload, applyDefault, receiveConfigurations]);
+  const selected = configurations.find(item => item.id === selection);
   const disabled = loading || busy || pending;
   function close() { if (!busy && !nestedEditor) { setEditor(null); setError(null); setNotice(null); onClose(); } }
   function restoreEditorFocus() {
@@ -133,11 +140,9 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
     ++requestVersion.current; setBusy(true); setError(null); setNotice(null);
     try {
       const records = await requestConfigurations(parsed.data);
-      setConfigurations(records); setEditor(null); setNotice(`slipConfigs.done.${parsed.data.action}`);
+      receiveConfigurations(records, parsed.data.action === "create" ? parsed.data.name : undefined);
+      setEditor(null); setNotice(`slipConfigs.done.${parsed.data.action}`);
       if (editor) restoreEditorFocus();
-      const createdName = parsed.data.action === "create" ? parsed.data.name : null;
-      onSelectionChange(createdName !== null ? records.find(item => item.name === createdName)?.id ?? null
-        : records.some(item => item.id === selectedId) ? selectedId : null);
     } catch (failure) {
       const code = failure instanceof ConfigurationRequestError ? failure.code : "unavailable";
       setError(["invalid", "limit", "name-taken", "conflict", "not-found", "forbidden"].includes(code)
@@ -145,8 +150,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
       if (["conflict", "not-found"].includes(code)) {
         setEditor(null);
         try {
-          const records = await requestConfigurations(); setConfigurations(records);
-          if (!records.some(item => item.id === selectedId)) onSelectionChange(null);
+          receiveConfigurations(await requestConfigurations());
         } catch { /* Keep the actionable conflict notice. */ }
         restoreEditorFocus();
       }
@@ -177,7 +181,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
     <CriteriaDialogButton type="button" disabled={disabled} onClick={apply}>{m.text(`slipConfigs.confirm.${editor.action}`)}</CriteriaDialogButton>
   </>;
   const footer = <>
-    <CriteriaDialogButton type="button" disabled={disabled || !!editor || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
+    <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !!editor || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
       onClick={event => edit("create", event.currentTarget)}>{m.text("slipConfigs.create")}</CriteriaDialogButton>
     <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !!editor || !selected}
       onClick={event => edit("rename", event.currentTarget)}>{m.text("slipConfigs.rename")}</CriteriaDialogButton>
@@ -185,16 +189,17 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
       onClick={event => edit("update", event.currentTarget)}>{m.text("slipConfigs.update")}</CriteriaDialogButton>
     <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !!editor || !selected}
       onClick={event => edit("delete", event.currentTarget)}>{m.text("slipConfigs.delete")}</CriteriaDialogButton>
+    <CriteriaDialogButton type="button" disabled={disabled || !!editor || !selected}
+      onClick={() => { if (selected) { onLoad(selected); close(); } }}>{m.text("slipConfigs.use")}</CriteriaDialogButton>
   </>;
   return <><SavedDialog id={id} title={m.text("slipConfigs.title")} open onCancel={close} closeLabel={m.text("slipConfigs.close")}
     dismissOnBackdrop={false} closeButtonRef={closeButton} busy={busy} footer={footer} {...(editor && !desktop ? { onApply: apply } : {})}>
     <Content data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
-      <SelectInput ref={chooseField} label={m.text("slipConfigs.choose")} value={selectedId ?? ""} disabled={disabled || !!editor || !configurations.length}
+      <SelectInput ref={chooseField} label={m.text("slipConfigs.choose")} value={selection ?? ""} disabled={disabled || !!editor || !configurations.length}
         hint={m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}
         onChange={event => {
           setError(null); setNotice(null);
-          const configuration = configurations.find(item => item.id === event.currentTarget.value);
-          if (configuration) onLoad(configuration); else onSelectionChange(null);
+          setSelection(event.currentTarget.value || null);
         }}>
         <option value="">{m.text("slipConfigs.placeholder")}</option>
         {configurations.map(item => <option key={item.id} value={item.id}>{item.name}{item.isDefault ? ` · ${m.text("slipConfigs.default")}` : ""}</option>)}

@@ -158,10 +158,10 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const [activeGroup, setActiveGroup] = useState<CriteriaGroup | null>(() => issueGroup(initialError));
   const snapshot = useRef<{ group: CriteriaGroup; draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
     activeGroup ? { group: activeGroup, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse } : null);
-  const selectConfiguration = useCallback((id: string | null) => {
-    setSelectedConfiguration(id);
+  const clearAppliedConfiguration = useCallback(() => {
+    setSelectedConfiguration(null);
     const url = new URL(window.location.href);
-    if (id) url.searchParams.set("configuration", id); else url.searchParams.delete("configuration");
+    url.searchParams.delete("configuration");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
   const loadConfiguration = useCallback((configuration: SlipConfiguration) => {
@@ -385,8 +385,8 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     <BuilderHeader>
       <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     </BuilderHeader>
-    {signedIn && <SavedSlipConfigurations id={savedFiltersId} locale={locale} currentParameters={currentParameters} selectedId={selectedConfiguration}
-      open={savedFiltersOpen} onClose={closeSavedFilters} onSelectionChange={selectConfiguration}
+    {signedIn && <SavedSlipConfigurations id={savedFiltersId} locale={locale} currentParameters={currentParameters} appliedId={selectedConfiguration}
+      open={savedFiltersOpen} onClose={closeSavedFilters} onAppliedConfigurationRemoved={clearAppliedConfiguration}
       applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} canApplyDefault={canApplyDefault} />}
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
