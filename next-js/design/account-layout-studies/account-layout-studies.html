@@ -1,0 +1,320 @@
+<div id="goal-hint-account-studies" class="viz-carousel" aria-label="Goal Hint account layouts">
+  <section class="gh-account gh-classic" data-variant="Admin classic" aria-label="Admin classic account layout"></section>
+  <section class="gh-account gh-split" data-variant="Split workspace" aria-label="Split workspace account layout" hidden></section>
+  <section class="gh-account gh-compact" data-variant="Compact records" aria-label="Compact records account layout" hidden></section>
+  <section class="gh-account gh-passport" data-variant="Account passport" aria-label="Account passport layout" hidden></section>
+  <section class="gh-account gh-plan" data-variant="Subscription first" aria-label="Subscription first account layout" hidden></section>
+  <section class="gh-account gh-quiet" data-variant="Quiet settings" aria-label="Quiet settings account layout" hidden></section>
+  <section class="gh-account gh-inspector" data-variant="Details and inspector" aria-label="Details and inspector account layout" hidden></section>
+  <section class="gh-account gh-grouped" data-variant="Grouped settings" aria-label="Grouped settings account layout" hidden></section>
+  <section class="gh-account gh-footer" data-variant="Action footer" aria-label="Action footer account layout" hidden></section>
+  <section class="gh-account gh-ledger" data-variant="Account ledger" aria-label="Account ledger layout" hidden></section>
+</div>
+<style>
+  #goal-hint-account-studies .gh-account {
+    --gh-bg: light-dark(#f2f6fb, #061522); --gh-paper: light-dark(#fff, #0b2030);
+    --gh-text: light-dark(#061747, #edf5ff); --gh-muted: light-dark(#526987, #a4bad1);
+    --gh-line: light-dark(#dfe6ee, #203a4c); --gh-blue: light-dark(#2455cb, #2797ff);
+    --gh-on-blue: light-dark(#fff, #051727); --gh-tint: light-dark(#eaf1ff, #12354c);
+    --gh-cyan: light-dark(#0094d2, #00b9f2); --gh-green: light-dark(#126747, #92dcc1);
+    --gh-green-bg: light-dark(#eaf7f0, #102f2b); --gh-danger: light-dark(#b73535, #ffb3b3);
+    --gh-side: 204px; --gh-space: 24px;
+    color: var(--gh-text); font: 14px/1.5 "Manrope", "Segoe UI", Arial, sans-serif;
+  }
+  #goal-hint-account-studies .gh-account * { box-sizing: border-box; }
+  #goal-hint-account-studies .gh-account [hidden] { display: none !important; }
+  #goal-hint-account-studies .gh-account h1, #goal-hint-account-studies .gh-account h2,
+  #goal-hint-account-studies .gh-account h3, #goal-hint-account-studies .gh-account p { margin: 0; }
+  #goal-hint-account-studies .gh-account button, #goal-hint-account-studies .gh-account input,
+  #goal-hint-account-studies .gh-account select { font: inherit; }
+  #goal-hint-account-studies .gh-account button { color: inherit; }
+  #goal-hint-account-studies .gh-account button:focus-visible,
+  #goal-hint-account-studies .gh-account summary:focus-visible,
+  #goal-hint-account-studies .gh-account input:focus-visible { outline: 2px solid var(--gh-cyan); outline-offset: 3px; }
+  #goal-hint-account-studies .gh-window { background: var(--gh-bg); min-block-size: 720px; border: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-top { min-block-size: 58px; padding: 10px 100px 10px 20px; display: flex; align-items: center; gap: 28px; background: var(--gh-paper); border-block-end: 2px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-brand { white-space: nowrap; font-size: 23px; font-weight: 800; letter-spacing: -1px; }
+  #goal-hint-account-studies .gh-brand span { color: var(--gh-cyan); }
+  #goal-hint-account-studies .gh-public { display: flex; gap: 22px; align-items: center; font-size: 13px; color: var(--gh-muted); }
+  #goal-hint-account-studies .gh-public button { background: none; border: 0; padding: 6px 0; }
+  #goal-hint-account-studies .gh-preview { font-size: 11px; color: var(--gh-muted); padding: 2px 6px; border: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-account-menu { margin-inline-start: auto; position: relative; }
+  #goal-hint-account-studies .gh-account-menu summary { list-style: none; display: flex; gap: 7px; align-items: center; padding: 7px 0; font-weight: 600; white-space: nowrap; }
+  #goal-hint-account-studies .gh-account-menu summary::-webkit-details-marker { display: none; }
+  #goal-hint-account-studies .gh-menu-popup { position: absolute; z-index: 5; inset-block-start: 100%; inset-inline-end: 0; inline-size: 196px; padding: 6px; background: var(--gh-paper); border: 1px solid var(--gh-line); box-shadow: 0 12px 28px #0002; }
+  #goal-hint-account-studies .gh-menu-popup button { display: block; inline-size: 100%; text-align: start; border: 0; background: none; padding: 9px 10px; border-radius: 4px; }
+  #goal-hint-account-studies .gh-menu-popup button:hover { background: var(--gh-tint); }
+  #goal-hint-account-studies .gh-body { display: grid; grid-template-columns: var(--gh-side) minmax(0, 1fr); min-block-size: 660px; }
+  #goal-hint-account-studies .gh-sidebar { background: var(--gh-paper); border-inline-end: 1px solid var(--gh-line); padding: 24px 12px 16px; display: flex; flex-direction: column; gap: 18px; min-inline-size: 0; }
+  #goal-hint-account-studies .gh-side-head { padding-inline: 12px; font-size: 19px; font-weight: 750; }
+  #goal-hint-account-studies .gh-sidebar nav { display: grid; gap: 4px; }
+  #goal-hint-account-studies .gh-sidebar nav button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-block-size: 42px; text-align: start; border: 0; border-radius: 4px; background: transparent; white-space: normal; font-size: 13px; }
+  #goal-hint-account-studies .gh-sidebar nav button[aria-current="page"] { color: var(--gh-blue); background: var(--gh-tint); font-weight: 700; }
+  #goal-hint-account-studies .gh-sidebar nav button:hover { background: var(--gh-tint); }
+  #goal-hint-account-studies .gh-nav-group { color: var(--gh-muted); text-transform: uppercase; font-size: 10px; letter-spacing: 1px; padding: 16px 12px 4px; }
+  #goal-hint-account-studies .gh-side-foot { margin-block-start: auto; padding: 20px 12px 0; display: grid; gap: 12px; border-block-start: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-side-foot small { color: var(--gh-muted); font-size: 11px; }
+  #goal-hint-account-studies .gh-signout { border: 0; background: transparent; text-align: start; padding: 0; display: flex; align-items: center; gap: 10px; min-block-size: 32px; }
+  #goal-hint-account-studies .gh-icon { inline-size: 17px; block-size: 17px; flex: none; vertical-align: middle; }
+  #goal-hint-account-studies .gh-main { min-inline-size: 0; padding: var(--gh-space); display: flex; flex-direction: column; gap: 20px; }
+  #goal-hint-account-studies .gh-page-head { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; }
+  #goal-hint-account-studies .gh-page-head h1 { font-size: 25px; letter-spacing: -.6px; line-height: 1.25; font-weight: 750; }
+  #goal-hint-account-studies .gh-page-head p { color: var(--gh-muted); font-size: 12px; margin-block-start: 5px; }
+  #goal-hint-account-studies .gh-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  #goal-hint-account-studies .gh-button { min-block-size: 38px; padding: 8px 14px; border: 1px solid var(--gh-line); border-radius: 4px; background: var(--gh-paper); font-size: 12px; font-weight: 650; white-space: normal; }
+  #goal-hint-account-studies .gh-button:hover { border-color: var(--gh-blue); }
+  #goal-hint-account-studies .gh-button.gh-primary { color: var(--gh-on-blue); border-color: var(--gh-blue); background: var(--gh-blue); }
+  #goal-hint-account-studies .gh-link { color: var(--gh-blue); padding: 6px 0; border: 0; background: transparent; font-size: 12px; font-weight: 650; text-align: start; }
+  #goal-hint-account-studies .gh-panel { background: var(--gh-paper); border: 1px solid var(--gh-line); min-inline-size: 0; }
+  #goal-hint-account-studies .gh-pad { padding: 20px; }
+  #goal-hint-account-studies .gh-section-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block-end: 16px; }
+  #goal-hint-account-studies .gh-eyebrow { color: var(--gh-muted); font-size: 11px; letter-spacing: .4px; }
+  #goal-hint-account-studies .gh-plan-name { font-size: 28px; font-weight: 750; letter-spacing: -.8px; }
+  #goal-hint-account-studies .gh-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; font-size: 11px; font-weight: 650; border-radius: 2px; color: var(--gh-green); background: var(--gh-green-bg); white-space: nowrap; }
+  #goal-hint-account-studies .gh-status::before { content: ""; inline-size: 5px; block-size: 5px; background: currentColor; }
+  #goal-hint-account-studies .gh-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; margin: 0; }
+  #goal-hint-account-studies .gh-facts > div { min-inline-size: 0; }
+  #goal-hint-account-studies .gh-facts dt { color: var(--gh-muted); font-size: 11px; margin-block-end: 4px; }
+  #goal-hint-account-studies .gh-facts dd { margin: 0; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+  #goal-hint-account-studies .gh-facts dd small { display: block; font-size: 11px; color: var(--gh-muted); font-weight: 400; margin-block-start: 3px; }
+  #goal-hint-account-studies .gh-divider { border: 0; border-block-start: 1px solid var(--gh-line); margin: 18px 0; }
+  #goal-hint-account-studies .gh-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+  #goal-hint-account-studies .gh-stack { display: grid; gap: 18px; min-inline-size: 0; }
+  #goal-hint-account-studies .gh-record { display: grid; grid-template-columns: minmax(90px, .65fr) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 17px 0; border-block-end: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-record > span { color: var(--gh-muted); font-size: 12px; }
+  #goal-hint-account-studies .gh-record > strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  #goal-hint-account-studies .gh-record:last-child { border-block-end: 0; }
+  #goal-hint-account-studies .gh-activity { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  #goal-hint-account-studies .gh-activity li { display: grid; grid-template-columns: 7px minmax(0,1fr) auto; gap: 10px; align-items: baseline; font-size: 12px; }
+  #goal-hint-account-studies .gh-activity li::before { content: ""; block-size: 5px; inline-size: 5px; background: var(--gh-cyan); }
+  #goal-hint-account-studies .gh-activity small { color: var(--gh-muted); font-size: 11px; }
+  #goal-hint-account-studies .gh-form-wrap { max-inline-size: 620px; inline-size: 100%; }
+  #goal-hint-account-studies .gh-form { display: grid; gap: 18px; }
+  #goal-hint-account-studies .gh-form label { display: grid; gap: 7px; font-size: 12px; font-weight: 600; }
+  #goal-hint-account-studies .gh-form input { inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 10px 12px; color: var(--gh-text); border: 1px solid var(--gh-line); border-radius: 4px; background: var(--gh-paper); font-size: 16px; }
+  #goal-hint-account-studies .gh-form small { color: var(--gh-muted); font-size: 12px; }
+  #goal-hint-account-studies .gh-form-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding-block-start: 16px; border-block-start: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-alert { color: var(--gh-green); padding: 10px 12px; background: var(--gh-green-bg); border-inline-start: 2px solid currentColor; font-size: 12px; }
+  #goal-hint-account-studies .gh-error { color: var(--gh-danger); }
+  #goal-hint-account-studies .gh-notice:empty { display: none; }
+  #goal-hint-account-studies .gh-table { inline-size: 100%; border-collapse: collapse; text-align: start; font-size: 12px; }
+  #goal-hint-account-studies .gh-table th { font-size: 11px; font-weight: 500; color: var(--gh-muted); background: var(--gh-bg); }
+  #goal-hint-account-studies .gh-table th, #goal-hint-account-studies .gh-table td { padding: 13px 16px; border-block-end: 1px solid var(--gh-line); text-align: start; }
+  #goal-hint-account-studies .gh-table small { display: block; color: var(--gh-muted); font-size: 11px; }
+  #goal-hint-account-studies .gh-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; }
+  #goal-hint-account-studies .gh-toggle-row input { inline-size: 18px; block-size: 18px; accent-color: var(--gh-blue); }
+  #goal-hint-account-studies .gh-mobile-menu { display: none; }
+  /* Each concept changes composition, not just its palette. */
+  #goal-hint-account-studies .gh-classic .gh-overview { display: grid; gap: 20px; }
+  #goal-hint-account-studies .gh-classic .gh-panel { border: 0; border-block: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-classic .gh-sub-facts { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  #goal-hint-account-studies .gh-split .gh-overview { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
+  #goal-hint-account-studies .gh-split .gh-wide { grid-column: 1/-1; }
+  #goal-hint-account-studies .gh-split .gh-plan-summary { border-block-start: 3px solid var(--gh-blue); }
+  #goal-hint-account-studies .gh-compact .gh-main { gap: 14px; }
+  #goal-hint-account-studies .gh-compact .gh-record { padding-block: 14px; }
+  #goal-hint-account-studies .gh-compact .gh-strip { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 18px 20px; gap: 16px; background: var(--gh-tint); border-block: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-compact .gh-sidebar nav button { min-block-size: 38px; padding-block: 8px; }
+  #goal-hint-account-studies .gh-passport .gh-identity { background: var(--gh-paper); border-inline-start: 3px solid var(--gh-cyan); padding: 20px; display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  #goal-hint-account-studies .gh-passport .gh-identity strong { display: block; margin-block-start: 5px; font-size: 21px; letter-spacing: -.5px; }
+  #goal-hint-account-studies .gh-passport .gh-account-tools { display: grid; gap: 0; }
+  #goal-hint-account-studies .gh-plan .gh-plan-hero { padding: 26px; background: var(--gh-tint); border-block-start: 3px solid var(--gh-blue); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  #goal-hint-account-studies .gh-plan .gh-plan-name { font-size: 36px; }
+  #goal-hint-account-studies .gh-plan .gh-plan-hero p { color: var(--gh-muted); margin-block-start: 6px; font-size: 12px; }
+  #goal-hint-account-studies .gh-plan .gh-plan-bottom { padding: 18px 26px; display: flex; flex-wrap: wrap; gap: 20px 40px; background: var(--gh-paper); border: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-quiet .gh-main { background: var(--gh-paper); padding-inline: max(var(--gh-space), 6%); }
+  #goal-hint-account-studies .gh-quiet .gh-overview { max-inline-size: 660px; }
+  #goal-hint-account-studies .gh-quiet .gh-sidebar { background: var(--gh-bg); }
+  #goal-hint-account-studies .gh-quiet .gh-sidebar nav button[aria-current] { background: var(--gh-paper); box-shadow: inset 2px 0 var(--gh-blue); }
+  #goal-hint-account-studies .gh-quiet .gh-record { grid-template-columns: 1fr minmax(0,1fr) auto; padding-block: 21px; }
+  #goal-hint-account-studies .gh-inspector .gh-overview { display: grid; grid-template-columns: minmax(0,1.45fr) minmax(0,1fr); gap: 20px; }
+  #goal-hint-account-studies .gh-inspector .gh-inspect { border: 0; border-inline-start: 1px solid var(--gh-line); padding-inline-start: 20px; }
+  #goal-hint-account-studies .gh-inspector .gh-inspect .gh-facts { grid-template-columns: 1fr; }
+  #goal-hint-account-studies .gh-grouped .gh-overview { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+  #goal-hint-account-studies .gh-grouped .gh-group-action { padding: 10px 18px; border-block-start: 1px solid var(--gh-line); background: var(--gh-bg); }
+  #goal-hint-account-studies .gh-grouped .gh-sidebar { padding-block-start: 18px; }
+  #goal-hint-account-studies .gh-footer .gh-main { gap: 18px; }
+  #goal-hint-account-studies .gh-footer .gh-overview { display: flex; flex: 1; }
+  #goal-hint-account-studies .gh-footer .gh-detail-sheet { inline-size: 100%; display: flex; flex-direction: column; background: var(--gh-paper); border: 1px solid var(--gh-line); }
+  #goal-hint-account-studies .gh-footer .gh-sheet-content { padding: 24px; }
+  #goal-hint-account-studies .gh-footer .gh-sheet-footer { margin-block-start: auto; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; border-block-start: 1px solid var(--gh-line); padding: 16px 24px; }
+  #goal-hint-account-studies .gh-footer .gh-readonly { border: 1px solid var(--gh-line); background: var(--gh-bg); padding: 12px; margin-block-start: 6px; }
+  #goal-hint-account-studies .gh-ledger .gh-main { padding: 0; gap: 0; }
+  #goal-hint-account-studies .gh-ledger .gh-page-head { padding: 24px; border-block-end: 1px solid var(--gh-line); background: var(--gh-paper); }
+  #goal-hint-account-studies .gh-ledger .gh-overview { padding: 0 24px; background: var(--gh-paper); }
+  #goal-hint-account-studies .gh-ledger .gh-record { grid-template-columns: 130px minmax(0,1fr) auto; padding-block: 24px; }
+  #goal-hint-account-studies .gh-ledger .gh-main > :not(.gh-page-head):not(.gh-overview):not(.gh-notice) { margin: 24px; }
+  #goal-hint-account-studies .gh-ledger .gh-sidebar nav button { border-radius: 0; }
+  #goal-hint-account-studies .gh-ledger .gh-sidebar nav button[aria-current] { box-shadow: inset 3px 0 var(--gh-blue); }
+  @media (max-width: 860px) {
+    #goal-hint-account-studies .gh-public { display: none; }
+    #goal-hint-account-studies .gh-top { gap: 12px; }
+    #goal-hint-account-studies .gh-body { grid-template-columns: minmax(170px, var(--gh-side)) minmax(0,1fr); }
+    #goal-hint-account-studies .gh-facts { gap: 18px; }
+    #goal-hint-account-studies .gh-split .gh-overview, #goal-hint-account-studies .gh-inspector .gh-overview { grid-template-columns: 1fr; }
+    #goal-hint-account-studies .gh-inspector .gh-inspect { border-inline-start: 0; border-block-start: 1px solid var(--gh-line); padding: 18px 0 0; }
+    #goal-hint-account-studies .gh-inspector .gh-inspect .gh-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    #goal-hint-account-studies .gh-window { min-block-size: 920px; }
+  }
+  @media (max-width: 640px) {
+    #goal-hint-account-studies .gh-body { display: flex; flex-direction: column; min-block-size: 1040px; }
+    #goal-hint-account-studies .gh-window { min-block-size: 1100px; }
+    #goal-hint-account-studies .gh-top { padding: 10px 94px 10px 14px; gap: 10px; flex-wrap: wrap; }
+    #goal-hint-account-studies .gh-brand { font-size: 21px; }
+    #goal-hint-account-studies .gh-account-menu { margin-inline-start: 0; }
+    #goal-hint-account-studies .gh-menu-popup { inset-inline-start: 0; inset-inline-end: auto; }
+    #goal-hint-account-studies .gh-preview { display: none; }
+    #goal-hint-account-studies .gh-sidebar { padding: 10px 14px; border-inline-end: 0; border-block-end: 1px solid var(--gh-line); gap: 0; }
+    #goal-hint-account-studies .gh-side-head, #goal-hint-account-studies .gh-side-foot { display: none; }
+    #goal-hint-account-studies .gh-sidebar nav { display: none; padding-block-start: 8px; }
+    #goal-hint-account-studies .gh-sidebar.gh-menu-open nav { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+    #goal-hint-account-studies .gh-sidebar .gh-nav-group { display: none; }
+    #goal-hint-account-studies .gh-mobile-menu { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: transparent; padding: 4px 0; min-block-size: 36px; inline-size: 100%; text-align: start; }
+    #goal-hint-account-studies .gh-main, #goal-hint-account-studies .gh-quiet .gh-main { padding: 20px 16px; }
+    #goal-hint-account-studies .gh-page-head h1 { font-size: 23px; }
+    #goal-hint-account-studies .gh-two, #goal-hint-account-studies .gh-grouped .gh-overview { grid-template-columns: 1fr; }
+    #goal-hint-account-studies .gh-classic .gh-sub-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    #goal-hint-account-studies .gh-record, #goal-hint-account-studies .gh-quiet .gh-record, #goal-hint-account-studies .gh-ledger .gh-record { grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; padding-block: 18px; }
+    #goal-hint-account-studies .gh-record > span { grid-column: 1; }
+    #goal-hint-account-studies .gh-record > strong { grid-column: 1; }
+    #goal-hint-account-studies .gh-record > button { grid-column: 2; grid-row: span 2; align-self: center; }
+    #goal-hint-account-studies .gh-ledger .gh-main { padding: 0; }
+    #goal-hint-account-studies .gh-ledger .gh-page-head { padding: 20px 16px; }
+    #goal-hint-account-studies .gh-ledger .gh-overview { padding-inline: 16px; }
+    #goal-hint-account-studies .gh-pad, #goal-hint-account-studies .gh-footer .gh-sheet-content { padding: 18px 16px; }
+    #goal-hint-account-studies .gh-compact .gh-strip { grid-template-columns: 1fr 1fr; padding: 18px 16px; }
+    #goal-hint-account-studies .gh-plan .gh-plan-hero, #goal-hint-account-studies .gh-plan .gh-plan-bottom { padding: 20px 16px; }
+    #goal-hint-account-studies .gh-activity li { grid-template-columns: 5px minmax(0,1fr); }
+    #goal-hint-account-studies .gh-activity small { grid-column: 2; }
+    #goal-hint-account-studies .gh-table th, #goal-hint-account-studies .gh-table td { padding: 10px 8px; }
+    #goal-hint-account-studies .gh-table th:nth-child(2), #goal-hint-account-studies .gh-table td:nth-child(2) { display: none; }
+    #goal-hint-account-studies .gh-sidebar nav button, #goal-hint-account-studies .gh-button, #goal-hint-account-studies .gh-link, #goal-hint-account-studies .gh-signout { min-block-size: 44px; }
+  }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('goal-hint-account-studies');
+  const sections = [
+    ['overview', 'Overview', 'layout-dashboard'], ['subscription', 'Subscription', 'badge-check'],
+    ['payments', 'Payments', 'credit-card'], ['phone', 'Change phone', 'smartphone'],
+    ['password', 'Change password', 'lock-keyhole'], ['devices', 'Devices', 'monitor'],
+    ['notifications', 'Notifications', 'bell'], ['activity', 'Activity', 'history'],
+  ];
+  const states = new Map();
+  const esc = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  const icon = name => `<i class="gh-icon" data-lucide="${name}" aria-hidden="true"></i>`;
+  const button = (text, view, primary = false) => `<button type="button" class="gh-button cursor-interaction${primary ? ' gh-primary' : ''}" data-open="${view}">${text}</button>`;
+  const link = (text, view) => `<button type="button" class="gh-link cursor-interaction" data-open="${view}">${text}</button>`;
+  const submitButton = text => `<button class="gh-button gh-primary cursor-interaction" type="button" data-preview-submit>${text}</button>`;
+  const active = '<span class="gh-status">Active</span>';
+  const facts = (items, extra = '') => `<dl class="gh-facts ${extra}">${items.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
+  const subscriptionFacts = (showStatus = true) => facts([['Package', 'Weekly'], ...(showStatus ? [['Status', active]] : []), ['Expires', '7 Nov 2026<small>13:00 EAT</small>'], ['Time left', '6 days']], 'gh-sub-facts');
+  const profileFacts = phone => facts([['Phone', esc(phone)], ['Devices', '1 signed in'], ['WhatsApp updates', 'Enabled'], ['Account credit', 'UGX 2,000']]);
+  const record = (label, value, action, view) => `<div class="gh-record"><span>${label}</span><strong>${value}</strong>${link(action, view)}</div>`;
+  const activity = () => '<ol class="gh-activity"><li><span>Payment approved · Weekly</span><small>31 Oct</small></li><li><span>Subscription renewed</span><small>31 Oct</small></li></ol>';
+  const title = (text, action = '', sub = '') => `<div class="gh-page-head"><div><h1>${text}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${action}</div>`;
+  const panel = (name, body, action = '') => `<section class="gh-panel gh-pad"><div class="gh-section-title"><h2 style="font:inherit">${name}</h2>${action}</div>${body}</section>`;
+  const overview = [
+    phone => `<div class="gh-overview">${panel('Subscription', facts([['Package', 'Weekly'], ['Expires', '7 Nov 2026<small>13:00 EAT</small>'], ['Time left', '6 days']], 'gh-sub-facts'), active)}${panel('Sign-in details', profileFacts(phone), link('Edit phone', 'phone'))}<div class="gh-actions">${button('Change phone', 'phone')}${button('Change password', 'password')}${link('View activity', 'activity')}</div></div>`,
+    phone => `<div class="gh-overview"><section class="gh-panel gh-pad gh-plan-summary"><div class="gh-section-title"><span>Subscription</span>${active}</div><div class="gh-plan-name">Weekly</div><hr class="gh-divider">${facts([['Expires', '7 Nov 2026'], ['Time left', '6 days']])}<div class="gh-actions" style="margin-top:24px">${button('Renew', 'subscription', true)}${link('Details', 'subscription')}</div></section>${panel('Recent activity', activity(), link('View all', 'activity'))}<div class="gh-wide">${panel('Account details', profileFacts(phone), link('Edit phone', 'phone'))}</div></div>`,
+    phone => `<div class="gh-overview"><div class="gh-strip">${facts([['Package', 'Weekly']])}${facts([['Expires', '7 Nov 2026']])}${facts([['Time left', '6 days']])}</div><section class="gh-panel gh-pad">${record('Phone', esc(phone), 'Change', 'phone')}${record('Password', '••••••••', 'Change', 'password')}${record('Devices', '1 signed in', 'Manage', 'devices')}${record('WhatsApp', 'Enabled', 'Edit', 'notifications')}${record('Account credit', 'UGX 2,000', 'Payments', 'payments')}</section></div>`,
+    phone => `<div class="gh-stack"><div class="gh-identity"><div><span class="gh-eyebrow">Your phone</span><strong>${esc(phone)}</strong></div>${button('Change phone', 'phone')}</div><div class="gh-two">${panel('Membership', `${subscriptionFacts(false)}<hr class="gh-divider">${link('Renew subscription', 'subscription')}`, active)}${panel('Sign-in & preferences', `<div class="gh-account-tools">${record('Password', 'Set', 'Change', 'password')}${record('Devices', '1 signed in', 'View', 'devices')}${record('WhatsApp', 'Enabled', 'Edit', 'notifications')}</div>`)}</div>${panel('Latest activity', activity(), link('View all', 'activity'))}</div>`,
+    phone => `<div class="gh-stack"><section><div class="gh-plan-hero"><div><div class="gh-eyebrow">Your subscription</div><div class="gh-plan-name">Weekly</div><p>Expires 7 Nov 2026 · 13:00 EAT</p></div><div class="gh-stack" style="justify-items:start">${active}${button('Renew subscription', 'subscription', true)}</div></div><div class="gh-plan-bottom">${facts([['Time left', '6 days']])}${facts([['Credit', 'UGX 2,000']])}${link('Payment history', 'payments')}</div></section><section class="gh-panel gh-pad">${record('Phone', esc(phone), 'Change', 'phone')}${record('Password', '••••••••', 'Change', 'password')}${record('Devices', '1 signed in', 'View', 'devices')}</section></div>`,
+    phone => `<div class="gh-overview">${record('Subscription', `Weekly ${active}`, 'Manage', 'subscription')}${record('Expiry', '7 Nov 2026 · 6 days left', 'Renew', 'subscription')}${record('Phone', esc(phone), 'Change', 'phone')}${record('Password', '••••••••', 'Change', 'password')}${record('Devices', '1 signed in', 'Manage', 'devices')}${record('WhatsApp updates', 'Enabled', 'Edit', 'notifications')}${record('Payments', 'UGX 2,000 credit', 'View', 'payments')}</div>`,
+    phone => `<div class="gh-overview"><div class="gh-stack">${panel('Subscription', `${subscriptionFacts()}<hr class="gh-divider"><div class="gh-actions">${button('Renew', 'subscription', true)}${link('Payment history', 'payments')}</div>`)}${panel('Activity', activity(), link('View all', 'activity'))}</div><aside class="gh-inspect"><div class="gh-section-title">Account details</div>${facts([['Phone', esc(phone)], ['Password', '••••••••'], ['Devices', '1 signed in'], ['WhatsApp', 'Enabled']])}<hr class="gh-divider"><div class="gh-stack">${link('Change phone', 'phone')}${link('Change password', 'password')}${link('Manage devices', 'devices')}</div></aside></div>`,
+    phone => `<div class="gh-overview"><section class="gh-panel"><div class="gh-pad"><div class="gh-section-title">Subscription ${active}</div>${facts([['Package', 'Weekly'], ['Time left', '6 days'], ['Expires', '7 Nov 2026']])}</div><div class="gh-group-action">${link('Manage subscription', 'subscription')}</div></section><section class="gh-panel"><div class="gh-pad"><div class="gh-section-title">Sign-in</div>${facts([['Phone', esc(phone)], ['Password', 'Set']])}</div><div class="gh-group-action gh-actions">${link('Change phone', 'phone')}${link('Change password', 'password')}</div></section><section class="gh-panel"><div class="gh-pad"><div class="gh-section-title">Payments</div>${facts([['Last payment', 'UGX 5,000'], ['Credit', 'UGX 2,000']])}</div><div class="gh-group-action">${link('View payments', 'payments')}</div></section><section class="gh-panel"><div class="gh-pad"><div class="gh-section-title">Preferences</div>${facts([['Devices', '1 signed in'], ['WhatsApp', 'Enabled']])}</div><div class="gh-group-action gh-actions">${link('Devices', 'devices')}${link('Notifications', 'notifications')}</div></section></div>`,
+    phone => `<div class="gh-overview"><section class="gh-detail-sheet"><div class="gh-sheet-content"><div class="gh-section-title">Account details ${active}</div>${facts([['Phone', `<div class="gh-readonly">${esc(phone)}</div>`], ['Password', '<div class="gh-readonly">••••••••</div>'], ['Package', '<div class="gh-readonly">Weekly</div>'], ['Expires', '<div class="gh-readonly">7 Nov 2026</div>']])}<hr class="gh-divider">${facts([['Time left', '6 days'], ['Devices', '1 signed in']])}</div><div class="gh-sheet-footer">${button('Change phone', 'phone')}${button('Change password', 'password')}${button('Renew', 'subscription', true)}</div></section></div>`,
+    phone => `<div class="gh-overview">${record('Subscription', `Weekly ${active}`, 'Manage', 'subscription')}${record('Expires', '7 Nov 2026 · 13:00 EAT', 'Renew', 'subscription')}${record('Phone', esc(phone), 'Change', 'phone')}${record('Password', '••••••••', 'Change', 'password')}${record('Account credit', 'UGX 2,000', 'Payments', 'payments')}${record('Devices', '1 signed in', 'Manage', 'devices')}${record('Recent activity', 'Payment approved · 31 Oct', 'View', 'activity')}</div>`,
+  ];
+  const payments = () => `<section class="gh-panel"><table class="gh-table"><thead><tr><th>Payment</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody><tr><td>PDEMO<small>Weekly</small></td><td>31 Oct 2026</td><td>UGX 5,000</td><td>${active.replace('Active', 'Approved')}</td></tr><tr><td>PCRED<small>Account credit</small></td><td>24 Oct 2026</td><td>UGX 2,000</td><td>${active.replace('Active', 'Approved')}</td></tr></tbody></table></section>`;
+
+  function content(index, view, state) {
+    if (view === 'overview') return `${title('Account', [0,2,7].includes(index) ? button('Renew', 'subscription', true) : '')}${overview[index](state.phone)}`;
+    if (view === 'subscription') return `${title('Subscription', active)}<div class="gh-form-wrap">${panel('Weekly', `${subscriptionFacts()}<hr class="gh-divider">${facts([['Price', 'UGX 5,000'], ['Account credit', 'UGX 2,000']])}<hr class="gh-divider"><div class="gh-actions">${button('Renew subscription', 'renewal', true)}${link('View payments', 'payments')}</div>`)}</div>`;
+    if (view === 'renewal') return `${title('Renew subscription')}<div class="gh-form-wrap">${panel('Weekly', `${facts([['Duration', '7 days'], ['Price', 'UGX 5,000']])}<hr class="gh-divider"><div class="gh-actions">${button('Back', 'subscription')}<button type="button" class="gh-button gh-primary cursor-interaction" data-demo="Renewal selected in this sample.">Continue</button></div>`)}</div>`;
+    if (view === 'payments') return `${title('Payments')}${panel('Account credit', facts([['Available', 'UGX 2,000'], ['Auto-renew', 'Off']]))}${payments()}`;
+    if (view === 'phone') return `${title('Change phone')}<div class="gh-form-wrap">${panel('Phone number', `<p class="gh-eyebrow">Current phone</p><strong style="display:block;margin:5px 0 22px">${esc(state.phone)}</strong><form class="gh-form" data-task="phone"><label>New phone<input name="phone" type="tel" autocomplete="off" inputmode="tel" placeholder="+256 700 000 102" required minlength="8" maxlength="22"></label><label>Current password<input name="current" type="password" autocomplete="off" required></label><div class="gh-form-foot">${button('Cancel', 'overview')}${submitButton('Continue')}</div><p class="gh-form-error gh-error" role="alert"></p></form>`)}</div>`;
+    if (view === 'password') return `${title('Change password')}<div class="gh-form-wrap">${panel('Password', `<form class="gh-form" data-task="password"><label>Current password<input name="current" type="password" autocomplete="off" required></label><label>New password<input name="password" type="password" autocomplete="off" minlength="8" maxlength="128" required></label><label>Confirm password<input name="confirm" type="password" autocomplete="off" minlength="8" maxlength="128" required></label><small>Use at least 8 characters.</small><div class="gh-form-foot">${button('Cancel', 'overview')}${submitButton('Update password')}</div><p class="gh-form-error gh-error" role="alert"></p></form>`)}</div>`;
+    if (view === 'devices') return `${title('Devices')}<div class="gh-form-wrap">${panel('Signed-in device', `${facts([['Device', 'This browser'], ['Last active', 'Now']])}<hr class="gh-divider"><button type="button" class="gh-button cursor-interaction" data-demo="Other-device sign-out previewed. Your session is unchanged.">Sign out others</button>`)}</div>`;
+    if (view === 'notifications') return `${title('Notifications')}<div class="gh-form-wrap">${panel('WhatsApp', `<form class="gh-form" data-task="notifications"><label class="gh-toggle-row" style="display:flex"><span>Account updates</span><input type="checkbox" name="whatsapp" ${state.notifications ? 'checked' : ''}></label><small>${esc(state.phone)}</small><div class="gh-form-foot">${button('Cancel', 'overview')}${submitButton('Save changes')}</div></form>`)}</div>`;
+    return `${title('Activity')}<div class="gh-form-wrap">${panel('Recent activity', activity())}</div>`;
+  }
+
+  function renderView(section, view) {
+    const state = states.get(section);
+    state.view = view;
+    section.querySelector('.gh-main').innerHTML = content(state.index, view, state);
+    section.querySelectorAll('.gh-sidebar [data-open]').forEach(button => {
+      if (button.dataset.open === view || view === 'renewal' && button.dataset.open === 'subscription') button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    section.querySelector('.gh-mobile-menu span').textContent = sections.find(item => item[0] === view)?.[1] ?? 'Subscription';
+    section.querySelector('.gh-sidebar').classList.remove('gh-menu-open');
+    section.querySelector('.gh-mobile-menu').setAttribute('aria-expanded', 'false');
+    section.querySelectorAll('.gh-account-menu').forEach(menu => { menu.open = false; });
+    if (globalThis.lucide) globalThis.lucide.createIcons({ attrs: { width: 17, height: 17 } });
+  }
+  function notify(section, text) {
+    const main = section.querySelector('.gh-main');
+    let notice = main.querySelector('.gh-notice');
+    if (!notice) { notice = document.createElement('p'); notice.className = 'gh-alert gh-notice'; notice.setAttribute('role', 'status'); main.append(notice); }
+    notice.textContent = text;
+  }
+  // Form previews stay local, including in hosts that prohibit native form submission.
+  function submitPreview(section, form) {
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    if (form.dataset.task === 'password') {
+      if (form.elements.password.value !== form.elements.confirm.value) { form.querySelector('.gh-form-error').textContent = 'Passwords do not match.'; return; }
+      form.reset(); form.querySelector('.gh-form-error').textContent = '';
+      notify(section, 'Password change previewed. Your real password is unchanged.');
+    } else if (form.dataset.task === 'phone') {
+      notify(section, 'Phone verification previewed. No code was sent.'); form.elements.current.value = '';
+    } else {
+      states.get(section).notifications = form.elements.whatsapp.checked;
+      notify(section, 'Preference updated in this sample.');
+    }
+  }
+
+  [...root.children].filter(section => section.hasAttribute('data-variant')).forEach((section, index) => {
+    const state = { index, view: 'overview', phone: '+256 700 000 101', notifications: true };
+    states.set(section, state);
+    const nav = sections.map(([key, name, glyph], position) => `${index === 7 && (position === 3 || position === 5) ? `<span class="gh-nav-group">${position === 3 ? 'Sign-in' : 'Preferences'}</span>` : ''}<button type="button" class="cursor-interaction" data-open="${key}"${key === 'overview' ? ' aria-current="page"' : ''}>${icon(glyph)}<span>${name}</span></button>`).join('');
+    section.innerHTML = `<div class="gh-window"><header class="gh-top"><div class="gh-brand">Goal <span>Hint</span></div><span class="gh-preview">Sample</span><nav class="gh-public" aria-label="Site navigation"><button type="button" data-demo="Best Slips stays in the main app.">Best Slips</button><button type="button" data-demo="Matches stays in the main app.">Matches</button><button type="button" data-demo="Slip Builder stays in the main app.">Slip builder</button></nav><details class="gh-account-menu"><summary class="cursor-interaction">${icon('user-round')} Account ${icon('chevron-down')}</summary><nav class="gh-menu-popup" aria-label="Account menu">${sections.slice(0,5).map(([key, label]) => `<button type="button" class="cursor-interaction" data-open="${key}">${key === 'overview' ? 'My account' : label}</button>`).join('')}<button type="button" class="cursor-interaction" data-demo="Sign-out preview only. Your account stays signed in.">Sign out</button></nav></details></header><div class="gh-body"><aside class="gh-sidebar"><div class="gh-side-head">Account</div><button type="button" class="gh-mobile-menu cursor-interaction" aria-expanded="false">${icon('menu')}<span>Overview</span>${icon('chevron-down')}</button><nav aria-label="Account sections">${nav}</nav><div class="gh-side-foot"><small>+256 700 000 101</small><button type="button" class="gh-signout cursor-interaction" data-demo="Sign-out preview only. Your account stays signed in.">${icon('log-out')} Sign out</button></div></aside><main class="gh-main" aria-label="Account details"></main></div></div>`;
+    renderView(section, 'overview');
+    section.addEventListener('click', event => {
+      const element = event.target.closest('button');
+      if (!element) return;
+      if (element.dataset.open) renderView(section, element.dataset.open);
+      else if (element.hasAttribute('data-preview-submit')) submitPreview(section, element.closest('form'));
+      else if (element.dataset.demo) notify(section, element.dataset.demo);
+      else if (element.classList.contains('gh-mobile-menu')) {
+        const open = section.querySelector('.gh-sidebar').classList.toggle('gh-menu-open');
+        element.setAttribute('aria-expanded', String(open));
+      }
+    });
+    section.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && event.target.matches('input') && event.target.form) {
+        event.preventDefault(); submitPreview(section, event.target.form); return;
+      }
+      if (event.key === 'Escape') {
+        const menu = section.querySelector('.gh-account-menu');
+        if (menu.open) { menu.open = false; menu.querySelector('summary').focus(); }
+        section.querySelector('.gh-sidebar').classList.remove('gh-menu-open');
+        section.querySelector('.gh-mobile-menu').setAttribute('aria-expanded', 'false');
+      }
+    });
+    section.addEventListener('submit', event => {
+      event.preventDefault();
+      submitPreview(section, event.target);
+    });
+    const layout = { sidebar: index === 5 ? 190 : 204, spacing: index === 2 ? 18 : 24 };
+    const applyLayout = () => { section.style.setProperty('--gh-side', `${layout.sidebar}px`); section.style.setProperty('--gh-space', `${layout.spacing}px`); };
+    applyLayout();
+    if (globalThis.Tweak) {
+      const tweak = new globalThis.Tweak({ container: section, onChange: applyLayout });
+      tweak.addSlider(layout, 'sidebar', { label: 'Menu width', min: 180, max: 240, unit: 'px' });
+      tweak.addSlider(layout, 'spacing', { label: 'Content spacing', min: 16, max: 32, unit: 'px' });
+    }
+  });
+})();
+</script>
