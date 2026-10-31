@@ -169,8 +169,8 @@ export function positionGroup(position: string | null): PositionGroup | null {
 
 /** Players arranged by the provider formation grid "row:column"; rows run from goalkeeper forward. */
 export function pitchRows<T extends { grid: string | null }>(players: readonly T[]): T[][] | null {
-  const placed = players.map((player) => ({ player, cell: player.grid?.match(/^(\d{1,2}):(\d{1,2})$/u) ?? null }));
-  if (placed.length === 0 || placed.some((entry) => entry.cell === null)) return null;
+  const placed = players.map((player) => ({ player, cell: player.grid?.match(/^([1-9]\d?):([1-9]\d?)$/u) ?? null }));
+  if (placed.length === 0 || placed.some((entry) => entry.cell === null) || new Set(players.map(player => player.grid)).size !== players.length) return null;
   const rows = new Map<number, { column: number; player: T }[]>();
   for (const { player, cell } of placed) {
     const row = Number(cell![1]), column = Number(cell![2]);
@@ -180,11 +180,17 @@ export function pitchRows<T extends { grid: string | null }>(players: readonly T
 }
 
 /** Rotate the provider's goalkeeper-first formation onto its own half of a horizontal pitch. */
-export function horizontalPitchPositions<T extends { grid: string | null }>(players: readonly T[], side: "home" | "away") {
+export function horizontalPitchPositions<T extends { grid: string | null }>(players: readonly T[], side: "home" | "away", formation: string | null = null) {
   const rows = pitchRows(players);
-  return rows?.flatMap((row, line) => row.map((player, column) => {
+  if (!rows || rows.length < 2 || rows[0]?.length !== 1) return null;
+  if (formation) {
+    if (!/^[1-9](?:\s*[-–−]\s*[1-9]){1,5}$/u.test(formation.trim())) return null;
+    const shape = formation.trim().split(/\s*[-–−]\s*/u).map(Number);
+    if (shape.length !== rows.length - 1 || shape.some((count, index) => count !== rows[index + 1]!.length)) return null;
+  }
+  return rows.flatMap((row, line) => row.map((player, column) => {
     const x = 7 + 35 * line / Math.max(1, rows.length - 1);
     const y = 100 * (column + .5) / row.length;
     return { player, x: side === "home" ? x : 100 - x, y: side === "home" ? y : 100 - y };
-  })) ?? null;
+  }));
 }

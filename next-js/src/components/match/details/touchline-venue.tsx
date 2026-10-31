@@ -6,6 +6,8 @@ import { ContextIcon } from "./details-icons";
 import { Crest, Facts, Note, SectionState, useStableDetails } from "./details-ui";
 import { TouchlineEmpty } from "./touchline-ui";
 import { useInsightSection } from "./use-match-view";
+import { FootballPitch } from "../football-pitch";
+import { pitchCanvas } from "@/domain/football-pitch";
 
 const Table = styled.table`
   inline-size: 100%; border-collapse: collapse; font-size: .875rem; font-variant-numeric: tabular-nums;
@@ -16,8 +18,9 @@ const Table = styled.table`
 `;
 const Ground = styled.div`
   padding: 24px; border: 1px solid ${({ theme }) => theme.color.border};
-  > svg { display: block; inline-size: 100%; block-size: 180px; margin-block-end: 24px;
+  > svg { display: block; inline-size: min(100%, 360px); aspect-ratio: ${pitchCanvas.length} / ${pitchCanvas.width}; block-size: auto; margin: 0 auto 20px;
     color: ${({ theme }) => theme.color.accent.emerald.solid}; background: ${({ theme }) => theme.color.accent.emerald.soft}; }
+  [data-stripe] { fill: ${({ theme }) => theme.color.accent.emerald.soft}; }
   h3 { margin: 0 0 18px; font-size: 1.25rem; }
 `;
 function useContextFacts() {
@@ -41,10 +44,7 @@ export function TouchlineStandings() {
 export function TouchlineVenue() {
   const { messages } = useStableDetails(), context = useContextFacts(), venue = context.value?.venue;
   return <><SectionState loading={context.loading} error={context.error} onRetry={context.retry} /><Ground>
-    <svg viewBox="0 0 340 180" fill="none" stroke="currentColor" strokeWidth="1.5" role="img" aria-label={messages.text("touchline.pitch")}>
-      <rect x="20" y="15" width="300" height="150" /><path d="M170 15v150M20 55h42v70H20M320 55h-42v70h42" /><circle cx="170" cy="90" r="26" />
-      <path d="M20 72h16v36H20M320 72h-16v36h16" /><circle cx="170" cy="90" r="2" />
-    </svg><h3>{venue?.name ?? messages.text("details.venue")}</h3><Facts>
+    <FootballPitch role="img" aria-label={messages.text("touchline.pitch")} /><h3>{venue?.name ?? messages.text("details.venue")}</h3><Facts>
       <dt>{messages.text("touchline.location")}</dt><dd>{venue?.city ?? messages.text("details.notAvailable")}</dd>
       <dt>{messages.text("touchline.pitch")}</dt><dd>{messages.text("details.notProvided")}</dd>
       <dt>{messages.text("touchline.surface")}</dt><dd>{messages.text("details.notProvided")}</dd>

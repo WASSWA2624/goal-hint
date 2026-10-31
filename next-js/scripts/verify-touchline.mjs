@@ -49,12 +49,29 @@ export async function verifyTouchline(page, { origin = "http://127.0.0.1:3112", 
           const geometry = await page.locator("[data-touchline-pitch]").evaluate(field => {
             const pitch = field.getBoundingClientRect(), players = [...field.querySelectorAll("button")];
             const rectangles = players.map(player => player.getBoundingClientRect());
-            return { horizontal: pitch.width > pitch.height * 2,
+            const boundary = field.querySelector("[data-field-boundary]").getBoundingClientRect();
+            const circle = field.querySelector("[data-centre-circle]").getBoundingClientRect();
+            const bench = document.querySelector("[data-touchline-bench]").getBoundingClientRect();
+            return { proportional: Math.abs(boundary.width / boundary.height - 105 / 68) < .005 && Math.abs(circle.width / circle.height - 1) < .005,
+              compact: pitch.width <= 842 && (bench.left > pitch.right ? bench.bottom < pitch.bottom : bench.top > pitch.bottom),
+              aligned: players.every(player => {
+                const shirt = player.querySelector("[data-shirt]").getBoundingClientRect();
+                return Math.abs(shirt.x + shirt.width / 2 - pitch.x - field.clientLeft - parseFloat(player.style.left) * field.clientWidth / 100) < 2
+                  && Math.abs(shirt.y + shirt.height / 2 - pitch.y - field.clientTop - parseFloat(player.style.top) * field.clientHeight / 100) < 2;
+              }),
               ownHalves: players.every((player, i) => player.dataset.side === "home" ? rectangles[i].right < pitch.x + pitch.width / 2 : rectangles[i].left > pitch.x + pitch.width / 2),
               separated: rectangles.every((box, i) => rectangles.slice(i + 1).every(other => box.right <= other.left || other.right <= box.left || box.bottom <= other.top || other.bottom <= box.top)),
               contained: rectangles.every(box => box.left >= pitch.left && box.right <= pitch.right && box.top >= pitch.top && box.bottom <= pitch.bottom) };
           });
-          check(geometry.horizontal && geometry.ownHalves && geometry.separated && geometry.contained, `horizontal pitch/${width}: readable, separate markers within their halves`);
+          check(geometry.proportional && geometry.compact && geometry.aligned && geometry.ownHalves && geometry.separated && geometry.contained, `pitch/${width}: realistic proportions, balanced halves and readable markers`);
+          check(await page.locator("[data-position]").evaluateAll(labels => labels.every(label => /^(Goalkeeper|Defender|Midfielder|Forward)$/.test(label.textContent))), "provider position codes expanded into role names");
+          check(await page.locator("[data-position]").evaluateAll(labels => labels.every(label => {
+            const range = document.createRange(); range.selectNodeContents(label); return range.getClientRects().length === 1;
+          })), "role names remain unbroken");
+          const teamSheet = page.locator('[data-section="lineups"] details');
+          await teamSheet.locator("summary").click();
+          check((await teamSheet.innerText()).includes("Liverpool · Confirmed lineup · retrieved"), "retrieval time is not presented as a provider update");
+          await teamSheet.locator("summary").click();
           await page.getByRole("button", { name: "Liverpool", exact: true }).click();
           check(await page.locator('[data-touchline-pitch] button[data-side="away"]').count() === 11 && await page.locator('[data-touchline-pitch] button[data-side="home"]').count() === 0, "team filter preserves the selected half");
           await page.getByRole("button", { name: "Both teams", exact: true }).click();

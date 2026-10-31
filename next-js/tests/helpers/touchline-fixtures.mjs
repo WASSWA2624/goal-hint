@@ -44,7 +44,7 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
   sections.h2h.meetings = sample.meetings.map(result);
   for (const [index, side] of ["home", "away"].entries()) {
     const squad = sample.squads[index];
-    sections.lineups[side] = { team: side, formation: squad.formation, status: "confirmed", updatedAt: now, retrievedAt: now,
+    sections.lineups[side] = { team: side, formation: squad.formation, status: "confirmed", updatedAt: side === "home" ? now : null, retrievedAt: now,
       starters: squad.starters.map((entry, i) => player(entry, side, "starting", i)), substitutes: squad.substitutes.map((entry, i) => player(entry, side, "substitute", i + 20)) };
     sections.form[side] = sample.form[index].records.map((row, i) => ({ fixtureId: `${side}-recent-${i}`, slug: "recent-result", kickoffAt: now - (i + 1) * 7 * 86400000,
       competition: { id: "premier-league", name: "Premier League", logoUrl: null },

@@ -25,13 +25,20 @@ and uncertainty belong to Analysis. Current match statistics and event lists
 are presented in their respective tabs. Venue omits competition, score,
 standings and recent results already owned elsewhere. Desktop lineups share one
 horizontal pitch: home players defend the left goal, away players defend the
-right, with both formations beside the team names. Provider formation rows are
-rotated onto each team's own half. Full names, shirt numbers and player profiles
+right, with both formations and confirmed status beside the team names. A bounded
+105 × 68 reference field uses [IFAB Law 1 marking dimensions](https://theifab.com/laws/latest/the-field-of-play/)
+and uniform scaling; its geometry is not a measurement of this fixture's venue.
+Provider formation rows are rotated onto each team's own half. Full names, shirt numbers and player profiles
 remain visible; the position detail mode adds stored positions to the same
 markers. The pitch replaces the repeated starter list only when every visible
-starter has a supplied formation coordinate. Otherwise complete starter lists
-remain visible. Substitutes sit below their team's half; team-sheet timestamps
+starter has a unique, valid formation coordinate consistent with the supplied
+formation. Otherwise complete starter lists remain visible. Position codes are
+expanded to readable roles; specific roles are preserved only when supplied.
+Substitutes sit alongside the pitch on wider desktops and below it on narrower
+screens; team-sheet timestamps
 and unavailable profile/manager fields are in one expandable details disclosure.
+When the provider update time is missing, the retrieval timestamp is labelled
+as retrieved rather than presented as an update.
 The compact scoreboard, prediction attribution and tab spacing bring the active
 content higher on desktop while retaining readable names and controls.
 

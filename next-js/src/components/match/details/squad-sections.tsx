@@ -3,7 +3,7 @@
 import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { parsePlayerKey, pitchRows, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
+import { horizontalPitchPositions, parsePlayerKey, pitchRows, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
 import type { InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { openItem, type TeamFocus } from "@/domain/match-view";
@@ -15,6 +15,7 @@ import {
 import { ItemPanel, SectionCard, useEmbeddedSection, useReturnFocus } from "./section-card";
 import { useInsightSection } from "./use-match-view";
 import { TouchlineLineupPitch } from "./touchline-lineup-pitch";
+import { playerPositionLabel } from "./labels";
 
 type Player = InsightSections["players"]["players"][number];
 type Injury = InsightSections["injuries"]["injuries"][number];
@@ -42,7 +43,7 @@ function PlayerPanel({ player, injury, lineup }: { player: Player | null; injury
     <Facts>
       <dt>{messages.text("details.team")}</dt><dd>{side === "home" ? home : away}</dd>
       <dt>{messages.text("details.number")}</dt><dd>{player?.number ?? "—"}</dd>
-      <dt>{messages.text("details.position")}</dt><dd>{player?.position ?? messages.text("details.notAvailable")}</dd>
+      <dt>{messages.text("details.position")}</dt><dd>{playerPositionLabel(messages, player?.position ?? null)}</dd>
       <dt>{messages.text("details.lineupRole")}</dt><dd>{player?.role ? messages.text(`details.role.${player.role}`)
         : messages.text(lineup ? "details.notInLineup" : "details.lineupNotPublished")}</dd>
       <dt>{messages.text("details.availability")}</dt><dd>{injury ? <>
@@ -117,7 +118,7 @@ const PlayerRow = styled(RowButton)`
   > span[data-number] { color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; text-align: end; }
   > span[data-name] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 `;
-const LineupGrid = styled.div`
+const LineupGrid = styled.div<{ $besidePitch?: boolean }>`
   display: grid;
   gap: 12px;
   @container details-card (min-width: 40rem) {
@@ -125,10 +126,22 @@ const LineupGrid = styled.div`
     > section[data-side="away"] { grid-column: 2; }
   }
   > section { display: grid; gap: 6px; align-content: start; min-inline-size: 0; }
+  @container details-card (min-width: 72rem) {
+    grid-template-columns: ${({ $besidePitch }) => $besidePitch ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))"};
+    > section[data-side="away"] { grid-column: ${({ $besidePitch }) => $besidePitch ? "1" : "2"}; }
+  }
+`;
+const LineupWorkspace = styled.div<{ $pitch: boolean }>`
+  display: grid; gap: 16px; min-inline-size: 0;
+  > [data-field-column] { min-inline-size: 0; inline-size: 100%; max-inline-size: 840px; margin-inline: auto; display: grid; gap: 10px; }
+  @container details-card (min-width: 72rem) {
+    grid-template-columns: ${({ $pitch }) => $pitch ? "minmax(0, 840px) minmax(240px, 280px)" : "minmax(0, 1fr)"};
+    ${({ $pitch }) => $pitch ? "max-inline-size: 1140px; inline-size: 100%; margin-inline: auto; align-items: start; gap: 20px;" : ""}
+  }
 `;
 const PitchTeams = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
-  > div { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+  > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-inline-size: 0; }
   > [data-side="home"] { grid-column: 1; }
   > [data-side="away"] { grid-column: 2; justify-content: end; }
   strong { font-size: .875rem; }
@@ -148,6 +161,54 @@ function short(name: string | null) {
   return parts.length > 1 ? parts.at(-1)! : name;
 }
 
+function LineupPlayerList({ players, side }: { players: Lineup["starters"]; side: "home" | "away" }) {
+  const { messages, update } = useDetails();
+  return <RowList>{players.map(player => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
+    onClick={() => update(current => ({ ...current, item: playerKey(side, player.id) }))}>
+    <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span>
+    <span>{player.position ? playerPositionLabel(messages, player.position) : ""}</span><span />
+  </PlayerRow></li>)}</RowList>;
+}
+
+function LineupTimestamp({ lineup, teamName }: { lineup: Lineup; teamName?: string }) {
+  const { messages } = useDetails();
+  const time = at(lineup.updatedAt ?? lineup.retrievedAt);
+  return <Note>{teamName && `${teamName} · `}{messages.text(lineup.updatedAt === null ? "touchline.lineupRetrieved" : "details.lineupStatus",
+    { status: messages.text("details.confirmed") })}{" "}
+    <time dateTime={toUtcIsoString(time)}>{messages.reportingInstant(time)}</time></Note>;
+}
+
+function LineupRosters({ lineups, sides, hasPitch }: { lineups: InsightSections["lineups"]; sides: readonly ("home" | "away")[]; hasPitch: boolean }) {
+  const { data, messages, home, away, update } = useDetails();
+  const embedded = useEmbeddedSection();
+  return <LineupGrid $besidePitch={embedded && hasPitch} data-touchline-bench={embedded && hasPitch || undefined}>
+    {sides.map(side => {
+      const lineup = lineups[side], rows = lineup ? pitchRows(lineup.starters) : null;
+      const team = side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
+      return <section key={side} data-side={embedded ? side : undefined} aria-label={side === "home" ? home : away}>
+        {!embedded && <Strong style={{ display: "flex", alignItems: "center", gap: 6 }}><Crest name={team.name} url={team.logoUrl} />
+          {side === "home" ? home : away}{lineup?.formation ? ` · ${lineup.formation}` : ""}</Strong>}
+        {lineup ? <>
+          {!embedded && <LineupTimestamp lineup={lineup} />}
+          {!embedded && rows && <Pitch aria-label={messages.text("details.formationView")} data-side={side}>
+            {[...rows].reverse().map((row, index) => <li key={index}>{row.map(player => {
+              const key = playerKey(side, player.id);
+              return <button type="button" key={key} data-item-key={key} onClick={() => update(current => ({ ...current, item: key }))}
+                aria-label={messages.text("details.playerOpen", { player: playerName(messages, player) })}>
+                <b>{player.number ?? "–"}</b><span>{short(player.name)}</span>
+              </button>;
+            })}</li>)}
+          </Pitch>}
+          {(!embedded || !hasPitch) && <><Strong>{messages.text("details.starters")}</Strong><LineupPlayerList players={lineup.starters} side={side} /></>}
+          <Strong>{embedded && hasPitch ? messages.text("touchline.teamSubstitutes", { team: side === "home" ? home : away }) : messages.text("details.substitutes")}</Strong>
+          {lineup.substitutes.length ? <LineupPlayerList players={lineup.substitutes} side={side} /> : <Note>{messages.text("details.noSubstitutes")}</Note>}
+          {!embedded && <Note>{messages.text("details.managerMissing")}</Note>}
+        </> : <Note>{messages.text("details.lineupNotPublished")}</Note>}
+      </section>;
+    })}
+  </LineupGrid>;
+}
+
 export const LineupsSection = memo(function LineupsSection() {
   const { data, messages, home, away, view, update } = useDetails();
   const open = view.section === "lineups";
@@ -159,15 +220,11 @@ export const LineupsSection = memo(function LineupsSection() {
   const lineups = lookup.allLineups;
   const sides = view.team === "both" ? (["home", "away"] as const) : [view.team];
   const team = (side: "home" | "away") => side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
-  const playerButton = (player: Lineup["starters"][number]) => {
-    const key = playerKey(player.team, player.id);
-    return <button type="button" key={key} data-item-key={key} onClick={() => update((current) => ({ ...current, item: key }))}
-      aria-label={messages.text("details.playerOpen", { player: playerName(messages, player) })}>
-      <b>{player.number ?? "–"}</b><span>{short(player.name)}</span>
-    </button>;
-  };
   const any = Boolean(lineups.home || lineups.away);
-  const hasPitch = sides.every(side => lineups[side] && pitchRows(lineups[side]!.starters));
+  const hasPitch = sides.every(side => {
+    const lineup = lineups[side];
+    return lineup && horizontalPitchPositions(lineup.starters, side, lineup.formation);
+  });
   return <SectionCard section="lineups" icon={<LineupIcon />} title={messages.text("details.section.lineups")}
     meta={lineups.home?.formation && lineups.away?.formation ? messages.text("details.formations", { home: lineups.home.formation, away: lineups.away.formation })
       : messages.text(any ? "details.confirmed" : "details.lineupNotPublished")}
@@ -181,46 +238,21 @@ export const LineupsSection = memo(function LineupsSection() {
         <option value="number">{messages.text("details.number")}</option><option value="position">{messages.text("details.position")}</option>
         <option disabled>{messages.text("touchline.age")} · {messages.text("details.notAvailable")}</option><option disabled>{messages.text("touchline.rating")} · {messages.text("details.notAvailable")}</option>
       </select></label>}</PanelBar>
-      {embedded && <>
+      <LineupWorkspace $pitch={embedded && hasPitch}>
+      {embedded && <div data-field-column>
         <PitchTeams>{sides.map(side => <div key={side} data-side={side}>
           <Crest name={team(side).name} url={team(side).logoUrl} size={24} />
-          <strong>{side === "home" ? home : away}</strong><small>{messages.text(`touchline.${side}`)}</small>
+          <strong>{side === "home" ? home : away}</strong><small>{messages.text(`touchline.${side}`)}{lineups[side] && ` · ${messages.text("details.confirmed")}`}</small>
           {lineups[side]?.formation && <b data-formation>{lineups[side]!.formation}</b>}
         </div>)}</PitchTeams>
         {hasPitch ? <TouchlineLineupPitch lineups={lineups} sides={sides} display={display} />
           : any && <Note>{messages.text("touchline.positionsMissing")}</Note>}
-      </>}
-      <LineupGrid>
-        {sides.map((side) => {
-          const lineup = lineups[side], rows = lineup ? pitchRows(lineup.starters) : null;
-          return <section key={side} data-side={embedded ? side : undefined} aria-label={side === "home" ? home : away}>
-            {!embedded && <Strong style={{ display: "flex", alignItems: "center", gap: 6 }}><Crest name={team(side).name} url={team(side).logoUrl} />
-              {side === "home" ? home : away}{lineup?.formation ? ` · ${lineup.formation}` : ""}</Strong>}
-            {lineup ? <>
-              {!embedded && <Note>{messages.text("details.lineupStatus", { status: messages.text("details.confirmed") })}{" "}
-                <time dateTime={toUtcIsoString(at(lineup.updatedAt ?? lineup.retrievedAt))}>{messages.reportingInstant(at(lineup.updatedAt ?? lineup.retrievedAt))}</time></Note>}
-              {!embedded && rows && <Pitch aria-label={messages.text("details.formationView")} data-side={side}>
-                {[...rows].reverse().map((row, index) => <li key={index}>{row.map(playerButton)}</li>)}
-              </Pitch>}
-              {(!embedded || !hasPitch) && <><Strong>{messages.text("details.starters")}</Strong>
-              <RowList>{lineup.starters.map((player) => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
-                onClick={() => update((current) => ({ ...current, item: playerKey(side, player.id) }))}>
-                <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span><span>{player.position ?? ""}</span><span />
-              </PlayerRow></li>)}</RowList></>}
-              <Strong>{messages.text("details.substitutes")}</Strong>
-              {lineup.substitutes.length ? <RowList>{lineup.substitutes.map((player) => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
-                onClick={() => update((current) => ({ ...current, item: playerKey(side, player.id) }))}>
-                <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span><span>{player.position ?? ""}</span><span />
-              </PlayerRow></li>)}</RowList> : <Note>{messages.text("details.noSubstitutes")}</Note>}
-              {!embedded && <Note>{messages.text("details.managerMissing")}</Note>}
-            </> : <Note>{messages.text("details.lineupNotPublished")}</Note>}
-          </section>;
-        })}
-      </LineupGrid>
+        {hasPitch && <Note>{messages.text("touchline.formationSchematic")}</Note>}
+      </div>}
+      <LineupRosters lineups={lineups} sides={sides} hasPitch={hasPitch} />
+      </LineupWorkspace>
       {embedded && <TeamSheetDetails><summary>{messages.text("touchline.teamSheetDetails")}</summary><div>
-        {sides.map(side => { const lineup = lineups[side]; return lineup && <Note key={side}>{side === "home" ? home : away}{" · "}
-          {messages.text("details.lineupStatus", { status: messages.text("details.confirmed") })}{" · "}
-          <time dateTime={toUtcIsoString(at(lineup.updatedAt ?? lineup.retrievedAt))}>{messages.reportingInstant(at(lineup.updatedAt ?? lineup.retrievedAt))}</time></Note>; })}
+        {sides.map(side => { const lineup = lineups[side]; return lineup && <LineupTimestamp key={side} lineup={lineup} teamName={side === "home" ? home : away} />; })}
         <Note>{messages.text("touchline.playerDetailsMissing")}</Note><Note>{messages.text("details.managerMissing")}</Note>
       </div></TeamSheetDetails>}
     </div>}
@@ -261,7 +293,7 @@ export const PlayersSection = memo(function PlayersSection() {
     const key = playerKey(player.team, player.id), injury = injuryFor(player);
     return <li key={key}><SquadRow type="button" data-item-key={key} onClick={() => update((current) => openItem(current, "players", key))}>
       <Avatar aria-hidden="true">{initials(player.name)}</Avatar>
-      <span data-name><b>{playerName(messages, player)}</b><small>{[player.team === "home" ? home : away, player.position, player.number !== null ? `#${player.number}` : null].filter(Boolean).join(" · ")}</small></span>
+      <span data-name><b>{playerName(messages, player)}</b><small>{[player.team === "home" ? home : away, player.position ? playerPositionLabel(messages, player.position) : null, player.number !== null ? `#${player.number}` : null].filter(Boolean).join(" · ")}</small></span>
       {injury ? <Pill $accent={statusAccent[injury.status]}>{messages.text(`details.injury.${injury.status}`)}</Pill>
         : player.role ? <Pill $accent={player.role === "starting" ? "emerald" : "blue"}>{messages.text(`details.role.${player.role}`)}</Pill> : <span />}
     </SquadRow></li>;

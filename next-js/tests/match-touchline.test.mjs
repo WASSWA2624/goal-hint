@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { matchDetailTabs, detailTabForView, openDetailTab, hasMatchPredictionAccess } from "../src/domain/match-detail-tabs.ts";
 import { parseMatchView, serializeMatchView, splitMatchViewParameters, openItem } from "../src/domain/match-view.ts";
 import { horizontalPitchPositions } from "../src/domain/match-details.ts";
+import { pitchCanvasPosition, referencePitch, pitchCanvas } from "../src/domain/football-pitch.ts";
 
 test("Touchline tabs preserve deep links, revision state and their own section controls", () => {
   for (const panel of matchDetailTabs) {
@@ -19,6 +20,27 @@ test("Touchline tabs preserve deep links, revision state and their own section c
   assert.equal(detailTabForView(parseMatchView({ market: "total-goals" })), "markets");
   assert.equal(detailTabForView(openItem(openDetailTab(parseMatchView({}), "stats"), "news", "article-1")), "analysis");
   assert.equal(parseMatchView({ panel: "invalid" }).panel, null);
+});
+
+test("pitch projections share a uniform reference scale and preserve mirrored halves", () => {
+  const topLeft = pitchCanvasPosition(0, 0), bottomRight = pitchCanvasPosition(100, 100);
+  assert.ok(Math.abs((bottomRight.x - topLeft.x) * pitchCanvas.length / 100 - referencePitch.length) < 1e-9);
+  assert.ok(Math.abs((bottomRight.y - topLeft.y) * pitchCanvas.width / 100 - referencePitch.width) < 1e-9);
+  assert.deepEqual(pitchCanvasPosition(50, 50), { x: 50, y: 50 });
+  for (const shape of [[4, 3, 3], [4, 2, 3, 1], [5, 4, 1], [3, 5, 2]]) {
+    const players = [1, ...shape].flatMap((count, row) => Array.from({ length: count }, (_, column) => ({ grid: `${row + 1}:${column + 1}` })));
+    const home = horizontalPitchPositions(players, "home", shape.join("-"));
+    const away = horizontalPitchPositions(players, "away", shape.join("–"));
+    assert.equal(home.length, 11); assert.equal(away.length, 11);
+    for (const [i, point] of home.entries()) {
+      const projected = pitchCanvasPosition(point.x, point.y), opposite = pitchCanvasPosition(away[i].x, away[i].y);
+      assert.ok(Math.abs(projected.x + opposite.x - 100) < 1e-9);
+      assert.ok(Math.abs(projected.y + opposite.y - 100) < 1e-9);
+    }
+    assert.equal(horizontalPitchPositions(players, "home", "4-5-1"), null);
+    assert.equal(horizontalPitchPositions([...players.slice(1), players[1]], "home"), null);
+    assert.equal(horizontalPitchPositions([{ grid: "0:1" }, ...players.slice(1)], "home"), null);
+  }
 });
 
 test("Touchline UI entitlement follows verified completion or full paid/earned access", () => {
