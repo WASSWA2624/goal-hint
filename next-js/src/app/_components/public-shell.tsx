@@ -18,12 +18,13 @@ import { FallbackStyleProvider } from "@/styles/provider";
 import {
   DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HomeLink,
   ShellFrame, SkipLink, TabBar,
+  WorkspaceHeaderContent,
 } from "@/components/navigation/shell-styles";
 
 import { getShellDate } from "./shell-time";
 export { getShellDate, getShellInstant } from "./shell-time";
 
-export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true, wide = false, administratorName }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true, wide = false, workspace = false, administratorName }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
@@ -37,19 +38,22 @@ export async function PublicShell({ children, locale, current, today: reportingD
   showAccount?: boolean;
   /** Dense dashboards use the wide container while keeping the shared phone header. */
   wide?: boolean;
+  /** Account workspaces own their full-width content and subscription details. */
+  workspace?: boolean;
   administratorName?: string;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
   const today = reportingDate ?? await getShellDate();
   const destinations = navigationDestinations(today, language, zone);
+  const ContentHeader = workspace ? WorkspaceHeaderContent : HeaderContent;
 
   return (
     <FallbackStyleProvider><ShellFrame>
       {app && <MemberNavigationRecovery />}
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header $app={app}>
-        <HeaderContent $wide={app || wide}>
+        <ContentHeader $wide={app || wide || workspace}>
           <HomeLink href={homeHref(language)} aria-label={messages.text("navigation.home")} prefetch={false}>
             <HeaderBrand alt="" />
           </HomeLink>
@@ -57,14 +61,14 @@ export async function PublicShell({ children, locale, current, today: reportingD
             <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
           </DesktopNav>
           <HeaderActions><AccountLinks locale={language} showAccount={showAccount} {...(administratorName ? { administratorName } : {})} /></HeaderActions>
-        </HeaderContent>
+        </ContentHeader>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
-      {!administratorName && <SubscriptionStatusBar locale={language} desktopOnly={app} wide={app || wide} bestSlips={current === "best-slips"} />}
-      <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $compactTop={current === "best-slips"} $dashboard={current === "dashboard"}>
+      {!administratorName && !workspace && <SubscriptionStatusBar locale={language} desktopOnly={app} wide={app || wide} bestSlips={current === "best-slips"} />}
+      <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $compactTop={current === "best-slips"} $dashboard={current === "dashboard"} $workspace={workspace}>
         <Container $wide={app || wide}>{children}</Container>
       </PageMain>
-      {current !== "dashboard" && <Footer>
+      {current !== "dashboard" && !workspace && <Footer>
         <FooterContent $wide={app || wide}>
           <FooterBrand>
             <BrandMark alt="" />

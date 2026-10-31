@@ -207,18 +207,17 @@ def subscription_discovery(origin):
             continue  # The existing sales-off account fixture deliberately represents a guest.
         html = visible_html(request(origin, f"/en/account?state={scenario}", timeout=60).text)
         summary = match(r'<section\b[^>]*data-subscription-summary="(?:active|inactive)"[^>]*>([\s\S]*?)</section>', html)
-        assert summary.start() < html.index("Change phone"), "Subscription details must precede account settings."
         no_match(r'<details\b', summary.group(1))
         if scenario in active:
-            match(r'You have access until\s*<strong[^>]*><time dateTime="[^"]+">\d{1,2} \w+ \d{4}, \d{2}:\d{2} EAT</time></strong>\s*—\s*\d+ days? from now\.', summary.group(1))
+            match(r'<time dateTime="[^"]+">\d{1,2} \w+ \d{4}, \d{2}:\d{2} EAT</time>', summary.group(1))
+            match(r'\d+ days?', summary.group(1))
         else:
-            no_match(r'<time\b', summary.group(1))
-            match(r"Your access ended on" if scenario == "expired" else r"You have no active subscription\.", summary.group(1))
+            match("Expired" if scenario == "expired" else "Inactive", summary.group(1))
         if status["canSubscribe"]:
-            match(r'href="/en/subscribe[^\"]*"', summary.group(1))
-            match("View payment" if status["paymentPending"] else "Extend" if scenario in active else "Subscribe", summary.group(1))
+            match(r'href="/en/subscribe[^\"]*"', html)
+            match("View payment" if status["paymentPending"] else "Renew" if scenario in active else "Subscribe", html)
         else:
-            no_match(r'href="/en/subscribe', summary.group(1))
+            no_match(r'href="/en/subscribe', html)
     for token, scenario, can_subscribe in [(None, "free", True), (None, "off", False), ("d", "active", False), ("b", "free", False)]:
         response = request(origin, "/api/account/session", headers={"Cookie": "goal-hint-member=" + token * 43 if token else "",
             "X-Subscription-Fixture-State": scenario})
@@ -230,22 +229,30 @@ def subscription_discovery(origin):
 
 
 def subscriber_dashboard(origin):
-    """Real Account markup handles subscription states and safe activity independently."""
+    """Focused Account sections retain real auth/renewal paths without the old text stack."""
     for state, package in [("active", "Weekly"), ("trial", "Free trial"), ("off-active", "Weekly"),
             ("queued", "Weekly"), ("free", None), ("expired", None), ("pending", None)]:
         html = visible_html(request(origin, f"/en/account?state={state}").text)
+        body = match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</article>', html).group(1)
         summary = match(r'<section\b[^>]*data-subscription-summary[^>]*>([\s\S]*?)</section>', html).group(1)
         if package:
-            match(rf'Current package:\s*<strong[^>]*>{re.escape(package)}</strong>', summary)
+            match(rf'<dd\b[^>]*data-active-package[^>]*>{re.escape(package)}</dd>', summary)
         else:
-            no_match("Current package:", summary)
+            no_match("data-active-package", summary)
+        match(r'<h1[^>]*>Account</h1>', body)
+        match("Sign-in details", body)
+        match("Phone", body)
+        no_match(r'data-account-activity|data-payment-status|type="password"|Your access|You have access|saved-slip-configurations', body)
+        no_match(r'data-subscription-status-bar', html)
+        html = visible_html(request(origin, f"/en/account?state={state}&section=activity").text)
         activity = match(r'<section\b[^>]*data-account-activity[^>]*>([\s\S]*?)</section>', html).group(1)
         match("Recent activity", activity)
-        assert html.index("data-subscription-summary") < html.index("data-account-activity") < html.index("Change phone")
         no_match(r'Best slips|Custom Filters|saved-slip-configurations|codeHash|passwordHash|payerPhone|transactionRef', activity)
         if state == "queued":
-            match("Next package", summary)
-            no_match(r'Current package:\s*<strong[^>]*>Next package', summary)
+            subscription_html = visible_html(request(origin, "/en/account?state=queued&section=subscription").text)
+            match("Upcoming packages", subscription_html)
+            match("Next package", subscription_html)
+            no_match(r'data-active-package[^>]*>Next package', subscription_html)
         if state == "free":
             match("No activity yet", activity)
         elif state == "pending":
@@ -253,22 +260,42 @@ def subscriber_dashboard(origin):
         else:
             match("Access added", activity)
             match(r'<time dateTime="[^"]+">[^<]*\d{4}[^<]* EAT</time>', activity)
-    history = visible_html(request(origin, "/en/account?state=history").text)
+    history = visible_html(request(origin, "/en/account?state=history&section=activity").text)
     activity = match(r'<section\b[^>]*data-account-activity[^>]*>([\s\S]*?)</section>', history).group(1)
     assert len(re.findall(r'<li\b', activity)) == 10
     for label in ["Payment reversed", "Payment approved", "Payment declined", "Payment replaced", "Payment submitted", "Account credit"]:
         match(label, activity)
-    unavailable = visible_html(request(origin, "/en/account?state=dashboard-unavailable").text)
+    unavailable = visible_html(request(origin, "/en/account?state=dashboard-unavailable&section=activity").text)
     match("Recent activity is temporarily unavailable", unavailable)
-    match("You have access until", unavailable)
     no_match("No activity yet", unavailable)
     unavailable = visible_html(request(origin, "/en/account?state=subscription-unavailable").text)
     match("Subscription details are unavailable", unavailable)
-    match("Access added", unavailable)
     for state in ["signed-out", "blocked", "unverified", "password-reset"]:
-        html = visible_html(request(origin, f"/en/account?state={state}").text)
-        no_match(r'data-account-activity|data-active-package', html)
-    print("Subscriber dashboard: current package, queued/expired/closed states, bounded activity, private guards and unavailable reads pass.", flush=True)
+        for section in ["overview", "phone", "password", "payments", "devices"]:
+            html = visible_html(request(origin, f"/en/account?state={state}&section={section}").text)
+            no_match(r'data-account-workspace|data-account-details|data-account-activity|data-active-package', html)
+    headings = {"overview": "Account", "subscription": "Subscription", "payments": "Payments", "phone": "Change phone",
+        "password": "Change password", "devices": "Devices", "notifications": "Notifications", "activity": "Activity"}
+    for section, heading in headings.items():
+        html = visible_html(request(origin, f"/en/account?state=active&section={section}&return=%2Fen%2Fslips").text)
+        body = match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</article>', html).group(1)
+        match(rf'<h1[^>]*>{heading}</h1>', body)
+        match(rf'data-account-section="{section}"', html)
+        match(r'aria-label="Account sections"', html)
+        match(r'href="/en/account\?section=password&amp;return=%2Fen%2Fslips"', html)
+        if section in ["phone", "password"]:
+            match(rf'action="/api/account/{section}"', body)
+            match(r'name="currentPassword"', body)
+        if section == "devices":
+            match(r'action="/api/account/devices"', body)
+        if section == "notifications":
+            match(r'data-account-notifications', body)
+    for query in ["section=unknown", "section=phone&section=password"]:
+        html = visible_html(request(origin, f"/en/account?state=active&{query}").text)
+        match(r'data-account-section="overview"', html)
+    payments = visible_html(request(origin, "/en/account?state=pending&section=payments").text)
+    match(r'data-payment-status="pending"', payments)
+    print("Account workspace: all sections, concise facts, renewal/payment paths, bounded activity and private guards pass.", flush=True)
 
 
 def main():
@@ -289,7 +316,7 @@ def main():
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Sign in"), ("signed-out", "Phone number"),
                 ("signed-in", "256 700 000 101"), ("unavailable", "Member access is unavailable."),
-                ("active", "You have access until"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
+                ("active", "Time left"), ("ended", "Expired"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
             assert response.status == 200
             match(expected, response.text)
@@ -318,7 +345,7 @@ def main():
                 match("Change password", response.text)
                 match("Sign out", response.text)
             if state in ("active", "ended"):
-                match("Sign out others", response.text)
+                match("Sign out others", request(server.origin, f"/en/account?state={state}&section=devices").text)
         register = request(server.origin, "/en/account?view=register")
         match(r'<button[^>]*type="submit"[^>]*>Sign up</button>', register.text)
         match(r'<h1[^>]*>Sign up</h1>', register.text)

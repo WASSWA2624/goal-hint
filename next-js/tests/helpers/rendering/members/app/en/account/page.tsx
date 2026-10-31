@@ -16,10 +16,12 @@ function fixtureServices(state: string) {
   const scenario = state === "ended" ? "expired" : state === "signed-in" ? "free"
     : ["queued", "dashboard-unavailable", "subscription-unavailable"].includes(state) ? "active" : state;
   const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial"].includes(scenario), at = Date.now();
-  return async () => ({ config: { production: false },
+  return async () => {
+    const consent = (await cookies()).get("member-fixture-whatsapp")?.value;
+    return { config: { production: false },
     settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "test" } },
     sessions: { async verify() { return [...subscriptionScenarios.filter(value => value !== "off"), "blocked", "administrator", "history"].includes(scenario)
-      ? { accountId: "00000000-0000-4000-8000-000000000101", tokenHash: "synthetic", phone: state === "administrator" ? fixtureAdminPhone : "256700000101", administrator: state === "administrator", blocked: state === "blocked", codeEnteredAt: unlocked ? new Date(at) : null } : null; } },
+      ? { accountId: "00000000-0000-4000-8000-000000000101", tokenHash: "synthetic", phone: state === "administrator" ? fixtureAdminPhone : "256700000101", administrator: state === "administrator", blocked: state === "blocked", codeEnteredAt: unlocked ? new Date(at) : null, whatsappNotificationsAt: consent === "on" ? new Date(at) : null } : null; } },
     auth: { async passwordResetSession() { return state === "password-reset" ? { phone: "256700000101" } : null; },
       async verificationSession() { return ["unverified", "sms-only", "unsupported"].includes(state) ? { phone: state === "unsupported" ? "5511999999999" : state === "sms-only" ? "447700900123" : "256700000101" } : null; } },
     codes: { async subscriptionStatus() { if (state === "subscription-unavailable") throw new Error("Synthetic unavailable subscription"); return fixtureSubscriptionStatus(scenario); },
@@ -30,7 +32,8 @@ function fixtureServices(state: string) {
     payments: { async view() { return { acceptedTerms: unlocked,
       status: fixtureSubscriptionStatus(scenario).paymentPending ? { reference: "PFAKE", status: "pending", planName: "Weekly", priceUgx: 5000,
         submittedAt: new Date(at).toISOString(), endsAt: null, rejectText: null, rejectReason: null } : null }; } },
-  }) as unknown as MemberServices;
+  } as unknown as MemberServices;
+  };
 }
 const accountRoutes = Object.fromEntries(["signed-out", "signed-in", "unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", ...subscriptionScenarios].map((state) =>
   [state, createAccountRoute({ services: fixtureServices(state) })]));

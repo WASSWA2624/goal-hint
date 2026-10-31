@@ -7,7 +7,7 @@ import { fixtureAdminPassword, fixtureAdminPhone, fixtureTokens } from "./fixtur
 import { fixtureRegistrationTrial } from "./fixture-subscription";
 export { fixtureTokens } from "./fixture-identity";
 
-type FixtureAction = "register" | "login" | "verification" | "verify" | "forgot" | "reset-code" | "reset";
+type FixtureAction = "register" | "login" | "verification" | "verify" | "forgot" | "reset-code" | "reset" | "phone" | "password";
 export const fixtureScenarios = ["success", "send-failed", "rate-limited", "invalid-code", "unavailable", "denied", "missing", "blocked", "pending-verification", "password-reset", "automatic-trial"] as const;
 
 /** Only the isolated rendering app imports this adapter. It never creates accounts, writes a database or sends messages. */
@@ -56,6 +56,14 @@ export function fixtureAuthHandler(action: FixtureAction) {
         async verifyAccount(code: unknown) { return verify(code); },
         async verifyPasswordReset(_phone: unknown, code: unknown) { return verify(code, true); },
         async resetPassword() { return scenario === "unavailable" ? unavailable() : authenticated(); },
+        async changePassword(_password: unknown, current: unknown, binding: { member: unknown }) {
+          return !binding.member || current !== "Synthetic current password" ? { status: "unauthorized", message: "Your current password is incorrect." }
+            : scenario === "unavailable" ? unavailable() : authenticated();
+        },
+        async changePhone(phone: unknown, current: unknown, binding: { member: unknown }) {
+          return !binding.member || current !== "Synthetic current password" ? { status: "unauthorized", message: "Your current password is incorrect." }
+            : scenario === "unavailable" ? unavailable() : authenticated({ token: fixtureTokens.pending, phone: normalizePhone(phone), requiresVerification: true });
+        },
       },
     }) as unknown as MemberServices;
     const response = await createMemberAuthHandler(action, source)(request);

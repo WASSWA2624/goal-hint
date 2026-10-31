@@ -2,18 +2,17 @@
 
 import { useState, type FormEvent } from "react";
 import styled from "styled-components";
-import { TextInput, TextLink } from "@/components/ui/controls";
+import { Button, TextInput, TextLink } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { ChevronLeftIcon } from "@/components/ui/icons";
 import { passwordChangeWindowMs } from "@/domain/member-verification";
 import { formatPhone } from "@/domain/phone";
 import { resolveLocale } from "@/i18n/locales";
-import { createMessages, fillMessage } from "@/i18n/messages";
+import { createMessages } from "@/i18n/messages";
 import { AccountHelpLinks, type AdminContact } from "./admin-contact";
-import { AccountAction, AccountBlock, AccountBlockActions, AccountBlockText, AccountFine } from "./account-overview";
 import { MemberForm } from "./member-controls";
-import { AccountError, AccountNote, AccountPrimary, AccountTextButton } from "./account-styles";
-import { richText } from "./rich-text";
+import { AccountError, AccountNote, AccountPrimary } from "./account-styles";
+import { ButtonLink } from "@/components/ui/controls";
+import { AccountSectionActions } from "./account-workspace";
 
 /** Private request data stays in the request body and in component memory only. */
 export async function accountRequest<T>(path: string, body: Record<string, unknown>): Promise<T> {
@@ -66,25 +65,21 @@ export function ResetPasswordForm({ locale, phone, returnTo = null, contact }: {
 }
 
 const TaskForm = styled.div`
-  display: grid; gap: 12px; min-inline-size: 0; padding-block: 12px 16px;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border};
-  h2 { margin: 0; font-size: 1.0625rem; font-weight: 800; }
-  input { min-block-size: 48px; font-size: 16px; }
+  display: grid; gap: 12px; min-inline-size: 0;
+  input { font-size: 1rem; }
 `;
 
 /**
- * Who is signed in and on how many unlocked devices, then the sign-in changes. Account changes require the current password;
- * a new phone must also be verified. devices lists each unlocked device's last use, or null when the account has none.
+ * A focused workspace form. Account changes require the current password and a new phone must also be verified.
  */
-export function AccountSettings({ phone, locale, contact, returnTo = null, devices = null }: {
-  phone: string; locale: string; contact: AdminContact; returnTo?: string | null; devices?: readonly string[] | null;
+export function AccountSecurityForm({ task, locale, contact, returnTo = null, cancelHref }: {
+  task: "phone" | "password"; locale: string; contact: AdminContact; returnTo?: string | null; cancelHref: string;
 }) {
-  const m = createMessages(locale), [task, setTask] = useState<"phone" | "password" | null>(null);
+  const m = createMessages(locale);
   const [newPhone, setNewPhone] = useState(""), [current, setCurrent] = useState(""), [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const back = () => { setCurrent(""); setPassword(""); setConfirm(""); setError(""); setTask(null); };
   async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!task || busy) return;
+    event.preventDefault(); if (busy) return;
     if (task === "password" && password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
     setBusy(true); setError("");
     try {
@@ -92,30 +87,17 @@ export function AccountSettings({ phone, locale, contact, returnTo = null, devic
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
-  if (!task) {
-    const number = { phone: <strong>+{formatPhone(phone)}</strong> };
-    return <AccountBlock data-account-sign-in>
-      <AccountBlockText>
-        <p>{richText(m.text("account.signedInWith"), number)}</p>
-        {!!devices?.length && <AccountFine>{fillMessage(m.plural("account.unlockedOn", devices.length),
-          { times: new Intl.ListFormat(resolveLocale(locale), { type: "conjunction" }).format(devices) })}</AccountFine>}
-      </AccountBlockText>
-      <AccountBlockActions>
-        {devices && <form method="post" action="/api/account/devices" data-analytics-ignore><AccountAction type="submit">{m.text("account.signOutOthers")}</AccountAction></form>}
-        <AccountAction onClick={() => setTask("phone")}>{m.text("account.changePhone")}</AccountAction>
-        <AccountAction onClick={() => setTask("password")}>{m.text("account.changePassword")}</AccountAction>
-      </AccountBlockActions>
-    </AccountBlock>;
-  }
   const currentField = <PasswordInput name="currentPassword" label={m.text("account.currentPassword")} value={current} onChange={setCurrent} current />;
-  return <TaskForm data-account-sign-in><h2>{m.text(task === "phone" ? "account.changePhone" : "account.changePassword")}</h2>
+  return <TaskForm data-account-sign-in>
     <MemberForm method="post" action={`/api/account/${task}`} onSubmit={save} data-analytics-ignore aria-busy={busy}>
       {task === "phone" ? <><PhoneInput name="phone" label={m.text("account.newPhone")} value={newPhone} onValueChange={setNewPhone} required />{currentField}</>
         : <>{currentField}<NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} /></>}
       {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneVerification")}</AccountNote>}
       <AccountNote><TextLink href={`/${resolveLocale(locale)}/account?${new URLSearchParams({ view: "forgot", ...(returnTo ? { return: returnTo } : {}) })}`} prefetch={false}>{m.text("account.forgotPassword")}</TextLink></AccountNote>
       {error && <AccountError role="alert">{error}</AccountError>}
-      <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
-      <AccountTextButton variant="quiet" onClick={back} disabled={busy}><ChevronLeftIcon />{m.text("account.back")}</AccountTextButton>
+      <AccountSectionActions>
+        <Button type="submit" disabled={busy}>{m.text(busy ? "account.working" : task === "phone" ? "account.savePhone" : "account.savePassword")}</Button>
+        <ButtonLink href={cancelHref} prefetch={false} variant="secondary">{m.text("account.cancelLabel")}</ButtonLink>
+      </AccountSectionActions>
     </MemberForm><AccountHelpLinks locale={locale} contact={contact} /></TaskForm>;
 }

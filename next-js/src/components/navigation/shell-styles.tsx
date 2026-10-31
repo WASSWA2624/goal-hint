@@ -377,3 +377,16 @@ export const FooterNote = styled.p`
   margin: 0;
   ${media.tablet} { justify-self: end; text-align: end; }
 `;
+
+/** The same full-width header rail for admin and member workspaces. */
+export const WorkspaceHeaderContent = styled(HeaderContent)`
+  inline-size: 100%; max-inline-size: none;
+  min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
+  padding-inline: 12px 8px;
+  ${media.belowDesktop} {
+    > ${HomeLink} { flex: 1 1 0; min-inline-size: min(6rem, 100%);
+      img { max-inline-size: 100%; block-size: auto; }
+    }
+  }
+  ${media.desktop} { gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 24px 20px; }
+`;

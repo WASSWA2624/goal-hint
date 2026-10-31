@@ -1,5 +1,9 @@
 # 196 — Account layout studies
 
+Selection: **Admin classic**, implemented in [plan 197](197-admin-classic-account-workspace.md).
+The subsequent implementation follows the user's additional requirement to reuse
+the actual admin/app chrome and compact components.
+
 ## Scope
 
 Prepare ten interactive Account page concepts for the user's selection before

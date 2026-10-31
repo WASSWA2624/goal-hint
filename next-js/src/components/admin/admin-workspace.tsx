@@ -3,9 +3,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
-import Link from "@/components/navigation/navigation-link";
-import { HomeLink } from "@/components/navigation/shell-styles";
-import { compactHeaderRow } from "@/components/ui/header-controls";
 import { joinedDesktopSections } from "@/components/ui/layout";
 import {
   CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GridIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
@@ -13,6 +10,7 @@ import {
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
+import { WorkspaceNavigationLink } from "@/components/ui/workspace-navigation";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { watchPendingPaymentTitle } from "./pending-title";
 import { adminSidebarSize, clampSidebarWidth, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
@@ -134,20 +132,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
   );
 }
 
-/** Full-width brand bar content, so the wordmark lines up with the section sidebar. */
-export const AdminHeaderContent = styled.div`
-  ${compactHeaderRow}
-  inline-size: 100%;
-  min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
-  padding-inline: 12px 8px;
-  ${media.belowDesktop} {
-    > ${HomeLink} {
-      flex: 1 1 0; min-inline-size: min(6rem, 100%);
-      img { max-inline-size: 100%; block-size: auto; }
-    }
-  }
-  ${media.desktop} { gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 24px 20px; }
-`;
+export { WorkspaceHeaderContent as AdminHeaderContent } from "@/components/navigation/shell-styles";
 export const AdminMark = styled.span`
   display: none;
   ${media.desktop} { display: inline; }
@@ -232,28 +217,7 @@ const Caption = styled.p`
   letter-spacing: 0.08em;
   text-transform: uppercase;
 `;
-const SectionLink = styled(Link)`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-  padding: 0 10px;
-  border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text};
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  text-decoration: none;
-  white-space: nowrap;
-  > [data-sidebar-label] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
-  > svg { flex: none; font-size: 1.0625rem; color: ${({ theme }) => theme.color.mutedText}; }
-  &[aria-current="page"] {
-    background: ${({ theme }) => theme.color.brandSoft};
-    font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    > svg { color: ${({ theme }) => theme.color.brand}; }
-  }
-  ${media.hover} { &:hover:not([aria-current="page"]) { background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
-  ${media.desktop} { min-block-size: 40px; }
-`;
+const SectionLink = WorkspaceNavigationLink;
 const MenuBar = styled.details`
   position: relative;
   z-index: 15;

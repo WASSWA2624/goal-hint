@@ -1,5 +1,8 @@
 # Account layout studies
 
+Selected: **Admin classic**. See [plan 197](../../dev-plan/197-admin-classic-account-workspace.md)
+for the implementation and the subsequent shared-app styling refinements.
+
 Ten interactive desktop Account concepts for selection, following the admin
 dashboard's left navigation and right detail area. Every concept includes the
 same Account destinations, phone/password forms, and account dropdown. Narrow

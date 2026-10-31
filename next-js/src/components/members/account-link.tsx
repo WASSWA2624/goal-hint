@@ -11,6 +11,8 @@ import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dis
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { formatPhone } from "@/domain/phone";
+import { accountSectionHref, type AccountSection } from "@/domain/account-navigation";
+import { accountSectionIcons } from "./account-navigation";
 import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "@/components/admin/pending-payments";
@@ -147,7 +149,12 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
     <Popup id={popupId}>
       <Identity><UserIcon /><div>{administratorName ? <strong>{administratorName}</strong> : <><small>{messages.text("account.registeredNumber")}</small><strong>+{formatPhone((phone ?? "").replace(/^\+/, ""))}</strong></>}</div></Identity>
       {!administratorName && <nav aria-label={messages.text("account.title")} onClick={dismiss}>
-        <Destination href={`/${resolveLocale(locale)}/account`} prefetch={false}><UserIcon />{messages.text("account.title")}<ChevronRightIcon /></Destination>
+        {(["overview", "subscription", "payments", "phone", "password"] satisfies AccountSection[]).map(section => {
+          const Icon = accountSectionIcons[section];
+          return <Destination key={section} href={accountSectionHref(locale, section)} prefetch={false}><Icon />
+            {messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}<ChevronRightIcon />
+          </Destination>;
+        })}
       </nav>}
       <SignOut logoutAction={administratorName ? "/api/admin/logout" : "/api/account/sign-out"}><SignOutIcon />{messages.text("auth.signOut")}</SignOut>
     </Popup>

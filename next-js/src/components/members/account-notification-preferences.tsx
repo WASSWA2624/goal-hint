@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { formatPhone } from "@/domain/phone";
 import { createMessages } from "@/i18n/messages";
@@ -24,7 +25,7 @@ export const AccountWhatsAppConsentLabel = styled.label`
 export function AccountNotificationPreferences({ locale, phone, whatsappNotificationsAt }: {
   locale: string; phone: string; whatsappNotificationsAt: string | null;
 }) {
-  const m = createMessages(locale), id = useId();
+  const m = createMessages(locale), id = useId(), router = useRouter();
   const inFlight = useRef(false);
   const [consentAt, setConsentAt] = useState(whatsappNotificationsAt), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -34,7 +35,7 @@ export function AccountNotificationPreferences({ locale, phone, whatsappNotifica
     setBusy(true); setError(""); setSaved(false);
     try {
       const reply = await accountRequest<{ whatsappNotificationsAt: string | null }>("preferences", { whatsappNotifications: enabled });
-      setConsentAt(reply.whatsappNotificationsAt); setSaved(true);
+      setConsentAt(reply.whatsappNotificationsAt); setSaved(true); router.refresh();
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); }
     finally { inFlight.current = false; setBusy(false); }
   }

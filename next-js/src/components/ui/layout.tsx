@@ -85,7 +85,7 @@ const anchorClearance = css`
 `;
 
 /** App screens (feeds) start close to the header; content pages keep generous spacing. */
-export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compactTop?: boolean; $dashboard?: boolean }>`
+export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compactTop?: boolean; $dashboard?: boolean; $workspace?: boolean }>`
   padding-block: ${({ theme, $app }) => $app ? `10px ${theme.space.lg}` : `${theme.space.md} ${theme.space.lg}`};
   min-inline-size: 0;
   ${({ $compact }) => $compact && css`
@@ -104,6 +104,11 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
   ${({ $dashboard }) => $dashboard && css`
     padding-block: 0 calc(var(--app-mobile-tab-height, 3rem) + 1rem + env(safe-area-inset-bottom));
     ${media.desktop} { padding-block: 0 24px; }
+  `}
+  ${({ $workspace }) => $workspace && css`
+    padding-block: 0 calc(var(--app-mobile-tab-height, 3rem) + 1rem + env(safe-area-inset-bottom));
+    > ${Container} { max-inline-size: none; padding-inline: 0; }
+    ${media.desktop} { padding-block: 0; }
   `}
 `;
 
