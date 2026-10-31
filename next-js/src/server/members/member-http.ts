@@ -14,10 +14,12 @@ import { createMemberPreferences, type MemberPreferences } from "./member-prefer
 import { createPlansService } from "./plans.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { cheapestActivePlan, type SubscriptionOffer } from "../../domain/subscription-offer.ts";
+import { createSlipConfigurations, type SlipConfigurationsService } from "../slips/slip-configurations.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
 export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null;
   preferences?: MemberPreferences | null;
+  configurations?: SlipConfigurationsService | null;
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
@@ -31,6 +33,7 @@ export async function getMemberServices(): Promise<MemberServices> {
     codes: database && keyed ? createAccessCodes({ database, config }) : null,
     auth: database && keyed ? createMemberAuth({ database, config }) : null,
     preferences: database && keyed ? createMemberPreferences({ database }) : null,
+    configurations: database && keyed ? createSlipConfigurations({ database }) : null,
     offer: database ? () => readOffer(database) : null };
 }
 

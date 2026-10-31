@@ -79,6 +79,8 @@
     "test:settlement": "node --conditions=react-server --test tests/market-settlement.test.mjs tests/market-settlement.integration.mjs",
     "test:odds": "node --conditions=react-server --test tests/odds.test.mjs tests/odds-import.test.mjs tests/odds.integration.mjs",
     "test:slips": "node --conditions=react-server --test tests/slip-builder.test.mjs tests/joint-slips.test.mjs tests/best-slips.test.mjs tests/slip-card.test.mjs tests/slip-price-page.test.mjs tests/slip-service.test.mjs tests/slip-forecast.test.mjs tests/saved-slips.test.mjs tests/saved-slips.integration.mjs",
+    "test:slip-configurations": "node --conditions=react-server --test --test-concurrency=1 tests/slip-configurations.test.mjs tests/slip-configurations.integration.mjs",
+    "test:slip-configurations:rendering": "python scripts/verify-slip-configurations-rendering.py",
     "test:slips:rendering": "python scripts/verify-slip-rendering.py",
     "test:team-codes": "node --conditions=react-server --test tests/team-codes.test.mjs tests/team-name.test.mjs tests/team-codes.integration.mjs",
     "test:feed": "node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs",

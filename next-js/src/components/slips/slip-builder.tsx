@@ -29,6 +29,8 @@ import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { SlipInputWarning, SlipNumericInput } from "./slip-numeric-input";
+import { SavedSlipConfigurations } from "./saved-slip-configurations";
+import { canonicalSlipConfigurationParameters, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { AccessNotice, ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
   Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
 
@@ -112,10 +114,11 @@ type Props = Readonly<{
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
   jointEstimates?: boolean;
+  configurationId?: string | null; applyDefault?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null, applyDefault = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const [pagination, setPagination] = useState({ result, page: 1 });
@@ -124,6 +127,9 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const recheckAccess = useCallback(() => { startTransition(() => router.refresh()); }, [router]);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const formRef = useRef<HTMLFormElement>(null), errorRef = useRef<HTMLParagraphElement>(null);
+  const defaultAllowed = useRef(true);
+  const canApplyDefault = useCallback(() => defaultAllowed.current, []);
+  const markInteracted = useCallback(() => { defaultAllowed.current = false; }, []);
   const action = slipsHref(locale), errorId = `${prefix}-error`, formId = `${prefix}-form`;
   const resetCriteria = { ...defaultSlipCriteria(today), timeFrom: fullDayKickoffTime.from, timeTo: fullDayKickoffTime.to };
   const resetDraft = criteriaDraft(resetCriteria);
@@ -134,6 +140,18 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const [selectedMarkets, setSelectedMarkets] = useState(initialMarkets ?? criteria.markets);
   const [outcomes, setOutcomes] = useState(initialOutcomes ?? criteria.outcomes ?? {});
   const [reuse, setReuse] = useState(initialReuse ?? criteria.reuse);
+  const currentParameters = useMemo(() => {
+    try {
+      const parameters = new URLSearchParams();
+      for (const field of slipInputFields) parameters.set(field, draft[field] ?? "");
+      parameters.set("markets", selectedMarkets.join(",")); parameters.set("reuse", reuse ? "1" : "0");
+      for (const market of selectedMarkets) if (outcomes[market]?.length) parameters.set(`picks.${market}`, outcomes[market]!.join(","));
+      return canonicalSlipConfigurationParameters(parameters.toString(), today);
+    } catch { return null; }
+  }, [draft, selectedMarkets, outcomes, reuse, today]);
+  const loadConfiguration = useCallback((configuration: SlipConfiguration) => {
+    startTransition(() => router.push(slipConfigurationHref(configuration, locale), { scroll: false }));
+  }, [locale, router]);
   const [activeGroup, setActiveGroup] = useState<CriteriaGroup | null>(() => issueGroup(initialError));
   const snapshot = useRef<{ group: CriteriaGroup; draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
     activeGroup ? { group: activeGroup, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse } : null);
@@ -230,7 +248,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     setInputWarning(null); setFeedbackKey((current) => current + 1);
     setDraft(resetDraft); setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
     setError(null); snapshot.current = null; setActiveGroup(null);
-    if (window.location.search) startTransition(() => router.push(action, { scroll: false }));
+    if (window.location.search) startTransition(() => router.push(`${action}?${serializeSlipCriteria(resetCriteria)}`, { scroll: false }));
   }
   function resetDialog(group: CriteriaGroup) {
     setInputWarning(null); setFeedbackKey((current) => current + 1);
@@ -243,8 +261,11 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     event.preventDefault();
     const parameters = new URLSearchParams();
     new FormData(event.currentTarget).forEach((value, key) => { if (typeof value === "string") parameters.append(key, value); });
+    const configuration = parameters.get("configuration");
+    parameters.delete("configuration");
     try {
       const next = serializeSlipCriteria(parseSlipCriteria(parameters, today));
+      if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
       next.set("build", "1"); setError(null); setInputWarning(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
       const href = `${action}?${next}`;
       startTransition(() => {
@@ -334,11 +355,13 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     mobile={messages.text(signedIn ? "slips.mobile.access.subscribe" : "slips.mobile.access.signIn")}
     desktop={messages.text(signedIn ? "slips.access.subscribe" : "slips.access.signIn")} />} />;
 
-  return <SlipStack data-slip-builder-page aria-busy={pending}>
+  return <SlipStack data-slip-builder-page aria-busy={pending} onInputCapture={markInteracted} onClickCapture={markInteracted} onKeyDownCapture={markInteracted}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
     <BuilderHeader>
       <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     </BuilderHeader>
+    {signedIn && <SavedSlipConfigurations locale={locale} currentParameters={currentParameters} selectedId={configurationId}
+      applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} formId={formId} canApplyDefault={canApplyDefault} />}
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
       <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>

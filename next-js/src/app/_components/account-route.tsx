@@ -27,6 +27,7 @@ import { getMemberServices, type MemberServicesSource } from "@/server/members/m
 import { createPlansService } from "@/server/members/plans";
 import { memberCookieName, type MemberIdentity } from "@/server/members/member-sessions";
 import { PublicShell } from "./public-shell";
+import { SavedSlipConfigurations } from "@/components/slips/saved-slip-configurations";
 
 async function readPlans() {
   const { database } = await getAnalyticsServices();
@@ -112,6 +113,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
         {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
         {credit && hasCredit && <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} active={!!activeUntil} />}
+        <div id="saved-slip-configurations"><SavedSlipConfigurations locale={locale} /></div>
         <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} devices={view ? view.devices.map((device) => formatPeriodEnd(device.lastSeenAt)) : null} />
         <AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} />
         <AccountLogOut locale={locale} />

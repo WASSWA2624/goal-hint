@@ -1703,9 +1703,28 @@ model MemberAccount {
   movesTo          AccountMove[]       @relation("MovesTo")
   autoRenewPlan    SubscriptionPlan?   @relation("AutoRenewPlan", fields: [autoRenewPlanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   paymentNotifications PaymentNotificationOutbox[]
+  slipConfigurations SlipConfiguration[]
 
   @@index([autoRenew])
   @@index([autoRenewPlanId])
+}
+
+// Private builder filters belong to the account, independently of paid access or session lifetime.
+// NULL means non-default; the composite unique key permits many NULLs but only one TRUE per account.
+model SlipConfiguration {
+  id         String        @id @db.Char(36)
+  accountId  String        @db.Char(36)
+  name       String        @db.VarChar(60)
+  nameKey    String        @db.VarChar(120)
+  parameters String        @db.VarChar(2048)
+  isDefault  Boolean?
+  revision   Int           @default(1) @db.UnsignedInt
+  createdAt  DateTime      @db.DateTime(3)
+  updatedAt  DateTime      @db.DateTime(3)
+  account    MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([accountId, nameKey])
+  @@unique([accountId, isDefault])
 }
 
 // Atomic account-update delivery intents. No recipient, SMS body, amount, plan, transaction reference or gateway payload.

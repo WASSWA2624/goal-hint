@@ -13,6 +13,7 @@ import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { pageMetadata } from "@/server/seo/metadata";
 import { getShellInstant, PublicShell } from "./public-shell";
+import { slipConfigurationIdSchema } from "@/domain/slip-configurations";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
 
@@ -27,7 +28,9 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       return pageMetadata({ title: messages.text("slips.metadataTitle"), description: messages.text("slips.description"), path: slipsHref(locale) });
     },
     async Page({ params, searchParams }: Props) {
-      const { locale } = await params, query = await searchParams, at = await instant(), today = getReportingDate(at);
+      const { locale } = await params, rawQuery = await searchParams, at = await instant(), today = getReportingDate(at);
+      const { configuration, ...query } = rawQuery;
+      const configurationId = slipConfigurationIdSchema.safeParse(configuration).success ? configuration as string : null;
       const access = await contentAccess(resolveAccess), showAccount = true;
       const initialInputs: SlipInputs = {};
       for (const field of slipInputFields) {
@@ -35,7 +38,10 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
         if (typeof value === "string" && value.length <= 256) initialInputs[field] = value;
       }
       let criteria = defaultSlipCriteria(today), error: SlipCriteriaIssue | null = null;
-      try { criteria = parseSlipCriteria(query, today); }
+      try {
+        if (configuration !== undefined && configuration !== "" && !configurationId) throw new SlipCriteriaError("query", "invalid-query");
+        criteria = parseSlipCriteria(query, today);
+      }
       catch (issue) {
         if (!(issue instanceof SlipCriteriaError)) throw issue;
         error = { code: issue.code, field: issue.field };
@@ -61,10 +67,11 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       try { const binding = jointModel(); jointEstimates = !!binding && approvedSlipJointModel(binding, at); }
       catch { /* An unavailable estimator offers no whole-slip limits. */ }
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
-      const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}`;
+      const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}|${configurationId ?? ""}`;
       return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
         <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
-          error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates} {...(initialMarkets ? { initialMarkets } : {})} />
+          error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates}
+          configurationId={configurationId} applyDefault={Object.keys(rawQuery).length === 0} {...(initialMarkets ? { initialMarkets } : {})} />
       </PublicShell>;
     },
   };

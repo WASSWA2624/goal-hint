@@ -1,2 +1,5 @@
 # Keep the pinned third-party source's original formatting intact.
 flutter/packages/flutter_inappwebview_windows/** whitespace=-blank-at-eol
+# Migration checksums must stay identical on Windows and the MariaDB deployment host.
+next-js/prisma/migrations/20261031040514_saved_slip_configurations/migration.sql text eol=lf
+next-js/prisma/mariadb/20261031040514_saved_slip_configurations.sql text eol=lf

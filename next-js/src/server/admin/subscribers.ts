@@ -108,6 +108,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             break;
           case "erase": {
             await tx.savedSlip.deleteMany({ where: { accountId: id } });
+            await tx.slipConfiguration.deleteMany({ where: { accountId: id } });
             const rows = await tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true } });
             await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: rows.map(r => r.id) } } });
             await tx.paymentSubmission.updateMany({ where: { accountId: id }, data: { payerPhone: null, rejectText: null, imagePurgedAt: at } });
