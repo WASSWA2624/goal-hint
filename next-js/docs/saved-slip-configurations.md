@@ -1,12 +1,14 @@
-# Saved Slip Builder configurations
+# Custom Filters
 
 Every signed-in account can keep up to ten named filter configurations, including
-while access is expired or subscription sales are closed. **Saved filters** in
+while access is expired or subscription sales are closed. **Custom Filters** in
 the builder's Actions opens the shared criteria dialog, using the existing
-filter toolbar styling. The dialog starts with the chooser and provides edit,
-rename, optional default and delete controls. **Save current filters**
-and **Update selected** sit in the footer. Their editors and confirmations stay
-inside this same dialog. This is the only management interface on desktop and
+filter toolbar styling. The body contains the chooser, optional default and
+**Edit filters**. The footer contains **Save current filters**, **Rename**,
+**Update selected**, **Delete** and **Close**. It stays visible while an inline
+editor or confirmation names the affected filter and offers a specific action
+and Cancel. The chooser stays visible; no nested dialog replaces the context.
+Persistent explanatory text is omitted. This is the only management interface on desktop and
 phone; the account page has no saved-filter panel. Deleting a configuration does
 not change an open builder draft. The main builder is the single place to view
 and edit filter values: **Edit filters** closes the dialog and focuses its first

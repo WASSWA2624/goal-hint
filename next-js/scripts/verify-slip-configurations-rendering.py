@@ -8,7 +8,8 @@ def verify(origin):
     headers = {"Cookie": "goal-hint-member=" + "a" * 43, "Sec-Fetch-Site": "same-origin"}
     builder = request(origin, "/en/slips", headers=headers)
     assert builder.status == 200 and "data-saved-filters-trigger" in builder.text
-    assert "data-saved-slip-configurations" not in builder.text, "Saved filters belong in their closed dialog."
+    assert ">Custom Filters</button>" in builder.text, "The builder action must use the current feature name."
+    assert "data-saved-slip-configurations" not in builder.text, "Custom Filters belong in their closed dialog."
     assert 'data-slip-state="idle"' in builder.text, "A fresh builder must not generate slips."
     account = request(origin, "/en/account", headers=headers)
     assert account.status == 200 and "data-saved-slip-configurations" not in account.text
