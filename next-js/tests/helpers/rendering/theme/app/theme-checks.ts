@@ -76,7 +76,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     assert(!!percentage && visible(percentage) === wideSummary, `${outcome} percentage shows only in the desktop summary layout`);
   }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
-  check(headerSelector, theme.header.background);
+  check(headerSelector, phone ? theme.header.background : theme.color.surfaceMuted);
   const header = document.querySelector(headerSelector);
   if (header) {
     const amount = lightness(getComputedStyle(header).backgroundColor);

@@ -89,6 +89,7 @@
 | ☑ Completed | [184-joined-desktop-sections.md](dev-plan/184-joined-desktop-sections.md) | Desktop section gaps removed; live primary-page and isolated Performance/Analytics layout checks passed in both themes; mobile spacing preserved. |
 | ☑ Completed | [185-full-width-desktop-sections.md](dev-plan/185-full-width-desktop-sections.md) | Full-width desktop frames and square section edges; 48 isolated desktop cases, 64 unchanged mobile/tablet comparisons, lint, types and 141 tests passed. Live server requests timed out; see progress log. |
 | ☑ Completed | [186-aligned-desktop-content.md](dev-plan/186-aligned-desktop-content.md) | Shared 16px desktop content gutter inside full-width sections; lint, types, 151 tests, 66 desktop cases and 88 unchanged mobile/tablet comparisons passed. See progress log for live-page limits. |
+| ☑ Completed | [189-distinct-desktop-shell-backgrounds.md](dev-plan/189-distinct-desktop-shell-backgrounds.md) | Muted desktop header/footer fills in both themes; lint, types, 28 tests, six desktop checks and eight unchanged mobile/tablet comparisons passed. |
 
 ## Partial rows
 

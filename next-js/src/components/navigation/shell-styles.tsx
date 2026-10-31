@@ -80,7 +80,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
   display: ${({ $app }) => $app ? "none" : "block"};
   ${compactHeaderSurface}
   box-shadow: ${({ theme }) => theme.header.shadow};
-  ${desktop} { display: block; }
+  ${desktop} { display: block; background: ${({ theme }) => theme.color.surfaceMuted}; }
 `;
 
 export const HeaderContent = styled(Container)`
@@ -329,7 +329,7 @@ export const Footer = styled.footer`
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   font-size: 0.75rem;
   line-height: 1.4;
-  ${desktop} { padding-block: 14px; font-size: 0.8125rem; }
+  ${desktop} { padding-block: 14px; font-size: 0.8125rem; background: ${({ theme }) => theme.color.surfaceMuted}; }
 `;
 export const FooterContent = styled(Container)`
   display: grid;

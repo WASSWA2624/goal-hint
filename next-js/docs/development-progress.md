@@ -5582,3 +5582,30 @@ Preview scripts, captures and logs are ignored under
 existing `full-width-live-builder.png` filename. The owned preview and browser
 are closed after verification. See
 [plan 186](../dev-plan/186-aligned-desktop-content.md).
+
+## 189 — Distinct desktop shell backgrounds — 31 October 2026
+
+The shared desktop header and footer now use `theme.color.surfaceMuted`:
+`#E8EDF5` in Light and `#0D253B` in Dark. Both areas have a subtle fill distinct
+from the page background and content surfaces. Existing desktop media rules
+contain the change; dimensions, spacing, borders, body/subscription surfaces,
+phone/tablet fills and native appearance metadata retain their current values.
+The theme fixture expects the new desktop header fill while keeping its
+original phone expectation.
+
+Changed-file ESLint with zero warnings and strict TypeScript checking passed
+under Node 24.18.1.
+
+All 28 existing theme, boundary and navigation tests passed. A browser preview
+of the real shared Header/Footer and layout components passed six desktop cases
+at 1024px, 1440px and 1920px in both themes: matching shell fills, distinction
+from page/content backgrounds, text contrast of at least 4.5:1 and no horizontal
+overflow. Eight original-versus-current phone/tablet cases at 320px, 375px,
+768px and 1023px retained identical styling. Measured element geometry remained
+identical across all fourteen cases. Both desktop theme screenshots were
+visually reviewed.
+
+The preview uses sample navigation/content without live records or account
+state. Scripts, results and captures are ignored under
+`output/playwright/desktop-shell-*`. The owned preview and browser were closed.
+See [plan 189](../dev-plan/189-distinct-desktop-shell-backgrounds.md).

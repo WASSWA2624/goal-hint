@@ -11,10 +11,12 @@ honest development state until their later implementation prompts.
 Semantic colors, typography, spacing, breakpoints, borders, focus and control
 dimensions share one contract, including a light/dark mode for native controls.
 Light mode uses the approved Porcelain Blue palette: a cool `#F0F3F8` page,
-white content surfaces and header/navigation chrome, `#E8EDF5` muted regions,
+white content surfaces and phone header/navigation chrome, `#E8EDF5` muted
+regions and desktop header/footer backgrounds,
 `#15243B` body text, `#53647C` secondary text and a `#2457C5` action accent.
-Dark mode uses navy page, content and header surfaces
-with light text. Muted surfaces, fields, menus, dialogs, tables, match cards and
+Dark mode uses navy page, content and header surfaces with light text; its
+desktop header and footer share the `#0D253B` muted surface.
+Muted surfaces, fields, menus, dialogs, tables, match cards and
 slip cards all resolve colors from the active theme. `theme.phoneCardFrame`
 provides the shared square, shadow-free match/slip frame with a themed border;
 phone cards do not force the light palette when dark mode is selected.
@@ -61,6 +63,10 @@ The version-1 JSON contains exactly seven public fields:
 | `foreground` | `theme.color.text` |
 | `accent` | `theme.color.brand` |
 | `chrome` | Solid `theme.header.background`; also used by `theme-color` |
+
+Desktop web headers and footers use `theme.color.surfaceMuted` from 64rem up
+to distinguish the shell from the body. Their mobile fills and the native
+`chrome`/`theme-color` metadata above retain the existing header token.
 
 Colors are opaque six-digit hex values. No account state, credentials, route
 data or native preference is included. The Flutter host reads this bounded
