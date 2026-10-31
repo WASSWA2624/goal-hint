@@ -11,7 +11,7 @@ import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { marketSelections, type MarketFamily, type MarketSelection } from "@/domain/markets";
 import { slipsHref } from "@/domain/navigation";
 import { subscriberHref } from "@/domain/subscriber-navigation";
@@ -30,9 +30,9 @@ import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { SlipInputWarning, SlipNumericInput } from "./slip-numeric-input";
 import { SavedSlipConfigurations } from "./saved-slip-configurations";
-import { canonicalSlipConfigurationParameters, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
+import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { AccessNotice, ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
-  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
+  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   const messages = createMessages(locale);
@@ -118,8 +118,10 @@ type Props = Readonly<{
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null, applyDefault = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null, applyDefault = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
+  const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
+  const result = clearedResult === receivedResult ? null : receivedResult;
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const [pagination, setPagination] = useState({ result, page: 1 });
   if (pagination.result !== result) setPagination({ result, page: 1 });
@@ -127,6 +129,10 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const recheckAccess = useCallback(() => { startTransition(() => router.refresh()); }, [router]);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const formRef = useRef<HTMLFormElement>(null), errorRef = useRef<HTMLParagraphElement>(null);
+  const savedFiltersTrigger = useRef<HTMLButtonElement>(null);
+  const [savedFiltersOpen, setSavedFiltersOpen] = useState(false);
+  const [selectedConfiguration, setSelectedConfiguration] = useState(configurationId);
+  const savedFiltersId = `${prefix}-saved-filters`;
   const defaultAllowed = useRef(true);
   const canApplyDefault = useCallback(() => defaultAllowed.current, []);
   const markInteracted = useCallback(() => { defaultAllowed.current = false; }, []);
@@ -149,12 +155,32 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       return canonicalSlipConfigurationParameters(parameters.toString(), today);
     } catch { return null; }
   }, [draft, selectedMarkets, outcomes, reuse, today]);
-  const loadConfiguration = useCallback((configuration: SlipConfiguration) => {
-    startTransition(() => router.push(slipConfigurationHref(configuration, locale), { scroll: false }));
-  }, [locale, router]);
   const [activeGroup, setActiveGroup] = useState<CriteriaGroup | null>(() => issueGroup(initialError));
   const snapshot = useRef<{ group: CriteriaGroup; draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
     activeGroup ? { group: activeGroup, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse } : null);
+  const selectConfiguration = useCallback((id: string | null) => {
+    setSelectedConfiguration(id);
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("configuration", id); else url.searchParams.delete("configuration");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+  const loadConfiguration = useCallback((configuration: SlipConfiguration) => {
+    const day = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
+    const next = slipConfigurationCriteria(configuration.parameters, day);
+    setDraft(criteriaDraft(next)); setSelectedMarkets(next.markets); setOutcomes(next.outcomes ?? {}); setReuse(next.reuse);
+    setError(null); setInputWarning(null); setFeedbackKey(value => value + 1);
+    snapshot.current = null; setActiveGroup(null); setSelectedConfiguration(configuration.id); setClearedResult(receivedResult);
+    // Keep the management dialog open and replace the generation URL without a server build/read.
+    window.history.replaceState(null, "", slipConfigurationHref(configuration, locale, day));
+  }, [locale, receivedResult]);
+  const closeSavedFilters = useCallback(() => {
+    setSavedFiltersOpen(false);
+    requestAnimationFrame(() => savedFiltersTrigger.current?.focus());
+  }, []);
+  const editSavedFilters = useCallback(() => {
+    setSavedFiltersOpen(false);
+    requestAnimationFrame(() => formRef.current?.querySelector<HTMLInputElement>('input:not([type="hidden"]):not(:disabled)')?.focus());
+  }, []);
   useEffect(() => {
     if (!error) return;
     const frame = requestAnimationFrame(() => errorRef.current?.focus());
@@ -175,7 +201,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   }
   const invalidField = error?.field;
   const showJoint = jointEstimates || criteria.totalProbMin !== undefined || criteria.totalProbMax !== undefined
-    || initialInputs.totalProbMin !== undefined || initialInputs.totalProbMax !== undefined;
+    || initialInputs.totalProbMin !== undefined || initialInputs.totalProbMax !== undefined || Boolean(draft.totalProbMin || draft.totalProbMax);
   const invalidLimits = groupFields.limits.some((field) => field === invalidField);
   const invalidKickoff = invalidField === "dateFrom" || invalidField === "dateTo" || invalidField === "timeFrom" || invalidField === "timeTo";
   const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
@@ -248,6 +274,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     setInputWarning(null); setFeedbackKey((current) => current + 1);
     setDraft(resetDraft); setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
     setError(null); snapshot.current = null; setActiveGroup(null);
+    setSelectedConfiguration(null);
+    setClearedResult(receivedResult);
     if (window.location.search) startTransition(() => router.push(`${action}?${serializeSlipCriteria(resetCriteria)}`, { scroll: false }));
   }
   function resetDialog(group: CriteriaGroup) {
@@ -265,6 +293,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     parameters.delete("configuration");
     try {
       const next = serializeSlipCriteria(parseSlipCriteria(parameters, today));
+      setClearedResult(null);
       if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
       next.set("build", "1"); setError(null); setInputWarning(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
       const href = `${action}?${next}`;
@@ -360,12 +389,14 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     <BuilderHeader>
       <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     </BuilderHeader>
-    {signedIn && <SavedSlipConfigurations locale={locale} currentParameters={currentParameters} selectedId={configurationId}
-      applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} formId={formId} canApplyDefault={canApplyDefault} />}
+    {signedIn && <SavedSlipConfigurations id={savedFiltersId} locale={locale} currentParameters={currentParameters} selectedId={selectedConfiguration}
+      open={savedFiltersOpen} onClose={closeSavedFilters} onEdit={editSavedFilters} onSelectionChange={selectConfiguration}
+      applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} canApplyDefault={canApplyDefault} />}
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
       <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
         <input type="hidden" name="build" value="1" />
+        {selectedConfiguration && <input type="hidden" name="configuration" value={selectedConfiguration} />}
         <BuilderEssentials data-slip-builder-essentials>
         <div data-slip-count data-toolbar-group="slips">{field("slips", <><span data-slip-count-label="mobile">{messages.text("slips.totalSlips")}</span><span data-slip-count-label="desktop">{messages.text("slips.totalSlips")}</span></>, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</div>
         <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups data-slip-target-groups>
@@ -465,6 +496,9 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         <Actions data-criteria-actions data-toolbar-group="actions">
           <CriteriaTitle data-criteria-title>{messages.text("slips.toolbar.actions")}</CriteriaTitle>
           <ActionControls>
+          {signedIn && <SavedFiltersButton ref={savedFiltersTrigger} type="button" variant="secondary" data-saved-filters-trigger
+            aria-haspopup="dialog" aria-expanded={savedFiltersOpen} aria-controls={savedFiltersId} disabled={pending || !enhanced}
+            onClick={() => setSavedFiltersOpen(true)}>{messages.text("slipConfigs.title")}</SavedFiltersButton>}
           <ClearLink href={action} variant="quiet" prefetch={false} onClick={(event) => { event.preventDefault(); reset(); }}><ResetIcon />{messages.text("slips.reset")}</ClearLink>
           {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
             <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />

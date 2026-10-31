@@ -19,7 +19,7 @@ export const slipToolbarControl = css`
 const desktopBuildAction = css`
   ${media.desktop} {
     && {
-      flex: none; inline-size: 13rem; min-inline-size: 13rem;
+      flex: 1 1 5.5rem; inline-size: auto; min-inline-size: max-content; max-inline-size: 13rem;
       block-size: ${compactControlHeight}; min-block-size: ${compactControlHeight};
       padding: 4px 8px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.75rem; line-height: 1.3; white-space: nowrap;
     }
@@ -173,11 +173,13 @@ export const CriteriaForm = styled.form`
   > [role="alert"] { margin: 0; }
   ${media.desktop} {
     &[data-enhanced="true"] {
-      flex-direction: row; flex-wrap: wrap; align-items: stretch; gap: 8px 10px;
+      display: grid; align-items: stretch; gap: 8px clamp(6px, .7vw, 10px);
+      grid-template-columns: 3.25rem repeat(2, minmax(7rem, 1fr)) repeat(3, max-content) minmax(max-content, 1.6fr);
       > [data-slip-builder-essentials] { display: contents; }
       [data-criteria-field="targets"], [data-slip-target-groups] { display: contents; }
       [data-slip-criteria-options]:not([hidden]) { display: contents; }
-      > [role="alert"], > [data-slip-criteria-summary] { flex: 1 0 100%; }
+      > [role="alert"], > [data-slip-criteria-summary] { grid-column: 1 / -1; }
+      [data-toolbar-group]:not([data-toolbar-group="slips"]) { padding-inline-start: 6px; }
     }
   }
 `;
@@ -195,7 +197,7 @@ export const BuilderEssentials = styled.div`
   }
   ${media.desktop} {
     grid-template-columns: 4.25rem max-content; gap: 12px;
-    > [data-slip-count] { flex: none; inline-size: 4.25rem; }
+    > [data-slip-count] { flex: none; inline-size: 3.25rem; }
     > [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
     > [data-slip-count] label { ${desktopGroupTitle} }
     [data-slip-count-label="mobile"] { display: none; }
@@ -301,7 +303,7 @@ export const TargetGroups = styled(LimitGroups)`
     grid-template-columns: repeat(2, max-content); gap: 12px;
     > fieldset { flex: none; ${desktopGroupDivider} }
     > fieldset > legend { ${desktopGroupTitle} }
-    ${Fields} { grid-template-columns: repeat(2, 6rem); }
+    ${Fields} { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     ${Fields} > div > input { font-size: 0.75rem; padding-inline: 6px; font-variant-numeric: tabular-nums; }
   }
 `;
@@ -339,6 +341,10 @@ export const ActionControls = styled.div`
   display: contents;
   ${media.desktop} { display: flex; align-items: center; gap: 4px; }
 `;
+export const SavedFiltersButton = styled(Button)`
+  && { ${slipToolbarControl} ${filterButtonColors} flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${media.belowDesktop} { && { flex: 1 0 100%; min-block-size: 36px; } }
+`;
 export const BuildButton = styled(Button)`
   && { ${slipToolbarControl} }
   ${desktopBuildAction}
@@ -351,7 +357,7 @@ export const BuildLink = styled(ButtonLink)`
 `;
 export const ClearLink = styled(ButtonLink)`
   && { ${slipToolbarControl} flex: 1 1 auto; }
-  ${media.desktop} { && { ${filterButtonColors} } }
+  ${media.desktop} { && { ${filterButtonColors} flex: none; } }
   ${media.belowDesktop} {
     && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; font-size: ${mobileToolbarFontSize}; white-space: nowrap; ${filterButtonColors} }
   }

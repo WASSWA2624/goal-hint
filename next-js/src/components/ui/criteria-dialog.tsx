@@ -96,7 +96,7 @@ const Actions = styled.footer`
   [data-enhanced="false"] > & { display: none; }
 `;
 
-const ActionButton = styled(Button)`
+export const CriteriaDialogButton = styled(Button)`
   && {
     min-block-size: 2.25rem;
     padding: 6px 12px;
@@ -108,6 +108,8 @@ const ActionButton = styled(Button)`
 `;
 
 type ResetAction = { onReset: () => void; resetLabel: string } | { onReset?: never; resetLabel?: never };
+type DialogActions = { footer?: never; onApply: () => void; applyLabel: string; cancelLabel: string }
+  | { footer: ReactNode; onApply?: () => void; applyLabel?: never; cancelLabel?: never };
 
 export type CriteriaDialogProps = Readonly<{
   id: string;
@@ -115,17 +117,14 @@ export type CriteriaDialogProps = Readonly<{
   title: ReactNode;
   open: boolean;
   onCancel: () => void;
-  onApply: () => void;
-  applyLabel: string;
-  cancelLabel: string;
   closeLabel: string;
   children: ReactNode;
   className?: string;
   busy?: boolean;
-} & ResetAction>;
+} & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, resetLabel, children, className, busy = false }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, resetLabel, children, className, busy = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -148,7 +147,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onCancel();
     }}
     onKeyDown={(event) => {
-      if (!enhanced || !open || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;
+      if (!enhanced || !open || !onApply || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;
       const target = event.target;
       if (!(target instanceof HTMLInputElement) || ["button", "submit", "reset"].includes(target.type)) return;
       event.preventDefault(); onApply();
@@ -156,9 +155,11 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
     <Header><h2 id={titleId}>{title}</h2><CloseButton type="button" variant="quiet" aria-label={closeLabel} disabled={busy} onClick={onCancel}><CloseIcon /></CloseButton></Header>
     <Body>{children}</Body>
     <Actions>
-      {onReset && <ActionButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}>{resetLabel}</ActionButton>}
-      <ActionButton type="button" variant="secondary" disabled={busy} onClick={onCancel}>{cancelLabel}</ActionButton>
-      <ActionButton type="button" disabled={busy} onClick={onApply}>{applyLabel}</ActionButton>
+      {footer ?? <>
+        {onReset && <CriteriaDialogButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}>{resetLabel}</CriteriaDialogButton>}
+        <CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={onCancel}>{cancelLabel}</CriteriaDialogButton>
+        <CriteriaDialogButton type="button" disabled={busy} onClick={onApply}>{applyLabel}</CriteriaDialogButton>
+      </>}
     </Actions>
   </Dialog>;
 }

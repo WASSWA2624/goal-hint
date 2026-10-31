@@ -1,78 +1,42 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import styled, { css } from "styled-components";
-import { Button, ButtonLink, FieldLabel, SelectInput, TextInput, TextLink } from "@/components/ui/controls";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { desktopContentPadding } from "@/components/ui/layout";
-import { slipConfigurationHref, slipConfigurationMutationSchema, slipConfigurationRules, slipConfigurationsSchema,
+import { useEffect, useRef, useState } from "react";
+import styled from "styled-components";
+import { Button, SelectInput, TextInput } from "@/components/ui/controls";
+import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
+import { slipConfigurationMutationSchema, slipConfigurationRules, slipConfigurationsSchema,
   type SlipConfiguration, type SlipConfigurationMutation } from "@/domain/slip-configurations";
-import { slipsHref } from "@/domain/navigation";
 import { startRequestDeadline } from "@/domain/request-deadline";
 import { createMessages, type TextKey } from "@/i18n/messages";
-import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors } from "@/components/ui/filter-chrome";
-import { media } from "@/styles/theme";
-import { slipToolbarControl } from "./slip-styles";
 
-const visuallyHidden = css`
-  position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+const SavedDialog = styled(CriteriaDialog)`
+  inline-size: min(34rem, calc(100vw - 24px));
+  > footer { flex-wrap: wrap; }
 `;
-const Panel = styled.section<{ $builder: boolean }>`
-  display: grid; gap: 10px; min-inline-size: 0; padding: 12px;
-  border-block: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.none};
-  ${desktopContentPadding(true)}
-  h2 { margin: 0; font-size: .9375rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  p { margin: 0; font-size: .8125rem; color: ${({ theme }) => theme.color.mutedText}; }
+const Content = styled.div`
+  display: grid; gap: 14px; min-inline-size: 0;
+  p { margin: 0; font-size: .8125rem; line-height: 1.45; overflow-wrap: anywhere; }
   [role="alert"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
-  ${({ $builder }) => $builder && css`
-    ${filterPanelColors}
-    ${media.desktop} { padding-block: 8px; gap: 0; }
-  `}
 `;
 const Row = styled.div`
-  display: flex; flex-wrap: wrap; align-items: end; gap: 8px; min-inline-size: 0;
-  > [data-field] { flex: 1 1 14rem; min-inline-size: 0; max-inline-size: 28rem; }
-  button, a { font-size: .8125rem; }
-  @media (pointer: coarse) { button, a { min-block-size: 44px; } }
-`;
-/** Builder copy and management remain available on phones and on the account dashboard. */
-const Details = styled.div<{ $builder: boolean }>`
-  display: contents;
-  ${({ $builder }) => $builder && css`${media.desktop} { display: none; }`}
-`;
-const Picker = styled.div<{ $builder: boolean }>`
-  display: contents;
-  ${({ $builder }) => $builder && css`
-    ${media.desktop} {
-      display: block; flex: 0 1 18rem; min-inline-size: 0; max-inline-size: 28rem;
-      > div > ${FieldLabel} { ${visuallyHidden} }
-    }
-  `}
-`;
-const ConfigurationSelect = styled(SelectInput)<{ $builder: boolean }>`
-  ${({ $builder }) => $builder && css`
-    ${media.desktop} { && { ${slipToolbarControl} ${filterControlColors} ${controlFeedback} padding-inline-end: 24px; } }
-  `}
-`;
-const ConfigurationButton = styled(Button)<{ $builder: boolean }>`
-  ${({ $builder }) => $builder && css`
-    ${media.desktop} { && { ${slipToolbarControl} ${filterButtonColors} ${controlFeedback} font-weight: ${({ theme }) => theme.typography.weight.medium}; } }
-  `}
-`;
-const Status = styled.p<{ $builder: boolean }>`
-  ${({ $builder }) => $builder && css`${media.desktop} { ${visuallyHidden} }`}
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  button { font-size: .8125rem; }
 `;
 const Check = styled.label`
   display: inline-flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: .8125rem;
   input { inline-size: 18px; block-size: 18px; accent-color: ${({ theme }) => theme.color.link}; }
 `;
-const DialogContent = styled.div`display: grid; gap: 12px; p { margin: 0; overflow-wrap: anywhere; }`;
-type DialogAction = "create" | "rename" | "update" | "delete";
-type Editor = { action: DialogAction; target: SlipConfiguration | null };
-type Props = { locale: string; currentParameters?: string | null; selectedId?: string | null;
-  applyDefault?: boolean; onLoad?: (configuration: SlipConfiguration) => void; pending?: boolean; formId?: string; canApplyDefault?: () => boolean };
+const EditorPanel = styled.div`
+  display: grid; gap: 10px; padding-block-start: 12px;
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  h3 { margin: 0; font-size: .9375rem; }
+`;
+const Hint = styled.p`color: ${({ theme }) => theme.color.mutedText};`;
+type EditorAction = "create" | "rename" | "update" | "delete";
+type Editor = { action: EditorAction; target: SlipConfiguration | null };
+type Props = { id: string; locale: string; currentParameters: string | null; selectedId: string | null; open: boolean;
+  onClose: () => void; onEdit: () => void; onSelectionChange: (id: string | null) => void; onLoad: (configuration: SlipConfiguration) => void;
+  applyDefault?: boolean; pending?: boolean; canApplyDefault?: () => boolean };
 
 class ConfigurationRequestError extends Error {
   constructor(readonly code: string) { super(code); }
@@ -92,15 +56,20 @@ async function requestConfigurations(body?: SlipConfigurationMutation, signal?: 
   } finally { clearDeadline(); signal?.removeEventListener("abort", abort); }
 }
 
-/** The same account-owned controls serve the builder and the subscriber dashboard. */
-export function SavedSlipConfigurations({ locale, currentParameters, selectedId, applyDefault = false, onLoad, pending = false, formId, canApplyDefault }: Props) {
-  const m = createMessages(locale), id = useId(), builder = !!onLoad;
-  const [configurations, setConfigurations] = useState<SlipConfiguration[]>([]), [selection, setSelection] = useState(selectedId ?? "");
+/** One builder-only dialog manages saves; editable filter values live in the main builder. */
+export function SavedSlipConfigurations({ id, locale, currentParameters, selectedId, open, onClose, onEdit, onSelectionChange,
+  onLoad, applyDefault = false, pending = false, canApplyDefault }: Props) {
+  const m = createMessages(locale);
+  const [configurations, setConfigurations] = useState<SlipConfiguration[]>([]);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [reload, setReload] = useState(0);
   const [error, setError] = useState<TextKey | null>(null), [saved, setSaved] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null), [name, setName] = useState(""), [isDefault, setDefault] = useState(false);
-  const latest = useRef({ currentParameters, onLoad, canApplyDefault }), defaultAttempted = useRef(false), requestVersion = useRef(0);
-  useEffect(() => { latest.current = { currentParameters, onLoad, canApplyDefault }; }, [currentParameters, onLoad, canApplyDefault]);
+  const nameField = useRef<HTMLInputElement>(null);
+  const latest = useRef({ currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault });
+  const defaultAttempted = useRef(false), requestVersion = useRef(0);
+  useEffect(() => { latest.current = { currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault }; },
+    [currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault]);
+  useEffect(() => { if (editor?.action === "create" || editor?.action === "rename") nameField.current?.focus(); }, [editor]);
   useEffect(() => {
     const refresh = () => { if (!busy && document.visibilityState === "visible") setReload(value => value + 1); };
     window.addEventListener("focus", refresh); document.addEventListener("visibilitychange", refresh);
@@ -111,28 +80,22 @@ export function SavedSlipConfigurations({ locale, currentParameters, selectedId,
     void requestConfigurations(undefined, controller.signal).then(records => {
       if (controller.signal.aborted || version !== requestVersion.current) return;
       setConfigurations(records); setError(null); setLoading(false);
-      setSelection(previous => records.some(item => item.id === previous) ? previous
-        : builder ? "" : records.find(item => item.isDefault)?.id ?? records[0]?.id ?? "");
+      if (latest.current.selectedId && !records.some(item => item.id === latest.current.selectedId)) latest.current.onSelectionChange(null);
       if (!defaultAttempted.current) {
         defaultAttempted.current = true;
         const configured = records.find(item => item.isDefault);
-        // A slow read must never replace filters the member started editing, or a submitted build.
         if (applyDefault && configured && latest.current.currentParameters === initial && latest.current.canApplyDefault?.() !== false
-          && !window.location.search) latest.current.onLoad?.(configured);
+          && !window.location.search) latest.current.onLoad(configured);
       }
     }).catch(failure => { if (!controller.signal.aborted && version === requestVersion.current) {
       setError(failure instanceof ConfigurationRequestError && failure.code === "forbidden" ? "slipConfigs.error.forbidden" : "slipConfigs.error.unavailable"); setLoading(false);
     } });
     return () => controller.abort();
-  }, [reload, builder, applyDefault]);
-  const selected = configurations.find(item => item.id === selection);
+  }, [reload, applyDefault]);
+  const selected = configurations.find(item => item.id === selectedId);
   const disabled = loading || busy || pending;
-  const errorKey = (failure: unknown): TextKey => {
-    const code = failure instanceof ConfigurationRequestError ? failure.code : "unavailable";
-    return ["invalid", "limit", "name-taken", "conflict", "not-found", "forbidden"].includes(code)
-      ? `slipConfigs.error.${code}` as TextKey : "slipConfigs.error.unavailable";
-  };
-  function open(action: DialogAction) {
+  function close() { if (!busy) { setEditor(null); setError(null); setSaved(false); onClose(); } }
+  function edit(action: EditorAction) {
     setError(null); setSaved(false); setName(action === "create" ? "" : selected?.name ?? ""); setDefault(false);
     setEditor({ action, target: action === "create" ? null : selected ?? null });
   }
@@ -145,13 +108,18 @@ export function SavedSlipConfigurations({ locale, currentParameters, selectedId,
       const records = await requestConfigurations(parsed.data);
       setConfigurations(records); setEditor(null); setSaved(true);
       const createdName = parsed.data.action === "create" ? parsed.data.name : null;
-      setSelection(previous => createdName !== null ? records.find(item => item.name === createdName)?.id ?? ""
-        : records.some(item => item.id === previous) ? previous : "");
+      onSelectionChange(createdName !== null ? records.find(item => item.name === createdName)?.id ?? null
+        : records.some(item => item.id === selectedId) ? selectedId : null);
     } catch (failure) {
-      setError(errorKey(failure));
-      if (failure instanceof ConfigurationRequestError && ["conflict", "not-found"].includes(failure.code)) {
+      const code = failure instanceof ConfigurationRequestError ? failure.code : "unavailable";
+      setError(["invalid", "limit", "name-taken", "conflict", "not-found", "forbidden"].includes(code)
+        ? `slipConfigs.error.${code}` as TextKey : "slipConfigs.error.unavailable");
+      if (["conflict", "not-found"].includes(code)) {
         setEditor(null);
-        try { setConfigurations(await requestConfigurations()); } catch { /* Keep the actionable conflict notice. */ }
+        try {
+          const records = await requestConfigurations(); setConfigurations(records);
+          if (!records.some(item => item.id === selectedId)) onSelectionChange(null);
+        } catch { /* Keep the actionable conflict notice. */ }
       }
     } finally { setBusy(false); }
   }
@@ -165,45 +133,50 @@ export function SavedSlipConfigurations({ locale, currentParameters, selectedId,
     } else if (target) void mutate(action === "rename" ? { action, id: target.id, revision: target.revision, name }
       : { action, id: target.id, revision: target.revision });
   }
-  return <Panel $builder={builder} aria-labelledby={`${id}-title`} data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
-    <Details $builder={builder}><Row><h2 id={`${id}-title`}>{m.text("slipConfigs.title")}</h2>
-      {!loading && <p>{m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}</p>}</Row></Details>
-    <Row data-configuration-controls>
-      <Picker $builder={builder}><ConfigurationSelect $builder={builder} label={m.text(builder ? "slipConfigs.choose" : "slipConfigs.chooseManage")} name={builder ? "configuration" : undefined}
-        form={formId} value={selection} disabled={disabled || !configurations.length}
-        onChange={event => { const value = event.currentTarget.value; setSelection(value); setError(null); setSaved(false);
-          const configuration = configurations.find(item => item.id === value); if (configuration) onLoad?.(configuration); }}>
+  if (!open) return null;
+  const footer = editor ? <>
+    <CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={() => { setEditor(null); setError(null); }}>{m.text("slipConfigs.cancel")}</CriteriaDialogButton>
+    <CriteriaDialogButton type="button" disabled={disabled} onClick={apply}>{m.text(editor.action === "create" ? "slipConfigs.save" : `slipConfigs.${editor.action}`)}</CriteriaDialogButton>
+  </> : <>
+    <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
+      onClick={() => edit("create")}>{m.text("slipConfigs.save")}</CriteriaDialogButton>
+    <CriteriaDialogButton type="button" disabled={disabled || !selected || !currentParameters} onClick={() => edit("update")}>{m.text("slipConfigs.update")}</CriteriaDialogButton>
+    <CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={close}>{m.text("slipConfigs.close")}</CriteriaDialogButton>
+  </>;
+  return <SavedDialog id={id} title={m.text("slipConfigs.title")} open onCancel={close} closeLabel={m.text("slipConfigs.close")}
+    busy={busy} footer={footer} {...(editor ? { onApply: apply } : {})}>
+    <Content data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
+      <SelectInput label={m.text("slipConfigs.choose")} value={selectedId ?? ""} disabled={disabled || !!editor || !configurations.length}
+        hint={m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}
+        onChange={event => {
+          setError(null); setSaved(false);
+          const configuration = configurations.find(item => item.id === event.currentTarget.value);
+          if (configuration) onLoad(configuration); else onSelectionChange(null);
+        }}>
         <option value="">{m.text("slipConfigs.placeholder")}</option>
         {configurations.map(item => <option key={item.id} value={item.id}>{item.name}{item.isDefault ? ` · ${m.text("slipConfigs.default")}` : ""}</option>)}
-      </ConfigurationSelect></Picker>
-      {builder ? <><ConfigurationButton $builder type="button" variant="secondary" disabled={disabled || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
-        onClick={() => open("create")}>{m.text("slipConfigs.save")}</ConfigurationButton>
-        <ConfigurationButton $builder type="button" variant="secondary" disabled={disabled || !selected || !currentParameters} onClick={() => open("update")}>{m.text("slipConfigs.update")}</ConfigurationButton></>
-        : <ButtonLink href={selected ? slipConfigurationHref(selected, locale) : slipsHref(locale)} prefetch={false}>{m.text(selected ? "slipConfigs.edit" : "slipConfigs.openBuilder")}</ButtonLink>}
-    </Row>
-    <Details $builder={builder}>{selected && <Row>
-      <Check><input type="checkbox" checked={selected.isDefault} disabled={disabled}
-        onChange={event => { void mutate({ action: "default", id: selected.id, revision: selected.revision, isDefault: event.currentTarget.checked }); }} />{m.text("slipConfigs.useDefault")}</Check>
-      <Button type="button" variant="quiet" disabled={disabled} onClick={() => open("rename")}>{m.text("slipConfigs.rename")}</Button>
-      <Button type="button" variant="quiet" disabled={disabled} onClick={() => open("delete")}>{m.text("slipConfigs.delete")}</Button>
-    </Row>}
-    {loading ? <p role="status">{m.text("slipConfigs.loading")}</p> : !configurations.length && <p>{m.text("slipConfigs.empty")}</p>}
-    <p>{m.text("slipConfigs.hint", { build: m.text("slips.build") })} {m.text("slipConfigs.defaultHint")}</p>
-    {builder && <TextLink href={`/${locale}/account#saved-slip-configurations`} prefetch={false}>{m.text("slipConfigs.manage")}</TextLink>}</Details>
-    {currentParameters === null && <p>{m.text("slipConfigs.invalidFilters")}</p>}
-    {error && !editor && <p role="alert">{m.text(error)} <Details as="span" $builder={builder}><Button type="button" variant="quiet" disabled={busy} onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button></Details></p>}
-    {saved && <Status $builder={builder} role="status">{m.text("slipConfigs.saved")}</Status>}
-    {editor && <CriteriaDialog id={`${id}-dialog`} title={m.text(`slipConfigs.${editor.action}Title`)} open busy={busy}
-      onCancel={() => { if (!busy) { setEditor(null); setError(null); } }} onApply={apply}
-      applyLabel={m.text(editor.action === "create" ? "slipConfigs.save" : `slipConfigs.${editor.action}`)}
-      cancelLabel={m.text("slipConfigs.cancel")} closeLabel={m.text("slipConfigs.close")}>
-      <DialogContent>
-        {editor.action === "create" || editor.action === "rename" ? <TextInput label={m.text("slipConfigs.name")} name="configurationName"
+      </SelectInput>
+      {selected && <Row>
+        <Check><input type="checkbox" checked={selected.isDefault} disabled={disabled || !!editor}
+          onChange={event => { void mutate({ action: "default", id: selected.id, revision: selected.revision, isDefault: event.currentTarget.checked }); }} />{m.text("slipConfigs.useDefault")}</Check>
+        <Button type="button" variant="quiet" disabled={disabled || !!editor} onClick={onEdit}>{m.text("slipConfigs.edit")}</Button>
+        <Button type="button" variant="quiet" disabled={disabled || !!editor} onClick={() => edit("rename")}>{m.text("slipConfigs.rename")}</Button>
+        <Button type="button" variant="quiet" disabled={disabled || !!editor} onClick={() => edit("delete")}>{m.text("slipConfigs.delete")}</Button>
+      </Row>}
+      {editor && <EditorPanel data-configuration-editor={editor.action}>
+        <h3>{m.text(`slipConfigs.${editor.action}Title`)}</h3>
+        {editor.action === "create" || editor.action === "rename" ? <TextInput ref={nameField} label={m.text("slipConfigs.name")} name="configurationName"
           value={name} required maxLength={slipConfigurationRules.nameLength} disabled={busy} onChange={event => setName(event.currentTarget.value)} />
           : <p>{m.text(editor.action === "update" ? "slipConfigs.updateHint" : "slipConfigs.deleteHint", { name: editor.target!.name })}</p>}
-        {editor.action === "create" && <Check><input type="checkbox" checked={isDefault} disabled={busy} onChange={event => setDefault(event.currentTarget.checked)} />{m.text("slipConfigs.useDefault")}</Check>}
-        {error && <p role="alert">{m.text(error)}</p>}
-      </DialogContent>
-    </CriteriaDialog>}
-  </Panel>;
+        {editor.action === "create" && <Check><input type="checkbox" checked={isDefault} disabled={busy}
+          onChange={event => setDefault(event.currentTarget.checked)} />{m.text("slipConfigs.useDefault")}</Check>}
+      </EditorPanel>}
+      {loading ? <p role="status">{m.text("slipConfigs.loading")}</p> : !configurations.length && <Hint>{m.text("slipConfigs.empty")}</Hint>}
+      <Hint>{m.text("slipConfigs.hint", { build: m.text("slips.build") })}</Hint>
+      {currentParameters === null && <p>{m.text("slipConfigs.invalidFilters")}</p>}
+      {error && <p role="alert">{m.text(error)} {!editor && <Button type="button" variant="quiet" disabled={busy}
+        onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button>}</p>}
+      {saved && <p role="status">{m.text("slipConfigs.saved")}</p>}
+    </Content>
+  </SavedDialog>;
 }

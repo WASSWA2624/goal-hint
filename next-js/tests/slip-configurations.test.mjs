@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { canonicalSlipConfigurationParameters, slipConfigurationHref, slipConfigurationMutationSchema } from "../src/domain/slip-configurations.ts";
+import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationMutationSchema } from "../src/domain/slip-configurations.ts";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria } from "../src/domain/slip-builder.ts";
 import { createSlipConfigurationsHandler } from "../src/server/slips/slip-configurations-http.ts";
 import { memberTokenHash } from "../src/server/members/member-sessions.ts";
@@ -44,7 +44,10 @@ test("legacy dated configurations load for each current reporting day while reta
   assert.equal(new URLSearchParams(canonical).has("dateFrom"), false);
   assert.equal(canonicalSlipConfigurationParameters(canonical, "2026-11-01"), canonical);
   for (const day of ["2026-10-31", "2026-11-01"]) {
+    const draft = slipConfigurationCriteria(legacy.parameters, day);
     const loaded = new URL(slipConfigurationHref(legacy, "en", day), "https://example.test").searchParams;
+    assert.deepEqual(draft, parseSlipCriteria(new URLSearchParams(canonical), day));
+    assert.equal(draft.dateFrom, day); assert.equal(draft.dateTo, day);
     assert.equal(loaded.get("dateFrom"), day); assert.equal(loaded.get("dateTo"), day);
     assert.equal(loaded.get("timeFrom"), "09:30"); assert.equal(loaded.get("timeTo"), "18:45");
     assert.equal(loaded.has("build"), false);

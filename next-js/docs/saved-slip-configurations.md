@@ -1,13 +1,17 @@
 # Saved Slip Builder configurations
 
 Every signed-in account can keep up to ten named filter configurations, including
-while access is expired or subscription sales are closed. The builder offers
-**Save current filters**, a load dropdown and **Update selected**.
-Desktop shows only these three controls, styled with the existing filter toolbar.
-Counts, management controls and explanatory text stay on the account page and
-phone layout. The account page's **Saved Slip Builder configurations** panel
-provides rename, default and delete controls; **Edit filters in builder** loads the selected filters for editing
-and updating. Deleting a configuration does not change an open builder draft.
+while access is expired or subscription sales are closed. **Saved filters** in
+the builder's Actions opens the shared criteria dialog, using the existing
+filter toolbar styling. The dialog starts with the chooser and provides edit,
+rename, optional default and delete controls. **Save current filters**
+and **Update selected** sit in the footer. Their editors and confirmations stay
+inside this same dialog. This is the only management interface on desktop and
+phone; the account page has no saved-filter panel. Deleting a configuration does
+not change an open builder draft. The main builder is the single place to view
+and edit filter values: **Edit filters** closes the dialog and focuses its first
+field; **Update selected** replaces the saved values with that current draft.
+All desktop filter and action buttons share one row, including at 1024px.
 
 Names are trimmed, Unicode-normalized and unique per account without case
 distinctions. A configuration includes time bounds, market selections/outcomes,
@@ -20,11 +24,12 @@ needed.
 
 An optional default fills a fresh builder visit with no query. Explicit query
 filters and Reset take precedence. A slow default read does not overwrite filters
-the member has started editing. Loading navigates to canonical filters with the
-configuration ID and **without `build=1`**. Previous results are cleared by the route;
-generation still requires the existing explicit Build slips action and entitlement.
-Configuration controls sit outside the generation form, with an associated
-selection control to preserve the selection through generation.
+the member has started editing. Loading updates the builder draft and canonical
+URL with the configuration ID **without `build=1`**, clears previous results,
+and keeps the dialog open. It requires no server
+navigation or generation. Generation still requires the explicit Build slips
+action and entitlement. Configuration controls sit outside the generation form;
+a hidden configuration ID preserves the selection through generation.
 
 `GET /api/account/slip-configurations` returns the private account collection.
 `POST` accepts strict `create`, `rename`, `update`, `default` and `delete` actions.

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "./calendar.ts";
-import { parseSlipCriteria, serializeSlipCriteria } from "./slip-builder.ts";
+import { parseSlipCriteria, serializeSlipCriteria, type SlipCriteria } from "./slip-builder.ts";
 import { fullDayKickoffTime } from "./kickoff-time.ts";
 
 export const slipConfigurationRules = Object.freeze({ maximum: 10, nameLength: 60, parameterBytes: 2048, requestBytes: 8192 });
@@ -38,6 +38,12 @@ export type SlipConfiguration = z.infer<typeof slipConfigurationSchema>;
 export const slipConfigurationsSchema = z.strictObject({ configurations: z.array(slipConfigurationSchema).max(slipConfigurationRules.maximum) });
 export type SlipConfigurations = z.infer<typeof slipConfigurationsSchema>;
 export type SlipConfigurationFailure = "forbidden" | "limit" | "name-taken" | "not-found" | "conflict" | "invalid";
+
+/** A fresh draft, independent of the generation result or the dates in an older save. */
+export function slipConfigurationCriteria(parameters: string,
+  today = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()))): SlipCriteria {
+  return parseSlipCriteria(new URLSearchParams(canonicalSlipConfigurationParameters(parameters, today)), today);
+}
 
 /** Loading fills today's filters without generation, even for legacy saves or an already-open builder from yesterday. */
 export function slipConfigurationHref(configuration: Pick<SlipConfiguration, "id" | "parameters">, locale: string,

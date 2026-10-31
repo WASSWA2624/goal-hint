@@ -7,10 +7,12 @@ from lib.runtime import main_guard
 def verify(origin):
     headers = {"Cookie": "goal-hint-member=" + "a" * 43, "Sec-Fetch-Site": "same-origin"}
     builder = request(origin, "/en/slips", headers=headers)
-    assert builder.status == 200 and "data-saved-slip-configurations" in builder.text
+    assert builder.status == 200 and "data-saved-filters-trigger" in builder.text
+    assert "data-saved-slip-configurations" not in builder.text, "Saved filters belong in their closed dialog."
     assert 'data-slip-state="idle"' in builder.text, "A fresh builder must not generate slips."
     account = request(origin, "/en/account", headers=headers)
-    assert account.status == 200 and 'id="saved-slip-configurations"' in account.text
+    assert account.status == 200 and "data-saved-slip-configurations" not in account.text
+    assert 'id="saved-slip-configurations"' not in account.text, "Management belongs only in Slip Builder."
     collection = request(origin, "/api/account/slip-configurations", headers=headers)
     assert collection.status == 200 and len(json.loads(collection.text)["configurations"]) <= 10
     assert request(origin, "/api/account/slip-configurations", headers={"Sec-Fetch-Site": "same-origin"}).status == 403
