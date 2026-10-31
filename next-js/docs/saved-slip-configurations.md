@@ -4,18 +4,24 @@ Every signed-in account can keep up to ten named filter configurations, includin
 while access is expired or subscription sales are closed. **Custom Filters** in
 the builder's Actions opens the shared criteria dialog, using the existing
 filter toolbar styling. The body contains the chooser and optional default.
-The footer contains **Create New Filter**, **Rename**, **Update** and **Delete**;
+The footer contains **Create New Filter**, **Rename Selected Filter**,
+**Update Selected Filter** and **Delete Selected Filter**;
 the top-right X closes the parent. On desktop, these actions open a
 smaller native child dialog above the visible, inactive parent. The child names
 the affected filter and offers its specific action and Cancel. Its errors stay
 inside the child. Cancel, Escape and successful writes return to the parent and
 restore focus; background controls remain inert until the child closes. The two
-dialogs share the existing criteria-dialog styling with a subtle stacked offset.
+dialogs share the existing criteria-dialog styling and are centered in the
+viewport. The wider desktop parent fits its four actions on one row. Clicking
+outside either dialog does nothing; Escape, explicit close/cancel controls and
+completed actions handle dismissal. Child action labels are Create, Rename,
+Update and Delete.
 Phones and tablets keep inline editors. Resizing preserves the pending form.
 Persistent explanatory text is omitted. This is the only management interface on desktop and
 phone; the account page has no saved-filter panel. Deleting a configuration does
 not change an open builder draft. The main builder is the single place to view
-and edit filter values; **Update** replaces the saved values with that current draft.
+and edit filter values; **Update Selected Filter** replaces the saved values with
+that current draft.
 All desktop filter and action buttons share one row, including at 1024px.
 
 Names are trimmed, Unicode-normalized and unique per account without case

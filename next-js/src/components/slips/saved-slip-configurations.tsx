@@ -11,19 +11,16 @@ import { startRequestDeadline } from "@/domain/request-deadline";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
-const SavedDialog = styled(CriteriaDialog)<{ $stacked: boolean }>`
+const SavedDialog = styled(CriteriaDialog)`
   inline-size: min(34rem, calc(100vw - 24px));
   > footer { flex-wrap: wrap; }
   ${media.desktop} {
+    inline-size: min(48rem, calc(100vw - 24px));
     > footer { flex-wrap: nowrap; }
-    transform: ${({ $stacked }) => $stacked ? "translate(-2rem, -2rem)" : "none"};
-    max-block-size: calc(100dvh - ${({ $stacked }) => $stacked ? 88 : 24}px);
   }
 `;
 const EditorDialog = styled(CriteriaDialog)`
   inline-size: min(26rem, calc(100vw - 24px));
-  max-block-size: calc(100dvh - 88px);
-  transform: translate(2rem, 2rem);
   > header > h2 { min-inline-size: 0; overflow-wrap: anywhere; }
 `;
 const Content = styled.div`
@@ -190,7 +187,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
       onClick={event => edit("delete", event.currentTarget)}>{m.text("slipConfigs.delete")}</CriteriaDialogButton>
   </>;
   return <><SavedDialog id={id} title={m.text("slipConfigs.title")} open onCancel={close} closeLabel={m.text("slipConfigs.close")}
-    $stacked={nestedEditor} closeButtonRef={closeButton} busy={busy} footer={footer} {...(editor && !desktop ? { onApply: apply } : {})}>
+    dismissOnBackdrop={false} closeButtonRef={closeButton} busy={busy} footer={footer} {...(editor && !desktop ? { onApply: apply } : {})}>
     <Content data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
       <SelectInput ref={chooseField} label={m.text("slipConfigs.choose")} value={selectedId ?? ""} disabled={disabled || !!editor || !configurations.length}
         hint={m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}
@@ -219,7 +216,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
     </Content>
   </SavedDialog>
   {nestedEditor && <EditorDialog id={`${id}-editor`} title={editorTitle} open busy={busy}
-    onCancel={cancelEditor} closeLabel={m.text("slipConfigs.cancel")} footer={editorActions} onApply={apply}>
+    dismissOnBackdrop={false} onCancel={cancelEditor} closeLabel={m.text("slipConfigs.cancel")} footer={editorActions} onApply={apply}>
     <Content data-configuration-editor={editor.action} data-analytics-ignore>{editorFields}</Content>
   </EditorDialog>}
   </>;
