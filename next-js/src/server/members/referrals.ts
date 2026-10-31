@@ -43,6 +43,9 @@ export async function recordReferralRegistration(tx: Prisma.TransactionClient, c
 
 /** Caller holds the invitee account lock. A successful first verification and its one award commit together. */
 export async function awardReferralRegistration(tx: Prisma.TransactionClient, config: Key, account: { id: string; phone: string | null }, at: Date) {
+  // Recheck the actual invitee under its lock, even when a future caller supplies stale/claimed identity fields.
+  const verified = await lockMemberAccount(tx, account.id);
+  if (!eligibleInviter(verified) || verified.phone !== account.phone || verified.phoneVerifiedAt! > at) return;
   const registration = await tx.memberReferral.findUnique({ where: { accountId: account.id } });
   if (!registration || registration.status !== "pending") return;
   const inviter = registration.inviterId && registration.inviterId !== account.id ? await lockMemberAccount(tx, registration.inviterId) : null;

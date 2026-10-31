@@ -97,7 +97,7 @@ export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "
     onStart?.();
     const reply = await action.send("/api/admin/codes", { action: "manual", phone: f.get("phone"), note: f.get("note"), amount: Number(f.get("amount")), ...(planId ? { planId } : { days: Number(f.get("days")) }), ...(network ? { network } : {}), ...(transactionId ? { transactionId } : {}) });
     if (reply.ok) onSaved?.(); }
-  return <form id={formId} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={submit} data-analytics-ignore data-manual-code-form><FormStack data-code-form-stack>
+  return <form id={formId} method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={submit} data-analytics-ignore data-manual-code-form><FormStack data-code-form-stack>
     <GrantSection data-grant-section="account">
       {fixedPhone ? <input type="hidden" name="phone" value={phone} /> : <PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} lookup required disabled={action.busy} />}
       <PlanField plans={plans} disabled={action.busy} onValueChange={setSelectedPlan} />
@@ -155,7 +155,7 @@ export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; acti
   const locked = action.busy || code.status === "revoked";
   function cancel() { setConfirming(false); revokeTrigger.current?.focus(); }
   return <CodeTools ref={tools} tabIndex={-1} role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
-    {code.source !== "referral" && <ExtendForm method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
+    {code.source !== "referral" && <ExtendForm method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
       <ExtendField>Extend by<input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} />days</ExtendField>
       <ActionButton type="submit" disabled={locked}>Extend</ActionButton>
     </ExtendForm>}
@@ -253,7 +253,7 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
     <CodeList aria-label="Code directory">
       <RecordListTools>
-        <SearchForm method={preview ? "get" : "post"} action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
+        <SearchForm method="post" action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
           <FloatingField label="Phone or reference"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Enter phone number or code" maxLength={40} autoComplete="off" disabled={action.busy} /></FloatingField>
           <FloatingField label="Status"><select value={status} disabled={action.busy} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{Object.entries(codeStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FloatingField>
           <ActionButton type="submit" disabled={action.busy}><SearchIcon />Search</ActionButton>

@@ -200,6 +200,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       if (!phone) return invalid("Enter a valid phone number with its country code.");
       if (!channelFor(phone, channel)) return invalid("Choose an available SMS or WhatsApp delivery channel.");
       if (!await limit({ purpose: "password-reset-address", value: safeAddress(address), maximum: 30, windowMs: 3_600_000 })) return busy();
+      if (!await limit({ purpose: "password-reset-phone", value: phone, maximum: 10, windowMs: 3_600_000 })) return busy();
       const reserved = await decide(database, async tx => {
         const found = await tx.memberAccount.findUnique({ where: { phone } });
         const account = found ? await lockMemberAccount(tx, found.id) : null, at = new Date(now());
@@ -216,6 +217,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       const phone = normalizePhone(phoneInput);
       if (!phone) return refused();
       if (!await limit({ purpose: "password-reset-check-address", value: safeAddress(address), maximum: 30, windowMs: 15 * 60_000 })) return busy();
+      if (!await limit({ purpose: "password-reset-check-phone", value: phone, maximum: 15, windowMs: 15 * 60_000 })) return busy();
       return decide(database, async tx => {
         const found = await tx.memberAccount.findUnique({ where: { phone } });
         const account = found ? await lockMemberAccount(tx, found.id) : null, at = new Date(now());

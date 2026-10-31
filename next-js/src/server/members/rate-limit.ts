@@ -7,10 +7,9 @@ import type { Prisma } from "../generated/prisma/client.ts";
 export type MemberLimit = Readonly<{ purpose: string; value: string; maximum: number; windowMs: number }>;
 export const memberRateRules = Object.freeze({ signIns: 1_000, newAccounts: 1_000, hourMs: 3_600_000, dayMs: 86_400_000 });
 
-/** Atomic fixed-window counters. No raw address or number is stored; unknown proxy addresses share no bucket. */
+/** Atomic fixed-window counters. No raw address/number is stored; unresolved addresses share a bounded bucket. */
 export async function takeMemberLimit(tx: Prisma.TransactionClient, config: Pick<AnalyticsConfig, "key">,
   limit: MemberLimit, at: Date): Promise<boolean> {
-  if (limit.value === "unknown") return true;
   const key = config.key(`member-${limit.purpose}`, limit.value);
   const start = new Date(Math.floor(at.getTime() / limit.windowMs) * limit.windowMs);
   const end = new Date(+start + limit.windowMs);

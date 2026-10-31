@@ -3,7 +3,7 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
-import { createReferrals } from "../src/server/members/referrals.ts";
+import { awardReferralRegistration, createReferrals } from "../src/server/members/referrals.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
@@ -58,6 +58,9 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   const paid = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic paid-priority period" }, "synthetic-owner");
   assert.equal(paid.status, "created");
   const invited = await signup(friend, link);
+  await f.database.transaction(tx => awardReferralRegistration(tx, f.config, { id: invited.pending.accountId, phone: friend }, new Date(now())));
+  assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { source: "referral" } })), 0,
+    "The reward boundary rejects an unverified invitee even when called directly");
   const results = await Promise.all([auth.verifyAccount(invited.otp, invited.pending.token, "198.51.100.9"), auth.verifyAccount(invited.otp, invited.pending.token, "198.51.100.10")]);
   assert.deepEqual(results.map(row => row.status).sort(), ["authenticated", "unauthorized"]);
   assert.equal((await referrals.read(member)).earnedDays, 1);
@@ -91,4 +94,24 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   assert.equal((await referrals.read(member)).earnedDays, 1, "A deleted number cannot earn twice");
   assert.equal((await admin.action(member.accountId, "delete", undefined, "synthetic-owner")).status, "saved");
   assert.equal(await f.database.query(tx => tx.memberReferral.count({ where: { status: "rewarded", accessCodeId: null, inviterId: null } })), 1);
+
+  // Existing owner-confirmed number changes deliberately move earned grants intact. Other ownership remains immutable.
+  const moving = await signup("256700009107");
+  const movingLogin = await auth.verifyAccount(moving.otp, moving.pending.token, "198.51.100.9");
+  const movingMember = await sessions.verify(movingLogin.token), movingLink = (await referrals.read(movingMember)).code;
+  const movingFriend = await signup("256700009108", movingLink);
+  await auth.verifyAccount(movingFriend.otp, movingFriend.pending.token, "198.51.100.9");
+  const originalEarned = await f.database.query(tx => tx.accessCode.findFirst({ where: { accountId: movingMember.accountId, source: "referral" } }));
+  const originalPaid = await codes.manual({ phone: "256700009107", durationDays: 1, amountReceivedUgx: 0, note: "Synthetic transfer policy check" }, "synthetic-owner");
+  assert.equal(originalPaid.status, "created");
+  const moved = await codes.changeNumber(movingMember.accountId, { newPhone: "256700009109", verifiedBy: "old-number" }, "synthetic-owner");
+  assert.equal(moved.status, "created");
+  const transferred = await f.database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { id: originalEarned.id } }));
+  assert.equal(transferred.accountId, moved.grant.accountId);
+  assert.equal(+transferred.endsAt - +transferred.startsAt, DAY);
+  assert.equal((await f.database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { id: originalPaid.grant.id } }))).accountId, movingMember.accountId);
+  const immutableAward = await f.database.query(tx => tx.memberReferral.findUniqueOrThrow({ where: { accountId: movingFriend.pending.accountId } }));
+  assert.equal(immutableAward.inviterId, movingMember.accountId); assert.equal(immutableAward.accessCodeId, originalEarned.id);
+  assert.equal(await f.database.query(tx => tx.accountMove.count({ where: { fromAccountId: movingMember.accountId, toAccountId: moved.grant.accountId } })), 1);
+  assert.equal(await f.database.query(tx => tx.ownerAuditEvent.count({ where: { action: "number_changed", accountId: moved.grant.accountId } })), 1);
 });

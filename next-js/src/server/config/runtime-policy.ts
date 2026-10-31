@@ -140,6 +140,7 @@ const environmentSchema = z.object({
   GOAL_HINT_IOS_APP_LINK_TEAM_ID: optional(z.string().trim().regex(/^[A-Z0-9]{10}$/))
     .describe("Public ten-character Apple team ID for the signed iOS app; blank leaves universal links unconfigured."),
   GOAL_HINT_DATABASE_ENABLED: enabled.describe("Use true or false; database integration belongs to prompt 003."),
+  GOAL_HINT_TRUSTED_PROXY_CIDRS: text.describe("Comma-separated exact proxy IPs/CIDRs, verified from the actual socket chain. Blank trusts no forwarded address."),
   GOAL_HINT_MTN_MOMO_NUMBER: subscriptionPhone.describe("Supply the MTN MoMo receiving number with its country code; independent of support numbers."),
   GOAL_HINT_MTN_MOMO_NAME: subscriptionName.describe("Supply the registered name shown for the MTN MoMo receiving wallet."),
   GOAL_HINT_MTN_MOMO_MENU_SHORTCUT: subscriptionShortcut.describe("Optional tested MTN menu string; digits, * and # with {amount}. Leave blank when unverified."),

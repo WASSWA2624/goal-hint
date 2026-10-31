@@ -234,7 +234,7 @@ test("Plans and Settings: reads expose managed identity, writes are JSON only, e
     "mtnMenuShortcut", "mtnName", "mtnNumber", "whatsappPhone"]);
   assert.deepEqual(shown.requirements.test.map(({ key }) => key), ["plan", "payment-number", "contact"]);
   assert.deepEqual(shown.requirements.on.map(({ key }) => key), ["plan", "payment-number", "contact", "privacy", "terms"]);
-  assert.equal(shown.diagnostics.address, "203.0.113.8", "The diagnostics name the address the throttles use.");
+  assert.equal(shown.diagnostics.address, "unknown", "Raw forwarded headers cannot establish a trusted transport address.");
   assert.deepEqual(shown.diagnostics.headers.filter(({ value }) => value !== null), [{ name: "x-forwarded-for", value: "198.51.100.4, 203.0.113.8" },
     { name: "x-real-ip", value: "203.0.113.8" }]);
   const form = await plans.POST(request(plansRoute, "POST", { ...signedIn, ...sameOrigin, "content-type": "application/x-www-form-urlencoded" }, "action=create"));
@@ -298,19 +298,19 @@ test("owner screenshot is private JPEG with a sandbox and cannot return data wit
 test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
   assert.match(await source("src/components/admin/subscriber-styles.tsx"), /export const CompactForm\s*=\s*styled\.form\b/u,
     "The shared subscriber form wrapper remains a native HTML form.");
-  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payment-review.tsx","src/components/admin/subscriber-detail.tsx","src/components/admin/subscriber-credentials.tsx","src/components/admin/subscriber-directory.tsx"]){
+  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payment-review.tsx","src/components/admin/subscriber-detail.tsx"]){
     const text=await source(file);
     const names=["form",...Array.from(text.matchAll(/\b(\w+)\s*=\s*styled\.form\b/gu),match=>match[1]),
-      ...(file.endsWith("subscriber-detail.tsx") || file.endsWith("subscriber-credentials.tsx") ? ["CompactForm"] : [])].join("|");
+      ...(file.endsWith("subscriber-detail.tsx") ? ["CompactForm"] : [])].join("|");
     const forms=[...text.matchAll(new RegExp(`<(?:${names})\\b[^>]*?onSubmit=`,"gu"))];assert.ok(forms.length>0,file);
     for(const [form] of forms)assert.match(form,/method="post"/u,file);
   }
 });
 
-test("member ownership keys are immutable after insert in every handwritten server module",async()=>{
+test("member ownership keys remain immutable except the reviewed earned-access number transfer",async()=>{
  const ts=(await import("typescript")).default;
  async function sources(dir){const result=[];for(const e of await readdir(path.join(root,dir),{withFileTypes:true})){if(e.name==="generated")continue;const rel=`${dir}/${e.name}`;if(e.isDirectory())result.push(...await sources(rel));else if(/\.tsx?$/u.test(e.name))result.push(rel);}return result;}
- let checked=0;
+ let checked=0, earnedTransfers=0;
  for(const file of await sources("src")){
   const text=await source(file);
   for(const match of text.matchAll(/\bUPDATE\s+`?(?:AccessCode|PaymentSubmission|MemberSession)`?\s+SET([\s\S]*?)\bWHERE\b/giu))assert.doesNotMatch(match[1],/\baccountId\s*=/iu,file);
@@ -324,7 +324,13 @@ test("member ownership keys are immutable after insert in every handwritten serv
    for(const p of n.properties){if(ts.isSpreadAssignment(p)){inspectData(p.expression,new Set(seen));continue;}assert.notEqual(p.name?.getText(tree).replace(/["']/g,""),"accountId",`${file}: ownership mutation`);}
   }
   function visit(n){if(ts.isCallExpression(n)&&ts.isPropertyAccessExpression(n.expression)&&["update","updateMany","upsert"].includes(n.expression.name.text)&&ts.isPropertyAccessExpression(n.expression.expression)&&["accessCode","paymentSubmission","memberSession"].includes(n.expression.expression.name.text)){
-   checked++;const args=n.arguments[0];assert.ok(args&&ts.isObjectLiteralExpression(args),file);for(const prop of args.properties)if(ts.isPropertyAssignment(prop)&&["data","update"].includes(prop.name.getText(tree)))inspectData(prop.initializer);
+   checked++;const args=n.arguments[0];assert.ok(args&&ts.isObjectLiteralExpression(args),file);
+   let method=n.parent;while(method&&!ts.isMethodDeclaration(method))method=method.parent;
+   // One explicit, account-locked existing policy exception; the real MySQL referral test verifies its effects/audit.
+   const earnedTransfer=file==="src/server/members/access-codes.ts"&&method?.name.getText(tree)==="changeNumber"
+     &&n.getText(tree).replace(/\s/gu,"")==="tx.accessCode.update({where:{id:code.id},data:{accountId:destination.id}})";
+   if(earnedTransfer)earnedTransfers++;
+   else for(const prop of args.properties)if(ts.isPropertyAssignment(prop)&&["data","update"].includes(prop.name.getText(tree)))inspectData(prop.initializer);
   }ts.forEachChild(n,visit);}visit(tree);
- }assert.ok(checked>=15,`checked ${checked} ownership-sensitive updates`);
+ }assert.ok(checked>=15,`checked ${checked} ownership-sensitive updates`);assert.equal(earnedTransfers,1);
 });

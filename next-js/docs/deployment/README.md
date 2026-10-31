@@ -141,6 +141,13 @@ deployed `BUILD_INFO.json`. See [how-to-deploy.md](how-to-deploy.md).
 
 ## Troubleshooting
 
+Before enabling per-client registration/verification limits behind Passenger,
+qualify the actual socket/proxy chain and configure only verified proxy CIDRs.
+Blank `GOAL_HINT_TRUSTED_PROXY_CIDRS` trusts no forwarded address. See the
+[transport security checklist](../registration-referral-security.md#client-address-provenance).
+Raw X-Forwarded-For/X-Real-IP observations do not establish trust; remote ingress
+and Passenger socket behavior remain unverified until tested on that deployment.
+
 - **Every page returns 500, or Passenger shows 503 or "Incomplete response":**
   check the application log. Its path is shown in **Setup Node.js App**, often
   `~/goal-hint/stderr.log`. A `RuntimePolicyError` lists the settings to fix.

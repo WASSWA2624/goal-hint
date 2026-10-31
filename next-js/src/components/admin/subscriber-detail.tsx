@@ -91,7 +91,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
   const actionFields = <>
     {active === "grant" && <ManualCodeForm formId={`${id}-form-grant`} externalActions={externalActionControls} plans={plans} action={action} phone={account.phone ?? ""} compact fixedPhone onSaved={closeAction} />}
     {active === "number" && <ChangeNumber formId={`${id}-form-number`} externalActions={externalActionControls} path={path} action={action} onSaved={closeAction} />}
-    {active === "block" && <CompactForm id={`${id}-form-block`} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : path} onSubmit={async event => {
+    {active === "block" && <CompactForm id={`${id}-form-block`} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
       event.preventDefault(); if (action.busy) return;
       const reply = await action.send(path, { action: account.blockedAt ? "unblock" : "block", value: new FormData(event.currentTarget).get("reason") }, account.blockedAt ? "Account unblocked." : "Account blocked and devices signed out.");
       if (reply.ok) closeAction();
@@ -196,7 +196,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
 function OwnerNote({ account, action, formId, externalActions, onDirtyChange }: { account: OwnerSubscriber; action: CodeAction; formId: string; externalActions: boolean; onDirtyChange: (dirty: boolean) => void }) {
   const [note, setNote] = useState(account.ownerNote ?? "");
   useEffect(() => { onDirtyChange(note !== (account.ownerNote ?? "")); }, [account.ownerNote, note, onDirtyChange]);
-  return <CompactForm id={formId} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={async event => {
+  return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={async event => {
     event.preventDefault(); if (!action.busy) await action.send(`/api/admin/subscribers/${account.id}`, { action: "note", value: note }, "Owner note saved.");
   }}><FieldBlock>Owner note<textarea name="note" rows={2} maxLength={500} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={action.busy} placeholder="Add a private note…" /></FieldBlock>
     <NoteFooter><span>{note.length}/500 · Admin only</span>{!externalActions && <ActionButton type="submit" disabled={action.busy || note === (account.ownerNote ?? "")}>Save note</ActionButton>}</NoteFooter>
@@ -208,7 +208,7 @@ function CreditAdjust({ path, action, formId, externalActions, open, onOpenChang
   const [amount, setAmount] = useState(""), [note, setNote] = useState(""), [confirmed, setConfirmed] = useState(false);
   const value = Number(amount), valid = /^-?\d+$/u.test(amount.trim()) && value !== 0 && Math.abs(value) <= walletRules.adjustmentMaxUgx && !!note.trim();
   useEffect(() => { onReadyChange(valid && confirmed); }, [confirmed, onReadyChange, valid]);
-  return <PlainDrawer data-subscriber-credit-adjust open={open} onToggle={event => { if (event.currentTarget.open !== open) onOpenChange(event.currentTarget.open); }}><summary>Correct credit<ChevronDownIcon /></summary><div><CompactForm id={formId} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : path} onSubmit={async event => {
+  return <PlainDrawer data-subscriber-credit-adjust open={open} onToggle={event => { if (event.currentTarget.open !== open) onOpenChange(event.currentTarget.open); }}><summary>Correct credit<ChevronDownIcon /></summary><div><CompactForm id={formId} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
     event.preventDefault(); if (action.busy || !valid || !confirmed) return;
     const reply = await action.send(path, { action: "credit-adjust", amount: value, note, confirmed }, `Credit ${value > 0 ? "added" : "removed"}.`);
     if (reply.ok) { setAmount(""); setNote(""); setConfirmed(false); }
@@ -227,7 +227,7 @@ function ChangeNumber({ path, action, onSaved, formId, externalActions }: { path
     const reply = await action.send(path, { action: "change-number", newPhone: data.get("newPhone"), verifiedBy: data.get("verifiedBy"), confirmed: data.get("confirmed") === "on" }, "Remaining access and credit moved to the new number. Old sessions no longer have access.");
     if (reply.ok) onSaved();
   }
-  return <CompactForm id={formId} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : path} onSubmit={submit}><MutedText>Move remaining access, credit and auto-renewal to the new number&apos;s account. Old sessions lose access. Both accounts can then be erased but not permanently deleted.</MutedText>
+  return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : path} onSubmit={submit}><MutedText>Move remaining access, credit and auto-renewal to the new number&apos;s account. Old sessions lose access. Both accounts can then be erased but not permanently deleted.</MutedText>
     <FieldRow><PhoneInput label="New phone number" name="newPhone" lookup required disabled={action.busy} hint="" />
       <FieldBlock>Verified by<select name="verifiedBy" required disabled={action.busy}><option value="">Choose verification</option><option value="old-number">Old number</option><option value="payment-details">Payment details</option></select></FieldBlock></FieldRow>
     <label><input type="checkbox" name="confirmed" required disabled={action.busy} /> I verified this request.</label>
@@ -243,7 +243,7 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
     const reply = await action.send(`/api/admin/subscribers/${account.id}`, { action: kind, confirmed }, deleting ? "Account and all related information permanently deleted." : "Personal data erased. Accounting history retained.");
     if (reply.ok) onSaved();
   }
-  return <CompactForm id={formId} method={action.localOnly ? "get" : "post"} action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={submit} data-subscriber-removal={kind}>
+  return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={submit} data-subscriber-removal={kind}>
     <MutedText>{deleting ? "Permanently removes the account and all related information, including payments, screenshots, access, saved slips and audit records. Payment totals will change. This cannot be undone."
       : `Clears numbers, passwords, notes, sessions and screenshots.${account.creditUgx > 0 ? ` The ${formatCredit(account.creditUgx)} credit is forfeited.` : ""} Payment amounts, IDs and access history remain for accounting. This cannot be undone.`}</MutedText>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => onConfirmedChange(event.target.checked)} /> I verified this account and understand this cannot be undone.</label>

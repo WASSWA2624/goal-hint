@@ -1,4 +1,5 @@
 import "server-only";
+import { verifiedClientAddress } from "./client-address.ts";
 
 /**
  * Shared helpers for private endpoints: the analytics dashboard, the owner dashboard (`/admin`) and member routes.
@@ -73,15 +74,14 @@ export function isSameOrigin(request: Request): boolean {
   const site = request.headers.get("sec-fetch-site");
   if (site !== null) return site === "same-origin";
   const origin = request.headers.get("origin");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const host = request.headers.get("host");
   if (origin === null || host === null) return false;
   try { return new URL(origin).host === host; } catch { return false; }
 }
 
-/** The address seen by the nearest proxy (the last X-Forwarded-For entry); used only as an HMAC throttle key. */
+/** Only the Node transport can establish an address; raw forwarding headers are never sufficient. */
 export function clientAddress(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for")?.split(",").map((value) => value.trim()).filter(Boolean);
-  return forwarded?.at(-1) ?? headers.get("x-real-ip")?.trim() ?? "unknown";
+  return verifiedClientAddress(headers);
 }
 
 /** Headers that can carry a visitor's address, as proxies and CDNs commonly name them. */
@@ -90,8 +90,8 @@ export const clientAddressHeaders = Object.freeze(["x-forwarded-for", "x-real-ip
 export type ClientAddressDiagnostics = Readonly<{ address: string; headers: readonly Readonly<{ name: string; value: string | null }>[] }>;
 
 /**
- * Which address headers reached the app and the address the throttles key on (owner Settings, plan section 10). Compared
- * with a request that forges `X-Forwarded-For`, it shows whether the host's proxy appends the real address last.
+ * Owner-only diagnostic hints. Raw headers are untrusted observations, not proof of proxy configuration.
+ * The resolved address requires Node transport provenance; never expose the private proof header here.
  */
 export function clientAddressDiagnostics(headers: Headers): ClientAddressDiagnostics {
   return { address: clientAddress(headers), headers: clientAddressHeaders.map((name) => ({ name, value: headers.get(name)?.slice(0, 300) ?? null })) };

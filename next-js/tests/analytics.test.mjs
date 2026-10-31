@@ -390,7 +390,7 @@ test("origin and client address helpers", () => {
   assert.equal(isSameOrigin(request("/", { headers: { origin: "http://localhost:3000" } })), true);
   assert.equal(isSameOrigin(request("/", { headers: { origin: "http://localhost:3001" } })), false);
   assert.equal(isSameOrigin(request("/")), false, "State changes without any origin evidence are refused.");
-  assert.equal(clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 2.2.2.2" })), "2.2.2.2");
+  assert.equal(clientAddress(new Headers({ "x-forwarded-for": "1.1.1.1, 2.2.2.2" })), "unknown", "Headers alone cannot establish a trusted peer");
   assert.equal(clientAddress(new Headers()), "unknown");
 });
 
