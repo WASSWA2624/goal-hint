@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode, type Ref } from "react";
 import styled from "styled-components";
 import { Button } from "./controls";
 import { CloseIcon } from "./icons";
@@ -118,13 +118,14 @@ export type CriteriaDialogProps = Readonly<{
   open: boolean;
   onCancel: () => void;
   closeLabel: string;
+  closeButtonRef?: Ref<HTMLButtonElement>;
   children: ReactNode;
   className?: string;
   busy?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, resetLabel, children, className, busy = false, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -152,7 +153,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
       if (!(target instanceof HTMLInputElement) || ["button", "submit", "reset"].includes(target.type)) return;
       event.preventDefault(); onApply();
     }}>
-    <Header><h2 id={titleId}>{title}</h2><CloseButton type="button" variant="quiet" aria-label={closeLabel} disabled={busy} onClick={onCancel}><CloseIcon /></CloseButton></Header>
+    <Header><h2 id={titleId}>{title}</h2><CloseButton ref={closeButtonRef} type="button" variant="quiet" aria-label={closeLabel} disabled={busy} onClick={onCancel}><CloseIcon /></CloseButton></Header>
     <Body>{children}</Body>
     <Actions>
       {footer ?? <>

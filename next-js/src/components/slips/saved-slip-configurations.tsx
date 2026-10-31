@@ -4,16 +4,27 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { Button, SelectInput, TextInput } from "@/components/ui/controls";
 import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { slipConfigurationMutationSchema, slipConfigurationRules, slipConfigurationsSchema,
   type SlipConfiguration, type SlipConfigurationMutation } from "@/domain/slip-configurations";
 import { startRequestDeadline } from "@/domain/request-deadline";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
-const SavedDialog = styled(CriteriaDialog)`
+const SavedDialog = styled(CriteriaDialog)<{ $stacked: boolean }>`
   inline-size: min(34rem, calc(100vw - 24px));
   > footer { flex-wrap: wrap; }
-  ${media.desktop} { > footer { flex-wrap: nowrap; } }
+  ${media.desktop} {
+    > footer { flex-wrap: nowrap; }
+    transform: ${({ $stacked }) => $stacked ? "translate(-2rem, -2rem)" : "none"};
+    max-block-size: calc(100dvh - ${({ $stacked }) => $stacked ? 88 : 24}px);
+  }
+`;
+const EditorDialog = styled(CriteriaDialog)`
+  inline-size: min(26rem, calc(100vw - 24px));
+  max-block-size: calc(100dvh - 88px);
+  transform: translate(2rem, 2rem);
+  > header > h2 { min-inline-size: 0; overflow-wrap: anywhere; }
 `;
 const Content = styled.div`
   display: grid; gap: 14px; min-inline-size: 0;
@@ -36,7 +47,7 @@ const EditorPanel = styled.section`
 type EditorAction = "create" | "rename" | "update" | "delete";
 type Editor = { action: EditorAction; target: SlipConfiguration | null };
 type Props = { id: string; locale: string; currentParameters: string | null; selectedId: string | null; open: boolean;
-  onClose: () => void; onEdit: () => void; onSelectionChange: (id: string | null) => void; onLoad: (configuration: SlipConfiguration) => void;
+  onClose: () => void; onSelectionChange: (id: string | null) => void; onLoad: (configuration: SlipConfiguration) => void;
   applyDefault?: boolean; pending?: boolean; canApplyDefault?: () => boolean };
 
 class ConfigurationRequestError extends Error {
@@ -58,13 +69,15 @@ async function requestConfigurations(body?: SlipConfigurationMutation, signal?: 
 }
 
 /** One builder-only dialog manages saves; editable filter values live in the main builder. */
-export function SavedSlipConfigurations({ id, locale, currentParameters, selectedId, open, onClose, onEdit, onSelectionChange,
+export function SavedSlipConfigurations({ id, locale, currentParameters, selectedId, open, onClose, onSelectionChange,
   onLoad, applyDefault = false, pending = false, canApplyDefault }: Props) {
   const m = createMessages(locale);
+  const desktop = useDesktopLayout();
   const [configurations, setConfigurations] = useState<SlipConfiguration[]>([]);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [reload, setReload] = useState(0);
   const [error, setError] = useState<TextKey | null>(null), [notice, setNotice] = useState<TextKey | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null), [name, setName] = useState(""), [isDefault, setDefault] = useState(false);
+  const nestedEditor = desktop && editor !== null;
   const nameField = useRef<HTMLInputElement>(null);
   const chooseField = useRef<HTMLSelectElement>(null), cancelEditorButton = useRef<HTMLButtonElement>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null), closeButton = useRef<HTMLButtonElement>(null);
@@ -75,7 +88,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
     [currentParameters, selectedId, onLoad, onSelectionChange, canApplyDefault]);
   useEffect(() => {
     if (editor) (editor.action === "create" || editor.action === "rename" ? nameField.current : cancelEditorButton.current)?.focus();
-  }, [editor]);
+  }, [editor, desktop]);
   useEffect(() => {
     if (editor || busy || !restoreFocus.current) return;
     restoreFocus.current = false;
@@ -106,11 +119,11 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
   }, [reload, applyDefault]);
   const selected = configurations.find(item => item.id === selectedId);
   const disabled = loading || busy || pending;
-  function close() { if (!busy) { setEditor(null); setError(null); setNotice(null); onClose(); } }
+  function close() { if (!busy && !nestedEditor) { setEditor(null); setError(null); setNotice(null); onClose(); } }
   function restoreEditorFocus() {
     restoreFocus.current = true;
   }
-  function cancelEditor() { setEditor(null); setError(null); restoreEditorFocus(); }
+  function cancelEditor() { if (!busy) { setEditor(null); setError(null); restoreEditorFocus(); } }
   function edit(action: EditorAction, trigger: HTMLButtonElement) {
     editorTrigger.current = trigger;
     setError(null); setNotice(null); setName(action === "create" ? "" : selected?.name ?? ""); setDefault(false);
@@ -153,19 +166,31 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
       : { action, id: target.id, revision: target.revision });
   }
   if (!open) return null;
+  const editorTitle = editor && m.text(`slipConfigs.${editor.action}Title`, { name: editor.target?.name ?? "" });
+  const editorFields = editor && <>
+    {editor.action === "create" || editor.action === "rename" ? <TextInput ref={nameField} label={m.text("slipConfigs.name")} name="configurationName"
+      value={name} required maxLength={slipConfigurationRules.nameLength} disabled={busy} onChange={event => setName(event.currentTarget.value)} />
+      : editor.action === "update" && <p>{m.text("slipConfigs.updateHint")}</p>}
+    {editor.action === "create" && <Check><input type="checkbox" checked={isDefault} disabled={busy}
+      onChange={event => setDefault(event.currentTarget.checked)} />{m.text("slipConfigs.useDefault")}</Check>}
+    {error && <p role="alert">{m.text(error)}</p>}
+  </>;
+  const editorActions = editor && <>
+    <CriteriaDialogButton ref={cancelEditorButton} type="button" variant="secondary" disabled={busy} onClick={cancelEditor}>{m.text("slipConfigs.cancel")}</CriteriaDialogButton>
+    <CriteriaDialogButton type="button" disabled={disabled} onClick={apply}>{m.text(`slipConfigs.confirm.${editor.action}`)}</CriteriaDialogButton>
+  </>;
   const footer = <>
     <CriteriaDialogButton type="button" disabled={disabled || !!editor || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
-      onClick={event => edit("create", event.currentTarget)}>{m.text("slipConfigs.save")}</CriteriaDialogButton>
+      onClick={event => edit("create", event.currentTarget)}>{m.text("slipConfigs.create")}</CriteriaDialogButton>
     <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !!editor || !selected}
       onClick={event => edit("rename", event.currentTarget)}>{m.text("slipConfigs.rename")}</CriteriaDialogButton>
     <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !!editor || !selected || !currentParameters}
       onClick={event => edit("update", event.currentTarget)}>{m.text("slipConfigs.update")}</CriteriaDialogButton>
     <CriteriaDialogButton type="button" variant="secondary" disabled={disabled || !!editor || !selected}
       onClick={event => edit("delete", event.currentTarget)}>{m.text("slipConfigs.delete")}</CriteriaDialogButton>
-    <CriteriaDialogButton ref={closeButton} type="button" variant="secondary" disabled={busy} onClick={close}>{m.text("slipConfigs.close")}</CriteriaDialogButton>
   </>;
-  return <SavedDialog id={id} title={m.text("slipConfigs.title")} open onCancel={close} closeLabel={m.text("slipConfigs.close")}
-    busy={busy} footer={footer} {...(editor ? { onApply: apply } : {})}>
+  return <><SavedDialog id={id} title={m.text("slipConfigs.title")} open onCancel={close} closeLabel={m.text("slipConfigs.close")}
+    $stacked={nestedEditor} closeButtonRef={closeButton} busy={busy} footer={footer} {...(editor && !desktop ? { onApply: apply } : {})}>
     <Content data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
       <SelectInput ref={chooseField} label={m.text("slipConfigs.choose")} value={selectedId ?? ""} disabled={disabled || !!editor || !configurations.length}
         hint={m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}
@@ -177,28 +202,25 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, selecte
         <option value="">{m.text("slipConfigs.placeholder")}</option>
         {configurations.map(item => <option key={item.id} value={item.id}>{item.name}{item.isDefault ? ` · ${m.text("slipConfigs.default")}` : ""}</option>)}
       </SelectInput>
-      {selected && editor?.action !== "create" && <Row>
+      {selected && (nestedEditor || editor?.action !== "create") && <Row>
         <Check><input type="checkbox" checked={selected.isDefault} disabled={disabled || !!editor}
           onChange={event => { void mutate({ action: "default", id: selected.id, revision: selected.revision, isDefault: event.currentTarget.checked }); }} />{m.text("slipConfigs.useDefault")}</Check>
-        <Button type="button" variant="quiet" disabled={disabled || !!editor} onClick={onEdit}>{m.text("slipConfigs.edit")}</Button>
       </Row>}
-      {editor && <EditorPanel data-configuration-editor={editor.action} aria-labelledby={`${id}-editor-title`}>
-        <h3 id={`${id}-editor-title`}>{m.text(`slipConfigs.${editor.action}Title`, { name: editor.target?.name ?? "" })}</h3>
-        {editor.action === "create" || editor.action === "rename" ? <TextInput ref={nameField} label={m.text("slipConfigs.name")} name="configurationName"
-          value={name} required maxLength={slipConfigurationRules.nameLength} disabled={busy} onChange={event => setName(event.currentTarget.value)} />
-          : editor.action === "update" && <p>{m.text("slipConfigs.updateHint")}</p>}
-        {editor.action === "create" && <Check><input type="checkbox" checked={isDefault} disabled={busy}
-          onChange={event => setDefault(event.currentTarget.checked)} />{m.text("slipConfigs.useDefault")}</Check>}
-        <Row>
-          <CriteriaDialogButton ref={cancelEditorButton} type="button" variant="secondary" disabled={busy} onClick={cancelEditor}>{m.text("slipConfigs.cancel")}</CriteriaDialogButton>
-          <CriteriaDialogButton type="button" disabled={disabled} onClick={apply}>{m.text(`slipConfigs.confirm.${editor.action}`)}</CriteriaDialogButton>
-        </Row>
+      {editor && !desktop && <EditorPanel data-configuration-editor={editor.action} aria-labelledby={`${id}-editor-title`}>
+        <h3 id={`${id}-editor-title`}>{editorTitle}</h3>
+        {editorFields}
+        <Row>{editorActions}</Row>
       </EditorPanel>}
       {loading && <p role="status">{m.text("slipConfigs.loading")}</p>}
       {currentParameters === null && <p>{m.text("slipConfigs.invalidFilters")}</p>}
-      {error && <p role="alert">{m.text(error)} {!editor && <Button type="button" variant="quiet" disabled={busy}
-        onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button>}</p>}
+      {error && !editor && <p role="alert">{m.text(error)} <Button type="button" variant="quiet" disabled={busy}
+        onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button></p>}
       {notice && <p role="status">{m.text(notice)}</p>}
     </Content>
-  </SavedDialog>;
+  </SavedDialog>
+  {nestedEditor && <EditorDialog id={`${id}-editor`} title={editorTitle} open busy={busy}
+    onCancel={cancelEditor} closeLabel={m.text("slipConfigs.cancel")} footer={editorActions} onApply={apply}>
+    <Content data-configuration-editor={editor.action} data-analytics-ignore>{editorFields}</Content>
+  </EditorDialog>}
+  </>;
 }

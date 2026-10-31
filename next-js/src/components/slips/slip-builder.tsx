@@ -177,10 +177,6 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     setSavedFiltersOpen(false);
     requestAnimationFrame(() => savedFiltersTrigger.current?.focus());
   }, []);
-  const editSavedFilters = useCallback(() => {
-    setSavedFiltersOpen(false);
-    requestAnimationFrame(() => formRef.current?.querySelector<HTMLInputElement>('input:not([type="hidden"]):not(:disabled)')?.focus());
-  }, []);
   useEffect(() => {
     if (!error) return;
     const frame = requestAnimationFrame(() => errorRef.current?.focus());
@@ -390,7 +386,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     </BuilderHeader>
     {signedIn && <SavedSlipConfigurations id={savedFiltersId} locale={locale} currentParameters={currentParameters} selectedId={selectedConfiguration}
-      open={savedFiltersOpen} onClose={closeSavedFilters} onEdit={editSavedFilters} onSelectionChange={selectConfiguration}
+      open={savedFiltersOpen} onClose={closeSavedFilters} onSelectionChange={selectConfiguration}
       applyDefault={applyDefault} onLoad={loadConfiguration} pending={pending} canApplyDefault={canApplyDefault} />}
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
