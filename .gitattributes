@@ -5,3 +5,5 @@ next-js/prisma/migrations/20261031040514_saved_slip_configurations/migration.sql
 next-js/prisma/mariadb/20261031040514_saved_slip_configurations.sql text eol=lf
 next-js/prisma/migrations/20261031120000_referral_rewards/migration.sql text eol=lf
 next-js/prisma/mariadb/20261031120000_referral_rewards.sql text eol=lf
+next-js/prisma/migrations/20261031104143_account_notifications/migration.sql text eol=lf
+next-js/prisma/mariadb/20261031104143_account_notifications.sql text eol=lf

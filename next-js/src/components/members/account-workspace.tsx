@@ -9,6 +9,7 @@ import { formatPhone } from "@/domain/phone";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { accountSectionIcons } from "./account-navigation";
+import { NotificationUnread } from "./notification-unread";
 import { MemberSignOut } from "./member-controls";
 import { DeskHead, Panel, PanelBody, PanelHead, StatGrid } from "@/components/admin/desk-styles";
 
@@ -100,6 +101,7 @@ export function AccountWorkspace({ locale, current, phone, returnTo, children }:
     return <li key={section}><WorkspaceNavigationLink href={accountSectionHref(locale, section, returnTo)} prefetch={false}
       aria-current={current === section ? "page" : undefined} {...(mobile ? { onClick: dismiss } : {})}>
       <Icon /><span data-sidebar-label>{m.text(`account.section.${section}`)}</span>
+      {section === "notifications" && <NotificationUnread locale={locale} />}
     </WorkspaceNavigationLink></li>;
   })}</Links>;
   return <Frame data-account-workspace>

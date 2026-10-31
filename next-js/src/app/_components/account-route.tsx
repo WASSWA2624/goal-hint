@@ -9,6 +9,7 @@ import { AccountSecurityForm, ResetPasswordForm } from "@/components/members/acc
 import { AccountFacts, AccountPageHead, AccountPanel, AccountWorkspace } from "@/components/members/account-workspace";
 import { AccountDevices, AccountPaymentHistory, AccountQuickActions, AccountSubscriptionPanel } from "@/components/members/account-panels";
 import { AccountNotificationPreferences } from "@/components/members/account-notification-preferences";
+import { AccountNotifications } from "@/components/members/account-notifications";
 import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountVerificationForm } from "@/components/members/account-verification";
@@ -23,6 +24,7 @@ import { adminLandingPath } from "@/domain/admin-navigation";
 import { publicSupportContactSettings } from "@/domain/public-subscription-settings";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import { accountSection, accountSectionHref } from "@/domain/account-navigation";
+import { notificationCursor } from "@/domain/account-notifications";
 import { formatPhone } from "@/domain/phone";
 import { formatCredit } from "@/domain/wallet";
 import { codeStatus } from "@/domain/subscription-period";
@@ -76,6 +78,8 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
       summarySection || section === "referrals" ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
     ]) : [null, null, null, null, null];
+    const notifications = member && !member.blocked && section === "notifications"
+      ? await resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null;
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
@@ -137,7 +141,10 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
         </AccountPanel>}
         {section === "devices" && <AccountDevices locale={locale} devices={view?.devices.map(device => ({ at: device.lastSeenAt.toISOString(), current: device.tokenHash === member.tokenHash })) ?? null} />}
-        {section === "notifications" && <AccountPanel narrow title={messages.text("account.notificationsLabel")}><AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} /></AccountPanel>}
+        {section === "notifications" && <>
+          <AccountNotifications locale={locale} page={notifications} older={!!notificationCursor(parameters.before)} />
+          <AccountPanel narrow title={messages.text("notifications.whatsappPreferences")}><AccountNotificationPreferences locale={locale} phone={member.phone} whatsappNotificationsAt={member.whatsappNotificationsAt?.toISOString() ?? null} /></AccountPanel>
+        </>}
         {section === "activity" && <AccountActivity locale={locale} dashboard={dashboard} />}
       </AccountWorkspace>
     </PublicShell>;

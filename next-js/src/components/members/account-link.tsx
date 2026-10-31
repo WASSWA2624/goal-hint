@@ -6,6 +6,7 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { CardIcon, ChevronRightIcon, SignInIcon, SignOutIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { NotificationUnread } from "./notification-unread";
 import { compactHeaderControl, compactHeaderIconControl } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { createMessages } from "@/i18n/messages";
@@ -54,6 +55,7 @@ const Disclosure = styled.details`
   flex: none;
   > summary {
     ${compactHeaderIconControl}
+    position: relative;
     list-style: none;
     > svg { font-size: 1.125rem; }
     &::-webkit-details-marker { display: none; }
@@ -136,16 +138,17 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
       dismiss();
       root.current.querySelector("summary")?.focus({ preventScroll: true });
     }}>
-    <summary aria-label={messages.text("account.title")} title={messages.text("account.title")} aria-controls={popupId} aria-expanded={open}>
+    <summary aria-label={messages.text("account.title")} title={messages.text("account.title")} aria-controls={popupId} aria-expanded={open} aria-describedby={!administratorName ? `${popupId}-unread` : undefined}>
       <UserIcon />
+      {!administratorName && <NotificationUnread locale={locale} dot id={`${popupId}-unread`} />}
     </summary>
     <Popup id={popupId}>
       <Identity><UserIcon /><div>{administratorName ? <strong>{administratorName}</strong> : <><small>{messages.text("account.registeredNumber")}</small><strong>+{formatPhone((phone ?? "").replace(/^\+/, ""))}</strong></>}</div></Identity>
       {!administratorName && <nav aria-label={messages.text("account.title")} onClick={dismiss}>
-        {(["overview", "subscription", "payments", "phone", "password"] satisfies AccountSection[]).map(section => {
+        {(["overview", "subscription", "notifications", "payments", "phone", "password"] satisfies AccountSection[]).map(section => {
           const Icon = accountSectionIcons[section];
           return <Destination key={section} href={accountSectionHref(locale, section)} prefetch={false}><Icon />
-            {messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}<ChevronRightIcon />
+            {messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}{section === "notifications" && <NotificationUnread locale={locale} />}<ChevronRightIcon />
           </Destination>;
         })}
       </nav>}

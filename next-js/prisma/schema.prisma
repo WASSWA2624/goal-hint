@@ -1707,9 +1707,30 @@ model MemberAccount {
   slipConfigurations SlipConfiguration[]
   registration     MemberReferral?     @relation("ReferralRegistration")
   referrals        MemberReferral[]    @relation("ReferralInviter")
+  notifications    MemberNotification[]
 
   @@index([autoRenew])
   @@index([autoRenewPlanId])
+}
+
+// In-app account events and their per-account read/dismiss state; no recipient or message payload.
+model MemberNotification {
+  id           String        @id @db.Char(36)
+  accountId    String        @db.Char(36)
+  eventKey     String        @db.VarChar(96)
+  kind         String        @db.VarChar(24)
+  occurredAt   DateTime      @db.DateTime(3)
+  createdAt    DateTime      @db.DateTime(3)
+  expiresAt    DateTime?     @db.DateTime(3)
+  readAt       DateTime?     @db.DateTime(3)
+  dismissedAt  DateTime?     @db.DateTime(3)
+  withdrawnAt  DateTime?     @db.DateTime(3)
+  account      MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([accountId, eventKey])
+  @@index([accountId, dismissedAt, withdrawnAt, occurredAt, id], map: "MemberNotification_feed_idx")
+  @@index([accountId, readAt, dismissedAt, withdrawnAt], map: "MemberNotification_unread_idx")
+  @@index([occurredAt])
 }
 
 // One registration identity per canonical phone digest, retained without its number.

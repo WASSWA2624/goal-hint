@@ -11,7 +11,7 @@ const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").up
 /** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
 export function createMemberAuthFixture({ admins = [], adminHash = null, send, trialDays = 2 } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
-  const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), referrals = new Map(), sent = [], messages = [];
+  const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), accessCodes = new Map(), referrals = new Map(), notifications = new Map(), payments = new Map(), sent = [], messages = [];
   function matches(row, where = {}) {
     return Object.entries(where).every(([name, value]) => {
       if (name === "OR") return value.some((part) => matches(row, part));
@@ -40,6 +40,12 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
       async findFirst(query) { return (await this.findMany(query))[0] ?? null; },
       async count({ where } = {}) { return [...rows.values()].filter((row) => matches(row, where)).length; },
       async create({ data }) { const row = { ...defaults, ...data }; assert.ok(!rows.has(row[id])); rows.set(row[id], row); return { ...row }; },
+      async createMany({ data, skipDuplicates }) { let count = 0; for (const row of data) {
+        if (rows.has(row[id]) || row.eventKey !== undefined && [...rows.values()].some(existing => existing.accountId === row.accountId && existing.eventKey === row.eventKey)) {
+          assert.ok(skipDuplicates); continue;
+        }
+        await this.create({ data: row }); count++;
+      } return { count }; },
       async update({ where, data }) { const row = [...rows.values()].find((row) => matches(row, where)); assert.ok(row); for (const [name, value] of Object.entries(data)) row[name] = value && typeof value === "object" && "increment" in value ? row[name] + value.increment : value; return { ...row }; },
       async updateMany({ where, data }) { let count = 0; for (const row of rows.values()) if (matches(row, where)) { Object.assign(row, data); count++; } return { count }; },
       async deleteMany({ where }) { let count = 0; for (const [identifier, row] of rows) if (matches(row, where)) { rows.delete(identifier); count++; } return { count }; },
@@ -49,8 +55,9 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
   const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, blockedAt: null, erasedAt: null, referralCode: null }),
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberReferral: table(referrals, "id", { rewardedAt: null, accessCodeId: null, inviterId: null, accountId: null, status: "pending" }),
+    memberNotification: table(notifications, "id", { expiresAt: null, readAt: null, dismissedAt: null, withdrawnAt: null }),
     memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
-    paymentSubmission: { async findMany() { return []; } },
+    paymentSubmission: table(payments, "id", { decidedAt: null }),
     accessCode: table(accessCodes, "id", { revokedAt: null, extensionDays: 0 }),
     subscriptionSettings: { async findUnique() { return settings; }, async findUniqueOrThrow() { return settings; } },
     ownerAuditEvent: { async create({ data }) { sent.push(data); return data; } },
@@ -66,9 +73,9 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
   };
   const database = { async query(run) { return run(tx); }, transaction(run) {
     const result = queue.then(async () => {
-      const snapshots = [accounts, sessions, challenges, buckets, accessCodes, referrals].map((rows) => structuredClone(rows));
+      const snapshots = [accounts, sessions, challenges, buckets, accessCodes, referrals, notifications].map((rows) => structuredClone(rows));
       const auditCount = sent.length;
-      try { return await run(tx); } catch (error) { sent.length = auditCount; [accounts, sessions, challenges, buckets, accessCodes, referrals].forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
+      try { return await run(tx); } catch (error) { sent.length = auditCount; [accounts, sessions, challenges, buckets, accessCodes, referrals, notifications].forEach((rows, i) => { rows.clear(); for (const entry of snapshots[i]) rows.set(...entry); }); throw error; }
     });
     queue = result.catch(() => {}); return result;
   } };
@@ -86,6 +93,6 @@ export function createMemberAuthFixture({ admins = [], adminHash = null, send, t
     const member = await sessionService.verify(logged.token); assert.ok(member);
     return { member, token: logged.token };
   }
-  return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, referrals, sessionService, account, authenticate, adminPhones, restart,
+  return { service, database, tx, settings, accounts, sessions, challenges, buckets, accessCodes, sent, messages, referrals, notifications, payments, sessionService, account, authenticate, adminPhones, restart,
     now: () => time, advance: (ms) => { time += ms; } };
 }

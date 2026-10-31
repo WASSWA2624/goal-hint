@@ -109,6 +109,8 @@
     "members:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts purge",
     "members:referral-codes": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/referrals.ts",
     "members:renew": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts renew",
+    "members:notifications": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts notifications",
+    "test:notifications": "node --conditions=react-server --test --test-concurrency=1 tests/account-notifications.test.mjs tests/account-notifications.integration.mjs",
     "payments:notifications": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/payment-notifications.ts",
     "test:payment-outbox": "node --conditions=react-server --test --test-concurrency=1 tests/payment-outbox.test.mjs tests/payment-outbox.integration.mjs",
     "analytics:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/analytics.ts purge",

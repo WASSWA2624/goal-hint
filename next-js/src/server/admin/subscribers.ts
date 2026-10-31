@@ -130,6 +130,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
             await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });
+            await tx.memberNotification.deleteMany({ where: { accountId: id } });
             break;
           }
           default: return rollback({ status: "invalid", message: "Unknown subscriber action." });

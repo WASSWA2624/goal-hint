@@ -8,13 +8,14 @@ import { fixtureTokens } from "../../fixture-auth";
 import { fixtureAdminPhone } from "../../fixture-identity";
 import { fixtureSubscriptionPeriods, fixtureSubscriptionStatus, subscriptionScenarios } from "../../fixture-subscription";
 import { fixtureDashboard } from "../../fixture-dashboard";
+import { fixtureNotifications } from "../../fixture-notifications";
 
 export const dynamic = "force-dynamic";
 export const metadata = pageMetadata({ title: "Account", description: "Isolated member acceptance fixture." });
 
 function fixtureServices(state: string) {
   const scenario = state === "ended" ? "expired" : state === "signed-in" ? "free"
-    : ["queued", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable"].includes(state) ? "active" : state;
+    : ["queued", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable"].includes(state) ? "active" : state;
   const unlocked = ["active", "manual", "trial", "pending-renewal", "expired", "off-active", "registration-trial"].includes(scenario), at = Date.now();
   return async () => {
     const consent = (await cookies()).get("member-fixture-whatsapp")?.value;
@@ -29,6 +30,7 @@ function fixtureServices(state: string) {
         if (state === "queued") codes.push({ ...codes[0]!, id: "synthetic-queued", planName: "Next package", startsAt: codes[0]!.endsAt, endsAt: new Date(+codes[0]!.endsAt + 7 * 86_400_000) });
         return { codes, devices: [{ tokenHash: "synthetic", lastSeenAt: new Date(at) }] }; } },
     dashboard: { async read() { if (state === "dashboard-unavailable") throw new Error("Synthetic unavailable history"); return fixtureDashboard(scenario); } },
+    notifications: fixtureNotifications(state),
     referrals: { async read() {
       if (state === "referral-unavailable") throw new Error("Synthetic unavailable referrals");
       const empty = state === "referral-empty";
@@ -42,7 +44,7 @@ function fixtureServices(state: string) {
   } as unknown as MemberServices;
   };
 }
-const accountRoutes = Object.fromEntries(["signed-out", "signed-in", "unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", ...subscriptionScenarios].map((state) =>
+const accountRoutes = Object.fromEntries(["signed-out", "signed-in", "unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable", ...subscriptionScenarios].map((state) =>
   [state, createAccountRoute({ services: fixtureServices(state) })]));
 
 /** Synthetic scenarios are confined to this isolated acceptance app; no owner setting or developer DB is changed. */

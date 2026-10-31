@@ -293,6 +293,10 @@ def subscriber_dashboard(origin):
             match(r'action="/api/account/devices"', body)
         if section == "notifications":
             match(r'data-account-notifications', body)
+            match(r'data-account-notification-feed', body)
+            for label in ["Inbox", "WhatsApp preferences", "Payment approved", "Payment rejected", "Access activated", "Access ends soon", "Access expired", "1 free day earned", "Mark as read", "Dismiss"]:
+                match(label, body)
+            no_match(r'eventKey|accountId|tokenHash', body)
         if section == "referrals":
             match(r'data-account-referrals', body)
             for label in ["Copy link", "WhatsApp", "Telegram"]:
@@ -313,6 +317,11 @@ def subscriber_dashboard(origin):
     match(r'No referrals yet', empty)
     failed = visible_html(request(origin, "/en/account?state=referral-unavailable&section=referrals").text)
     match(r'Referral details are temporarily unavailable', failed)
+    empty_notifications = visible_html(request(origin, "/en/account?state=notifications-empty&section=notifications").text)
+    match(r'No notifications\.', empty_notifications)
+    unavailable_notifications = visible_html(request(origin, "/en/account?state=notifications-unavailable&section=notifications").text)
+    match(r'Notifications are temporarily unavailable', unavailable_notifications)
+    match(r'WhatsApp preferences', unavailable_notifications)
     for view in ["forgot", "reset"]:
         response = request(origin, f"/en/account?state=active&view={view}")
         assert response.status == 307 and response.headers["location"] == "/en/account?section=password"

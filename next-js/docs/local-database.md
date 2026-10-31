@@ -383,3 +383,23 @@ verified referral registration/verification/award and password/session rotation;
 no synthetic accounts/referrals remained and no external messages were sent.
 Temporary administration tasks were removed; the normal startup task remains.
 This update applies to the configured local MySQL instance, not remote production.
+
+
+## 31 October 2026 in-app notification migration
+
+The authorized notification/reminder batch added
+`20261031104143_account_notifications`. The private before-backup checksum was
+verified and a separate MySQL restore matched 112 tables and 55 completed
+migrations. The restore input needed a delimiter normalization for the existing
+single-statement SharedSlip SIGNAL trigger; the original backup remains intact.
+No live trigger, password, data directory or startup configuration changed.
+
+The notification migration applied, application SELECT/INSERT/UPDATE/DELETE
+permissions on MemberNotification were verified, and application DDL remains
+unavailable. `db:verify` passed with no pending migrations or schema drift;
+`db:health` reports ready. The in-app worker checked one eligible account without
+failure; a repeat run preserved its notification count. The temporary native
+administrator task was removed; GoalHintMySQL84 remains intact. Private restore
+artifacts are excluded from Git. See [batch verification](../dev-plan/202-essential-account-notifications.md)
+for the isolated restore limitation. Remote production is not covered by this
+local update.
