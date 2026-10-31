@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import styled from "styled-components";
-import { Button, ButtonLink, SelectInput, TextInput, TextLink } from "@/components/ui/controls";
+import styled, { css } from "styled-components";
+import { Button, ButtonLink, FieldLabel, SelectInput, TextInput, TextLink } from "@/components/ui/controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { slipConfigurationHref, slipConfigurationMutationSchema, slipConfigurationRules, slipConfigurationsSchema,
@@ -10,8 +10,15 @@ import { slipConfigurationHref, slipConfigurationMutationSchema, slipConfigurati
 import { slipsHref } from "@/domain/navigation";
 import { startRequestDeadline } from "@/domain/request-deadline";
 import { createMessages, type TextKey } from "@/i18n/messages";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors } from "@/components/ui/filter-chrome";
+import { media } from "@/styles/theme";
+import { slipToolbarControl } from "./slip-styles";
 
-const Panel = styled.section`
+const visuallyHidden = css`
+  position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+`;
+const Panel = styled.section<{ $builder: boolean }>`
   display: grid; gap: 10px; min-inline-size: 0; padding: 12px;
   border-block: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.none};
@@ -19,12 +26,43 @@ const Panel = styled.section`
   h2 { margin: 0; font-size: .9375rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   p { margin: 0; font-size: .8125rem; color: ${({ theme }) => theme.color.mutedText}; }
   [role="alert"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+  ${({ $builder }) => $builder && css`
+    ${filterPanelColors}
+    ${media.desktop} { padding-block: 8px; gap: 0; }
+  `}
 `;
 const Row = styled.div`
   display: flex; flex-wrap: wrap; align-items: end; gap: 8px; min-inline-size: 0;
   > [data-field] { flex: 1 1 14rem; min-inline-size: 0; max-inline-size: 28rem; }
   button, a { font-size: .8125rem; }
   @media (pointer: coarse) { button, a { min-block-size: 44px; } }
+`;
+/** Builder copy and management remain available on phones and on the account dashboard. */
+const Details = styled.div<{ $builder: boolean }>`
+  display: contents;
+  ${({ $builder }) => $builder && css`${media.desktop} { display: none; }`}
+`;
+const Picker = styled.div<{ $builder: boolean }>`
+  display: contents;
+  ${({ $builder }) => $builder && css`
+    ${media.desktop} {
+      display: block; flex: 0 1 18rem; min-inline-size: 0; max-inline-size: 28rem;
+      > div > ${FieldLabel} { ${visuallyHidden} }
+    }
+  `}
+`;
+const ConfigurationSelect = styled(SelectInput)<{ $builder: boolean }>`
+  ${({ $builder }) => $builder && css`
+    ${media.desktop} { && { ${slipToolbarControl} ${filterControlColors} ${controlFeedback} padding-inline-end: 24px; } }
+  `}
+`;
+const ConfigurationButton = styled(Button)<{ $builder: boolean }>`
+  ${({ $builder }) => $builder && css`
+    ${media.desktop} { && { ${slipToolbarControl} ${filterButtonColors} ${controlFeedback} font-weight: ${({ theme }) => theme.typography.weight.medium}; } }
+  `}
+`;
+const Status = styled.p<{ $builder: boolean }>`
+  ${({ $builder }) => $builder && css`${media.desktop} { ${visuallyHidden} }`}
 `;
 const Check = styled.label`
   display: inline-flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: .8125rem;
@@ -127,35 +165,34 @@ export function SavedSlipConfigurations({ locale, currentParameters, selectedId,
     } else if (target) void mutate(action === "rename" ? { action, id: target.id, revision: target.revision, name }
       : { action, id: target.id, revision: target.revision });
   }
-  const dates = selected && new URLSearchParams(selected.parameters);
-  return <Panel aria-labelledby={`${id}-title`} data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
-    <Row><h2 id={`${id}-title`}>{m.text("slipConfigs.title")}</h2>
-      {!loading && <p>{m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}</p>}</Row>
-    <Row>
-      <SelectInput label={m.text(builder ? "slipConfigs.choose" : "slipConfigs.chooseManage")} name={builder ? "configuration" : undefined}
+  return <Panel $builder={builder} aria-labelledby={`${id}-title`} data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
+    <Details $builder={builder}><Row><h2 id={`${id}-title`}>{m.text("slipConfigs.title")}</h2>
+      {!loading && <p>{m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}</p>}</Row></Details>
+    <Row data-configuration-controls>
+      <Picker $builder={builder}><ConfigurationSelect $builder={builder} label={m.text(builder ? "slipConfigs.choose" : "slipConfigs.chooseManage")} name={builder ? "configuration" : undefined}
         form={formId} value={selection} disabled={disabled || !configurations.length}
         onChange={event => { const value = event.currentTarget.value; setSelection(value); setError(null); setSaved(false);
           const configuration = configurations.find(item => item.id === value); if (configuration) onLoad?.(configuration); }}>
         <option value="">{m.text("slipConfigs.placeholder")}</option>
         {configurations.map(item => <option key={item.id} value={item.id}>{item.name}{item.isDefault ? ` · ${m.text("slipConfigs.default")}` : ""}</option>)}
-      </SelectInput>
-      {builder ? <><Button type="button" variant="secondary" disabled={disabled || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
-        onClick={() => open("create")}>{m.text("slipConfigs.save")}</Button>
-        <Button type="button" variant="secondary" disabled={disabled || !selected || !currentParameters} onClick={() => open("update")}>{m.text("slipConfigs.update")}</Button></>
+      </ConfigurationSelect></Picker>
+      {builder ? <><ConfigurationButton $builder type="button" variant="secondary" disabled={disabled || !currentParameters || configurations.length >= slipConfigurationRules.maximum}
+        onClick={() => open("create")}>{m.text("slipConfigs.save")}</ConfigurationButton>
+        <ConfigurationButton $builder type="button" variant="secondary" disabled={disabled || !selected || !currentParameters} onClick={() => open("update")}>{m.text("slipConfigs.update")}</ConfigurationButton></>
         : <ButtonLink href={selected ? slipConfigurationHref(selected, locale) : slipsHref(locale)} prefetch={false}>{m.text(selected ? "slipConfigs.edit" : "slipConfigs.openBuilder")}</ButtonLink>}
     </Row>
-    {selected && <><Row>
+    <Details $builder={builder}>{selected && <Row>
       <Check><input type="checkbox" checked={selected.isDefault} disabled={disabled}
         onChange={event => { void mutate({ action: "default", id: selected.id, revision: selected.revision, isDefault: event.currentTarget.checked }); }} />{m.text("slipConfigs.useDefault")}</Check>
       <Button type="button" variant="quiet" disabled={disabled} onClick={() => open("rename")}>{m.text("slipConfigs.rename")}</Button>
       <Button type="button" variant="quiet" disabled={disabled} onClick={() => open("delete")}>{m.text("slipConfigs.delete")}</Button>
-    </Row><p>{m.text("slipConfigs.dates", { from: dates!.get("dateFrom")!, to: dates!.get("dateTo")! })}</p></>}
+    </Row>}
     {loading ? <p role="status">{m.text("slipConfigs.loading")}</p> : !configurations.length && <p>{m.text("slipConfigs.empty")}</p>}
     <p>{m.text("slipConfigs.hint", { build: m.text("slips.build") })} {m.text("slipConfigs.defaultHint")}</p>
-    {builder && <TextLink href={`/${locale}/account#saved-slip-configurations`} prefetch={false}>{m.text("slipConfigs.manage")}</TextLink>}
+    {builder && <TextLink href={`/${locale}/account#saved-slip-configurations`} prefetch={false}>{m.text("slipConfigs.manage")}</TextLink>}</Details>
     {currentParameters === null && <p>{m.text("slipConfigs.invalidFilters")}</p>}
-    {error && !editor && <p role="alert">{m.text(error)} <Button type="button" variant="quiet" disabled={busy} onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button></p>}
-    {saved && <p role="status">{m.text("slipConfigs.saved")}</p>}
+    {error && !editor && <p role="alert">{m.text(error)} <Details as="span" $builder={builder}><Button type="button" variant="quiet" disabled={busy} onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button></Details></p>}
+    {saved && <Status $builder={builder} role="status">{m.text("slipConfigs.saved")}</Status>}
     {editor && <CriteriaDialog id={`${id}-dialog`} title={m.text(`slipConfigs.${editor.action}Title`)} open busy={busy}
       onCancel={() => { if (!busy) { setEditor(null); setError(null); } }} onApply={apply}
       applyLabel={m.text(editor.action === "create" ? "slipConfigs.save" : `slipConfigs.${editor.action}`)}

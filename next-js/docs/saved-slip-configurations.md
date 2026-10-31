@@ -2,21 +2,27 @@
 
 Every signed-in account can keep up to ten named filter configurations, including
 while access is expired or subscription sales are closed. The builder offers
-**Save current filters**, a load dropdown and **Update selected**. The account
-page's **Saved Slip Builder configurations** panel provides rename, default and
-delete controls; **Edit filters in builder** loads the selected filters for editing
+**Save current filters**, a load dropdown and **Update selected**.
+Desktop shows only these three controls, styled with the existing filter toolbar.
+Counts, management controls and explanatory text stay on the account page and
+phone layout. The account page's **Saved Slip Builder configurations** panel
+provides rename, default and delete controls; **Edit filters in builder** loads the selected filters for editing
 and updating. Deleting a configuration does not change an open builder draft.
 
 Names are trimmed, Unicode-normalized and unique per account without case
-distinctions. A configuration includes every validated builder filter, including
-exact dates, time bounds, market selections/outcomes, reuse and unrestricted
-ranges. Dates are absolute, not rolling offsets. The interface makes this explicit.
+distinctions. A configuration includes time bounds, market selections/outcomes,
+reuse and unrestricted ranges. Dates are excluded: loading uses today's date
+in the reporting timezone, Africa/Kampala, for both date bounds. The saved time
+range is preserved; blank times default to the entire day, 00:00–23:59.
+Older dated configurations are normalized on read and load for today as well;
+the next filter update writes the date-free format. No additional migration is
+needed.
 
 An optional default fills a fresh builder visit with no query. Explicit query
 filters and Reset take precedence. A slow default read does not overwrite filters
 the member has started editing. Loading navigates to canonical filters with the
 configuration ID and **without `build=1`**. Previous results are cleared by the route;
-generation still requires the existing explicit Generate action and entitlement.
+generation still requires the existing explicit Build slips action and entitlement.
 Configuration controls sit outside the generation form, with an associated
 selection control to preserve the selection through generation.
 

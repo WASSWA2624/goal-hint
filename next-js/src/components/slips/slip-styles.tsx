@@ -10,7 +10,7 @@ import { media } from "@/styles/theme";
 const compactControlHeight = "2rem";
 const mobileToolbarFontSize = "0.75rem";
 const mobileToolbarValueFontSize = "0.875rem";
-const toolbarAction = css`
+export const slipToolbarControl = css`
   min-block-size: ${compactControlHeight}; min-inline-size: 0; padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control}; gap: 5px; font-size: 0.75rem; line-height: 1.3;
   > svg { flex: none; font-size: 0.875rem; }
@@ -233,7 +233,7 @@ export const CriteriaTitle = styled.span`
 `;
 export const CriteriaTrigger = styled(Button)`
   && {
-    ${toolbarAction}
+    ${slipToolbarControl}
     inline-size: 100%; min-block-size: 36px; padding-inline: 6px;
     flex-direction: row; gap: 4px; font-weight: ${({ theme }) => theme.typography.weight.medium};
     ${filterButtonColors}
@@ -340,17 +340,17 @@ export const ActionControls = styled.div`
   ${media.desktop} { display: flex; align-items: center; gap: 4px; }
 `;
 export const BuildButton = styled(Button)`
-  && { ${toolbarAction} }
+  && { ${slipToolbarControl} }
   ${desktopBuildAction}
   ${mobileBuildAction}
 `;
 export const BuildLink = styled(ButtonLink)`
-  && { ${toolbarAction} }
+  && { ${slipToolbarControl} }
   ${desktopBuildAction}
   ${mobileBuildAction}
 `;
 export const ClearLink = styled(ButtonLink)`
-  && { ${toolbarAction} flex: 1 1 auto; }
+  && { ${slipToolbarControl} flex: 1 1 auto; }
   ${media.desktop} { && { ${filterButtonColors} } }
   ${media.belowDesktop} {
     && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; font-size: ${mobileToolbarFontSize}; white-space: nowrap; ${filterButtonColors} }

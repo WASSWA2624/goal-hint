@@ -19,15 +19,35 @@ const request = (token, body, headers = {}) => new Request("http://localhost:300
     ...(body ? { "content-type": "application/json" } : {}), ...headers }, ...(body ? { body: JSON.stringify(body) } : {}),
 });
 
-test("configuration filters round-trip every field and omit all generation/navigation flags", () => {
+test("configuration filters preserve reusable fields without dates or generation/navigation flags", () => {
   const canonical = canonicalSlipConfigurationParameters(parameters, "2026-10-31");
-  assert.deepEqual(parseSlipCriteria(new URLSearchParams(canonical), "2026-10-31"), parseSlipCriteria(new URLSearchParams(parameters), "2026-10-31"));
-  const url = new URL(slipConfigurationHref({ id: randomUUID(), parameters: canonical }, "en"), "https://example.test");
+  const saved = new URLSearchParams(canonical);
+  assert.equal(saved.has("dateFrom"), false); assert.equal(saved.has("dateTo"), false);
+  const expected = { ...parseSlipCriteria(new URLSearchParams(parameters), "2026-10-31"), timeFrom: "00:00", timeTo: "23:59" };
+  assert.deepEqual(parseSlipCriteria(saved, "2026-10-31"), expected);
+  const url = new URL(slipConfigurationHref({ id: randomUUID(), parameters: canonical }, "en", "2026-11-01"), "https://example.test");
   assert.equal(url.pathname, "/en/slips"); assert.equal(url.searchParams.has("build"), false);
+  assert.equal(url.searchParams.get("dateFrom"), "2026-11-01"); assert.equal(url.searchParams.get("dateTo"), "2026-11-01");
   assert.equal(url.searchParams.get("probMin"), "82.123"); assert.ok(url.searchParams.has("configuration"));
   for (const query of [`${parameters}&build=1`, `${parameters}&configuration=${randomUUID()}`, `${parameters}&accountId=${randomUUID()}`,
-    "markets=", "dateFrom=2026-10-31&dateTo=2026-12-31", "x".repeat(2049)]) {
+    "markets=", "timeFrom=25%3A00&timeTo=26%3A00", "x".repeat(2049)]) {
     assert.throws(() => canonicalSlipConfigurationParameters(query));
+  }
+});
+
+test("legacy dated configurations load for each current reporting day while retaining the chosen time range", () => {
+  const query = new URLSearchParams(parameters);
+  query.set("dateFrom", "2020-01-01"); query.set("dateTo", "2020-01-15");
+  query.set("timeFrom", "09:30"); query.set("timeTo", "18:45");
+  const legacy = { id: randomUUID(), parameters: query.toString() };
+  const canonical = canonicalSlipConfigurationParameters(legacy.parameters, "2026-10-31");
+  assert.equal(new URLSearchParams(canonical).has("dateFrom"), false);
+  assert.equal(canonicalSlipConfigurationParameters(canonical, "2026-11-01"), canonical);
+  for (const day of ["2026-10-31", "2026-11-01"]) {
+    const loaded = new URL(slipConfigurationHref(legacy, "en", day), "https://example.test").searchParams;
+    assert.equal(loaded.get("dateFrom"), day); assert.equal(loaded.get("dateTo"), day);
+    assert.equal(loaded.get("timeFrom"), "09:30"); assert.equal(loaded.get("timeTo"), "18:45");
+    assert.equal(loaded.has("build"), false);
   }
 });
 
@@ -36,17 +56,34 @@ test("save, restart/read, rename and replace filters persist independently of su
   const saved = await f.service.mutate(member, create("  Morning picks  "));
   assert.equal(saved.status, "saved"); let record = saved.configurations[0];
   assert.equal(record.name, "Morning picks"); assert.equal(record.isDefault, false);
+  assert.equal(new URLSearchParams([...f.rows.values()][0].parameters).has("dateFrom"), false);
   const anotherDevice = { ...member, tokenHash: memberTokenHash("c".repeat(43)) };
   f.sessions.set(anotherDevice.tokenHash, { ...f.first.session, tokenHash: anotherDevice.tokenHash });
   assert.deepEqual((await f.restart().read(anotherDevice)).configurations, saved.configurations);
   let changed = await f.restart().mutate(member, { action: "rename", id: record.id, revision: record.revision, name: "Evening picks" });
   record = changed.configurations[0]; assert.equal(record.name, "Evening picks"); assert.equal(record.revision, 2);
-  const next = serializeSlipCriteria({ ...defaultSlipCriteria("2026-11-01"), teamsMin: 3, teamsMax: 8, slips: 9 }).toString();
+  const next = serializeSlipCriteria({ ...defaultSlipCriteria("2026-11-01"), timeFrom: "08:15", timeTo: "21:30", teamsMin: 3, teamsMax: 8, slips: 9 }).toString();
   changed = await f.service.mutate(member, { action: "update", id: record.id, revision: record.revision, parameters: next });
   record = changed.configurations[0]; assert.equal(record.name, "Evening picks");
-  assert.equal(new URLSearchParams(record.parameters).get("dateFrom"), "2026-11-01"); assert.equal(record.revision, 3);
+  const updated = new URLSearchParams(record.parameters);
+  assert.equal(updated.has("dateFrom"), false); assert.equal(updated.has("dateTo"), false);
+  assert.equal(updated.get("timeFrom"), "08:15"); assert.equal(updated.get("timeTo"), "21:30"); assert.equal(record.revision, 3);
   assert.equal((await f.restart().read(anotherDevice)).configurations[0].parameters, record.parameters);
   assert.ok(f.locks.every(lock => /FOR UPDATE/u.test(lock.sql)), "Every operation revalidates under the account lock");
+});
+
+test("reading an existing dated save removes legacy dates without altering its time range or revision", async () => {
+  const f = fixture();
+  const saved = (await f.service.mutate(f.first.member, create("Legacy filters"))).configurations[0];
+  const legacy = new URLSearchParams(parameters);
+  legacy.set("dateFrom", "2020-01-01"); legacy.set("dateTo", "2020-12-31");
+  legacy.set("timeFrom", "07:45"); legacy.set("timeTo", "22:15");
+  f.rows.get(saved.id).parameters = legacy.toString();
+  const current = (await f.restart().read(f.first.member)).configurations[0];
+  const filters = new URLSearchParams(current.parameters);
+  assert.equal(filters.has("dateFrom"), false); assert.equal(filters.has("dateTo"), false);
+  assert.equal(filters.get("timeFrom"), "07:45"); assert.equal(filters.get("timeTo"), "22:15");
+  assert.equal(current.revision, saved.revision);
 });
 
 test("concurrent saves never exceed ten per owner and deleting frees a slot", async () => {
