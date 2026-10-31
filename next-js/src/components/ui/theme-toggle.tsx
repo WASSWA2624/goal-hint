@@ -5,7 +5,7 @@ import { createMessages } from "@/i18n/messages";
 import { MoonIcon, SunIcon } from "./icons";
 import { setThemePreference } from "@/styles/theme-preference";
 import { media } from "@/styles/theme";
-import { compactHeaderControl } from "./header-controls";
+import { compactHeaderIconControl } from "./header-controls";
 
 const Appearance = styled.div`
   display: grid;
@@ -36,15 +36,8 @@ const Option = styled.button`
 `;
 
 const Toggle = styled.button`
-  ${compactHeaderControl}
-  inline-size: 2.75rem;
-  padding: 4px;
-  color: ${({ theme }) => theme.header.text};
-  background: transparent;
-  border-color: transparent;
+  ${compactHeaderIconControl}
   > svg { font-size: 1rem; }
-  ${media.desktop} { inline-size: 2rem; }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
 `;
 
 /** One visible, named header action uses the same persisted theme preference on every screen. */

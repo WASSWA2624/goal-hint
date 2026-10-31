@@ -11,6 +11,14 @@ import type { MemberIdentity } from "./member-sessions.ts";
 
 type Key = Pick<AnalyticsConfig, "key">;
 const phoneKey = (config: Key, phone: string) => config.key("referral-registration-phone", phone);
+export const newReferralCode = () => randomBytes(16).toString("hex");
+/** Caller holds the account lock; existing invitation links must never change. */
+async function ensureReferralCode(tx: Prisma.TransactionClient, account: Pick<MemberAccount, "id" | "referralCode">) {
+  if (account.referralCode) return account.referralCode;
+  const code = newReferralCode();
+  await tx.memberAccount.update({ where: { id: account.id }, data: { referralCode: code } });
+  return code;
+}
 function eligibleInviter(account: MemberAccount | null): account is MemberAccount & { phone: string } {
   return !!account?.phone && !!account.passwordHash && !!account.phoneVerifiedAt && !account.blockedAt && !account.erasedAt && !isMemberAdminPhone(account.phone);
 }
@@ -49,6 +57,30 @@ export async function awardReferralRegistration(tx: Prisma.TransactionClient, co
 
 export function createReferrals({ database, now = Date.now }: { database: DatabaseRuntime; now?: () => number }) {
   return Object.freeze({
+    /** Operator-only, bounded and rerunnable. Provisioning a code never grants eligibility or rewards. */
+    async provisionCodes(apply = false) {
+      let cursor: string | undefined, missing = 0, created = 0, skipped = 0;
+      while (true) {
+        const accounts = await database.query(tx => tx.memberAccount.findMany({
+          where: { referralCode: null, phone: { not: null }, passwordHash: { not: null }, erasedAt: null,
+            ...(cursor ? { id: { gt: cursor } } : {}) },
+          orderBy: { id: "asc" }, take: 100, select: { id: true, phone: true },
+        }));
+        if (!accounts.length) break;
+        for (const row of accounts) {
+          if (isMemberAdminPhone(row.phone)) { skipped++; continue; }
+          missing++;
+          if (apply) created += await accessCodeTransaction(database, async tx => {
+            const account = await lockMemberAccount(tx, row.id);
+            if (!account?.phone || !account.passwordHash || account.erasedAt || account.referralCode || isMemberAdminPhone(account.phone)) return 0;
+            await ensureReferralCode(tx, account);
+            return 1;
+          });
+        }
+        cursor = accounts.at(-1)!.id;
+      }
+      return { missing, created, skipped, applied: apply };
+    },
     async inviter(code: string): Promise<boolean> {
       if (!validReferralCode(code)) return false;
       return database.query(async tx => eligibleInviter(await tx.memberAccount.findUnique({ where: { referralCode: code } })));
@@ -60,8 +92,7 @@ export function createReferrals({ database, now = Date.now }: { database: Databa
         const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
         if (!eligibleInviter(account) || account.phone !== member.phone || !session?.authenticatedAt || session.passwordResetAt
           || session.accountId !== member.accountId || session.expiresAt <= at) return null;
-        const code = account.referralCode ?? randomBytes(16).toString("hex");
-        if (!account.referralCode) await tx.memberAccount.update({ where: { id: member.accountId }, data: { referralCode: code } });
+        const code = await ensureReferralCode(tx, account);
         const [verified, history, periods] = await Promise.all([
           tx.memberReferral.count({ where: { inviterId: member.accountId, status: "rewarded" } }),
           tx.memberReferral.findMany({ where: { inviterId: member.accountId }, orderBy: [{ registeredAt: "desc" }, { id: "desc" }], take: referralRules.historyLimit,

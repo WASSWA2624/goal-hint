@@ -6,7 +6,7 @@ import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { CardIcon, ChevronRightIcon, SignInIcon, SignOutIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { compactHeaderControl } from "@/components/ui/header-controls";
+import { compactHeaderControl, compactHeaderIconControl } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
@@ -53,19 +53,12 @@ const Disclosure = styled.details`
   position: relative;
   flex: none;
   > summary {
-    ${compactHeaderControl}
-    inline-size: 2.75rem;
-    padding: 4px;
-    color: ${({ theme }) => theme.header.text};
-    background: transparent;
-    border-color: transparent;
+    ${compactHeaderIconControl}
     list-style: none;
     > svg { font-size: 1.125rem; }
-    ${media.desktop} { inline-size: 2rem; }
     &::-webkit-details-marker { display: none; }
-    ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
   }
-  &[open] > summary { background: ${({ theme }) => theme.header.controlHover}; }
+  &[open] > summary { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; }
 `;
 const Popup = styled.div`
   position: absolute;

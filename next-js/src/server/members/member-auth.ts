@@ -19,7 +19,7 @@ import { decide, settingsServiceFor } from "./settings.ts";
 import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 import { createVerificationCodes } from "./verification-codes.ts";
 import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts";
-import { awardReferralRegistration, recordReferralRegistration, rememberRegistrationPhone } from "./referrals.ts";
+import { awardReferralRegistration, newReferralCode, recordReferralRegistration, rememberRegistrationPhone } from "./referrals.ts";
 
 export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: 128 });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
@@ -151,7 +151,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         return await accessCodeTransaction<AuthSuccess | AuthFailure>(database, async (tx) => {
           const existing = await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
           if (existing) return conflict();
-          const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at } });
+          const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, referralCode: newReferralCode(), createdAt: at, lastSignInAt: at } });
           await recordReferralRegistration(tx, config, account, at, referralCode);
           const trial = await grantRegistrationTrial(tx, account.id, at);
           return rotate(tx, account, binding, at, trial);

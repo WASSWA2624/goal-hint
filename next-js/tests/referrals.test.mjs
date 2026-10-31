@@ -20,8 +20,34 @@ async function inviter(f) {
 async function register(f, inviteCode, phone = friend) {
   const result = await f.service.register(phone, password, { member: null }, address, inviteCode);
   assert.equal(result.status, "authenticated"); assert.equal(result.requiresVerification, true);
+  assert.match([...f.accounts.values()].find(account => account.phone === phone).referralCode, /^[a-f0-9]{32}$/, "Registration creates a persistent invitation code before the Referrals screen is visited.");
   return result;
 }
+
+test("legacy member codes are provisioned in bounded batches without changing existing links or granting rewards", async t => {
+  const f = fixture(), referrals = createReferrals({ database: f.database, now: f.now });
+  const previous = process.env.GOAL_HINT_ADMIN_PHONES;
+  process.env.GOAL_HINT_ADMIN_PHONES = '["256700000991"]';
+  t.after(() => { if (previous === undefined) delete process.env.GOAL_HINT_ADMIN_PHONES; else process.env.GOAL_HINT_ADMIN_PHONES = previous; });
+  const account = (id, fields = {}) => ({ id, phone: "256700000003", passwordHash: "synthetic-password-hash", phoneVerifiedAt: new Date(f.now()),
+    referralCode: null, erasedAt: null, blockedAt: null, ...fields });
+  for (let i = 0; i < 205; i++) { const id = `legacy-${String(i).padStart(3, "0")}`; f.accounts.set(id, account(id, { phoneVerifiedAt: i === 0 ? null : new Date(f.now()) })); }
+  f.accounts.set("kept", account("kept", { referralCode: code }));
+  f.accounts.set("erased", account("erased", { erasedAt: new Date(f.now()) }));
+  f.accounts.set("unregistered", account("unregistered", { passwordHash: null }));
+  f.accounts.set("admin", account("admin", { phone: "256700000991" }));
+  assert.deepEqual(await referrals.provisionCodes(), { missing: 205, created: 0, skipped: 1, applied: false });
+  const runs = await Promise.all([referrals.provisionCodes(true), referrals.provisionCodes(true)]);
+  assert.equal(runs.reduce((sum, run) => sum + run.created, 0), 205);
+  const generated = [...f.accounts.values()].filter(row => row.id.startsWith("legacy-")).map(row => row.referralCode);
+  assert.equal(new Set(generated).size, 205);
+  assert.ok(generated.every(value => /^[a-f0-9]{32}$/.test(value)));
+  assert.equal(f.accounts.get("kept").referralCode, code);
+  for (const id of ["admin", "erased", "unregistered"]) assert.equal(f.accounts.get(id).referralCode, null);
+  assert.deepEqual(await referrals.provisionCodes(true), { missing: 0, created: 0, skipped: 1, applied: true });
+  assert.equal(await referrals.inviter(generated[0]), false, "A pending member's code does not bypass phone verification.");
+  assert.equal(f.referrals.size, 0); assert.equal(f.accessCodes.size, 0); assert.equal(f.sessions.size, 0);
+});
 async function verify(f, pending) {
   assert.equal((await f.service.requestVerification("sms", pending.token, address)).status, "requested");
   const otp = f.messages.at(-1).code;

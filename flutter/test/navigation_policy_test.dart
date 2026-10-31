@@ -38,6 +38,8 @@ void main() {
     () {
       for (final address in [
         'https://example.com/help?from=goalhint',
+        'https://wa.me/?text=Join%20me%20on%20Goal%20Hint',
+        'https://t.me/share/url?url=https%3A%2F%2Fgoalhint.com%2Fr%2Faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         'https://goalhint.com.example.com/en',
         'https://other.goalhint.com/en',
         'http://goalhint.com/en',

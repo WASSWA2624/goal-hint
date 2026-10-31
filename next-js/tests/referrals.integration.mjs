@@ -9,6 +9,29 @@ import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
 import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
+import { hashPassword } from "../src/server/analytics/analytics-password.ts";
+
+test("legacy referral provisioning is idempotent under genuine database concurrency", { timeout: 180_000 }, async t => {
+  let f;
+  try { f = await paidDatabase(); }
+  catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
+  t.after(() => f.close());
+  const at = new Date(), passwordHash = await hashPassword("synthetic legacy password"), oldCode = "c".repeat(32);
+  const legacyId = randomUUID(), existingId = randomUUID();
+  await f.database.query(async tx => {
+    await tx.memberAccount.create({ data: { id: legacyId, phone: "256700009101", passwordHash, phoneVerifiedAt: at, createdAt: at, lastSignInAt: at } });
+    await tx.memberAccount.create({ data: { id: existingId, phone: "256700009102", passwordHash, referralCode: oldCode, phoneVerifiedAt: at, createdAt: at, lastSignInAt: at } });
+  });
+  const service = createReferrals({ database: f.database });
+  const attempts = await Promise.all([service.provisionCodes(true), service.provisionCodes(true)]);
+  assert.equal(attempts.reduce((sum, result) => sum + result.created, 0), 1);
+  await f.database.query(async tx => {
+    assert.match((await tx.memberAccount.findUniqueOrThrow({ where: { id: legacyId } })).referralCode, /^[a-f0-9]{32}$/);
+    assert.equal((await tx.memberAccount.findUniqueOrThrow({ where: { id: existingId } })).referralCode, oldCode);
+    assert.equal(await tx.accessCode.count(), 0); assert.equal(await tx.memberReferral.count(), 0);
+  });
+  assert.equal((await service.provisionCodes(true)).created, 0);
+});
 
 test("referral award concurrency, paid precedence, immutable identity and deletion work on isolated MySQL", { timeout: 180_000 }, async t => {
   let f;

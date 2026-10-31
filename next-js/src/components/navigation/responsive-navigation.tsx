@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
-import { DashboardIcon, DocumentIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
+import { DashboardIcon, DocumentIcon, GiftIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
 import type { NavigationLocation } from "@/domain/navigation";
 import { normalizeNavigationLocation } from "@/domain/navigation-paths";
 import type { AccentName } from "@/styles/theme";
@@ -11,7 +11,7 @@ import { fitNavigationItems, minimumPrimaryDestinations } from "./navigation-fit
 import { MoreList, MoreMenu, TabLink, TabList, TabMeasure, TopNavLink, TopNavList, TopNavMeasure } from "./shell-styles";
 
 const icons = { matches: HomeIcon, live: LiveIcon, results: ResultsIcon, slips: SlipIcon,
-  help: HelpIcon, privacy: ShieldIcon, terms: DocumentIcon, contact: MailIcon, dashboard: DashboardIcon };
+  help: HelpIcon, privacy: ShieldIcon, terms: DocumentIcon, contact: MailIcon, dashboard: DashboardIcon, invite: GiftIcon };
 export type NavigationDestination = Readonly<{
   key: NavigationLocation; href: string; label: string; tab: string; icon: keyof typeof icons; tone: AccentName;
 }>;

@@ -45,6 +45,23 @@ export const compactHeaderControl = css`
   }
 `;
 
+/** Borderless app-bar actions share a quiet fill and clear pointer/keyboard feedback. */
+export const compactHeaderIconControl = css`
+  ${compactHeaderControl}
+  inline-size: 2.75rem;
+  padding: 4px;
+  border: 0;
+  color: ${({ theme }) => theme.header.text};
+  background: ${({ theme }) => theme.header.controlFill};
+  background: color-mix(in srgb, ${({ theme }) => theme.header.accent} 9%, transparent);
+  transition: background-color 140ms ease, color 140ms ease;
+  ${media.desktop} { inline-size: 2rem; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; } }
+  &:active, &:focus-visible { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; }
+  &:focus-visible { outline-offset: -3px; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+`;
+
 /** Branding has no padded clear space; its home link remains easy to tap. */
 export const compactHeaderBrand = css`
   display: inline-flex;

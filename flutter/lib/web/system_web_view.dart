@@ -11,6 +11,7 @@ import '../config/app_config.dart';
 import '../config/app_branding.dart';
 import 'android_file_selector.dart';
 import 'navigation_policy.dart';
+import 'native_invitation_share.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 import 'web_view_failure.dart';
@@ -26,6 +27,8 @@ class SystemWebViewAdapter extends WebViewAdapter {
   final AppConfig configuration;
   final NavigationPolicy navigationPolicy;
   final Future<bool> Function(Uri) openExternal;
+  final _invitationShare = NativeInvitationShare();
+  final _viewKey = GlobalKey();
 
   static const _browserStore = MethodChannel(
     'com.goalhint.goal_hint/browser_store',
@@ -109,6 +112,28 @@ class SystemWebViewAdapter extends WebViewAdapter {
       final controller = WebViewController.fromPlatformCreationParams(params);
       _controller = controller;
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      await controller.addJavaScriptChannel(
+        'GoalHintInvitationShare',
+        onMessageReceived: (message) {
+          if (_hidden) return;
+          final box = _viewKey.currentContext?.findRenderObject();
+          if (box is! RenderBox || !box.hasSize || box.size.isEmpty) return;
+          unawaited(
+            _invitationShare.handle(
+              message.message,
+              ownsDocument: () async =>
+                  !_disposed &&
+                  !_loading &&
+                  _failure == null &&
+                  await controller.currentUrl() == _currentUri.toString() &&
+                  navigationPolicy.evaluate(_currentUri.toString()) ==
+                      NavigationAction.allow,
+              evaluate: controller.runJavaScript,
+              anchor: box.localToGlobal(Offset.zero) & box.size,
+            ),
+          );
+        },
+      );
       await controller.setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: _navigate,
@@ -134,6 +159,9 @@ class SystemWebViewAdapter extends WebViewAdapter {
               }
               await applyPendingTheme();
               await _normalizeLinkTargets();
+              await controller.runJavaScript(
+                _invitationShare.installScript(configuration.origin),
+              );
               try {
                 await _flushBrowserStore();
               } on Exception {
@@ -221,7 +249,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   @override
   Widget buildView() => _ready && _controller != null
-      ? WebViewWidget(controller: _controller!)
+      ? WebViewWidget(key: _viewKey, controller: _controller!)
       : const SizedBox.shrink();
 
   @override
@@ -345,6 +373,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   }
 
   void _pageStarted(String url) {
+    _invitationShare.invalidate();
     if (_disposed || navigationPolicy.evaluate(url) != NavigationAction.allow) {
       return;
     }
@@ -433,6 +462,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   @override
   void dispose() {
+    _invitationShare.invalidate();
     _disposed = true;
     _appearanceSampler.dispose();
     ++_historyRequest;

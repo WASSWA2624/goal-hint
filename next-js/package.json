@@ -107,6 +107,7 @@
     "test:seo:rendering": "python scripts/verify-seo-rendering.py",
     "analytics:hash-password": "node --conditions=react-server src/workers/analytics.ts hash-password",
     "members:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts purge",
+    "members:referral-codes": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/referrals.ts",
     "members:renew": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts renew",
     "payments:notifications": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/payment-notifications.ts",
     "test:payment-outbox": "node --conditions=react-server --test --test-concurrency=1 tests/payment-outbox.test.mjs tests/payment-outbox.integration.mjs",

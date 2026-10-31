@@ -6,7 +6,13 @@ invitation link with Copy link, and the latest ten registrations. Overview and
 Subscription show a compact summary; Activity includes one entry per award. No
 invitee phone, account identifier or registration digest is returned to the UI.
 
-Each verified member receives a persistent random invitation code on first use.
+New registrations receive a persistent random invitation code immediately.
+Existing registered members can be provisioned with `npm run members:referral-codes`
+(preview), then `npm run members:referral-codes -- --apply`. This bounded,
+rerunnable operator command fills only missing codes and preserves existing links.
+Erased, passwordless and configured administrator accounts are excluded. Pending
+or blocked members cannot earn as inviters until the existing eligibility checks
+pass. An authenticated Referrals read retains a safe fallback for old releases.
 `/r/[code]` redirects to registration and records the first valid code in a signed,
 HttpOnly, SameSite=Lax cookie for 30 days (Secure/__Host- in production). Reopening
 links cannot replace or extend valid attribution. Embedded/prefetched links do not
@@ -60,5 +66,11 @@ production fixture HTML/browser checks passed. A rollback-only application-role
 local smoke test also passed without retaining synthetic accounts or sending
 messages. Synthetic fixtures alone do not establish database races, delivery or
 remote schema/grants. The reviewed MariaDB overlay was not executed in this task.
-WhatsApp/Telegram/native invitation sharing and the general in-app notification
-feed remain separate audit work.
+WhatsApp/Telegram/native invitation sharing now reuses this link in the existing
+panel; see [Invite Friends](invite-friends.md). The general in-app notification
+feed remains separate audit work.
+
+On 31 October, the authorized local backfill assigned the one missing registered
+member code. A private before-snapshot was preserved, existing links remained
+unchanged and a repeat preview found zero missing registered member codes. No
+new migration, attribution rewrite or reward grant was involved.
