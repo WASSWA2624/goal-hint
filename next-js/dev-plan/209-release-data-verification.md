@@ -1,5 +1,11 @@
 # 209 — Independent data and release verification
 
+**Historical evidence:** the owner's subsequent
+[31 October scope decisions](../docs/implementation-decisions.md#31-october-2026--remaining-work-scope-closure)
+resolve the alert/sharing/OTP recommendations and close the release/device group
+from active work. Do not carry those items forward. The observations below retain
+their actual verification status; tasks 10/11 remain open in the active audit.
+
 Read-only Track C investigation on 31 October 2026 (Africa/Kampala), alongside
 the authorised referral-review and phone-polling work. No deployment, configuration
 change, migration, message delivery, paid provider request or device installation

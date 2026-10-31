@@ -142,4 +142,6 @@ from immutable controlled-code events and actual financial amounts.
   startup task and existing stashes/detached worktrees were preserved. This is a
   local rollout only. Production hosting/SSH, ingress, scheduled workers/delivery,
   signed Android installation and physical-device checks remain **Unverified**,
-  with precise blockers in plan 209 and the remaining-work audit.
+  as historical observations in plan 209. The owner's subsequent
+  [scope closure](../docs/implementation-decisions.md#31-october-2026--remaining-work-scope-closure)
+  removes this release/device follow-up from active work.

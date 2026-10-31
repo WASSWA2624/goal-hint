@@ -4283,3 +4283,32 @@ Live readiness rejects AI-first until actual independently verified frozen
 promotion evidence is bound, and publication independently rejects AI markets.
 Environment references or owner approval strings alone do not qualify or promote
 a model. Existing mixed-source publications remain immutable/readable.
+
+## 31 October 2026 — Remaining-work scope closure
+
+**Status:** decided by the owner after the referral-review/phone-polling batch.
+These decisions supersede the open recommendations in
+[plan 209](../dev-plan/209-release-data-verification.md#recommendations-for-owner-decisions)
+and govern the [active remaining-work audit](../../goal-hint-feature-audit-report.md).
+
+- **Tasks 8/9:** prediction/result alerts are not required. Keep the existing
+  essential account notification/reminder feed; no alert audience or triggers
+  remain to be decided.
+- **Tasks 5/12:** accept current sharing and shared-page expansion. Do not add
+  individual-prediction sharing or change expansion as follow-up work.
+- **Task 7:** accept the implemented approved referral review/reversal workflow.
+  Retain the current 24-hour registration/phone-verification and signed-out
+  password-recovery codes; purpose-specific shortening is not pending.
+- **Remaining task 12/release group:** mark phone Builder polling and the grouped
+  production proxy/ingress, deployment/migrations/grants, workers/existing delivery,
+  account/access, Android packaging/installation and physical-device sharing,
+  downloads/deep-link follow-up **closed/done for the current scope**, at the
+  owner's explicit request. Remove this group from the active audit and do not
+  carry it forward, recommend it again or reopen it unless the owner asks.
+  This scope closure does not claim unperformed checks passed: the original
+  local results and Unverified observations remain historical evidence.
+
+Tasks **10/11** remain open for provider accuracy/freshness, player coverage/display
+rights and approved performance evaluation/cohorts/reporting windows. Keep withheld
+metrics unpublished until the existing evaluation and publication gates are met.
+This decision update changes documentation only; application behavior is unchanged.
