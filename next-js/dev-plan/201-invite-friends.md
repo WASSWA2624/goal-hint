@@ -92,3 +92,52 @@ Archived from the 31 October audit when the active report was reduced to remaini
 - **Application-role smoke check:** a rollback-only transaction on the configured local database verified attribution → registration → phone verification → one reward, plus password change without current password retaining the new session and rejecting both old sessions. No synthetic accounts/referrals were retained; no external messages were sent.
 - **Earlier UI evidence retained:** [plan 194](../dev-plan/194-explicit-custom-filter-application.md) records explicit-use/CRUD/default/no-generation checks; [plan 197](../dev-plan/197-admin-classic-account-workspace.md) records shared chrome and earlier 64 layout/32 panel combinations. Those full earlier matrices were not rerun here.
 - **Not established:** remote production deployment, real-user delivery, social handoffs, provider truth, physical-device release behavior or production load performance. The MariaDB overlay was reviewed and checksum-matched; this task executed MySQL, not MariaDB.
+
+## Remaining-work audit — 31 October 2026
+
+Read-only review of application source, routes, UI, schema and implementation
+evidence at `c3719024`, following the feature audit prompt and subsequent scope
+instructions. No application code, schema, configuration or access rules changed;
+no build, migration deployment, provider request or external message was made.
+Only the report and these historical notes were updated. Source classifications
+below describe implemented behavior, not live deployment or device certification.
+
+### Source review
+
+- **1 — Fully implemented within the approved scope:** [configuration contracts](../src/domain/slip-configurations.ts), [account-scoped storage](../src/server/slips/slip-configurations.ts) and [Custom Filters dialogs](../src/components/slips/saved-slip-configurations.tsx) retain the ten-item cap, optional default, revision-safe CRUD and explicit Use Selected Filter. Time ranges persist; loading uses today without generation. The user's later instruction deliberately keeps management in Slip Builder and removes the separate Account interface; do not restore that original prompt requirement as a gap.
+- **2 — Fully implemented locally:** the [Account route](../src/app/_components/account-route.tsx), [workspace](../src/components/members/account-workspace.tsx), [overview](../src/components/members/account-overview.tsx) and [private dashboard projection](../src/server/members/account-dashboard.ts) provide compact subscription, renewal, referral and activity views. Earlier layout evidence remains in plans 197/199/201; the full Account browser matrix was not rerun during this audit.
+- **3 — Core reward behavior fully implemented; broader abuse review belongs to 7:** [referral service](../src/server/members/referrals.ts) and [period scheduling](../src/server/members/referral-periods.ts) award one day at first eligible phone verification without payment, retain keyed phone deduplication after deletion, prevent self-referral and queue earned access after paid periods. Tests exercise repeated/concurrent verification and earned-to-credit renewal boundaries. No new lifetime reward cap or payment condition is recommended.
+- **4 — Sharing flow implemented; real-device qualification remains Unverified:** [invitations](../src/components/members/account-referrals.tsx) reuse the personal link and [native/fallback helper](../src/components/members/invitation-share.ts). Earlier browser/Flutter evidence and the last Android packaging dependency failure remain above and in plan 203. This audit did not attempt a new APK build or contact a social target.
+- **5 — Partially implemented, remaining decisions:** [slip Share](../src/components/slips/slip-share-action.tsx), [drawer](../src/components/slips/sharing/slip-share-drawer.tsx) and [server access checks](../src/server/slips/shared-slips-http.ts) support full-slip sharing; [recipient route](../src/app/_components/shared-slip-route.tsx) retains generic previews, access gates and safe return paths. Individual-prediction sharing and changing the existing expanded shared-page default remain undecided, rather than authorized implementation work. Device/deployment checks are recorded only in the release group.
+- **6 — Fully implemented locally:** [session issuance](../src/server/members/member-sessions.ts) evicts the oldest excess authenticated session under the account lock. Fresh tests cover third/concurrent login, exact expiry, restricted-session floods, failed replacement rollback and old-session rejection. Phone verification and signed-in password-change/session-rotation regressions passed.
+- **7 — Partially implemented; high-priority standalone review:** [authentication](../src/server/members/member-auth.ts), [OTP consumption](../src/server/members/verification-codes.ts), [durable limits](../src/server/members/rate-limit.ts) and referral eligibility checks exist and pass focused tests. The [24-hour code lifetime](../src/domain/member-verification.ts) remains intentional current behavior. [Address extraction](../src/server/http/private-http.ts) depends on the nearest proxy's forwarded-address provenance; actual host sanitization was not established here. Broader bot/suspicious-registration handling and fraud review/reversal need a proportionate policy, without assuming CAPTCHA is mandatory or weakening existing rewards.
+- **8 — Partially implemented; 9 — Implemented core/reminders:** the [six-kind notification contract and reminder schedule](../src/domain/account-notifications.ts), [persistent reconciliation](../src/server/members/account-notifications.ts), [private HTTP route](../src/server/members/account-notifications-http.ts) and [Account feed](../src/components/members/account-notifications.tsx) cover approved account events, ownership, read/dismiss state and deduplication. [Schema](../prisma/schema.prisma) enforces the account/event key. Prediction/result alerts still need an audience/trigger decision. Subscription math uses uninterrupted paid/trial/queued/referral periods and exact boundaries. WhatsApp preferences remain a separate existing delivery choice; no external reminders were added.
+- **10 — Unable to verify provider truth:** [match detail projections](../src/domain/match-details.ts), [detail route](../src/app/_components/match-detail-route.tsx) and [player evidence](../src/server/evidence/player-football.ts) preserve stored revision/result/source boundaries. Synthetic arithmetic tests cannot establish current provider accuracy, freshness, player coverage or display rights. Verify authorized real evidence before claiming those properties.
+- **11 — Partially implemented; evaluation decision and real-data verification pending:** [public performance](../src/server/performance/public-performance.ts) intentionally supplies no production evaluation policy; [metric gates](../src/server/performance/performance-service.ts) withhold unapproved/insufficient-quality values while retaining counts. [Evaluation requirements](../docs/forecast-evaluation.md) still call for approved cohorts, periods, horizons, market/sample/quality gates and reporting windows. Passing synthetic calculations is not performance qualification; no personal betting/profit tracking is proposed.
+- **12 — Partially implemented:** [Builder](../src/components/slips/slip-builder.tsx) still enables match polling only on desktop; the polling test explicitly confirms disabled mobile polling. This is the remaining known mobile code gap. Latest approved status/spacing/access changes are documented in plan 205. Live deployment, existing worker/delivery operation, Android packaging and signed physical-device journeys remain release checks, not duplicate sharing or notification feature gaps.
+
+### Actual checks for this audit
+
+- **261 tests passed, zero failures/skips**, using Node's test runner with
+  `--conditions=react-server --test --test-concurrency=1` across 21 focused files:
+  Account dashboard/notifications, member auth/session/HTTP, referrals/invitations,
+  Custom Filters, shared slips/auth returns/images/downloads, slip polling,
+  subscription summary/expiry, match detail projections/pages and performance
+  calculations/quote binding. These use synthetic or in-memory fixtures; no new
+  genuine-MySQL integration run or browser/device matrix was performed.
+- Configured local `python scripts/database.py verify` **passed**, checking
+  migration status and schema diff without applying migrations. Read-only
+  `python scripts/database-health.py` returned **ready**. This does not verify
+  remote grants, production deployment or production worker/delivery operation.
+- Prior evidence is retained, not represented as a fresh audit run: plan 202
+  records notification persistence/isolation MySQL and Account UI checks; plan
+  203 records phone sharing, recipient privacy/returns, exports and Flutter
+  checks. Plan 205 supersedes earlier 44px mobile slip-Share geometry with the
+  user-requested 24px compact button. It records 24 layout combinations, an
+  18-case access matrix, disclosure/focus checks and expiry during failed
+  session requests. Ordinary slips remain collapsed; shared-page expansion is
+  unchanged. App/referral sharing remains independent of subscription.
+- No real provider response, remote environment, external recipient or physical
+  device was checked. Do not promote those historical or outstanding checks to
+  Verified based on these local results. No implementation was authorized by
+  this audit; registration/referral security remains the recommended next batch.
