@@ -9,6 +9,8 @@ export const ShareTrigger = styled(Button)`
     font-size: .75rem; line-height: 1.25; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   svg { inline-size: 14px; block-size: 14px; }
   @media (pointer: coarse) { && { min-block-size: 36px; } }
+  &&[data-share-icon-only] { inline-size: 44px; min-inline-size: 44px; min-block-size: 44px; padding: 0; }
+  &[data-share-icon-only] svg { inline-size: 18px; block-size: 18px; }
 `;
 
 export const Drawer = styled.dialog`

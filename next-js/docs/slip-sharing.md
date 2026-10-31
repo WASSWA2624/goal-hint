@@ -3,7 +3,10 @@
 Full Best Slips and Slip Builder cards share one lazy-loaded drawer on desktop
 and phones. Ordinary slips remain collapsed. The Share action is a sibling of
 the native disclosure; header taps toggle selections and Share does not. Closing
-restores trigger focus. Shared-slip pages retain their current expanded default.
+restores trigger focus. On phones, an icon-only Share control sits beside the
+narrower status badge. The header has no disclosure arrow or reserved arrow
+column; tapping it still toggles the slip, and its left blue strip remains.
+Shared-slip pages retain their current expanded default.
 Aggregate-only previews expose no sharing action.
 
 The drawer prepares the existing immutable snapshot and branded PNGs. It clearly

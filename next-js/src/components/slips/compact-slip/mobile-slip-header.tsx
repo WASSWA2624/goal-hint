@@ -11,9 +11,9 @@ import { SlipHeaderDate, SlipStatusBadge, type SlipHeaderPublication } from "../
 
 /** Shared by full slips, aggregate-only summaries and the design comparison. */
 export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount, index, locale, outcome = "pending", status = outcome,
-  headingId, headerOnly = false, showRank = false, className, variant, publicationDay, publishedAt }: {
+  headingId, headerOnly = false, showRank = false, className, variant, publicationDay, publishedAt, hasAction = false }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string;
+  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string; hasAction?: boolean;
 } & SlipHeaderPublication) {
   const m = createMessages(locale), id = useId(), noteId = `${id}-probability-note`;
   const label = m.text(`slips.header.${status}`);
@@ -36,6 +36,7 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
   </>;
   return <MobileHeaderRow as={headerOnly ? "header" : "summary"} className={className} data-slip-summary data-mobile-slip-header
       data-mobile-slip-layout={variant ? undefined : "compact-rail"}
+      data-header-action={hasAction ? "" : undefined}
       data-slip-toggle={headerOnly ? undefined : ""} data-header-summary data-header-variant={variant}
       data-header-outcome={outcome} data-header-status-value={status} data-header-only={headerOnly ? "" : undefined} data-large-odds={totalOdds.length > 5 ? "" : undefined}
       data-header-publication={publicationDay || publishedAt !== undefined ? "" : undefined}
@@ -60,8 +61,7 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
         </>}
         {variant ? <span data-status-full>{label}</span> : <SlipStatusBadge outcome={outcome} status={status} locale={locale} />}
       </span>
-      {variant ? <span data-header-chevron aria-hidden="true" />
-        : <span data-header-toggle aria-hidden="true"><span data-header-chevron /></span>}
+      {variant && <span data-header-chevron aria-hidden="true" />}
       <span id={noteId} hidden>{m.text("slips.averageHint")}</span>
     </MobileHeaderRow>;
 }

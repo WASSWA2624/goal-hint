@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { SlipCard } from "@/components/slips/slip-card";
 import { HeaderBrand } from "@/components/ui/brand";
 import { Container, PageMain, Stack } from "@/components/ui/layout";
-import { fixtureShared, fixtureSlip, fixtureSource, scenarios, type Scenario } from "./data";
+import { createdAt, today, fixtureShared, fixtureSlip, fixtureSource, scenarios, type Scenario } from "./data";
 
 export const metadata = { title: "Slip sharing acceptance | Goal Hint", robots: { index: false, follow: false } };
 
@@ -16,6 +16,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
     <h1>{scenario === "best" ? "Best Slips" : scenario === "shared" ? "Shared slip" : "Slip Builder"}</h1>
     <section data-sharing-scenario={scenario}>
       <SlipCard slip={fixtureSlip(scenario)} index={0} locale="en" initiallyOpen={scenario === "shared"}
+        {...(scenario === "best" ? { publicationDay: today } : { publishedAt: Date.parse(createdAt) })}
         {...(scenario === "shared" ? { sharedSlip: fixtureShared(scenario) } : { shareSource: fixtureSource(scenario) })} />
     </section>
   </Stack></Container></PageMain>;

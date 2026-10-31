@@ -102,11 +102,11 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
   </>;
   const header = variant === "clean-ledger"
     ? <MobileSlipHeader totalOdds={totalOdds} averageProbability={averageProbability} selectionCount={selectionCount}
-      index={index} locale={locale} outcome={outcome} status={status} headingId={headingId ?? `${id}-heading`} headerOnly={!collapsible} showRank={showRank}
+      index={index} locale={locale} outcome={outcome} status={status} headingId={headingId ?? `${id}-heading`} headerOnly={!collapsible} showRank={showRank} hasAction={!!action}
       {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})} />
     : collapsible ? <summary data-slip-toggle data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</summary>
       : <header data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</header>;
-  return <CompactCard data-compact-slip={variant} data-slip-id={slipId}>
+  return <CompactCard data-compact-slip={variant} data-slip-id={slipId} data-phone-shareable={action ? "" : undefined}>
     {variant !== "clean-ledger" && <VisuallyHidden id={`${id}-average-note`}>{messages.text("slips.averageHint")}</VisuallyHidden>}
     {collapsible ? <details data-slip-disclosure open={initiallyOpen}>
       {header}

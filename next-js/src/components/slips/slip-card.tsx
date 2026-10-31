@@ -17,8 +17,8 @@ import type { SlipHeaderPublication } from "./slip-header-meta";
 /** Keep desktop content visually collapsed until hydration selects its native disclosure. */
 const PhoneSlipFallback = styled.div`
   position: relative; min-inline-size: 0;
-  [data-phone-share-action] { display: flex; justify-content: flex-end; padding-inline: 6px; border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
-  [data-phone-share-action] [data-share-slip] { min-block-size: 44px; }
+  [data-phone-shareable] { position: relative; }
+  [data-phone-share-action] { position: absolute; inset-block-start: 6px; inset-inline-end: 6px; }
   ${media.belowDesktop} {
     [data-compact-slip="clean-ledger"] {
       border-radius: ${({ theme }) => theme.radius.control};
@@ -50,7 +50,7 @@ export const SlipCard = memo(function SlipCard({ slip, index, locale, results, m
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" initiallyOpen={initiallyOpen} showRank={!sharedSlip}
     {...publication}
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})}
-    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} locale={locale}
+    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} locale={locale} iconOnly
       {...(shareSource ? { source: shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} /> : undefined} />
   </PhoneSlipFallback>;
 });
