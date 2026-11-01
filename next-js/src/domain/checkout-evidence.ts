@@ -6,6 +6,18 @@ import { validMobilePhone } from "./phone-mobile.ts";
 type Numbers = Readonly<Record<MobileNetwork, string | null>>;
 const names = { mtn: "MTN Mobile Money", airtel: "Airtel Money" };
 
+/** Validate clipboard content before it can replace a message or its extracted fields. */
+export function inspectPaymentMessage(text: string, provider: MobileNetwork, numbers: Numbers, screenshotTransactionId: string | null = null) {
+  const evidence = paymentEvidence(text, numbers, { bare: false });
+  if (text.length > 12_000 || !evidence.transactionId || evidence.amount === null) return { ok: false as const,
+    message: "This is not a readable payment transaction message. Paste the complete MTN or Airtel message with its transaction ID and amount. Your current message has not changed." };
+  const mismatch = paymentDestinationMismatch(text, provider, numbers, "transaction message");
+  if (mismatch) return { ok: false as const, message: mismatch };
+  if (screenshotTransactionId && !sameTransactionId(screenshotTransactionId, evidence.transactionId)) return { ok: false as const,
+    message: "The transaction message and screenshot show different transaction IDs. Paste the message for this payment, or remove or replace the screenshot. Your current message has not changed." };
+  return { ok: true as const, evidence };
+}
+
 export function paymentDestinationMismatch(text: string, provider: MobileNetwork, numbers: Numbers, source = "evidence"): string | null {
   const found = paymentDestination(text, numbers), expected = normalizePhone(numbers[provider]);
   if (found.recipient && expected && found.recipient !== expected) {

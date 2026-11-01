@@ -6,14 +6,14 @@ import { FloatingField } from "@/components/ui/floating-field";
 import { AmountInput } from "@/components/ui/amount-input";
 import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { CardIcon, CheckIcon, ClipboardIcon, CopyIcon, GiftIcon } from "@/components/ui/icons";
+import { CardIcon, CheckIcon, ClipboardIcon, CloseIcon, CopyIcon, GiftIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
 import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { paymentEvidence } from "@/domain/payment-sms";
-import { checkoutDetailsIssue, paymentDestinationMismatch } from "@/domain/checkout-evidence";
+import { checkoutDetailsIssue, inspectPaymentMessage, paymentDestinationMismatch } from "@/domain/checkout-evidence";
 import { paymentEvidenceDate } from "@/domain/payment-evidence-date";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { validMobilePhone } from "@/domain/phone-mobile";
@@ -205,13 +205,20 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     if (mismatch) setError(mismatch);
     else if (!evidence.transactionId && !evidence.amount) setError("We couldn’t find transaction details in this message. Paste the complete payment message, or check and enter its transaction details below.");
   }
+  function pasteTransactionMessage(text: string) {
+    const checked = inspectPaymentMessage(text, receiptProvider, numbers, image ? draft.screenshot?.transactionId ?? paymentEvidence(screenshotText).transactionId : null);
+    if (!checked.ok) { setError(checked.message); return; }
+    extract(text);
+  }
   async function pasteMessage() {
-    setError("");
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text.trim()) throw new Error();
-      extract(text.slice(0, 12000));
-    } catch { messageInput.current?.focus(); setError("Paste your transaction message into the field, or add a screenshot."); }
+    let text: string;
+    try { text = await navigator.clipboard.readText(); }
+    catch { messageInput.current?.focus(); setError("Your browser couldn’t read the clipboard. Paste directly into the transaction message field, or add a screenshot."); return; }
+    pasteTransactionMessage(text);
+  }
+  function clearMessage() {
+    update({ text: "", originalText: "" }); setReading("");
+    requestAnimationFrame(() => messageInput.current?.focus());
   }
   const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
   const visibleRequests = view.requests.slice(0, 5);
@@ -291,10 +298,16 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         {external && <>
           <WizardNotice id={`${evidenceId}-requirement`}>Message or screenshot required.</WizardNotice>
           <FloatingField label={`Transaction message${screenshotReady ? " (optional)" : ""}`}
-            action={<Button variant="quiet" disabled={busy || readingActive} onClick={() => void pasteMessage()}><ClipboardIcon />Paste</Button>}>
+            action={<>{draft.text.length > 0 && <Button variant="quiet" aria-label="Clear transaction message" disabled={busy || readingActive} onClick={clearMessage}><CloseIcon />Clear</Button>}
+              <Button variant="quiet" disabled={busy || readingActive} onClick={() => void pasteMessage()}><ClipboardIcon />Paste</Button></>}>
             <CheckoutMessage ref={messageInput} id={`${evidenceId}-message`} rows={3} maxLength={12000} disabled={readingActive} required={!screenshotReady}
               aria-describedby={`${evidenceId}-requirement`} placeholder="Enter or paste the payment message"
-              value={draft.text} onChange={e => update({ text: e.target.value })} onBlur={() => { if (draft.text && draft.text !== draft.originalText) extract(draft.text); }} />
+              value={draft.text} onChange={e => update({ text: e.target.value })}
+              onPaste={event => { event.preventDefault(); if (!busy && !readingActive) pasteTransactionMessage(event.clipboardData.getData("text/plain")); }}
+              onBlur={event => {
+                if (event.relatedTarget instanceof Node && event.currentTarget.parentElement?.querySelector("[data-field-action]")?.contains(event.relatedTarget)) return;
+                if (draft.text && draft.text !== draft.originalText) extract(draft.text);
+              }} />
           </FloatingField>
           <PaymentScreenshot image={image} metadata={draft.screenshot ?? null} provider={receiptProvider} numbers={numbers} optional={!!draft.text.trim()} messageTransactionId={paymentEvidence(draft.text).transactionId}
             submissionId={attaching?.id ?? null} disabled={busy} requirementId={`${evidenceId}-requirement`} onBusyChange={setReadingActive}

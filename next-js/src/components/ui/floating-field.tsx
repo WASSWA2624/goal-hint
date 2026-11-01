@@ -26,7 +26,7 @@ const Frame = styled.div`
   }
   > input, > textarea { inline-size: 100%; min-block-size: 44px; font-size: 16px; }
   &[data-field-action="true"] > textarea { padding-block-start: 36px; }
-  > [data-field-action] { position: absolute; inset-block-start: 3px; inset-inline-end: 3px; }
+  > [data-field-action] { position: absolute; inset-block-start: 3px; inset-inline-end: 3px; display: flex; align-items: center; gap: 4px; }
   > [data-field-action] button { min-block-size: 30px; padding: 3px 8px; font-size: 13px; }
   > [data-field-action] svg { inline-size: 16px; block-size: 16px; }
   &:focus-within > label { color: ${({ theme }) => theme.color.link}; }

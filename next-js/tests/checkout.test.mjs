@@ -5,7 +5,7 @@ import { checkoutMethodAvailable, checkoutSelectionSchema, receiptInputSchema, f
 import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { paymentDateNotExtracted, paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
-import { checkoutDetailsIssue, paymentDestinationMismatch } from "../src/domain/checkout-evidence.ts";
+import { checkoutDetailsIssue, inspectPaymentMessage, paymentDestinationMismatch } from "../src/domain/checkout-evidence.ts";
 import { deleteGroupedDigit, digitCaret, groupInteger } from "../src/domain/input-format.ts";
 import { formatNationalPhone, splitPhoneValue } from "../src/domain/phone-countries.ts";
 import { capCheckoutFunding, chooseCheckoutMethod } from "../src/components/members/checkout-draft.ts";
@@ -31,6 +31,22 @@ test("provider checks compare receiving numbers separately from branding and exc
   assert.equal(paymentDestinationMismatch("From: 0700000901. Paid UGX 5,000 to 0700000902", "airtel", numbers), null);
   const thread = "Paid UGX 1,000 to 0700000901. Transaction ID: OLD12345\nPaid UGX 5,000 to 0700000902. Transaction ID: NEW12345";
   assert.equal(paymentDestinationMismatch(thread, "airtel", numbers), null);
+});
+
+test("message paste requires a complete readable transaction and compatible provider and screenshot", () => {
+  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+  const message = "MTN Mobile Money. You have sent UGX 5,000 to 0700000901. Transaction ID: TEST123456";
+  const valid = inspectPaymentMessage(message, "mtn", numbers);
+  assert.equal(valid.ok, true); assert.equal(valid.evidence.transactionId, "TEST123456"); assert.equal(valid.evidence.amount, 5000);
+  for (const text of ["", "shopping list", "5000", "TEST123456", "Transaction ID: TEST123456", "Paid UGX 5,000", "Fee UGX 500. Balance UGX 12,000. Transaction ID: TEST123456", `${message}${" ".repeat(12001)}`]) {
+    const rejected = inspectPaymentMessage(text, "mtn", numbers);
+    assert.equal(rejected.ok, false); assert.match(rejected.message, /complete MTN or Airtel message/);
+  }
+  assert.equal(inspectPaymentMessage(message, "airtel", numbers).ok, false);
+  assert.equal(inspectPaymentMessage(message, "mtn", numbers, "TEST123456").ok, true);
+  const conflict = inspectPaymentMessage(message, "mtn", numbers, "OTHER99887766");
+  assert.equal(conflict.ok, false); assert.match(conflict.message, /different transaction IDs/);
+  assert.equal(inspectPaymentMessage("Airtel Money. Paid UGX 5,000 to 0700000902. TID: AIR123456", "airtel", numbers).ok, true);
 });
 
 test("details require either evidence source and recheck provider changes before review", () => {
