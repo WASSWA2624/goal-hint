@@ -107,6 +107,7 @@ const SortGroup = styled.div`
   ${media.belowDesktop} { display: none; }
 
   ${controlRow}
+  > [data-filter-actions] { margin-block-start: 6px; }
 `;
 const ResultCount = styled.p`
   color: ${({ theme }) => theme.color.mutedText};

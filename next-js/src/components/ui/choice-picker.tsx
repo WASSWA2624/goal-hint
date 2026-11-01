@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useId, useRef, useState, useSyncExternalStore } from "react";
+import { controlBodyHeight } from "./control-layout";
 import styled from "styled-components";
 import { ChevronDownIcon } from "./icons";
 import { closeDetails, useOutsideDismiss } from "./use-outside-dismiss";
@@ -11,7 +12,7 @@ const Root = styled.details`
   position: relative; min-inline-size: 0;
   > summary {
     display: flex; align-items: center; justify-content: space-between; gap: 5px;
-    min-block-size: 2rem; padding: 4px 6px; list-style: none;
+    ${controlBodyHeight} padding: 4px 6px; list-style: none;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};

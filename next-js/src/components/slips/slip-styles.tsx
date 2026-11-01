@@ -1,5 +1,6 @@
 "use client";
 
+import { controlBodyHeight } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
@@ -8,10 +9,11 @@ import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, Page
 import { media } from "@/styles/theme";
 import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
 
-const compactControlHeight = "2.5rem";
+const compactControlHeight = "var(--form-control-height, 40px)";
 const mobileToolbarFontSize = "0.75rem";
 const mobileToolbarValueFontSize = "0.875rem";
 export const slipToolbarControl = css`
+  ${controlBodyHeight}
   min-block-size: ${compactControlHeight}; min-inline-size: 0; padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control}; gap: 5px; font-size: 0.75rem; line-height: 1.3;
   > svg { flex: none; font-size: 0.875rem; }

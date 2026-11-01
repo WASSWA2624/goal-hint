@@ -81,7 +81,6 @@ const Frame = styled.div`
   > [data-field-action] button { min-block-size: 30px; padding: 3px 8px; font-size: 13px; }
   > [data-field-action] svg { inline-size: 16px; block-size: 16px; }
   > [data-floating-outline] { ${floatingOutline} }
-  &:not(:focus-within):has(> select[data-feed-status]) > [data-floating-outline] { border-color: transparent; }
   ${floatingFieldState}
 `;
 const Message = styled.div`

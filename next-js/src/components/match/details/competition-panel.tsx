@@ -2,6 +2,7 @@
 
 import { FloatingField } from "@/components/ui/floating-field";
 
+import { controlBodyHeight, inlineControlRow } from "@/components/ui/control-layout";
 import styled from "styled-components";
 import { useMemo } from "react";
 import type { MatchView } from "@/domain/match-view";
@@ -21,6 +22,8 @@ const Toolbar = styled.div`
   select { min-block-size: 28px; max-inline-size: 100%; padding: 3px 6px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     border: 0; font: inherit; font-size: .75rem; ${focusRing} }
   > small { margin-inline-start: auto; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
+  ${inlineControlRow}
+  &:has(> [data-floating-field]) > fieldset > label { ${controlBodyHeight} }
 `;
 const Footnote = styled.div`
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;

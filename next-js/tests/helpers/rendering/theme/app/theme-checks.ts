@@ -211,7 +211,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     const field = document.querySelector(selector);
     const boundary = field?.closest("[data-floating-control]")?.querySelector("[data-floating-outline]") ?? field;
     assert(!!boundary && getComputedStyle(boundary).borderTopWidth === (boundary.matches("[data-floating-outline]") ? ruleWidth : fieldBorderWidth), "Text entry has one thin boundary");
-    assert(!!boundary && getComputedStyle(boundary).borderTopColor === normalize(theme.color.controlBorder), "Text entry boundaries retain their contrast");
+    assert(!!boundary && getComputedStyle(boundary).borderTopColor === normalize(boundary.matches("[data-floating-outline]") ? theme.textField.borderColor : theme.color.controlBorder), "Floating boundaries retain the faint theme color");
   }
   assert(document.documentElement.scrollWidth <= window.innerWidth, "Fixture must not overflow the viewport");
   return errors;

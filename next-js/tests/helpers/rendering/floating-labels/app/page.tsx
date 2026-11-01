@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
-import { FieldBlock, FieldRow } from "@/components/admin/admin-form";
+import { ActionButton as OwnerAction, FieldBlock, FieldRow } from "@/components/admin/admin-form";
 import { FeedSearchInput } from "@/components/match/feed-search-input";
+import { CompactSelect } from "@/components/match/filter-parts";
 import { SlipNumericInput } from "@/components/slips/slip-numeric-input";
+import { CustomRangeButton, DateControls, DateSelect } from "@/components/slips/best-slips-filter-styles";
 import { AmountInput } from "@/components/ui/amount-input";
-import { Button, FileInput, SelectInput, TextInput } from "@/components/ui/controls";
+import { Button, ButtonLink, FileInput, SelectInput, TextInput } from "@/components/ui/controls";
+import { inlineControlRow } from "@/components/ui/control-layout";
 import { FloatingField } from "@/components/ui/floating-field";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SearchIcon } from "@/components/ui/icons";
@@ -22,6 +25,14 @@ const Canvas = styled.main`
 const StepperPressure = styled.div`
   button { min-block-size: 36px; padding-block: 4px; font-size: 1rem; }
 `;
+const MixedControls = styled.div`
+  display: flex; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1;
+  > [data-control-field] { flex: 1 1 12rem; }
+  ${inlineControlRow}
+`;
+const SameFill = styled.section`
+  padding: 12px; background: ${({ theme }) => theme.textField.background};
+`;
 
 export default function Page() {
   const [dark, setDark] = useState(false), [amount, setAmount] = useState("");
@@ -33,8 +44,20 @@ export default function Page() {
         <FieldRow data-alignment-row style={{ gridColumn: "1 / -1" }}>
           <TextInput label="Row text" hint="Help below this field must not move the control" />
           <SelectInput label="Row select" defaultValue="one"><option value="one">One</option></SelectInput>
-          <Button>Row action</Button>
+          <OwnerAction>Row action</OwnerAction>
         </FieldRow>
+        <MixedControls data-mixed-controls>
+          <div data-control-field><TextInput id="mixed-input" label="Mixed row field" defaultValue="Value" /></div>
+          <DateControls data-mixed-dates>
+            <DateSelect label="Mixed date picker" value={menu} options={[{ value: "all", label: "All dates" }, { value: "one", label: "Today" }]} onValueChange={setMenu} />
+            <CustomRangeButton type="button" data-mixed-range>Custom dates</CustomRangeButton>
+          </DateControls>
+          <CompactSelect data-mixed-compact aria-label="Mixed compact select" value={menu}
+            options={[{ value: "all", label: "All" }, { value: "one", label: "One" }]} onChange={event => setMenu(event.target.value)} />
+          <Button data-mixed-action>Apply filters</Button>
+          <ButtonLink href="#mixed-input" data-mixed-link>Open results</ButtonLink>
+        </MixedControls>
+        <SameFill data-same-fill><FloatingField label="Same background"><input id="same-fill" defaultValue="Value" /></FloatingField></SameFill>
         <TextInput id="empty" label="Empty text" placeholder="Example value" name="text" hint="Text hint" />
         <TextInput id="leading" label="Search account" leading={<SearchIcon />} />
         <TextInput id="filled" label="Restored text" defaultValue="Saved value" />

@@ -2,6 +2,7 @@
 
 import { filledTableRows } from "@/components/ui/filled-surfaces";
 import { useRef, useState, useSyncExternalStore } from "react";
+import { inlineControlRow } from "@/components/ui/control-layout";
 import styled from "styled-components";
 import { Button, ButtonLink, TextInput } from "@/components/ui/controls";
 import { accountSectionHref } from "@/domain/account-navigation";
@@ -20,6 +21,7 @@ const LinkRow = styled.div`
   > :first-child { flex: 1; min-inline-size: 0; }
   input { min-inline-size: 0; }
   > button { flex: none; inline-size: auto; }
+  ${inlineControlRow}
 `;
 const ShareActions = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-inline-size: 48rem;

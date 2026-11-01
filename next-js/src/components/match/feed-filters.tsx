@@ -3,6 +3,7 @@
 import { FloatingField } from "@/components/ui/floating-field";
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { controlBodyHeight, inlineControlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -95,6 +96,7 @@ const CompactToolbar = styled(QueryChoices)`
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
   ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; }
+  ${inlineControlRow}
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
 const PhoneToolbar = styled.div`
@@ -105,6 +107,7 @@ const PhoneToolbar = styled.div`
   gap: 6px;
   min-inline-size: 0;
   ${desktop} { display: none; }
+  ${inlineControlRow}
 `;
 const SortField = styled.span`
   position: relative;
@@ -125,7 +128,7 @@ const SortField = styled.span`
 `;
 const PhoneSort = styled(CompactSelect)`
   flex: 1;
-  min-block-size: 2.75rem;
+  ${controlBodyHeight}
   padding-inline: 28px 24px;
 
   font-size: 0.8125rem;
@@ -321,7 +324,7 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
 /** One labelled trigger per list; its checklist opens in place inside the sheet. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { min-block-size: 2.75rem; padding: 6px 10px; font-size: 0.8125rem; }
+  > button { ${controlBodyHeight} padding: 6px 10px; font-size: 0.8125rem; }
   [data-picker-label] { flex: 0 1 auto; min-inline-size: 0; overflow-wrap: anywhere; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; overflow-wrap: anywhere; }
   @container feed-filter-fields (max-width: 14rem) {
@@ -412,13 +415,15 @@ const DesktopGrid = styled.div`
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
   align-items: center;
   gap: 8px 10px;
+
+  ${inlineControlRow}
 `;
 const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
   min-inline-size: 0;
-  min-block-size: 2.375rem;
+  ${controlBodyHeight}
   padding-inline: 10px 4px;
   background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.field};
   border: 0;
@@ -514,11 +519,13 @@ const FilterActions = styled.div`
     min-inline-size: 0;
     flex: 1 1 auto;
     gap: 6px;
-    > button { min-block-size: 2.75rem; padding-inline: 8px; font-size: 0.8125rem; white-space: normal; }
+    > button { padding-inline: 8px; font-size: 0.8125rem; white-space: normal; }
     > button[type="submit"] { flex: 1; min-inline-size: min(100%, 5rem); }
     > button > svg { font-size: 0.875rem; }
     [data-desktop-icon] { display: none; }
   }
+
+  ${inlineControlRow}
 `;
 
 export type FeedFilterDraftStatus = Readonly<{ valid: boolean; changed: boolean }>;

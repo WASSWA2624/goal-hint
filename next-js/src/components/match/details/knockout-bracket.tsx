@@ -3,6 +3,7 @@
 import { FloatingField } from "@/components/ui/floating-field";
 
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { inlineControlRow } from "@/components/ui/control-layout";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
@@ -17,6 +18,7 @@ const Toolbar = styled.div`
   > label { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
   select { max-inline-size: 100%; min-inline-size: 0; min-block-size: 30px; padding: 4px 6px; font: inherit;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border: 0; ${focusRing} }
+  ${inlineControlRow}
 `;
 const Control = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-block-size: 30px; padding: 4px 8px;

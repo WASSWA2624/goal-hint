@@ -257,3 +257,16 @@ test("a full storage quota does not prevent changing an existing saved theme", (
   assert.equal(state.values.get(themeStorageKey), "light");
   assert.equal(getThemeSnapshot(), "dark");
 });
+
+
+test("floating outlines stay faint and visible, with a quiet distinct focus tint", () => {
+  for (const theme of [lightTheme, darkTheme]) {
+    const { background, borderColor, focusBorderColor } = theme.textField;
+    assert.ok(contrast(borderColor, background) > 1.1, `${theme.mode}: outline must remain visible`);
+    assert.ok(contrast(borderColor, background) < 1.8, `${theme.mode}: outline must remain faint`);
+    assert.ok(contrast(focusBorderColor, background) > contrast(borderColor, background), `${theme.mode}: focus must be distinguishable`);
+    assert.ok(contrast(focusBorderColor, background) < 3, `${theme.mode}: focus tint must remain quiet`);
+  }
+  const gray = channels(lightTheme.textField.borderColor);
+  assert.ok(Math.max(...gray) - Math.min(...gray) < 20, "White fields use a neutral, pale gray boundary");
+});

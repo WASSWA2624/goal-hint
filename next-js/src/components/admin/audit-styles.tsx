@@ -23,19 +23,12 @@ export const ExportButton = styled(ActionButton)`
 
 /** Search and filters: loose on phones (search, then a Filters drawer), one open side panel from desktop up. */
 export const AuditTools = styled(RecordListTools)`
-  input, select { min-block-size: 44px; }
   ${media.belowDesktop} { input, select { font-size: 16px; } }
-  ${media.desktop} { input, select { min-block-size: 34px; padding-block: 4px; } }
   [data-floating-field] select { border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
-/** The search label stays for assistive technology; the placeholder and icon name the field on screen. */
-export const SearchField = styled.div`
-  position: relative;
-  min-inline-size: 0;
-  label { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden;
-    clip: rect(0 0 0 0); white-space: nowrap; }
-`;
+/** Shared floating search keeps the visible label and the same body height as adjacent filters. */
+export const SearchField = styled.div`min-inline-size: 0;`;
 
 export const FilterDrawer = styled.div`
   ${mobileFilterPanel}

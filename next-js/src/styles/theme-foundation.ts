@@ -185,7 +185,7 @@ export interface GoalHintTheme {
     readonly readingMaxWidth: string;
   };
   readonly frame: Readonly<{ desktopCardRadius: string }>;
-  readonly textField: Readonly<{ background: string; hoverBackground: string; borderWidth: string }>;
+  readonly textField: Readonly<{ background: string; hoverBackground: string; borderWidth: string; borderColor: string; focusBorderColor: string }>;
   readonly motion: Readonly<{
     fast: string; feedback: string; disclosure: string; surface: string; easing: string;
     reducedDuration: string;
@@ -320,7 +320,7 @@ export const foundationLightTheme: GoalHintTheme = {
   },
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px", readingMaxWidth: "65ch" },
   frame: { desktopCardRadius: brandTokens.shape.radius.none },
-  textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", borderWidth: "1px" },
+  textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", borderWidth: "1px", borderColor: "#DFE4EC", focusBorderColor: "#A8C0E2" },
   motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms" },
   interaction: { pressedFilter: "none", headerHoverBrightness: 1.1, filterHoverBrightness: 0.95, toolHoverBrightness: 0.96 },
   scrollbarColor: "auto",
@@ -367,7 +367,7 @@ export const foundationLightTheme: GoalHintTheme = {
 export const foundationDarkTheme: GoalHintTheme = {
   ...foundationLightTheme,
   mode: "dark",
-  textField: { background: "#1A2E41", hoverBackground: "#24405B", borderWidth: "0px" },
+  textField: { background: "#1A2E41", hoverBackground: "#24405B", borderWidth: "0px", borderColor: "#344A60", focusBorderColor: "#476B8F" },
   color: {
     ...foundationLightTheme.color,
     text: "#F4F7FF",

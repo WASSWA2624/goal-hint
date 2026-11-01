@@ -4,9 +4,10 @@ import Link from "@/components/navigation/navigation-link";
 import {
   useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";
+import { controlBodyHeight } from "@/components/ui/control-layout";
 import { FloatingOutline } from "@/components/ui/floating-outline";
 import { selectSurface } from "@/components/ui/filled-surfaces";
-import { floatingLabel, raisedFloatingLabel, floatingOutline } from "@/components/ui/floating-field-styles";
+import { floatingLabel, raisedFloatingLabel, floatingOutline, floatingOutlineFocus } from "@/components/ui/floating-field-styles";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -86,8 +87,8 @@ export const IconButton = styled.button`
   display: inline-grid;
   flex: none;
   place-items: center;
-  inline-size: 1.875rem;
-  block-size: 1.875rem;
+  ${controlBodyHeight}
+  inline-size: var(--form-control-height);
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.brandSoft};
@@ -126,7 +127,7 @@ const SelectFace = styled.div`
   > span > span:not([data-current]) { visibility: hidden; }
   border: 1px solid transparent;
   @media (pointer: coarse) { min-block-size: 44px; }
-  min-block-size: 40px; margin-block-start: 6px; padding-block: 8px;
+  ${controlBodyHeight} margin-block-start: 6px; padding-block: 8px;
   > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
   > label { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 30px); }
   &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
@@ -142,7 +143,7 @@ const SelectFace = styled.div`
     &:disabled { cursor: not-allowed; }
   }
   > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); color: ${({ theme }) => theme.color.brand}; pointer-events: none; }
-  &:has(select:focus-visible) > [data-floating-outline] { border-width: 2px; border-color: ${({ theme }) => theme.color.focus}; }
+  &:has(select:focus-visible) > [data-floating-outline] { ${floatingOutlineFocus} }
   &:has(select:disabled) { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; }
 `;
 export type CompactSelectOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
@@ -188,6 +189,7 @@ const PickerSummary = styled.button`
   &[aria-expanded="true"] {  background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   ${focusRing}
+  ${controlBodyHeight}
 `;
 const PickerPanel = styled.div`
   position: absolute;

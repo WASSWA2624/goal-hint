@@ -1,5 +1,6 @@
 "use client";
 
+import { controlBodyHeight, inlineControlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, focusRing, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
@@ -12,7 +13,7 @@ import type { BestSlipsStatus } from "@/domain/best-slips-query";
 const compactControl = css`
   box-sizing: border-box;
   min-inline-size: 0;
-  min-block-size: 2rem;
+  ${controlBodyHeight}
   max-inline-size: 100%;
   padding: 4px 9px;
   color: ${({ theme }) => theme.color.text};
@@ -48,6 +49,8 @@ export const FiltersRow = styled.div`
   align-items: center;
   gap: 6px 10px;
   min-inline-size: 0;
+
+  ${inlineControlRow}
 `;
 
 const toggleGroup = css`
@@ -73,6 +76,8 @@ export const ToggleRow = styled.div`
     @media (max-width: 79.99rem) { flex-wrap: wrap; }
   }
   ${media.belowDesktop} { flex-wrap: wrap; gap: 4px; }
+
+  ${inlineControlRow}
 `;
 
 export const ResultGroup = styled.div`
@@ -85,7 +90,7 @@ export const ResultGroup = styled.div`
   &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
   ${media.desktop} {
     gap: 6px;
-    padding: 3px;
+    padding: 0;
     background: transparent;
     @media (max-width: 79.99rem) { flex: 1 0 100%; box-sizing: border-box; }
   }
@@ -123,6 +128,8 @@ export const DateControls = styled.div`
     @media (max-width: 79.99rem) { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
   }
   ${media.belowDesktop} { flex: 1 1 12rem; gap: 4px; margin: 0; padding: 0; border: 0; }
+
+  ${inlineControlRow}
 `;
 
 export const DateSelect = styled(SelectMenu)`
@@ -138,7 +145,7 @@ export const DateSelect = styled(SelectMenu)`
   }
   ${media.belowDesktop} {
     flex: 1; inline-size: 100%;
-    > [data-select-trigger] { min-block-size: 32px; padding: 3px 8px; font-size: .8125rem; box-shadow: none; }
+    > [data-select-trigger] { padding: 3px 8px; font-size: .8125rem; box-shadow: none; }
   }
 `;
 
@@ -147,7 +154,6 @@ export const CustomRangeButton = styled(FilterButton)`
   flex: none;
   align-items: center;
   gap: 5px;
-  min-block-size: 34px;
   padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control};
   white-space: nowrap;
@@ -155,7 +161,7 @@ export const CustomRangeButton = styled(FilterButton)`
   > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; font-weight: 600;  }
-  ${media.belowDesktop} { min-block-size: 32px; padding: 2px 6px; }
+  ${media.belowDesktop} { padding: 2px 6px; }
 `;
 
 export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
@@ -172,7 +178,6 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   flex: none;
   align-items: center;
   gap: 5px;
-  min-block-size: 28px;
   padding: 3px 6px;
   white-space: nowrap;
   border: 0;
@@ -196,7 +201,6 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} {
     gap: 6px;
-    min-block-size: 36px;
     padding: 6px 10px;
     font-size: .8125rem;
     > strong { font-size: .8125rem; font-weight: 700; }
@@ -211,7 +215,7 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   }
   ${media.belowDesktop} {
     display: grid; grid-template-columns: max-content max-content; justify-content: center; align-content: center;
-    gap: 1px 3px; min-block-size: 36px; padding: 2px 4px;
+    gap: 1px 3px; padding: 2px 4px;
     border-radius: ${({ theme }) => theme.radius.control}; font-size: .75rem; line-height: 1.2; text-align: center;
     &::before { display: none; }
     > span:first-of-type { grid-column: 1 / -1; }
@@ -233,7 +237,6 @@ export const ResetButton = styled(FilterButton)`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-block-size: 34px;
   padding: 4px 10px;
 
   color: ${({ theme }) => theme.color.mutedText};
@@ -242,14 +245,14 @@ export const ResetButton = styled(FilterButton)`
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};  } }
   @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; }
-  ${media.belowDesktop} { min-block-size: 32px; padding: 2px 6px; }
+  ${media.belowDesktop} { padding: 2px 6px; }
 `;
 
 export const RangeButton = styled(FilterButton)`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-block-size: 24px;
+  block-size: auto; min-block-size: 24px;
   padding: 1px 4px;
   border: 0;
   background: transparent;

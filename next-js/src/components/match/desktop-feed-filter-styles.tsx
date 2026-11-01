@@ -1,6 +1,6 @@
 "use client";
 
-import { controlRow } from "@/components/ui/control-layout";
+import { controlBodyHeight, controlRow } from "@/components/ui/control-layout";
 
 import { FloatingField } from "@/components/ui/floating-field";
 
@@ -174,7 +174,7 @@ export const ActionButton = styled(Button)`
     flex: none;
     gap: 6px;
     min-inline-size: 0;
-    min-block-size: 2rem;
+    ${controlBodyHeight}
     padding: 4px 8px;
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.75rem;

@@ -3,10 +3,11 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from "react";
 import styled from "styled-components";
 import { CheckIcon, ChevronDownIcon } from "./icons";
+import { controlBodyHeight } from "./control-layout";
 import { focusRing } from "./filter-chrome";
 import { selectSurface } from "./filled-surfaces";
 import { FloatingOutline } from "./floating-outline";
-import { floatingLabel, raisedFloatingLabel, floatingOutline } from "./floating-field-styles";
+import { floatingLabel, raisedFloatingLabel, floatingOutline, floatingOutlineFocus } from "./floating-field-styles";
 import { useOutsideDismiss } from "./use-outside-dismiss";
 
 export type SelectMenuOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
@@ -16,7 +17,7 @@ export type SelectMenuProps = Readonly<{
 const Root = styled.div`
   position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: 6px;
   > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
-  &:focus-within > [data-floating-outline] { border-width: 2px; border-color: ${({ theme }) => theme.color.focus}; }
+  &:focus-within > [data-floating-outline] { ${floatingOutlineFocus} }
 `;
 const Trigger = styled.button`
   display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -32,7 +33,7 @@ const Trigger = styled.button`
   border: 1px solid transparent;
   @media (pointer: coarse) { min-block-size: 44px; }
   &:focus-visible { outline: none; }
-  position: relative; min-block-size: 40px; padding-block: 8px;
+  position: relative; ${controlBodyHeight} padding-block: 8px;
   > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 40px); }
   &:focus-within > [data-select-label] { color: ${({ theme }) => theme.color.link}; }
 `;
