@@ -81,7 +81,7 @@ function LiveDetail({ initial, today, locale, children, preview: initialPreview 
   const active = fixture.status === "live" || data.run?.phase === "updating" ||
     (fixture.status === "scheduled" && kickoffAt !== null && Math.abs(kickoffAt - asOf) <= liveRefreshRules.kickoffLeadMs);
   useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
-    refresh, rollover: () => router.refresh() });
+    refresh, rollover: () => { void refresh(); } });
   const sections = preview ? gateInsights(preview, data.access, isCompletedFixtureStatus(data.fixture.status)).sections : null;
   const allowed = hasMatchPredictionAccess(data);
   const currentPreview = !allowed ? null : preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;

@@ -46,8 +46,10 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     check(await page.locator('[data-event-symbol="second-yellow"] rect').count() === 2, "second-yellow dismissal shows both cards");
     check((await page.locator('[data-match-event="8"] [data-player-on]').innerText()).includes("Nico Rossi"), "incoming substitute identified");
     check((await page.locator('[data-match-event="8"] [data-player-off]').innerText()).includes("Samuel Okoro"), "outgoing substitute identified");
+    check(await page.locator('[data-match-event="8"] [data-player-on] small').innerText() === "In"
+      && await page.locator('[data-match-event="8"] [data-player-off] small').innerText() === "Out", "substitutions use clear In and Out labels");
     check((await page.locator('[data-match-event="5"] [data-event-detail]').innerText()) === "Goal cancelled", "VAR outcome retained");
-    check(await page.locator("[data-active-match-tab] h2").count() === 1 && await page.locator("[data-active-match-tab] h3").count() === 0, "one events heading");
+    check(await page.locator("[data-active-match-tab] h2, [data-active-match-tab] h3").count() === 0, "events tab is the section heading");
     await page.locator("[data-event-source] summary").click();
     check((await page.locator("[data-event-source]").innerText()).includes("Data retrieved") && (await page.locator("[data-event-source]").innerText()).includes("not supplied an update time"), "independent source clocks remain available");
     await page.locator("[data-event-source] summary").click();
@@ -83,7 +85,6 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(origin + path(5, "finished-regulation"), { waitUntil: "networkidle" });
     await page.locator('[data-match-design="phone"]').waitFor();
-    await page.getByText("Match events (15)", { exact: true }).click();
     await page.locator("[data-match-event-timeline]").waitFor();
     check(await page.locator("[data-match-event]").count() === 15, "phone reuses full visual timeline");
     check(await page.locator('[data-event-row]').count() === 14 && await paired.locator('[data-match-event]').count() === 2, "phone also shares same-minute events");

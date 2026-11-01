@@ -2,11 +2,11 @@ export const minimumPrimaryDestinations = 3;
 export const maximumDesktopDestinations = 5;
 
 /** Preserve order and put any destinations that cannot fit into More at every text size. */
-export function fitNavigationItems({ widths, moreWidth, activeMoreWidth = moreWidth, currentIndex = -1, availableWidth, gap = 0, equalColumns = false }: Readonly<{
+export function fitNavigationItems({ widths, moreWidth, activeMoreWidth = moreWidth, currentIndex = -1, availableWidth, gap = 0, equalColumns = false, maximumVisible = maximumDesktopDestinations }: Readonly<{
   widths: readonly number[]; moreWidth: number; activeMoreWidth?: number; currentIndex?: number;
-  availableWidth: number; gap?: number; equalColumns?: boolean;
+  availableWidth: number; gap?: number; equalColumns?: boolean; maximumVisible?: number;
 }>): number {
-  const maximum = equalColumns ? widths.length : Math.min(maximumDesktopDestinations, widths.length);
+  const maximum = equalColumns ? widths.length : Math.min(maximumVisible, widths.length);
   for (let count = maximum; count >= 0; count--) {
     const overflow = count < widths.length, columns = count + Number(overflow);
     const visibleWidths = widths.slice(0, count);

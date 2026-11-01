@@ -74,7 +74,7 @@ export function useInsightSection<S extends MatchSection>(id: string, section: S
   return {
     // The endpoint validated this payload against the section's own schema.
     data: state.data?.section === section ? state.data.data as InsightSections[S] : null,
-    loading: enabled && state.isLoading,
+    loading: enabled && state.isLoading && !state.data && completeAt === null,
     error: enabled && state.isError,
     retry: () => setAttempt((value) => value + 1),
   };

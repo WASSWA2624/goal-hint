@@ -103,7 +103,7 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
   if (section === "events") return <Frame as={embedded ? "div" : "section"} $embedded={embedded} aria-labelledby={embedded ? undefined : "match-events-title"} data-live-match>
     <Stack $gap="sm">
       <EventToolbar data-event-toolbar>
-        <h2 id={embedded ? "touchline-panel-title" : "match-events-title"}><HistoryIcon />{m.text("liveMatch.eventHeading")}</h2>
+        {!embedded && <h2 id="match-events-title"><HistoryIcon />{m.text("liveMatch.eventHeading")}</h2>}
         {hasEvents && <div data-legend>{([['goal', 'goal'], ['yellow-card', 'card'], ['substitution', 'substitution'], ['var', 'var']] as const).map(([kind, type]) =>
           <span key={kind} role="img" aria-label={m.text(`liveMatch.event.${type}`)} title={m.text(`liveMatch.event.${type}`)}><MatchEventSymbol kind={kind} /></span>)}</div>}
         <div data-meta>
@@ -124,12 +124,12 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
       </>}
     </Stack>
   </Frame>;
-  return <Frame $embedded={embedded} aria-labelledby="match-observations-title" data-live-match><Stack $gap="sm">
-    <SectionHeading id="match-observations-title">{m.text(section === "all" ? "liveMatch.title" : "liveMatch.statistics")}</SectionHeading>
+  return <Frame $embedded={embedded} aria-label={embedded ? m.text("liveMatch.statistics") : undefined} aria-labelledby={embedded ? undefined : "match-observations-title"} data-live-match><Stack $gap="sm">
+    {!embedded && <SectionHeading id="match-observations-title">{m.text(section === "all" ? "liveMatch.title" : "liveMatch.statistics")}</SectionHeading>}
     <MutedText>{m.text("liveMatch.separate")}</MutedText>
     {!snapshot ? <MutedText>{m.text("liveMatch.notCollected")}</MutedText> : <>
       <strong>{stateLabel}</strong>
-      <section aria-labelledby={section === "all" ? "match-statistics-title" : "match-observations-title"}><Stack $gap="sm">
+      <section aria-label={embedded ? m.text("liveMatch.statistics") : undefined} aria-labelledby={embedded ? undefined : section === "all" ? "match-statistics-title" : "match-observations-title"}><Stack $gap="sm">
         {section === "all" && <h3 id="match-statistics-title">{m.text("liveMatch.statistics")}</h3>}
         <SourceStatus source={snapshot.statistics} kind={m.text("liveMatch.statistics")} stale={stale(snapshot.statistics)} m={m} />
         {snapshot.statistics.items.length > 0 && <Stats>

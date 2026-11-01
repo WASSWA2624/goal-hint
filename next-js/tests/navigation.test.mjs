@@ -34,6 +34,8 @@ test("desktop keeps at most five primary destinations and reserves space for Mor
   assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 400 }), 5);
   assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 399 }), 4);
   assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 2000, equalColumns: true }), 10);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 2000, maximumVisible: 10 }), 10);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 399, maximumVisible: 10 }), 4);
 });
 
 test("mobile navigation moves destinations into More instead of squeezing three primary links", () => {

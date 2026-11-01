@@ -12,7 +12,7 @@ export type MatchDetailTab = (typeof matchDetailTabs)[number];
 export const marketCategories = ["popular", "results", "goals", "btts", "double-chance", "draw-no-bet", "handicaps", "corners",
   "cards", "halves", "correct-score", "clean-sheets", "specials"] as const;
 export type MarketCategory = (typeof marketCategories)[number];
-export const formWindows = [5, 10, 0] as const;
+export const formWindows = [5, 10, 20, 0] as const;
 export type FormWindow = (typeof formWindows)[number];
 export type TeamFocus = "both" | "home" | "away";
 export type VenueFocus = "all" | "home" | "away";

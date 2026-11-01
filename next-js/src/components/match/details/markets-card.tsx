@@ -72,6 +72,7 @@ const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   > span[data-pick] [data-selected-odds] { flex: none; }
   > span[data-bar] { font-variant-numeric: tabular-nums; text-align: end; }
   > svg { color: ${({ theme }) => theme.color.mutedText}; }
+  &[aria-expanded="true"] > svg { transform: rotate(90deg); }
   ${media.belowDesktop} {
     grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto .625rem;
     gap: 6px; padding: 7px 0; font-size: .75rem;
@@ -152,17 +153,18 @@ export function Explanation() {
 }
 
 /** All outcomes, source, timing, settlement and explanation for one market of the applicable revision. */
-function MarketPanel({ family }: { family: MarketFamily }) {
+function MarketPanel({ family, inline = false }: { family: MarketFamily; inline?: boolean }) {
   const embedded = useEmbeddedSection();
   const { data, messages, update } = useStableDetails();
   const snapshot = fullDetailSnapshot(data);
   const { item, outcome, reason } = marketRow(data, family);
-  const heading = useRevealOnOpen<HTMLHeadingElement>(true, family, "card");
+  const heading = useRevealOnOpen<HTMLHeadingElement>(!inline, family, "card");
   const close = () => update((current) => ({ ...current, market: null }));
-  return <Panel data-market-panel={family}>
-    <Crumbs items={[{ label: messages.text("details.title"), onSelect: () => update((current) => ({ ...current, market: null, section: null, item: null })) },
+  return <Panel data-market-panel={family} data-inline-market={inline || undefined}
+    role={inline ? "region" : undefined} aria-labelledby={inline ? `market-row-${family}` : undefined}>
+    {!inline && <><Crumbs items={[{ label: messages.text("details.title"), onSelect: () => update((current) => ({ ...current, market: null, section: null, item: null })) },
       { label: messages.text("details.markets"), onSelect: close }, { label: marketName(messages, family) }]} />
-    <PanelHeading ref={heading} tabIndex={-1}>{marketName(messages, family)}</PanelHeading>
+    <PanelHeading ref={heading} tabIndex={-1}>{marketName(messages, family)}</PanelHeading></>}
     {item && snapshot ? <>
       <Facts>
         <dt>{messages.text("details.prediction")}</dt><dd><strong><PredictionOutcome messages={messages} selection={item.market.selection} /><PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
@@ -196,7 +198,7 @@ function MarketPanel({ family }: { family: MarketFamily }) {
       <Note>{messages.text(`detail.unavailable.${reason}`)}</Note>
       <Note>{messages.text(`detail.refresh.${data.fixture.update?.prediction ?? "unavailable"}`)}</Note>
     </>}
-    <LinkButton type="button" onClick={close}>‹ {messages.text("details.backToMarkets")}</LinkButton>
+    {!inline && <LinkButton type="button" onClick={close}>‹ {messages.text("details.backToMarkets")}</LinkButton>}
   </Panel>;
 }
 
@@ -238,16 +240,17 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
   const featured = embedded ? featuredFamily(data) : null;
   const published = snapshot?.markets.filter(entry => entry.market.family !== featured).length ?? 0;
   const label = (family: MarketFamily) => marketName(messages, family);
-  const shown = visibleMarkets(view.marketCategory, query, label).filter(family => family !== featured);
+  const filtered = visibleMarkets(view.marketCategory, query, label).filter(family => family !== featured);
+  const shown = view.market && !filtered.includes(view.market) ? [view.market, ...filtered] : filtered;
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
-  return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-labelledby={embedded ? "touchline-panel-title" : "section-markets-title"}
+  return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-label={embedded ? messages.text("details.allMarkets") : undefined} aria-labelledby={embedded ? undefined : "section-markets-title"}
     style={embedded ? { padding: 0, border: 0 } : undefined}>
     {!embedded && <CardHeader icon={<MarketsIcon />} title={messages.text("details.allMarkets")} open={view.marketsOpen} controls="section-markets"
       meta={messages.text("details.publishedCount", { count: messages.number(published), total: messages.number(publicPolicy.markets.length) })}
       onToggle={() => update((current) => ({ ...current, marketsOpen: !current.marketsOpen, market: current.marketsOpen ? null : current.market }))}
       headingId="section-markets-title" />}
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
-      {view.marketsOpen && (view.market ? <MarketPanel family={view.market} /> : <Body>
+      {view.marketsOpen && (!embedded && view.market ? <MarketPanel family={view.market} /> : <Body>
         <Tools>
           <Search><SearchIcon aria-hidden="true" /><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
             aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>
@@ -265,17 +268,22 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
               const pick = item ? predictionDescription(messages, item.market.selection) : messages.text("details.notAvailable");
               const price = selectedDetailPrice(data, family), standing = liveStanding(data, family);
               return <li key={family}>
-                <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} onClick={() => update((current) => ({ ...current, market: family }))}
+                <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} id={`market-row-${family}`} aria-expanded={embedded ? view.market === family : undefined}
+                  aria-controls={embedded ? `market-details-${family}` : undefined}
+                  onClick={() => update(current => ({ ...current, market: current.market === family ? null : family }), "replace")}
                   aria-label={[messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) }),
                     price ? `${messages.text("details.odds")}: ${price}` : null,
                     standing ? messages.text("details.standingLabel", { standing: messages.text(`details.standing.${standing}`) }) : null].filter(Boolean).join(". ")}>
                   <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span title={marketName(messages, family)}>{marketName(messages, family)}</span></span>
 
                   <span data-pick><span>{item ? <PredictionOutcome messages={messages} selection={item.market.selection} /> : pick}<PredictionOdds odds={price} /></span>{standing ? <Standing standing={standing} compact /> : settled && <DetailOutcome status={settled} />}</span>
-                  <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b></>
+                  <span data-bar>{item ? <b>{percent(messages, item.market.selectedProbability)}</b>
                     : <b>—</b>}</span>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}><path d="m9 6 6 6-6 6" /></svg>
                 </MarketRow>
+                {embedded && <div id={`market-details-${family}`} hidden={view.market !== family}>
+                  {view.market === family && <MarketPanel family={family} inline />}
+                </div>}
               </li>;
             })}
           </RowList> : <Note>{query ? messages.text("details.noMarketMatch", { query })

@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import Image from "next/image";
 import type { CSSProperties } from "react";
 import { media } from "@/styles/theme";
 import { pitchCanvas, pitchCanvasPosition, referencePitch } from "@/domain/football-pitch";
@@ -9,6 +10,8 @@ import type { InsightSections } from "@/domain/match-insights";
 import { FootballPitch } from "../football-pitch";
 import { focusRing, useStableDetails } from "./details-ui";
 import { lineupDetailLabel, lineupDetailValue, type LineupDisplay } from "./lineup-player-detail";
+import { countryFlagAsset } from "@/domain/country-flag";
+import { CountryLabel } from "@/components/ui/country-label";
 
 type Side = "home" | "away";
 type Lineups = InsightSections["lineups"];
@@ -25,7 +28,7 @@ const Field = styled.div`
     aspect-ratio: ${pitchCanvas.width} / ${pitchCanvas.length};
     > svg { inset: auto; inset-inline-start: 50%; inset-block-start: 50%;
       inline-size: ${100 * pitchCanvas.length / pitchCanvas.width}%; block-size: ${100 * pitchCanvas.width / pitchCanvas.length}%;
-      transform: translate(-50%, -50%) rotate(-90deg); }
+      transform: translate(-50%, -50%) rotate(90deg); }
   }
 `;
 const Marker = styled.button`
@@ -42,6 +45,7 @@ const Marker = styled.button`
   [data-shirt] > svg { inline-size: 28px; block-size: 30px; }
   [data-shirt] > b { position: absolute; inset-block-start: 8px; inset-inline: 0; color: ${({ theme }) => theme.color.onBrand}; font-size: .625rem; }
   [data-phone-position] { display: none; }
+  [data-nationality-flag] { display: none; }
   [data-player-name] { max-inline-size: 100%; overflow-wrap: anywhere; text-wrap: balance; }
   [data-phone-name] { display: none; }
   [data-position] { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; font-weight: 500; overflow-wrap: normal; }
@@ -51,6 +55,7 @@ const Marker = styled.button`
     [data-shirt], [data-shirt] > svg { inline-size: 24px; block-size: 26px; }
     [data-shirt] > b { inset-block-start: 7px; }
     [data-shirt] > [data-phone-position] { display: block; font-size: .5rem; }
+    [data-shirt] > [data-nationality-flag] { display: block; position: absolute; inset-block-start: -1px; inset-inline-end: -5px; inline-size: 12px; block-size: 8px; object-fit: contain; }
     &:not([data-profile="number"]) [data-shirt-number] { display: none; }
     [data-player-name] { display: none; }
     [data-phone-name] { display: block; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -85,16 +90,17 @@ export function TouchlineLineupPitch({ lineups, sides, display, selectTeam = fal
       {positions?.map(({ player, x, y }) => { const point = pitchCanvasPosition(x, y);
         return <Marker type="button" key={player.id} data-side={side} data-profile={display} data-item-key={playerKey(side, player.id)}
         style={{ "--player-x": `${point.x}%`, "--player-y": `${point.y}%`, "--player-width": `${width * referencePitch.length / pitchCanvas.length}%`,
-          "--phone-x": `${point.y}%`, "--phone-y": `${100 - point.x}%`, "--phone-width": `${phoneWidth}%` } as CSSProperties}
+          "--phone-x": `${100 - point.y}%`, "--phone-y": `${point.x}%`, "--phone-width": `${phoneWidth}%` } as CSSProperties}
         onClick={() => update(current => ({ ...current, ...(selectTeam ? { team: side } : {}), item: playerKey(side, player.id) }))}
         title={`${player.name ?? messages.text("details.playerUnknown")} · ${lineupDetailLabel(messages, display)}: ${lineupDetailValue(messages, player, display) ?? messages.text("details.notProvided")}`}
         aria-label={`${messages.text("details.playerOpen", { player: player.name ?? messages.text("details.playerUnknown") })} · ${lineupDetailLabel(messages, display)}: ${lineupDetailValue(messages, player, display) ?? messages.text("details.notProvided")}`}>
         <span data-shirt aria-hidden="true"><svg viewBox="0 0 42 44" fill="currentColor" stroke="white" strokeWidth="1"><path d="m12 3-9 5-2 10 7 3 3-5v26h20V16l3 5 7-3-2-10-9-5c-1 7-17 7-18 0Z" /></svg><b data-shirt-number>{player.number ?? "–"}</b>
           {display !== "number" && <b data-phone-position>{lineupDetailValue(messages, player, display, true) ?? "–"}</b>}
+          {display === "nationality" && countryFlagAsset(player.nationality) && <Image data-nationality-flag src={countryFlagAsset(player.nationality)!} alt="" width={12} height={8} unoptimized />}
         </span>
         <span data-player-name>{player.name ?? messages.text("details.playerUnknown")}</span>
         <span data-phone-name aria-hidden="true">{player.name ? compactName(player.name) : messages.text("details.playerUnknown")}</span>
-        {display !== "number" && <span data-position>{lineupDetailValue(messages, player, display) ?? "–"}</span>}
+        {display !== "number" && <span data-position>{display === "nationality" && player.nationality ? <CountryLabel country={player.nationality} /> : lineupDetailValue(messages, player, display) ?? "–"}</span>}
       </Marker>; })}
     </div>)}
   </Field>;

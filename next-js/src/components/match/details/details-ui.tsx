@@ -474,7 +474,7 @@ export const Facts = styled.dl`
 
 type PendingReveal = { restoration: ScrollRestoration; timer?: number; show?: (() => void) | undefined };
 /** Focus and reveal an opened panel; on close, return focus to whatever opened it. */
-export function useRevealOnOpen<T extends HTMLElement>(open: boolean, key: string | null, reveal: "card" | "self" = "self") {
+export function useRevealOnOpen<T extends HTMLElement>(open: boolean, key: string | null, reveal: "card" | "self" | "focus" = "self") {
   const target = useRef<T>(null), previous = useRef<string | null>(null), first = useRef(true);
   useEffect(() => {
     const current = open ? key : null;
@@ -483,6 +483,7 @@ export function useRevealOnOpen<T extends HTMLElement>(open: boolean, key: strin
     if (current !== null && current !== previous.current && target.current) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       target.current.focus({ preventScroll: true });
+      if (reveal === "focus") { previous.current = current; first.current = false; return; }
       const element = reveal === "card" ? target.current.closest<HTMLElement>("[data-section]") ?? target.current : target.current;
       const initial = first.current;
       const scroll = () => element.scrollIntoView({ block: "start", behavior: reduce || initial ? "auto" : "smooth" });

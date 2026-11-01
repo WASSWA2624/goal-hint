@@ -1,11 +1,16 @@
 /** Browser acceptance for the native match page using explicitly synthetic stored fixtures. */
 export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", captureDirectory } = {}) {
-  const failures = [], errors = [], checks = [];
+  const failures = [], errors = [], checks = [], navigations = [];
+  const onRequest = request => { if (request.resourceType() === "document" || new URL(request.url()).searchParams.has("_rsc")) navigations.push(request.url()); };
   const check = (value, label) => { checks.push(label); if (!value) failures.push(label); };
   const onError = error => errors.push(String(error));
   const onConsole = message => { if (message.type() === "error") errors.push(message.text()); };
-  page.on("pageerror", onError); page.on("console", onConsole);
-  await page.addInitScript(() => { Date.now = () => Date.parse("2026-10-09T09:00:00Z"); delete Navigator.prototype.serviceWorker; });
+  page.on("pageerror", onError); page.on("console", onConsole); page.on("request", onRequest);
+  await page.addInitScript(() => {
+    window.__matchTestNow = Date.parse("2026-10-09T09:00:00Z");
+    Date.now = () => window.__matchTestNow;
+    delete Navigator.prototype.serviceWorker;
+  });
   await page.setExtraHTTPHeaders({ "x-test-viewer": "anonymous" });
   await page.route("**/api/account/session", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ phone: null, administrator: false, subscription: null }) }));
   const path = "/en/matches/10000000-0000-4000-8000-000000000005/finished-regulation";
@@ -13,7 +18,9 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
   const nav = page.getByRole("tablist", { name: "Match information", exact: true });
   const panel = page.locator("#match-information-panel");
   async function select(id) {
-    await nav.locator(`[data-match-tab="${id}"]`).click();
+    const button = page.locator(`[data-match-tab-navigation] [data-match-tab="${id}"]`);
+    if (!await button.isVisible()) await page.locator("[data-match-tabs-more] summary").click();
+    await button.click();
     await page.locator(`[data-active-match-tab="${id}"]`).waitFor();
   }
   async function capture(name) {
@@ -33,18 +40,75 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     check(await nav.locator("[data-match-tab]").evaluateAll(elements => elements.map(element => element.dataset.matchTab).join(",")) === tabs.join(","), "prioritized shared tab order");
     check(await nav.evaluate(element => element.scrollWidth > element.clientWidth), "mobile navigation scrolls horizontally");
     check(await page.locator('[data-active-match-tab="stats"]').count() === 1, "Team Stats is the initial tab");
+    const hero = await page.locator("[data-verdict]").elementHandle();
+    const navigationCount = navigations.length;
+    const right = page.getByRole("button", { name: "Scroll tabs right", exact: true });
+    await right.click();
+    await page.waitForFunction(() => document.querySelector('[role="tablist"][aria-label="Match information"]').scrollLeft > 0);
+    await page.waitForFunction(() => !document.querySelector('button[aria-label="Scroll tabs left"]').disabled);
+    check(await page.getByRole("button", { name: "Scroll tabs left", exact: true }).isEnabled(), "mobile scroll arrows move the strip without selecting a tab");
+    check(await page.locator('[data-active-match-tab="stats"]').count() === 1, "scroll arrows leave the content unchanged");
+    check(await nav.locator("[data-tab-icon]").evaluateAll(elements => new Set(elements.map(element => getComputedStyle(element).color)).size > 3), "tab icons use a restrained range of colors");
     for (const id of tabs) {
       await select(id);
       check(await nav.getByRole("tab", { selected: true }).count() === 1 && await page.locator("[data-active-match-tab]").count() === 1, `${id}: only the selected content panel`);
-      check(await panel.locator('button[aria-expanded]').count() === 0, `${id}: no category disclosure inside the tab`);
+      check(await panel.locator("#touchline-panel-title, [data-embedded-section] > h3").count() === 0, `${id}: tab title is not repeated`);
+      check(await hero.evaluate(element => element.isConnected), `${id}: prediction shell stays mounted`);
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${id}: no page overflow`);
     }
+    check(navigations.length === navigationCount, "tab changes do not navigate or refetch the server page");
+    async function stableSwitch(id, label) {
+      await page.evaluate(() => {
+        const read = () => [scrollY, document.querySelector('[data-match-tab-navigation]').getBoundingClientRect().top,
+          document.querySelector('[data-verdict]').getBoundingClientRect().top];
+        window.__matchTabFrames = [read()]; window.__matchTabSampling = true;
+        const sample = () => { if (!window.__matchTabSampling) return; window.__matchTabFrames.push(read()); requestAnimationFrame(sample); };
+        requestAnimationFrame(sample);
+      });
+      await select(id);
+      const stable = await page.evaluate(async () => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.__matchTabSampling = false;
+        return window.__matchTabFrames.every(frame => frame.every((position, index) => position === window.__matchTabFrames[0][index]));
+      });
+      check(stable, label);
+    }
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.locator(`[data-match-design="${width < 1024 ? "phone" : "touchline"}"]`).waitFor();
+      for (const depth of [0, 200, 650, "bottom"]) {
+        await select("lineups");
+        await page.evaluate(depth => window.scrollTo(0, depth === "bottom" ? document.documentElement.scrollHeight - innerHeight : depth), depth);
+        for (const id of ["referee", "markets", "lineups", "history", "form"]) {
+          await stableSwitch(id, `${width}/${depth}/${id}: tabs, prediction and page scroll stay pixel-stable`);
+          if (width < 1024) check(await nav.evaluate(element => {
+            const selected = element.querySelector('[aria-selected="true"]'), box = selected.getBoundingClientRect(), strip = element.getBoundingClientRect();
+            const desired = Math.max(0, Math.min(element.scrollWidth - element.clientWidth,
+              element.scrollLeft + box.left + box.width / 2 - strip.left - strip.width / 2));
+            return Math.abs(element.scrollLeft - desired) < 1;
+          }), `${width}/${depth}/${id}: selected mobile tab is centered or clamped at the strip edge`);
+        }
+      }
+      check(await panel.locator('[data-results-filters] fieldset').evaluateAll(groups => groups.every(group => {
+        const labels = [...group.querySelectorAll('label')].map(label => label.getBoundingClientRect());
+        return labels.every(label => Math.abs(label.top - labels[0].top) < 1);
+      })), `${width}: radio options fit on one row per filter`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('[data-match-design="phone"]').waitFor();
+    const rolloverHero = await page.locator("[data-verdict]").elementHandle();
+    const rolloverResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/matches/10000000-0000-4000-8000-000000000005");
+    await page.evaluate(() => { window.__matchTestNow += 86400000; document.dispatchEvent(new Event("visibilitychange")); });
+    await rolloverResponse;
+    check(await rolloverHero.evaluate(element => element.isConnected) && navigations.length === navigationCount, "day rollover refreshes observations without refreshing the page");
+    await page.evaluate(() => { window.__matchTestNow = Date.parse("2026-10-09T09:00:00Z"); });
     await select("stats");
     const filters = panel.locator("[data-form-filters] select");
     check(await filters.count() === 2 && await filters.nth(0).getAttribute("aria-label") === "Venue", "venue dropdown precedes match sample");
     await filters.nth(0).selectOption("away"); await filters.nth(1).selectOption("10");
     check(new URL(page.url()).searchParams.get("venue") === "away" && new URL(page.url()).searchParams.get("window") === "10", "statistics filters persist in the URL");
     await page.reload({ waitUntil: "networkidle" });
+    await page.locator('[data-match-design="phone"]').waitFor();
     check(await filters.nth(0).inputValue() === "away" && await filters.nth(1).inputValue() === "10", "statistics filters survive refresh");
     await capture("shared-tabs-statistics-mobile");
     for (const width of [320, 390, 768, 1440]) {
@@ -60,29 +124,62 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: market containment`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
+    const marketRows = panel.locator("[data-detail-market]");
+    const marketCount = await marketRows.count(), firstMarket = marketRows.first();
+    const beforeY = await page.evaluate(() => scrollY);
+    await firstMarket.click();
+    check(await firstMarket.getAttribute("aria-expanded") === "true" && await panel.locator("[data-inline-market]").count() === 1, "market details expand beneath their row");
+    check(await marketRows.count() === marketCount && await panel.locator('[data-inline-market] nav').count() === 0, "expanding a market keeps all rows and adds no page breadcrumbs");
+    check(Math.abs(await page.evaluate(() => scrollY) - beforeY) < 2, "market expansion does not move the page");
     await capture("shared-tabs-markets-mobile");
+    await firstMarket.click();
+    check(await firstMarket.getAttribute("aria-expanded") === "false" && await panel.locator("[data-inline-market]").count() === 0, "market row collapses in place");
     await page.locator('[data-verdict] button').click();
     await panel.locator('[data-market-panel="both-teams-to-score"]').waitFor();
     check(await panel.getByRole("heading", { name: "Source and timing", exact: true }).count() === 1, "featured pick opens its full market details");
     await select("form");
-    const results = panel.getByRole("combobox", { name: "Results", exact: true });
-    check(await results.inputValue() === "home", "results default to the home club");
-    for (const value of ["home", "away", "h2h"]) {
-      await results.selectOption(value);
+    const results = panel.getByRole("group", { name: "Teams", exact: true });
+    check(await results.getByRole("radio", { name: "Arsenal", exact: true }).isChecked(), "results default to the home club");
+    check(await panel.locator('[data-results-filters] input[type="radio"]').count() === 10
+      && await panel.locator('[data-results-filters] button').count() === 0, "result filters use compact native radio choices");
+    await results.getByRole("radio", { name: "Arsenal", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(() => new URL(location.href).searchParams.get("team") === "away");
+    check(await results.getByRole("radio", { name: "Liverpool", exact: true }).isChecked(), "native radio arrow keys update the selected team");
+    await results.getByRole("radio", { name: "Arsenal", exact: true }).check();
+    check(await panel.locator("[data-results-filters] > section").evaluateAll(elements => elements.map(element => element.dataset.row).join(",")) === "teams,venues,matches", "three toggle rows are Teams, Venues, Matches");
+    for (const name of ["Arsenal", "Liverpool", "Head-to-Head"]) {
+      await results.getByRole("radio", { name, exact: true }).check();
       const rows = panel.locator("[data-result-list] a");
-      check(await rows.count() > 0, `${value}: selected results available`);
-      check(await rows.first().evaluate(element => [...element.children].filter(child => !child.hidden).map(child => child.tagName === "TIME" ? "date" : child.dataset.team ?? (child.hasAttribute("data-score") ? "score" : "result")).join(",")) === "date,home,score,away,result", `${value}: actual fixture order retained`);
-      check(await rows.first().locator('[data-team="home"]').getAttribute("title") !== null, `${value}: complete club names available`);
+      check(await rows.count() > 0, `${name}: selected results available`);
+      check(await rows.first().evaluate(element => [...element.children].filter(child => !child.hidden).map(child => child.tagName === "TIME" ? "date" : child.dataset.resultSide ? child.dataset.resultSide + "Result" : child.dataset.team ?? "score").join(",")) === "date,homeResult,home,score,away,awayResult", `${name}: actual fixture order and two result markers`);
+      check(await rows.evaluateAll(elements => elements.every(element => {
+        const goals = [...element.querySelectorAll("[data-score] b")].map(node => Number(node.textContent));
+        const home = goals[0] > goals[1] ? "W" : goals[0] < goals[1] ? "L" : "D";
+        const away = home === "W" ? "L" : home === "L" ? "W" : "D";
+        return element.querySelector('[data-result-side="home"]').textContent === home && element.querySelector('[data-result-side="away"]').textContent === away;
+      })), `${name}: each club gets its own correct W/D/L marker`);
     }
+    await panel.getByRole("group", { name: "Matches", exact: true }).getByRole("radio", { name: "Last 20", exact: true }).check();
+    check(new URL(page.url()).searchParams.get("window") === "20", "results match-sample toggle updates its URL");
     await capture("shared-tabs-results-mobile");
     await panel.locator("[data-result-list] a").first().click();
     await panel.locator("[data-item-panel]").waitFor();
     await panel.getByRole("button", { name: /Back to list/u }).click();
-    check(await results.inputValue() === "h2h", "record Back restores H2H filter");
+    check(await results.getByRole("radio", { name: "Head-to-Head", exact: true }).isChecked(), "record Back restores H2H filter");
     await select("lineups");
     const pitch = panel.locator("[data-touchline-pitch]");
     check(await pitch.locator("button[data-item-key]").count() === 22, "one full mobile pitch retains every starter");
     check(!(await panel.innerText()).includes("schematic player positions"), "pitch explanation removed");
+    check(await pitch.evaluate(element => {
+      const box = element.getBoundingClientRect(), mid = box.top + box.height / 2;
+      return [...element.querySelectorAll("button[data-side]")].every(button => { const shirt = button.querySelector("[data-shirt]").getBoundingClientRect();
+        return button.dataset.side === "home" ? shirt.top + shirt.height / 2 < mid : shirt.top + shirt.height / 2 > mid; });
+    }), "home players occupy the upper half and away players the lower half");
+    check(await pitch.evaluate(element => { const box = element.getBoundingClientRect(), column = element.parentElement;
+      return column.querySelector('[data-pitch-teams] [data-side="home"]').getBoundingClientRect().bottom <= box.top + 1
+        && column.querySelector('[data-pitch-teams] [data-side="away"]').getBoundingClientRect().top >= box.bottom - 1;
+    }), "team names and formations match their ends of the pitch");
     const detail = panel.getByRole("combobox", { name: "Player detail", exact: true });
     for (const field of ["position", "nationality", "age", "rating", "number"]) {
       await detail.selectOption(field);
@@ -93,17 +190,33 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     }
     check(await panel.locator('[data-team-roster="home"]').count() === 1, "home team sheet is default");
     await panel.locator("[data-lineup-team-tabs]").getByRole("tab", { name: /Liverpool/u }).click();
+    await panel.locator('[data-team-roster="away"]').waitFor();
     check(await panel.locator('[data-team-roster="away"]').count() === 1 && await pitch.locator("button").count() === 22, "team switching keeps both pitch halves");
     check((await panel.locator('[data-team-absences="away"]').innerText()).includes("Daniel Rey"), "team availability stays below the bench");
+    await detail.selectOption("nationality");
+    await pitch.locator('[data-profile="nationality"]').first().waitFor();
+    check(await pitch.locator("[data-nationality-flag]").count() === 22, "nationality mode adds flags to the pitch");
+    check(await panel.locator('[data-team-roster="away"] [data-lineup-players="starters"] [data-country-label] img').count() === 11
+      && await panel.locator('[data-team-roster="away"] [data-lineup-players="substitutes"] [data-country-label] img').count() > 0
+      && await panel.locator('[data-team-absences="away"] [data-country-label] img').count() === 1, "nationality flags accompany starters, substitutes and supplied injury profiles");
     await capture("shared-tabs-lineups-mobile");
     await nav.getByRole("tab", { selected: true }).press("End");
     await page.locator('[data-active-match-tab="history"]').waitFor();
     check(await nav.locator('[data-match-tab="history"]').evaluate(element => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth + 1; }), "keyboard selection scrolls the active tab into view");
     await page.goto(origin + path + "?panel=h2h&venue=away", { waitUntil: "networkidle" });
-    check(await page.locator('[data-active-match-tab="form"]').count() === 1 && await results.inputValue() === "h2h", "legacy H2H link opens the combined results tab");
+    check(await page.locator('[data-active-match-tab="form"]').count() === 1 && await results.getByRole("radio", { name: "Head-to-Head", exact: true }).isChecked(), "legacy H2H link opens the combined results tab");
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.locator('[data-match-design="touchline"]').waitFor();
+    await page.locator("[data-match-tabs-more] summary").waitFor();
+    check(await page.locator("[data-match-tabs-more]").count() === 1, "desktop overflow uses the shared More menu");
+    await select("history");
+    check(await page.locator('[data-active-match-tab="history"]').count() === 1, "desktop More items select their content");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await select("stats");
     check(await nav.evaluate(element => element.scrollWidth <= element.clientWidth + 1), "desktop tabs fit as a normal row");
+    check(await nav.locator('[data-match-tab]').evaluateAll(elements => elements.every(element => {
+      const style = getComputedStyle(element); return parseFloat(style.fontSize) >= 13 && Number(style.fontWeight) >= 600;
+    })), "desktop tab labels use readable size and stronger weight");
     await capture("shared-tabs-desktop");
     await page.getByRole("button", { name: "Switch to dark theme", exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 }); await select("stats");
@@ -113,7 +226,10 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     check(await page.getByRole("heading", { name: "Completed matches are public", exact: true }).count() === 1 && await page.locator("[data-detail-market]").count() === 0, "unfinished guest access stays restricted");
     check(errors.length === 0, "no browser errors");
     return { checks: checks.length, failures, errors };
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+    return { checks: checks.length, failures, errors };
   } finally {
-    await page.unroute("**/api/account/session"); page.off("pageerror", onError); page.off("console", onConsole);
+    await page.unroute("**/api/account/session"); page.off("pageerror", onError); page.off("console", onConsole); page.off("request", onRequest);
   }
 }

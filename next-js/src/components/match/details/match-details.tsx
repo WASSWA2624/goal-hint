@@ -26,6 +26,7 @@ import { TouchlineTabs } from "./touchline-tabs";
 /** One column at every width; desktop sections align with the full-width app frame. */
 const Page = styled.article`
   display: grid;
+  align-content: start;
   gap: 8px;
   min-inline-size: 0;
   overflow-wrap: anywhere;

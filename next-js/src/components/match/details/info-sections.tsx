@@ -6,6 +6,7 @@ import Link from "@/components/navigation/navigation-link";
 import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
+import { CountryLabel } from "@/components/ui/country-label";
 import { providerImageSource } from "@/components/ui/provider-image";
 import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
@@ -54,7 +55,7 @@ const HistoryBody = styled.div`
   font-size: ${size("body")};
   line-height: 1.45;
   > #revision-history { padding: 0; background: none; border: 0; }
-  > #revision-history > summary { min-block-size: 1.75rem; padding-block: 4px; }
+  > #revision-history > summary { display: none; }
   > #revision-history > div { gap: 12px; }
   & :is(h2, h3) { font-size: ${size("emphasis")}; line-height: 1.25; }
   & section { padding: 10px; }
@@ -146,7 +147,7 @@ export const ContextSection = memo(function ContextSection() {
         <dt>{messages.text("details.competition")}</dt><dd style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {fixture.competition.logoUrl && <SmallLogo src={providerImageSource(fixture.competition.logoUrl, 18)} alt="" width={18} height={18} referrerPolicy="no-referrer" />}
           {fixture.competition.name ?? messages.text("match.competitionUnknown")}</dd>
-        <dt>{messages.text("details.country")}</dt><dd>{value?.competition.country ?? fixture.competition.country ?? messages.text("details.notAvailable")}</dd>
+        <dt>{messages.text("details.country")}</dt><dd>{value?.competition.country ?? fixture.competition.country ? <CountryLabel country={value?.competition.country ?? fixture.competition.country} /> : messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.round")}</dt><dd>{value?.competition.round ?? messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("match.kickoff")}</dt><dd>{kickoff === null ? messages.text("details.kickoffUnknown")
           : <time dateTime={toUtcIsoString(kickoff)}>{messages.reportingInstant(kickoff)}</time>}</dd>

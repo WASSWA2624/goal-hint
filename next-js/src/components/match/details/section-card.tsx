@@ -65,7 +65,8 @@ export function SectionCard({ section, icon, title, meta, itemLabel, children }:
 /** A nested item view inside an opened section; Back returns to the list with its filters and page. */
 export function ItemPanel({ itemKey, title, accent = "blue", children }: { itemKey: string; title: string; accent?: AccentName; children: ReactNode }) {
   const { update, messages } = useStableDetails();
-  const heading = useRevealOnOpen<HTMLHeadingElement>(true, itemKey, "card");
+  const embedded = useEmbeddedSection();
+  const heading = useRevealOnOpen<HTMLHeadingElement>(true, itemKey, embedded ? "focus" : "card");
   return <Panel data-item-panel={itemKey} style={{ borderColor: "transparent", paddingBlockStart: 0 }}>
     <LinkButton type="button" onClick={() => update((current) => ({ ...current, item: null }))}>‹ {messages.text("details.backToList")}</LinkButton>
     <PanelHeading as="h4" ref={heading} tabIndex={-1} data-accent={accent}>{title}</PanelHeading>
@@ -79,7 +80,7 @@ export function useReturnFocus(container: RefObject<HTMLElement | null>, item: s
   useEffect(() => {
     if (previous.current && !item) {
       const row = container.current?.querySelector<HTMLElement>(`[data-item-key="${CSS.escape(previous.current)}"]`);
-      row?.focus();
+      row?.focus({ preventScroll: true });
     }
     previous.current = item;
   }, [container, item]);

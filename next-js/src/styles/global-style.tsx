@@ -18,7 +18,9 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   /* Keep owner columns and navigation aligned when moving between short and long screens. */
-  html:has([data-admin-shell]) { scrollbar-gutter: stable; }
+  html:has([data-admin-shell], [data-match-detail]) { scrollbar-gutter: stable; }
+  /* Match tabs reserve their own space; anchoring a visible footer would move the page instead. */
+  html:has([data-match-detail]) { overflow-anchor: none; }
 
   body {
     margin: 0;

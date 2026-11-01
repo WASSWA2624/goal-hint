@@ -122,7 +122,7 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
         const playerId = integer(value.playerExternalId);
         if (!playerId || injuries.length >= 120) continue;
         const type = string(value.type)?.slice(0, 128) ?? null;
-        injuries.push({ team: side, playerId, playerName: string(value.playerName), status: injuryStatus(type), type,
+        injuries.push({ team: side, playerId, playerName: string(value.playerName), nationality: string(value.nationality)?.slice(0, 128) ?? null, status: injuryStatus(type), type,
           reason: string(value.reason), updatedAt: claim.asOfAt, retrievedAt: source.retrievedAt, source: source.publisher.slice(0, 128) });
         if (!players.has(`${side}:${playerId}`)) players.set(`${side}:${playerId}`, { id: playerId, team: side, name: string(value.playerName),
           number: null, position: null, grid: null, role: null });

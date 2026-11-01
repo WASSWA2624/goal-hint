@@ -58,9 +58,9 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
   }
   sections.players.players = Object.values(sections.lineups).flatMap(squad => [...squad.starters, ...squad.substitutes]);
   sections.injuries.injuries = [
-    { team: "home", playerId: 901, playerName: "Adrian Cole", status: "out", type: "Injury", reason: "Hamstring injury",
+    { team: "home", playerId: 901, playerName: "Adrian Cole", nationality: "England", status: "out", type: "Injury", reason: "Hamstring injury",
       updatedAt: null, retrievedAt: now, source: "Synthetic provider report" },
-    { team: "away", playerId: 902, playerName: "Daniel Rey", status: "out", type: "Suspension", reason: "Suspended",
+    { team: "away", playerId: 902, playerName: "Daniel Rey", nationality: "France", status: "out", type: "Suspension", reason: "Suspended",
       updatedAt: now, retrievedAt: now, source: "Synthetic provider report" },
   ];
   sections.context.venue = { name: "Emirates Stadium", city: "London", retrievedAt: now };

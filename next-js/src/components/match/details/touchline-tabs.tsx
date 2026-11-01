@@ -1,61 +1,40 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import styled from "styled-components";
-import { matchDetailTabs, detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDetailTab } from "@/domain/match-detail-tabs";
-import { openSection, type MatchSection, type MatchView } from "@/domain/match-view";
+import { detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDetailTab } from "@/domain/match-detail-tabs";
+import { formWindows, openSection, type FormWindow, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { LockIcon } from "@/components/ui/icons";
+import { RadioGroup } from "@/components/ui/radio-group";
 import { LiveMatchPanel } from "../live-match-panel";
-import { CompareIcon, HeadToHeadIcon, ContextIcon, LineupIcon, MarketsIcon, HistoryIcon, NewsIcon, RefereeIcon, ReasonIcon, PlayerIcon } from "./details-icons";
 import { DetailsProvider, Note, ViewProvider, focusRing, useStableDetails } from "./details-ui";
 import { DisclosureProvider } from "./section-card";
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
 import { LineupsSection, PlayersSection } from "./squad-sections";
 import { ContextSection, HistorySection, NewsSection, RefereeSection } from "./info-sections";
 import { Explanation, MarketsCard } from "./markets-card";
-import { TouchlineBody, TouchlineEmpty, TouchlineHeading, TouchlineLinkButton, TouchlineSurface, focusMatchAccess } from "./touchline-ui";
+import { TouchlineBody, TouchlineEmpty, TouchlineLinkButton, TouchlineSurface, focusMatchAccess } from "./touchline-ui";
 import { TouchlineStandings } from "./touchline-venue";
+import { MatchTabNavigation } from "./match-tab-navigation";
 
-const icons = { stats: CompareIcon, markets: MarketsIcon, lineups: LineupIcon, form: HeadToHeadIcon, analysis: ReasonIcon,
-  events: HistoryIcon, standings: ContextIcon, players: PlayerIcon, news: NewsIcon, venue: ContextIcon, referee: RefereeIcon, history: HistoryIcon };
 const embeddedDisclosure = { open: true, byDefault: false, reveal: 0, embedded: true, toggle: () => {} };
 const untitledDisclosure = { ...embeddedDisclosure, hideHeading: true };
 const Surface = styled(TouchlineSurface)`
+  align-self: start; overflow-anchor: none;
   ${media.belowDesktop} { margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter}); border-inline: 0; }
-`;
-const Navigation = styled.div`
-  position: sticky; inset-block-start: calc(var(--review-height, 0px) + var(--app-header-height, ${({ theme }) => theme.header.desktopHeight}));
-  z-index: 10; display: flex; overflow-x: auto; overscroll-behavior-inline: contain;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface};
-  scrollbar-width: thin;
-  ${media.belowDesktop} { inset-block-start: var(--review-height, 0px); scrollbar-width: none; }
-`;
-const Tab = styled.button`
-  display: inline-flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: 6px;
-  min-block-size: 46px; padding: 9px 10px; white-space: nowrap;
-  background: transparent; color: ${({ theme }) => theme.color.mutedText};
-  border: 0; border-block-end: 2px solid transparent; border-radius: ${({ theme }) => theme.radius.none};
-  font: inherit; font-size: .75rem; line-height: 1.4; cursor: pointer;
-  > svg { flex: none; inline-size: 16px; block-size: 16px; }
-  > svg[data-lock] { inline-size: 11px; block-size: 11px; }
-  &[aria-selected="true"] { color: ${({ theme }) => theme.color.brand}; border-block-end-color: currentColor; font-weight: 800; }
-  &:hover { background: ${({ theme }) => theme.color.brandSoft}; }
-  ${focusRing}
-  ${media.desktop} { font-size: .6875rem; padding-inline: 7px; gap: 5px; }
 `;
 const Panel = styled.div`
   padding: 16px ${({ theme }) => theme.layout.gutter}; min-inline-size: 0;
+  min-block-size: max(min(280px, 40dvh), var(--match-panel-min-size, 0px));
   scroll-margin-block-start: calc(var(--review-height, 0px) + var(--app-header-height, 3rem) + 64px);
-  ${TouchlineHeading} { margin-block-end: 12px; }
   ${media.belowDesktop} { padding: 12px; scroll-margin-block-start: calc(var(--review-height, 0px) + 50px);
-    ${TouchlineHeading} h2 { font-size: 1rem; } ${TouchlineHeading} p { display: none; } }
+  }
   ${focusRing}
 `;
-const ResultFilter = styled.label`
-  display: flex; align-items: center; gap: 10px; font-size: .8125rem;
-  > select { min-inline-size: 0; max-inline-size: 100%; min-block-size: 36px; padding: 5px 8px; color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.controlBorder}; font: inherit; ${focusRing} }
+const ResultFilters = styled.div`
+  display: grid; gap: 8px;
+  > section { min-inline-size: 0; }
 `;
 
 /** Reuse the existing section bodies with independent item state and shared group filters. */
@@ -75,38 +54,23 @@ function Section({ section, view, children, heading = true }: { section: MatchSe
 
 export function TouchlineTabs({ view }: { view: MatchView }) {
   const { data, messages, update } = useStableDetails();
+  const panel = useRef<HTMLDivElement>(null);
   const selected = detailTabForView(view), allowed = hasMatchPredictionAccess(data);
-  const navigation = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const list = navigation.current, tab = list?.querySelector<HTMLElement>(`[data-match-tab="${selected}"]`);
-    if (!list || !tab) return;
-    const box = list.getBoundingClientRect(), target = tab.getBoundingClientRect();
-    if (target.left < box.left) list.scrollBy({ left: target.left - box.left });
-    else if (target.right > box.right) list.scrollBy({ left: target.right - box.right });
-    const content = document.getElementById("match-information-panel");
-    if (content && content.getBoundingClientRect().top < box.bottom) content.scrollIntoView({ block: "start" });
-  }, [selected]);
-  function select(panel: MatchDetailTab) { update(current => openDetailTab(current, panel)); }
-  function keyDown(event: KeyboardEvent<HTMLButtonElement>, id: MatchDetailTab) {
-    const index = matchDetailTabs.indexOf(id);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? matchDetailTabs.length - 1
-      : event.key === "ArrowRight" ? (index + 1) % matchDetailTabs.length : event.key === "ArrowLeft" ? (index + matchDetailTabs.length - 1) % matchDetailTabs.length : null;
-    if (next === null) return;
-    event.preventDefault(); select(matchDetailTabs[next]!);
-    document.getElementById(`match-tab-${matchDetailTabs[next]}`)?.focus({ preventScroll: true });
+  function preserveViewport() {
+    const element = panel.current;
+    if (!element) return;
+    // Reserve only the space beneath the current viewport. A shorter panel must neither
+    // clamp the page's scroll position nor pull its sticky tabs out of their container.
+    element.style.setProperty("--match-panel-min-size", `${Math.max(0, window.innerHeight - element.getBoundingClientRect().top)}px`);
   }
-  return <Surface data-touchline-tabs>
-    <Navigation ref={navigation} role="tablist" aria-label={messages.text("touchline.tabs")} aria-orientation="horizontal">
-      {matchDetailTabs.map(id => { const Icon = icons[id]; return <Tab type="button" key={id} id={`match-tab-${id}`} role="tab" aria-selected={selected === id}
-        aria-controls="match-information-panel" tabIndex={selected === id ? 0 : -1} data-match-tab={id} onClick={() => select(id)} onKeyDown={event => keyDown(event, id)}>
-        <Icon aria-hidden="true" /><span>{messages.text(`touchline.tab.${id}`)}</span>{!allowed && (id === "markets" || id === "analysis") && <LockIcon data-lock aria-hidden="true" />}
-      </Tab>; })}
-    </Navigation>
-    <Panel role="tabpanel" id="match-information-panel" aria-labelledby={`match-tab-${selected}`} tabIndex={0} data-active-match-tab={selected}>
-      {(selected !== "events" || !allowed) && <TouchlineHeading><h2 id="touchline-panel-title">{messages.text(`touchline.tab.${selected}`)}</h2><p>{messages.text(`touchline.hint.${selected}`)}</p></TouchlineHeading>}
+  function select(tab: MatchDetailTab) { preserveViewport(); update(current => openDetailTab(current, tab)); }
+  return <Surface data-touchline-tabs onClickCapture={preserveViewport} onChangeCapture={preserveViewport}
+    onKeyDownCapture={event => { if (["Enter", " ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) preserveViewport(); }}>
+    <MatchTabNavigation selected={selected} allowed={allowed} onSelect={select} />
+    <Panel ref={panel} role="tabpanel" id="match-information-panel" aria-labelledby={`match-tab-${selected}`} tabIndex={0} data-active-match-tab={selected}>
       {!allowed ? <TouchlineEmpty><LockIcon aria-hidden="true" /><p>{messages.text("touchline.accessAbove")}</p>
         <TouchlineLinkButton type="button" onClick={focusMatchAccess}>{messages.text("touchline.accessAction")}</TouchlineLinkButton></TouchlineEmpty>
-      : <TouchlineBody key={selected}>
+      : <TouchlineBody>
         {selected === "stats" && <>
           <Section section="stats" view={view} heading={false}><StatsSection /></Section>
           {Boolean(data.liveMatch?.statistics.items.length) && <Observations kind="statistics" />}
@@ -131,14 +95,31 @@ function FormAndH2H({ view }: { view: MatchView }) {
   const { home, away, messages, update } = useStableDetails();
   const section = view.section === "h2h" ? "h2h" : "form";
   const selected = section === "h2h" ? "h2h" : view.team === "away" ? "away" : "home";
+  function chooseTeam(value: "home" | "away" | "h2h") {
+    update(current => ({ ...openDetailTab(current, "form"), section: value === "h2h" ? "h2h" : "form",
+      team: value === "away" ? "away" : "home", venue: current.venue, window: current.window,
+      tab: value === "h2h" && current.window === 0 ? "h2h-all" : null }), "replace");
+  }
   return <>
-    <ResultFilter>{messages.text("touchline.results")}<select aria-label={messages.text("touchline.results")} value={selected}
-      onChange={event => { const value = event.target.value; update(current => ({ ...openDetailTab(current, "form"),
-        section: value === "h2h" ? "h2h" : "form", team: value === "away" ? "away" : "home" }), "replace"); }}>
-      <option value="home">{home}</option><option value="away">{away}</option><option value="h2h">{messages.text("details.section.h2h")}</option>
-    </select></ResultFilter>
-    <Section section={section} view={view} heading={false}>{section === "h2h" ? <H2HSection /> : <FormSection singleTeam />}</Section>
+    <ResultFilters data-results-filters>
+      <section data-row="teams">
+        <RadioGroup label={messages.text("touchline.teams")} value={selected} onChange={chooseTeam}
+          options={[{ value: "home", label: home }, { value: "away", label: away }, { value: "h2h", label: messages.text("details.section.h2h") }]} />
+      </section>
+      <section data-row="venues">
+        <RadioGroup label={messages.text("touchline.venues")} value={view.venue} onChange={(venue: VenueFocus) => update(current => ({ ...current, venue, page: 1, item: null }), "replace")}
+          options={(["all", "home", "away"] as const).map(value => ({ value, label: value === "all" ? messages.text("details.venue.all")
+            : section === "h2h" ? messages.text("details.hostedBy", { team: value === "home" ? home : away }) : messages.text(`details.venue.${value}`) }))} />
+      </section>
+      <section data-row="matches">
+        <RadioGroup label={messages.text("touchline.matches")} value={view.window} onChange={(window: FormWindow) => update(current => ({ ...current, window, page: 1, item: null,
+          tab: section === "h2h" && window === 0 ? "h2h-all" : null }), "replace")}
+          options={formWindows.map(value => ({ value, label: value === 0 ? messages.text("details.allStored") : messages.text("details.lastN", { count: String(value) }) }))} />
+      </section>
+    </ResultFilters>
+    <Section section={section} view={view} heading={false}>{section === "h2h" ? <H2HSection filters={false} /> : <FormSection singleTeam />}</Section>
   </>;
+
 }
 
 function Observations({ kind }: { kind: "statistics" | "events" }) {
@@ -146,5 +127,5 @@ function Observations({ kind }: { kind: "statistics" | "events" }) {
   return <LiveMatchPanel snapshot={data.liveMatch ?? null} asOf={data.asOf} home={home} away={away} locale={locale}
     homeLogoUrl={data.fixture.homeTeam.logoUrl ?? null} awayLogoUrl={data.fixture.awayTeam.logoUrl ?? null}
     liveClock={data.fixture.liveClock ?? null}
-    historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} section={kind} embedded={kind === "events"} />;
+    historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} section={kind} embedded />;
 }

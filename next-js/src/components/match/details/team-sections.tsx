@@ -97,7 +97,7 @@ export function RecordPanel({ record }: { record: InsightResult }) {
 
 /** A stored result: plain clicks open it in place, while the row stays a real link to its own match page. */
 const RecordRow = styled(RowButton)`
-  grid-template-columns: 4rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
+  grid-template-columns: 3.9rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
   gap: 6px; min-block-size: 44px; text-decoration: none; font-size: .75rem;
   > time { color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
   > span[data-team] { display: flex; align-items: center; gap: 4px; min-inline-size: 0; }
@@ -107,7 +107,7 @@ const RecordRow = styled(RowButton)`
   [data-winner="true"] { font-weight: 800; color: ${({ theme }) => theme.color.text}; }
   [data-winner="false"] { color: ${({ theme }) => theme.color.mutedText}; }
   ${media.belowDesktop} { padding-inline: 0; gap: 4px; font-size: .6875rem;
-    grid-template-columns: 3.9rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
+    grid-template-columns: 3.4rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
     > span[data-team] > :first-child:not(:last-child) { display: none; }
   }
 `;
@@ -124,19 +124,20 @@ const MeetingBalance = styled.div`
   i:nth-child(2) { background: ${({ theme }) => theme.color.mutedText}; }
   i:nth-child(3) { background: ${({ theme }) => theme.color.accent.blue.solid}; }
 `;
-function ResultRows({ records, perspective, section }: {
-  records: readonly InsightResult[]; perspective: string; section: MatchSection;
+function ResultRows({ records, section }: {
+  records: readonly InsightResult[]; section: MatchSection;
 }) {
   const { messages, locale, update } = useStableDetails();
   return <RowList data-result-list>
     {records.map(record => {
-      const letter = resultFor(record, perspective), draw = record.homeGoals === record.awayGoals;
+      const draw = record.homeGoals === record.awayGoals;
       const homeName = record.home.name ?? messages.text("details.teamUnknown"), awayName = record.away.name ?? messages.text("details.teamUnknown");
       return <li key={record.fixtureId}>
         <RecordRow as={Link} href={matchHref(record.fixtureId, record.slug, locale)} prefetch={false} data-item-key={record.fixtureId}
           aria-label={`${messages.reportingInstant(at(record.kickoffAt))} · ${homeName} ${record.homeGoals}–${record.awayGoals} ${awayName}`}
           onClick={event => plainClick(event, () => update(current => openItem(current, section, record.fixtureId)))}>
           <time dateTime={toUtcIsoString(at(record.kickoffAt))} title={messages.reportingInstant(at(record.kickoffAt))}>{messages.reportingDay(at(record.kickoffAt))}</time>
+          <span data-result-side="home"><FormLetters letters={[resultFor(record, record.home.id)]} label={messages.text("touchline.resultForTeam", { team: homeName })} /></span>
           <span data-team="home" data-winner={!draw && record.homeGoals > record.awayGoals} title={homeName}>
             <Crest name={homeName} url={record.home.logoUrl} size={16} /><span>{homeName}</span>
           </span>
@@ -145,7 +146,7 @@ function ResultRows({ records, perspective, section }: {
           <span data-team="away" data-winner={!draw && record.awayGoals > record.homeGoals} title={awayName}>
             <Crest name={awayName} url={record.away.logoUrl} size={16} /><span>{awayName}</span>
           </span>
-          <FormLetters letters={[letter]} label={messages.text("touchline.resultForTeam", { team: perspective === record.home.id ? homeName : awayName })} />
+          <span data-result-side="away"><FormLetters letters={[resultFor(record, record.away.id)]} label={messages.text("touchline.resultForTeam", { team: awayName })} /></span>
         </RecordRow>
       </li>;
     })}
@@ -263,16 +264,16 @@ export const FormSection = memo(function FormSection({ singleTeam = false }: { s
         <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(value) => update((current) => ({ ...current, team: value, page: 1 }), "replace")}
           options={[{ value: "both", label: messages.text("details.bothTeams") }, { value: "home", label: home }, { value: "away", label: away }]} />
       </PanelBar>}
-      <FormFilters />
+      {!singleTeam && <FormFilters />}
       {sides.map((side) => {
         const records = formRecords(all[side], team(side).id, view.venue, view.window), summary = teamComparison(records, [], team(side).id, "").home;
         const paged = pageOf(records, view.page, pageSize);
         return <div key={side} style={{ display: "grid", gap: 6 }}>
-          <Strong>{side === "home" ? home : away}</Strong>
+          {!singleTeam && <Strong>{side === "home" ? home : away}</Strong>}
           {records.length ? <>
             <Note>{messages.text("details.formSummary", { wins: messages.number(summary.wins), draws: messages.number(summary.draws), losses: messages.number(summary.losses),
               scored: messages.number(summary.goalsFor), conceded: messages.number(summary.goalsAgainst), count: messages.plural("details.sampleResults", records.length) })}</Note>
-            <ResultRows records={paged.items} perspective={team(side).id} section="form" />
+            <ResultRows records={paged.items} section="form" />
             <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
           </> : <Note>{messages.text("details.noStoredResults")}</Note>}
         </div>;
@@ -281,7 +282,7 @@ export const FormSection = memo(function FormSection({ singleTeam = false }: { s
   </SectionCard>;
 });
 
-export const H2HSection = memo(function H2HSection() {
+export const H2HSection = memo(function H2HSection({ filters = true }: { filters?: boolean }) {
   const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "h2h";
   const embedded = useEmbeddedSection();
@@ -297,7 +298,7 @@ export const H2HSection = memo(function H2HSection() {
   const homeId = data.fixture.homeTeam.id;
   const competitions = [...new Map(meetings.map((meeting) => [meeting.competition.id, meeting.competition.name ?? messages.text("match.competitionUnknown")])).entries()];
   const filtered = meetings.filter((meeting) => (view.venue === "all" || (view.venue === "home" ? meeting.home.id === homeId : meeting.away.id === homeId)) &&
-    (view.competition === null || meeting.competition.id === view.competition));
+    (view.competition === null || meeting.competition.id === view.competition)).slice(0, view.window || 20);
   const totals = headToHead(filtered, homeId), paged = pageOf(filtered, view.page, pageSize);
   const record = view.item ? meetings.find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
@@ -319,7 +320,7 @@ export const H2HSection = memo(function H2HSection() {
         <dt>{messages.text("details.metric.bttsRate")}</dt><dd>{percent(messages, totals.bttsRate)}</dd>
         <dt>{messages.text("details.metric.over25Rate")}</dt><dd>{percent(messages, totals.over25Rate)}</dd>
       </Facts>
-      <PanelBar>
+      {filters && <PanelBar>
         {embedded && <ChoiceGroup label={messages.text("touchline.h2hWindow")} value={view.tab === "h2h-all" ? "h2h-all" : "h2h-recent"}
           onChange={(tab: string) => update(current => ({ ...current, tab, page: 1 }), "replace")}
           options={[{ value: "h2h-recent", label: messages.text("touchline.lastSeasons") }, { value: "h2h-all", label: messages.text("touchline.lastMeetings") }]} />}
@@ -329,8 +330,8 @@ export const H2HSection = memo(function H2HSection() {
         {competitions.length > 1 && <ChoiceGroup label={messages.text("details.competition")} value={view.competition ?? ""}
           onChange={(value) => update((current) => ({ ...current, competition: value || null, page: 1 }), "replace")}
           options={[{ value: "", label: messages.text("details.allCompetitions") }, ...competitions.map(([id, name]) => ({ value: id, label: name }))]} />}
-      </PanelBar>
-      {paged.items.length ? <ResultRows records={paged.items} perspective={homeId} section="h2h" /> : <Note>{messages.text(meetings.length ? "details.noFilteredMeetings" : "details.noMeetings")}</Note>}
+      </PanelBar>}
+      {paged.items.length ? <ResultRows records={paged.items} section="h2h" /> : <Note>{messages.text(meetings.length ? "details.noFilteredMeetings" : "details.noMeetings")}</Note>}
       <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
       <Note>{messages.text("details.h2hBasis")}</Note>
     </div>}

@@ -38,6 +38,7 @@ export const playerSchema = z.strictObject({ id: z.number().int().positive(), te
 export const lineupSchema = z.strictObject({ team: teamSide, formation: text(32).nullable(), status: z.enum(["confirmed"]),
   updatedAt: at.nullable(), retrievedAt: at, starters: z.array(playerSchema).max(30), substitutes: z.array(playerSchema).max(40) });
 export const injurySchema = z.strictObject({ team: teamSide, playerId: z.number().int().positive(), playerName: text(256).nullable(),
+  nationality: text(128).nullable().optional(),
   status: z.enum(["out", "doubtful", "unknown"]), type: text(128).nullable(), reason: text(256).nullable(),
   updatedAt: at.nullable(), retrievedAt: at, source: text(128) });
 export const newsItemSchema = z.strictObject({ id: text(128), kind: z.enum(["report", "analysis"]), publisher: text(512),
