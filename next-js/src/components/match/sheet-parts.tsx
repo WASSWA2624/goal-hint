@@ -4,6 +4,7 @@ import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { IconButton } from "./filter-parts";
+import { dialogSurface } from "@/components/ui/dialog-surfaces";
 
 /** Phone bottom sheets: the filter editor and the date calendar. Desktop never shows them. */
 const phoneMedia = media.belowDesktop.replace("@media ", "");
@@ -28,7 +29,7 @@ export const sheetFrame = css`
   max-inline-size: 40rem;
   margin-inline: auto;
   padding-block-end: env(safe-area-inset-bottom);
-  background: ${({ theme }) => theme.color.surface};
+  ${dialogSurface}
   border-block-start: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   outline: none;

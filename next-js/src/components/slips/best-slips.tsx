@@ -51,7 +51,7 @@ export function BestSlips({ result, locale }: { result: BestSlipsResult; locale:
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
   }, [refreshing, router, pageRefreshMs, browse.loading, browse.updating]);
   return <SlipStack data-best-slips-page>
-    <AppBrandBar locale={locale} bestSlips />
+    <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
     <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
       entitled={browse.entitled} busy={browse.loading || browse.updating} updating={browse.updating}

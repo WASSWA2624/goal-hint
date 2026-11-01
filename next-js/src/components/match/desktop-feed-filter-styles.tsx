@@ -7,6 +7,7 @@ import { FloatingField } from "@/components/ui/floating-field";
 import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
+import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
 import { desktopStickyFilters } from "@/components/ui/filter-chrome";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
@@ -55,7 +56,7 @@ export const Panel = styled.form`
   border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.page};
-  [data-criteria-dialog] { background: var(--filter-panel-background); }
+  [data-criteria-dialog] { ${filterDialogSurface} }
   ${desktopContentPadding(true)}
 `;
 

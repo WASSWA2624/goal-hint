@@ -92,6 +92,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         const statusCorners = !statusStyle || ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"]
           .every(corner => Number.parseFloat(statusStyle[corner]) > 0) && statusStyle.borderTopWidth === "0px";
         const distributionBars = canvas.querySelectorAll("[data-performance-summary] > [aria-hidden=true]").length;
+        const subscriptionBanners = canvas.querySelectorAll("[data-subscription-status-bar], [data-desktop-subscription-status], [data-mobile-subscription-status]").length;
         const textFieldErrors = [], selectErrors = [];
         if (document.querySelector('[data-preview-theme="porcelain-blue"]')) {
           for (const select of canvas.querySelectorAll("select, [data-select-trigger]")) {
@@ -124,7 +125,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           screens: document.querySelectorAll('nav[aria-label="Preview screens"] a').length,
           overlap: header.width > 0 && header.height > 0 && header.top < studio.bottom - 1,
           outsideParent, bordered, idleProgressVisible, textFieldErrors, selectErrors,
-          footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, statusCorners, distributionBars, content: canvas.textContent.trim().length };
+          footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, statusCorners, distributionBars, subscriptionBanners, content: canvas.textContent.trim().length };
       });
       const ratio = contrast(result.foreground, result.background);
       if (result.overflow) errors.push(`${theme}/${screen}: horizontal overflow at ${width}px`);
@@ -136,6 +137,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
       for (const error of result.selectErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
       if (!result.statusCorners) errors.push(`${theme}/${screen}: status selection needs subtle borderless corners`);
       if (result.distributionBars) errors.push(`${theme}/${screen}: performance distribution bar must be absent`);
+      if (result.subscriptionBanners) errors.push(`${theme}/${screen}: subscription header banner must be absent`);
       if (result.themes !== 10 || result.screens !== 12) errors.push(`${theme}/${screen}: missing navigation`);
       if (result.overlap) errors.push(`${theme}/${screen}: app header overlaps the studio`);
       if (ratio < 4.5) errors.push(`${theme}/${screen}: body contrast ${ratio.toFixed(2)}`);

@@ -49,10 +49,6 @@ export const authCopy = {
   analyticsCounted: "Only browsers that allowed analytics. Global Privacy Control, Do Not Track, bots, automated browsers and logged-in or previously logged-in administrators are excluded.",
   analyticsExcluded: `Visitors appear here once they allow analytics in the consent banner; your own browser is excluded after you ${authVerbs.signIn}.`,
   headerActionEmphasis: "Accent-filled payment or registration actions stand out beside subtly tinted theme and account controls.",
-  bannerGuest: "Logged out",
-  bannerMember: "Logged in · No subscription",
-  bannerDescription: "Compare ten compact banners directly beneath the same app header. Each shows logged-out visitors, logged-in members without a subscription, and active subscribers. Option 01 is applied on desktop. Mobile keeps its existing design.",
-  bannerMetadata: "Compare ten desktop subscription banners for logged-out visitors, members and active subscribers.",
 } as const;
 
 export const authMessages = {

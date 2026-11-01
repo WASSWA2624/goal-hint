@@ -12,6 +12,7 @@ import { preserveDigitCaret } from "./formatted-input";
 import { controlHeight } from "./control-layout";
 import { FloatingField } from "./floating-field";
 import { textFieldSurface } from "./filled-surfaces";
+import { dialogSurface } from "./dialog-surfaces";
 import { createMessages } from "@/i18n/messages";
 import { Field, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
 import { CheckIcon, ChevronDownIcon, GlobeIcon } from "./icons";
@@ -208,7 +209,7 @@ const DialFlagFallback = styled.span`
 const CountryMenu = styled.div`
   position: fixed; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; box-sizing: border-box; padding: 10px;
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay}; overflow: hidden;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  color: ${({ theme }) => theme.color.text}; ${dialogSurface}
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const CountrySearch = styled.input`
@@ -224,7 +225,7 @@ const CountryResults = styled.div`display: grid; align-content: start; min-block
 const CountryOption = styled.button`
   display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 16px; align-items: center; gap: 8px;
   inline-size: 100%; min-block-size: 48px; padding: 8px; text-align: start; border: 0; border-radius: ${({ theme }) => theme.radius.none}; cursor: pointer;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit; font-size: 0.875rem;
+  color: ${({ theme }) => theme.color.text}; background: transparent; font: inherit; font-size: 0.875rem;
   > span:nth-child(2) { overflow-wrap: anywhere; }
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
   > span:nth-child(3) { font-variant-numeric: tabular-nums; }

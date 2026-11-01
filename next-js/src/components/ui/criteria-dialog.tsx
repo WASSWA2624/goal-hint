@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore, type ReactNode, type Ref } fro
 import styled from "styled-components";
 import { Button } from "./controls";
 import { CloseIcon } from "./icons";
+import { dialogSurface } from "./dialog-surfaces";
 
 const subscribe = () => () => {};
 const serverSnapshot = () => false;
@@ -22,7 +23,7 @@ const Dialog = styled.dialog`
   padding: 0;
   overflow: hidden;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  ${dialogSurface}
   box-shadow: ${({ theme }) => theme.shadow.popover};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};

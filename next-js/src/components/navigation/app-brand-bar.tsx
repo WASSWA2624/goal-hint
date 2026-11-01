@@ -5,7 +5,6 @@ import styled from "styled-components";
 import { HeaderBrand } from "@/components/ui/brand";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { AccountLinks } from "@/components/members/account-link";
-import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -39,12 +38,12 @@ const Home = styled(Link)`
   }
 `;
 
-export function AppBrandBar({ locale, showAccount = true, bestSlips = false }: { locale: string; showAccount?: boolean; bestSlips?: boolean }) {
+export function AppBrandBar({ locale, showAccount = true }: { locale: string; showAccount?: boolean }) {
   return <Group data-mobile-app-header><Bar>
     <Home href={homeHref(locale)} prefetch={false} aria-label={createMessages(locale).text("navigation.home")}>
       <HeaderBrand alt="" />
     </Home>
     <AccountLinks locale={locale} showAccount={showAccount} />
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />
-  </Bar><SubscriptionStatusBar locale={locale} bestSlips={bestSlips} /></Group>;
+  </Bar></Group>;
 }

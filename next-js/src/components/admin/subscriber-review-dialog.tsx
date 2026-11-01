@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { CloseIcon } from "@/components/ui/icons";
 import { ActionButton } from "./admin-form";
 import { formSurface } from "./subscriber-styles";
+import { dialogSurface } from "@/components/ui/dialog-surfaces";
 
 type SubscriberReviewDialogProps = {
   open: boolean;
@@ -49,7 +50,7 @@ const Dialog = styled.dialog`
   position: fixed; inset: 0; inline-size: min(40rem, calc(100vw - 24px)); max-inline-size: calc(100vw - 24px);
   max-block-size: calc(100dvh - 24px); min-inline-size: 0; margin: auto; padding: 0; overflow: hidden;
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit;
+  color: ${({ theme }) => theme.color.text}; ${dialogSurface} font: inherit;
   &[open] { display: flex; flex-direction: column; }
   &::backdrop { background: ${({ theme }) => theme.color.scrim}; }
   *, *::before, *::after { box-sizing: border-box; }

@@ -163,7 +163,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     }
   }
   const dialog = document.querySelector<HTMLDialogElement>("#theme-dialog");
-  if (dialog?.open && dialog.dataset.enhanced === "true") check("#theme-dialog", theme.color.surface);
+  if (dialog?.open && dialog.dataset.enhanced === "true") check("#theme-dialog", theme.mode === "light" ? theme.textField.background : theme.color.surface);
   for (const list of [...document.querySelectorAll("[data-theme-fixture] [data-slip-selections]")].filter(visible)) {
     const items = [...list.querySelectorAll(":scope > [data-slip-selection]")];
     assert(getComputedStyle(list).rowGap === "0px", "Slip matches join without gaps");

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
+import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
 
 const compactControlHeight = "2.5rem";
 const mobileToolbarFontSize = "0.75rem";
@@ -99,7 +100,7 @@ export const BuilderPanel = styled(CriteriaPanel)`
   ${filterPanelColors}
   ${desktopStickyFilters}
   && { padding: 8px; border-radius: ${({ theme }) => theme.radius.surface}; }
-  [data-criteria-dialog] { background: var(--filter-panel-background); }
+  [data-criteria-dialog] { ${filterDialogSurface} }
   ${mobileFilterPanel}
   && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
   [data-slip-label="mobile"] { display: none; }

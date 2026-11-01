@@ -2,7 +2,6 @@ import "server-only";
 import type { ReactNode } from "react";
 import { HeaderBrand, BrandMark } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
-import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { navigationDestinations } from "@/components/navigation/navigation-destinations";
 import { SessionNavigation } from "@/components/navigation/session-navigation";
@@ -33,7 +32,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   zone?: string | null;
   /** App screens have their own phone heading, wider desktop content and the phone tab bar. */
   app?: boolean;
-  /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
+  /** Dense mobile feeds keep compact vertical spacing and the shared content gutter. */
   compact?: boolean;
   showAccount?: boolean;
   /** Dense dashboards use the wide container while keeping the shared phone header. */
@@ -64,7 +63,6 @@ export async function PublicShell({ children, locale, current, today: reportingD
         </ContentHeader>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
-      {!administratorName && !workspace && <SubscriptionStatusBar locale={language} desktopOnly={app} wide={app || wide} bestSlips={current === "best-slips"} />}
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $compactTop={current === "best-slips"} $dashboard={current === "dashboard"} $workspace={workspace}>
         <Container $wide={app || wide}>{children}</Container>
       </PageMain>

@@ -2,14 +2,12 @@ import { performanceMessages } from "./performance.ts";
 import { liveMatchMessages } from "./live-match.ts";
 import { freeTrialMessages } from "./free-trial.ts";
 import { authLabels, authMessages } from "./auth.ts";
-import { subscriptionBannerMessages } from "./subscription-banner.ts";
 import { fieldShortForms, predictionShortForms } from "../../domain/betting-short-forms.ts";
 
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
   ...authMessages,
-  ...subscriptionBannerMessages,
   ...performanceMessages,
   ...liveMatchMessages,
   ...freeTrialMessages,

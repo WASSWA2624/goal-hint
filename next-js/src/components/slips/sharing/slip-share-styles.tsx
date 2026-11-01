@@ -5,6 +5,7 @@ import { media } from "@/styles/theme";
 import { Button } from "@/components/ui/controls";
 import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import { slipHeaderActionFrame } from "../slip-disclosure-styles";
+import { dialogSurface } from "@/components/ui/dialog-surfaces";
 
 export const ShareTrigger = styled(Button)`
   && { min-block-size: 28px; min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: ${({ theme }) => theme.radius.control};
@@ -26,7 +27,7 @@ export const Drawer = styled.dialog`
   margin: 0 0 0 auto; padding: 0; border: 0; border-inline-start: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   border-start-start-radius: ${({ theme }) => theme.radius.overlay}; border-end-start-radius: ${({ theme }) => theme.radius.overlay};
-  background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text};
+  ${dialogSurface} color: ${({ theme }) => theme.color.text};
   @media (max-width: 22rem) { border-radius: ${({ theme }) => theme.radius.none}; }
   font: inherit; font-size: .8125rem; text-align: start; overflow: hidden;
   &[open] { display: flex; flex-direction: column; }

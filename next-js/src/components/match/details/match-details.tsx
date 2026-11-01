@@ -3,7 +3,6 @@
 import Link from "@/components/navigation/navigation-link";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
-import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { HeaderBrand } from "@/components/ui/brand";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { memo, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
@@ -35,15 +34,6 @@ const Page = styled.article`
     inline-size: 100%;
     > ${Note} { padding-inline: ${({ theme }) => theme.space.md}; }
   }
-`;
-const PhoneHeaderGroup = styled.div`
-  display: grid;
-  gap: 0;
-  min-inline-size: 0;
-  ${desktop} { display: none; }
-`;
-const PhoneSubscriptionStatus = styled(SubscriptionStatusBar)`
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
 `;
 /**
  * The phone top bar matches the feed's branded bar and quiet separator, full bleed
@@ -121,15 +111,12 @@ function DesktopBackLink() {
 function PhoneHeader() {
   const { locale, messages, showAccount } = useStableDetails();
   const backHref = useBackHref(locale);
-  return <PhoneHeaderGroup>
-    <PhoneBar>
-      <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
-      <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><HeaderBrand alt="" /></PhoneHome>
-      <AccountLinks locale={locale} showAccount={showAccount === true} />
-      <NavigationProgress label={messages.text("navigation.loading")} />
-    </PhoneBar>
-    <PhoneSubscriptionStatus locale={locale} />
-  </PhoneHeaderGroup>;
+  return <PhoneBar>
+    <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
+    <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><HeaderBrand alt="" /></PhoneHome>
+    <AccountLinks locale={locale} showAccount={showAccount === true} />
+    <NavigationProgress label={messages.text("navigation.loading")} />
+  </PhoneBar>;
 }
 
 export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false, showAccount = false, offer = null }: {
