@@ -6,7 +6,7 @@ export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as
 export const plans = [1, 7, 30].map((durationDays, i) => ({ id: `00000000-0000-4000-8000-00000000000${i}`,
   name: ["Daily", "Weekly", "Monthly"][i]!, priceUgx: [1000, 5000, 20000][i]!, durationDays, active: true, sortOrder: i, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z" }));
 const state = globalThis as typeof globalThis & { checkoutFixture?: CheckoutView };
-export function view(): CheckoutView { return state.checkoutFixture ??= { availableWalletUgx: 3000, availableReferralDays: 3, lastMethod: null, requests: [] }; }
+export function view(): CheckoutView { return state.checkoutFixture ??= { availableWalletUgx: 3000, availableReferralDays: 7, lastMethod: null, requests: [] }; }
 export function quote(selection: CheckoutSelection): CheckoutQuote {
   const plan = plans.find(p => p.id === selection.planId) ?? plans[0]!;
   const priceUgx = selection.purpose === "referral" ? 0 : selection.purpose === "topup" ? selection.topUpUgx : plan.priceUgx;

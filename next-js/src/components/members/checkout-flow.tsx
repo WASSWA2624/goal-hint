@@ -42,7 +42,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
 }) {
   const router = useRouter(), [view, setView] = useState(initialView ?? emptyView);
   const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
-    method: "", useWallet: false, walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
+    method: "", useWallet: false, useReferral: false, walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
     paidAt: localDate(), text: "", extracted: {}, originalText: "", accepted: false, attachingId: null });
   const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -131,6 +131,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     setError("");
     if (draft.step === 0) { update({ step: 1 }); return; }
     if (!draft.method) { setError(draft.useWallet ? `Choose MTN or Airtel to pay the remaining ${formatUgx(selectedPlanPrice - Number(draft.walletUgx))}.` : "Choose a payment method."); return; }
+    if (draft.purpose === "referral" && Number(draft.referralDays) < 1) { setError("Choose at least one available referral day."); return; }
     setBusy(true);
     try { const value = await send<CheckoutQuote>({ action: "quote", selection: selection() }); lastQuoteKey.current = value.quoteKey; setQuote(value); update({ step: 2 }); }
     catch (e) { setError((e as Error).message); }
@@ -281,19 +282,19 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       </>}
       {draft.step === 1 && <>
         <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(Object.keys(methodNames) as CheckoutSelection["method"][]).filter(method => topUp ? ["mtn", "airtel"].includes(method) : true).map(method => <label key={method}>
-          <input type={method === "wallet" ? "checkbox" : "radio"} name={method === "wallet" ? "checkout-wallet" : "checkout-method"}
-            checked={method === "wallet" ? draft.useWallet : draft.method === method} disabled={busy || !networkAvailable(method)}
+          <input type={method === "wallet" || method === "referral" ? "checkbox" : "radio"} name={method === "wallet" || method === "referral" ? `checkout-${method}` : "checkout-method"}
+            checked={method === "wallet" ? draft.useWallet : method === "referral" ? draft.useReferral : draft.method === method} disabled={busy || !networkAvailable(method)}
             onChange={event => chooseMethod(method, event.target.checked)} />
           {method === "mtn" || method === "airtel" ? <CheckoutProviderMark><MobileMoneyLogo network={method} /></CheckoutProviderMark> : method === "wallet" ? <CardIcon /> : <GiftIcon />}
           <span data-method-text>{methodNames[method]}{method === "wallet" && <small>{formatUgx(view.availableWalletUgx)}</small>}{method === "referral" && <small>{view.availableReferralDays} days available</small>}</span>
         </label>)}</CheckoutChoices>
-        {!topUp && (draft.method || draft.useWallet) && <CheckoutFundingFields>
+        {!topUp && (draft.method || draft.useWallet || draft.useReferral) && <CheckoutFundingFields>
           {draft.purpose === "plan" && <CheckoutFundingInput label="Wallet to use (UGX)" maxLabel="Use max wallet amount" disabled={busy}
             maximum={walletMaximum} value={draft.walletUgx} onValueChange={walletUgx => update({ walletUgx, useWallet: true })} />}
           <CheckoutFundingInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} maxLabel="Use max referral days" disabled={busy}
-            maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays })} />
+            maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays, useReferral: true })} />
         </CheckoutFundingFields>}
-        {draft.method && <PaymentDestination selection={selection()} onError={setError} />}
+        {draft.method && (draft.purpose !== "referral" || Number(draft.referralDays) > 0) && <PaymentDestination selection={selection()} onError={setError} />}
         <WizardActions><Button variant="secondary" onClick={() => update({ step: 0 })}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
       </>}
       {draft.step === 2 && <form onSubmit={submit} noValidate style={{ display: "grid", gap: 12 }}>

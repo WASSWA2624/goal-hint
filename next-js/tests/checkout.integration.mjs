@@ -59,6 +59,20 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(Date.parse(redeemed.endsAt) - now(), 10 * 86_400_000);
     assert.equal((await checkout.read(who)).availableReferralDays, 0);
   });
+  await t.test("a weekly purchase plus seven referral days grants fourteen days without reducing its cash price", async () => {
+    const who = await member(); await fund(who, 0, 7);
+    const selection = select({ referralDays: 7 }), quoted = await checkout.quote(who, selection);
+    assert.equal(quoted.value.priceUgx, 5000); assert.equal(quoted.value.amountToSend, 5000);
+    assert.equal(quoted.value.durationDays, 7); assert.equal(quoted.value.referralDays, 7);
+    const request = await submit(who, selection, proof(5000));
+    assert.equal(request.status, "pending");
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: request.id } })), 0);
+    assert.equal((await verify(request.id, 5000)).ok, true);
+    assert.equal((await act(request.id, { action: "approve-checkout" })).ok, true);
+    const view = await checkout.read(who);
+    assert.equal(Date.parse(view.requests[0].endsAt) - now(), 14 * 86_400_000);
+    assert.equal(view.availableReferralDays, 0);
+  });
   await t.test("external funding rejects contributions above spendable balances without creating a request", async () => {
     const who = await member(); await fund(who, 2000, 2);
     for (const method of ["mtn", "airtel"]) for (const patch of [{ walletUgx: 2001 }, { referralDays: 3 }]) {
