@@ -38,7 +38,7 @@ test("details require either evidence source and recheck provider changes before
   const text = "MTN. Paid UGX 5,000 to 0700000901. Transaction ID: TEST12345";
   const input = { text, screenshotText: "", hasImage: false, screenshotReady: false, transactionId: "TEST12345", amountUgx: "5000", payerPhone: "256700000123" };
   assert.equal(checkoutDetailsIssue(input, "mtn", numbers), null);
-  assert.match(checkoutDetailsIssue({ ...input, text: "" }, "mtn", numbers), /At least one/);
+  assert.match(checkoutDetailsIssue({ ...input, text: "" }, "mtn", numbers), /at least one/);
   assert.equal(checkoutDetailsIssue({ ...input, text: "", screenshotText: text, hasImage: true, screenshotReady: true }, "mtn", numbers), null);
   assert.match(checkoutDetailsIssue({ ...input, text: "", hasImage: true }, "mtn", numbers), /Recheck/);
   assert.match(checkoutDetailsIssue(input, "airtel", numbers), /selected Airtel/);

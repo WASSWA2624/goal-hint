@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 import styled from "styled-components";
@@ -9,6 +9,7 @@ import { phoneInputIssue } from "@/domain/phone-mobile";
 import { composePhoneValue, formatNationalPhone, isInternationalPhoneInput, phoneCountry, searchPhoneCountries, splitPhoneValue, type PhoneCountry, type PhoneValueParts } from "@/domain/phone-countries";
 import { deleteGroupedDigit, integerDigits } from "@/domain/input-format";
 import { preserveDigitCaret } from "./formatted-input";
+import { FloatingField } from "./floating-field";
 import { createMessages } from "@/i18n/messages";
 import { Field, FieldLabel, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
 import { CheckIcon, ChevronDownIcon, GlobeIcon } from "./icons";
@@ -22,13 +23,14 @@ export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoC
   /** The field finds an existing account (sign-in, recovery, search), so a number stored before the mobile check still passes. */
   lookup?: boolean;
   formatValue?: boolean;
+  floatingLabel?: boolean;
 };
 
 type PhoneDraft = PhoneValueParts & Readonly<{ value: string }>;
 type CountryMenuPosition = Readonly<{ left: number; top: number; width: number; maxHeight: number }>;
 
 /** A fixed country prefix and a national field share the original canonical-value and native validation contract. */
-export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lookup = false, formatValue = false, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
+export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lookup = false, formatValue = false, floatingLabel = false, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
   const [draft, setDraft] = useState<PhoneDraft>(() => ({ ...splitPhoneValue(value ?? defaultValue), value: value ?? defaultValue }));
   const [touched, setTouched] = useState(false), [pasteError, setPasteError] = useState<string | null>(null);
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
@@ -113,15 +115,16 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
     }
     return null;
   }
+  const numberField = (input: ReactElement<{ id?: string }>) => floatingLabel ? <FloatingField label={label}>{input}</FloatingField> : input;
   return <Field data-phone-field data-analytics-ignore>
-    <FieldLabel htmlFor={field.id}>{label}</FieldLabel>
-    <PhoneControl ref={frame} data-phone-control>
+    {!floatingLabel && <FieldLabel htmlFor={field.id}>{label}</FieldLabel>}
+    <PhoneControl ref={frame} data-phone-control data-floating-label={floatingLabel}>
       <CountryTrigger ref={trigger} type="button" data-phone-country-trigger disabled={inactive} aria-label={countryDescription}
         aria-haspopup="dialog" aria-expanded={open && !inactive} aria-controls={menuId} onClick={() => open ? closeCountries() : showCountries()}
         onKeyDown={event => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); showCountries(); } }}>
         {country ? <PhoneCountryFlag key={country.iso2} country={country} /> : <GlobeIcon />}<span>+{parts.callingCode}</span><ChevronDownIcon />
       </CountryTrigger>
-      <InputControl {...props} name={undefined} ref={control} id={field.id} type="tel" inputMode="numeric" autoComplete="tel-national"
+      {numberField(<InputControl {...props} name={undefined} ref={control} id={field.id} type="tel" inputMode="numeric" autoComplete="tel-national"
         value={formatValue ? formatNationalPhone(parts) : parts.national} dir="ltr" spellCheck={false} autoCapitalize="none" maxLength={phoneInputMaxLength} data-phone-input data-analytics-ignore
         aria-describedby={field.describedBy} aria-invalid={field.invalid} $invalid={field.isInvalid}
         placeholder={props.placeholder ?? messages.text("phone.nationalPlaceholder")}
@@ -150,7 +153,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
           if (incoming) { event.preventDefault(); change(incoming); }
         }}
         onBlur={event => { setTouched(true); if (!inactive && canonical) change(splitPhoneValue(canonical, parts.country ?? "UG")); onBlur?.(event); }}
-        onInvalid={event => { setTouched(true); onInvalid?.(event); }} />
+        onInvalid={event => { setTouched(true); onInvalid?.(event); }} />)}
       <input type="hidden" name={name} value={canonical ?? fullValue} disabled={props.disabled} data-phone-canonical data-analytics-ignore />
     </PhoneControl>
     {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
@@ -182,6 +185,10 @@ function PhoneCountryFlag({ country }: { country: PhoneCountry }) {
 const PhoneControl = styled.div`
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; min-inline-size: 0;
   > input[data-phone-input] { padding-inline-start: 10px; }
+  &[data-floating-label="true"] {
+    padding-block-start: 6px; align-items: end;
+    > [data-floating-field] { margin-block-start: 0; }
+  }
 `;
 const CountryTrigger = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px 8px;

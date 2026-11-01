@@ -11,6 +11,7 @@ import { Preview } from "./subscribe-styles";
 import { preparePaymentImage } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
 import { sendCheckout } from "./checkout-client";
+import { PaymentImagePreview } from "./payment-image-preview";
 
 export async function screenshotDigest(blob: Blob) {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()))].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -27,14 +28,9 @@ export function PaymentScreenshot({ image, metadata, provider, numbers, messageT
   onRemove: () => void; onBusyChange: (busy: boolean) => void; onPasteMessage: () => void;
 }) {
   const id = useId(), input = useRef<HTMLInputElement>(null), abort = useRef<AbortController | null>(null), running = useRef(false);
-  const [preview, setPreview] = useState(""), [progress, setProgress] = useState(""), [dialog, setDialog] = useState<Dialog | null>(null);
+  const [progress, setProgress] = useState(""), [dialog, setDialog] = useState<Dialog | null>(null);
   const [cancellable, setCancellable] = useState(false);
   const [selected, setSelected] = useState<number | null>(null), urls = useRef<string[]>([]), mounted = useRef(true);
-  useEffect(() => {
-    const url = image ? URL.createObjectURL(image) : "";
-    Promise.resolve().then(() => setPreview(url));
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [image]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; abort.current?.abort(); urls.current.forEach(url => URL.revokeObjectURL(url)); }; }, []);
   function close() { urls.current.forEach(url => URL.revokeObjectURL(url)); urls.current = []; setDialog(null); setSelected(null); }
   function failure(message = unreadableScreenshotMessage) { setDialog({ kind: "error", title: "Check your screenshot", message }); }
@@ -135,7 +131,7 @@ export function PaymentScreenshot({ image, metadata, provider, numbers, messageT
     <CheckoutScreenshot role="group" tabIndex={0} aria-label={`Choose or paste a payment screenshot${optional ? " (optional)" : ""}`} aria-describedby={requirementId} onPaste={onPaste}>
       <div><Button variant="secondary" disabled={busy} onClick={() => input.current?.click()}><ImageIcon />Choose image</Button>
         <Button variant="quiet" disabled={busy} onClick={() => void paste()}><ClipboardIcon />Paste image</Button></div>
-      {image && preview && <div data-screenshot-preview><a href={preview} target="_blank" rel="noopener"><Preview src={preview} alt="Payment screenshot preview" /></a>
+      {image && <div data-screenshot-preview><PaymentImagePreview image={image} disabled={busy} />
         <Button variant="quiet" disabled={busy} onClick={onRemove}><TrashIcon />Remove screenshot</Button></div>}
       {image && !ready && !progress && <Button variant="secondary" disabled={disabled} onClick={() => void prepare(new File([image], "Saved screenshot", { type: image.type }), true)}>Recheck saved screenshot</Button>}
       {progress && <><p role="status">{progress}</p>{cancellable && <Button variant="quiet" onClick={() => abort.current?.abort()}>Cancel reading</Button>}</>}

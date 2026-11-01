@@ -20,7 +20,7 @@ export function paymentDestinationMismatch(text: string, provider: MobileNetwork
 export function checkoutDetailsIssue(input: { text: string; screenshotText: string; hasImage: boolean; screenshotReady: boolean;
   transactionId: string; amountUgx: string; payerPhone: string }, provider: MobileNetwork, numbers: Numbers): string | null {
   if (input.hasImage && !input.screenshotReady) return "Recheck or remove the saved screenshot before continuing.";
-  if (!input.hasImage && !input.text.trim()) return "Add a transaction message or screenshot. At least one is required.";
+  if (!input.hasImage && !input.text.trim()) return "Add a payment screenshot or paste the transaction message before continuing. The filled-in transaction details are kept, but at least one evidence source is required.";
   for (const [source, text] of [["transaction message", input.text], ["screenshot", input.screenshotText]] as const) {
     const mismatch = paymentDestinationMismatch(text, provider, numbers, source);
     if (mismatch) return mismatch;

@@ -22,9 +22,10 @@ import { localUgandaPhone } from "@/domain/phone";
 import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
 import { refreshMemberSession } from "./member-session";
 import { PaymentWizard, WizardActions, WizardNotice, WizardPlans, WizardReview } from "./payment-wizard";
-import { Plan, PlanName, PlanPrice, Preview } from "./subscribe-styles";
+import { Plan, PlanName, PlanPrice } from "./subscribe-styles";
 import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { PaymentScreenshot, screenshotDigest } from "./payment-screenshot";
+import { PaymentImagePreview } from "./payment-image-preview";
 import { sendCheckout as send } from "./checkout-client";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { capCheckoutFunding, chooseCheckoutMethod, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
@@ -304,17 +305,17 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           <FloatingField label="Transaction ID"><InputControl $invalid={false} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
             value={draft.transactionId} onChange={e => update({ transactionId: normalizeTransactionId(e.target.value) })} /></FloatingField>
           <AmountInput label="Reported amount (UGX)" required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => update({ amountUgx })} />
-          <PhoneInput label="My number used to pay" formatValue required disabled={readingActive} value={draft.payerPhone} onValueChange={payerPhone => update({ payerPhone })} />
+          <PhoneInput label="Number used to pay" floatingLabel formatValue required disabled={readingActive} value={draft.payerPhone} onValueChange={payerPhone => update({ payerPhone })} />
         </>}
         <WizardActions><Button variant="secondary" disabled={busy || readingActive} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>
-          <Button type="submit" disabled={busy || readingActive || external && (!!image && !screenshotReady || !image && !draft.text.trim())}>Next</Button></WizardActions>
+          <Button type="submit" disabled={busy || readingActive}>Next</Button></WizardActions>
       </form>}
       {draft.step === 3 && <form onSubmit={submit} noValidate style={{ display: "grid", gap: 12 }}>
         {summary}
         {external && <div data-payment-review>
           <WizardReview><div><dt>Payment method</dt><dd>{methodNames[receiptProvider]}</dd></div><div><dt>Transaction ID</dt><dd>{draft.transactionId}</dd></div>
-            <div><dt>My number used to pay</dt><dd>{formatReviewPhone(draft.payerPhone)}</dd></div>
-            {image && <div><dt>Screenshot</dt><dd><ScreenshotReview image={image} /></dd></div>}
+            <div><dt>Number used to pay</dt><dd>{formatReviewPhone(draft.payerPhone)}</dd></div>
+            {image && <div><dt>Screenshot</dt><dd><PaymentImagePreview image={image} disabled={busy} /></dd></div>}
           </WizardReview>
           {draft.text.trim() && <details><summary>Transaction message</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{draft.text}</p></details>}
         </div>}
@@ -326,12 +327,6 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       </form>}
     </PaymentWizard>}
   </>;
-}
-
-function ScreenshotReview({ image }: { image: Blob }) {
-  const [url, setUrl] = useState("");
-  useEffect(() => { const next = URL.createObjectURL(image); Promise.resolve().then(() => setUrl(next)); return () => URL.revokeObjectURL(next); }, [image]);
-  return url ? <a href={url} target="_blank" rel="noopener"><Preview src={url} alt="Payment screenshot" /></a> : null;
 }
 
 function PaymentDestination({ selection, onError }: { selection: CheckoutSelection; onError: (message: string) => void }) {

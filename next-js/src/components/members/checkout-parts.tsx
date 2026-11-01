@@ -92,9 +92,7 @@ export const CheckoutScreenshot = styled.div`
   svg { inline-size: 18px; block-size: 18px; }
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 13px; line-height: 18px; }
   [data-screenshot-preview] { display: flex; flex-wrap: nowrap; justify-content: space-between; }
-  [data-screenshot-preview] a { min-inline-size: 0; ${focusTreatment} }
-  [data-screenshot-preview] button { flex: none; min-block-size: 36px; padding: 4px 8px; }
-  img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: 100px; object-fit: contain; }
+  [data-screenshot-preview] > button:last-child { flex: none; min-block-size: 36px; padding: 4px 8px; }
   ${focusTreatment}
 `;
 const PayLine = styled.div`
