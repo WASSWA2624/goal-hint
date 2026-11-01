@@ -4,7 +4,7 @@ Implement `prompts/payment-implementation-prompt.md` within the shared Next.js a
 
 - Preserve package snapshots, existing earned access, branding, wallet history and referral qualification rules.
 - Add durable idempotent requests, provider/transaction receipt identities, private claims, reservations and audit events.
-- Offer three checkout steps with explicit internal confirmation and customer-correctable original evidence.
+- Offer Package, Pay, Details and Review steps with explicit internal confirmation and customer-correctable original evidence.
 - Verify receipts individually, preserve unapplied money, block disputed ownership and allocate once.
 - Integrate customer status, optional support links and paginated admin review.
 - Verify accounting and concurrency on an isolated MySQL instance; check responsive rendering, types, lint and build.
@@ -12,7 +12,7 @@ Implement `prompts/payment-implementation-prompt.md` within the shared Next.js a
 Historical referral access remains intact. Future qualifying registrations earn one redeemable day.
 Reservations last 48 hours; expired requests require customer reconfirmation before allocation.
 
-Completed the customer layout refinements: inline progress labels, one-line pay summary, paired methods with icons, compact provider/copy row, full-width pasteable evidence, screenshot preview and editable extracted timestamps. External receipts require a message or screenshot on both client and server.
+Completed the customer layout refinements: inline progress labels, one-line pay summary, paired methods with icons, compact provider/copy row, full-width pasteable evidence and screenshot preview. External receipts require a message or screenshot on both client and server.
 
 Verified with restricted real MySQL accounting/migration/admin/retention scenarios, responsive browser acceptance, focused unit/HTTP checks, schema checks, lint, TypeScript and production builds. Existing unrelated unit-suite failures are recorded in `docs/payment-checkout.md`.
 
@@ -25,3 +25,5 @@ Wallet selection is an independent contribution whenever the spendable balance i
 Referral days are also an independent selection: a weekly package plus seven redeemed referral days grants fourteen days at the unchanged weekly cash price. Selecting only referral days retains cash-free redemption; choosing a paid source adds those days to the package instead.
 
 Screenshot intake now enforces one current image per transaction, explicit replacement, duplicate-byte/image detection, multi-image selection, clear readability/provider/message mismatch feedback and improved removal. Reuse checks run privately before acceptance and again before submission. Checkout dialogs require button dismissal. Preview samples support testing all cases; original accepted evidence survives failed replacement and remains restorable across refresh.
+
+The flow now separates Details from Review, keeping the summary, evidence preview and terms on the final step. Shared floating fields and amount grouping reduce the evidence form's height. The payer field groups its national digits by country without changing its canonical value. Each evidence source becomes optional when the other is supplied. Provider branding and receiving numbers are checked separately during extraction, before Review/Submit and on the server; failed checks preserve balances and prior evidence. Customer date/time entry is removed, extracted dates are retained, and an absent evidence date is explicitly identified for admin verification rather than presented as a detected payment time.

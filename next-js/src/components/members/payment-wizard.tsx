@@ -86,13 +86,13 @@ const Progress = styled.nav`
   li > span:last-child { overflow-wrap: anywhere; }
   li svg { inline-size: 13px; block-size: 13px; }
   &[data-inline-labels="true"] {
-    ol { align-items: center; }
+    ol { align-items: center; grid-template-columns: repeat(var(--payment-steps, 4), max-content); justify-content: space-between; }
     li { flex-direction: row; align-items: center; min-block-size: 24px; }
     li > span:first-child { box-sizing: border-box; inline-size: 24px; block-size: 24px; }
-    li > span:last-child { display: block; line-height: 24px; }
+    li > span:last-child { display: block; line-height: 24px; white-space: nowrap; }
     li svg { display: block; }
     li:first-child { justify-content: flex-start; }
-    li:nth-child(2) { justify-content: center; }
+    li:not(:first-child):not(:last-child) { justify-content: center; }
     li:last-child { justify-content: flex-end; }
   }
   li[data-complete="true"] { color: ${({ theme }) => theme.color.link}; }
@@ -117,7 +117,7 @@ const Progress = styled.nav`
 `;
 
 /** Present one stage at a time; the caller owns navigation, validation and data. */
-export function PaymentWizard({ locale, step, title, children, headingRef, totalSteps = 4, hideTitle = false }: {
+export function PaymentWizard({ locale, step, title, children, headingRef, totalSteps = 4, hideTitle = false, inlineLabels = totalSteps === 3, labels: stepLabels }: {
   locale: string;
   step: PaymentStep;
   title: string;
@@ -125,14 +125,16 @@ export function PaymentWizard({ locale, step, title, children, headingRef, total
   headingRef?: Ref<HTMLHeadingElement>;
   totalSteps?: 3 | 4;
   hideTitle?: boolean;
+  inlineLabels?: boolean;
+  labels?: readonly [string, string, string, string];
 }) {
   const m = createMessages(locale), titleId = useId();
   const labels = ["subscribe.wizard.package", "subscribe.wizard.pay", "subscribe.wizard.proof", "subscribe.wizard.review"] as const;
   return <Card data-subscribe-layout="stepwise" data-payment-step={step + 1} aria-labelledby={titleId} style={{ "--payment-steps": totalSteps } as CSSProperties}>
-    <Progress aria-label={m.text("subscribe.wizard.progress")} data-payment-progress data-inline-labels={totalSteps === 3}>
+    <Progress aria-label={m.text("subscribe.wizard.progress")} data-payment-progress data-inline-labels={inlineLabels}>
       <ol>{labels.slice(0, totalSteps).map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined} data-complete={index < step}>
         <span aria-hidden="true">{index < step ? <CheckIcon /> : index + 1}</span>
-        <span>{totalSteps === 3 && index === 2 ? "Confirm" : m.text(label)}</span>
+        <span>{stepLabels?.[index] ?? (totalSteps === 3 && index === 2 ? "Confirm" : m.text(label))}</span>
       </li>)}</ol>
     </Progress>
     {hideTitle ? <VisuallyHidden as="h2" id={titleId} ref={headingRef} tabIndex={-1}>{title}</VisuallyHidden>

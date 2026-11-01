@@ -4,7 +4,10 @@ import { randomUUID } from "node:crypto";
 import { checkoutMethodAvailable, checkoutSelectionSchema, receiptInputSchema, fundingAmounts } from "../src/domain/checkout.ts";
 import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
-import { paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
+import { paymentDateNotExtracted, paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
+import { checkoutDetailsIssue, paymentDestinationMismatch } from "../src/domain/checkout-evidence.ts";
+import { deleteGroupedDigit, digitCaret, groupInteger } from "../src/domain/input-format.ts";
+import { formatNationalPhone, splitPhoneValue } from "../src/domain/phone-countries.ts";
 import { capCheckoutFunding, chooseCheckoutMethod } from "../src/components/members/checkout-draft.ts";
 import { inspectPaymentScreenshot, unreadableScreenshotMessage } from "../src/domain/payment-screenshot.ts";
 
@@ -17,6 +20,41 @@ test("screenshots need a readable transaction ID and amount, without treating OC
   const wrong = inspectPaymentScreenshot("Airtel Money. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers);
   assert.equal(wrong.ok, false); assert.match(wrong.message, /selected MTN/);
   assert.equal(inspectPaymentScreenshot("MTN. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers, "OTHER987654").ok, false);
+});
+
+test("provider checks compare receiving numbers separately from branding and exclude the payer", () => {
+  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+  for (const text of ["Paid UGX 5,000 to 0700000901. Transaction ID: TEST12345", "MTN. Paid UGX 5,000. Transaction ID: TEST12345", "Paid UGX 5,000. Transaction ID: TEST12345\n0700 000 901"])
+    assert.match(paymentDestinationMismatch(text, "airtel", numbers), /selected Airtel/);
+  assert.match(paymentDestinationMismatch("Airtel. Paid UGX 5,000 to 0700000901", "airtel", numbers), /receiving number/);
+  assert.match(paymentDestinationMismatch("MTN. Paid UGX 5,000 to 0700000999", "mtn", numbers), /0700000901/);
+  assert.equal(paymentDestinationMismatch("From: 0700000901. Paid UGX 5,000 to 0700000902", "airtel", numbers), null);
+  const thread = "Paid UGX 1,000 to 0700000901. Transaction ID: OLD12345\nPaid UGX 5,000 to 0700000902. Transaction ID: NEW12345";
+  assert.equal(paymentDestinationMismatch(thread, "airtel", numbers), null);
+});
+
+test("details require either evidence source and recheck provider changes before review", () => {
+  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+  const text = "MTN. Paid UGX 5,000 to 0700000901. Transaction ID: TEST12345";
+  const input = { text, screenshotText: "", hasImage: false, screenshotReady: false, transactionId: "TEST12345", amountUgx: "5000", payerPhone: "256700000123" };
+  assert.equal(checkoutDetailsIssue(input, "mtn", numbers), null);
+  assert.match(checkoutDetailsIssue({ ...input, text: "" }, "mtn", numbers), /At least one/);
+  assert.equal(checkoutDetailsIssue({ ...input, text: "", screenshotText: text, hasImage: true, screenshotReady: true }, "mtn", numbers), null);
+  assert.match(checkoutDetailsIssue({ ...input, text: "", hasImage: true }, "mtn", numbers), /Recheck/);
+  assert.match(checkoutDetailsIssue(input, "airtel", numbers), /selected Airtel/);
+  assert.match(checkoutDetailsIssue({ ...input, screenshotText: text.replace("TEST12345", "DIFFERENT998877"), hasImage: true, screenshotReady: true }, "mtn", numbers), /different transaction/);
+});
+
+test("amount and phone displays retain canonical values and support edits around separators", () => {
+  assert.equal(groupInteger("2500000"), "2,500,000"); assert.equal(groupInteger(""), "");
+  assert.equal(digitCaret("2,500,000", 2), 3);
+  assert.deepEqual(deleteGroupedDigit("12,345", 3, 3, "Backspace"), { value: "1,345", digitsBefore: 1 });
+  assert.deepEqual(deleteGroupedDigit("12,345", 2, 2, "Delete"), { value: "12,45", digitsBefore: 2 });
+  assert.equal(formatNationalPhone(splitPhoneValue("256700123456")), "700 123 456");
+  assert.equal(formatNationalPhone(splitPhoneValue("12025550123")), "202 555 0123");
+  assert.equal(formatNationalPhone(splitPhoneValue("447911123456")), "7911 123456");
+  assert.equal(paymentDateNotExtracted({ extracted: { paymentDateSource: "submission" } }), true);
+  for (const original of [null, {}, { extracted: { paymentDateSource: "evidence" } }]) assert.equal(paymentDateNotExtracted(original), false);
 });
 
 test("checkout uses integer funding and referral days never reduce the cash price", () => {

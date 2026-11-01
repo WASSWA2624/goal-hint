@@ -6,7 +6,9 @@ import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 import styled from "styled-components";
 import { normalizePhone, phoneInputMaxLength } from "@/domain/phone";
 import { phoneInputIssue } from "@/domain/phone-mobile";
-import { composePhoneValue, isInternationalPhoneInput, phoneCountry, searchPhoneCountries, splitPhoneValue, type PhoneCountry, type PhoneValueParts } from "@/domain/phone-countries";
+import { composePhoneValue, formatNationalPhone, isInternationalPhoneInput, phoneCountry, searchPhoneCountries, splitPhoneValue, type PhoneCountry, type PhoneValueParts } from "@/domain/phone-countries";
+import { deleteGroupedDigit, integerDigits } from "@/domain/input-format";
+import { preserveDigitCaret } from "./formatted-input";
 import { createMessages } from "@/i18n/messages";
 import { Field, FieldLabel, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
 import { CheckIcon, ChevronDownIcon, GlobeIcon } from "./icons";
@@ -19,13 +21,14 @@ export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoC
   onValueChange?: (value: string) => void;
   /** The field finds an existing account (sign-in, recovery, search), so a number stored before the mobile check still passes. */
   lookup?: boolean;
+  formatValue?: boolean;
 };
 
 type PhoneDraft = PhoneValueParts & Readonly<{ value: string }>;
 type CountryMenuPosition = Readonly<{ left: number; top: number; width: number; maxHeight: number }>;
 
 /** A fixed country prefix and a national field share the original canonical-value and native validation contract. */
-export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lookup = false, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
+export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lookup = false, formatValue = false, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
   const [draft, setDraft] = useState<PhoneDraft>(() => ({ ...splitPhoneValue(value ?? defaultValue), value: value ?? defaultValue }));
   const [touched, setTouched] = useState(false), [pasteError, setPasteError] = useState<string | null>(null);
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
@@ -119,7 +122,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
         {country ? <PhoneCountryFlag key={country.iso2} country={country} /> : <GlobeIcon />}<span>+{parts.callingCode}</span><ChevronDownIcon />
       </CountryTrigger>
       <InputControl {...props} name={undefined} ref={control} id={field.id} type="tel" inputMode="numeric" autoComplete="tel-national"
-        value={parts.national} dir="ltr" spellCheck={false} autoCapitalize="none" maxLength={phoneInputMaxLength} data-phone-input data-analytics-ignore
+        value={formatValue ? formatNationalPhone(parts) : parts.national} dir="ltr" spellCheck={false} autoCapitalize="none" maxLength={phoneInputMaxLength} data-phone-input data-analytics-ignore
         aria-describedby={field.describedBy} aria-invalid={field.invalid} $invalid={field.isInvalid}
         placeholder={props.placeholder ?? messages.text("phone.nationalPlaceholder")}
         onChange={event => {
@@ -131,6 +134,13 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
             && normalized && parsePhoneNumberFromString(`+${normalized}`, { extract: false })?.isPossible();
           const incoming = isInternationalPhoneInput(raw) || digits.length >= 10 && raw.startsWith(parts.callingCode) || autofill ? internationalValue(raw) : null;
           change(incoming ?? { ...parts, national: raw });
+          if (formatValue && !incoming) preserveDigitCaret(event.currentTarget, integerDigits(raw.slice(0, event.currentTarget.selectionStart ?? raw.length)).length);
+        }}
+        onKeyDown={event => {
+          props.onKeyDown?.(event);
+          if (!formatValue || inactive || event.defaultPrevented) return;
+          const control = event.currentTarget, edit = deleteGroupedDigit(control.value, control.selectionStart ?? 0, control.selectionEnd ?? 0, event.key);
+          if (edit) { event.preventDefault(); change({ ...parts, national: edit.value }); preserveDigitCaret(control, edit.digitsBefore); }
         }}
         onPaste={event => {
           if (inactive) return;

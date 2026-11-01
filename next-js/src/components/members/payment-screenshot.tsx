@@ -20,9 +20,10 @@ type Picked = { file: File; url: string };
 type Dialog = { title: string; message: string; kind: "error" | "duplicate" | "replace" | "pick" | "reuse";
   candidate?: Candidate; text?: string; metadata?: ScreenshotMetadata; files?: Picked[] };
 
-export function PaymentScreenshot({ image, metadata, provider, numbers, messageTransactionId, submissionId, disabled, requirementId, onAccept, onRemove, onBusyChange, onPasteMessage }: {
+export function PaymentScreenshot({ image, metadata, provider, numbers, messageTransactionId, submissionId, disabled, requirementId, optional = false, onAccept, onRemove, onBusyChange, onPasteMessage }: {
   image: Blob | null; metadata?: ScreenshotMetadata | null; provider: "mtn" | "airtel"; numbers: { mtn: string | null; airtel: string | null };
   messageTransactionId: string | null; submissionId: string | null; disabled: boolean; requirementId: string; onAccept: (image: Blob, metadata: ScreenshotMetadata, text: string) => void;
+  optional?: boolean;
   onRemove: () => void; onBusyChange: (busy: boolean) => void; onPasteMessage: () => void;
 }) {
   const id = useId(), input = useRef<HTMLInputElement>(null), abort = useRef<AbortController | null>(null), running = useRef(false);
@@ -128,10 +129,10 @@ export function PaymentScreenshot({ image, metadata, provider, numbers, messageT
   const busy = disabled || !!progress;
   const ready = !!image && metadata?.version === 1 && metadata.provider === provider;
   return <CheckoutEvidenceField>
-    <header><label htmlFor={`${id}-file`}>Payment screenshot</label></header>
+    <header><label htmlFor={`${id}-file`}>Payment screenshot{optional ? " (optional)" : ""}</label></header>
     <VisuallyHidden as="input" ref={input} id={`${id}-file`} type="file" accept="image/*" disabled={busy}
       onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ""; void choose(files); }} />
-    <CheckoutScreenshot role="group" tabIndex={0} aria-label="Choose or paste a payment screenshot" aria-describedby={requirementId} onPaste={onPaste}>
+    <CheckoutScreenshot role="group" tabIndex={0} aria-label={`Choose or paste a payment screenshot${optional ? " (optional)" : ""}`} aria-describedby={requirementId} onPaste={onPaste}>
       <div><Button variant="secondary" disabled={busy} onClick={() => input.current?.click()}><ImageIcon />Choose image</Button>
         <Button variant="quiet" disabled={busy} onClick={() => void paste()}><ClipboardIcon />Paste image</Button></div>
       {image && preview && <div data-screenshot-preview><a href={preview} target="_blank" rel="noopener"><Preview src={preview} alt="Payment screenshot preview" /></a>

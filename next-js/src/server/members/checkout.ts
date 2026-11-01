@@ -5,6 +5,7 @@ import { checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSe
   type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView, type ReceiptInput } from "../../domain/checkout.ts";
 import { formatPaymentReference, parseTransactionId, transactionKey } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
+import { paymentDestinationMismatch } from "../../domain/checkout-evidence.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
@@ -117,6 +118,12 @@ export function createCheckout({ database, config, now = Date.now, environment =
     const transactionId = parseTransactionId(input.transactionId), payerPhone = validMobilePhone(input.payerPhone), paidAt = new Date(input.paidAt);
     if (!transactionId || !payerPhone || +paidAt > +at + 300_000 || !["mtn", "airtel"].includes(row.method ?? "")) return fail("Check the transaction details.");
     const provider = row.method!, key = transactionKey(transactionId);
+    const settings = configuredSubscriptionSettings(await lockSettings(tx, "checkout", at), environment);
+    const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber, [provider]: row.receivingNumber ?? (provider === "mtn" ? settings.mtnNumber : settings.airtelNumber) };
+    for (const [source, text] of [["transaction message", input.original.text], ["screenshot", image ? input.original.extracted.screenshotText : ""]] as const) {
+      const mismatch = typeof text === "string" ? paymentDestinationMismatch(text, provider as "mtn" | "airtel", numbers, source) : null;
+      if (mismatch) return fail(mismatch);
+    }
     let receipt = await tx.paymentReceipt.findUnique({ where: { provider_transactionKey: { provider, transactionKey: key } } });
     if (!receipt) {
       // Legacy approvals made after migration also block reuse in this workflow.

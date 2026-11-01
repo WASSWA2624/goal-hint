@@ -114,6 +114,25 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: b.accountId } })), 0);
     assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: saved.value.id } })), 0);
   });
+  await t.test("provider and recipient contradictions are refused without reserving balances or changing evidence", async () => {
+    const who = await member(); await fund(who, 1000, 1);
+    const selection = select({ method: "airtel", walletUgx: 1000, referralDays: 1 }), quote = await checkout.quote(who, selection);
+    for (const original of [
+      { text: "Paid UGX 4,000 to 0700000901. Transaction ID: WRONG12345", extracted: {} },
+      { text: "Airtel. Paid UGX 4,000 to 0700000901. Transaction ID: WRONG12345", extracted: {} },
+      { text: "", extracted: { screenshotText: "Paid UGX 4,000 to 0700000901. Transaction ID: WRONG12345" } },
+    ]) {
+      const refused = await checkout.confirm(who, selection, randomUUID(), quote.value.quoteKey, true, { ...proof(4000), original }, original.text ? null : jpeg());
+      assert.equal(refused.ok, false); assert.match(refused.message, /receiving number/);
+    }
+    assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: who.accountId } })), 0);
+    assert.equal((await checkout.read(who)).availableWalletUgx, 1000); assert.equal((await checkout.read(who)).availableReferralDays, 1);
+    const request = await submit(who, selection, proof(4000));
+    const before = (await review.detail(request.id)).claims[0];
+    const correction = await checkout.attach(who, request.id, { ...proof(4000, before.receipt.transactionId), original: { text: "MTN. Paid UGX 4,000 to 0700000901", extracted: {} } });
+    assert.equal(correction.ok, false);
+    assert.deepEqual((await review.detail(request.id)).claims[0].corrections, before.corrections);
+  });
   await t.test("combined funding, shortfall plus top-up, excess and concurrent approval allocate once", async () => {
     const who = await member(); await fund(who, 2000, 1);
     const request = await submit(who, select({ walletUgx: 2000, referralDays: 1 }), proof(1000));

@@ -58,9 +58,8 @@ function shillingValue(raw: string): number | undefined {
  * before that ID; in one that starts with its ID ("SENT. TID 123. UGX 5,000 to …") it is the first one after. With `bare`,
  * text that is only an ID is the ID; screenshot text never is, since stray words read from an image are not an ID.
  */
-export function paymentEvidence(text: string, ownerNumbers: Readonly<Partial<Record<MobileNetwork, string | null>>> = {},
-  { bare = true }: { bare?: boolean } = {}): PaymentEvidence {
-  if (text.length > 12_000) return { transactionId: null, amount: null, network: null };
+function readEvidence(text: string, ownerNumbers: Readonly<Partial<Record<MobileNetwork, string | null>>>, bare: boolean) {
+  if (text.length > 12_000) return { evidence: { transactionId: null, amount: null, network: null }, context: "" };
   const paid = [...text.matchAll(new RegExp(shillings, "giu"))].flatMap((match) => {
     const value = shillingValue(match[1] ?? match[2] ?? match[3] ?? "");
     return value !== undefined && !notPaid.test(text.slice(Math.max(0, match.index - 30), match.index)) ? [{ index: match.index, value }] : [];
@@ -79,12 +78,34 @@ export function paymentEvidence(text: string, ownerNumbers: Readonly<Partial<Rec
   // judged on that message alone, since a thread's top message is often cut off.
   const next = newest && paid.find((value) => value.index >= newest.end);
   const idFirst = !!newest && !!next && /^[\s.,;:-]*$/u.test(text.slice(newest.end, next.index));
-  const amount = !newest ? paid[0]?.value : idFirst ? paid.find((value) => value.index > newest.start)?.value
-    : paid.filter((value) => value.index < newest.start && value.index > (earlier?.end ?? -1)).at(-1)?.value;
+  const amount = !newest ? paid[0] : idFirst ? paid.find((value) => value.index > newest.start)
+    : paid.filter((value) => value.index < newest.start && value.index > (earlier?.end ?? -1)).at(-1);
   const own = newest ? text.slice(idFirst ? newest.start : earlier?.end ?? 0, idFirst ? undefined : newest.end) : text;
   const bareId = bare && onlyIdCharacters.test(trimmed) && !ugandanMobile.test(trimmed.replace(/[\s-]/gu, "")) ? parseTransactionId(trimmed) : null;
-  return { transactionId: newest?.id ?? bareId, amount: amount ?? null,
-    network: parsePaymentSms(own, ownerNumbers).network ?? parsePaymentSms(text, ownerNumbers).network ?? null };
+  return { evidence: { transactionId: newest?.id ?? bareId, amount: amount?.value ?? null,
+    network: parsePaymentSms(own, ownerNumbers).network ?? parsePaymentSms(text, ownerNumbers).network ?? null },
+    context: earlier && newest ? text.slice(idFirst ? newest.start : amount?.index ?? newest.start) : text };
+}
+
+export function paymentEvidence(text: string, ownerNumbers: Readonly<Partial<Record<MobileNetwork, string | null>>> = {},
+  { bare = true }: { bare?: boolean } = {}): PaymentEvidence {
+  return readEvidence(text, ownerNumbers, bare).evidence;
+}
+
+/** Receiving details stay separate from wallet branding and the sender's phone number. */
+export function paymentDestination(text: string, ownerNumbers: Readonly<Partial<Record<MobileNetwork, string | null>>>) {
+  const { context } = readEvidence(text, ownerNumbers, false);
+  const phone = String.raw`(?<!\d)(?:\+?256[\s-]?)?0?7\d{2}(?:[\s-]?\d{3}){2}(?!\d)`;
+  const labelled = [...context.matchAll(new RegExp(String.raw`\b(?:to|recipient|receiver)\s*[:=]?\s*[^\d\n]{0,60}?(${phone})`, "giu"))].at(-1);
+  const sender = /\b(?:from|sender)\s*[:=]?\s*[^\d\n]{0,60}?$/iu;
+  const known = [...context.matchAll(new RegExp(phone, "gu"))].flatMap(match => {
+    const number = normalizePhone(match[0]);
+    return number && Object.values(ownerNumbers).some(value => normalizePhone(value) === number)
+      && !sender.test(context.slice(Math.max(0, match.index - 80), match.index)) ? [number] : [];
+  }).at(-1);
+  const brand = [...context.matchAll(/\b(MTN|MoMo|Airtel)\b/giu)].at(-1)?.[1];
+  return { recipient: normalizePhone(labelled?.[1]) ?? known ?? null,
+    network: brand ? brand.toLowerCase() === "airtel" ? "airtel" as const : "mtn" as const : null };
 }
 
 // Look-alike characters OCR swaps in transaction IDs, folded to one form before comparing.

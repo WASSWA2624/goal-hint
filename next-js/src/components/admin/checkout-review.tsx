@@ -5,13 +5,14 @@ import { Button, TextInput } from "@/components/ui/controls";
 import { formatUgx } from "@/domain/subscription-plans";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { checkoutLabels, checkoutOpenStatuses } from "@/domain/checkout";
+import { paymentDateNotExtracted as dateNotExtracted } from "@/domain/payment-evidence-date";
 import type { OwnerPayment } from "@/domain/owner-members";
 import { CheckoutActions } from "../members/checkout-parts";
 import { WizardReview } from "../members/payment-wizard";
 
 type Receipt = { id: string; provider: string; transactionId: string; verifiedAt: string | null; verifiedBy: string | null;
   amountUgx: number | null; disputed: boolean; senderPhone: string | null; recipient: string | null;
-  allocatedSubmissionId: string | null; intendedSubmissionId: string | null;
+  allocatedSubmissionId: string | null; intendedSubmissionId: string | null; receivedAt: string | null;
   claims: { submissionId: string; submission: { reference: string; accountId: string } }[] };
 type Detail = { revision: number; status: string; walletUgx: number; referralDays: number; receivingNumber: string | null;
   reservationActive: boolean; reservationUntil: string | null; amountToSend: number; remainingUgx: number; excessUgx: number; verifiedUgx: number;
@@ -26,6 +27,7 @@ const Review = styled.article`
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
   textarea { inline-size: 100%; resize: vertical; } label { overflow-wrap: anywhere; }
 `;
+const localDate = (value: string) => new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
 export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPayment; nav: ReactNode; onResolved: () => void }) {
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
         {detail.excessUgx > 0 && <div><dt>Wallet excess on approval</dt><dd>{formatUgx(detail.excessUgx)}</dd></div>}
       </WizardReview>
       {detail.claims.map(claim => <fieldset key={`${claim.id}:${detail.revision}`}><legend>{claim.receipt.provider.toUpperCase()} · {claim.receipt.transactionId}</legend>
-        <p>{claim.withdrawn ? "Withdrawn evidence · " : ""}Reported {formatUgx(claim.amountUgx)} · payer {claim.payerPhone ?? "unavailable"} · {formatPeriodEnd(new Date(claim.paidAt))} EAT</p>
+        <p>{claim.withdrawn ? "Withdrawn evidence · " : ""}Reported {formatUgx(claim.amountUgx)} · payer {claim.payerPhone ?? "unavailable"} · {dateNotExtracted(claim.original) ? "Payment date not read from evidence" : `${formatPeriodEnd(new Date(claim.paidAt))} EAT`}</p>
         {claim.purgedAt ? <p>Private evidence removed under the retention policy. Accounting is retained.</p> : <>
           {claim.legacyImage && <a href={`${url}/screenshot`} target="_blank" rel="noopener">Original screenshot</a>}
           {claim.imageSha256 && !claim.imageIsLegacy && <a href={`${url}/screenshot?claimId=${claim.id}`} target="_blank" rel="noopener">View private screenshot</a>}
@@ -88,7 +90,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
           <TextInput name="amountUgx" label="Actual incoming amount (UGX)" required inputMode="numeric" defaultValue={claim.receipt.amountUgx ?? claim.amountUgx} />
           <TextInput name="recipient" label="Receiving number from provider records" required defaultValue={claim.receipt.recipient ?? detail.receivingNumber ?? ""} />
           <TextInput name="senderPhone" label="Sender number from receiving account (if available)" defaultValue={claim.receipt.senderPhone ?? ""} />
-          <TextInput name="receivedAt" label="Actual payment date and time (local)" type="datetime-local" required defaultValue={new Date(Date.parse(claim.paidAt) - new Date(claim.paidAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16)} />
+          <TextInput name="receivedAt" label="Actual payment date and time (local)" type="datetime-local" required defaultValue={claim.receipt.receivedAt ? localDate(claim.receipt.receivedAt) : dateNotExtracted(claim.original) ? "" : localDate(claim.paidAt)} />
           <label><input type="checkbox" name="transactionChecked" required /> Transaction ID matches the incoming transfer</label>
           <label><input type="checkbox" name="recipientChecked" required /> Correct receiving MTN/Airtel account</label>
           <label><input type="checkbox" name="successfulReceipt" required /> Funds successfully received; amount checked</label>

@@ -23,3 +23,10 @@ export function paymentEvidenceDate(text: string): string | null {
   }
   return null;
 }
+
+/** Old records retain their reported date; new reports distinguish a fallback submission timestamp from an extracted date. */
+export function paymentDateNotExtracted(original: unknown): boolean {
+  if (!original || typeof original !== "object" || !("extracted" in original)) return false;
+  const extracted = original.extracted;
+  return !!extracted && typeof extracted === "object" && "paymentDateSource" in extracted && extracted.paymentDateSource === "submission";
+}
