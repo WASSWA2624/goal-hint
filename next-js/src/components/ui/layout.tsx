@@ -92,7 +92,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
     ${media.belowDesktop} {
       padding-block: 8px 12px;
       background: ${({ theme }) => theme.color.page};
-      > ${Container} { padding-inline: 8px; }
+      > ${Container} { padding-inline: ${({ theme }) => theme.layout.gutter}; }
     }
   `}
   ${media.desktop} {

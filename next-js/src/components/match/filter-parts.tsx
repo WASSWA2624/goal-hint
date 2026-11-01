@@ -5,6 +5,7 @@ import {
   useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";
 import { FloatingOutline } from "@/components/ui/floating-outline";
+import { selectSurface } from "@/components/ui/filled-surfaces";
 import { floatingLabel, raisedFloatingLabel, floatingOutline } from "@/components/ui/floating-field-styles";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
@@ -107,6 +108,7 @@ export const IconButton = styled.button`
  * cell, so the face keeps the widest option's width, as a native select does.
  */
 const SelectFace = styled.div`
+  --select-surface: ${({ theme }) => theme.color.brandSoft};
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -115,11 +117,10 @@ const SelectFace = styled.div`
   padding-inline: 8px 22px;
   color: ${({ theme }) => theme.color.text};
   border: 0;
-  ${filterButtonColors}
+  ${selectSurface}
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.body};
-  ${controlFeedback}
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > span > span:not([data-current]) { visibility: hidden; }

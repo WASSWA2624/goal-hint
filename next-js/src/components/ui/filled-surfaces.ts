@@ -29,6 +29,24 @@ export const textFieldSurface = css`
 export const textFieldSelector = 'input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]), textarea';
 export const nativeTextFieldSurface = css`&:is(${textFieldSelector}) { ${textFieldSurface} }`;
 
+/** Selects share the text-entry fill; their native or floating frame owns the border. */
+export const selectSurface = css`
+  background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : `var(--select-surface, ${theme.color.field})`};
+  transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
+  ${media.hover} { &:hover:not(:disabled):not([aria-invalid="true"]) { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : `var(--select-hover-surface, ${theme.color.fieldHover})`}; } }
+  &:focus-within:not([aria-invalid="true"]) { background: ${({ theme }) => theme.textField.hoverBackground}; }
+  &[aria-expanded="true"] { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : theme.color.brandSoft}; }
+  &[aria-invalid="true"] {
+    color: ${({ theme }) => theme.color.outcome.incorrect.text};
+    background: ${({ theme }) => theme.color.outcome.incorrect.background};
+  }
+  &:disabled, &:has(> select:disabled) {
+    color: ${({ theme }) => theme.color.disabledText};
+    background: ${({ theme }) => theme.color.disabledSurface};
+  }
+`;
+export const nativeSelectSurface = css`&:is(select) { ${selectSurface} }`;
+
 /** Shared by standalone fields and composite controls (search, phone, filters). */
 export const filledField = css`
   border: 0;
@@ -45,6 +63,7 @@ export const filledField = css`
     background: ${({ theme }) => theme.color.disabledSurface};
   }
   ${nativeTextFieldSurface}
+  ${nativeSelectSurface}
 `;
 
 /** Quiet actions use the same readable tint as the approved header actions. */

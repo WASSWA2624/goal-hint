@@ -5,6 +5,7 @@ import { controlFeedback, desktopStickyFilters, filterButtonColors, filterContro
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { SelectMenu } from "@/components/ui/select-menu";
+import { selectSurface } from "@/components/ui/filled-surfaces";
 import { media } from "@/styles/theme";
 import type { BestSlipsStatus } from "@/domain/best-slips-query";
 
@@ -127,10 +128,12 @@ export const DateControls = styled.div`
 export const DateSelect = styled(SelectMenu)`
   flex: none;
   > [data-select-trigger] {
-    ${filterButtonColors}
+    --select-surface: ${({ theme }) => theme.color.brandSoft};
+    --select-hover-surface: ${({ theme }) => theme.color.brandSoft};
+    color: ${({ theme }) => theme.color.link};
+    ${selectSurface}
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     box-shadow: none;
-    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
     ${media.desktop} { font-size: .8125rem;  }
   }
   ${media.belowDesktop} {

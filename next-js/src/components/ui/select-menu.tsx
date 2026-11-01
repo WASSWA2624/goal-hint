@@ -3,7 +3,8 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from "react";
 import styled from "styled-components";
 import { CheckIcon, ChevronDownIcon } from "./icons";
-import { controlFeedback, filterControlColors, focusRing } from "./filter-chrome";
+import { focusRing } from "./filter-chrome";
+import { selectSurface } from "./filled-surfaces";
 import { FloatingOutline } from "./floating-outline";
 import { floatingLabel, raisedFloatingLabel, floatingOutline } from "./floating-field-styles";
 import { useOutsideDismiss } from "./use-outside-dismiss";
@@ -22,12 +23,11 @@ const Trigger = styled.button`
   inline-size: 100%; min-inline-size: 0; min-block-size: 34px; padding: 6px 10px;
   color: ${({ theme }) => theme.color.text}; border: 0;
   border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 0.75rem; text-align: start; cursor: pointer;
-  ${filterControlColors} ${controlFeedback} ${focusRing}
+  ${selectSurface} ${focusRing}
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   > span > span:not([data-current]) { visibility: hidden; }
   > svg { flex: none; color: ${({ theme }) => theme.color.brand}; }
-  &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
   border: 1px solid transparent;
   @media (pointer: coarse) { min-block-size: 44px; }
@@ -41,7 +41,7 @@ const Options = styled.ul`
   display: grid; gap: 2px; inline-size: max(100%, 11rem); max-inline-size: calc(100vw - 32px);
   max-block-size: min(20rem, 50dvh); overflow-y: auto; overscroll-behavior: contain;
   margin: 0; padding: 4px; list-style: none; box-sizing: border-box;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.surface};
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover}; scrollbar-width: thin;
   > li {

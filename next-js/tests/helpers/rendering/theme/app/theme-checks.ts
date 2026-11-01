@@ -90,7 +90,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   check("#theme-search [data-text-field-frame], #theme-textarea", theme.textField.background);
   check("#theme-invalid-input", theme.color.outcome.incorrect.background);
   check("#theme-disabled-input", theme.color.disabledSurface);
-  check("#theme-control-select", theme.color.field);
+  check("#theme-control-select", theme.textField.background);
   check("#theme-slips [data-slip-id]", theme.phoneCardFrame.inset);
   check("#theme-slips [data-slip-summary]", phone ? theme.phoneCardFrame.mobileHeader : theme.phoneCardFrame.header);
   check("#theme-member-step", theme.color.brandSoft);
@@ -141,7 +141,9 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {
     // Matches and slips use the same aligned match-row treatment, without the former table header or stripes.
-    check("#theme-matches [data-match-board]", theme.color.surface);
+    check("#theme-matches [data-match-board]", theme.color.page);
+    const list = document.querySelector("#theme-matches [data-match-list]");
+    assert(!!list && getComputedStyle(list).rowGap === theme.space.xs, "Desktop matches retain a small gap");
     const matchRows = [...document.querySelectorAll("#theme-matches [data-desktop-row]")].filter(visible);
     const fixtures = [...document.querySelectorAll("#theme-matches [data-fixture-id]")].filter(visible);
     assert(matchRows.length > 0 && matchRows.length === fixtures.length, "Each desktop fixture uses the shared match row");

@@ -56,7 +56,7 @@ const PhoneBar = styled.div`
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: -10px;
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
-  padding-inline: 8px;
+  padding-inline: ${({ theme }) => theme.layout.gutter};
   ${compactHeaderSurface}
   @media (max-width: 379px) {
     [data-header-auth="register"] { > svg { display: block; } > span { display: none; } }

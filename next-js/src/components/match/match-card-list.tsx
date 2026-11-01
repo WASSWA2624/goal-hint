@@ -20,7 +20,7 @@ const Board = styled.div<{ $indexLength: number }>`
   ${media.desktop} {
     ${desktopMatchBaseStyles}
     ${alignedLedgerStyles}
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.page};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
     box-shadow: none;
@@ -46,7 +46,8 @@ const List = styled.ul`
 
   ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+    gap: ${({ theme }) => theme.space.xs};
+    > li { background: ${({ theme }) => theme.color.surface}; }
     > li + li { border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset}; }
   }
 `;

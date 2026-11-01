@@ -19,7 +19,7 @@ const Group = styled.div`
   display: grid;
   min-inline-size: 0;
   margin-block-start: -8px;
-  margin-inline: -8px;
+  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
   ${media.desktop} { display: none; }
 `;
 const Bar = styled.div`
@@ -27,7 +27,7 @@ const Bar = styled.div`
   ${compactHeaderRow}
   justify-content: space-between;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  padding-inline: 8px;
+  padding-inline: ${({ theme }) => theme.layout.gutter};
   ${compactHeaderSurface}
   ${media.desktop} { display: none; }
 `;

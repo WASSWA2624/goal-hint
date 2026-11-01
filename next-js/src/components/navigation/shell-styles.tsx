@@ -87,7 +87,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
 export const HeaderContent = styled(Container)`
   ${compactHeaderRow}
   min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
-  padding-inline: 8px;
+  padding-inline: ${({ theme }) => theme.layout.gutter};
   ${desktop} { flex-wrap: nowrap; gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
   ${desktopContentPadding()}

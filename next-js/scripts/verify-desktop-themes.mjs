@@ -92,8 +92,16 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         const statusCorners = !statusStyle || ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"]
           .every(corner => Number.parseFloat(statusStyle[corner]) > 0) && statusStyle.borderTopWidth === "0px";
         const distributionBars = canvas.querySelectorAll("[data-performance-summary] > [aria-hidden=true]").length;
-        const textFieldErrors = [];
+        const textFieldErrors = [], selectErrors = [];
         if (document.querySelector('[data-preview-theme="porcelain-blue"]')) {
+          for (const select of canvas.querySelectorAll("select, [data-select-trigger]")) {
+            const bounds = select.getBoundingClientRect();
+            if (!bounds.width || !bounds.height || select.matches(":disabled")) continue;
+            const face = getComputedStyle(select).opacity === "0" ? select.closest("[data-floating-control]") : select;
+            if (face && select.getAttribute("aria-invalid") !== "true" && getComputedStyle(face).backgroundColor !== "rgb(255, 255, 255)") {
+              selectErrors.push(`${select.id || select.name || select.getAttribute("aria-label")}: select is not white`);
+            }
+          }
           for (const input of canvas.querySelectorAll('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"], [type="button"], [type="submit"]), textarea')) {
             const bounds = input.getBoundingClientRect();
             if (!bounds.width || !bounds.height || input.matches(":disabled")) continue;
@@ -115,7 +123,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           themes: document.querySelectorAll('nav[aria-label="Desktop themes"] a').length,
           screens: document.querySelectorAll('nav[aria-label="Preview screens"] a').length,
           overlap: header.width > 0 && header.height > 0 && header.top < studio.bottom - 1,
-          outsideParent, bordered, idleProgressVisible, textFieldErrors,
+          outsideParent, bordered, idleProgressVisible, textFieldErrors, selectErrors,
           footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, statusCorners, distributionBars, content: canvas.textContent.trim().length };
       });
       const ratio = contrast(result.foreground, result.background);
@@ -125,6 +133,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
       if (result.idleProgressVisible) errors.push(`${theme}/${screen}: idle loading track must not form a header border`);
       if (result.footerBackground && result.footerBackground !== result.background) errors.push(`${theme}/${screen}: footer must share the page background`);
       for (const error of result.textFieldErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
+      for (const error of result.selectErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
       if (!result.statusCorners) errors.push(`${theme}/${screen}: status selection needs subtle borderless corners`);
       if (result.distributionBars) errors.push(`${theme}/${screen}: performance distribution bar must be absent`);
       if (result.themes !== 10 || result.screens !== 12) errors.push(`${theme}/${screen}: missing navigation`);

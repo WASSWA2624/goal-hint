@@ -3,7 +3,7 @@
 import { cloneElement, useEffect, useId, useRef, useState, type AriaAttributes, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
 import styled from "styled-components";
 import { FloatingOutline } from "./floating-outline";
-import { textFieldSurface } from "./filled-surfaces";
+import { selectSurface, textFieldSurface } from "./filled-surfaces";
 import { floatingControl, floatingFieldState, floatingLabel, floatingOutline } from "./floating-field-styles";
 
 type ControlProps = { id?: string; value?: string | number | readonly string[]; defaultValue?: string | number | readonly string[]; placeholder?: string; type?: string } & Pick<AriaAttributes, "aria-describedby" | "aria-invalid">;
@@ -62,12 +62,12 @@ const Frame = styled.div`
     &, &[aria-invalid="true"] { border-color: transparent; }
   }
   &&& > select[data-feed-status] { border: 0; }
-  &&& > select { padding-inline-end: 24px; }
+  &&& > select { ${selectSurface} padding-inline-end: 24px; }
   &&& > textarea { block-size: auto; min-block-size: 5.5rem; resize: vertical; }
   &:has(> textarea) > label { inset-block-start: 12px; transform: none; }
   &&:not(:focus-within)[data-floating-filled="false"] > input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]) { color: transparent; }
   > select:has(option:checked[value=""]) { color: transparent; }
-  > select option { color: ${({ theme }) => theme.color.text}; }
+  > select option { color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.textField.background}; }
   &&[data-field-leading="true"] > label { inset-inline-start: 38px; max-inline-size: calc(100% - 48px); }
   &&[data-field-leading="true"] > input { padding-inline-start: 38px; }
   &&[data-field-trailing="true"] > input { padding-inline-end: 92px; }
