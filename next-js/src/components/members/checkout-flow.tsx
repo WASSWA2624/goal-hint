@@ -21,7 +21,7 @@ import { preparePaymentImage } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
 import { CheckoutActions, CheckoutChoices, CheckoutEvidenceField, CheckoutFundingFields, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutScreenshot, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { MobileMoneyLogo } from "./mobile-money-logo";
-import { loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
+import { capCheckoutFunding, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
 
 const emptyView: CheckoutView = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
 const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Referral days" };
@@ -58,7 +58,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     void loadCheckoutDraft(key).then(stored => {
       if (!alive) return;
       if (stored?.draft && stored.draft.purpose === (topUp ? "topup" : stored.draft.purpose)) {
-        setDraft({ ...stored.draft, accepted: false }); setImage(stored.image);
+        setDraft(capCheckoutFunding({ ...stored.draft, accepted: false }, initialView, plans)); setImage(stored.image);
       } else setDraft(current => {
         const previous = initialView.lastMethod;
         const method = previous && Object.hasOwn(methodNames, previous)
@@ -84,7 +84,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   async function refresh() {
     const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin" });
     if (!response.ok) throw new Error("Status could not refresh. Your request is kept.");
-    const next: CheckoutView = await response.json(); setView(next);
+    const next: CheckoutView = await response.json(); setView(next); setDraft(current => capCheckoutFunding(current, next, plans));
     if (next.requests.some(r => r.status === "approved")) { void refreshMemberSession(); router.refresh(); }
     return next;
   }
@@ -92,13 +92,13 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     let alive = true;
     const update = () => { if (document.visibilityState === "visible") void fetch("/api/account/checkout", { cache: "no-store" }).then(async r => {
       if (!r.ok || !alive) return; const next: CheckoutView = await r.json();
-      if (alive) { setView(next); void refreshMemberSession(); }
+      if (alive) { setView(next); setDraft(current => capCheckoutFunding(current, next, plans)); void refreshMemberSession(); }
     }).catch(() => {}); };
     const timer = setInterval(update, 20_000); window.addEventListener("focus", update); window.addEventListener("online", update);
     document.addEventListener("visibilitychange", update);
     return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update); };
-  }, []);
-  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => ({ ...d, ...values, accepted: values.accepted ?? false })); setError(""); };
+  }, [plans]);
+  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => capCheckoutFunding({ ...d, ...values, accepted: values.accepted ?? false }, view, plans)); setError(""); };
   const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
     method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
   const selectionKey = JSON.stringify(selection());
@@ -262,8 +262,11 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           <span data-method-text>{methodNames[method]}{method === "wallet" && <small>{formatUgx(view.availableWalletUgx)}</small>}{method === "referral" && <small>{view.availableReferralDays} days available</small>}</span>
         </label>)}</CheckoutChoices>
         {!topUp && draft.method && <CheckoutFundingFields>
-          {["mtn", "airtel"].includes(draft.method) && <TextInput label="Wallet to use (UGX)" inputMode="numeric" value={draft.walletUgx} onChange={e => update({ walletUgx: e.target.value.replace(/\D/gu, "") })} />}
-          <TextInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} inputMode="numeric" value={draft.referralDays} onChange={e => update({ referralDays: e.target.value.replace(/\D/gu, "") })} />
+          {["mtn", "airtel"].includes(draft.method) && <TextInput label="Wallet to use (UGX)" type="number" inputMode="numeric" min={0}
+            max={Math.min(view.availableWalletUgx, plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0)} step={1}
+            value={draft.walletUgx} onChange={e => update({ walletUgx: e.target.value })} />}
+          <TextInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} type="number" inputMode="numeric" min={0}
+            max={Math.min(365, view.availableReferralDays)} step={1} value={draft.referralDays} onChange={e => update({ referralDays: e.target.value })} />
         </CheckoutFundingFields>}
         {draft.method && <PaymentDestination selection={selection()} />}
         <WizardActions><Button variant="secondary" onClick={() => update({ step: 0 })}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>

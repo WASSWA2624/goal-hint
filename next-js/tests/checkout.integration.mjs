@@ -59,6 +59,17 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(Date.parse(redeemed.endsAt) - now(), 10 * 86_400_000);
     assert.equal((await checkout.read(who)).availableReferralDays, 0);
   });
+  await t.test("external funding rejects contributions above spendable balances without creating a request", async () => {
+    const who = await member(); await fund(who, 2000, 2);
+    for (const method of ["mtn", "airtel"]) for (const patch of [{ walletUgx: 2001 }, { referralDays: 3 }]) {
+      const selection = select({ method, ...patch }), quoted = await checkout.quote(who, selection);
+      assert.equal(quoted.ok, false); assert.equal(quoted.code, "balance-changed");
+      assert.equal((await checkout.confirm(who, selection, randomUUID(), "invalid", true, proof())).ok, false);
+    }
+    assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: who.accountId } })), 0);
+    assert.equal((await checkout.read(who)).availableWalletUgx, 2000);
+    assert.equal((await checkout.read(who)).availableReferralDays, 2);
+  });
   await t.test("an external receipt requires a message or screenshot; extraction failure still allows manual corrections", async () => {
     const who = await member(), selection = select(), quoted = await checkout.quote(who, selection);
     const missing = await checkout.confirm(who, selection, randomUUID(), quoted.value.quoteKey, true,

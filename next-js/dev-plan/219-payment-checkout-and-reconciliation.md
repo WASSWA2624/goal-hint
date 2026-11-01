@@ -15,3 +15,5 @@ Reservations last 48 hours; expired requests require customer reconfirmation bef
 Completed the customer layout refinements: inline progress labels, one-line pay summary, paired methods with icons, compact provider/copy row, full-width pasteable evidence, screenshot preview and editable extracted timestamps. External receipts require a message or screenshot on both client and server.
 
 Verified with restricted real MySQL accounting/migration/admin/retention scenarios, responsive browser acceptance, focused unit/HTTP checks, schema checks, lint, TypeScript and production builds. Existing unrelated unit-suite failures are recorded in `docs/payment-checkout.md`.
+
+Funding fields immediately cap wallet contributions at the available balance and package price, and referral days at the available days (up to 365). The same caps apply to restored drafts, package changes and refreshed balances; changes clear purchase confirmation. Server-side balance validation remains authoritative.

@@ -5,6 +5,7 @@ import { checkoutMethodAvailable, checkoutSelectionSchema, receiptInputSchema, f
 import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
+import { capCheckoutFunding } from "../src/components/members/checkout-draft.ts";
 
 test("checkout uses integer funding and referral days never reduce the cash price", () => {
   assert.deepEqual(fundingAmounts(5000, 2000, 1000), { amountToSend: 3000, remainingUgx: 2000, excessUgx: 0 });
@@ -21,6 +22,21 @@ test("manual evidence remains valid after failed extraction and original text is
   assert.equal(receiptInputSchema.safeParse(input).success, true);
   for (const patch of [{ amountUgx: 1000.5 }, { amountUgx: 0 }, { paidAt: "yesterday" }, { verified: true }, { original: { text: "x".repeat(12001), extracted: {} } }])
     assert.equal(receiptInputSchema.safeParse({ ...input, ...patch }).success, false);
+});
+
+test("funding inputs cap edits and restored choices at spendable balances and package cost", () => {
+  const planId = randomUUID(), plans = [{ id: planId, priceUgx: 5000 }];
+  const draft = { purpose: "plan", planId, walletUgx: "99999999999999999999", referralDays: "99", accepted: true };
+  const available = { availableWalletUgx: 3000, availableReferralDays: 3 };
+  assert.deepEqual(capCheckoutFunding(draft, available, plans), { ...draft, walletUgx: "3000", referralDays: "3", accepted: false });
+  assert.equal(capCheckoutFunding(draft, { ...available, availableWalletUgx: 10000 }, plans).walletUgx, "5000");
+  assert.equal(capCheckoutFunding({ ...draft, referralDays: "999" }, { ...available, availableReferralDays: 500 }, plans).referralDays, "365");
+  const lowered = capCheckoutFunding({ ...draft, walletUgx: "3000", referralDays: "3" }, { availableWalletUgx: 0, availableReferralDays: 0 }, plans);
+  assert.equal(lowered.walletUgx, "0"); assert.equal(lowered.referralDays, "0"); assert.equal(lowered.accepted, false);
+  const blank = { ...draft, walletUgx: "", referralDays: "" };
+  assert.equal(capCheckoutFunding(blank, available, plans), blank, "Clearing an input remains possible.");
+  const valid = { ...draft, walletUgx: "500", referralDays: "1" };
+  assert.equal(capCheckoutFunding(valid, available, plans), valid, "Available choices stay unchanged.");
 });
 
 test("a previous method is usable only with its current provider or sufficient available balance", () => {
