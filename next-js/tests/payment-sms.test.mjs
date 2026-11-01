@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { parsePaymentSms, paymentEvidence } from "../src/domain/payment-sms.ts";
+import { parsePaymentSms, paymentDestination, paymentEvidence } from "../src/domain/payment-sms.ts";
 
 const fixtures = JSON.parse(await readFile(new URL("fixtures/payment-sms/synthetic.json", import.meta.url), "utf8"));
 for (const sample of fixtures.samples) test(`synthetic SMS: ${sample.label}`, () => assert.deepEqual(parsePaymentSms(sample.text, fixtures.ownerNumbers), sample.expected));
@@ -11,6 +11,16 @@ test("garbage and fee/balance-only messages supply no amount or ID", () => {
 test("the owner's recipient selects its network, while a foreign recipient warns without preventing edits", () => {
   assert.equal(parsePaymentSms("MTN: Paid UGX 5,000 to 0700000902", fixtures.ownerNumbers).network, "airtel");
   assert.deepEqual(parsePaymentSms("Paid UGX 5,000 to 0700000999", fixtures.ownerNumbers), { amount: 5000, counterparty: "256700000999", foreignRecipient: "256700000999" });
+});
+
+test("MTN Y’ello branding variants identify the provider without inventing a receiving number", () => {
+  for (const brand of ["Y'ello", "Y’ello", "Y‘ello", "Yʼello", "Y-ello", "Yello", "Y ELLO"]) {
+    const text = `${brand}. Paid UGX 5,000. Transaction ID: TEST123456`;
+    assert.equal(parsePaymentSms(text, {}).network, "mtn", brand);
+    assert.equal(paymentEvidence(text).network, "mtn", brand);
+    assert.deepEqual(paymentDestination(text, {}), { recipient: null, network: "mtn" }, brand);
+  }
+  assert.equal(paymentDestination("Paid UGX 5,000 to Yellow Taxi. Transaction ID: TEST123456", {}).network, null);
 });
 test("a pasted payment SMS or bare ID yields only the transaction ID; other text yields nothing", () => {
   for (const sample of fixtures.samples) assert.equal(paymentEvidence(sample.text).transactionId, sample.expected.transactionId, sample.label);

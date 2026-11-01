@@ -2,6 +2,7 @@ import { normalizePhone, type MobileNetwork } from "./phone.ts";
 import { parseTransactionId, transactionKey } from "./payment.ts";
 
 export type PaymentSms = Readonly<{ amount?: number; transactionId?: string; network?: MobileNetwork; counterparty?: string; foreignRecipient?: string }>;
+const mtnBrand = String.raw`\b(?:MTN|MoMo|Y[\s'’‘ʼ-]*ello)\b`;
 // A transaction ID after its label; shared by the one-message parser and the newest-message search below. A bare "ID:" counts
 // only with no word just before it on its line, so "Agent ID:" or "Merchant ID:" codes are not taken for the payment's ID.
 const transactionLabel = String.raw`\b(?:transaction\s*(?:id|ref(?:erence)?)|trans\s*id|txn\s*id|tid|(?<![A-Z][ \t]*)id(?=\s*[:#]))\s*[:#=.-]?\s*([A-Z0-9][A-Z0-9.-]{3,39})(?![A-Z0-9.-])`;
@@ -20,7 +21,7 @@ export function parsePaymentSms(text: string, ownerNumbers: Readonly<Partial<Rec
   const transactionId = labelledId(new RegExp(transactionLabel, "iu").exec(text)?.[1]);
   if (transactionId) result.transactionId = transactionId;
   if (/\bAirtel\b/iu.test(text)) result.network = "airtel";
-  else if (/\bMTN\b|\bMoMo\b/iu.test(text)) result.network = "mtn";
+  else if (new RegExp(mtnBrand, "iu").test(text)) result.network = "mtn";
   const recipient = /\b(?:to|recipient|receiver)\s*[:=]?\s*(?:[^\d\n]{0,60}?)((?:\+?256[ -]?)?0?7\d{2}(?:[ -]?\d{3}){2})(?!\d)/iu.exec(text)?.[1];
   const sender = /\b(?:from|sender)\s*[:=]?\s*(?:[^\d\n]{0,60}?)((?:\+?256[ -]?)?0?7\d{2}(?:[ -]?\d{3}){2})(?!\d)/iu.exec(text)?.[1];
   const counterparty = normalizePhone(recipient ?? sender);
@@ -103,7 +104,7 @@ export function paymentDestination(text: string, ownerNumbers: Readonly<Partial<
     return number && Object.values(ownerNumbers).some(value => normalizePhone(value) === number)
       && !sender.test(context.slice(Math.max(0, match.index - 80), match.index)) ? [number] : [];
   }).at(-1);
-  const brand = [...context.matchAll(/\b(MTN|MoMo|Airtel)\b/giu)].at(-1)?.[1];
+  const brand = [...context.matchAll(new RegExp(`${mtnBrand}|\\bAirtel\\b`, "giu"))].at(-1)?.[0];
   return { recipient: normalizePhone(labelled?.[1]) ?? known ?? null,
     network: brand ? brand.toLowerCase() === "airtel" ? "airtel" as const : "mtn" as const : null };
 }

@@ -157,11 +157,12 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const warnings = useMemo(() => external ? checkoutEvidenceWarnings({ text: draft.text, screenshotText, hasImage,
     transactionId: draft.transactionId, amountUgx: draft.amountUgx }, receiptProvider, numbers) : [],
   [external, draft.text, screenshotText, hasImage, draft.transactionId, draft.amountUgx, receiptProvider, numbers]);
-  const warningKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.text, screenshotText, draft.screenshot?.imageSha256, draft.transactionId, draft.amountUgx, draft.payerPhone]);
+  const warningKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.text, screenshotText, draft.screenshot?.imageSha256, draft.transactionId, draft.amountUgx]);
   const sourceKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.originalText, screenshotText, hasImage]);
   useEffect(() => {
-    if (!loaded || draft.step < 1 || !external || busy || readingActive || error || notice || warningDialog || draft.text !== draft.originalText) return;
-    if (!warnings.length || warningsAccepted === warningKey) { autoWarningKey.current = sourceKey; return; }
+    if (!loaded || draft.step !== 2 || !external || busy || readingActive || error || notice || warningDialog || draft.text !== draft.originalText) return;
+    // Missing branding alone needs one confirmation at Next, rather than interrupting evidence entry.
+    if (!warnings.some(warning => !warning.id.endsWith(".unknown-provider")) || warningsAccepted === warningKey) { autoWarningKey.current = sourceKey; return; }
     if (autoWarningKey.current === sourceKey) return;
     const timer = setTimeout(() => { autoWarningKey.current = sourceKey; setWarningDialog({ warnings, key: warningKey }); }, 0);
     return () => clearTimeout(timer);

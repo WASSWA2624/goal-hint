@@ -70,6 +70,22 @@ test("advisory warnings cover method, source disagreements, entered fields and u
   assert.equal(receiptEvidenceValidation(original, [...history, { evidence: { extracted: { ...original.extracted, validationFingerprint: "b".repeat(64) } } }]).reviewed, false);
 });
 
+test("provider confirmation avoids false branding warnings while retaining actual discrepancies", () => {
+  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+  const plain = "Paid UGX 5,000. Transaction ID: TEST123456";
+  const input = { text: `Y’ello. ${plain}`, screenshotText: plain, hasImage: true, transactionId: "TEST123456", amountUgx: "5000" };
+  assert.deepEqual(checkoutEvidenceWarnings(input, "mtn", numbers), [], "Matching branded evidence supports the unbranded source.");
+  assert.deepEqual(checkoutEvidenceWarnings({ ...input, text: plain, screenshotText: `MTN. ${plain}` }, "mtn", numbers), []);
+  const unknown = checkoutEvidenceWarnings({ ...input, text: "", screenshotText: plain }, "mtn", numbers);
+  assert.deepEqual(unknown, [{ id: "screenshot.unknown-provider", message: "We couldn’t confirm the screenshot is from MTN Mobile Money." }]);
+  assert.ok(checkoutEvidenceWarnings(input, "airtel", numbers).some(w => w.id === "message.method"));
+  const different = checkoutEvidenceWarnings({ ...input, screenshotText: plain.replace("TEST123456", "OTHER123456") }, "mtn", numbers);
+  assert.ok(different.some(w => w.id === "screenshot.unknown-provider"));
+  assert.ok(different.some(w => w.id === "sources.id"));
+  const foreign = checkoutEvidenceWarnings({ ...input, screenshotText: "Paid UGX 5,000 to 0700000999. Transaction ID: TEST123456" }, "mtn", numbers);
+  assert.ok(foreign.some(w => w.id === "screenshot.method"), "A matching ID must not hide an incorrect receiving account.");
+});
+
 test("amount and phone displays retain canonical values and support edits around separators", () => {
   assert.equal(groupInteger("2500000"), "2,500,000"); assert.equal(groupInteger(""), "");
   assert.equal(digitCaret("2,500,000", 2), 3);

@@ -122,7 +122,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber, [provider]: row.receivingNumber ?? (provider === "mtn" ? settings.mtnNumber : settings.airtelNumber) };
     const screenshotText = image && typeof input.original.extracted.screenshotText === "string" ? input.original.extracted.screenshotText : "";
     const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);
-    if (warnings.length && !input.warningsAccepted) return fail("Review the payment evidence warnings and choose Continue for admin review before submitting.", "evidence-warning");
+    if (warnings.length && !input.warningsAccepted) return fail("Review the payment details and choose Confirm before submitting.", "evidence-warning");
     const fingerprint = createHash("sha256").update(JSON.stringify([provider, transactionId, input.amountUgx, payerPhone, input.paidAt, input.original.text, screenshotText,
       image ? createHash("sha256").update(image).digest("hex") : null, warnings])).digest("hex");
     const original = { ...input.original, extracted: { ...input.original.extracted, validationVersion: 1, selectedProvider: provider,

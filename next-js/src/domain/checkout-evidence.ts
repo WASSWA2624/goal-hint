@@ -31,7 +31,10 @@ export function checkoutEvidenceWarnings(input: EvidenceComparison, provider: Mo
   for (const source of sources) {
     const mismatch = paymentDestinationMismatch(source.text, provider, numbers, source.label);
     if (mismatch) warnings.push({ id: `${source.id}.method`, message: mismatch });
-    if (!source.network) warnings.push({ id: `${source.id}.unknown-provider`, message: `We couldn’t confidently identify MTN or Airtel in the ${source.label}. You selected ${names[provider]}; the admin will check the receiving account.` });
+    const supported = sources.some(other => other !== source && other.network === provider && source.evidence.transactionId && other.evidence.transactionId
+      && transactionKey(source.evidence.transactionId) === transactionKey(other.evidence.transactionId)
+      && source.evidence.amount !== null && source.evidence.amount === other.evidence.amount);
+    if (!source.network && !mismatch && !supported) warnings.push({ id: `${source.id}.unknown-provider`, message: `We couldn’t confirm the ${source.label} is from ${names[provider]}.` });
     if (input.transactionId && source.evidence.transactionId && transactionKey(input.transactionId) !== transactionKey(source.evidence.transactionId))
       warnings.push({ id: `${source.id}.reported-id`, message: `The ${source.label} shows transaction ID ${source.evidence.transactionId}, while the entered ID is ${input.transactionId}.` });
     if (input.amountUgx && Number(input.amountUgx) > 0 && source.evidence.amount !== null && Number(input.amountUgx) !== source.evidence.amount)
