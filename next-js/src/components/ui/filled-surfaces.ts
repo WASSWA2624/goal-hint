@@ -1,6 +1,34 @@
 import { css } from "styled-components";
 import { media } from "@/styles/theme";
 
+/** Text entry keeps a visible boundary on a white canvas; composite fields frame their input once. */
+export const textFieldSurface = css`
+  transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing},
+    border-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
+  border: ${({ theme }) => theme.textField.borderWidth} solid ${({ theme }) => theme.color.controlBorder};
+  background: ${({ theme }) => theme.textField.background};
+  ${media.hover} {
+    &:hover:not(:disabled):not([aria-invalid="true"]):not(:has(> input[aria-invalid="true"])) {
+      background: ${({ theme }) => theme.textField.hoverBackground};
+    }
+  }
+  &:focus-within:not([aria-invalid="true"]):not(:has(> input[aria-invalid="true"])) {
+    background: ${({ theme }) => theme.textField.hoverBackground};
+  }
+  &[aria-invalid="true"], &:has(> input[aria-invalid="true"]) {
+    border-color: ${({ theme }) => theme.color.outcome.incorrect.text};
+    color: ${({ theme }) => theme.color.outcome.incorrect.text};
+    background: ${({ theme }) => theme.color.outcome.incorrect.background};
+  }
+  &:disabled {
+    color: ${({ theme }) => theme.color.disabledText};
+    background: ${({ theme }) => theme.color.disabledSurface};
+  }
+`;
+
+export const textFieldSelector = 'input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]), textarea';
+export const nativeTextFieldSurface = css`&:is(${textFieldSelector}) { ${textFieldSurface} }`;
+
 /** Shared by standalone fields and composite controls (search, phone, filters). */
 export const filledField = css`
   border: 0;
@@ -16,6 +44,7 @@ export const filledField = css`
     color: ${({ theme }) => theme.color.disabledText};
     background: ${({ theme }) => theme.color.disabledSurface};
   }
+  ${nativeTextFieldSurface}
 `;
 
 /** Quiet actions use the same readable tint as the approved header actions. */

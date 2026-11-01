@@ -4,7 +4,8 @@ import type { ComponentPropsWithRef } from "react";
 import styled, { css } from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
-import { controlFeedback, filterControlColors } from "./filter-parts";
+import { filterControlColors } from "./filter-parts";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 
 type FeedSearchInputProps = Omit<ComponentPropsWithRef<"input">, "type" | "aria-label" | "children"> & {
   label: string;
@@ -14,7 +15,7 @@ type FeedSearchInputProps = Omit<ComponentPropsWithRef<"input">, "type" | "aria-
   mobile?: boolean;
 };
 
-const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
+const Field = styled.div.attrs<{ "data-text-field-frame"?: string }>({ "data-text-field-frame": "" })<{ $compact?: boolean; $mobile?: boolean }>`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   min-inline-size: 0;
@@ -23,7 +24,6 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
-  ${controlFeedback}
   &:focus-within {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
     outline-offset: 2px;
@@ -31,14 +31,14 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
   ${({ $compact }) => $compact && css`
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    column-gap: 6px;
+    column-gap: 0;
     min-block-size: 2rem;
     padding-inline-start: 8px;
     border-radius: ${({ theme }) => theme.radius.control};
     background: ${({ theme }) => theme.color.field};
-    > svg { flex: none; font-size: 0.875rem; color: ${({ theme }) => theme.color.mutedText}; }
+    > svg { flex: none; margin-inline-end: 6px; font-size: 0.875rem; color: ${({ theme }) => theme.color.mutedText}; }
     > input, > button { min-block-size: calc(2rem - 2px); font-size: 0.75rem; }
-    > input { padding: 4px 0; }
+    > input { padding: 4px 8px 4px 0; }
     > button {
       align-self: stretch;
       padding-inline: 9px;
@@ -54,13 +54,14 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
   `}
   ${({ $mobile }) => $mobile && css`
     ${media.belowDesktop} {
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding-inline-start: 0;
       align-items: center;
       min-block-size: 36px;
       border-radius: ${({ theme }) => theme.radius.control};
       background: ${({ theme }) => theme.color.field};
       > input, > button { min-block-size: 34px; }
-      > input { padding: 2px 6px 2px 0; }
+      > input { padding: 2px 8px; }
       > input::placeholder { font-size: 0.75rem; }
       > button {
         min-inline-size: 36px;
@@ -71,6 +72,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
       > button > svg { font-size: 0.9375rem; }
     }
   `}
+  && { ${textFieldSurface} }
 `;
 
 const Input = styled.input`
@@ -98,7 +100,10 @@ const Submit = styled.button`
   min-block-size: 2.625rem;
   padding-inline: 14px;
   border: 0;
-  border-radius: ${({ theme }) => theme.radius.control};
+  border-radius: ${({ theme }) => theme.radius.none};
+  border-start-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - ${theme.textField.borderWidth}))`};
+  border-end-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - ${theme.textField.borderWidth}))`};
+  align-self: stretch;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surfaceMuted};
   font: inherit;
@@ -118,13 +123,13 @@ const Submit = styled.button`
 /** A single search field with an inset action; its parent form owns submission. */
 export function FeedSearchInput({ label, submitLabel, submitDisabled, compact = false, mobile = false, ...props }: FeedSearchInputProps) {
   const input = <Input {...props} type="search" aria-label={label} enterKeyHint={mobile ? "search" : props.enterKeyHint} />;
-  const submit = <Submit type="submit" disabled={props.disabled || submitDisabled}
+  const submit = <Submit type="submit" data-feed-search-submit disabled={props.disabled || submitDisabled}
     aria-label={mobile ? submitLabel : undefined} title={mobile ? submitLabel : undefined}>
     {(mobile || !compact) && <SearchIcon aria-hidden="true" />}{!mobile && submitLabel}
   </Submit>;
   return <Field data-feed-search $compact={compact} $mobile={mobile}>
-    {mobile ? submit : compact && <SearchIcon aria-hidden="true" />}
+    {compact && !mobile && <SearchIcon aria-hidden="true" />}
     {input}
-    {!mobile && submit}
+    {submit}
   </Field>;
 }

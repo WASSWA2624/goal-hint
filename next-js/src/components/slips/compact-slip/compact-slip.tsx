@@ -132,7 +132,7 @@ export function CompactSlip({ slip, index, locale, variant = "clean-ledger", ini
   return <CompactSlipDisclosure totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length}
     index={index} locale={locale} variant={variant} initiallyOpen={initiallyOpen} collapsible={collapsible} showRank={showRank} slipId={slip.id} headingId={headingId} outcome={outcome} status={status} action={action}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}>
-      <ul aria-labelledby={headingId}>
+      <ul data-slip-selections aria-labelledby={headingId}>
         {slip.selections.map((selection, selectionIndex) => {
           const result = results?.find((item) => item.fixtureId === selection.fixtureId);
           return variant === "clean-ledger" ? <CleanLedgerSelection key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks={analysisLinks} {...(currentStates ? { matchStates: currentStates } : {})} {...(result ? { result } : {})} />

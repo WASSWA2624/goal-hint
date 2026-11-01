@@ -3,6 +3,7 @@
 import styled from "styled-components";
 import { controlFeedback } from "./filter-parts";
 import { media } from "@/styles/theme";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 
 /** Date and time ranges share clear phone fields and compact desktop controls. */
 export const RangeFieldset = styled.fieldset`
@@ -38,7 +39,7 @@ export const RangeFields = styled.div`
     background: ${({ theme }) => theme.color.field};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
-    ${controlFeedback}
+    ${textFieldSurface}
     &:has(input:focus-visible) { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
     &:has(input[aria-invalid="true"]) { background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   }
@@ -94,6 +95,7 @@ export const RangeFields = styled.div`
       font-size: 16px;
       line-height: 1.2;
       ${controlFeedback}
+      ${textFieldSurface}
       &:focus-visible {
         outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
         outline-offset: 2px;

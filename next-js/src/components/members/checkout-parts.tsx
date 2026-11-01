@@ -1,5 +1,6 @@
 "use client";
 import styled from "styled-components";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import type { CheckoutQuote } from "@/domain/checkout";
 import { fundingAmounts } from "@/domain/checkout";
 import { formatUgx } from "@/domain/subscription-plans";
@@ -82,7 +83,7 @@ export const CheckoutMessage = styled.textarea`
   display: block; box-sizing: border-box; inline-size: 100%; min-inline-size: 0; min-block-size: 88px;
   padding: 10px; resize: vertical; font: inherit; font-size: 15px; line-height: 21px;
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.field};
+  color: ${({ theme }) => theme.color.text}; ${textFieldSurface}
   ${focusTreatment}
 `;
 export const CheckoutScreenshot = styled.div`

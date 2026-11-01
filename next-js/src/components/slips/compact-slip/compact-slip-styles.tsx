@@ -1,8 +1,8 @@
 "use client";
 
 import styled from "styled-components";
-import { media } from "@/styles/theme";
 import { slipDisclosureIndicator } from "../slip-disclosure-styles";
+import { joinedSlipSelections } from "../joined-slip-styles";
 
 /** A full-row link leaves the compact content with one generous, predictable analysis target. */
 export const MatchRow = styled.div`
@@ -38,16 +38,11 @@ export const MatchRow = styled.div`
 export const CompactCard = styled.article`
   --slip-header-action-size: 28px;
   --slip-header-action-gap: 10px;
-  --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.border.width}))`};
-  min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  border: 0; border-radius: ${({ theme }) => theme.radius.surface};
+  --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.phoneCardFrame.ruleWidth}))`};
+  min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.inset};
+  border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+  border-radius: ${({ theme }) => theme.radius.surface};
   container: compact-slip / inline-size;
-  /* Explicit expanded-slip frame: retain its thickness with borderless control themes. */
-  &:has(> details[open]) {
-    border-color: ${({ theme }) => theme.phoneCardFrame.selection};
-    outline: ${({ theme }) => `max(2px, calc(3px - ${theme.border.width}))`} solid ${({ theme }) => theme.phoneCardFrame.selection};
-    outline-offset: 0;
-  }
   /* Paint joined headers inside the outer curve without clipping focus or tooltips. */
   > details { border-radius: var(--slip-inner-radius); }
   /* Native disclosure slots do not reliably inherit non-inherited corner properties. */
@@ -86,15 +81,6 @@ export const CompactCard = styled.article`
   ul { list-style: none; display: grid; margin: 0; padding: 0; min-inline-size: 0; }
   li { min-inline-size: 0; }
   li + li { border-block-start: 0; }
-
-  &[data-compact-slip="clean-ledger"] [data-slip-content] > ul { gap: 4px; padding: 4px 6px; }
-  &[data-compact-slip="clean-ledger"] [data-slip-content] > ul > li + li { border-block-start: 0; }
-  ${media.belowDesktop} {
-    &[data-compact-slip="clean-ledger"] {
-      background: ${({ theme }) => theme.phoneCardFrame.inset};
-      [data-slip-content] > ul { gap: 6px; padding: 6px; }
-    }
-  }
 
   &[data-compact-slip="clean-ledger"] [data-slip-summary]:not([data-mobile-slip-header]) { padding-block: 4px; row-gap: 2px; }
   @container compact-slip (max-width: 12rem) {
@@ -238,4 +224,5 @@ export const CompactCard = styled.article`
     [data-summary-fact] strong { font-size: 0.8125rem; }
     ${MatchRow} { padding-inline: 7px; column-gap: 6px; }
   }
+  ${joinedSlipSelections}
 `;

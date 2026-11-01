@@ -1,6 +1,6 @@
 "use client";
 
-import { filledTableRows } from "@/components/ui/filled-surfaces";
+import { filledTableRows, nativeTextFieldSurface } from "@/components/ui/filled-surfaces";
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters, mobileFilterPanel } from "@/components/ui/filter-chrome";
@@ -160,6 +160,7 @@ export const Field = styled.label`
     border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.field};
+    ${nativeTextFieldSurface}
     font-size: ${({ theme }) => theme.typography.scale.body};
   }
   ${media.belowDesktop} { flex-basis: calc(50% - 6px); max-inline-size: none; }

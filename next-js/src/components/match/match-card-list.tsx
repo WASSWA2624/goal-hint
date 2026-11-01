@@ -47,7 +47,7 @@ const List = styled.ul`
   ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    > li + li { border-block-start: 0; }
+    > li + li { border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset}; }
   }
 `;
 const Divider = styled.li`
@@ -79,6 +79,6 @@ export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardL
   const indexLabel = rowNumberMaximum !== undefined && Number.isSafeInteger(rowNumberMaximum) && rowNumberMaximum > 0
     ? messages.number(Math.min(rowNumberMaximum, 9_999)) : "";
   return <MatchCardLayoutContext.Provider value={desktop}><DesktopContent data-match-section><Board $indexLength={indexLabel.length} data-match-board>
-    <List role="list" {...props} />
+    <List role="list" data-match-list {...props} />
   </Board></DesktopContent></MatchCardLayoutContext.Provider>;
 }

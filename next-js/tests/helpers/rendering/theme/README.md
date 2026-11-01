@@ -34,3 +34,9 @@ borders, phone match/slip frames, and the Won, Lost and Pending performance fill
 labels, numbers and icons against their semantic theme colors. The light-header
 and dark phone-card assertions independently catch the reported mixed-theme
 regressions.
+
+The always-expanded one-match and three-match examples under `#theme-joined-slips`
+cover single, first, middle, and last row geometry. Joined selection checks run
+on both desktop and compact layouts: white light-mode fills, no gaps, 1px inset
+separators, only exposed rounded corners, and matching analysis focus geometry.
+Border checks permit only the approved slip perimeter and selection separators.

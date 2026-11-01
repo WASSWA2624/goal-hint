@@ -7,6 +7,7 @@ type ThemePalette = Readonly<{
   cardBorder?: string; cardInset?: string; cardHeader?: string;
   mobileSlipHeader?: string; slipSelection?: string;
   fieldHover?: string;
+  input?: string;
 }>;
 export type ThemeDirection = Readonly<{
   id: string; name: string; description: string; mode: "light" | "dark";
@@ -33,10 +34,10 @@ export const porcelainBlueDirection: ThemeDirection = {
   mode: "light", font: manrope, fontLabel: "Manrope", shape: "subtle",
   palette: {
     page: "#FFFFFF", surface: "#EDF1F7", muted: "#F1F4FA", text: "#182640", secondary: "#53627A",
-    border: "#DCE3EF", control: "#77859C", fieldHover: "#D2D8E2",
+    border: "#DCE3EF", control: "#77859C", fieldHover: "#D2D8E2", input: "#FFFFFF",
     accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF",
     header: "#EDF1F7", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
-    cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#DCE8FB",
+    cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#EDF1F7",
     mobileSlipHeader: "#EDF1F7", slipSelection: "#FFFFFF",
   },
 };
@@ -48,10 +49,11 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
   const link = direction.mode === "dark" ? p.headerAccent : p.accent;
   const headerDark = p.header !== p.surface;
   const decorativeBorder = `color-mix(in srgb, ${p.border} 55%, ${p.surface})`;
+  const field = blend(p.surface, p.control, 0.22), fieldHover = p.fieldHover ?? blend(p.surface, p.control, 0.26);
   return {
     ...base,
     color: { ...base.color, page: p.page, surface: p.surface, surfaceMuted: p.muted, text: p.text,
-      field: blend(p.surface, p.control, 0.22), fieldHover: p.fieldHover ?? blend(p.surface, p.control, 0.26),
+      field, fieldHover,
       mutedText: blend(p.secondary, p.text, 0.2), border: decorativeBorder, controlBorder: p.control, buttonBorder: decorativeBorder,
       brand: link, brandHover: direction.mode === "dark" ? p.text : p.hover, brandSoft: p.soft,
       link, focus: link, disabledText: p.secondary, disabledSurface: p.muted,
@@ -80,6 +82,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
       : { ...base.radius, surface: base.radius.overlay },
     border: { ...base.border, width: "0px", accentWidth: "0px", focusWidth: "2px" },
     frame: { ...base.frame, desktopCardRadius: direction.shape === "crisp" ? base.radius.control : base.radius.overlay },
+    textField: { background: p.input ?? field, hoverBackground: p.input ?? fieldHover, borderWidth: p.input ? "1px" : "0px" },
     space: { ...base.space, md: "14px", lg: "20px", xl: "24px" },
     gradient: { action: p.accent, actionHover: p.hover, tableHeader: p.muted, page: p.page },
     shadow: { ...base.shadow, cardHover: direction.shape === "crisp" ? "none" : `0 3px 12px ${p.text}0A` },

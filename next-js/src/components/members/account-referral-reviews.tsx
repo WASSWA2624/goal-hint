@@ -3,6 +3,7 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import type { MemberReferralReview } from "@/domain/referral-reviews";
 import { referralReviewRules } from "@/domain/referral-reviews";
 import { accountSectionHref } from "@/domain/account-navigation";
@@ -31,7 +32,7 @@ const AppealField = styled.label`
   display: grid; gap: 6px; font-size: .875rem;
   textarea { box-sizing: border-box; inline-size: 100%; min-block-size: 7rem; padding: 10px;
     border: 0;
-    border-radius: ${({ theme }) => theme.radius.control}; background: ${({ theme }) => theme.color.surface}; color: inherit; font: inherit; resize: vertical; }
+    border-radius: ${({ theme }) => theme.radius.control}; color: inherit; font: inherit; resize: vertical; ${textFieldSurface} }
 `;
 
 export function AccountReferralReviews({ initial, locale = "en", older = false }: { initial: readonly MemberReferralReview[] | null; locale?: string; older?: boolean }) {

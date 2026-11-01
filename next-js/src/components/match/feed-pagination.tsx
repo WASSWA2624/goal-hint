@@ -17,6 +17,10 @@ const Bar = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+  margin-block-start: ${({ theme }) => theme.space.sm};
+  padding-block-start: 12px;
+  background: ${({ theme }) => theme.color.page};
+  border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
   ${desktop} {
     display: flex;
     flex-wrap: wrap;
@@ -36,7 +40,7 @@ export function FeedPagination({ query, today, data, busy, error, onRetry }: {
   const first = data.total === 0 ? 0 : (page - 1) * data.pageSize + 1, last = Math.min(data.total, (page - 1) * data.pageSize + data.records.length);
   const changed = error === "changed" || error === "stale-data";
   if (total < 1) return null;
-  return <Bar>
+  return <Bar data-feed-pagination>
     <p>{messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(data.total) })}</p>
     {error && <p role="alert">{messages.text(changed ? "feed.pagination.changed" : error === "rate-limited" ? "feed.pagination.busy" : "feed.pagination.failed")}
       {" "}<Button variant="quiet" onClick={onRetry} disabled={busy} data-pagination-retry>{messages.text(changed ? "feed.pagination.refresh" : "feed.pagination.retry")}</Button></p>}

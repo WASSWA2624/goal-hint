@@ -185,6 +185,7 @@ export interface GoalHintTheme {
     readonly readingMaxWidth: string;
   };
   readonly frame: Readonly<{ desktopCardRadius: string }>;
+  readonly textField: Readonly<{ background: string; hoverBackground: string; borderWidth: string }>;
   readonly motion: Readonly<{
     fast: string; feedback: string; disclosure: string; surface: string; easing: string;
     reducedDuration: string;
@@ -207,6 +208,8 @@ export interface GoalHintTheme {
   /** Shared compact match frames and the contrasting slip body/header around them. */
   readonly phoneCardFrame: Readonly<{
     border: string; radius: string; shadow: string; inset: string;
+    /** Thin slip perimeter and selection separators, independent of other component borders. */
+    ruleWidth: string;
     /** Desktop slip header, independent of the compact header and selection fills. */
     header: string;
     /** Compact slip headers can reuse a previous canvas without changing their bodies. */
@@ -317,6 +320,7 @@ export const foundationLightTheme: GoalHintTheme = {
   },
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px", readingMaxWidth: "65ch" },
   frame: { desktopCardRadius: brandTokens.shape.radius.none },
+  textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", borderWidth: "1px" },
   motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms" },
   interaction: { pressedFilter: "none", headerHoverBrightness: 1.1, filterHoverBrightness: 0.95, toolHoverBrightness: 0.96 },
   scrollbarColor: "auto",
@@ -356,13 +360,14 @@ export const foundationLightTheme: GoalHintTheme = {
     cardHover: "none",
     popover: "0 8px 24px rgb(7 23 71 / 16%)",
   },
-  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#E8EDF5", header: "#F1F4FA", mobileHeader: brandTokens.colors.white, selection: brandTokens.colors.white },
+  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#E8EDF5", ruleWidth: "1px", header: "#F1F4FA", mobileHeader: brandTokens.colors.white, selection: brandTokens.colors.white },
 };
 
 /** The same semantic contract keeps every native control and detail panel readable in dark mode. */
 export const foundationDarkTheme: GoalHintTheme = {
   ...foundationLightTheme,
   mode: "dark",
+  textField: { background: "#1A2E41", hoverBackground: "#24405B", borderWidth: "0px" },
   color: {
     ...foundationLightTheme.color,
     text: "#F4F7FF",
@@ -453,5 +458,5 @@ export const foundationDarkTheme: GoalHintTheme = {
     },
   },
   shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
-  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", header: "#0D253B", mobileHeader: "#081B2C", selection: "#081B2C" },
+  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", ruleWidth: "1px", header: "#0D253B", mobileHeader: "#081B2C", selection: "#081B2C" },
 };

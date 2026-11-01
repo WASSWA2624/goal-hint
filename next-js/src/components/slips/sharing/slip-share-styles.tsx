@@ -3,6 +3,7 @@
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { Button } from "@/components/ui/controls";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import { slipHeaderActionFrame } from "../slip-disclosure-styles";
 
 export const ShareTrigger = styled(Button)`
@@ -58,7 +59,7 @@ export const DrawerBody = styled.div`
   [data-share-public-note] { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; margin: 12px 0 0; }
   [data-share-error] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
   textarea { inline-size: 100%; min-block-size: 150px; resize: vertical; background: ${({ theme }) => theme.color.field};
-    color: inherit; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: 8px; }
+    color: inherit; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: 8px; ${textFieldSurface} }
 `;
 
 export const DrawerFooter = styled.footer`

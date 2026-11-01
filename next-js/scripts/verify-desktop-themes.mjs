@@ -44,6 +44,11 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
       if (screen === "matches") await page.locator('[data-performance-summary="matches"]').waitFor();
       if (screen === "analytics") await page.getByText("2,846", { exact: true }).waitFor({ timeout: 10000 });
       const result = await page.evaluate(() => {
+        const ruleProbe = document.createElement("span");
+        ruleProbe.style.borderTop = "1px solid";
+        document.body.append(ruleProbe);
+        const ruleWidth = getComputedStyle(ruleProbe).borderTopWidth;
+        ruleProbe.remove();
         const body = getComputedStyle(document.body), canvas = document.querySelector("[data-preview-canvas]");
         const studioElement = document.querySelector("[data-theme-studio]");
         const headerElement = [...canvas.querySelectorAll("[data-app-header], [data-mobile-app-header] > div")]
@@ -61,11 +66,46 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           const bounds = element.getBoundingClientRect();
           if (!bounds.width || !bounds.height) return false;
           const style = getComputedStyle(element);
+          const edges = ["Top", "Right", "Bottom", "Left"];
+          if (element.matches("[data-compact-slip]")) {
+            return edges.some(edge => style[`border${edge}Width`] !== ruleWidth || style[`border${edge}Color`] !== style.backgroundColor);
+          }
+          if (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection]")) {
+            const backdrop = getComputedStyle(element.closest("[data-compact-slip]")).backgroundColor;
+            return edges.some(edge => style[`border${edge}Width`] !== (edge === "Top" ? ruleWidth : "0px")) || style.borderTopColor !== backdrop;
+          }
+          if (element.matches("[data-match-list] > li + li, [data-feed-pagination]")) {
+            return edges.some(edge => !["0px", edge === "Top" ? ruleWidth : "0px"].includes(style[`border${edge}Width`]));
+          }
+          if (element.matches('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"]), textarea, [data-text-field-frame]')) {
+            return edges.some(edge => !["0px", ruleWidth].includes(style[`border${edge}Width`]));
+          }
           return ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"]
             .some(edge => Number.parseFloat(style[edge]) > 0);
         }).map(element => element.tagName.toLowerCase() + (element.id ? `#${element.id}` : ""));
         const idleProgressVisible = !document.querySelector('[data-navigation-pending], main [aria-busy="true"]')
           && [...canvas.querySelectorAll("[data-navigation-progress]")].some(element => getComputedStyle(element).opacity !== "0");
+        const footer = canvas.querySelector("[data-app-footer]");
+        const statusSelect = [...canvas.querySelectorAll("[data-feed-status]")].find(element => element.getBoundingClientRect().width > 0);
+        const statusStyle = statusSelect && getComputedStyle(statusSelect);
+        const statusCorners = !statusStyle || ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"]
+          .every(corner => Number.parseFloat(statusStyle[corner]) > 0) && statusStyle.borderTopWidth === "0px";
+        const distributionBars = canvas.querySelectorAll("[data-performance-summary] > [aria-hidden=true]").length;
+        const textFieldErrors = [];
+        if (document.querySelector('[data-preview-theme="porcelain-blue"]')) {
+          for (const input of canvas.querySelectorAll('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"], [type="button"], [type="submit"]), textarea')) {
+            const bounds = input.getBoundingClientRect();
+            if (!bounds.width || !bounds.height || input.matches(":disabled")) continue;
+            const nativeStyle = getComputedStyle(input);
+            const frame = nativeStyle.borderTopWidth === ruleWidth ? input : input.closest("[data-text-field-frame]");
+            const style = frame && getComputedStyle(frame);
+            if (!style || style.borderTopWidth !== ruleWidth || style.borderRightWidth !== ruleWidth) {
+              textFieldErrors.push(`${input.id || input.name || input.type}: missing field boundary`);
+            } else if (input.getAttribute("aria-invalid") !== "true" && style.backgroundColor !== "rgb(255, 255, 255)") {
+              textFieldErrors.push(`${input.id || input.name || input.type}: text field is not white`);
+            }
+          }
+        }
         return { overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
           foreground: body.color, background: body.backgroundColor,
           mutedForeground: muted.color, mutedBackground: surface.backgroundColor,
@@ -74,13 +114,18 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           themes: document.querySelectorAll('nav[aria-label="Desktop themes"] a').length,
           screens: document.querySelectorAll('nav[aria-label="Preview screens"] a').length,
           overlap: header.width > 0 && header.height > 0 && header.top < studio.bottom - 1,
-          outsideParent, bordered, idleProgressVisible, content: canvas.textContent.trim().length };
+          outsideParent, bordered, idleProgressVisible, textFieldErrors,
+          footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, statusCorners, distributionBars, content: canvas.textContent.trim().length };
       });
       const ratio = contrast(result.foreground, result.background);
       if (result.overflow) errors.push(`${theme}/${screen}: horizontal overflow at ${width}px`);
       if (result.outsideParent) errors.push(`${theme}/${screen}: a panel or form exceeds its parent`);
       if (result.bordered.length) errors.push(`${theme}/${screen}: decorative borders on ${[...new Set(result.bordered)].join(", ")}`);
       if (result.idleProgressVisible) errors.push(`${theme}/${screen}: idle loading track must not form a header border`);
+      if (result.footerBackground && result.footerBackground !== result.background) errors.push(`${theme}/${screen}: footer must share the page background`);
+      for (const error of result.textFieldErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
+      if (!result.statusCorners) errors.push(`${theme}/${screen}: status selection needs subtle borderless corners`);
+      if (result.distributionBars) errors.push(`${theme}/${screen}: performance distribution bar must be absent`);
       if (result.themes !== 10 || result.screens !== 12) errors.push(`${theme}/${screen}: missing navigation`);
       if (result.overlap) errors.push(`${theme}/${screen}: app header overlaps the studio`);
       if (ratio < 4.5) errors.push(`${theme}/${screen}: body contrast ${ratio.toFixed(2)}`);

@@ -9,6 +9,9 @@ import { FeatureBody } from "@/components/admin/settings-feature-styles";
 import { SettingsForm } from "@/components/admin/settings-styles";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
+import { FeedSearchInput } from "@/components/match/feed-search-input";
+import { CheckoutMessage } from "@/components/members/checkout-parts";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { RailNumber, RailStep, StepRail } from "@/components/members/subscribe-styles";
 import { PaymentWizard, WizardActions } from "@/components/members/payment-wizard";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
@@ -24,8 +27,9 @@ import { defaultBestSlipsQuery } from "@/domain/best-slips-query";
 import { parseReportingDate } from "@/domain/calendar";
 import { checkRenderedTheme } from "./theme-checks";
 
-export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; slip: BuiltSlip }) {
+export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureSnapshot[]; slip: BuiltSlip; edgeSlips: BuiltSlip[] }) {
   const theme = useTheme();
+  const desktop = useDesktopLayout();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [query, setQuery] = useState(defaultBestSlipsQuery(false));
   const [result, setResult] = useState<{ mode: string; width: number; errors: string[] } | null>(null);
@@ -72,6 +76,10 @@ export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; 
       <Inline><Button>Primary action</Button><Button variant="secondary" data-surface-control>Secondary action</Button>
         <Button disabled>Disabled action</Button><Button variant="quiet" onClick={() => setDialogOpen(true)} data-open-theme-dialog>Open dialog</Button></Inline>
       <TextInput id="theme-control-input" label="Example input" defaultValue="Synthetic text" />
+      <form id="theme-search" onSubmit={event => event.preventDefault()}><FeedSearchInput id="theme-search-input" label="Synthetic search" submitLabel="Search" compact mobile={!desktop} /></form>
+      <CheckoutMessage id="theme-textarea" aria-label="Synthetic message" defaultValue="Synthetic text" />
+      <TextInput id="theme-invalid-input" label="Invalid example" defaultValue="Synthetic" error="Synthetic validation message" />
+      <TextInput id="theme-disabled-input" label="Disabled example" defaultValue="Synthetic" disabled />
       <SelectInput id="theme-control-select" label="Example selection" defaultValue="one"><option value="one">First example</option><option value="two">Second example</option></SelectInput>
       <StepRail><RailStep><RailNumber id="theme-member-step">1</RailNumber><h3>Payment step</h3><div><p>Synthetic member payment guidance.</p></div></RailStep></StepRail>
     </Stack></Surface>
@@ -83,6 +91,9 @@ export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; 
         selectedFamily={(["match-result", "total-goals", "both-teams-to-score"] as const)[index]!} analysisSlug="synthetic-preview" /></li>)}</MatchCardList>
     </Stack></section>
     <section id="theme-slips"><Stack $gap="sm"><SectionHeading>Slip card</SectionHeading><SlipCard slip={slip} index={0} locale="en" /></Stack></section>
+    <section id="theme-joined-slips"><Stack $gap="sm"><SectionHeading>Joined selection edges</SectionHeading>
+      {edgeSlips.map((example, index) => <SlipCard key={example.id} slip={example} index={index + 1} locale="en" initiallyOpen />)}
+    </Stack></section>
     <CriteriaDialog id="theme-dialog" title="Synthetic criteria" open={dialogOpen} onCancel={() => setDialogOpen(false)} onApply={() => setDialogOpen(false)}
       applyLabel="Apply" cancelLabel="Cancel" closeLabel="Close dialog"><TextInput label="Example dialog field" defaultValue="Synthetic" /></CriteriaDialog>
   </Stack>;

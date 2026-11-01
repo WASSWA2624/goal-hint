@@ -95,13 +95,6 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       border-end-start-radius: var(--slip-inner-radius);
       border-end-end-radius: var(--slip-inner-radius);
     }
-    [data-slip-content] > ul,
-    [data-slip-content] > ul > li:last-child,
-    [data-slip-content] > ul > li:last-child > :is(a, div) {
-      border-end-start-radius: inherit;
-      border-end-end-radius: inherit;
-    }
-
     &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
     &&& [data-compact-slip] > header[data-slip-summary] {
       min-block-size: 44px;

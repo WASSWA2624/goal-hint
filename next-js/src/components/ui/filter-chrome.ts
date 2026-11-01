@@ -2,6 +2,7 @@
 
 import { css } from "styled-components";
 import { media } from "@/styles/theme";
+import { nativeTextFieldSurface, textFieldSelector } from "./filled-surfaces";
 
 export const focusRing = css`
   &:focus-visible {
@@ -37,6 +38,7 @@ export const desktopStickyFilters = css`
 export const filterControlColors = css`
   border: 0;
   background: var(--filter-field-background, ${({ theme }) => theme.color.field});
+  ${nativeTextFieldSurface}
 `;
 
 export const filterButtonColors = css`
@@ -48,6 +50,6 @@ export const filterButtonColors = css`
 
 export const controlFeedback = css`
   transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
-  ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]):not([aria-expanded="true"]) { background: ${({ theme }) => theme.color.fieldHover}; } }
-  &:focus-within { background: ${({ theme }) => theme.color.fieldHover}; }
+  ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]):not([aria-expanded="true"]):not(:is(${textFieldSelector})) { background: ${({ theme }) => theme.color.fieldHover}; } }
+  &:focus-within:not(:is(${textFieldSelector})) { background: ${({ theme }) => theme.color.fieldHover}; }
 `;

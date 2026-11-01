@@ -6,6 +6,7 @@ import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, Sor
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useClientReady } from "@/components/ui/use-client-ready";
 import { mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -88,7 +89,7 @@ const CompactToolbar = styled(QueryChoices)`
   gap: 4px;
   > select {
     padding-inline: 8px 4px;
-    border-radius: ${({ theme }) => theme.radius.none};
+    border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
@@ -367,8 +368,7 @@ const ProbabilityInputs = styled.div`
     /* Editable field boundaries stay distinct from quiet section frames. */
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
-    ${controlFeedback}
-    background: ${({ theme }) => theme.color.field};
+    ${textFieldSurface}
     color: ${({ theme }) => theme.color.mutedText};
     font-size: 0.8125rem;
     white-space: nowrap;
@@ -392,7 +392,7 @@ const ProbabilityInputs = styled.div`
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     @container feed-filter-fields (max-width: 13rem) { grid-template-columns: minmax(0, 1fr); }
-    > label { display: grid; gap: 2px; padding: 0; border: 0; white-space: normal; font-size: 0.75rem; }
+    > label { display: grid; gap: 2px; padding: 0; border: 0; background: transparent; white-space: normal; font-size: 0.75rem; }
     > [data-range-separator] { display: none; }
     input {
       inline-size: 100%;
@@ -401,6 +401,7 @@ const ProbabilityInputs = styled.div`
       border: 0;
       border-radius: ${({ theme }) => theme.radius.control};
       ${controlFeedback}
+      ${textFieldSurface}
       font-size: 16px;
       &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
     }
@@ -591,13 +592,13 @@ function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, mess
   invalid: boolean; descriptionId: string; messages: Messages; disabled?: boolean;
 }) {
   return <ProbabilityInputs>
-    {(["min", "max"] as const).map((bound) => <Fragment key={bound}><label>
+    {(["min", "max"] as const).map((bound) => <Fragment key={bound}><label data-text-field-frame>
       <span data-bound-label>{messages.text(bound === "min" ? "feed.filters.minimumPercent" : "feed.filters.maximumPercent")}</span>
       <input disabled={disabled} type="text" inputMode="decimal" autoComplete="off" value={values[bound]} placeholder={messages.text("feed.filters.any")}
         aria-label={messages.text(bound === "min" ? "feed.filters.minimum" : "feed.filters.maximum", { label: messages.text("feed.filters.probabilityLabel") })}
         aria-invalid={invalid} aria-describedby={invalid ? descriptionId : undefined}
         onChange={(event) => { if (/^\d*(?:\.\d*)?$/u.test(event.target.value)) onChange(bound, event.target.value); }} />
-    </label>{bound === "min" && <span data-range-separator aria-hidden="true">–</span>}</Fragment>)}
+    </label>{bound === "min" && <span data-range-separator aria-hidden="true">â€“</span>}</Fragment>)}
   </ProbabilityInputs>;
 }
 
@@ -857,7 +858,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
         <PhoneSection>
           <OddsNote><InfoIcon /><span><strong>{oddsLabel}: {messages.text("feed.filters.any")}</strong><br />
-            {messages.text("feed.filters.oddsUnavailable")} · {messages.text("feed.filters.oddsPending")}</span></OddsNote>
+            {messages.text("feed.filters.oddsUnavailable")} Â· {messages.text("feed.filters.oddsPending")}</span></OddsNote>
         </PhoneSection>
         <DesktopOnly>
           <DesktopGrid>

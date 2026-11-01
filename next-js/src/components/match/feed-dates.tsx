@@ -35,10 +35,10 @@ export function DateRangePicker({ query, today, from, to, onChange, disabled = f
   return <RangeFieldset aria-label={messages.text("feed.date.range")} disabled={disabled}>
     <RangeLegend>{messages.text("feed.date.title")}</RangeLegend>
     <RangeFields data-range="dates">
-      <label><span>{messages.text("feed.date.from")}</span><input type="date" value={from}
+      <label data-text-field-frame><span>{messages.text("feed.date.from")}</span><input type="date" value={from}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
         onChange={(event) => onChange(event.target.value, to)} /></label>
-      <label><span>{messages.text("feed.date.to")}</span><input type="date" value={to} min={from || undefined} max={maximumTo}
+      <label data-text-field-frame><span>{messages.text("feed.date.to")}</span><input type="date" value={to} min={from || undefined} max={maximumTo}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
         onChange={(event) => onChange(from, event.target.value)} /></label>
       {invalid && <RangeHelp id={`${id}-error`} role="alert">{messages.text("feed.date.tooLong")}</RangeHelp>}

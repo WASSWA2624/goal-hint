@@ -306,14 +306,14 @@ export const TabList = styled.ul`
 export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
 
 /** Footer clearance matches the phone tab targets, border and safe area. */
-export const Footer = styled.footer`
+export const Footer = styled.footer.attrs<{ "data-app-footer"?: string }>({ "data-app-footer": "" })`
   padding-block: 10px calc(10px + ${mobileTabHeight} + 1px + env(safe-area-inset-bottom));
   color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.page};
   border-block-start: 0;
   font-size: 0.75rem;
   line-height: 1.4;
-  ${desktop} { padding-block: 14px; font-size: 0.8125rem; background: ${({ theme }) => theme.color.surfaceMuted}; }
+  ${desktop} { padding-block: 14px; font-size: 0.8125rem; }
 `;
 export const FooterContent = styled(Container)`
   display: grid;

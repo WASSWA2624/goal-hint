@@ -90,17 +90,6 @@ const Extras = styled.dl`
   display: flex; flex: none; gap: 8px; margin: 0; padding-inline-start: 8px;
   border-inline-start: 0;
 `;
-const Distribution = styled.div`
-  position: absolute; inset-inline: 0; inset-block-end: 0; display: flex; block-size: 2px;
-  overflow: hidden; border-end-start-radius: ${({ theme }) => theme.radius.surface}; border-end-end-radius: ${({ theme }) => theme.radius.surface};
-  background: ${({ theme }) => theme.color.border};
-  ${desktopSectionFrame}
-`;
-const Segment = styled.span<{ $tone: OutcomeTone }>`
-  flex-basis: 0; min-inline-size: 2px;
-  background: ${({ theme, $tone }) => $tone === "unavailable" ? theme.color.controlBorder : theme.color.outcome[$tone].text};
-`;
-
 /** One compact, accessible presentation for full-period match and slip outcomes. */
 export function PerformanceSummary({ counts, locale, kind, title, period, headingLevel = 2, showCoverage = true }: {
   counts: PerformanceSummaryCounts; locale: string; kind: "matches" | "slips" | "predictions";
@@ -122,7 +111,6 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
   const cancelledOutcome = { key: "cancelled", tone: "void" as const, label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 };
   const extras = [voidOutcome, cancelledOutcome, ...coverage.filter(({ key }) => showCoverage || key !== "unavailable")]
     .filter(({ count }) => count > 0);
-  const segments = [...outcomes, voidOutcome, cancelledOutcome, ...coverage];
   return <Panel role="group" aria-label={label} data-performance-summary={kind}>
     <Content>
       <Header tabIndex={0} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
@@ -148,7 +136,5 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
       </Count>)}</Extras>}
       </Figures>
     </Content>
-    <Distribution aria-hidden="true">{segments.filter(({ count }) => count > 0).map(({ tone, label, count }) =>
-      <Segment key={label} $tone={tone} style={{ flexGrow: count }} />)}</Distribution>
   </Panel>;
 }

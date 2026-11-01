@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { Field, FieldLabel, FieldMessage, InputControl, useFieldAccessibility, type TextInputProps } from "@/components/ui/controls";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import { formatSlipMatchCount, guardSlipNumber, normalizeSlipMatchCount, slipNumericRule, stepSlipNumber,
   type SlipNumberGuardResult, type SlipNumericField } from "@/domain/slip-input-guards";
 
@@ -23,7 +24,7 @@ const NumericField = styled(Field)`
       white-space: nowrap;
       cursor: text;
     }
-    > input:not([type="hidden"]) { min-block-size: 40px; padding-block: 17px 3px; background: var(--filter-field-background, ${({ theme }) => theme.color.field}); }
+    > input:not([type="hidden"]) { min-block-size: 40px; padding-block: 17px 3px; ${textFieldSurface} }
     &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
   }
 `;

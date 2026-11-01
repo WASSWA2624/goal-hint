@@ -1,4 +1,5 @@
 import type { GoalHintTheme } from "@/styles/theme";
+import { textFieldSelector } from "@/components/ui/filled-surfaces";
 
 const visible = (element: Element) => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0;
 const rgb = (color: string) => (color.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
@@ -26,6 +27,13 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   };
   const dark = theme.mode === "dark";
   const phone = window.innerWidth < 1024;
+  // Chromium snaps thin borders to physical pixels at fractional display scales.
+  const ruleProbe = document.createElement("span");
+  ruleProbe.style.borderTop = `${theme.phoneCardFrame.ruleWidth} solid`;
+  document.body.append(ruleProbe);
+  const ruleWidth = getComputedStyle(ruleProbe).borderTopWidth;
+  const fieldBorderWidth = Number.parseFloat(theme.textField.borderWidth) === 0 ? "0px" : ruleWidth;
+  ruleProbe.remove();
   const checkRadius = (selector: string, expected: string | Record<"borderTopLeftRadius" | "borderTopRightRadius" | "borderBottomLeftRadius" | "borderBottomRightRadius", string>) => {
     const elements = [...document.querySelectorAll(selector)].filter(visible);
     assert(elements.length > 0, `Missing visible radius example ${selector}`);
@@ -44,7 +52,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   if (!phone) checkRadius("#theme-matches [data-match-board]", theme.radius.none);
   checkRadius("#theme-slips [data-slip-id]", phone ? theme.radius.surface : theme.frame.desktopCardRadius);
   for (const summary of [...document.querySelectorAll("#theme-slips summary[data-slip-summary]")].filter(visible)) {
-    const innerRadius = `${Math.max(0, Number.parseFloat(theme.radius.surface) - Number.parseFloat(theme.border.width))}px`;
+    const innerRadius = `${Math.max(0, Number.parseFloat(theme.radius.surface) - Number.parseFloat(theme.phoneCardFrame.ruleWidth))}px`;
     const expanded = summary.parentElement?.hasAttribute("open");
     checkRadius("#theme-slips summary[data-slip-summary]", {
       borderTopLeftRadius: innerRadius, borderTopRightRadius: innerRadius,
@@ -70,6 +78,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     checkRadius(`#${CSS.escape(dialog.id)}`, theme.radius.overlay);
   }
   check("body", theme.color.page);
+  check("[data-app-footer]", theme.color.page);
   check("#theme-filters [data-best-slips-filters]", theme.color.page);
   if (!dark) {
     check("body", "#FFFFFF");
@@ -77,13 +86,18 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   check("#theme-controls", theme.color.surface);
   check("#theme-controls [data-surface-control]", theme.color.brandSoft);
-  check("#theme-control-input, #theme-control-select", theme.color.field);
-  check("#theme-slips [data-slip-id]", phone ? theme.phoneCardFrame.inset : theme.color.surface);
+  check("#theme-control-input, #theme-admin-input, #theme-payment-input", theme.textField.background);
+  check("#theme-search [data-text-field-frame], #theme-textarea", theme.textField.background);
+  check("#theme-invalid-input", theme.color.outcome.incorrect.background);
+  check("#theme-disabled-input", theme.color.disabledSurface);
+  check("#theme-control-select", theme.color.field);
+  check("#theme-slips [data-slip-id]", theme.phoneCardFrame.inset);
   check("#theme-slips [data-slip-summary]", phone ? theme.phoneCardFrame.mobileHeader : theme.phoneCardFrame.header);
   check("#theme-member-step", theme.color.brandSoft);
   check("#theme-member-step", theme.color.link, "color");
   check("#theme-performance [data-performance-summary]", theme.color.surface);
   const summary = document.querySelector("#theme-performance [data-performance-summary]");
+  assert(!summary?.querySelector(":scope > [aria-hidden=true]"), "Performance totals have no distribution bar");
   const predicted = summary?.querySelector("[data-summary-predicted]");
   assert(!!predicted && visible(predicted), "Predicted match total remains visible on phone and desktop");
   assert(predicted?.querySelector("dt")?.textContent === "Predicted" && predicted.querySelector("dd")?.textContent === "116",
@@ -119,7 +133,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
     check("#theme-slips [data-slip-summary]", theme.phoneCardFrame.mobileHeader);
-    checkRadius("#theme-matches [data-fixture-id], #theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.radius);
+    checkRadius("#theme-matches [data-fixture-id]", theme.phoneCardFrame.radius);
     checkRadius("#theme-matches [data-fixture-id] > a", `${Math.max(0, Number.parseFloat(theme.phoneCardFrame.radius) - Number.parseFloat(theme.border.width))}px`);
     if (document.querySelector("#theme-slips [data-slip-disclosure][open]")) {
       check("#theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.selection);
@@ -148,12 +162,52 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   const dialog = document.querySelector<HTMLDialogElement>("#theme-dialog");
   if (dialog?.open && dialog.dataset.enhanced === "true") check("#theme-dialog", theme.color.surface);
+  for (const list of [...document.querySelectorAll("[data-theme-fixture] [data-slip-selections]")].filter(visible)) {
+    const items = [...list.querySelectorAll(":scope > [data-slip-selection]")];
+    assert(getComputedStyle(list).rowGap === "0px", "Slip matches join without gaps");
+    for (const [index, item] of items.entries()) {
+      const row = item.querySelector(":scope > [data-fixture-id]");
+      assert(!!row, "Each selection retains its match card");
+      if (!row) continue;
+      const style = getComputedStyle(row), separator = getComputedStyle(item);
+      assert(style.backgroundColor === normalize(theme.phoneCardFrame.selection), "Joined match rows retain their selection fill");
+      for (const corner of ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"] as const) {
+        const rounded = corner.startsWith("borderTop") ? index === 0 : index === items.length - 1;
+        assert(Number.parseFloat(style[corner]) === Number.parseFloat(rounded ? theme.phoneCardFrame.radius : theme.radius.none), "Only the outside selection corners are rounded");
+      }
+      assert(separator.borderTopWidth === (index ? ruleWidth : "0px"), "Selection separators stay thin");
+      if (index) {
+        assert(separator.borderTopColor === normalize(theme.phoneCardFrame.inset), "Separators use the slip background");
+        const previous = items[index - 1]!.getBoundingClientRect(), current = item.getBoundingClientRect();
+        assert(Math.abs(current.top - previous.bottom) < 0.1, "Selection wrappers touch without gaps");
+      }
+      const analysis = row.querySelector("[data-row-analysis]");
+      if (analysis) assert(getComputedStyle(analysis).borderRadius === style.borderRadius, "Analysis focus follows the joined corners");
+    }
+  }
   for (const element of [...document.querySelectorAll("[data-theme-fixture] *")].filter(visible)) {
     const style = getComputedStyle(element);
     const target = element.id || element.tagName.toLowerCase();
     for (const edge of ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const) {
-      assert(Number.parseFloat(style[edge]) === 0, `${target}: decorative ${edge} must be zero`);
+      const frame = element.matches("[data-compact-slip]");
+      const separator = (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection], [data-feed-pagination]")
+        || !phone && element.matches("[data-match-list] > li + li")) && edge === "borderTopWidth";
+      const field = element.matches(textFieldSelector + ", [data-text-field-frame]");
+      const expected = frame || separator ? ruleWidth : field ? fieldBorderWidth : "0px";
+      assert(style[edge] === expected || field && style[edge] === "0px", `${target}: unexpected ${edge}`);
+      if (frame) assert(style.borderTopColor === normalize(theme.phoneCardFrame.inset), "Slip frames use the slip background");
     }
+  }
+  for (const button of document.querySelectorAll<HTMLElement>("[data-feed-search-submit]")) {
+    const input = button.parentElement?.querySelector("input");
+    const style = getComputedStyle(button), rect = button.getBoundingClientRect();
+    assert(!!input && rect.left >= input.getBoundingClientRect().right - 1, "Search submission stays on the right");
+    assert(style.borderTopLeftRadius === "0px" && style.borderBottomLeftRadius === "0px", "Joined search actions have square left corners");
+  }
+  for (const selector of ["#theme-control-input", "#theme-admin-input", "#theme-payment-input"]) {
+    const field = document.querySelector(selector);
+    assert(!!field && getComputedStyle(field).borderTopWidth === fieldBorderWidth, "Text entry has the theme's thin boundary");
+    assert(!!field && getComputedStyle(field).borderTopColor === normalize(theme.color.controlBorder), "Text entry boundaries retain their contrast");
   }
   assert(document.documentElement.scrollWidth <= window.innerWidth, "Fixture must not overflow the viewport");
   return errors;

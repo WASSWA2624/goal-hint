@@ -3,6 +3,7 @@
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
+import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import { PredictionOdds, PredictionOutcome, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { predictionDescription } from "@/domain/prediction-label";
 import { detailAnalysis } from "@/domain/detail-presentation";
@@ -24,7 +25,7 @@ import {
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
 
-const Search = styled.label`
+const Search = styled.label.attrs<{ "data-text-field-frame"?: string }>({ "data-text-field-frame": "" })`
   display: flex;
   align-items: center;
   gap: 6px;
@@ -35,6 +36,7 @@ const Search = styled.label`
   background: ${({ theme }) => theme.color.field};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
+  ${textFieldSurface}
   &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: ${size("secondary")}; outline: none; }
 `;

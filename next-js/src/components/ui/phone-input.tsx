@@ -10,6 +10,7 @@ import { composePhoneValue, formatNationalPhone, isInternationalPhoneInput, phon
 import { deleteGroupedDigit, integerDigits } from "@/domain/input-format";
 import { preserveDigitCaret } from "./formatted-input";
 import { FloatingField } from "./floating-field";
+import { textFieldSurface } from "./filled-surfaces";
 import { createMessages } from "@/i18n/messages";
 import { Field, FieldLabel, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
 import { CheckIcon, ChevronDownIcon, GlobeIcon } from "./icons";
@@ -215,7 +216,7 @@ const CountryMenu = styled.div`
 const CountrySearch = styled.input`
   box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: 44px; padding: 8px 10px;
   border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 1rem;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.field}; ${focusTreatment}
+  color: ${({ theme }) => theme.color.text}; ${textFieldSurface} ${focusTreatment}
 `;
 const CountrySearchLabel = styled.label`
   position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden;

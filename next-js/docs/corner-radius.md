@@ -54,9 +54,14 @@ Desktop review themes can select a restrained corner through
 `theme.frame.desktopCardRadius`, taking its value from this same radius scale.
 Theme card frames, hover backgrounds, and their full-height rails consume the
 shared setting together.
-The approved Team stack mobile match cards and framed selections inside expanded
-slips use `theme.phoneCardFrame.radius`, mapped to `control` (4px). Slip headers
-inherit the outer slip corners. Desktop match rows keep their straight joined seams.
+Standalone Team stack mobile match cards use `theme.phoneCardFrame.radius`,
+mapped to `control` (4px). Slip selections use the same scale on mobile and
+desktop, with rounded top corners only on the first match and rounded bottom
+corners only on the last. Middle rows have square corners; a single match has
+all four corners rounded. Selection wrappers touch, with a 1px separator in the
+slip background color. The slip perimeter uses the same thin rule. Slip header
+fills use the outer radius minus `theme.phoneCardFrame.ruleWidth`; analysis
+links inherit their match row's corners so keyboard focus follows the shape.
 Disclosure indicators are pinned 8px below the header's top edge in both states.
 Only the inner chevron rotates: right when collapsed, down when expanded. On
 mobile, Share and disclosure use matching 28px frames with `control` corners,

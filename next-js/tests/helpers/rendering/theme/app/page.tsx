@@ -1,6 +1,6 @@
 import { PublicShell } from "@/app/_components/public-shell";
 import { parseFixtureSnapshot } from "@/domain/fixture-snapshot";
-import { records, syntheticBuild, today } from "./synthetic-slips";
+import { criteria, records, syntheticBuild, today } from "./synthetic-slips";
 import { ThemePreview } from "./theme-preview";
 
 export default function Page() {
@@ -11,7 +11,10 @@ export default function Page() {
   });
   const slips = syntheticBuild().data?.slips;
   if (!slips?.length) throw new Error("Synthetic theme fixture needs a generated slip.");
+  const single = syntheticBuild({ ...criteria, teamsMin: 1, teamsMax: 1, totalMin: 125, totalMax: 260 }).data?.slips[0];
+  const triple = syntheticBuild({ ...criteria, teamsMin: 3, teamsMax: 3, totalMax: 100000 }).data?.slips[0];
+  if (!single || !triple) throw new Error("Joined selection checks need one-match and three-match slips.");
   return <PublicShell locale="en" today={today} current="today" app compact>
-    <ThemePreview fixtures={snapshots} slip={slips[0]!} />
+    <ThemePreview fixtures={snapshots} slip={slips[0]!} edgeSlips={[single, triple]} />
   </PublicShell>;
 }
