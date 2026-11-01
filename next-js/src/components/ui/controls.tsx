@@ -7,6 +7,8 @@ import { media } from "@/styles/theme";
 import { createMessages } from "@/i18n/messages";
 import { Icon } from "./icons";
 import { filledAction, filledField } from "./filled-surfaces";
+import { controlHeight } from "./control-layout";
+import { FloatingField } from "./floating-field";
 
 export type ButtonVariant = "primary" | "secondary" | "quiet";
 
@@ -108,6 +110,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
     }
   }}
 
+  ${controlHeight}
   ${({ $large, theme }) => $large && css`
     min-block-size: 3rem;
     min-inline-size: 3rem;
@@ -152,6 +155,7 @@ const TextAnchor = styled(Link)`
 `;
 
 export const Field = styled.div`
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.space.xs};
@@ -215,17 +219,9 @@ export const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean
   }
   &[data-password-input]::-ms-reveal { display: none; }
 `;
-const InputFrame = styled.div`
-  position: relative; min-inline-size: 0;
-  > span { position: absolute; inset-inline-start: 12px; inset-block-start: 50%; transform: translateY(-50%);
-    display: flex; pointer-events: none; color: ${({ theme }) => theme.color.mutedText}; }
-  > input[data-password-input] { padding-inline-end: 48px; }
-  svg { inline-size: 18px; block-size: 18px; }
-`;
-const TrailingSlot = styled.div`position: absolute; inset-block: 4px; inset-inline-end: 4px; display: flex; > * { min-block-size: 0; }`;
 const PasswordToggle = styled(Button)`
   && {
-    position: absolute; inset-inline-end: 1px; inset-block: 1px;
+    position: relative;
     inline-size: 44px; min-inline-size: 44px; min-block-size: 0; padding: 0;
     border: 0; border-radius: calc(${({ theme }) => theme.radius.control} - 1px); background: transparent;
     color: ${({ theme }) => theme.color.link};
@@ -312,16 +308,14 @@ export function TextInput({ label, hint, error, leading, trailing, type = "text"
 
   return (
     <Field>
-      <FieldLabel htmlFor={field.id}>{label}</FieldLabel>
-      {hasContent(leading) || hasContent(trailing) || password ? <InputFrame>
-        {hasContent(leading) && <span aria-hidden="true">{leading}</span>}{control}
+      <FloatingField label={label} leading={leading} trailing={password || hasContent(trailing) ? <>
         {password && <PasswordToggle type="button" variant="quiet" disabled={props.disabled} data-analytics-ignore
           aria-label={toggleLabel}
           aria-controls={field.id} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>
           <Icon><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{passwordVisible && <path d="m3 3 18 18" />}</Icon>
         </PasswordToggle>}
-        {hasContent(trailing) && <TrailingSlot>{trailing}</TrailingSlot>}
-      </InputFrame> : control}
+        {trailing}
+      </> : undefined}>{control}</FloatingField>
       {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
       {field.hasError && (
         <FieldMessage id={field.errorId} $error>
@@ -337,8 +331,7 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
 
   return (
     <Field>
-      <FieldLabel htmlFor={field.id}>{label}</FieldLabel>
-      <SelectControl
+      <FloatingField label={label}><SelectControl
         {...props}
         id={field.id}
         aria-describedby={field.describedBy}
@@ -346,7 +339,7 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
         $invalid={field.isInvalid}
       >
         {children}
-      </SelectControl>
+      </SelectControl></FloatingField>
       {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
       {field.hasError && (
         <FieldMessage id={field.errorId} $error>

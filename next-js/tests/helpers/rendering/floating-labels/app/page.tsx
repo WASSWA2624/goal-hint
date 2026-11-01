@@ -1,0 +1,63 @@
+"use client";
+
+import { useState } from "react";
+import styled, { ThemeProvider } from "styled-components";
+import { FieldBlock, FieldRow } from "@/components/admin/admin-form";
+import { FeedSearchInput } from "@/components/match/feed-search-input";
+import { SlipNumericInput } from "@/components/slips/slip-numeric-input";
+import { AmountInput } from "@/components/ui/amount-input";
+import { Button, FileInput, SelectInput, TextInput } from "@/components/ui/controls";
+import { FloatingField } from "@/components/ui/floating-field";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { SearchIcon } from "@/components/ui/icons";
+import { SelectMenu } from "@/components/ui/select-menu";
+import { darkTheme, lightTheme } from "@/styles/theme";
+
+const Canvas = styled.main`
+  padding: 16px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  > form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+  > header { display: flex; align-items: center; gap: 16px; margin-block-end: 16px; }
+`;
+
+const StepperPressure = styled.div`
+  button { min-block-size: 36px; padding-block: 4px; font-size: 1rem; }
+`;
+
+export default function Page() {
+  const [dark, setDark] = useState(false), [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState("256"), [count, setCount] = useState("2"), [menu, setMenu] = useState("all");
+  return <ThemeProvider theme={dark ? darkTheme : lightTheme}>
+    <Canvas data-floating-fixture data-mode={dark ? "dark" : "light"}>
+      <header><h1>Floating fields</h1><Button onClick={() => setDark(value => !value)}>Toggle theme</Button></header>
+      <form onSubmit={event => event.preventDefault()}>
+        <FieldRow data-alignment-row style={{ gridColumn: "1 / -1" }}>
+          <TextInput label="Row text" hint="Help below this field must not move the control" />
+          <SelectInput label="Row select" defaultValue="one"><option value="one">One</option></SelectInput>
+          <Button>Row action</Button>
+        </FieldRow>
+        <TextInput id="empty" label="Empty text" placeholder="Example value" name="text" hint="Text hint" />
+        <TextInput id="leading" label="Search account" leading={<SearchIcon />} />
+        <TextInput id="filled" label="Restored text" defaultValue="Saved value" />
+        <TextInput id="number" label="Number" type="number" defaultValue={0} />
+        <TextInput id="password" label="Password" type="password" />
+        <TextInput id="date" label="Date" type="date" />
+        <TextInput id="time" label="Time" type="time" />
+        <TextInput id="datetime" label="Date and time" type="datetime-local" />
+        <TextInput id="restored-date" label="Restored date" type="date" defaultValue="2026-11-01" />
+        <SelectInput id="select" label="Native choice" defaultValue=""><option value="">Choose</option><option value="one">One</option></SelectInput>
+        <FloatingField label="Notes"><textarea id="notes" name="notes" placeholder="More information" /></FloatingField>
+        <TextInput id="error" label="Invalid value" defaultValue="Invalid" error="Please correct this value" />
+        <TextInput id="disabled" label="Disabled value" disabled defaultValue="Unavailable" />
+        <TextInput id="readonly" label="Read only" readOnly defaultValue="Reference" />
+        <AmountInput label="Amount" value={amount} onValueChange={setAmount} />
+        <PhoneInput label="Phone number" value={phone} onValueChange={setPhone} />
+        <FieldBlock label="Owner field"><input id="owner" name="owner" /></FieldBlock>
+        <StepperPressure><SlipNumericInput field="slips" name="slips" label="Slip count" value={count} locale="en" onValueChange={setCount} /></StepperPressure>
+        <SelectMenu label="Category" value={menu} options={[{ value: "all", label: "All categories" }, { value: "one", label: "One" }]} onValueChange={setMenu} />
+        <FeedSearchInput label="Search matches" submitLabel="Search" placeholder="Find a team" />
+        <FileInput label="Attachment" id="attachment" />
+        <Button type="reset">Reset fields</Button>
+      </form>
+    </Canvas>
+  </ThemeProvider>;
+}

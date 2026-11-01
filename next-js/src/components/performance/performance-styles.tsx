@@ -1,5 +1,6 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
 import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled from "styled-components";
 import { media } from "@/styles/theme";
@@ -12,7 +13,8 @@ export const PerformanceSections = styled(Stack)`${joinedDesktopSections}`;
 export const PerformanceFilters = styled.form`
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px;
   align-items: end; min-inline-size: 0;
-  > button { align-self: end; }
+  ${controlRow}
+  > button { align-self: start; }
 `;
 export const MetricList = styled.dl`
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr)); gap: 12px;

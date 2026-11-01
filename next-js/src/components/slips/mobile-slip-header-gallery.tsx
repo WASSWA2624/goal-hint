@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
 import { darkTheme, lightTheme } from "@/styles/theme";
@@ -93,16 +95,16 @@ export function MobileSlipHeaderGallery({ locale }: { locale: string }) {
         <h1>Ten tighter Vertical rules headers.</h1>
         <p>09 Minimal rules is now the mobile header, with a little more horizontal padding around its text. Compare Slip, Odds, Probability, Matches and Status on one row in 28–34px headers. Fixed columns keep the separators aligned, and every status uses the same width. Expanded examples use the unchanged Clean ledger match rows. Tap a slip header to open or close it.</p>
         <Toolbar aria-label="Mobile header preview controls">
-          <label><span>Design</span><select value={focused} onChange={(event) => setFocused(event.target.value as MobileSlipHeaderVariant | "all")}>
+          <FloatingField label={<><span>Design</span></>}><select value={focused} onChange={(event) => setFocused(event.target.value as MobileSlipHeaderVariant | "all")}>
             <option value="all">Compare all 10</option>
             {mobileSlipHeaderDesigns.map((design, index) => <option key={design.id} value={design.id}>{String(index + 1).padStart(2, "0")} · {design.name}</option>)}
-          </select></label>
-          <label><span>Sample</span><select value={scenario} onChange={(event) => setScenario(event.target.value as MobileHeaderScenario)}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Sample</span></>}><select value={scenario} onChange={(event) => setScenario(event.target.value as MobileHeaderScenario)}>
             {mobileHeaderScenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select></label>
-          <label><span>Preview width</span><select value={width} onChange={(event) => setWidth(Number(event.target.value))}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Preview width</span></>}><select value={width} onChange={(event) => setWidth(Number(event.target.value))}>
             {[320, 375, 430].map((value) => <option key={value} value={value}>Up to {value}px</option>)}
-          </select></label>
+          </select></FloatingField>
           <fieldset><legend>Appearance</legend><div>
             <button type="button" aria-pressed={mode === "light"} onClick={() => setMode("light")}>Light</button>
             <button type="button" aria-pressed={mode === "dark"} onClick={() => setMode("dark")}>Dark</button>

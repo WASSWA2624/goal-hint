@@ -7,7 +7,7 @@ import { controlFeedback, desktopStickyFilters, filterButtonColors, filterContro
 import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 
-const compactControlHeight = "2rem";
+const compactControlHeight = "2.5rem";
 const mobileToolbarFontSize = "0.75rem";
 const mobileToolbarValueFontSize = "0.875rem";
 export const slipToolbarControl = css`
@@ -30,7 +30,7 @@ const mobileBuildAction = css`
   ${media.belowDesktop} {
     && {
       flex: none; inline-size: 13rem; min-inline-size: 13rem;
-      block-size: 36px; min-block-size: 36px; padding: 4px 8px;
+      block-size: var(--form-control-height, 40px); min-block-size: var(--form-control-height, 40px); padding: 4px 8px;
       font-size: ${mobileToolbarFontSize}; line-height: 1.3; white-space: nowrap;
     }
   }
@@ -107,23 +107,22 @@ export const BuilderPanel = styled(CriteriaPanel)`
     && { padding-block: 6px; }
     [data-slip-label="desktop"] { display: none; }
     [data-slip-label="mobile"] { display: inline; }
-    && [data-slip-builder-essentials] { grid-template-columns: 3.5rem minmax(0, 1fr); gap: 6px; }
-    && [data-slip-count] { align-self: stretch; }
-    && [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
-    && [data-slip-count] label, && [data-criteria-field="targets"] [data-slip-floating-field] > label,
+    && [data-slip-builder-essentials] { grid-template-columns: 5rem minmax(0, 1fr); gap: 6px; }
+    && [data-slip-count] { align-self: end; }
+    && [data-slip-count] > legend, && [data-criteria-field="targets"] [data-slip-floating-field] > label,
     && [data-slip-target-groups] > fieldset > legend {
       /* Keep the existing label line boxes so larger type does not move controls. */
       font-size: ${mobileToolbarFontSize}; line-height: 0.78125rem; white-space: nowrap;
     }
     && [data-slip-target-groups] { gap: 6px; }
-    && [data-slip-target-groups] > fieldset > legend { margin-block-end: 8px; }
+    && [data-slip-target-groups] > fieldset:not([data-floating-outline]) > legend { margin-block-end: 8px; }
     && [data-slip-builder-essentials] [data-slip-numeric-field] {
-      block-size: 36px; min-block-size: 36px; padding-block: 2px; font-size: ${mobileToolbarValueFontSize};
+      block-size: var(--form-control-height); min-block-size: var(--form-control-height); padding-block: 8px; font-size: ${mobileToolbarValueFontSize};
     }
     && [data-slip-builder-options] { gap: 4px; padding-block-start: 4px; }
     && [data-slip-criteria-options] { grid-template-columns: 1.15fr 1.1fr 0.9fr; gap: 4px; }
     && [data-criteria-trigger] {
-      min-block-size: 36px; padding: 3px; gap: 2px; font-size: clamp(0.6875rem, 3.125vw, 0.75rem); line-height: 1.2;
+      min-block-size: var(--form-control-height, 40px); padding: 3px; gap: 2px; font-size: clamp(0.6875rem, 3.125vw, 0.75rem); line-height: 1.2;
     }
     &&& [data-criteria-label] { white-space: nowrap; }
     &&& [data-criteria-value] { display: none; }
@@ -139,12 +138,12 @@ export const BuilderPanel = styled(CriteriaPanel)`
     && [data-criteria-dialog] > div { padding: 10px; }
     && [data-criteria-dialog] label[for] { font-size: 0.6875rem; line-height: 1.25; }
     && [data-criteria-dialog] input:not([type="checkbox"]):not([type="hidden"]) {
-      min-block-size: 36px; padding-block: 2px; font-size: 1rem;
+      min-block-size: 40px; padding-block: 8px; font-size: 1rem;
     }
     &&& [data-criteria-dialog] input[data-slip-numeric-field] { font-size: 0.875rem; }
-    && [data-criteria-dialog] fieldset > legend { margin-block-end: 8px; }
+    && [data-criteria-dialog] fieldset:not([data-floating-outline]) > legend { margin-block-end: 8px; }
     && [data-kickoff-fields] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    && [data-criteria-dialog] > footer button { min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
+    && [data-criteria-dialog] > footer button { min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem; }
     ${media.tablet} {
       && [data-slip-criteria-options] { flex: 1 1 18rem; }
       && [data-criteria-actions] { flex: 0 0 auto; margin-inline-start: auto; }
@@ -173,8 +172,8 @@ export const CriteriaForm = styled.form`
   > [role="alert"] { margin: 0; }
   ${media.desktop} {
     &[data-enhanced="true"] {
-      display: grid; align-items: stretch; gap: 8px clamp(6px, .7vw, 10px);
-      grid-template-columns: 3.25rem repeat(2, minmax(7rem, 1fr)) repeat(3, max-content) minmax(max-content, 1.6fr);
+      display: grid; align-items: end; gap: 8px clamp(6px, .7vw, 10px);
+      grid-template-columns: 5.5rem repeat(2, minmax(7rem, 1fr)) repeat(3, max-content) minmax(max-content, 1.6fr);
       > [data-slip-builder-essentials] { display: contents; }
       [data-criteria-field="targets"], [data-slip-target-groups] { display: contents; }
       [data-slip-criteria-options]:not([hidden]) { display: contents; }
@@ -184,27 +183,12 @@ export const CriteriaForm = styled.form`
   }
 `;
 export const BuilderEssentials = styled.div`
-  display: grid; grid-template-columns: 3.25rem minmax(0, 1fr); gap: 8px;
+  display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: 8px;
   align-items: end; min-inline-size: 0;
-  > [data-slip-count] > div { gap: 2px; }
-  > [data-slip-count] label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
-  [data-slip-count-label="desktop"] { display: none; }
-  > [data-slip-count] input {
-    min-block-size: ${compactControlHeight}; padding: 4px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 1rem;
-    ${filterControlColors}
-    ${controlFeedback}
-    &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
-  }
-  ${media.desktop} {
-    grid-template-columns: 4.25rem max-content; gap: 12px;
-    > [data-slip-count] { flex: none; inline-size: 3.25rem; }
-    > [data-slip-count] > div { block-size: 100%; justify-content: space-between; }
-    > [data-slip-count] label { ${desktopGroupTitle} }
-    [data-slip-count-label="mobile"] { display: none; }
-    [data-slip-count-label="desktop"] { display: inline; }
-    > [data-slip-count] input { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
-  }
-  @media (pointer: coarse) { > [data-slip-count] input { min-block-size: 44px; } }
+  > [data-slip-count] { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+  > [data-slip-count] > legend { ${desktopGroupTitle} margin-block-end: 8px; padding: 0; white-space: nowrap; }
+  > [data-slip-count] input { font-variant-numeric: tabular-nums; }
+  ${media.desktop} { grid-template-columns: 5.5rem max-content; gap: 12px; }
 `;
 export const BuilderOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
@@ -359,7 +343,7 @@ export const ClearLink = styled(ButtonLink)`
   && { ${slipToolbarControl} flex: 1 1 auto; }
   ${media.desktop} { && { ${filterButtonColors} flex: none; } }
   ${media.belowDesktop} {
-    && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: 36px; min-block-size: 36px; padding: 4px; font-size: ${mobileToolbarFontSize}; white-space: nowrap; ${filterButtonColors} }
+    && { flex: 1 1 0; inline-size: auto; min-inline-size: 4rem; block-size: var(--form-control-height, 40px); min-block-size: var(--form-control-height, 40px); padding: 4px; font-size: ${mobileToolbarFontSize}; white-space: nowrap; ${filterButtonColors} }
   }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;

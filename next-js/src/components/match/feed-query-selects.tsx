@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import type { ComponentPropsWithoutRef } from "react";
 import { feedDatePresets, feedFilterStatuses, parseFeedStatus, type FeedStatus } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
@@ -12,20 +14,20 @@ export function FeedStatusSelect({ locale, value, onChange, ...props }: SelectPr
 }) {
   const messages = createMessages(locale);
   const retained = !feedFilterStatuses.some((status) => status === value);
-  return <select {...props} data-feed-status aria-label={messages.text("feed.filters.status")} value={value}
+  return <FloatingField label={messages.text("feed.filters.status")}><select {...props} data-feed-status aria-label={messages.text("feed.filters.status")} value={value}
     onChange={(event) => onChange(parseFeedStatus(event.target.value))}>
     {feedFilterStatuses.map((status) => <option key={status} value={status}>{messages.text(`feed.filters.status.${status}`)}</option>)}
     {retained && <option value={value}>{messages.text(`feed.status.${value}`)}</option>}
-  </select>;
+  </select></FloatingField>;
 }
 
 export function FeedPeriodSelect({ locale, value, onChange, ...props }: SelectProps & {
   value: string; onChange: (period: string) => void;
 }) {
   const messages = createMessages(locale);
-  return <select {...props} data-feed-period aria-label={messages.text("feed.filters.period")} value={value}
+  return <FloatingField label={messages.text("feed.filters.period")}><select {...props} data-feed-period aria-label={messages.text("feed.filters.period")} value={value}
     onChange={(event) => onChange(event.target.value)}>
     {feedDatePresets.map((kind) => <option key={kind} value={kind}>{messages.text(`feed.date.${kind}`)}</option>)}
     <option value="custom">{messages.text("feed.filters.customDates")}</option>
-  </select>;
+  </select></FloatingField>;
 }

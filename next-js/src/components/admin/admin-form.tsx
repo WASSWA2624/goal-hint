@@ -1,5 +1,9 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
+export { FloatingField as FieldBlock } from "@/components/ui/floating-field";
+
 import styled, { css } from "styled-components";
 import { ToolButton } from "@/components/analytics/dashboard/dashboard-styles";
 import { authCopy } from "@/i18n/messages/auth";
@@ -7,8 +11,8 @@ import { media } from "@/styles/theme";
 import { filledField } from "@/components/ui/filled-surfaces";
 
 /**
- * Form parts for owner pages: one column on phones, 44 px targets (40 px from desktop up), bold 13 px labels, and 16 px text
- * in fields so phones do not zoom on focus. Owner copy is English only.
+ * Reusable owner form parts with shared floating labels, aligned control rows, and 16 px field text
+ * so phones do not zoom on focus. Owner copy is English only.
  */
 export const FormStack = styled.div`
   display: grid;
@@ -19,6 +23,8 @@ export const FieldRow = styled.div`
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+
+  ${controlRow}
 `;
 export const adminControl = css`
   inline-size: 100%;
@@ -32,15 +38,6 @@ export const adminControl = css`
   ${media.desktop} { min-block-size: 40px; padding-block: 6px; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
-`;
-export const FieldBlock = styled.label`
-  display: grid;
-  gap: 4px;
-  min-inline-size: 0;
-  font-size: ${({ theme }) => theme.typography.scale.body};
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  input, select, textarea { ${adminControl} }
-  textarea { min-block-size: 5.5rem; resize: vertical; }
 `;
 export const Hint = styled.span`
   color: ${({ theme }) => theme.color.mutedText};

@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { ActionButton, adminControl } from "./admin-form";
@@ -100,15 +102,7 @@ export const QueueFilters = styled.div`
     select { ${adminControl} min-block-size: 28px; padding: 2px 18px 2px 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
   }
 `;
-export const SearchField = styled.div`
-  position: relative;
-  min-inline-size: 0;
-  > svg { position: absolute; inset-inline-start: 12px; inset-block-start: 50%; transform: translateY(-50%); font-size: 1.125rem; color: ${({ theme }) => theme.color.mutedText}; pointer-events: none; }
-  > input { ${adminControl} padding-inline-start: 38px; }
-  > input::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
-  > label { ${visuallyHidden} }
-  ${media.desktop} { > input { min-block-size: 34px; padding-block: 4px; font-size: 0.8125rem; border-radius: ${({ theme }) => theme.radius.control}; } }
-`;
+export const SearchField = styled(FloatingField)`min-inline-size: 0;`;
 export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
   gap: 2px 6px;
   > span + span::before { content: "·"; margin-inline-end: 6px; }

@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
@@ -114,8 +116,8 @@ export function KnockoutBracketView({ bracket, roundId, onRoundChange }: {
   return <>
     <Toolbar data-bracket-controls>
       <Control type="button" aria-label={messages.text("competition.previousRound")} disabled={active === 0} onClick={() => navigate(active - 1)}><ChevronLeftIcon /></Control>
-      <label>{messages.text("competition.round")}<select aria-label={messages.text("competition.round")} value={bracket.rounds[active]?.id ?? ""}
-        onChange={event => navigate(bracket.rounds.findIndex(round => round.id === event.target.value))}>{bracket.rounds.map(round => <option key={round.id} value={round.id}>{round.name}</option>)}</select></label>
+      <FloatingField label={messages.text("competition.round")}><select aria-label={messages.text("competition.round")} value={bracket.rounds[active]?.id ?? ""}
+        onChange={event => navigate(bracket.rounds.findIndex(round => round.id === event.target.value))}>{bracket.rounds.map(round => <option key={round.id} value={round.id}>{round.name}</option>)}</select></FloatingField>
       <Control type="button" aria-label={messages.text("competition.nextRound")} disabled={active >= bracket.rounds.length - 1} onClick={() => navigate(active + 1)}><ChevronRightIcon /></Control>
       <Control type="button" disabled={!currentTie} onClick={() => {
         setPan({request:roundId,index:currentRound});

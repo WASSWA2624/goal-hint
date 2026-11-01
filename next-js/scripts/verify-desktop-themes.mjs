@@ -66,6 +66,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           const bounds = element.getBoundingClientRect();
           if (!bounds.width || !bounds.height) return false;
           const style = getComputedStyle(element);
+          if (element.matches("[data-floating-outline]")) return ["Top", "Right", "Bottom", "Left"].some(edge => Number.parseFloat(style[`border${edge}Width`]) > 2);
           const edges = ["Top", "Right", "Bottom", "Left"];
           if (element.matches("[data-compact-slip]")) {
             return edges.some(edge => style[`border${edge}Width`] !== ruleWidth || style[`border${edge}Color`] !== style.backgroundColor);
@@ -77,7 +78,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           if (element.matches("[data-match-list] > li + li, [data-feed-pagination]")) {
             return edges.some(edge => !["0px", edge === "Top" ? ruleWidth : "0px"].includes(style[`border${edge}Width`]));
           }
-          if (element.matches('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"]), textarea, [data-text-field-frame]')) {
+          if (element.matches('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"]), textarea, select, [data-select-trigger], [data-floating-control], [data-text-field-frame]')) {
             return edges.some(edge => !["0px", ruleWidth].includes(style[`border${edge}Width`]));
           }
           return ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"]

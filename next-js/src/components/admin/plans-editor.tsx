@@ -135,7 +135,7 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
       {desktop && status && <RecordFeedback><Notice $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice></RecordFeedback>}
       {desktop ? <>
         <RecordList aria-label="Plan directory">
-          <RecordListTools><FieldBlock>Find a plan<input aria-label="Find a plan" type="search" value={search} disabled={busy} onChange={event => setSearch(event.target.value)} placeholder="Name, days or price" /></FieldBlock></RecordListTools>
+          <RecordListTools><FieldBlock label={"Find a plan"}><input aria-label="Find a plan" type="search" value={search} disabled={busy} onChange={event => setSearch(event.target.value)} placeholder="Name, days or price" /></FieldBlock></RecordListTools>
           <RecordListScroll aria-label="Plan list" data-plans-list-scroll tabIndex={0}>{listedPlans.length ? listedPlans.map(plan => <li key={plan.id}>
             <RecordItem id={controlId(`${plan.id}:edit`)} data-plan-row={plan.id} aria-current={!adding && selected?.id === plan.id ? "true" : undefined} aria-controls="plan-record-detail" disabled={busy}
               onClick={() => { setSelectedId(plan.id); setAdding(false); setStatus(null); setEditing({ id: plan.id, draft: draftOf(plan), errors: {} }); }}>
@@ -236,9 +236,9 @@ function PlanFields({ draft, errors, onChange, idPrefix, disabled, hints = false
     {errors[key] && <FieldError id={`${idPrefix}-${key}-error`}>{errors[key]}</FieldError>}</>;
   return (
     <Fields $edit={!hints}>
-      <FieldBlock>Name<input ref={nameRef} {...field("name")} maxLength={planRules.nameMaxLength} autoComplete="off" required />{notes("name")}</FieldBlock>
-      <FieldBlock>Days<input {...field("durationDays")} inputMode="numeric" autoComplete="off" required />{notes("durationDays")}</FieldBlock>
-      <FieldBlock>Price (UGX)<input {...field("priceUgx")} inputMode="numeric" autoComplete="off" required />{notes("priceUgx")}</FieldBlock>
+      <FieldBlock label={"Name"} description={<>{notes("name")}</>}><input ref={nameRef} {...field("name")} maxLength={planRules.nameMaxLength} autoComplete="off" required /></FieldBlock>
+      <FieldBlock label={"Days"} description={<>{notes("durationDays")}</>}><input {...field("durationDays")} inputMode="numeric" autoComplete="off" required /></FieldBlock>
+      <FieldBlock label={"Price (UGX)"} description={<>{notes("priceUgx")}</>}><input {...field("priceUgx")} inputMode="numeric" autoComplete="off" required /></FieldBlock>
       {errors.plan && <FieldError role="alert">{errors.plan}</FieldError>}
     </Fields>
   );

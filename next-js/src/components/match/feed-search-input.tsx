@@ -1,7 +1,10 @@
 "use client";
 
-import type { ComponentPropsWithRef } from "react";
+import { useId, type ComponentPropsWithRef } from "react";
 import styled, { css } from "styled-components";
+import { floatingControl, floatingLabel, floatingFieldState, floatingOutline } from "@/components/ui/floating-field-styles";
+import { controlHeight } from "@/components/ui/control-layout";
+import { FloatingOutline } from "@/components/ui/floating-outline";
 import { SearchIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
 import { filterControlColors } from "./filter-parts";
@@ -19,21 +22,17 @@ const Field = styled.div.attrs<{ "data-text-field-frame"?: string }>({ "data-tex
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   min-inline-size: 0;
-  min-block-size: 2.75rem;
+  min-block-size: 40px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
-  &:focus-within {
-    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: 2px;
-  }
   ${({ $compact }) => $compact && css`
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     column-gap: 0;
     min-block-size: 2rem;
-    padding-inline-start: 8px;
+    padding-inline-start: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     background: ${({ theme }) => theme.color.field};
     > svg { flex: none; margin-inline-end: 6px; font-size: 0.875rem; color: ${({ theme }) => theme.color.mutedText}; }
@@ -72,13 +71,22 @@ const Field = styled.div.attrs<{ "data-text-field-frame"?: string }>({ "data-tex
       > button > svg { font-size: 0.9375rem; }
     }
   `}
-  && { ${textFieldSurface} }
+  position: relative; margin-block-start: 6px;
+  ${controlHeight} box-sizing: border-box;
+  && > input, && > button { min-block-size: calc(var(--form-control-height) - 2px); block-size: calc(var(--form-control-height) - 2px); }
+  && > label { ${floatingLabel} max-inline-size: calc(100% - 100px); }
+  && > input { ${floatingControl} min-block-size: calc(var(--form-control-height) - 2px); block-size: calc(var(--form-control-height) - 2px); padding-inline: 10px; }
+  &&& > input { border: 0; background: transparent; }
+  &&& > input:focus-visible { outline: none; }
+  > [data-floating-outline] { ${floatingOutline} }
+  ${floatingFieldState}
+  && { ${textFieldSurface} border: 1px solid transparent; }
 `;
 
 const Input = styled.input`
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: 2.625rem;
+  min-block-size: 38px;
   padding: 8px 12px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
@@ -97,7 +105,7 @@ const Submit = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 2.625rem;
+  min-block-size: 38px;
   padding-inline: 14px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
@@ -122,13 +130,15 @@ const Submit = styled.button`
 
 /** A single search field with an inset action; its parent form owns submission. */
 export function FeedSearchInput({ label, submitLabel, submitDisabled, compact = false, mobile = false, ...props }: FeedSearchInputProps) {
-  const input = <Input {...props} type="search" aria-label={label} enterKeyHint={mobile ? "search" : props.enterKeyHint} />;
+  const generated = useId(), id = props.id ?? generated;
+  const input = <Input {...props} placeholder=" " id={id} type="search" aria-label={label} enterKeyHint={mobile ? "search" : props.enterKeyHint} />;
   const submit = <Submit type="submit" data-feed-search-submit disabled={props.disabled || submitDisabled}
     aria-label={mobile ? submitLabel : undefined} title={mobile ? submitLabel : undefined}>
     {(mobile || !compact) && <SearchIcon aria-hidden="true" />}{!mobile && submitLabel}
   </Submit>;
-  return <Field data-feed-search $compact={compact} $mobile={mobile}>
-    {compact && !mobile && <SearchIcon aria-hidden="true" />}
+  return <Field data-feed-search data-floating-control $compact={compact} $mobile={mobile}>
+    <label htmlFor={id} title={label}>{label}</label>
+    <FloatingOutline label={label} />
     {input}
     {submit}
   </Field>;

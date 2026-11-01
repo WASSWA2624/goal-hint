@@ -1,4 +1,8 @@
 "use client";
+
+import { controlRow } from "@/components/ui/control-layout";
+
+import { FloatingField } from "@/components/ui/floating-field";
 import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -14,13 +18,12 @@ import { formatPeriodEnd } from "@/domain/subscription-period";
 import { paymentNotificationNotice } from "@/domain/payment-notification";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
-import { ActionButton, adminControl, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
+import { ActionButton, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
 import { Drawer, FactList, Panel, RowTitle, TextAction } from "./desk-styles";
 import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordHead, RecordItem,
   RecordItemMeta, RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordScroll, RecordWorkspace } from "./record-workspace";
 import { refreshPendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
-import { FloatingField } from "./floating-field";
 import { NetworkChoice } from "./network-choice";
 import { balancedCodePresentation, codePresentation } from "./code-presentation-styles";
 
@@ -83,7 +86,7 @@ export function ActionNotices({ action }: { action: CodeAction }) {
   return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <Link href={`/admin/payments?tab=approved#${action.duplicateId}`} prefetch={false}>Earlier payment</Link></>}</Notice>}</>;
 }
 export function PlanField({ plans, value, allowCustom = true, onValueChange, disabled }: { plans: readonly SubscriptionPlanView[]; value?: string; allowCustom?: boolean; onValueChange?: (value: string) => void; disabled?: boolean }) {
-  return <FieldBlock>Plan<select name="planId" defaultValue={value ?? plans[0]?.id ?? ""} disabled={disabled} onChange={event => onValueChange?.(event.currentTarget.value)}>{allowCustom && <option value="">Custom days</option>}
+  return <FieldBlock label={"Plan"}><select name="planId" defaultValue={value ?? plans[0]?.id ?? ""} disabled={disabled} onChange={event => onValueChange?.(event.currentTarget.value)}>{allowCustom && <option value="">Custom days</option>}
     {plans.map(p => <option key={p.id} value={p.id}>{p.name} · UGX {p.priceUgx.toLocaleString("en-UG")}{p.active ? "" : " · inactive"}</option>)}</select></FieldBlock>;
 }
 /**
@@ -104,14 +107,14 @@ export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "
       <PlanField plans={plans} disabled={action.busy} onValueChange={setSelectedPlan} />
     </GrantSection>
     <FieldPair data-grant-section="terms">
-      <FieldBlock><span>Custom days <NoWrap>(1–366)</NoWrap></span><input name="days" type="number" inputMode="numeric" min={1} max={366} defaultValue={1} required disabled={action.busy || selectedPlan !== ""} /></FieldBlock>
-      <FieldBlock><span>Amount received <NoWrap>(UGX)</NoWrap></span><input name="amount" type="number" inputMode="numeric" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>
+      <FieldBlock label={<><span>Custom days <NoWrap>(1–366)</NoWrap></span></>}><input name="days" type="number" inputMode="numeric" min={1} max={366} defaultValue={1} required disabled={action.busy || selectedPlan !== ""} /></FieldBlock>
+      <FieldBlock label={<><span>Amount received <NoWrap>(UGX)</NoWrap></span></>}><input name="amount" type="number" inputMode="numeric" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>
     </FieldPair>
-    <GrantSection data-grant-section="reason"><FieldBlock>Reason for granting access (required)<textarea name="note" maxLength={200} defaultValue={note} placeholder="For example, offline payment or complimentary access" required rows={2} disabled={action.busy} aria-describedby={reasonId} /></FieldBlock>
+    <GrantSection data-grant-section="reason"><FieldBlock label={"Reason for granting access (required)"}><textarea name="note" maxLength={200} defaultValue={note} placeholder="For example, offline payment or complimentary access" required rows={2} disabled={action.busy} aria-describedby={reasonId} /></FieldBlock>
       <Hint id={reasonId}>A short reason for the access record. Maximum 200 characters.</Hint></GrantSection>
     {!withoutTransaction && <PlainDrawer data-grant-payment><summary>Payment details · optional<ChevronDownIcon /></summary>
       <GrantSection><NetworkChoice disabled={action.busy} />
-        <FieldBlock>Transaction ID<input name="transactionId" maxLength={40} autoComplete="off" placeholder="Enter the payment reference" disabled={action.busy} /></FieldBlock></GrantSection></PlainDrawer>}
+        <FieldBlock label={"Transaction ID"}><input name="transactionId" maxLength={40} autoComplete="off" placeholder="Enter the payment reference" disabled={action.busy} /></FieldBlock></GrantSection></PlainDrawer>}
     {!compact && <Hint as="p" data-grant-hint>{authCopy.accessDeviceHelp}</Hint>}
     {!externalActions && <GrantButton type="submit" $variant="primary" $inline={fixedPhone} disabled={action.busy}>Grant access manually</GrantButton>}</FormStack></form>;
 }
@@ -123,6 +126,8 @@ const FieldPair = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
   gap: 10px;
+
+  ${controlRow}
 `;
 const PlainDrawer = styled.details`
   min-inline-size: 0;
@@ -157,7 +162,7 @@ export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; acti
   function cancel() { setConfirming(false); revokeTrigger.current?.focus(); }
   return <CodeTools ref={tools} tabIndex={-1} role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
     {code.source !== "referral" && <ExtendForm method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
-      <ExtendField>Extend by<input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} />days</ExtendField>
+      <ExtendField label="Extend by (days)"><input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} /></ExtendField>
       <ActionButton type="submit" disabled={locked}>Extend</ActionButton>
     </ExtendForm>}
     <TextAction ref={revokeTrigger} type="button" $tone="danger" disabled={locked} aria-expanded={confirming} aria-controls={confirming ? `${id}-revoke` : undefined}
@@ -186,25 +191,10 @@ const ExtendForm = styled.form`
   align-items: center;
   gap: 8px;
   min-inline-size: 0;
+
+  ${controlRow}
 `;
-const ExtendField = styled.label`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.body};
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  white-space: nowrap;
-  input {
-    ${adminControl}
-    inline-size: 3.25rem;
-    padding-inline: 4px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    appearance: textfield;
-    &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { appearance: none; margin: 0; }
-  }
-`;
+const ExtendField = styled(FloatingField)`flex: 1;`;
 /** Stacked, so it never needs more width than the controls above it (a list may give them only an auto column). */
 const RevokeConfirmation = styled.div`
   flex: 1 1 100%;
@@ -325,6 +315,8 @@ const SearchForm = styled.form`
   > :first-child { grid-column: 1 / -1; }
   > button > svg { flex: none; font-size: 1rem; }
   ${media.desktop} { input, select { min-block-size: 34px; font-size: 0.8125rem; } > button { min-block-size: 32px; } }
+
+  ${controlRow}
 `;
 const CodeRow = styled.li`
   display: grid;

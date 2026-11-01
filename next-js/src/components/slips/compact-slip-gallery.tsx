@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
 import { lightTheme, darkTheme } from "@/styles/theme";
@@ -91,16 +93,16 @@ export function CompactSlipGallery({ locale }: { locale: string }) {
             <button type="button" aria-pressed={context === "best"} onClick={() => setContext("best")}>Best slips</button>
             <button type="button" aria-pressed={context === "builder"} onClick={() => setContext("builder")}>Slip builder</button>
           </div></fieldset>
-          <label><span>Design</span><select value={focused} onChange={(event) => setFocused(event.target.value as CompactSlipVariant | "all")}>
+          <FloatingField label={<><span>Design</span></>}><select value={focused} onChange={(event) => setFocused(event.target.value as CompactSlipVariant | "all")}>
             <option value="all">Compare all 10</option>
             {compactSlipDesigns.map((design, index) => <option key={design.id} value={design.id}>{String(index + 1).padStart(2, "0")} · {design.name}</option>)}
-          </select></label>
-          <label><span>Sample</span><select value={scenario} onChange={(event) => setScenario(event.target.value as CompactSlipScenario)}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Sample</span></>}><select value={scenario} onChange={(event) => setScenario(event.target.value as CompactSlipScenario)}>
             {compactSlipScenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select></label>
-          <label><span>Preview width</span><select value={width} onChange={(event) => setWidth(Number(event.target.value))}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Preview width</span></>}><select value={width} onChange={(event) => setWidth(Number(event.target.value))}>
             {[320, 375, 430].map((value) => <option key={value} value={value}>Up to {value}px</option>)}
-          </select></label>
+          </select></FloatingField>
           <fieldset><legend>Appearance</legend><div>
             <button type="button" aria-pressed={mode === "light"} onClick={() => setMode("light")}>Light</button>
             <button type="button" aria-pressed={mode === "dark"} onClick={() => setMode("dark")}>Dark</button>

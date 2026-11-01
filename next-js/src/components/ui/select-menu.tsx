@@ -4,6 +4,8 @@ import { useCallback, useId, useLayoutEffect, useRef, useState, type ComponentPr
 import styled from "styled-components";
 import { CheckIcon, ChevronDownIcon } from "./icons";
 import { controlFeedback, filterControlColors, focusRing } from "./filter-chrome";
+import { FloatingOutline } from "./floating-outline";
+import { floatingLabel, raisedFloatingLabel, floatingOutline } from "./floating-field-styles";
 import { useOutsideDismiss } from "./use-outside-dismiss";
 
 export type SelectMenuOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
@@ -11,7 +13,9 @@ export type SelectMenuProps = Readonly<{
   value: string; options: readonly SelectMenuOption[]; label: string; onValueChange: (value: string) => void;
 }> & Omit<ComponentPropsWithoutRef<"button">, "children" | "value" | "onChange" | "onClick" | "onKeyDown" | "onSelect" | "role">;
 const Root = styled.div`
-  position: relative; min-inline-size: 0; max-inline-size: 100%;
+  position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: 6px;
+  > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
+  &:focus-within > [data-floating-outline] { border-width: 2px; border-color: ${({ theme }) => theme.color.focus}; }
 `;
 const Trigger = styled.button`
   display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -25,7 +29,12 @@ const Trigger = styled.button`
   > svg { flex: none; color: ${({ theme }) => theme.color.brand}; }
   &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
+  border: 1px solid transparent;
   @media (pointer: coarse) { min-block-size: 44px; }
+  &:focus-visible { outline: none; }
+  position: relative; min-block-size: 40px; padding-block: 8px;
+  > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 40px); }
+  &:focus-within > [data-select-label] { color: ${({ theme }) => theme.color.link}; }
 `;
 const Options = styled.ul`
   position: absolute; inset-inline-start: 0; inset-block-start: calc(100% + 6px); z-index: 50;
@@ -115,13 +124,15 @@ export function SelectMenu({ value, options, label, onValueChange, className, di
   return <Root className={className} ref={root} onBlur={(event) => {
     if (!event.currentTarget.contains(event.relatedTarget)) close();
   }}>
-    <Trigger {...attributes} ref={trigger} type="button" role="combobox" data-select-trigger disabled={disabled || !enabled.length}
+    <Trigger {...attributes} ref={trigger} type="button" role="combobox" data-select-trigger data-floating-control disabled={disabled || !enabled.length}
       aria-label={`${label}: ${current?.label ?? value}`} aria-haspopup="listbox" aria-expanded={open}
       aria-controls={open ? id : undefined} aria-activedescendant={open && activeIndex >= 0 ? `${id}-${activeIndex}` : undefined}
       onKeyDown={keyboard} onClick={() => { if (open) close(); else show(); }}>
+      <span data-select-label aria-hidden="true">{label}</span>
       <span aria-hidden="true">{options.map((option) => <span key={option.value} data-current={option.value === value || undefined}>{option.label}</span>)}</span>
       <ChevronDownIcon />
     </Trigger>
+    <FloatingOutline label={label} />
     {open && <Options ref={panel} id={id} role="listbox" aria-label={label} data-select-options>
       {options.map((option, index) => <li key={option.value} id={`${id}-${index}`} role="option" aria-selected={option.value === value}
         aria-disabled={option.disabled || undefined} data-active={!option.disabled && active?.value === option.value || undefined}

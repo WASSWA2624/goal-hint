@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { CalendarIcon, ChevronDownIcon, ChevronRightIcon, GlobeIcon, GridIcon, ResetIcon, SlidersIcon, TrophyIcon, type IconProps } from "@/components/ui/icons";
@@ -91,9 +93,9 @@ const OptionChecklist = memo(function OptionChecklist({ kind, options, selected,
     <OptionLogo url={option.logoUrl} /><span>{option.label}{option.detail && <small> · {option.detail}</small>}</span>
   </label>;
   return <fieldset><VisuallyHidden as="legend">{label}</VisuallyHidden>
-    <input data-option-search type="search" value={search} aria-label={messages.text("feed.filters.findOption", { label })}
+    <FloatingField label={messages.text("feed.filters.findOption", { label })}><input data-option-search type="search" value={search} aria-label={messages.text("feed.filters.findOption", { label })}
       placeholder={messages.text("feed.filters.findOption", { label })} onChange={(event) => setSearch(event.target.value)}
-      onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
+      onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} /></FloatingField>
     <label data-choice><input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
       {messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.allCountries")}</label>
     <div data-options>{exact.map((option) => optionRow(option))}
@@ -185,12 +187,10 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   }
   const error = (section: FeedFilterSection | null) => issue?.section === section
     ? <FilterError id={errorId} ref={errorRef} tabIndex={-1}>{issue.message}</FilterError> : null;
-  const input = (label: string, name: string, value: string, change: (value: string) => void, type = "text") => <label data-input>
-    <span>{label}</span><input type={type} name={name} value={value} placeholder={messages.text("feed.filters.any")}
+  const input = (label: string, name: string, value: string, change: (value: string) => void, type = "text") => <FloatingField data-input label={<><span>{label}</span></>}><input type={type} name={name} value={value} placeholder={messages.text("feed.filters.any")}
       inputMode={type === "text" ? "decimal" : undefined} autoComplete="off" step={type === "time" ? 60 : undefined}
       aria-invalid={issue?.section === active || undefined} aria-describedby={issue?.section === active ? errorId : undefined}
-      onChange={(event) => change(event.target.value)} />
-  </label>;
+      onChange={(event) => change(event.target.value)} /></FloatingField>;
   return <Panel data-desktop-feed-filters aria-label={messages.text("feed.filters.form")} aria-busy={pending} noValidate
     onReset={(event) => { event.preventDefault(); resetAll(); }} onSubmit={(event) => {
       event.preventDefault();
@@ -212,7 +212,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       }} /></PeriodField>
       <PeriodField><FeedPeriodSelect name="when" locale={query.locale} value={period} disabled={draft.query.status === "live"}
         title={draft.query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={changePeriod} /></PeriodField>
-      <SortField><VisuallyHidden>{messages.text("feed.sort.label")}</VisuallyHidden><select name="sort" aria-label={messages.text("feed.sort.label")}
+      <SortField label={messages.text("feed.sort.label")}><select name="sort" aria-label={messages.text("feed.sort.label")}
         value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={(event) => {
           const selected = feedSortOptions.find((sort) => `${sort.by}-${sort.direction}` === event.target.value);
           if (selected) setDraft((current) => ({ ...current, query: { ...current.query, sort: selected } }));
@@ -256,9 +256,9 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
           {input(messages.text("feed.date.to"), "to", draft.dates.to, (to) => setDraft((current) => ({ ...current, dates: { ...current.dates, to } })), "date")}
           {input(messages.text("feed.time.from"), "timeFrom", draft.times.from, (from) => setDraft((current) => ({ ...current, times: { ...current.times, from: from || fullDayKickoffTime.from } })), "time")}
           {input(messages.text("feed.time.to"), "timeTo", draft.times.to, (to) => setDraft((current) => ({ ...current, times: { ...current.times, to: to || fullDayKickoffTime.to } })), "time")}
-          <label data-input data-full><span>{messages.text("feed.filters.timezone")}</span><select name="tz" value={zone} onChange={(event) => {
+          <FloatingField data-input data-full label={<><span>{messages.text("feed.filters.timezone")}</span></>}><select name="tz" value={zone} onChange={(event) => {
             const zone = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, zone } }));
-          }}>{[...new Set([publicPolicy.reportingTimeZone, deviceZone, zone])].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          }}>{[...new Set([publicPolicy.reportingTimeZone, deviceZone, zone])].map((value) => <option key={value} value={value}>{value}</option>)}</select></FloatingField>
         </div>}
         {section === "leagues" && <OptionChecklist key={`leagues-${dialogVersion}`} kind="leagues" options={leagueList} selected={draft.query.leagues} onChange={changeLeagues} messages={messages} />}
         {section === "countries" && <OptionChecklist key={`countries-${dialogVersion}`} kind="countries" options={countryList} selected={draft.query.countries} onChange={changeCountries} messages={messages} />}
@@ -275,8 +275,8 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
             {input(messages.text("feed.filters.max"), "probMax", draft.probability.max, (max) => setDraft((current) => ({ ...current, probability: { ...current.probability, max } })))}
           </div></fieldset>
           <fieldset disabled><legend>{messages.text("feed.filters.oddsUnavailable")}</legend><div data-fields>
-            <label data-input><span>{messages.text("feed.filters.min")}</span><input placeholder={messages.text("feed.filters.any")} disabled /></label>
-            <label data-input><span>{messages.text("feed.filters.max")}</span><input placeholder={messages.text("feed.filters.any")} disabled /></label>
+            <FloatingField data-input label={<><span>{messages.text("feed.filters.min")}</span></>}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
+            <FloatingField data-input label={<><span>{messages.text("feed.filters.max")}</span></>}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
           </div></fieldset>
         </>}
         </>}

@@ -85,7 +85,7 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
     <RecordHead><h1>Referral review</h1><ActionButton type="button" disabled={busy} onClick={openCreate}>New case</ActionButton></RecordHead>
     <RecordFeedback>{notice && <p role="status">{notice}</p>}{error && !create && !decision && <FieldError role="alert">{error}</FieldError>}
       {!available && <FieldError role="status">Referral review is temporarily unavailable.</FieldError>}</RecordFeedback>
-    <RecordList><h2 data-record-list-title>Cases</h2><RecordListTools><ReviewTools><ReviewField>Status<select value={status} disabled={busy} onChange={event => void reload(event.target.value, "")}>
+    <RecordList><h2 data-record-list-title>Cases</h2><RecordListTools><ReviewTools><ReviewField label={"Status"}><select value={status} disabled={busy} onChange={event => void reload(event.target.value, "")}>
       <option value="all">All cases</option>{referralReviewStatuses.map(value => <option key={value} value={value}>{referralReviewStatusLabel[value]}</option>)}</select></ReviewField>
       <ActionButton type="button" disabled={busy} onClick={() => void reload()}>Refresh</ActionButton></ReviewTools></RecordListTools>
       <RecordListScroll>{visible.map(item => <li key={item.id}><ReviewItem type="button" disabled={busy} aria-current={selected?.id === item.id ? "true" : undefined} onClick={() => { setSelectedId(item.id); if (!desktop) details.current?.scrollIntoView({ block: "start", behavior: "auto" }); }}>
@@ -118,14 +118,14 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
       footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={close}>Cancel</CriteriaDialogButton>
         <CriteriaDialogButton type="submit" form={`${id}-form`} disabled={busy || !confirmed || !draft.grantId}>Create case</CriteriaDialogButton></>}>
       <ReviewForm id={`${id}-form`} method="post" action={endpoint} onSubmit={saveCreate}>
-        <ReviewField>Find earned grant<input value={search} maxLength={60} onChange={event => setSearch(event.target.value)} placeholder="Phone or grant reference" /></ReviewField>
+        <ReviewField label={"Find earned grant"}><input value={search} maxLength={60} onChange={event => setSearch(event.target.value)} placeholder="Phone or grant reference" /></ReviewField>
         <ActionButton type="button" disabled={busy} onClick={() => void findGrants()}>Find grants</ActionButton>
-        <ReviewField>Earned grant<select required value={draft.grantId} onChange={event => setDraft(previous => ({ ...previous, grantId: event.target.value }))}>
+        <ReviewField label={"Earned grant"}><select required value={draft.grantId} onChange={event => setDraft(previous => ({ ...previous, grantId: event.target.value }))}>
           <option value="">Choose grant</option>{grants.map(item => <option key={item.id} value={item.id}>{item.phone ? `+${formatPhone(item.phone)}` : "Erased account"} · {item.reference} · {referralReviewTime(item.unusedMs)} unused</option>)}</select></ReviewField>
-        <ReviewField>Reason<select value={draft.reason} onChange={event => setDraft(previous => ({ ...previous, reason: event.target.value as typeof previous.reason }))}>
+        <ReviewField label={"Reason"}><select value={draft.reason} onChange={event => setDraft(previous => ({ ...previous, reason: event.target.value as typeof previous.reason }))}>
           {referralReviewReasons.map(value => <option key={value} value={value}>{referralReviewReasonLabel[value]}</option>)}</select></ReviewField>
-        <ReviewField>Evidence summary<textarea required minLength={3} maxLength={referralReviewRules.summaryLength} value={draft.summary} onChange={event => setDraft(previous => ({ ...previous, summary: event.target.value }))} /></ReviewField>
-        <ReviewField>Evidence reference<input required minLength={3} maxLength={referralReviewRules.evidenceLength} value={draft.evidenceRef} onChange={event => setDraft(previous => ({ ...previous, evidenceRef: event.target.value }))} /></ReviewField>
+        <ReviewField label={"Evidence summary"}><textarea required minLength={3} maxLength={referralReviewRules.summaryLength} value={draft.summary} onChange={event => setDraft(previous => ({ ...previous, summary: event.target.value }))} /></ReviewField>
+        <ReviewField label={"Evidence reference"}><input required minLength={3} maxLength={referralReviewRules.evidenceLength} value={draft.evidenceRef} onChange={event => setDraft(previous => ({ ...previous, evidenceRef: event.target.value }))} /></ReviewField>
         <Hint>Use support/case references. Omit phone numbers, passwords and verification codes.</Hint>
         <CheckField><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Corroborated evidence is recorded.</CheckField><Hint>{policy}</Hint>
         {error && <FieldError role="alert">{error}</FieldError>}

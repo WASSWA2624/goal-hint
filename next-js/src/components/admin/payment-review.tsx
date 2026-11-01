@@ -142,25 +142,25 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
             <ReviewSectionHead><ZoneLabel as={desktop ? "h3" : "p"} id={`${p.id}-decision`}>{desktop ? "Confirm received payment" : "Decision"}</ZoneLabel>
               {desktop && <TextAction type="button" aria-expanded={smsOpen} aria-controls={`${p.id}-sms`} onClick={() => setSmsOpen(value => !value)}>Paste wallet SMS</TextAction>}
             </ReviewSectionHead>
-            <FieldRow data-payment-confirmation-fields><FieldBlock>Amount received · UGX<input id="payment-confirmed-amount" name="amount" type="number" min={0} max={4294967295} step={1} required value={amount} disabled={action.busy}
+            <FieldRow data-payment-confirmation-fields><FieldBlock label={"Amount received · UGX"}><input id="payment-confirmed-amount" name="amount" type="number" min={0} max={4294967295} step={1} required value={amount} disabled={action.busy}
               onChange={event => setAmount(event.target.value)} /></FieldBlock>
-              <FieldBlock as="div"><label htmlFor="payment-confirmed-id">Transaction ID</label><TransactionControl>
+              <TransactionControl><FieldBlock label="Transaction ID">
                 <input id="payment-confirmed-id" name="transactionId" required maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" spellCheck={false}
-                  value={id} disabled={action.busy} onChange={event => setId(normalizeTransactionId(event.target.value))} data-payment-transaction />
+                  value={id} disabled={action.busy} onChange={event => setId(normalizeTransactionId(event.target.value))} data-payment-transaction /></FieldBlock>
                 <CopyTextButton value={id} disabled={action.busy} compact />
-              </TransactionControl></FieldBlock></FieldRow>
+              </TransactionControl></FieldRow>
             <ZoneDrawer open={desktop || undefined} data-payment-plan-controls><summary>{network !== p.network || changedPlan ? `${networkLabel(network)}${topUp ? "" : ` · ${changedPlan?.name ?? p.planName}`} · Edit` : topUp ? "Change network" : "Change network or plan"}<ChevronDownIcon /></summary>
-              <div><FieldRow data-payment-plan-fields><FieldBlock>{desktop ? "Payment provider" : "Network"}<select name="network" value={network} disabled={action.busy} onChange={event => setNetwork(event.target.value)}><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FieldBlock>
-                {!topUp && p.planId && p.durationDays !== null && <FieldBlock>{desktop ? "Package / purpose" : "Subscription"}<select name="planId" value={planId} disabled={action.busy} onChange={event => setPlanId(event.target.value)}>
+              <div><FieldRow data-payment-plan-fields><FieldBlock label={desktop ? "Payment provider" : "Network"}><select name="network" value={network} disabled={action.busy} onChange={event => setNetwork(event.target.value)}><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FieldBlock>
+                {!topUp && p.planId && p.durationDays !== null && <FieldBlock label={desktop ? "Package / purpose" : "Subscription"}><select name="planId" value={planId} disabled={action.busy} onChange={event => setPlanId(event.target.value)}>
                   <option value={p.planId}>{desktop ? p.planName : `${p.planName} · ${formatPlanLength(p.durationDays)} · ${formatUgx(p.price)}`}</option>
                   {plans.filter(plan => plan.active && plan.id !== p.planId).map(plan => <option key={plan.id} value={plan.id}>{desktop ? plan.name : `${plan.name} · ${formatPlanLength(plan.durationDays)} · ${formatUgx(plan.priceUgx)}`}</option>)}
                 </select></FieldBlock>}
-                {desktop && topUp && <FieldBlock>Purpose<input value="Credit top-up" readOnly /></FieldBlock>}
+                {desktop && topUp && <FieldBlock label={"Purpose"}><input value="Credit top-up" readOnly /></FieldBlock>}
               </FieldRow></div></ZoneDrawer>
             {desktop && !topUp && <Hint data-payment-package>{duration === null ? "Selected package" : `${formatPlanLength(duration)} of access`}{validAmount && Number(amount) === price ? " · Amount matches package price." : ` · Package price: ${formatUgx(price)}.`}</Hint>}
             {validAmount && (topUp ? <Hint role="status" data-payment-credit>{desktop ? "The received amount" : formatUgx(Number(amount))} will be added to the account&apos;s credit.</Hint>
               : excess > 0 && <Hint role="status" data-payment-credit>{formatUgx(excess)} above the price will be added to the account&apos;s credit.</Hint>)}
-            <ZoneDrawer id={`${p.id}-sms`} open={smsOpen} onToggle={event => setSmsOpen(event.currentTarget.open)} data-payment-sms><summary>Paste wallet SMS · optional<ChevronDownIcon /></summary><div><FieldBlock>Received-payment message<textarea maxLength={12000} disabled={action.busy} rows={3}
+            <ZoneDrawer id={`${p.id}-sms`} open={smsOpen} onToggle={event => setSmsOpen(event.currentTarget.open)} data-payment-sms><summary>Paste wallet SMS · optional<ChevronDownIcon /></summary><div><FieldBlock label={"Received-payment message"}><textarea maxLength={12000} disabled={action.busy} rows={3}
               placeholder="Paste the SMS to update the payment fields" onChange={event => parse(event.target.value)} /></FieldBlock>
               {hasSms && <Hint role="status">{sms.transactionId && sms.amount !== undefined ? "Payment details updated." : "Enter the missing details above."}
                 {sms.counterparty && ` Sender: ${phoneLabel(sms.counterparty)}${sms.counterparty === p.payerPhone ? " · matches payer" : " · check payer"}.`}</Hint>}
@@ -172,8 +172,8 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
             <div>{desktop && <ZoneLabel as="h3">Reject payment</ZoneLabel>}<form id={`${rejectId}-form`} method="post" action={`/api/admin/payments/${p.id}`} onSubmit={async event => {
               event.preventDefault(); if (action.busy) return; const form = new FormData(event.currentTarget); onStart();
               await action.send(`/api/admin/payments/${p.id}`, { action: "reject", reason: form.get("reason"), text: form.get("text"), deleteImage: form.get("deleteImage") === "on" }, `Rejected ${p.reference}.`, true, onResolved);
-            }} aria-label={`Reject ${p.reference}`}><FormStack><FieldBlock>Reason<select id={`${rejectId}-reason`} name="reason" disabled={action.busy}>{Object.entries(reasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FieldBlock>
-              <FieldBlock>Message · optional<textarea name="text" maxLength={200} disabled={action.busy} rows={2} /></FieldBlock>
+            }} aria-label={`Reject ${p.reference}`}><FormStack><FieldBlock label={"Reason"}><select id={`${rejectId}-reason`} name="reason" disabled={action.busy}>{Object.entries(reasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FieldBlock>
+              <FieldBlock label={"Message · optional"}><textarea name="text" maxLength={200} disabled={action.busy} rows={2} /></FieldBlock>
               {p.hasImage && <CheckField><input type="checkbox" name="deleteImage" disabled={action.busy} />Delete screenshot</CheckField>}
               <DangerButton type="submit" disabled={action.busy} data-reject-inline>Reject payment</DangerButton></FormStack></form></div>
           </RejectDrawer>
@@ -193,7 +193,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
             event.preventDefault(); if (action.busy) return; const reason = new FormData(event.currentTarget).get("reason"); onStart();
             const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "reverse", reason }, `Reversed ${p.reference}.`);
             if (reply.ok) onRecovery({ reversed: true, carried: reply.body.carriedOtherDays === true, recovery: reason === "wrong-account" });
-          }}><FormStack><FieldBlock>Reason<select name="reason" disabled={action.busy}><option value="network-reversal">Network reversal</option><option value="wrong-account">Wrong account</option></select></FieldBlock>
+          }}><FormStack><FieldBlock label={"Reason"}><select name="reason" disabled={action.busy}><option value="network-reversal">Network reversal</option><option value="wrong-account">Wrong account</option></select></FieldBlock>
             <CheckField><input type="checkbox" required disabled={action.busy} />End access from this payment</CheckField>
             <DangerButton type="submit" disabled={action.busy}>Confirm reversal</DangerButton></FormStack></form></div></ZoneDrawer>}
           {recovery?.carried && <Notice $tone="warning">Other days moved with this payment. Restore any verified remaining access manually.</Notice>}

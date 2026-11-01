@@ -1,5 +1,7 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { EmptyPanel, StickyActions, visuallyHidden } from "./desk-styles";
@@ -55,6 +57,8 @@ export const RecordListTools = styled.div`
     input:not([type="checkbox"]):not([type="radio"]), select { min-block-size: 34px; font-size: 0.8125rem; }
     input, select, button { border-radius: ${({ theme }) => theme.radius.control}; }
   }
+
+  ${controlRow}
 `;
 export const RecordListScroll = styled.ol.attrs<{ "data-record-list-scroll"?: string }>({ "data-record-list-scroll": "" })`
   display: grid; align-content: start; gap: 8px; margin: 0; padding: 0;

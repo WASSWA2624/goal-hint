@@ -63,21 +63,19 @@ export function SettingsMessageEditor({ value, disabled, error, onChange }: {
       <MessageTabs aria-label="Message channel editor">{(["sms", "whatsapp", "email"] as const).map(item => <button type="button" key={item} aria-pressed={channel === item}
         onClick={() => { setChannel(item); setVariable(""); }}>{item === "sms" ? "SMS" : item === "whatsapp" ? "WhatsApp" : "Email"}</button>)}</MessageTabs>
       {channel === "email" ? <MessagePreview><strong>Email is not configured</strong><p>Email delivery requires a verified email address on the account and a configured email provider.</p></MessagePreview> : <>
-        {channel === "sms" ? <FieldBlock htmlFor="message-sms-body">Message text<textarea ref={smsInput} id="message-sms-body" aria-label="Message text" aria-describedby="message-sms-hint" rows={5} spellCheck={false} value={current.sms}
-          disabled={disabled} maxLength={1600} onChange={change => update({ sms: change.target.value })} /><Hint id="message-sms-hint">{current.sms.length}/1600 characters · SMS length can affect delivery cost.</Hint></FieldBlock>
+        {channel === "sms" ? <FieldBlock label={"Message text"} description={<><Hint id="message-sms-hint">{current.sms.length}/1600 characters · SMS length can affect delivery cost.</Hint></>}><textarea ref={smsInput} id="message-sms-body" aria-label="Message text" aria-describedby="message-sms-hint" rows={5} spellCheck={false} value={current.sms}
+          disabled={disabled} maxLength={1600} onChange={change => update({ sms: change.target.value })} /></FieldBlock>
           : <>
-            <FieldBlock htmlFor="message-whatsapp-template">Approved WhatsApp template<input id="message-whatsapp-template" value={current.whatsapp.templateName}
+            <FieldBlock label={"Approved WhatsApp template"}><input id="message-whatsapp-template" value={current.whatsapp.templateName}
               disabled={disabled || fixedWhatsApp} placeholder="Provider-approved template name" maxLength={128}
               onChange={change => update({ whatsapp: { ...current.whatsapp, templateName: change.target.value } })} /></FieldBlock>
-            <FieldBlock htmlFor="message-whatsapp-parameters">Template parameters · one per line<textarea ref={parameterInput} id="message-whatsapp-parameters" aria-label="Template parameters" aria-describedby="message-whatsapp-parameters-hint" rows={3}
-              disabled={disabled || fixedWhatsApp} spellCheck={false} value={current.whatsapp.parameters.join("\n")} onChange={change => updateSource(change.target.value)} />
-              <Hint id="message-whatsapp-parameters-hint">{fixedWhatsApp ? "The provider authentication template receives the verification code as its single parameter." : "Keep the parameter order identical to your approved provider template. The message wording is managed by the provider."}</Hint>
-            </FieldBlock>
+            <FieldBlock label={"Template parameters · one per line"} description={<><Hint id="message-whatsapp-parameters-hint">{fixedWhatsApp ? "The provider authentication template receives the verification code as its single parameter." : "Keep the parameter order identical to your approved provider template. The message wording is managed by the provider."}</Hint></>}><textarea ref={parameterInput} id="message-whatsapp-parameters" aria-label="Template parameters" aria-describedby="message-whatsapp-parameters-hint" rows={3}
+              disabled={disabled || fixedWhatsApp} spellCheck={false} value={current.whatsapp.parameters.join("\n")} onChange={change => updateSource(change.target.value)} /></FieldBlock>
           </>}
         {!fixedWhatsApp && <VariableBar>
-          <select aria-label="Variable to insert" value={variable} disabled={disabled} onChange={change => setVariable(change.target.value)}>
+          <FieldBlock label="Variable to insert"><select aria-label="Variable to insert" value={variable} disabled={disabled} onChange={change => setVariable(change.target.value)}>
             <option value="">Choose a variable…</option>{event.placeholders.map(name => <option key={name} value={name}>{messagePlaceholders[name].label} · {`{{${name}}}`}</option>)}
-          </select>
+          </select></FieldBlock>
           <ActionButton type="button" disabled={disabled || !variable} onClick={insert}>Insert variable</ActionButton>
         </VariableBar>}
         <MessagePreview aria-live="polite"><strong>{channel === "whatsapp" ? "Parameter preview · sample data" : "Message preview · sample data"}</strong><pre>{preview || "Your message preview will appear here."}</pre></MessagePreview>

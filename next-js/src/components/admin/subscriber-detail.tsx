@@ -96,7 +96,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       const reply = await action.send(path, { action: account.blockedAt ? "unblock" : "block", value: new FormData(event.currentTarget).get("reason") }, account.blockedAt ? "Account unblocked." : authCopy.blockedDevicesLoggedOut);
       if (reply.ok) closeAction();
     }}><MutedText>{account.blockedAt ? authCopy.unblockHelp : authCopy.blockHelp}</MutedText>
-      <FieldBlock>Reason<input name="reason" required maxLength={200} disabled={action.busy} /></FieldBlock>
+      <FieldBlock label={"Reason"}><input name="reason" required maxLength={200} disabled={action.busy} /></FieldBlock>
       {!externalActionControls && <ActionButton type="submit" $variant="primary" disabled={action.busy}>{account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</CompactForm>}
     {active === "devices" && <><MutedText>{authCopy.devicesLoginHelp}</MutedText>{!externalActionControls && <div><ActionButton type="button" disabled={action.busy} onClick={() => void signOutDevices()}>{actionTitles.devices}</ActionButton></div>}</>}
   </>;
@@ -198,7 +198,7 @@ function OwnerNote({ account, action, formId, externalActions, onDirtyChange }: 
   useEffect(() => { onDirtyChange(note !== (account.ownerNote ?? "")); }, [account.ownerNote, note, onDirtyChange]);
   return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={async event => {
     event.preventDefault(); if (!action.busy) await action.send(`/api/admin/subscribers/${account.id}`, { action: "note", value: note }, "Owner note saved.");
-  }}><FieldBlock>Owner note<textarea name="note" rows={2} maxLength={500} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={action.busy} placeholder="Add a private note…" /></FieldBlock>
+  }}><FieldBlock label={"Owner note"}><textarea name="note" rows={2} maxLength={500} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={action.busy} placeholder="Add a private note…" /></FieldBlock>
     <NoteFooter><span>{note.length}/500 · Admin only</span>{!externalActions && <ActionButton type="submit" disabled={action.busy || note === (account.ownerNote ?? "")}>Save note</ActionButton>}</NoteFooter>
   </CompactForm>;
 }
@@ -213,8 +213,8 @@ function CreditAdjust({ path, action, formId, externalActions, open, onOpenChang
     const reply = await action.send(path, { action: "credit-adjust", amount: value, note, confirmed }, `Credit ${value > 0 ? "added" : "removed"}.`);
     if (reply.ok) { setAmount(""); setNote(""); setConfirmed(false); }
   }}><MutedText>Use a negative amount to remove credit. Top-ups are approved from the payment instead.</MutedText>
-    <FieldRow><FieldBlock>Amount · UGX<input name="amount" inputMode="numeric" required value={amount} disabled={action.busy} onChange={event => setAmount(event.currentTarget.value)} placeholder="e.g. 5000 or -5000" /></FieldBlock>
-      <FieldBlock>Reason<input name="note" required maxLength={200} value={note} disabled={action.busy} onChange={event => setNote(event.currentTarget.value)} placeholder="Shown in the credit history" /></FieldBlock></FieldRow>
+    <FieldRow><FieldBlock label={"Amount · UGX"}><input name="amount" inputMode="numeric" required value={amount} disabled={action.busy} onChange={event => setAmount(event.currentTarget.value)} placeholder="e.g. 5000 or -5000" /></FieldBlock>
+      <FieldBlock label={"Reason"}><input name="note" required maxLength={200} value={note} disabled={action.busy} onChange={event => setNote(event.currentTarget.value)} placeholder="Shown in the credit history" /></FieldBlock></FieldRow>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => setConfirmed(event.target.checked)} /> I checked this correction.</label>
     {!externalActions && <ActionButton type="submit" $variant="primary" disabled={action.busy || !valid || !confirmed}>Save correction</ActionButton>}
   </CompactForm></div></PlainDrawer>;
@@ -229,7 +229,7 @@ function ChangeNumber({ path, action, onSaved, formId, externalActions }: { path
   }
   return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : path} onSubmit={submit}><MutedText>Move remaining access, credit and auto-renewal to the new number&apos;s account. Old sessions lose access. Both accounts can then be erased but not permanently deleted.</MutedText>
     <FieldRow><PhoneInput label="New phone number" name="newPhone" lookup required disabled={action.busy} hint="" />
-      <FieldBlock>Verified by<select name="verifiedBy" required disabled={action.busy}><option value="">Choose verification</option><option value="old-number">Old number</option><option value="payment-details">Payment details</option></select></FieldBlock></FieldRow>
+      <FieldBlock label={"Verified by"}><select name="verifiedBy" required disabled={action.busy}><option value="">Choose verification</option><option value="old-number">Old number</option><option value="payment-details">Payment details</option></select></FieldBlock></FieldRow>
     <label><input type="checkbox" name="confirmed" required disabled={action.busy} /> I verified this request.</label>
     {!externalActions && <ActionButton type="submit" $variant="primary" disabled={action.busy}>Change number and move access</ActionButton>}
   </CompactForm>;

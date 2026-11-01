@@ -2,8 +2,7 @@
 
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { SearchIcon } from "@/components/ui/icons";
-import { textFieldSurface } from "@/components/ui/filled-surfaces";
+import { FloatingField } from "@/components/ui/floating-field";
 import { PredictionOdds, PredictionOutcome, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { predictionDescription } from "@/domain/prediction-label";
 import { detailAnalysis } from "@/domain/detail-presentation";
@@ -25,21 +24,7 @@ import {
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
 
-const Search = styled.label.attrs<{ "data-text-field-frame"?: string }>({ "data-text-field-frame": "" })`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-inline-size: 0;
-  min-block-size: 1.875rem;
-  padding-inline: 8px;
-  color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.field};
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.control};
-  ${textFieldSurface}
-  &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: ${size("secondary")}; outline: none; }
-`;
+const Search = styled(FloatingField)`min-inline-size: min(100%, 12rem);`;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
 const columns = "minmax(0, 1.4fr) minmax(0, 1.1fr) 4rem 0.75rem";
 const wideColumns = "minmax(0, 1.35fr) minmax(0, 1.2fr) minmax(0, 1.1fr) 0.875rem";
@@ -254,7 +239,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
       {view.marketsOpen && (!embedded && view.market ? <MarketPanel family={view.market} /> : <Body>
         <Tools>
-          <Search><SearchIcon aria-hidden="true" /><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
+          <Search label={messages.text("details.searchMarkets")}><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
             aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>
           {!query && <ChoiceGroup label={messages.text("details.categories")} value={view.marketCategory}
             options={marketCategories.map((category) => ({ value: category, label: categoryLabel(category) }))}

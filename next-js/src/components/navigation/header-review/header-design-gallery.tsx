@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useState } from "react";
 import { ThemeProvider } from "styled-components";
 import { MoonIcon, SunIcon } from "@/components/ui/icons";
@@ -29,19 +31,19 @@ export function HeaderDesignGallery({ locale }: { locale: string }) {
           <p>Ten compact header options, each shown on desktop and mobile. Every option aligns the original logo symbol and app name to the same visible height, with square controls and a single header row.</p>
         </Intro>
         <Toolbar aria-label="Header preview settings">
-          <label><span>Compare</span><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>
+          <FloatingField label={<><span>Compare</span></>}><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>
             <option value={0}>All 10 options</option>
             {headerReviewDesigns.map((design) => <option key={design.id} value={design.id}>{String(design.id).padStart(2, "0")} · {design.name}</option>)}
-          </select></label>
-          <label><span>Account state</span><select aria-label="Account state" value={session} onChange={(event) => setSession(event.target.value as HeaderReviewSession)}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Account state</span></>}><select aria-label="Account state" value={session} onChange={(event) => setSession(event.target.value as HeaderReviewSession)}>
             <option value="guest">Guest · {authLabels.signIn} / {authLabels.signUp}</option><option value="member">Member · Account</option><option value="admin">Admin · Payments / Account</option>
-          </select></label>
-          <label><span>Mobile width</span><select aria-label="Mobile preview width" value={mobileWidth} onChange={(event) => setMobileWidth(Number(event.target.value))}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Mobile width</span></>}><select aria-label="Mobile preview width" value={mobileWidth} onChange={(event) => setMobileWidth(Number(event.target.value))}>
             {[320, 360, 390, 430].map((width) => <option key={width} value={width}>{width}px</option>)}
-          </select></label>
-          <label><span>Desktop width</span><select aria-label="Desktop preview width" value={desktopWidth} onChange={(event) => setDesktopWidth(Number(event.target.value))}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Desktop width</span></>}><select aria-label="Desktop preview width" value={desktopWidth} onChange={(event) => setDesktopWidth(Number(event.target.value))}>
             {[1024, 1280].map((width) => <option key={width} value={width}>{width}px</option>)}
-          </select></label>
+          </select></FloatingField>
           <button type="button" aria-label={`Switch to ${dark ? "light" : "dark"} previews`} onClick={toggleTheme}>{dark ? <SunIcon /> : <MoonIcon />}{dark ? "Light" : "Dark"}</button>
         </Toolbar>
         <Status role="status" aria-live="polite">{notice}</Status>

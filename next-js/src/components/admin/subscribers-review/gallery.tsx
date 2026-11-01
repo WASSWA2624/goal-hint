@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "styled-components";
@@ -30,8 +32,8 @@ export function SubscriberDesignGallery() {
     <div><Intro><div><small>Goal Hint · Subscriber interface studies</small><h1>Subscribers, with the details in reach.</h1>
       <p>Balanced compact is applied to Subscribers. Compare the shared search, filters, account summaries and dialog actions across all ten studies.</p></div>
       <Link href="/admin/subscribers" prefetch={false}>Open Subscribers page</Link></Intro>
-      <Toolbar aria-label="Subscriber sample controls"><label>Sample<select aria-label="Subscriber sample" value={index} onChange={event => choose(Number(event.currentTarget.value))}>
-        {subscriberDesigns.map((item, position) => <option key={item.id} value={position}>{item.id} · {item.name}</option>)}</select></label>
+      <Toolbar aria-label="Subscriber sample controls"><FloatingField label={"Sample"}><select aria-label="Subscriber sample" value={index} onChange={event => choose(Number(event.currentTarget.value))}>
+        {subscriberDesigns.map((item, position) => <option key={item.id} value={position}>{item.id} · {item.name}</option>)}</select></FloatingField>
         <ActionButton type="button" onClick={() => { demo.reset(); setRevision(value => value + 1); }}><ResetIcon />Reset sample</ActionButton>
         <ActionButton type="button" data-spacer onClick={() => setDark(value => !value)}>{dark ? <SunIcon /> : <MoonIcon />}{dark ? "Light" : "Dark"}</ActionButton>
         <a href="#all-subscriber-samples" onClick={event => { event.preventDefault(); document.getElementById("all-subscriber-samples")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>All 10 samples</a>

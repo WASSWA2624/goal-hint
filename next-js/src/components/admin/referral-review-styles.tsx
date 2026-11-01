@@ -1,5 +1,7 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { FieldBlock } from "./admin-form";
@@ -13,8 +15,10 @@ export const ReviewFooter = styled(RecordFooter)`
 `;
 export const ReviewTools = styled.div`
   display: flex; align-items: end; gap: 8px;
-  > label { flex: 1; min-inline-size: 0; }
+  > [data-floating-field] { flex: 1; min-inline-size: 0; }
   > button { flex: none; }
+
+  ${controlRow}
 `;
 
 /** Referral decisions use the same compact list/detail geometry and controls as Payments/Subscribers. */

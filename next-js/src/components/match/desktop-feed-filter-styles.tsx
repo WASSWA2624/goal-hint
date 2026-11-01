@@ -1,5 +1,9 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
+import { FloatingField } from "@/components/ui/floating-field";
+
 import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
@@ -62,9 +66,11 @@ export const SearchRow = styled.div`
   gap: 6px;
   min-inline-size: 0;
   > [data-feed-search] { flex: 1 1 14rem; }
+
+  ${controlRow}
 `;
 
-export const PeriodField = styled.label`
+export const PeriodField = styled.div`
   display: flex;
   flex: 0 1 auto;
   max-inline-size: 100%;
@@ -149,7 +155,7 @@ export const ActionRow = styled.div`
   > [data-filter-submit-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-inline-start: auto; }
 `;
 
-export const SortField = styled.label`
+export const SortField = styled(FloatingField)`
   display: flex;
   flex: 0 1 auto;
   max-inline-size: 100%;
@@ -184,9 +190,7 @@ export const DialogContent = styled.div`
   fieldset + fieldset { margin-block-start: 15px; padding-block-start: 13px; border-block-start: 0; }
   legend { margin-block-end: 7px; padding: 0; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  label[data-input] { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-  label[data-input][data-full] { grid-column: 1 / -1; }
-  label[data-input] > input, label[data-input] > select, input[data-option-search] { ${fieldControl} }
+  [data-input][data-full] { grid-column: 1 / -1; }
   input[data-option-search] { margin-block-end: 6px; }
   label[data-choice] { display: flex; align-items: center; gap: 8px; min-block-size: 36px; font-size: 0.8125rem; cursor: pointer; }
   input[type="checkbox"] { flex: none; inline-size: 16px; block-size: 16px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }

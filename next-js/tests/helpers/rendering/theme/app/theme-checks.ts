@@ -192,9 +192,10 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
       const frame = element.matches("[data-compact-slip]");
       const separator = (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection], [data-feed-pagination]")
         || !phone && element.matches("[data-match-list] > li + li")) && edge === "borderTopWidth";
-      const field = element.matches(textFieldSelector + ", [data-text-field-frame]");
+      const floating = element.matches("[data-floating-outline], [data-floating-control], [data-select-trigger]") || !!element.closest("[data-floating-control]");
+      const field = element.matches(textFieldSelector + ", select, [data-text-field-frame]");
       const expected = frame || separator ? ruleWidth : field ? fieldBorderWidth : "0px";
-      assert(style[edge] === expected || field && style[edge] === "0px", `${target}: unexpected ${edge}`);
+      assert(floating ? Number.parseFloat(style[edge]) <= 2 : style[edge] === expected || field && style[edge] === "0px", `${target}: unexpected ${edge}`);
       if (frame) assert(style.borderTopColor === normalize(theme.phoneCardFrame.inset), "Slip frames use the slip background");
     }
   }
@@ -206,8 +207,9 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   for (const selector of ["#theme-control-input", "#theme-admin-input", "#theme-payment-input"]) {
     const field = document.querySelector(selector);
-    assert(!!field && getComputedStyle(field).borderTopWidth === fieldBorderWidth, "Text entry has the theme's thin boundary");
-    assert(!!field && getComputedStyle(field).borderTopColor === normalize(theme.color.controlBorder), "Text entry boundaries retain their contrast");
+    const boundary = field?.closest("[data-floating-control]")?.querySelector("[data-floating-outline]") ?? field;
+    assert(!!boundary && getComputedStyle(boundary).borderTopWidth === (boundary.matches("[data-floating-outline]") ? ruleWidth : fieldBorderWidth), "Text entry has one thin boundary");
+    assert(!!boundary && getComputedStyle(boundary).borderTopColor === normalize(theme.color.controlBorder), "Text entry boundaries retain their contrast");
   }
   assert(document.documentElement.scrollWidth <= window.innerWidth, "Fixture must not overflow the viewport");
   return errors;

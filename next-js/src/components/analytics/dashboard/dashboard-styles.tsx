@@ -1,6 +1,10 @@
 "use client";
 
-import { filledTableRows, nativeTextFieldSurface } from "@/components/ui/filled-surfaces";
+import { controlRow } from "@/components/ui/control-layout";
+
+import { FloatingField } from "@/components/ui/floating-field";
+
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters, mobileFilterPanel } from "@/components/ui/filter-chrome";
@@ -142,27 +146,11 @@ export const FilterBar = styled.section`
   ${desktopSectionFrame}
   ${desktopContentPadding(true)}
   ${media.belowDesktop} { position: static; }
+
+  ${controlRow}
 `;
-export const Field = styled.label`
-  display: grid;
-  gap: 4px;
-  min-inline-size: 0;
-  flex: 1 1 9rem;
-  max-inline-size: 15rem;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.caption};
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  select, input {
-    min-block-size: 36px;
-    inline-size: 100%;
-    padding: 4px 8px;
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.control};
-    color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.field};
-    ${nativeTextFieldSurface}
-    font-size: ${({ theme }) => theme.typography.scale.body};
-  }
+export const Field = styled(FloatingField)`
+  flex: 1 1 8rem; max-inline-size: 16rem;
   ${media.belowDesktop} { flex-basis: calc(50% - 6px); max-inline-size: none; }
 `;
 export const ToolButton = styled.button<{ $variant?: "primary" | "secondary" | "quiet" }>`
@@ -367,6 +355,8 @@ export const SettingsRow = styled.div`
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px 12px;
+
+  ${controlRow}
 `;
 export const Muted = styled.p`
   color: ${({ theme }) => theme.color.mutedText};

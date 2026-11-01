@@ -1,5 +1,7 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
@@ -149,9 +151,13 @@ export const DialField = styled.div`
 export const DialRow = styled.div`
   display: flex;
   gap: 8px;
+  align-items: start;
   min-inline-size: 0;
-  input { ${adminControl} flex: 1 1 auto; min-inline-size: 0; }
+  > [data-floating-field] { flex: 1 1 auto; }
+  input { ${adminControl} min-inline-size: 0; }
   button { flex: none; white-space: nowrap; }
+
+  ${controlRow}
 `;
 
 /** Device limit sits in a narrow column; a full-width select for five numbers reads as noise. */

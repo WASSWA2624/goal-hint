@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
 import { MoonIcon, SunIcon } from "@/components/ui/icons";
@@ -52,17 +54,17 @@ export function MobileBannerDesignGallery({ locale }: { locale: string }) {
           <p>Ten brief mobile banners, each shown for visitors, members without a subscription, and active subscribers. Every offer and action fits in one row. Option 01 is applied on mobile, alongside the approved desktop Inline invitation.</p>
         </Intro>
         <Toolbar aria-label="Mobile banner preview settings">
-          <label><span>Design</span><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>
+          <FloatingField label={<><span>Design</span></>}><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>
             <option value={0}>All 10 designs</option>
             {mobileBannerReviewDesigns.map((design) => <option key={design.id} value={design.id}>{String(design.id).padStart(2, "0")} · {design.name}</option>)}
-          </select></label>
-          <label><span>Account state</span><select aria-label="Account state" value={state} onChange={(event) => setState(event.target.value as BannerReviewState | "all")}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Account state</span></>}><select aria-label="Account state" value={state} onChange={(event) => setState(event.target.value as BannerReviewState | "all")}>
             <option value="all">All three states</option>
             {bannerReviewStates.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select></label>
-          <label><span>Phone width</span><select aria-label="Mobile preview width" value={width} onChange={(event) => setWidth(Number(event.target.value))}>
+          </select></FloatingField>
+          <FloatingField label={<><span>Phone width</span></>}><select aria-label="Mobile preview width" value={width} onChange={(event) => setWidth(Number(event.target.value))}>
             {[320, 360, 390, 430].map((value) => <option key={value} value={value}>{value}px</option>)}
-          </select></label>
+          </select></FloatingField>
           <button type="button" aria-label={`Switch to ${dark ? "light" : "dark"} previews`} onClick={toggleTheme}>
             {dark ? <SunIcon /> : <MoonIcon />}{dark ? "Light" : "Dark"}
           </button>

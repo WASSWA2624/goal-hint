@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import styled from "styled-components";
 import { useMemo } from "react";
 import type { MatchView } from "@/domain/match-view";
@@ -59,11 +61,9 @@ export function TouchlineStandings({ view }: { view: MatchView }) {
         {mode === "table" && <RadioGroup label={messages.text("competition.columns")} value={detailed ? "detailed" : "summary"}
           onChange={value => update(current => ({...current, section:"context", tab:value === "detailed" ? "table-detail" : "table"}), "replace")}
           options={[{value:"summary",label:messages.text("competition.summary")},{value:"detailed",label:messages.text("competition.detailed")}]} />}
-        {mode === "table" && tables && tables.groups.length > 1 && <label>{messages.text("competition.group")}
-          <select aria-label={messages.text("competition.group")} value={group?.id} onChange={event => {
+        {mode === "table" && tables && tables.groups.length > 1 && <FloatingField label={messages.text("competition.group")}><select aria-label={messages.text("competition.group")} value={group?.id} onChange={event => {
             const item = event.target.value; update(current => ({...current,section:"context",item}), "replace");
-          }}>{tables.groups.map((group,index) => <option key={group.id} value={group.id}>{group.name ?? `${messages.text("competition.group")} ${messages.number(index + 1)}`}</option>)}</select>
-        </label>}
+          }}>{tables.groups.map((group,index) => <option key={group.id} value={group.id}>{group.name ?? `${messages.text("competition.group")} ${messages.number(index + 1)}`}</option>)}</select></FloatingField>}
         {supplied?.season && <small>{messages.text("competition.season", {year:String(supplied.season)})}</small>}
       </Toolbar>
       {mode === "table" && group && <>

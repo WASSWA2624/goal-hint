@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
@@ -41,9 +43,9 @@ export function CodesDesignGallery() {
           <Link href="/admin/codes" prefetch={false}>Open Codes page</Link>
         </Intro>
         <Toolbar aria-label="Codes sample controls">
-          <label>Sample<select aria-label="Codes sample" value={index} onChange={event => choose(Number(event.currentTarget.value))}>
+          <FloatingField label={"Sample"}><select aria-label="Codes sample" value={index} onChange={event => choose(Number(event.currentTarget.value))}>
             {codeDesigns.map((item, position) => <option key={item.id} value={position}>{item.id} · {item.name}</option>)}
-          </select></label>
+          </select></FloatingField>
           <div data-view-switch aria-label="Preview view" role="group">
             <ActionButton type="button" aria-pressed={view === "grant"} onClick={() => showView("grant")}>Grant access</ActionButton>
             <ActionButton type="button" aria-pressed={view === "details"} onClick={() => showView("details")}>Record details</ActionButton>

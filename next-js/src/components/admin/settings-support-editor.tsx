@@ -26,9 +26,9 @@ export function SettingsSupportEditor({ contacts, disabled, error, onChange }: {
     {contacts.length === 0 && <Hint>No support numbers added. Add a number to offer calls or WhatsApp support.</Hint>}
     <ContactList>{contacts.map((contact, index) => <ContactRow key={contact.id} aria-label={`Support contact ${index + 1}`}>
       <ContactFields>
-        <FieldBlock htmlFor={`support-${contact.id}-label`}>Contact label<input id={`support-${contact.id}-label`} value={contact.label} disabled={disabled} maxLength={supportContactRules.labelMaxLength}
+        <FieldBlock label={"Contact label"}><input id={`support-${contact.id}-label`} value={contact.label} disabled={disabled} maxLength={supportContactRules.labelMaxLength}
           placeholder="e.g. MTN support" onChange={event => update(contact.id, { label: event.target.value })} /></FieldBlock>
-        <FieldBlock htmlFor={`support-${contact.id}-network`}>Network<select id={`support-${contact.id}-network`} value={contact.network} disabled={disabled}
+        <FieldBlock label={"Network"}><select id={`support-${contact.id}-network`} value={contact.network} disabled={disabled}
           onChange={event => update(contact.id, { network: event.target.value as SupportContact["network"] })}>
           <option value="mtn">MTN</option><option value="airtel">Airtel</option><option value="other">Other</option>
         </select></FieldBlock>

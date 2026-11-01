@@ -394,7 +394,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         <input type="hidden" name="build" value="1" />
         {selectedConfiguration && <input type="hidden" name="configuration" value={selectedConfiguration} />}
         <BuilderEssentials data-slip-builder-essentials>
-        <div data-slip-count data-toolbar-group="slips">{field("slips", <><span data-slip-count-label="mobile">{messages.text("slips.totalSlips")}</span><span data-slip-count-label="desktop">{messages.text("slips.totalSlips")}</span></>, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</div>
+        <fieldset data-slip-count data-toolbar-group="slips"><legend>{messages.text("slips.totalSlips")}</legend>{field("slips", null, { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}</fieldset>
         <FieldGroup data-criteria-field="targets"><VisuallyHidden as="legend">{messages.text("slips.yourSlips")}</VisuallyHidden><TargetGroups data-slip-target-groups>
           <fieldset data-toolbar-group="total"><legend><span data-slip-label="mobile">{messages.text("slips.mobile.totalOdds")}</span><span data-slip-label="desktop">{messages.text("slips.totalOddsRange")}</span></legend><Fields>
             {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.totalMin") })}

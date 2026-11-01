@@ -4,6 +4,8 @@ import Link from "@/components/navigation/navigation-link";
 import {
   useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";
+import { FloatingOutline } from "@/components/ui/floating-outline";
+import { floatingLabel, raisedFloatingLabel, floatingOutline } from "@/components/ui/floating-field-styles";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -104,7 +106,7 @@ export const IconButton = styled.button`
  * stays at 16px, so iOS opens its picker without zooming the page. Every label shares one grid
  * cell, so the face keeps the widest option's width, as a native select does.
  */
-const SelectFace = styled.span`
+const SelectFace = styled.div`
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -121,6 +123,12 @@ const SelectFace = styled.span`
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > span > span:not([data-current]) { visibility: hidden; }
+  border: 1px solid transparent;
+  @media (pointer: coarse) { min-block-size: 44px; }
+  min-block-size: 40px; margin-block-start: 6px; padding-block: 8px;
+  > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
+  > label { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 30px); }
+  &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
   > select {
     position: absolute;
     inset: 0;
@@ -133,19 +141,19 @@ const SelectFace = styled.span`
     &:disabled { cursor: not-allowed; }
   }
   > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); color: ${({ theme }) => theme.color.brand}; pointer-events: none; }
-  &:has(select:focus-visible) {
-    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: 2px;
-  }
+  &:has(select:focus-visible) > [data-floating-outline] { border-width: 2px; border-color: ${({ theme }) => theme.color.focus}; }
   &:has(select:disabled) { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; }
 `;
 export type CompactSelectOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
 export function CompactSelect({ options, value, className, ...props }: Omit<ComponentPropsWithoutRef<"select">, "children" | "value"> & {
   options: readonly CompactSelectOption[]; value: string;
 }) {
-  return <SelectFace className={className}>
+  const id = useId();
+  return <SelectFace className={className} data-floating-control>
+    <label htmlFor={props.id ?? id}>{props["aria-label"]}</label>
+    <FloatingOutline label={props["aria-label"]} />
     <span aria-hidden="true">{options.map((option) => <span key={option.value} data-current={option.value === value || undefined}>{option.label}</span>)}</span>
-    <select value={value} {...props}>{options.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}</select>
+    <select value={value} {...props} id={props.id ?? id}>{options.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}</select>
     <ChevronDownIcon />
   </SelectFace>;
 }

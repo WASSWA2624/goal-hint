@@ -1,9 +1,10 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
-import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import type { MemberReferralReview } from "@/domain/referral-reviews";
 import { referralReviewRules } from "@/domain/referral-reviews";
 import { accountSectionHref } from "@/domain/account-navigation";
@@ -28,12 +29,7 @@ const Cases = styled.ul`
   button { min-block-size: 44px; align-self: center; }
   ${media.belowDesktop} { > li { grid-template-columns: minmax(0, 1fr); } button { justify-self: start; } }
 `;
-const AppealField = styled.label`
-  display: grid; gap: 6px; font-size: .875rem;
-  textarea { box-sizing: border-box; inline-size: 100%; min-block-size: 7rem; padding: 10px;
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.control}; color: inherit; font: inherit; resize: vertical; ${textFieldSurface} }
-`;
+const AppealField = styled(FloatingField)`textarea { min-block-size: 7rem; }`;
 
 export function AccountReferralReviews({ initial, locale = "en", older = false }: { initial: readonly MemberReferralReview[] | null; locale?: string; older?: boolean }) {
   const router = useRouter(), id = useId(), lock = useRef(false);
@@ -69,7 +65,7 @@ export function AccountReferralReviews({ initial, locale = "en", older = false }
       footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Cancel</CriteriaDialogButton>
         <CriteriaDialogButton type="submit" form={`${id}-form`} disabled={busy || statement.trim().length < 3}>Send appeal</CriteriaDialogButton></>}>
       <form id={`${id}-form`} method="post" action="/api/account/referral-reviews" onSubmit={submit}>
-        <AppealField>Why should we review this decision?<textarea required minLength={3} maxLength={referralReviewRules.appealLength} value={statement} onChange={event => setStatement(event.target.value)} /></AppealField>
+        <AppealField label={"Why should we review this decision?"}><textarea required minLength={3} maxLength={referralReviewRules.appealLength} value={statement} onChange={event => setStatement(event.target.value)} /></AppealField>
         <AccountFine>Use support references where available. Omit phone numbers, passwords and verification codes.</AccountFine>
         {error && <AccountError role="alert">{error}</AccountError>}
       </form></CriteriaDialog>}

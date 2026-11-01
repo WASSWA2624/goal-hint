@@ -1,5 +1,7 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { RecordScroll } from "./record-workspace";
@@ -34,6 +36,8 @@ export const TransactionControl = styled.div`
   gap: 4px;
   min-inline-size: 0;
   input { min-inline-size: 0; font-variant-numeric: tabular-nums; }
+
+  ${controlRow}
 `;
 
 /** The approved 01 layout changes desktop geometry; phones retain their panel flow. */

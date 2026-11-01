@@ -256,7 +256,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const phone = (key: ScalarSettingField, label: string) => managed.includes(key) ? fact(key, label)
     : <PhoneInput id={`setting-${key}`} label={label} value={draft[key]} disabled={busy} error={errors[key]} onValueChange={value => update(key, value)} />;
   const text = (key: ScalarSettingField, label: string, maximum: number, placeholder?: string) => managed.includes(key) ? fact(key, label)
-    : <FieldBlock htmlFor={`setting-${key}`}>{label}<input {...field(key)} maxLength={maximum} autoComplete="off" placeholder={placeholder} />{error(key)}</FieldBlock>;
+    : <FieldBlock label={label} description={<>{error(key)}</>}><input {...field(key)} maxLength={maximum} autoComplete="off" placeholder={placeholder} /></FieldBlock>;
   const drawer = (key: string, label: string, children: ReactNode) =>
     <Drawer $plain open={!!advanced[key]} onToggle={event => { const open = event.currentTarget.open; setAdvanced(shown => shown[key] === open ? shown : { ...shown, [key]: open }); }}>
       <summary>{label}<ChevronDownIcon /></summary><div>{children}</div>
@@ -264,8 +264,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const shortcutEditor = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber", desktop = false) => {
     const prefix = desktop ? "desktop-setting" : "setting";
     return <DialField>
-      <label htmlFor={`${prefix}-${key}`}>{desktop ? "Dial code · optional" : "Dial code"}</label>
-      <DialRow><input {...field(key, true, desktop)} inputMode="tel" autoComplete="off" spellCheck={false} maxLength={settingsRules.shortcutMaxLength} />
+      <DialRow><FieldBlock label={desktop ? "Dial code · optional" : "Dial code"}><input {...field(key, true, desktop)} inputMode="tel" autoComplete="off" spellCheck={false} maxLength={settingsRules.shortcutMaxLength} /></FieldBlock>
         <ActionButton type="button" disabled={busy} onClick={() => update(key, `${draft[key]}{amount}`)}>Add amount</ActionButton></DialRow>
       {errors[key] && <FieldError id={`${prefix}-${key}-error`}>{errors[key]}</FieldError>}
       <Hint id={`${prefix}-${key}-hint`}>{changed.includes(number) && !changed.includes(key) && settings[key] ? "This code will clear when the number changes." : "Use a code tested on your phone. Android only."}</Hint>
@@ -274,11 +273,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const shortcut = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber") => managed.includes(key)
     ? fact(key, "Dial code", codeShown(key))
     : <><MobileOnly>{drawer(key, "Dial code · optional", shortcutEditor(key, number))}</MobileOnly><DesktopOnly>{shortcutEditor(key, number, true)}</DesktopOnly></>;
-  const range = (key: "maxUnlockedDevices" | "trialDays", label: string, hint?: string) => <FieldBlock htmlFor={`setting-${key}`}>{label}
-    <select {...field(key, !!hint)}>{Array.from({ length: settingsRules[key].max - settingsRules[key].min + 1 }, (_, index) => settingsRules[key].min + index)
-      .map(value => <option key={value} value={value}>{key === "trialDays" ? value === 0 ? "Off" : `${value} ${value === 1 ? "day" : "days"}` : value}</option>)}</select>
-    {error(key)}{hint && <Hint id={`setting-${key}-hint`}>{hint}</Hint>}
-  </FieldBlock>;
+  const range = (key: "maxUnlockedDevices" | "trialDays", label: string, hint?: string) => <FieldBlock label={label} description={<>{error(key)}{hint && <Hint id={`setting-${key}-hint`}>{hint}</Hint>}</>}><select {...field(key, !!hint)}>{Array.from({ length: settingsRules[key].max - settingsRules[key].min + 1 }, (_, index) => settingsRules[key].min + index)
+      .map(value => <option key={value} value={value}>{key === "trialDays" ? value === 0 ? "Off" : `${value} ${value === 1 ? "day" : "days"}` : value}</option>)}</select></FieldBlock>;
   const network = (id: "mtn" | "airtel", title: string, number: "mtnNumber" | "airtelNumber", name: "mtnName" | "airtelName", code: "mtnMenuShortcut" | "airtelMenuShortcut") => {
     const fixed = locked(number, name, code);
     return <section aria-labelledby={`settings-network-${id}`}><NetworkTitle id={`settings-network-${id}`}><MobileMoneyLogo network={id} />{title}{fixed && badge}</NetworkTitle>
@@ -335,10 +331,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
                     : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList>
               </RequirementBox>}
               <TwoUp>{range("trialDays", authCopy.trialRegistration, "0 disables trials for new accounts.")}
-                <FieldBlock htmlFor="setting-screenshotRetentionDays">Keep payment proofs after approval · days
-                  <input {...field("screenshotRetentionDays", true)} type="number" inputMode="numeric" min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} />
-                  {error("screenshotRetentionDays")}<Hint id="setting-screenshotRetentionDays-hint">{settingsRules.screenshotRetentionDays.min}–{settingsRules.screenshotRetentionDays.max} days</Hint>
-                </FieldBlock>
+                <FieldBlock label={"Keep payment proofs after approval · days"} description={<>{error("screenshotRetentionDays")}<Hint id="setting-screenshotRetentionDays-hint">{settingsRules.screenshotRetentionDays.min}–{settingsRules.screenshotRetentionDays.max} days</Hint></>}><input {...field("screenshotRetentionDays", true)} type="number" inputMode="numeric" min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} /></FieldBlock>
               </TwoUp>
               {drawer("maxUnlockedDevices", "Advanced", <NarrowField>{range("maxUnlockedDevices", "Grant device limit", "For existing grants. Accounts always have one active session.")}</NarrowField>)}
             </PanelBody>
@@ -358,33 +351,26 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
               <ActionButton type="button" disabled={busy} onClick={cancelMode}>Cancel</ActionButton>
               <ActionButton type="button" $variant="primary" disabled={busy || selectedRequirements.length > 0} onClick={() => void confirmMode()}>Confirm switch</ActionButton>
             </div></ConfirmBox>}
-            <NarrowField><FieldBlock htmlFor="desktop-setting-trialDays">New account free trial<select {...field("trialDays", true, true)}>
+            <NarrowField><FieldBlock label={"New account free trial"} description={<>{errors.trialDays && <FieldError id="desktop-setting-trialDays-error">{errors.trialDays}</FieldError>}<Hint id="desktop-setting-trialDays-hint">Applies to accounts created after saving.</Hint></>}><select {...field("trialDays", true, true)}>
               {Array.from({ length: settingsRules.trialDays.max + 1 }, (_, days) => <option key={days} value={days}>{days === 0 ? "No free trial" : `${days} ${days === 1 ? "day" : "days"}`}</option>)}
-            </select>{errors.trialDays && <FieldError id="desktop-setting-trialDays-error">{errors.trialDays}</FieldError>}<Hint id="desktop-setting-trialDays-hint">Applies to accounts created after saving.</Hint></FieldBlock></NarrowField>
+            </select></FieldBlock></NarrowField>
             {drawer("desktop-access", "Advanced access settings", <TwoUp>
-              <FieldBlock htmlFor="desktop-setting-screenshotRetentionDays">Keep approved payment proofs · days<input {...field("screenshotRetentionDays", true, true)} type="number" inputMode="numeric"
-                min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} />
-                {errors.screenshotRetentionDays && <FieldError id="desktop-setting-screenshotRetentionDays-error">{errors.screenshotRetentionDays}</FieldError>}
-                <Hint id="desktop-setting-screenshotRetentionDays-hint">Delete approved screenshots after {draft.screenshotRetentionDays} days.</Hint>
-              </FieldBlock>
-              <FieldBlock htmlFor="desktop-setting-maxUnlockedDevices">Legacy grant device limit<select {...field("maxUnlockedDevices", true, true)}>
+              <FieldBlock label={"Keep approved payment proofs · days"} description={<>{errors.screenshotRetentionDays && <FieldError id="desktop-setting-screenshotRetentionDays-error">{errors.screenshotRetentionDays}</FieldError>}<Hint id="desktop-setting-screenshotRetentionDays-hint">Delete approved screenshots after {draft.screenshotRetentionDays} days.</Hint></>}><input {...field("screenshotRetentionDays", true, true)} type="number" inputMode="numeric"
+                min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} /></FieldBlock>
+              <FieldBlock label={"Legacy grant device limit"} description={<>{errors.maxUnlockedDevices && <FieldError id="desktop-setting-maxUnlockedDevices-error">{errors.maxUnlockedDevices}</FieldError>}<Hint id="desktop-setting-maxUnlockedDevices-hint">Applies to legacy grants. Member accounts use one active session.</Hint></>}><select {...field("maxUnlockedDevices", true, true)}>
                 {Array.from({ length: settingsRules.maxUnlockedDevices.max }, (_, index) => index + 1).map(value => <option key={value} value={value}>{value}</option>)}
-              </select>{errors.maxUnlockedDevices && <FieldError id="desktop-setting-maxUnlockedDevices-error">{errors.maxUnlockedDevices}</FieldError>}
-                <Hint id="desktop-setting-maxUnlockedDevices-hint">Applies to legacy grants. Member accounts use one active session.</Hint>
-              </FieldBlock>
+              </select></FieldBlock>
             </TwoUp>)}
           </PanelBody></DesktopOnly>}
           {section === "display" && <PanelBody>
-            <TwoUp><FieldBlock htmlFor="setting-copyFormat">Copied number format<select {...field("copyFormat")}>
+            <TwoUp><FieldBlock label={"Copied number format"} description={<>{error("copyFormat")}</>}><select {...field("copyFormat")}>
               <option value="international">International · 256 772 123 456</option><option value="local">Local · 0772 123 456</option>
-            </select>{error("copyFormat")}</FieldBlock>
+            </select></FieldBlock>
               {text("reviewTime", "Payment review time", settingsRules.reviewTimeMaxLength, "Usually within 30 minutes")}
             </TwoUp>
             <DesktopOnly><SettingsHint>Number format controls the number copied from desktop payment instructions. Preview: <strong>{draft.copyFormat === "local" ? "0772123456" : "256772123456"}</strong>.<br />
               Payment review time is an estimate shown to customers; it does not set an automatic processing deadline.</SettingsHint></DesktopOnly>
-            <FieldBlock htmlFor="setting-paymentNote">Payment note · optional<textarea {...field("paymentNote", true)} maxLength={settingsRules.paymentNoteMaxLength} />
-              {error("paymentNote")}<Hint id="setting-paymentNote-hint">{draft.paymentNote.length}/{settingsRules.paymentNoteMaxLength}</Hint>
-            </FieldBlock>
+            <FieldBlock label={"Payment note · optional"} description={<>{error("paymentNote")}<Hint id="setting-paymentNote-hint">{draft.paymentNote.length}/{settingsRules.paymentNoteMaxLength}</Hint></>}><textarea {...field("paymentNote", true)} maxLength={settingsRules.paymentNoteMaxLength} /></FieldBlock>
             <DesktopOnly><SettingsHint>The optional payment note appears with payment instructions. Automated outgoing messages are configured in Messages.</SettingsHint></DesktopOnly>
           </PanelBody>}
           {section === "messages" && <><DesktopOnly><SettingsMessageEditor value={messages} disabled={busy} error={errors.messageTemplates} onChange={setMessages} /></DesktopOnly>

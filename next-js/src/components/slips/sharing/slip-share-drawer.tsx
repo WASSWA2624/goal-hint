@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useEffect, useRef, useState } from "react";
 import { ChatIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
 import { shareInvitation, type NativeShareImage } from "@/components/members/invitation-share";
@@ -142,7 +144,7 @@ export function SlipShareDrawer({ id, source, initialShared, locale, onPrepared,
             <a href={prepared.shared.url} target="_blank" rel="noopener noreferrer">{prepared.shared.url.replace(/^https:\/\//u, "")}</a>
             <a href={publicPolicy.origin} target="_blank" rel="noopener noreferrer">{new URL(publicPolicy.origin).host}</a></div>
           <p data-share-public-note>{m.text("slipShare.publicHint")}</p>
-          {manualCopy && <label>{m.text(manualCopy === "link" ? "slipShare.link" : "slipShare.caption")}<textarea ref={captionField} readOnly value={manualCopy === "link" ? prepared.shared.url : prepared.caption} onFocus={(event) => event.currentTarget.select()} /></label>}
+          {manualCopy && <FloatingField label={m.text(manualCopy === "link" ? "slipShare.link" : "slipShare.caption")}><textarea ref={captionField} readOnly value={manualCopy === "link" ? prepared.shared.url : prepared.caption} onFocus={(event) => event.currentTarget.select()} /></FloatingField>}
         </>}
     </DrawerBody>
     <DrawerFooter>

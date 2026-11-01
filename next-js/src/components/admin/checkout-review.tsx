@@ -1,4 +1,6 @@
 "use client";
+
+import { FloatingField } from "@/components/ui/floating-field";
 import { useEffect, useState, type ReactNode } from "react";
 import styled from "styled-components";
 import { Button, TextInput } from "@/components/ui/controls";
@@ -79,7 +81,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
           {claim.validation.reviewed ? <p>Admin findings recorded for this evidence.</p> : !claim.withdrawn && pending && <form onSubmit={event => {
             event.preventDefault(); const data = new FormData(event.currentTarget);
             void act({ action: "review-evidence", claimId: claim.id, warningsChecked: data.has("warningsChecked"), reason: data.get("reason") });
-          }}><label>Findings and action taken<textarea name="reason" required minLength={3} maxLength={500} rows={2} /></label>
+          }}><FloatingField label={"Findings and action taken"}><textarea name="reason" required minLength={3} maxLength={500} rows={2} /></FloatingField>
             <label><input name="warningsChecked" type="checkbox" required /> Checked these differences against the original evidence and receiving-account records</label>
             <Button variant="secondary" type="submit" disabled={busy}>Record evidence review</Button></form>}
         </section>}
@@ -114,8 +116,8 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
           void act({ action: "resolve-dispute", receiptId: claim.receipt.id, intendedSubmissionId: data.get("intendedSubmissionId"), reason: data.get("reason"),
             contactedVerifiedPayer: data.has("contactedVerifiedPayer"), ownershipClear: data.has("ownershipClear") });
         }}>
-          <label>Intended subscriber request<select name="intendedSubmissionId" required>{claim.receipt.claims.map(c => <option key={c.submissionId} value={c.submissionId}>P{c.submission.reference} · {c.submission.accountId}</option>)}</select></label>
-          <label>Resolution and reasons<textarea name="reason" required minLength={3} maxLength={500} rows={2} /></label>
+          <FloatingField label={"Intended subscriber request"}><select name="intendedSubmissionId" required>{claim.receipt.claims.map(c => <option key={c.submissionId} value={c.submissionId}>P{c.submission.reference} · {c.submission.accountId}</option>)}</select></FloatingField>
+          <FloatingField label={"Resolution and reasons"}><textarea name="reason" required minLength={3} maxLength={500} rows={2} /></FloatingField>
           <label><input type="checkbox" name="contactedVerifiedPayer" required /> Contacted the sender number verified from receiving-account records</label>
           <label><input type="checkbox" name="ownershipClear" required /> Payer confirmed the intended subscriber; shared-phone ownership is clear</label>
           <p>If the payer cannot be verified or ownership remains unclear, leave funds unallocated and escalate through official provider support.</p>
@@ -124,7 +126,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
       </fieldset>)}
       {pending && <>
         <Button disabled={busy || blocked || detail.claims.some(c => !c.withdrawn && !c.validation.reviewed) || detail.remainingUgx > 0 || !detail.reservationActive} onClick={() => void act({ action: "approve-checkout" }, true)}>Approve and next</Button>
-        <label>Reason / correction<textarea value={reason} maxLength={500} rows={2} onChange={event => setReason(event.target.value)} /></label>
+        <FloatingField label={"Reason / correction"}><textarea value={reason} maxLength={500} rows={2} onChange={event => setReason(event.target.value)} /></FloatingField>
         <CheckoutActions>
           <Button variant="secondary" disabled={busy || reason.trim().length < 3} onClick={() => void act({ action: "request-correction", reason })}>Request correction</Button>
           <Button variant="secondary" disabled={busy || reason.trim().length < 3} onClick={() => void act({ action: "mark-disputed", reason })}>Mark disputed</Button>

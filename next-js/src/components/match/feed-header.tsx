@@ -1,9 +1,10 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
 import type { ReactNode } from "react";
 import styled from "styled-components";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import { ChevronDownIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
@@ -13,7 +14,7 @@ import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
 import { FeedNote } from "./feed-controls";
-import { focusRing } from "./filter-parts";
+import { FloatingField } from "@/components/ui/floating-field";
 
 const desktop = media.desktop;
 const HeaderContent = styled.div`
@@ -104,12 +105,8 @@ const SortGroup = styled.div`
   gap: 8px;
   ${desktop} { margin-inline-start: auto; justify-content: flex-end; }
   ${media.belowDesktop} { display: none; }
-`;
-const DesktopSortLabel = styled.label`
-  display: none;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.875rem;
-  ${desktop} { display: inline; }
+
+  ${controlRow}
 `;
 const ResultCount = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
@@ -124,25 +121,6 @@ const ResultCount = styled.p`
     > [data-desktop-count] { display: none; }
     > [data-phone-count] { display: inline; }
   }
-`;
-const SelectWrap = styled.span`
-  position: relative;
-  display: none;
-  ${desktop} { display: inline-flex; }
-  > select {
-    min-block-size: 2rem;
-    padding-inline: 7px 22px;
-    color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface};
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.control};
-    font: inherit;
-    font-size: 0.8125rem;
-    appearance: none;
-    cursor: pointer;
-    ${focusRing}
-  }
-  > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
 export const feedSortOptions: readonly FeedSort[] = [
   { by: "probability", direction: "desc" }, { by: "probability", direction: "asc" },
@@ -163,15 +141,13 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
   return <FilterToolbar>
     {summary}
     <SortGroup>
-      <DesktopSortLabel htmlFor="feed-sort-desktop">{messages.text("feed.sort.label")}</DesktopSortLabel>
-      <SelectWrap>
+      <FloatingField label={messages.text("feed.sort.label")}>
         <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
           {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
             {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
           </option>)}
         </select>
-        <ChevronDownIcon />
-      </SelectWrap>
+      </FloatingField>
       {actions}
     </SortGroup>
   </FilterToolbar>;

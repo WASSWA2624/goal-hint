@@ -319,41 +319,33 @@ function FilterControls({ selection, compare, filters, today, report, onSelectio
 
   return (
     <FilterBar aria-label="Report filters">
-      <Field>Period
-        <select value={selection.preset} onChange={(event) => {
+      <Field label={"Period"}><select value={selection.preset} onChange={(event) => {
           const preset = event.target.value as AnalyticsPreset | "custom";
           onSelection(preset === "custom" ? { ...selection, preset } : { preset, ...presetRange(preset, today) });
         }}>
           {Object.entries(analyticsPresets).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           <option value="custom">Custom range…</option>
-        </select>
-      </Field>
+        </select></Field>
       {selection.preset === "custom" && <>
-        <Field>From<input ref={fromInput} type="date" defaultValue={selection.from} max={today} onChange={applyCustom} /></Field>
-        <Field>To<input ref={toInput} type="date" defaultValue={selection.to} max={today} onChange={applyCustom} /></Field>
+        <Field label={"From"}><input ref={fromInput} type="date" defaultValue={selection.from} max={today} onChange={applyCustom} /></Field>
+        <Field label={"To"}><input ref={toInput} type="date" defaultValue={selection.to} max={today} onChange={applyCustom} /></Field>
       </>}
-      <Field>Compare with
-        <select value={compare} onChange={(event) => onCompare(event.target.value as ComparisonMode)}>
+      <Field label={"Compare with"}><select value={compare} onChange={(event) => onCompare(event.target.value as ComparisonMode)}>
           <option value="previous">Previous period</option>
           <option value="year">Same period last year</option>
           <option value="none">No comparison</option>
-        </select>
-      </Field>
-      <Field>Add a segment
-        <select value={dimension} onChange={(event) => setDimension(event.target.value as AnalyticsFilterKey | "")}>
+        </select></Field>
+      <Field label={"Add a segment"}><select value={dimension} onChange={(event) => setDimension(event.target.value as AnalyticsFilterKey | "")}>
           <option value="">Choose a dimension…</option>
           {analyticsFilterKeys.filter((key) => !filters[key]).map((key) => <option key={key} value={key}>{analyticsFilterLabels[key]}</option>)}
-        </select>
-      </Field>
-      {dimension && <Field>{analyticsFilterLabels[dimension]}
-        <select value="" onChange={(event) => {
+        </select></Field>
+      {dimension && <Field label={analyticsFilterLabels[dimension]}><select value="" onChange={(event) => {
           const option = options.find((entry) => entry.value === event.target.value);
           if (option) { onAddFilter(dimension, option.value, option.label); setDimension(""); }
         }}>
           <option value="">{options.length ? "Choose a value…" : "No values in this period"}</option>
           {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-      </Field>}
+        </select></Field>}
       <ToolButton as="a" href={exportHref} download $variant="secondary" style={{ marginInlineStart: "auto" }}>Export summary CSV</ToolButton>
       {customError && <Notice $tone="error" role="alert" style={{ inlineSize: "100%" }}>{customError}</Notice>}
       <Chips aria-label="Active segments">
@@ -509,11 +501,9 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
             ? new Date(settings.retention.lastPurgedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "not yet run"}
         </Muted>
         <SettingsRow>
-          <Field style={{ maxInlineSize: "16rem" }}>Keep raw analytics for
-            <select value={days ?? ""} onChange={(event) => setDays(Number(event.target.value))}>
+          <Field style={{ maxInlineSize: "16rem" }} label={"Keep raw analytics for"}><select value={days ?? ""} onChange={(event) => setDays(Number(event.target.value))}>
               {choices.map((value) => <option key={value} value={value}>{value} days{value === 395 ? " (13 months, default)" : ""}</option>)}
-            </select>
-          </Field>
+            </select></Field>
           <ToolButton type="button" $variant="primary" disabled={saving || days === null || days === settings.retention.retentionDays} onClick={() => {
             if (days === null) return;
             if (days < settings.retention.retentionDays

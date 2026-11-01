@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
@@ -43,12 +45,7 @@ const History = styled.ol`
     li > span:last-child { display: block; }
   }
 `;
-const PlanPicker = styled.label`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 0.875rem;
-  select { min-block-size: 44px; max-inline-size: 100%; padding-inline: 10px; font: inherit;
-    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: 0; border-radius: ${({ theme }) => theme.radius.control}; }
-`;
+const PlanPicker = styled(FloatingField)`max-inline-size: 24rem;`;
 
 async function postCredit(body: unknown) {
   const response = await fetch("/api/account/credit", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -144,7 +141,7 @@ export function CreditSection({ locale, credit, plans, salesOpen, acceptedTerms,
     {(salesOpen || on) && <AccountBlock data-credit-renewal>
       <AccountBlockText>
         <p>{sentence}</p>
-        {picking && <PlanPicker>{m.text("credit.autoRenewPlan")}<select value={planId} disabled={busy} onChange={(event) => setPlanId(event.currentTarget.value)} data-credit-plan>
+        {picking && <PlanPicker label={m.text("credit.autoRenewPlan")}><select value={planId} disabled={busy} onChange={(event) => setPlanId(event.currentTarget.value)} data-credit-plan>
           {plans.map((plan) => <option key={plan.id} value={plan.id}>{planLabel(plan)}</option>)}</select></PlanPicker>}
         {picking && !acceptedTerms && <TermsAssent locale={locale} checked={accepted} disabled={busy} onChange={setAccepted} />}
         {message && <AccountFine role="status">{message}</AccountFine>}

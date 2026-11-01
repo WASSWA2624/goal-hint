@@ -2,10 +2,12 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import styled from "styled-components";
-import { Field, FieldLabel, FieldMessage, InputControl, useFieldAccessibility, type TextInputProps } from "@/components/ui/controls";
+import { Field, FieldLabel, FieldMessage, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "@/components/ui/controls";
+import { ChevronDownIcon } from "@/components/ui/icons";
+import { FloatingOutline } from "@/components/ui/floating-outline";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { textFieldSurface } from "@/components/ui/filled-surfaces";
+import { floatingControl, floatingFieldState, floatingLabel, floatingOutline } from "@/components/ui/floating-field-styles";
 import { formatSlipMatchCount, guardSlipNumber, normalizeSlipMatchCount, slipNumericRule, stepSlipNumber,
   type SlipNumberGuardResult, type SlipNumericField } from "@/domain/slip-input-guards";
 
@@ -14,32 +16,34 @@ const clientSnapshot = () => true;
 const serverSnapshot = () => false;
 
 const NumericField = styled(Field)`
-  position: relative;
+  position: relative; margin-block-start: 6px;
   &&[data-slip-floating-field="true"] {
     gap: 0;
-    > label {
-      position: absolute; inset-block-start: 5px; inset-inline-start: 6px; z-index: 1;
-      max-inline-size: calc(100% - 12px); margin: 0; padding-inline: 3px;
-      font-size: 0.625rem; line-height: 1;
-      white-space: nowrap;
-      cursor: text;
-    }
-    > input:not([type="hidden"]) { min-block-size: 40px; padding-block: 17px 3px; ${textFieldSurface} }
-    &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
+    > label { ${floatingLabel} }
+    > input:not([type="hidden"]) { ${floatingControl} border: 1px solid transparent; &:focus-visible { outline: none; } }
+    > [data-floating-outline] { ${floatingOutline} }
+    ${floatingFieldState}
   }
 `;
 const NumericControl = styled(InputControl)`
   text-align: center;
-  @media (pointer: fine) { &&[data-slip-number-enhanced="true"] { padding-inline: 17px; } }
+  @media (pointer: fine) { &&[data-slip-number-enhanced="true"] { padding-inline: 8px 20px; } }
   ${media.belowDesktop} { &&[data-slip-number-enhanced="true"] { padding-inline: 3px; } }
 `;
 const Stepper = styled.span`
   display: none; position: absolute; inset-inline-end: 1px; inset-block-end: 1px;
-  inline-size: 14px; block-size: calc(2rem - 2px); opacity: 0;
+  inline-size: 18px; block-size: calc(var(--form-control-height, 40px) - 2px); opacity: 0;
   @media (pointer: fine) {
     display: flex; flex-direction: column;
     ${NumericField}:hover > &, ${NumericField}:focus-within > & { opacity: 1; }
   }
+  &&& > button {
+    flex: 1 1 50%; inline-size: 100%; min-inline-size: 0; block-size: 50%; min-block-size: 0;
+    max-block-size: 50%; margin: 0; padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none};
+    font-size: 0.625rem; line-height: 1;
+  }
+  &&& > button > svg { inline-size: 10px; block-size: 10px; }
+  &&& > button[data-step-up] > svg { transform: rotate(180deg); }
   ${media.belowDesktop} { display: none; }
 `;
 const StepButton = styled.button`
@@ -188,11 +192,12 @@ export function SlipNumericInput({ field: name, value, locale, onValueChange, on
     if (pair) { setPairWarning(true); setWarning(pair); }
     else { setPairWarning(false); setWarning(null); }
   }
-  return <NumericField data-slip-numeric-container={name} data-slip-floating-field={name !== "slips" || undefined}>
-    <FieldLabel htmlFor={accessibility.id}>{label}</FieldLabel>
+  return <NumericField data-slip-numeric-container={name} data-slip-floating-field="true" data-floating-control data-floating-filled={Boolean(compositionDraft ?? display)}>
+    {hasContent(label) && <FieldLabel htmlFor={accessibility.id}>{label}</FieldLabel>}
+    <FloatingOutline label={label} />
     <NumericControl {...props} ref={input} id={accessibility.id} data-slip-numeric-field={name} data-slip-number-enhanced={enhanced}
       type={enhanced ? "text" : "number"} name={enhanced ? undefined : props.name}
-      inputMode={rule.precision === 0 ? "numeric" : "decimal"} value={compositionDraft ?? display} autoComplete="off" spellCheck={false}
+      inputMode={rule.precision === 0 ? "numeric" : "decimal"} value={compositionDraft ?? display} autoComplete="off" placeholder=" " spellCheck={false}
       min={props.min ?? rule.minimum} max={props.max ?? rule.maximum} step={props.step ?? rule.step}
       role={enhanced ? "spinbutton" : undefined} aria-valuemin={enhanced ? Number(rule.minimum) : undefined}
       aria-valuemax={enhanced ? Number(rule.maximum) : undefined}
@@ -273,9 +278,9 @@ export function SlipNumericInput({ field: name, value, locale, onValueChange, on
     {enhanced && <input type="hidden" name={props.name} value={value} disabled={props.disabled} />}
     {enhanced && <Stepper data-slip-number-stepper>
       <StepButton type="button" tabIndex={-1} aria-label={messages.text("slips.guard.increase", { label: accessibleLabel })} disabled={props.disabled || props.readOnly}
-        onMouseDown={(event) => event.preventDefault()} onClick={() => step(1)}>▴</StepButton>
+        onMouseDown={(event) => event.preventDefault()} onClick={() => step(1)} data-step-up><ChevronDownIcon aria-hidden="true" /></StepButton>
       <StepButton type="button" tabIndex={-1} aria-label={messages.text("slips.guard.decrease", { label: accessibleLabel })} disabled={props.disabled || props.readOnly}
-        onMouseDown={(event) => event.preventDefault()} onClick={() => step(-1)}>▾</StepButton>
+        onMouseDown={(event) => event.preventDefault()} onClick={() => step(-1)}><ChevronDownIcon aria-hidden="true" /></StepButton>
     </Stepper>}
     <SlipInputWarning message={shownWarning} anchorRef={input} id={warningId} />
     {accessibility.hasHint && <FieldMessage id={accessibility.hintId}>{hint}</FieldMessage>}

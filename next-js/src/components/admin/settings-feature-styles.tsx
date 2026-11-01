@@ -1,5 +1,7 @@
 "use client";
 
+import { controlRow } from "@/components/ui/control-layout";
+
 import styled from "styled-components";
 import { adminControl } from "./admin-form";
 
@@ -62,6 +64,8 @@ export const MessageTabs = styled.div`
 export const VariableBar = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center;
   select { min-inline-size: 0; }
+
+  ${controlRow}
 `;
 export const MessagePreview = styled.div`
   display: grid; gap: 8px; padding: 12px 14px; background: ${({ theme }) => theme.color.surfaceMuted}; min-inline-size: 0;

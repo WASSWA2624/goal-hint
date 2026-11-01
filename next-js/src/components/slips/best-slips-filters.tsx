@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useId, useRef, useState, type FocusEvent, type ReactNode } from "react";
 import { CalendarIcon, ResetIcon } from "@/components/ui/icons";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
@@ -136,12 +138,12 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
       resetLabel={m.text("slips.reset")} applyLabel={m.text("bestSlips.filters.applyRange")}
       cancelLabel={m.text("slips.dialog.cancel")} closeLabel={m.text("slips.dialog.close", { section: m.text("bestSlips.filters.customRange") })}>
       <DateFields>
-        <label htmlFor={`${prefix}-from`}>{m.text("feed.date.from")}<input id={`${prefix}-from`} type="date" value={dates.from}
+        <FloatingField label={m.text("feed.date.from")}><input id={`${prefix}-from`} type="date" value={dates.from}
           required aria-describedby={issue ? `${hintId} ${errorId}` : hintId} aria-invalid={issue !== null}
-          onChange={(event) => { setDates((current) => ({ ...current, from: event.target.value })); setIssue(null); }} /></label>
-        <label htmlFor={`${prefix}-to`}>{m.text("feed.date.to")}<input id={`${prefix}-to`} type="date" value={dates.to}
+          onChange={(event) => { setDates((current) => ({ ...current, from: event.target.value })); setIssue(null); }} /></FloatingField>
+        <FloatingField label={m.text("feed.date.to")}><input id={`${prefix}-to`} type="date" value={dates.to}
           required aria-describedby={issue ? `${hintId} ${errorId}` : hintId} aria-invalid={issue !== null}
-          onChange={(event) => { setDates((current) => ({ ...current, to: event.target.value })); setIssue(null); }} /></label>
+          onChange={(event) => { setDates((current) => ({ ...current, to: event.target.value })); setIssue(null); }} /></FloatingField>
       </DateFields>
       <DateHint id={hintId}>{m.text("bestSlips.filters.dateHint", { days: m.number(bestSlipsQueryRules.maximumDays) })}</DateHint>
       {issue && <DateError id={errorId} ref={error} role="alert" tabIndex={-1}>{m.text(issue, { days: m.number(bestSlipsQueryRules.maximumDays) })}</DateError>}

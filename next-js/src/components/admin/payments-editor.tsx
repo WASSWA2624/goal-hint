@@ -1,5 +1,7 @@
 "use client";
 
+import { FloatingField } from "@/components/ui/floating-field";
+
 import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "@/components/navigation/navigation-link";
 import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
@@ -171,13 +173,13 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
       <h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"} queue</h2>
       <QueueBar>
         <form action="/admin/payments" method="get"><input type="hidden" name="tab" value={tab} /><input type="hidden" name="search" value={search} />
-        <SearchField><label htmlFor="payment-search">Find a payment</label><SearchIcon aria-hidden="true" />
+        <SearchField label="Find a payment" leading={<SearchIcon />} >
           <input id="payment-search" type="search" placeholder="Phone, transaction ID or reference" value={search} maxLength={100} disabled={action.busy} autoComplete="off"
             onChange={event => setSearch(event.target.value)} /></SearchField>
         <ActionButton type="submit">Search all requests</ActionButton></form>
         <QueueFilters>
-          <label><span>Payment provider</span><select aria-label="Payment provider" value={provider} disabled={action.busy} onChange={event => setProvider(event.target.value)}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></label>
-          <label><span>Sort payments</span><select aria-label="Sort payments" value={sort} disabled={action.busy} onChange={event => setSort(event.target.value as PaymentSort)}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <FloatingField label={<><span>Payment provider</span></>}><select aria-label="Payment provider" value={provider} disabled={action.busy} onChange={event => setProvider(event.target.value)}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FloatingField>
+          <FloatingField label={<><span>Sort payments</span></>}><select aria-label="Sort payments" value={sort} disabled={action.busy} onChange={event => setSort(event.target.value as PaymentSort)}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FloatingField>
         </QueueFilters>
       </QueueBar>
       <QueueSummary><span data-payment-count>{payments.length} of {queue.total ?? payments.length} requests</span><span>{desktop && sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
