@@ -67,7 +67,18 @@ def main():
                 assert "Updates are delayed" in html
             elif state == "final":
                 assert "Final match data" in html and "Updates are delayed" not in html
-        print("PASS 14 production match-data states: combined panel and dedicated events, including source chronology, delayed/empty/unavailable data and retained finals.", flush=True)
+        for state in ["half-time", "extra-time"]:
+            response = request(server.origin, f"/en/live-match?state={state}&section=events")
+            assert response.status == 200, (state, response.status)
+            html = visible_html(response.text)
+            assert 'data-event-period="half-time"' in html
+            if state == "half-time":
+                assert 'data-event-period="full-time"' not in html
+            else:
+                assert 'data-event-period="extra-time"' in html and 'data-event-period="extra-time-interval"' in html
+                assert 'data-event-period="full-time"' in html and "After extra time" in html
+                assert 'data-period-boundary="120"' in html
+        print("PASS 16 production match-data states, including compact incidents, source coverage, half-time and extra-time periods.", flush=True)
         if args.serve:
             server.serve()
 

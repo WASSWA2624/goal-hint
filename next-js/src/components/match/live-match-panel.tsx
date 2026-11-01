@@ -5,10 +5,14 @@ import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import type { LiveMatchSnapshot, LiveMatchStatistics, LiveMatchEvents } from "@/domain/live-match";
 import { isPlayedFinalStatus, type SettlementStatus } from "@/domain/market-settlement";
 import type { Messages } from "@/i18n/messages";
+import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
+import type { MatchTimelineContext } from "@/domain/match-event-presentation";
 import { useMessages } from "@/i18n/use-messages";
 import { MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { HistoryIcon } from "./details/details-icons";
 import { MatchEventTimeline } from "./match-event-timeline";
+import { MatchEventSymbol } from "./match-event-symbol";
+import { Icon } from "@/components/ui/icons";
 
 const Frame = styled(Surface)<{ $embedded: boolean }>`
   border-radius: ${({ theme }) => theme.radius.surface};
@@ -26,10 +30,19 @@ const Stats = styled.table`
   th:first-child { inline-size: 44%; }
   caption { text-align: start; font-weight: 600; padding-block-end: 8px; }
 `;
-const StatusRow = styled.div`
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+const EventToolbar = styled.div`
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-block-size: 32px;
   color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem;
-  strong { color: ${({ theme }) => theme.color.text}; font-size: .75rem; }
+  h2 { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: ${({ theme }) => theme.color.text}; font-size: 1rem; line-height: 1.4; }
+  h2 > svg { inline-size: 18px; block-size: 18px; color: ${({ theme }) => theme.color.brand}; }
+  [data-legend], [data-meta], [data-sort] { display: inline-flex; align-items: center; gap: 10px; }
+  [data-legend] > span { display: inline-flex; }
+  [data-legend] svg { inline-size: 19px; block-size: 19px; }
+  [data-legend] [data-arrow="on"] { stroke: ${({ theme }) => theme.color.accent.emerald.solid}; }
+  [data-legend] [data-arrow="off"] { stroke: ${({ theme }) => theme.color.accent.red.solid}; }
+  [data-meta] { margin-inline-start: auto; flex-wrap: wrap; }
+  [data-sort] { gap: 4px; font-size: .6875rem; }
+  [data-sort] svg { inline-size: 13px; block-size: 13px; }
   [data-current-live] { display: inline-flex; align-items: center; gap: 6px; color: ${({ theme }) => theme.color.live.text}; }
   [data-current-live]::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: ${({ theme }) => theme.radius.circle}; background: currentColor; }
 `;
@@ -69,9 +82,10 @@ function SourceStatus(props: SourceProps) {
 }
 
 /** Public match observations use their own clocks and never replace a pre-match forecast. */
-export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null, awayLogoUrl = null, locale, historical = false, fixtureStatus, section = "all", embedded = false }: {
+export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null, awayLogoUrl = null, liveClock = null, locale, historical = false, fixtureStatus, section = "all", embedded = false }: {
   snapshot: LiveMatchSnapshot | null; asOf: number; home: string; away: string; locale?: string; historical?: boolean; fixtureStatus?: SettlementStatus; section?: "all" | "statistics" | "events";
   homeLogoUrl?: string | null; awayLogoUrl?: string | null; embedded?: boolean;
+  liveClock?: FixtureSnapshot["liveClock"];
 }) {
   const m = useMessages(locale);
   const status = fixtureStatus ?? snapshot?.status;
@@ -80,19 +94,32 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
   const stale = (source: LiveMatchStatistics | LiveMatchEvents) => !retained && source.retrievedAt !== null
     && asOf - source.retrievedAt > snapshot!.staleAfterMs;
   const isLive = !historical && status === "live" && snapshot?.status === "live";
+  const finalData = status !== undefined && isPlayedFinalStatus(status) && snapshot !== null && isPlayedFinalStatus(snapshot.status);
   const stateLabel = m.text(historical ? "liveMatch.retained" : isLive ? "liveMatch.live"
-    : status !== undefined && isPlayedFinalStatus(status) && snapshot && isPlayedFinalStatus(snapshot.status) ? "liveMatch.final" : "liveMatch.retained");
+    : finalData ? "liveMatch.final" : "liveMatch.retained");
+  const context: MatchTimelineContext = { status: historical ? snapshot?.status ?? "unknown" : status ?? "unknown",
+    observedStatus: snapshot?.status ?? "unknown", clock: historical ? null : liveClock };
+  const hasEvents = Boolean(snapshot?.events.items.length);
   if (section === "events") return <Frame as={embedded ? "div" : "section"} $embedded={embedded} aria-labelledby={embedded ? undefined : "match-events-title"} data-live-match>
     <Stack $gap="sm">
-      {!embedded && <SectionHeading id="match-events-title">{m.text("liveMatch.events")}</SectionHeading>}
+      <EventToolbar data-event-toolbar>
+        <h2 id={embedded ? "touchline-panel-title" : "match-events-title"}><HistoryIcon />{m.text("liveMatch.eventHeading")}</h2>
+        {hasEvents && <div data-legend>{([['goal', 'goal'], ['yellow-card', 'card'], ['substitution', 'substitution'], ['var', 'var']] as const).map(([kind, type]) =>
+          <span key={kind} role="img" aria-label={m.text(`liveMatch.event.${type}`)} title={m.text(`liveMatch.event.${type}`)}><MatchEventSymbol kind={kind} /></span>)}</div>}
+        <div data-meta>
+          {isLive && <strong data-current-live>{m.text("match.status.live")}</strong>}
+          {snapshot && !isLive && (historical || !finalData) && <span title={stateLabel}>{m.text("liveMatch.recordedShort")}</span>}
+          {snapshot && (hasEvents || snapshot.events.state === "available") && <span>{m.plural("liveMatch.incidentCount", snapshot.events.items.length)}</span>}
+          {hasEvents && <span data-sort><Icon><path d="M12 20V4m-5 5 5-5 5 5" /></Icon>{m.text("liveMatch.latestFirst")}</span>}
+        </div>
+      </EventToolbar>
       {!snapshot ? <EventsEmpty><HistoryIcon /><MutedText>{m.text("liveMatch.eventsNotCollected")}</MutedText></EventsEmpty> : <>
-        <StatusRow><strong data-current-live={isLive || undefined}>{stateLabel}</strong>
-          {(snapshot.events.items.length > 0 || snapshot.events.state === "available") && <span>{m.plural("liveMatch.incidentCount", snapshot.events.items.length)}</span>}</StatusRow>
         <SourceNotice source={snapshot.events} kind={m.text("liveMatch.events")} stale={stale(snapshot.events)} m={m} />
         {snapshot.events.state === "available" && snapshot.events.items.length === 0 && <EventsEmpty><HistoryIcon /><MutedText>{m.text("liveMatch.noEvents")}</MutedText></EventsEmpty>}
-        {snapshot.events.items.length > 0 && <MatchEventTimeline events={snapshot.events.items} home={home} away={away} homeLogoUrl={homeLogoUrl} awayLogoUrl={awayLogoUrl} m={m} />}
+        {snapshot.events.items.length > 0 && <MatchEventTimeline events={snapshot.events.items} home={home} away={away} homeLogoUrl={homeLogoUrl} awayLogoUrl={awayLogoUrl} context={context} m={m} />}
         <EventSource data-event-source><summary>{m.text("liveMatch.eventSource")}</summary><div>
-          <SourceClocks source={snapshot.events} m={m} /><MutedText>{m.text("liveMatch.provider")}</MutedText><MutedText>{m.text("liveMatch.separate")}</MutedText>
+          <strong>{stateLabel}</strong><SourceClocks source={snapshot.events} m={m} /><MutedText>{m.text("liveMatch.provider")}</MutedText>
+          <MutedText>{m.text("liveMatch.periodContext")}</MutedText><MutedText>{m.text("liveMatch.separate")}</MutedText>
         </div></EventSource>
       </>}
     </Stack>
@@ -119,7 +146,7 @@ export function LiveMatchPanel({ snapshot, asOf, home, away, homeLogoUrl = null,
         <SourceStatus source={snapshot.events} kind={m.text("liveMatch.events")} stale={stale(snapshot.events)} m={m} />
         {snapshot.events.state === "available" && snapshot.events.items.length === 0 && <MutedText>{m.text("liveMatch.noEvents")}</MutedText>}
         {snapshot.events.items.length > 0 && <details><summary>{m.text("liveMatch.eventCount", { count: m.number(snapshot.events.items.length) })}</summary>
-          <MatchEventTimeline events={snapshot.events.items} home={home} away={away} homeLogoUrl={homeLogoUrl} awayLogoUrl={awayLogoUrl} m={m} />
+          <MatchEventTimeline events={snapshot.events.items} home={home} away={away} homeLogoUrl={homeLogoUrl} awayLogoUrl={awayLogoUrl} context={context} m={m} />
         </details>}
       </Stack></section>}
     </>}

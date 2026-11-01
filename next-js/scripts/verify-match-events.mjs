@@ -23,6 +23,10 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     check(JSON.stringify(sequence) === JSON.stringify(Array.from({ length: 15 }, (_, index) => 15 - index)), "newest events first, preserving every source incident");
     check(await page.locator('[data-match-event="15"] [data-event-minute]').innerText() === "90+7′", "stoppage-time minute preserved");
     check(await page.locator('[data-match-event="4"] [data-event-minute]').innerText() === "45+2′", "first-half added time preserved");
+    check(await page.locator('[data-event-period="full-time"]').count() === 1 && await page.locator('[data-event-period="half-time"]').count() === 1, "full-time and half-time dividers");
+    check(await page.locator('[data-event-period="added-time"]').count() === 2 && await page.locator('[data-event-period="extra-time"]').count() === 0, "added time remains distinct from extra-time periods");
+    check(await page.locator('[data-event-toolbar]').evaluate(toolbar => toolbar.getBoundingClientRect().height <= 40), "one compact desktop toolbar");
+    check(await page.locator('[data-match-event]').evaluateAll(rows => rows.every(row => row.getBoundingClientRect().height <= 48)), "desktop incidents fit horizontal rows");
     const placement = await page.locator("[data-match-event]").evaluateAll(rows => rows.every(row => {
       const minute = row.querySelector("[data-event-minute]").getBoundingClientRect(), incident = row.querySelector('[role="group"]').getBoundingClientRect();
       return row.dataset.eventTeam === "home" ? incident.right < minute.left : incident.left > minute.right;
@@ -58,6 +62,16 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     const privateResponse = await page.request.get(origin + path(2, "live"), { headers: { "x-test-viewer": "anonymous" } });
     check(!(await privateResponse.text()).includes("Caution review"), "protected event details absent from HTML and flight");
     checks.push("unfinished access and raw HTML boundary");
+
+    await page.goto(origin + "/en/live-match?state=extra-time&section=events", { waitUntil: "networkidle" });
+    await page.locator('[data-event-period="extra-time"]').waitFor();
+    check(await page.locator('[data-event-period="extra-time-interval"]').count() === 1, "extra-time half-time interval");
+    check((await page.locator('[data-event-period="full-time"]').innerText()).includes("After extra time"), "final boundary after extra time");
+    if (captureDirectory) await capture(`match-events-extra-time-${width}`);
+    await page.goto(origin + "/en/live-match?state=half-time&section=events", { waitUntil: "networkidle" });
+    await page.locator('[data-event-period="half-time"]').waitFor();
+    check(await page.locator('[data-event-period="full-time"]').count() === 0, "a half-time live clock is not labelled full-time");
+    checks.push("verified half-time and extra-time context");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(origin + path(5, "finished-regulation"), { waitUntil: "networkidle" });

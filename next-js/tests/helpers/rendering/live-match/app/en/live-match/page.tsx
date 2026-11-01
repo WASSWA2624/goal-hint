@@ -12,6 +12,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   return <PublicShell locale="en" current="live" today={parseReportingDate("2026-10-25")} app compact>
     <p>Synthetic display fixture. No real match or provider request.</p>
     <LiveMatchPanel snapshot={snapshot} asOf={scenarios.asOf} home="Synthetic Home Club" away="Synthetic Away Club" locale="en"
+      liveClock={name === "half-time" ? { phase: "half-time", minute: null } : null}
       section={query.section === "events" ? "events" : "all"} />
   </PublicShell>;
 }

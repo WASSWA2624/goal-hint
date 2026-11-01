@@ -51,13 +51,21 @@ See the provider's [event endpoint guide](https://www.api-football.com/news/post
 
 Football symbols distinguish normal goals, own goals, scored/missed penalties,
 yellow/red cards, second-yellow dismissals, substitutions and VAR reviews.
-Readable labels accompany symbols. Substitutions show the replacement as On
+Accessible labels and tooltips accompany symbols; special goal/dismissal outcomes
+remain explicit inline. Desktop names, assists, decisions and comments share one
+horizontal incident row when space permits. Substitutions show the replacement as On
 and the departing player as Off. VAR decisions, assists and supplied comments
 remain visible. Unknown card details use a neutral card symbol; unknown minutes
-remain a dash with a time-unavailable label. No running score, half-time marker
-or added-time announcement is inferred from an incomplete event stream.
+remain a dash with a time-unavailable label. No running score, whistle minute or
+announced added-time total is reconstructed from the event stream.
 
-The desktop tab has one heading and an expanded timeline. Source timestamps and
+The desktop tab has one compact toolbar with an icon legend, count and sort
+indication. Contextual dividers identify half-time, recorded added-time sections,
+confirmed extra-time periods and full-time. The model uses the fixture/live-clock
+state and recorded minutes; 90+7 is additional time, not proof of an extra-time
+period. Direct penalty shoot-outs do not imply extra time. These are period
+dividers, not additional provider incidents or exact whistle timestamps.
+Source timestamps and
 attribution are in Event data & source; partial/delayed notices remain visible.
 Phones reuse the same timeline inside the existing match-events disclosure.
 Both modes distinguish a confirmed empty response from unavailable coverage.

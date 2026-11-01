@@ -80,7 +80,7 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
       </Tab>; })}
     </Navigation>
     <Panel role="tabpanel" id="match-information-panel" aria-labelledby={`match-tab-${selected}`} tabIndex={0} data-active-match-tab={selected}>
-      <TouchlineHeading><h2 id="touchline-panel-title">{messages.text(`touchline.tab.${selected}`)}</h2><p>{messages.text(`touchline.hint.${selected}`)}</p></TouchlineHeading>
+      {(selected !== "events" || !allowed) && <TouchlineHeading><h2 id="touchline-panel-title">{messages.text(`touchline.tab.${selected}`)}</h2><p>{messages.text(`touchline.hint.${selected}`)}</p></TouchlineHeading>}
       {!allowed ? <TouchlineEmpty><LockIcon aria-hidden="true" /><p>{messages.text("touchline.accessAbove")}</p>
         <TouchlineLinkButton type="button" onClick={focusMatchAccess}>{messages.text("touchline.accessAction")}</TouchlineLinkButton></TouchlineEmpty>
       : <TouchlineBody>
@@ -107,5 +107,6 @@ function Observations({ kind }: { kind: "statistics" | "events" }) {
   const { data, home, away, locale } = useStableDetails();
   return <LiveMatchPanel snapshot={data.liveMatch ?? null} asOf={data.asOf} home={home} away={away} locale={locale}
     homeLogoUrl={data.fixture.homeTeam.logoUrl ?? null} awayLogoUrl={data.fixture.awayTeam.logoUrl ?? null}
+    liveClock={data.fixture.liveClock ?? null}
     historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} section={kind} embedded={kind === "events"} />;
 }

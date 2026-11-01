@@ -26,4 +26,13 @@ export const liveMatchViewScenarios = {
   final: liveMatchViewSnapshot({ status: 'finished-regulation', collectedAt: liveMatchViewNow - 600_000,
     statistics: { ...live.statistics, retrievedAt: liveMatchViewNow - 610_000 }, events: { ...live.events, retrievedAt: liveMatchViewNow - 610_000, providerUpdatedAt: null } }),
   missing: null,
+  'half-time': liveMatchViewSnapshot(),
+  'extra-time': liveMatchViewSnapshot({ status: 'finished-extra-time', events: { ...live.events, items: [
+    ...live.events.items,
+    { sequence: 3, elapsed: 90, extra: 4, team: 'home', type: 'substitution', detail: 'Substitution 1', player: 'Departing Player', assist: 'Replacement Player', comments: null },
+    { sequence: 4, elapsed: 97, extra: null, team: 'away', type: 'goal', detail: 'Normal Goal', player: 'Extra-time Scorer', assist: null, comments: null },
+    { sequence: 5, elapsed: 105, extra: 1, team: 'home', type: 'card', detail: 'Yellow Card', player: 'Synthetic Defender', assist: null, comments: 'Foul' },
+    { sequence: 6, elapsed: 113, extra: null, team: 'home', type: 'substitution', detail: 'Substitution 2', player: 'Departing Player', assist: 'Replacement Player', comments: null },
+    { sequence: 7, elapsed: 120, extra: 2, team: 'away', type: 'card', detail: 'Red Card', player: 'Synthetic Defender', assist: null, comments: null },
+  ] } }),
 };
