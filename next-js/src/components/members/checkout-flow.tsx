@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, TextInput } from "@/components/ui/controls";
+import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { CardIcon, CheckIcon, ClipboardIcon, CopyIcon, GiftIcon, ImageIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -21,7 +22,7 @@ import { preparePaymentImage } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
 import { CheckoutActions, CheckoutChoices, CheckoutEvidenceField, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutScreenshot, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { MobileMoneyLogo } from "./mobile-money-logo";
-import { capCheckoutFunding, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
+import { capCheckoutFunding, chooseCheckoutMethod, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
 
 const emptyView: CheckoutView = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
 const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Referral days" };
@@ -41,20 +42,20 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
 }) {
   const router = useRouter(), [view, setView] = useState(initialView ?? emptyView);
   const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
-    method: "", walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
+    method: "", useWallet: false, walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
     paidAt: localDate(), text: "", extracted: {}, originalText: "", accepted: false, attachingId: null });
   const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [reading, setReading] = useState(""), [preview, setPreview] = useState(""), [storageWarning, setStorageWarning] = useState(false);
+  const [reading, setReading] = useState(""), [preview, setPreview] = useState(""), storageWarning = useRef(false);
+  const [notice, setNotice] = useState<{ title: string; message: string; submit?: boolean } | null>(null);
   const [readingActive, setReadingActive] = useState(false), readingAbort = useRef<AbortController | null>(null);
   const [showNew, setShowNew] = useState(false), submitting = useRef(false), heading = useRef<HTMLHeadingElement>(null);
   const [quoteEpoch, setQuoteEpoch] = useState(0), lastQuoteKey = useRef<string | null>(null);
   const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null), screenshotInput = useRef<HTMLInputElement>(null);
-  const [pasteHint, setPasteHint] = useState("");
   const key = `${account.id}:${topUp ? "topup" : "plan"}`;
   const selectedPlanPrice = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
   const walletMaximum = Math.min(view.availableWalletUgx, selectedPlanPrice);
-  const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings, plans.find(p => p.id === draft.planId)?.priceUgx ?? Infinity);
+  const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings);
   useEffect(() => {
     let alive = true;
     void loadCheckoutDraft(key).then(stored => {
@@ -64,18 +65,19 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       } else setDraft(current => {
         const previous = initialView.lastMethod;
         const method = previous && Object.hasOwn(methodNames, previous)
-          && checkoutMethodAvailable(previous, initialView, settings, plans.find(p => p.id === current.planId)?.priceUgx ?? Infinity)
+          && checkoutMethodAvailable(previous, initialView, settings)
           && (!topUp || previous === "mtn" || previous === "airtel") ? previous as CheckoutSelection["method"] : "";
-        return { ...current, requestKey: crypto.randomUUID(), method,
-          purpose: topUp ? "topup" : method === "referral" ? "referral" : "plan",
-          walletUgx: method === "wallet" ? String(plans.find(p => p.id === current.planId)?.priceUgx ?? 0) : "0",
-          referralDays: method === "referral" ? String(Math.min(365, initialView.availableReferralDays)) : "0" };
+        const nextDraft = { ...current, requestKey: crypto.randomUUID() };
+        return method ? chooseCheckoutMethod(nextDraft, method, true, initialView, plans) : nextDraft;
       });
       setLoaded(true);
     });
     return () => { alive = false; };
   }, [key, topUp, initialView, plans, settings]);
-  useEffect(() => { if (loaded) void saveCheckoutDraft(key, { draft, image }).then(saved => setStorageWarning(!saved)); }, [key, loaded, draft, image]);
+  useEffect(() => { if (loaded) void saveCheckoutDraft(key, { draft, image }).then(saved => {
+    if (!saved && !storageWarning.current) setError("Browser storage is unavailable. Keep this page open to preserve your draft.");
+    storageWarning.current = !saved;
+  }); }, [key, loaded, draft, image]);
   useEffect(() => {
     if (!image) return;
     const url = URL.createObjectURL(image);
@@ -101,6 +103,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update); };
   }, [plans]);
   const update = (values: Partial<CheckoutDraft>) => { setDraft(d => capCheckoutFunding({ ...d, ...values, accepted: values.accepted ?? false }, view, plans)); setError(""); };
+  const chooseMethod = (method: CheckoutSelection["method"], selected: boolean) => {
+    setDraft(current => chooseCheckoutMethod(current, method, selected, view, plans)); setError("");
+  };
   const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
     method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
   const selectionKey = JSON.stringify(selection());
@@ -125,7 +130,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   async function next() {
     setError("");
     if (draft.step === 0) { update({ step: 1 }); return; }
-    if (!draft.method) { setError("Choose a payment method."); return; }
+    if (!draft.method) { setError(draft.useWallet ? `Choose MTN or Airtel to pay the remaining ${formatUgx(selectedPlanPrice - Number(draft.walletUgx))}.` : "Choose a payment method."); return; }
     setBusy(true);
     try { const value = await send<CheckoutQuote>({ action: "quote", selection: selection() }); lastQuoteKey.current = value.quoteKey; setQuote(value); update({ step: 2 }); }
     catch (e) { setError((e as Error).message); }
@@ -133,12 +138,22 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   }
   const attaching = view.requests.find(r => r.id === draft.attachingId);
   const external = !!attaching || ["mtn", "airtel"].includes(draft.method);
-  async function submit(event: FormEvent) {
-    event.preventDefault(); if (submitting.current) return;
+  const effectiveQuote = attaching ? { ...attaching, purpose: attaching.purpose as CheckoutQuote["purpose"] } : quote;
+  async function submit(event?: FormEvent, adjustmentAccepted = false) {
+    event?.preventDefault(); if (submitting.current) return;
     if (!draft.accepted) { setError("Check the details and confirm the purchase terms."); return; }
     if (external && !image && !draft.text.trim()) { setError("Paste a transaction message or add a screenshot before submitting."); return; }
     if (external && (!parseTransactionId(draft.transactionId) || !validMobilePhone(draft.payerPhone) || !Number.isSafeInteger(Number(draft.amountUgx)) || Number(draft.amountUgx) <= 0 || !Number.isFinite(Date.parse(draft.paidAt)))) {
       setError("Enter the transaction ID, reported amount, payer number and payment date."); return;
+    }
+    if (external && effectiveQuote && !adjustmentAccepted) {
+      const difference = Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) - effectiveQuote.amountToSend;
+      if (difference !== 0) {
+        setNotice({ title: difference > 0 ? "Extra payment" : "Remaining payment", submit: true,
+          message: difference > 0 ? `If confirmed, ${formatUgx(difference)} extra will be added to your wallet.`
+            : `If confirmed, ${formatUgx(-difference)} will remain. Your request stays open until the full payment is verified.` });
+        return;
+      }
     }
     submitting.current = true; setBusy(true); setError("");
     try {
@@ -162,7 +177,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     update({ ...(fromScreenshot && draft.text.trim() ? {} : { text, originalText: text }),
       extracted: { ...draft.extracted, ...extracted, ...(fromScreenshot ? { screenshotText: text } : {}) }, ...(evidence.transactionId ? { transactionId: evidence.transactionId } : {}),
       ...(evidence.amount !== null ? { amountUgx: String(evidence.amount) } : {}), ...(extracted.payerPhone ? { payerPhone: extracted.payerPhone } : {}), ...(paidAt ? { paidAt } : {}) });
-    setReading(evidence.transactionId || evidence.amount ? "Details extracted. Check and correct every field below." : "Details could not be extracted. Enter them below; your evidence is kept.");
+    setReading(evidence.transactionId || evidence.amount ? "Details extracted. Check and correct every field below." : "");
+    if (!evidence.transactionId && !evidence.amount) setError("Details could not be extracted. Enter them manually; your evidence is kept.");
   }
   async function chooseImage(file?: File) {
     if (!file) return;
@@ -176,27 +192,30 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       await saveCheckoutDraft(key, { draft, image: screenshot });
       if (controller.signal.aborted) { setReading("Enter the details manually; the screenshot is kept."); return; }
       const text = await readScreenshotText(screenshot, () => {}, controller.signal); extract(text.slice(0, 12000), true);
-    } catch { setReading(prepared ? "Enter the details manually; the screenshot is kept." : "This image could not be prepared. Choose another image or enter details manually."); }
+    } catch {
+      setReading("");
+      if (!controller.signal.aborted) setError(prepared ? "Enter the details manually; the screenshot is kept." : "This image could not be prepared. Choose another image or paste a transaction message.");
+    }
     finally { setBusy(false); setReadingActive(false); }
   }
   async function pasteMessage() {
-    setPasteHint("");
+    setError("");
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) throw new Error();
       extract(text.slice(0, 12000));
-    } catch { messageInput.current?.focus(); setPasteHint("Paste your transaction message into the field, or add a screenshot."); }
+    } catch { messageInput.current?.focus(); setError("Paste your transaction message into the field, or add a screenshot."); }
   }
   async function pasteScreenshot() {
-    setPasteHint("");
+    setError("");
     try {
       const items = await navigator.clipboard.read();
       for (const item of items) {
         const type = item.types.find(type => type.startsWith("image/"));
         if (type) { const blob = await item.getType(type); await chooseImage(new File([blob], "payment-screenshot", { type })); return; }
       }
-      setPasteHint("No screenshot was found on the clipboard. Copy an image or choose a file.");
-    } catch { setPasteHint("Paste a copied image into the screenshot box, or choose an image file."); }
+      setError("No screenshot was found on the clipboard. Copy an image or choose a file.");
+    } catch { setError("Paste a copied image into the screenshot box, or choose an image file."); }
   }
   function receiveScreenshot(event: ClipboardEvent<HTMLDivElement>) {
     const file = [...event.clipboardData.items].find(item => item.kind === "file" && item.type.startsWith("image/"))?.getAsFile();
@@ -206,7 +225,6 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
   const visibleRequests = view.requests.slice(0, 5);
   const showForm = loaded && (showNew || active.length === 0 || !!attaching);
-  const effectiveQuote = attaching ? { ...attaching, purpose: attaching.purpose as CheckoutQuote["purpose"] } : quote;
   const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
   function startReceipt(request: CheckoutRequest) {
     setQuote(null); setShowNew(true); setImage(null);
@@ -245,8 +263,14 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       </CheckoutActions>
       <CheckoutSupport settings={settings} reference={request.reference} />
     </CheckoutPanel>)}
-    {error && <CheckoutPanel><p role="alert">{error}</p></CheckoutPanel>}
-    {storageWarning && <p role="status">Browser storage is unavailable. Keep this page open to preserve your draft.</p>}
+    {(error || notice) && <CriteriaDialog id={`${evidenceId}-notice`} title={error ? "Check payment details" : notice!.title} open
+      closeLabel="Close message" onCancel={() => { setError(""); setNotice(null); }}
+      footer={<>{!error && notice?.submit ? <>
+        <CriteriaDialogButton variant="secondary" onClick={() => setNotice(null)}>Review amount</CriteriaDialogButton>
+        <CriteriaDialogButton onClick={() => { setNotice(null); void submit(undefined, true); }}>Submit</CriteriaDialogButton>
+      </> : <CriteriaDialogButton onClick={() => { setError(""); setNotice(null); }}>OK</CriteriaDialogButton>}</>}>
+      <p>{error || notice?.message}</p>
+    </CriteriaDialog>}
     {!loaded && <p role="status">Restoring checkout…</p>}
     {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={3} hideTitle title={["Choose package", "Choose Payment Methods", "Confirm"][draft.step]!} headingRef={heading}>
       {draft.step === 0 && <>
@@ -257,22 +281,22 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       </>}
       {draft.step === 1 && <>
         <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(Object.keys(methodNames) as CheckoutSelection["method"][]).filter(method => topUp ? ["mtn", "airtel"].includes(method) : true).map(method => <label key={method}>
-          <input type="radio" name="checkout-method" checked={draft.method === method} disabled={busy || !networkAvailable(method)} onChange={() => update({ method,
-            purpose: topUp ? "topup" : method === "referral" ? "referral" : "plan", walletUgx: method === "wallet" ? String(plans.find(p => p.id === draft.planId)?.priceUgx ?? 0) : "0",
-            referralDays: method === "referral" ? String(Math.min(365, view.availableReferralDays)) : draft.referralDays })} />
+          <input type={method === "wallet" ? "checkbox" : "radio"} name={method === "wallet" ? "checkout-wallet" : "checkout-method"}
+            checked={method === "wallet" ? draft.useWallet : draft.method === method} disabled={busy || !networkAvailable(method)}
+            onChange={event => chooseMethod(method, event.target.checked)} />
           {method === "mtn" || method === "airtel" ? <CheckoutProviderMark><MobileMoneyLogo network={method} /></CheckoutProviderMark> : method === "wallet" ? <CardIcon /> : <GiftIcon />}
           <span data-method-text>{methodNames[method]}{method === "wallet" && <small>{formatUgx(view.availableWalletUgx)}</small>}{method === "referral" && <small>{view.availableReferralDays} days available</small>}</span>
         </label>)}</CheckoutChoices>
-        {!topUp && draft.method && <CheckoutFundingFields>
-          {["mtn", "airtel"].includes(draft.method) && <CheckoutFundingInput label="Wallet to use (UGX)" maxLabel="Use max wallet amount" disabled={busy}
-            maximum={walletMaximum} value={draft.walletUgx} onValueChange={walletUgx => update({ walletUgx })} />}
+        {!topUp && (draft.method || draft.useWallet) && <CheckoutFundingFields>
+          {draft.purpose === "plan" && <CheckoutFundingInput label="Wallet to use (UGX)" maxLabel="Use max wallet amount" disabled={busy}
+            maximum={walletMaximum} value={draft.walletUgx} onValueChange={walletUgx => update({ walletUgx, useWallet: true })} />}
           <CheckoutFundingInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} maxLabel="Use max referral days" disabled={busy}
             maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays })} />
         </CheckoutFundingFields>}
-        {draft.method && <PaymentDestination selection={selection()} />}
+        {draft.method && <PaymentDestination selection={selection()} onError={setError} />}
         <WizardActions><Button variant="secondary" onClick={() => update({ step: 0 })}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
       </>}
-      {draft.step === 2 && <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+      {draft.step === 2 && <form onSubmit={submit} noValidate style={{ display: "grid", gap: 12 }}>
         {external && <>
           <WizardNotice id={`${evidenceId}-requirement`}>Add a transaction message or screenshot. At least one is required.</WizardNotice>
           <CheckoutEvidenceField>
@@ -288,12 +312,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
             <CheckoutScreenshot role="group" tabIndex={0} aria-label="Choose or paste a payment screenshot" aria-describedby={`${evidenceId}-requirement`} onPaste={receiveScreenshot}>
               <div><Button type="button" variant="secondary" disabled={busy} onClick={() => screenshotInput.current?.click()}><ImageIcon />Choose image</Button>
                 <Button type="button" variant="quiet" disabled={busy} onClick={() => void pasteScreenshot()}><ClipboardIcon />Paste image</Button></div>
-              {image && preview ? <div data-screenshot-preview><a href={preview} target="_blank" rel="noopener"><Preview src={preview} alt="Payment screenshot preview" /></a>
-                <Button type="button" variant="quiet" disabled={busy} onClick={() => setImage(null)}>Remove</Button></div>
-                : <p>Choose an image, paste a copied screenshot here, or use the transaction message above.</p>}
+              {image && preview && <div data-screenshot-preview><a href={preview} target="_blank" rel="noopener"><Preview src={preview} alt="Payment screenshot preview" /></a>
+                <Button type="button" variant="quiet" disabled={busy} onClick={() => setImage(null)}>Remove</Button></div>}
             </CheckoutScreenshot>
           </CheckoutEvidenceField>
-          {pasteHint && <WizardNotice role="status">{pasteHint}</WizardNotice>}
           {reading && <p role="status">{reading}</p>}
           {readingActive && <Button type="button" variant="quiet" onClick={() => readingAbort.current?.abort()}>Enter details manually</Button>}
           <TextInput label="Transaction ID" leading={<CardIcon />} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
@@ -306,34 +328,33 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         {summary}
         <label><input type="checkbox" checked={draft.accepted} onChange={e => update({ accepted: e.target.checked })} /> I checked these details and confirm this {draft.purpose === "referral" ? "redemption" : "purchase"}. I accept the <a href="/en/terms" target="_blank" rel="noopener">terms</a>.</label>
         <WizardActions><Button type="button" variant="secondary" disabled={busy} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>
-          <Button type="submit" disabled={busy || !draft.accepted || !attaching && !quote || external && !image && !draft.text.trim()}>{busy ? "Saving…" : external ? "Submit for review" : draft.purpose === "referral" ? "Redeem referral days" : "Confirm purchase"}</Button></WizardActions>
-        <WizardNotice>{external ? "Reported details and extraction do not verify payment. The admin checks the incoming transfer." : "Your available balance is debited only when you confirm."}</WizardNotice>
+          <Button type="submit" disabled={busy || !draft.accepted || !attaching && !quote || external && !image && !draft.text.trim()}>{busy ? "Saving…" : "Submit"}</Button></WizardActions>
+        {external ? <Button variant="quiet" onClick={() => setNotice({ title: "Payment verification", message: "Reported details and extraction do not verify payment. The admin checks the incoming transfer." })}>About payment verification</Button>
+          : <WizardNotice>Your available balance is debited only when you confirm.</WizardNotice>}
       </form>}
     </PaymentWizard>}
   </>;
 }
 
-function PaymentDestination({ selection }: { selection: CheckoutSelection }) {
+function PaymentDestination({ selection, onError }: { selection: CheckoutSelection; onError: (message: string) => void }) {
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState("");
   const identity = JSON.stringify(selection);
   useEffect(() => {
     let alive = true;
     const timer = setTimeout(() => { void send<CheckoutQuote>({ action: "quote", selection: JSON.parse(identity) }).then(q => {
-      if (alive) { setQuote(q); setError(""); setCopied(false); setCopyError(""); }
-    }).catch(e => { if (alive) { setQuote(null); setError(e.message); } }); }, 200);
+      if (alive) { setQuote(q); setError(""); setCopied(false); }
+    }).catch(e => { if (alive) { setQuote(null); setError(e.message); onError(e.message); } }); }, 200);
     return () => { alive = false; clearTimeout(timer); };
-  }, [identity]);
-  if (error) return <p role="status">{error}</p>;
+  }, [identity, onError]);
+  if (error) return null;
   if (!quote || quote.method !== selection.method || quote.walletUgx !== selection.walletUgx || quote.referralDays !== selection.referralDays || quote.planId !== selection.planId) return <p role="status">Calculating payment…</p>;
   return <div data-payment-destination><CheckoutPaySummary quote={quote} />
     {quote.recipient && (quote.method === "mtn" || quote.method === "airtel") && <CheckoutPayee>
       <div><CheckoutProviderMark><MobileMoneyLogo network={quote.method} /></CheckoutProviderMark><strong>{localUgandaPhone(quote.recipient)}</strong>
         <Button type="button" variant="quiet" aria-label={copied ? "Number copied" : `Copy ${methodNames[quote.method]} receiving number`} title={copied ? "Copied" : "Copy number"}
-          onClick={() => { void navigator.clipboard.writeText(quote.recipient!).then(() => setCopied(true)).catch(() => setCopyError("Select and copy the receiving number.")); }}>{copied ? <CheckIcon /> : <CopyIcon />}</Button></div>
+          onClick={() => { void navigator.clipboard.writeText(quote.recipient!).then(() => setCopied(true)).catch(() => onError("Select and copy the receiving number.")); }}>{copied ? <CheckIcon /> : <CopyIcon />}</Button></div>
       <small>{quote.recipientName}</small>
-      {copyError && <small role="status">{copyError}</small>}
     </CheckoutPayee>}
   </div>;
 }

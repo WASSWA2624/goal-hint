@@ -19,3 +19,5 @@ Verified with restricted real MySQL accounting/migration/admin/retention scenari
 Funding fields immediately cap wallet contributions at the available balance and package price, and referral days at the available days (up to 365). The same caps apply to restored drafts, package changes and refreshed balances; changes clear purchase confirmation. Server-side balance validation remains authoritative.
 
 Each funding field has a compact inline Max button that fills its permitted maximum using the same capped input update. It is disabled when no balance is available or the field is already at its maximum. A contribution covering the complete package selects wallet-only checkout; spending still requires explicit confirmation.
+
+Wallet selection is an independent contribution whenever the spendable balance is positive. Customers can edit that contribution and choose MTN or Airtel for the remainder; switching providers preserves partial wallet funding. Progress markers/labels share one vertical alignment. Confirmation uses Submit, omits redundant screenshot helper prose, and presents errors, verification information and payment adjustments in the shared dialog.

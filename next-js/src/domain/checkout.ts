@@ -29,9 +29,9 @@ export type CheckoutRequest = { id: string; reference: string; status: string; p
   receipts: { id: string; transactionId: string; amountUgx: number; paidAt: string; verified: boolean; disputed: boolean; withdrawn: boolean }[] };
 export type CheckoutView = { availableWalletUgx: number; availableReferralDays: number; lastMethod: string | null; requests: CheckoutRequest[] };
 export function checkoutMethodAvailable(method: string, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,
-  providers: { mtnNumber: string | null; airtelNumber: string | null }, priceUgx: number) {
+  providers: { mtnNumber: string | null; airtelNumber: string | null }) {
   return method === "mtn" ? !!providers.mtnNumber : method === "airtel" ? !!providers.airtelNumber
-    : method === "wallet" ? balances.availableWalletUgx >= priceUgx : method === "referral" && balances.availableReferralDays > 0;
+    : method === "wallet" ? balances.availableWalletUgx > 0 : method === "referral" && balances.availableReferralDays > 0;
 }
 export function fundingAmounts(priceUgx: number, walletUgx: number, externalUgx = 0) {
   const amountToSend = Math.max(0, priceUgx - walletUgx);

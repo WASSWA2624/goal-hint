@@ -120,7 +120,6 @@ export function FundingBreakdown({ quote: q, reportedUgx }: { quote: Pick<Checko
       {reportedUgx !== undefined && <div><dt>Reported payment</dt><dd>{formatUgx(reportedUgx)}</dd></div>}
       {reportedUgx !== undefined && amounts.remainingUgx > 0 && <div><dt>Remaining if confirmed</dt><dd>{formatUgx(amounts.remainingUgx)}</dd></div>}
     </WizardReview>
-    {reportedUgx !== undefined && amounts.excessUgx > 0 && <p>If confirmed, {formatUgx(amounts.excessUgx)} extra will be added to your wallet.</p>}
   </div>;
 }
 export function CheckoutSupport({ settings, reference }: { settings: SupportContactSettings; reference: string }) {

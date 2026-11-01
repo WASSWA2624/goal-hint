@@ -85,6 +85,16 @@ const Progress = styled.nav`
   }
   li > span:last-child { overflow-wrap: anywhere; }
   li svg { inline-size: 13px; block-size: 13px; }
+  &[data-inline-labels="true"] {
+    ol { align-items: center; }
+    li { flex-direction: row; align-items: center; min-block-size: 24px; }
+    li > span:first-child { box-sizing: border-box; inline-size: 24px; block-size: 24px; }
+    li > span:last-child { display: block; line-height: 24px; }
+    li svg { display: block; }
+    li:first-child { justify-content: flex-start; }
+    li:nth-child(2) { justify-content: center; }
+    li:last-child { justify-content: flex-end; }
+  }
   li[data-complete="true"] { color: ${({ theme }) => theme.color.link}; }
   li[data-complete="true"] > span:first-child {
     background: ${({ theme }) => theme.color.brandSoft};
@@ -102,7 +112,7 @@ const Progress = styled.nav`
   @media (max-width: 480px) {
     ol { gap: 4px; }
     li { flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
-    &[data-inline-labels="true"] li { flex-direction: row; justify-content: center; }
+    &[data-inline-labels="true"] li { flex-direction: row; align-items: center; }
   }
 `;
 

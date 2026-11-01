@@ -2,7 +2,7 @@ import type { CheckoutSelection, CheckoutView } from "@/domain/checkout";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 
 export type CheckoutDraft = { requestKey: string; step: 0 | 1 | 2; purpose: CheckoutSelection["purpose"]; planId: string;
-  method: CheckoutSelection["method"] | ""; walletUgx: string; referralDays: string; topUpUgx: string;
+  method: CheckoutSelection["method"] | ""; useWallet: boolean; walletUgx: string; referralDays: string; topUpUgx: string;
   transactionId: string; amountUgx: string; payerPhone: string; paidAt: string; text: string;
   extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null };
 
@@ -13,9 +13,25 @@ export function capCheckoutFunding(draft: CheckoutDraft, balances: Pick<Checkout
   const cap = (value: string, maximum: number) => value.trim() === "" ? "" : String(Math.min(maximum, Math.max(0, Math.floor(Number(value) || 0))));
   const walletUgx = cap(draft.walletUgx, Math.min(balances.availableWalletUgx, price));
   const referralDays = cap(draft.referralDays, Math.min(365, balances.availableReferralDays));
-  const method = price > 0 && Number(walletUgx) === price && (draft.method === "mtn" || draft.method === "airtel") ? "wallet" : draft.method;
-  return walletUgx === draft.walletUgx && referralDays === draft.referralDays && method === draft.method
-    ? draft : { ...draft, walletUgx, referralDays, method, accepted: false };
+  const useWallet = draft.useWallet ?? Number(walletUgx) > 0;
+  const method = price > 0 && Number(walletUgx) === price && draft.purpose === "plan" ? "wallet"
+    : draft.method === "wallet" ? "" : draft.method;
+  return walletUgx === draft.walletUgx && referralDays === draft.referralDays && method === draft.method && useWallet === draft.useWallet
+    ? draft : { ...draft, walletUgx, referralDays, method, useWallet, accepted: false };
+}
+
+/** Wallet is an optional contribution; a provider settles any cash remainder. */
+export function chooseCheckoutMethod(draft: CheckoutDraft, method: CheckoutSelection["method"], selected: boolean,
+  balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">, plans: readonly Pick<SubscriptionPlanView, "id" | "priceUgx">[]): CheckoutDraft {
+  const price = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
+  if (method === "wallet") return capCheckoutFunding({ ...draft, purpose: "plan", useWallet: selected,
+    method: draft.method === "mtn" || draft.method === "airtel" ? draft.method : selected ? "wallet" : "",
+    walletUgx: selected ? String(Math.min(balances.availableWalletUgx, price)) : "0", accepted: false }, balances, plans);
+  if (method === "referral") return capCheckoutFunding({ ...draft, purpose: "referral", method, useWallet: false,
+    walletUgx: "0", referralDays: String(Math.min(365, balances.availableReferralDays)), accepted: false }, balances, plans);
+  const walletUgx = Number(draft.walletUgx) >= price ? "0" : draft.walletUgx;
+  return capCheckoutFunding({ ...draft, purpose: draft.purpose === "topup" ? "topup" : "plan", method, walletUgx,
+    useWallet: Number(draft.walletUgx) >= price ? false : draft.useWallet, accepted: false }, balances, plans);
 }
 type Stored = { draft: CheckoutDraft; image: Blob | null };
 const memory = new Map<string, Stored>();

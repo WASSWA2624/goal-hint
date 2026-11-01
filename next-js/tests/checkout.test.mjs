@@ -5,7 +5,7 @@ import { checkoutMethodAvailable, checkoutSelectionSchema, receiptInputSchema, f
 import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
-import { capCheckoutFunding } from "../src/components/members/checkout-draft.ts";
+import { capCheckoutFunding, chooseCheckoutMethod } from "../src/components/members/checkout-draft.ts";
 
 test("checkout uses integer funding and referral days never reduce the cash price", () => {
   assert.deepEqual(fundingAmounts(5000, 2000, 1000), { amountToSend: 3000, remainingUgx: 2000, excessUgx: 0 });
@@ -26,7 +26,7 @@ test("manual evidence remains valid after failed extraction and original text is
 
 test("funding inputs cap edits and restored choices at spendable balances and package cost", () => {
   const planId = randomUUID(), plans = [{ id: planId, priceUgx: 5000 }];
-  const draft = { purpose: "plan", planId, method: "mtn", walletUgx: "99999999999999999999", referralDays: "99", accepted: true };
+  const draft = { purpose: "plan", planId, method: "mtn", useWallet: true, walletUgx: "99999999999999999999", referralDays: "99", accepted: true };
   const available = { availableWalletUgx: 3000, availableReferralDays: 3 };
   assert.deepEqual(capCheckoutFunding(draft, available, plans), { ...draft, walletUgx: "3000", referralDays: "3", accepted: false });
   assert.equal(capCheckoutFunding(draft, { ...available, availableWalletUgx: 10000 }, plans).walletUgx, "5000");
@@ -40,14 +40,35 @@ test("funding inputs cap edits and restored choices at spendable balances and pa
   assert.equal(capCheckoutFunding(valid, available, plans), valid, "Available choices stay unchanged.");
 });
 
-test("a previous method is usable only with its current provider or sufficient available balance", () => {
+test("wallet contributions stay selectable even when the balance cannot cover the package", () => {
   const balances = { availableWalletUgx: 1000, availableReferralDays: 1 }, providers = { mtnNumber: "256700000123", airtelNumber: null };
-  assert.equal(checkoutMethodAvailable("mtn", balances, providers, 1000), true);
-  assert.equal(checkoutMethodAvailable("airtel", balances, providers, 1000), false);
-  assert.equal(checkoutMethodAvailable("wallet", balances, providers, 1000), true);
-  assert.equal(checkoutMethodAvailable("wallet", balances, providers, 5000), false);
-  assert.equal(checkoutMethodAvailable("referral", balances, providers, 5000), true);
-  assert.equal(checkoutMethodAvailable("referral", { ...balances, availableReferralDays: 0 }, providers, 1000), false);
+  assert.equal(checkoutMethodAvailable("mtn", balances, providers), true);
+  assert.equal(checkoutMethodAvailable("airtel", balances, providers), false);
+  assert.equal(checkoutMethodAvailable("wallet", balances, providers), true);
+  assert.equal(checkoutMethodAvailable("wallet", { ...balances, availableWalletUgx: 0 }, providers), false);
+  assert.equal(checkoutMethodAvailable("referral", balances, providers), true);
+  assert.equal(checkoutMethodAvailable("referral", { ...balances, availableReferralDays: 0 }, providers), false);
+});
+
+test("partial wallet funding remains editable and survives provider changes without spending", () => {
+  const planId = randomUUID(), plans = [{ id: planId, priceUgx: 5000 }];
+  const balances = { availableWalletUgx: 3000, availableReferralDays: 3 };
+  const draft = { purpose: "plan", planId, method: "", useWallet: false, walletUgx: "0", referralDays: "1", accepted: true };
+  const wallet = chooseCheckoutMethod(draft, "wallet", true, balances, plans);
+  assert.equal(wallet.useWallet, true); assert.equal(wallet.walletUgx, "3000"); assert.equal(wallet.method, "");
+  const partial = capCheckoutFunding({ ...wallet, walletUgx: "1000" }, balances, plans);
+  const mtn = chooseCheckoutMethod(partial, "mtn", true, balances, plans);
+  const airtel = chooseCheckoutMethod(mtn, "airtel", true, balances, plans);
+  assert.equal(airtel.walletUgx, "1000"); assert.equal(airtel.method, "airtel"); assert.equal(airtel.referralDays, "1");
+  assert.equal(airtel.accepted, false);
+  const removed = chooseCheckoutMethod(airtel, "wallet", false, balances, plans);
+  assert.equal(removed.walletUgx, "0"); assert.equal(removed.useWallet, false); assert.equal(removed.method, "airtel");
+  const full = chooseCheckoutMethod(draft, "wallet", true, { ...balances, availableWalletUgx: 6000 }, plans);
+  assert.equal(full.method, "wallet"); assert.equal(full.walletUgx, "5000");
+  assert.equal(capCheckoutFunding({ ...full, walletUgx: "500" }, balances, plans).method, "");
+  const legacy = { ...airtel }; delete legacy.useWallet;
+  assert.equal(capCheckoutFunding(legacy, balances, plans).useWallet, true);
+  assert.equal(balances.availableWalletUgx, 3000, "Choosing funding never debits the wallet.");
 });
 
 test("evidence dates accept provider formats, EAT and explicit zones without normalizing invalid calendar dates", () => {
