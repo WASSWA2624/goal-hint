@@ -79,6 +79,12 @@ export function parseMatchView(input: Parameters): MatchView {
   };
 }
 
+/** Availability now belongs to the team sheet; old links retain their team/player. */
+export function parseMatchDetailsView(input: Parameters): MatchView {
+  const view = parseMatchView(input);
+  return view.section === "injuries" ? { ...view, section: "lineups", tab: null, page: 1 } : view;
+}
+
 /** Serializes only non-default view state, preserving every unrelated key and its order. */
 export function serializeMatchView(view: MatchView, base: URLSearchParams = new URLSearchParams()): URLSearchParams {
   const result = new URLSearchParams();

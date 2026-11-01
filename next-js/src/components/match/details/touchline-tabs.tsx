@@ -10,7 +10,7 @@ import { CompareIcon, HeadToHeadIcon, ContextIcon, LineupIcon, MarketsIcon, Hist
 import { DetailsProvider, Note, ViewProvider, focusRing, useStableDetails } from "./details-ui";
 import { DisclosureProvider } from "./section-card";
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
-import { InjuriesSection, LineupsSection } from "./squad-sections";
+import { LineupsSection } from "./squad-sections";
 import { HistorySection, NewsSection, RefereeSection } from "./info-sections";
 import { Explanation, MarketsCard } from "./markets-card";
 import { TouchlineBody, TouchlineEmpty, TouchlineGrid, TouchlineHeading, TouchlineLinkButton, TouchlineSurface, focusMatchAccess } from "./touchline-ui";
@@ -90,7 +90,7 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
         </>}
         {selected === "h2h" && <Section section="h2h" view={view} heading={false}><H2HSection /></Section>}
         {selected === "standings" && <TouchlineStandings />}
-        {selected === "lineups" && <><Section section="lineups" view={view} heading={false}><LineupsSection /></Section><Section section="injuries" view={view}><InjuriesSection /></Section></>}
+        {selected === "lineups" && <Section section="lineups" view={view} heading={false}><LineupsSection /></Section>}
         {selected === "markets" && <ViewProvider value={{ ...view, marketsOpen: true }}><DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded /></DisclosureProvider></ViewProvider>}
         {selected === "events" && <Observations kind="events" />}
         {selected === "venue" && <TouchlineGrid><TouchlineVenue /><Section section="referee" view={view}><RefereeSection /></Section></TouchlineGrid>}

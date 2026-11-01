@@ -54,6 +54,12 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
       homeGoals: row.venue === "H" ? row.scored : row.conceded, awayGoals: row.venue === "H" ? row.conceded : row.scored, status: "finished-regulation" }));
   }
   sections.players.players = Object.values(sections.lineups).flatMap(squad => [...squad.starters, ...squad.substitutes]);
+  sections.injuries.injuries = [
+    { team: "home", playerId: 901, playerName: "Adrian Cole", status: "out", type: "Injury", reason: "Hamstring injury",
+      updatedAt: null, retrievedAt: now, source: "Synthetic provider report" },
+    { team: "away", playerId: 902, playerName: "Daniel Rey", status: "out", type: "Suspension", reason: "Suspended",
+      updatedAt: now, retrievedAt: now, source: "Synthetic provider report" },
+  ];
   sections.context.venue = { name: "Emirates Stadium", city: "London", retrievedAt: now };
   sections.context.standings = { home: { rank: 2, points: 23, played: 10, group: "Premier League" }, away: { rank: 3, points: 21, played: 10, group: "Premier League" }, retrievedAt: now };
   sections.referee = { state: "available", name: "Chris Morgan", retrievedAt: now };

@@ -1,9 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { matchDetailTabs, detailTabForView, openDetailTab, hasMatchPredictionAccess } from "../src/domain/match-detail-tabs.ts";
-import { parseMatchView, serializeMatchView, splitMatchViewParameters, openItem } from "../src/domain/match-view.ts";
+import { parseMatchView, parseMatchDetailsView, serializeMatchView, splitMatchViewParameters, openItem } from "../src/domain/match-view.ts";
 import { horizontalPitchPositions } from "../src/domain/match-details.ts";
 import { pitchCanvasPosition, referencePitch, pitchCanvas } from "../src/domain/football-pitch.ts";
+
+test("legacy injury links open the combined team sheet and retain the selected team/player", () => {
+  const input = new URLSearchParams("section=injuries&team=away&item=away-17&tab=out&page=3&mk=closed&revision=kept");
+  const view = parseMatchDetailsView(input);
+  assert.equal(view.section, "lineups"); assert.equal(view.team, "away"); assert.equal(view.item, "away-17");
+  assert.equal(view.tab, null); assert.equal(view.page, 1); assert.equal(view.marketsOpen, false);
+  const serialized = serializeMatchView(view, input);
+  assert.equal(serialized.get("section"), "lineups"); assert.equal(serialized.get("revision"), "kept");
+  assert.deepEqual(parseMatchDetailsView({ section: "lineups", team: "home", tab: "lineup-position" }), parseMatchView({ section: "lineups", team: "home", tab: "lineup-position" }));
+});
 
 test("Touchline tabs preserve deep links, revision state and their own section controls", () => {
   for (const panel of matchDetailTabs) {

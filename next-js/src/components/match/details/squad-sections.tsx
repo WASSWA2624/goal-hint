@@ -1,21 +1,22 @@
 "use client";
 
-import { memo, useRef } from "react";
+import { memo, useId, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { horizontalPitchPositions, parsePlayerKey, pitchRows, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
+import { horizontalPitchPositions, parsePlayerKey, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
 import type { InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { openItem, type TeamFocus } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { InjuryIcon, LineupIcon, PlayerIcon } from "./details-icons";
 import {
-  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, size, useDetails, type Messages,
+  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, size, useDetails, type Messages,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useEmbeddedSection, useReturnFocus } from "./section-card";
 import { useInsightSection } from "./use-match-view";
 import { TouchlineLineupPitch } from "./touchline-lineup-pitch";
 import { playerPositionLabel } from "./labels";
+import { Icon } from "@/components/ui/icons";
 
 type Player = InsightSections["players"]["players"][number];
 type Injury = InsightSections["injuries"]["injuries"][number];
@@ -77,63 +78,28 @@ function usePlayerLookup(open: boolean) {
     retry: () => { players.retry(); injuries.retry(); lineups.retry(); } };
 }
 
-/** Vertical pitch for a full lineup, forwards at the top; names stay readable at phone width. */
-const Pitch = styled.ol`
-  position: relative;
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 10px 6px;
-  list-style: none;
-  background: repeating-linear-gradient(180deg, ${({ theme }) => theme.color.accent.emerald.soft} 0 2.5rem,
-    color-mix(in srgb, ${({ theme }) => theme.color.accent.emerald.solid} 8%, ${({ theme }) => theme.color.accent.emerald.soft}) 2.5rem 5rem);
-  border-radius: ${({ theme }) => theme.radius.surface};
-  > li { position: relative; z-index: 1; display: flex; justify-content: space-around; gap: 4px; }
-  > svg { position: absolute; inset: 12px; inline-size: calc(100% - 24px); block-size: calc(100% - 24px); color: ${({ theme }) => theme.color.accent.emerald.text}; opacity: .3; pointer-events: none; }
-  button {
-    display: grid;
-    justify-items: center;
-    gap: 2px;
-    min-inline-size: 0;
-    max-inline-size: 5.5rem;
-    padding: 2px;
-    color: ${({ theme }) => theme.color.accent.emerald.text};
-    background: none;
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.control};
-    font: inherit;
-    font-size: ${size("micro")};
-    line-height: 1.15;
-    text-align: center;
-    cursor: pointer;
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; }
-    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surface}; } }
-    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.circle}; font-size: ${size("caption")}; }
-    > span { overflow-wrap: anywhere; }
-  }
-  ${desktop} { button { font-size: ${size("caption")}; } }
-`;
 const PlayerRow = styled(RowButton)`
   grid-template-columns: 1.75rem minmax(0, 1fr) auto auto;
   > span[data-number] { color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; text-align: end; }
   > span[data-name] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 `;
-const LineupGrid = styled.div<{ $besidePitch?: boolean }>`
+const LineupGrid = styled.div<{ $besidePitch?: boolean; $single: boolean }>`
   display: grid;
   gap: 12px;
   @container details-card (min-width: 40rem) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    > section[data-side="away"] { grid-column: 2; }
+    grid-template-columns: ${({ $single }) => $single ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))"};
+    > section[data-side="away"] { grid-column: ${({ $single }) => $single ? "1" : "2"}; }
   }
   > section { display: grid; gap: 6px; align-content: start; min-inline-size: 0; }
   @container details-card (min-width: 72rem) {
-    grid-template-columns: ${({ $besidePitch }) => $besidePitch ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))"};
-    > section[data-side="away"] { grid-column: ${({ $besidePitch }) => $besidePitch ? "1" : "2"}; }
+    grid-template-columns: ${({ $besidePitch, $single }) => $besidePitch || $single ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))"};
+    > section[data-side="away"] { grid-column: ${({ $besidePitch, $single }) => $besidePitch || $single ? "1" : "2"}; }
   }
 `;
 const LineupWorkspace = styled.div<{ $pitch: boolean }>`
   display: grid; gap: 16px; min-inline-size: 0;
   > [data-field-column] { min-inline-size: 0; inline-size: 100%; max-inline-size: 840px; margin-inline: auto; display: grid; gap: 10px; }
+  ${media.belowDesktop} { > [data-field-column] { max-inline-size: 440px; } }
   @container details-card (min-width: 72rem) {
     grid-template-columns: ${({ $pitch }) => $pitch ? "minmax(0, 840px) minmax(240px, 280px)" : "minmax(0, 1fr)"};
     ${({ $pitch }) => $pitch ? "max-inline-size: 1140px; inline-size: 100%; margin-inline: auto; align-items: start; gap: 20px;" : ""}
@@ -154,16 +120,43 @@ const TeamSheetDetails = styled.details`
   > summary { padding-block: 6px; cursor: pointer; }
   > div { display: grid; gap: 6px; padding-block: 8px; }
 `;
+const TeamTabs = styled.div`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block-end: 12px;
+  border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  button { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px 7px;
+    min-inline-size: 0; min-block-size: 48px; padding: 8px 4px; border: 0; border-block-end: 2px solid transparent;
+    color: ${({ theme }) => theme.color.mutedText}; background: transparent; font: inherit; font-size: .8125rem; cursor: pointer; }
+  button[aria-selected="true"] { color: ${({ theme }) => theme.color.text}; border-block-end-color: ${({ theme }) => theme.color.brand}; font-weight: 700; }
+  button { ${focusRing} }
+  small { font-size: .625rem; font-weight: 500; }
+`;
+const Availability = styled.div`
+  display: grid; gap: 6px; margin-block-start: 6px; padding-block-start: 10px;
+  border-block-start: 1px solid ${({ theme }) => theme.color.border};
+`;
+const allSides = ["home", "away"] as const;
 
-function short(name: string | null) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/u);
-  return parts.length > 1 ? parts.at(-1)! : name;
+function LineupTeamTabs({ selected, panelId }: { selected: "home" | "away"; panelId: string }) {
+  const { data, home, away, messages, update } = useDetails();
+  const select = (team: "home" | "away") => update(current => ({ ...current, team, page: 1, item: null }), "replace");
+  return <TeamTabs role="tablist" aria-label={messages.text("details.team")} data-lineup-team-tabs>
+    {allSides.map(side => <button key={side} id={`${panelId}-${side}`} type="button" role="tab" aria-selected={selected === side}
+      aria-controls={panelId} tabIndex={selected === side ? 0 : -1} data-team={side} onClick={() => select(side)}
+      onKeyDown={event => {
+        const next = event.key === "Home" ? "home" : event.key === "End" ? "away" : ["ArrowLeft", "ArrowRight"].includes(event.key) ? side === "home" ? "away" : "home" : null;
+        if (!next) return;
+        event.preventDefault(); select(next);
+        event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-team="${next}"]`)?.focus();
+      }}>
+      <Crest name={side === "home" ? home : away} url={side === "home" ? data.fixture.homeTeam.logoUrl : data.fixture.awayTeam.logoUrl} size={20} />
+      <span>{side === "home" ? home : away}</span><small>{messages.text(`touchline.${side}`)}</small>
+    </button>)}
+  </TeamTabs>;
 }
 
-function LineupPlayerList({ players, side }: { players: Lineup["starters"]; side: "home" | "away" }) {
+function LineupPlayerList({ players, side, kind }: { players: Lineup["starters"]; side: "home" | "away"; kind: "starters" | "substitutes" }) {
   const { messages, update } = useDetails();
-  return <RowList>{players.map(player => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
+  return <RowList data-lineup-players={kind}>{players.map(player => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
     onClick={() => update(current => ({ ...current, item: playerKey(side, player.id) }))}>
     <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span>
     <span>{player.position ? playerPositionLabel(messages, player.position) : ""}</span><span />
@@ -178,32 +171,22 @@ function LineupTimestamp({ lineup, teamName }: { lineup: Lineup; teamName?: stri
     <time dateTime={toUtcIsoString(time)}>{messages.reportingInstant(time)}</time></Note>;
 }
 
-function LineupRosters({ lineups, sides, hasPitch }: { lineups: InsightSections["lineups"]; sides: readonly ("home" | "away")[]; hasPitch: boolean }) {
-  const { data, messages, home, away, update } = useDetails();
+function LineupRosters({ lineups, sides, hasPitch, injuries }: { lineups: InsightSections["lineups"]; sides: readonly ("home" | "away")[]; hasPitch: boolean; injuries: readonly Injury[] }) {
+  const { data, messages, home, away } = useDetails();
   const embedded = useEmbeddedSection();
-  return <LineupGrid $besidePitch={embedded && hasPitch} data-touchline-bench={embedded && hasPitch || undefined}>
+  return <LineupGrid $besidePitch={embedded && hasPitch} $single={sides.length === 1} data-touchline-bench={embedded && hasPitch || undefined}>
     {sides.map(side => {
-      const lineup = lineups[side], rows = lineup ? pitchRows(lineup.starters) : null;
+      const lineup = lineups[side];
       const team = side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
-      return <section key={side} data-side={embedded ? side : undefined} aria-label={side === "home" ? home : away}>
-        {!embedded && <Strong style={{ display: "flex", alignItems: "center", gap: 6 }}><Crest name={team.name} url={team.logoUrl} />
+      return <section key={side} data-side={side} data-team-roster={side} aria-label={side === "home" ? home : away}>
+        {embedded && !hasPitch && <Strong style={{ display: "flex", alignItems: "center", gap: 6 }}><Crest name={team.name} url={team.logoUrl} />
           {side === "home" ? home : away}{lineup?.formation ? ` · ${lineup.formation}` : ""}</Strong>}
         {lineup ? <>
-          {!embedded && <LineupTimestamp lineup={lineup} />}
-          {!embedded && rows && <Pitch aria-label={messages.text("details.formationView")} data-side={side}>
-            {[...rows].reverse().map((row, index) => <li key={index}>{row.map(player => {
-              const key = playerKey(side, player.id);
-              return <button type="button" key={key} data-item-key={key} onClick={() => update(current => ({ ...current, item: key }))}
-                aria-label={messages.text("details.playerOpen", { player: playerName(messages, player) })}>
-                <b>{player.number ?? "–"}</b><span>{short(player.name)}</span>
-              </button>;
-            })}</li>)}
-          </Pitch>}
-          {(!embedded || !hasPitch) && <><Strong>{messages.text("details.starters")}</Strong><LineupPlayerList players={lineup.starters} side={side} /></>}
+          {(!embedded || !hasPitch) && <><Strong>{messages.text("details.starters")}</Strong><LineupPlayerList players={lineup.starters} side={side} kind="starters" /></>}
           <Strong>{embedded && hasPitch ? messages.text("touchline.teamSubstitutes", { team: side === "home" ? home : away }) : messages.text("details.substitutes")}</Strong>
-          {lineup.substitutes.length ? <LineupPlayerList players={lineup.substitutes} side={side} /> : <Note>{messages.text("details.noSubstitutes")}</Note>}
-          {!embedded && <Note>{messages.text("details.managerMissing")}</Note>}
+          {lineup.substitutes.length ? <LineupPlayerList players={lineup.substitutes} side={side} kind="substitutes" /> : <Note>{messages.text("details.noSubstitutes")}</Note>}
         </> : <Note>{messages.text("details.lineupNotPublished")}</Note>}
+        <TeamAbsences injuries={injuries} side={side} />
       </section>;
     })}
   </LineupGrid>;
@@ -218,43 +201,51 @@ export const LineupsSection = memo(function LineupsSection() {
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
   const lineups = lookup.allLineups;
-  const sides = view.team === "both" ? (["home", "away"] as const) : [view.team];
+  const selected = view.team === "away" ? "away" : "home";
+  const panelId = useId();
+  const sides: readonly ("home" | "away")[] = embedded ? view.team === "both" ? allSides : [view.team] : [selected];
+  const pitchSides = embedded ? sides : allSides;
   const team = (side: "home" | "away") => side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
   const any = Boolean(lineups.home || lineups.away);
-  const hasPitch = sides.every(side => {
+  const hasPitch = pitchSides.every(side => {
     const lineup = lineups[side];
     return lineup && horizontalPitchPositions(lineup.starters, side, lineup.formation);
   });
-  return <SectionCard section="lineups" icon={<LineupIcon />} title={messages.text("details.section.lineups")}
-    meta={lineups.home?.formation && lineups.away?.formation ? messages.text("details.formations", { home: lineups.home.formation, away: lineups.away.formation })
+  return <SectionCard section="lineups" icon={<LineupIcon />} title={messages.text(embedded ? "details.section.lineups" : "touchline.lineupsAvailability")}
+    meta={open ? null : lineups.home?.formation && lineups.away?.formation ? messages.text("details.formations", { home: lineups.home.formation, away: lineups.away.formation })
       : messages.text(any ? "details.confirmed" : "details.lineupNotPublished")}
     itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
-      <PanelBar><TeamChoice />{embedded && <label>{messages.text("touchline.profileDetails")} <select aria-label={messages.text("touchline.profileDetails")} value={display} onChange={event => {
+      <PanelBar>{embedded && <TeamChoice />}<label>{messages.text("touchline.profileDetails")} <select aria-label={messages.text("touchline.profileDetails")} value={display} onChange={event => {
         const tab = event.target.value === "position" ? "lineup-position" : null;
         update(current => ({ ...current, tab }), "replace");
       }}>
         <option value="number">{messages.text("details.number")}</option><option value="position">{messages.text("details.position")}</option>
-        <option disabled>{messages.text("touchline.age")} · {messages.text("details.notAvailable")}</option><option disabled>{messages.text("touchline.rating")} · {messages.text("details.notAvailable")}</option>
-      </select></label>}</PanelBar>
+        {embedded && <><option disabled>{messages.text("touchline.age")} · {messages.text("details.notAvailable")}</option><option disabled>{messages.text("touchline.rating")} · {messages.text("details.notAvailable")}</option></>}
+      </select></label></PanelBar>
       <LineupWorkspace $pitch={embedded && hasPitch}>
-      {embedded && <div data-field-column>
-        <PitchTeams>{sides.map(side => <div key={side} data-side={side}>
+      <div data-field-column>
+        {hasPitch && <PitchTeams>{pitchSides.map(side => <div key={side} data-side={side}>
           <Crest name={team(side).name} url={team(side).logoUrl} size={24} />
           <strong>{side === "home" ? home : away}</strong><small>{messages.text(`touchline.${side}`)}{lineups[side] && ` · ${messages.text("details.confirmed")}`}</small>
           {lineups[side]?.formation && <b data-formation>{lineups[side]!.formation}</b>}
-        </div>)}</PitchTeams>
-        {hasPitch ? <TouchlineLineupPitch lineups={lineups} sides={sides} display={display} />
+        </div>)}</PitchTeams>}
+        {hasPitch ? <TouchlineLineupPitch lineups={lineups} sides={pitchSides} display={display} selectTeam={!embedded} />
           : any && <Note>{messages.text("touchline.positionsMissing")}</Note>}
         {hasPitch && <Note>{messages.text("touchline.formationSchematic")}</Note>}
-      </div>}
-      <LineupRosters lineups={lineups} sides={sides} hasPitch={hasPitch} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        {!embedded && <LineupTeamTabs selected={selected} panelId={panelId} />}
+        <div id={panelId} role={embedded ? undefined : "tabpanel"} aria-labelledby={embedded ? undefined : `${panelId}-${selected}`} tabIndex={embedded ? undefined : 0}>
+          <LineupRosters lineups={lineups} sides={sides} hasPitch={hasPitch} injuries={lookup.allInjuries} />
+        </div>
+      </div>
       </LineupWorkspace>
-      {embedded && <TeamSheetDetails><summary>{messages.text("touchline.teamSheetDetails")}</summary><div>
+      <TeamSheetDetails><summary>{messages.text("touchline.teamSheetDetails")}</summary><div>
         {sides.map(side => { const lineup = lineups[side]; return lineup && <LineupTimestamp key={side} lineup={lineup} teamName={side === "home" ? home : away} />; })}
-        <Note>{messages.text("touchline.playerDetailsMissing")}</Note><Note>{messages.text("details.managerMissing")}</Note>
-      </div></TeamSheetDetails>}
+        <Note>{messages.text("touchline.playerDetailsMissing")}</Note><Note>{messages.text("details.managerMissing")}</Note><Note>{messages.text("details.injuryBasis")}</Note>
+      </div></TeamSheetDetails>
     </div>}
   </SectionCard>;
 });
@@ -324,40 +315,22 @@ const InjuryRow = styled(RowButton)`
   > span[data-name] > small { overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; white-space: nowrap; text-overflow: ellipsis; }
 `;
 
-export const InjuriesSection = memo(function InjuriesSection() {
-  const embedded = useEmbeddedSection();
-  const { preview, messages, home, away, view, update } = useDetails();
-  const open = view.section === "injuries";
-  const lookup = usePlayerLookup(open);
-  const list = useRef<HTMLDivElement>(null);
-  useReturnFocus(list, view.item);
-  const status = (["out", "doubtful", "unknown"] as const).find((entry) => entry === view.tab) ?? null;
-  const filtered = lookup.allInjuries.filter((injury) => (view.team === "both" || injury.team === view.team) && (status === null || injury.status === status));
-  const paged = pageOf(filtered, view.page, 15);
-  const total = lookup.allInjuries.length || preview?.totals.injuries || 0;
-  const row = (injury: Injury) => {
-    const key = playerKey(injury.team, injury.playerId);
-    return <li key={`${key}-${injury.type ?? ""}`}><InjuryRow type="button" data-item-key={key} onClick={() => update((current) => openItem(current, "injuries", key))}>
-      <InjuryIcon />
-      <span data-name><b>{playerName(messages, { name: injury.playerName })}</b>
-        <small>{[injury.team === "home" ? home : away, injury.type, injury.reason].filter(Boolean).join(" · ")}</small></span>
-      <Pill $accent={statusAccent[injury.status]}>{messages.text(`details.injury.${injury.status}`)}</Pill>
-    </InjuryRow></li>;
-  };
-  return <SectionCard section="injuries" icon={<InjuryIcon />} title={messages.text("details.section.injuries")}
-    meta={total ? messages.plural("details.absenceCount", total) : preview ? messages.text("details.summary.noAbsences") : null}
-    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
-    <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
-    {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
-      <PanelBar>
-        {!embedded && <TeamChoice />}
-        <ChoiceGroup label={messages.text("details.status")} value={status ?? "all"} onChange={(value: string) => update((current) => ({ ...current, tab: value === "all" ? null : value, page: 1 }), "replace")}
-          options={[{ value: "all", label: messages.text("details.allStatuses") },
-            ...(["out", "doubtful", "unknown"] as const).map((value) => ({ value, label: messages.text(`details.injury.${value}`) }))]} />
-      </PanelBar>
-      {paged.items.length ? <RowList>{paged.items.map(row)}</RowList> : <Note>{messages.text(lookup.allInjuries.length ? "details.noFilteredInjuries" : "details.injuriesNone")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
-      <Note>{messages.text("details.injuryBasis")}</Note>
-    </div>}
-  </SectionCard>;
-});
+function TeamAbsences({ injuries, side }: { injuries: readonly Injury[]; side: "home" | "away" }) {
+  const { messages, update } = useDetails();
+  const entries = injuries.filter(injury => injury.team === side);
+  return <Availability data-team-absences={side}>
+    <Strong>{messages.text("details.section.injuries")}</Strong>
+    {entries.length ? <RowList>{entries.map(injury => {
+      const key = playerKey(side, injury.playerId);
+      const suspended = /suspend|suspension/iu.test(`${injury.type ?? ""} ${injury.reason ?? ""}`);
+      return <li key={`${key}-${injury.type ?? ""}-${injury.reason ?? ""}`}><InjuryRow type="button" data-item-key={key}
+        data-absence-kind={suspended ? "suspension" : "injury"}
+        onClick={() => update(current => ({ ...current, item: key }))}>
+        {suspended ? <Icon><circle cx="12" cy="12" r="8" /><path d="m6 6 12 12" /></Icon> : <InjuryIcon />}
+        <span data-name><b>{playerName(messages, { name: injury.playerName })}</b>
+          <small>{injury.reason ?? injury.type}</small></span>
+        <Pill $accent={statusAccent[injury.status]}>{messages.text(`details.injury.${injury.status}`)}</Pill>
+      </InjuryRow></li>;
+    })}</RowList> : <Note>{messages.text("details.injuriesNone")}</Note>}
+  </Availability>;
+}

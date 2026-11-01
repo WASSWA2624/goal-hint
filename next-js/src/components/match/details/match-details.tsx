@@ -23,7 +23,7 @@ import { MarketsCard } from "./markets-card";
 import { AnalysisDrawer } from "./analysis-drawer";
 import { Verdict } from "./verdict";
 import { LiveMatchPanel } from "../live-match-panel";
-import { InjuriesSection, LineupsSection, PlayersSection } from "./squad-sections";
+import { LineupsSection, PlayersSection } from "./squad-sections";
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
 import { DisclosureProvider } from "./section-card";
 import { useMatchView, useOpenByDefault } from "./use-match-view";
@@ -119,7 +119,7 @@ const Grid = styled.div`
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   min-inline-size: 0;
-  ${(["markets", "analysis", "stats", "lineups", "injuries", "form", "h2h", "players", "news", "context", "referee", "history"] as const)
+  ${(["markets", "analysis", "stats", "lineups", "form", "h2h", "players", "news", "context", "referee", "history"] as const)
     .map((section, index) => `> [data-section="${section}"] { order: ${index}; }`).join("\n")}
   ${media.belowDesktop} { margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter}); }
   ${desktop} {
@@ -236,7 +236,6 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
         <SectionView section="lineups" {...scoped}><LineupsSection /></SectionView>
         <SectionView section="players" {...scoped}><PlayersSection /></SectionView>
         <SectionView section="news" {...scoped}><NewsSection /></SectionView>
-        <SectionView section="injuries" {...scoped}><InjuriesSection /></SectionView>
         <SectionView section="context" {...scoped}><ContextSection /></SectionView>
         <SectionView section="referee" {...scoped}><RefereeSection /></SectionView>
         <SectionView section="history" {...scoped}><HistorySection /></SectionView>

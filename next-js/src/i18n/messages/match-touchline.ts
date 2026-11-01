@@ -6,6 +6,7 @@ export const matchTouchlineMessages = {
   "touchline.tab.h2h": "Head-to-head",
   "touchline.tab.standings": "Standings",
   "touchline.tab.lineups": "Lineups",
+  "touchline.lineupsAvailability": "Lineups & availability",
   "touchline.tab.markets": "Other markets",
   "touchline.tab.events": "Match events",
   "touchline.tab.venue": "Venue & officials",

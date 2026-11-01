@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { useRouter, useSearchParams } from "next/navigation";
 import type { InsightSections, InsightsPreview } from "@/domain/match-insights";
 import { previewHoldsSection } from "@/domain/match-insight-presentation";
-import { parseMatchView, serializeMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
+import { parseMatchDetailsView, serializeMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
 import { useDetailDispatch, useDetailSelector } from "@/state/detail-hooks";
 import { detailApi } from "@/state/detail-api";
 import { media } from "@/styles/theme";
@@ -20,7 +20,7 @@ export type ViewUpdate = (change: (current: MatchView) => MatchView, mode?: View
  */
 export function useMatchView() {
   const parameters = useSearchParams();
-  const view = useMemo(() => parseMatchView(parameters), [parameters]);
+  const view = useMemo(() => parseMatchDetailsView(parameters), [parameters]);
   const go = useCallback((next: MatchView, mode: ViewNavigation = "push") => {
     const query = serializeMatchView(next, new URLSearchParams(window.location.search)).toString();
     const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
@@ -29,7 +29,7 @@ export function useMatchView() {
     else window.history.replaceState(null, "", url);
   }, []);
   const update = useCallback<ViewUpdate>((change, mode = "push") =>
-    go(change(parseMatchView(new URLSearchParams(window.location.search))), mode), [go]);
+    go(change(parseMatchDetailsView(new URLSearchParams(window.location.search))), mode), [go]);
   return { view, go, update };
 }
 
