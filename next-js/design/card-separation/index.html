@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-comparison="proposed" data-width="375" data-context="all">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Goal Hint · Card separation designs</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="theme-tokens.css">
+  <link rel="stylesheet" href="review.css">
+  <script src="review.js" defer></script>
+</head>
+<body>
+  <header class="review-header">
+    <a class="wordmark" href="./" aria-label="Goal Hint card design review"><span class="brand-symbol" aria-hidden="true">G<span>H</span></span> GOAL HINT <span class="review-tag">DESIGN REVIEW</span></a>
+    <span class="preview-notice">Preview only · Sample data</span>
+  </header>
+  <main>
+    <div class="introduction">
+      <span class="eyebrow">SURFACES / SPACING / SUBTLE CORNERS</span>
+      <h1>A little more breathing room.</h1>
+      <p>Ten ways to separate slip and match cards, with the compact layout you already know. Scroll to compare every option across Best slips, Matches, and Slip Builder.</p>
+      <div class="review-notes"><span><i aria-hidden="true"></i> Start with <a href="#design-01">01 · Porcelain separation</a></span><span>Mobile spacing changes only</span><span>Production screens unchanged</span></div>
+    </div>
+    <div class="review-controls" aria-label="Preview controls">
+      <div class="control-group"><span id="theme-label">Theme</span><div class="segmented" role="group" aria-labelledby="theme-label"><button type="button" data-theme-choice="light" aria-pressed="true">Light</button><button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button></div></div>
+      <div class="control-group"><span id="comparison-label">Compare</span><div class="segmented" role="group" aria-labelledby="comparison-label"><button type="button" data-comparison-choice="proposed" aria-pressed="true">Proposed</button><button type="button" data-comparison-choice="current" aria-pressed="false">Current</button></div></div>
+      <label class="control-group">Preview size<select id="preview-width"><option value="320">Mobile · 320px</option><option value="375" selected>Mobile · 375px</option><option value="430">Mobile · 430px</option><option value="desktop">Desktop · full width</option></select></label>
+      <label class="control-group">Screens<select id="preview-context"><option value="all">All three screens</option><option value="best">Best slips</option><option value="matches">Matches</option><option value="builder">Slip Builder</option></select></label>
+      <a class="all-options" href="./" hidden>View all 10 options ↗</a>
+    </div>
+    <nav class="option-nav" aria-label="Jump to a design"></nav>
+    <div id="comparison-status" class="comparison-status" role="status" aria-live="polite">Showing proposed mobile designs. The same fixtures appear in every option.</div>
+    <div id="gallery"></div>
+    <noscript><p class="no-script">Enable JavaScript to view the ten card design options.</p></noscript>
+    <footer class="review-footer">Choose a design number, or combine the corners, spacing, and surface treatment you prefer. These previews do not place bets or change saved slips.</footer>
+  </main>
+</body>
+</html>
