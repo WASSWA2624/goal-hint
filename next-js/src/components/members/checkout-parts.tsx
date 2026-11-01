@@ -6,7 +6,7 @@ import { formatUgx } from "@/domain/subscription-plans";
 import { supportContactsOf, type SupportContactSettings } from "@/domain/support-contacts";
 import { telHref, waHref } from "@/domain/phone";
 import { WizardReview } from "./payment-wizard";
-import { focusTreatment } from "@/components/ui/controls";
+import { Button, TextInput, focusTreatment } from "@/components/ui/controls";
 
 export const CheckoutPanel = styled.section`
   display: grid; gap: 12px; inline-size: 100%; max-inline-size: 40rem; min-inline-size: 0;
@@ -39,7 +39,18 @@ export const CheckoutFundingFields = styled.div`
   > * { min-inline-size: 0; }
   > :only-child { grid-column: 1 / -1; }
   label { font-size: 13px; line-height: 18px; }
+  input { padding-inline-end: 56px; }
 `;
+const MaxButton = styled(Button)`
+  && { min-inline-size: 40px; padding: 0 8px; font-size: 12px; line-height: 18px; border-radius: ${({ theme }) => theme.radius.none}; }
+`;
+export function CheckoutFundingInput({ label, value, maximum, maxLabel, disabled = false, onValueChange }: {
+  label: string; value: string; maximum: number; maxLabel: string; disabled?: boolean; onValueChange: (value: string) => void;
+}) {
+  return <TextInput label={label} type="number" inputMode="numeric" min={0} max={maximum} step={1} value={value} disabled={disabled}
+    onChange={event => onValueChange(event.target.value)} trailing={<MaxButton type="button" variant="quiet" aria-label={maxLabel}
+      disabled={disabled || maximum === 0 || value !== "" && Number(value) === maximum} onClick={() => onValueChange(String(maximum))}>Max</MaxButton>} />;
+}
 export const CheckoutPayee = styled.div`
   display: grid; gap: 2px; padding-block-start: 8px; margin-block-start: 6px;
   border-block-start: 1px solid ${({ theme }) => theme.color.border};

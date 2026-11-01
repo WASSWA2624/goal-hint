@@ -17,3 +17,5 @@ Completed the customer layout refinements: inline progress labels, one-line pay 
 Verified with restricted real MySQL accounting/migration/admin/retention scenarios, responsive browser acceptance, focused unit/HTTP checks, schema checks, lint, TypeScript and production builds. Existing unrelated unit-suite failures are recorded in `docs/payment-checkout.md`.
 
 Funding fields immediately cap wallet contributions at the available balance and package price, and referral days at the available days (up to 365). The same caps apply to restored drafts, package changes and refreshed balances; changes clear purchase confirmation. Server-side balance validation remains authoritative.
+
+Each funding field has a compact inline Max button that fills its permitted maximum using the same capped input update. It is disabled when no balance is available or the field is already at its maximum. A contribution covering the complete package selects wallet-only checkout; spending still requires explicit confirmation.

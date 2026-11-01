@@ -13,7 +13,9 @@ export function capCheckoutFunding(draft: CheckoutDraft, balances: Pick<Checkout
   const cap = (value: string, maximum: number) => value.trim() === "" ? "" : String(Math.min(maximum, Math.max(0, Math.floor(Number(value) || 0))));
   const walletUgx = cap(draft.walletUgx, Math.min(balances.availableWalletUgx, price));
   const referralDays = cap(draft.referralDays, Math.min(365, balances.availableReferralDays));
-  return walletUgx === draft.walletUgx && referralDays === draft.referralDays ? draft : { ...draft, walletUgx, referralDays, accepted: false };
+  const method = price > 0 && Number(walletUgx) === price && (draft.method === "mtn" || draft.method === "airtel") ? "wallet" : draft.method;
+  return walletUgx === draft.walletUgx && referralDays === draft.referralDays && method === draft.method
+    ? draft : { ...draft, walletUgx, referralDays, method, accepted: false };
 }
 type Stored = { draft: CheckoutDraft; image: Blob | null };
 const memory = new Map<string, Stored>();

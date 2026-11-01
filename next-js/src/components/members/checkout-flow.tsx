@@ -19,7 +19,7 @@ import { PaymentWizard, WizardActions, WizardNotice, WizardPlans } from "./payme
 import { Plan, PlanName, PlanPrice, Preview } from "./subscribe-styles";
 import { preparePaymentImage } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
-import { CheckoutActions, CheckoutChoices, CheckoutEvidenceField, CheckoutFundingFields, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutScreenshot, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
+import { CheckoutActions, CheckoutChoices, CheckoutEvidenceField, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutScreenshot, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { capCheckoutFunding, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
 
@@ -52,6 +52,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null), screenshotInput = useRef<HTMLInputElement>(null);
   const [pasteHint, setPasteHint] = useState("");
   const key = `${account.id}:${topUp ? "topup" : "plan"}`;
+  const selectedPlanPrice = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
+  const walletMaximum = Math.min(view.availableWalletUgx, selectedPlanPrice);
   const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings, plans.find(p => p.id === draft.planId)?.priceUgx ?? Infinity);
   useEffect(() => {
     let alive = true;
@@ -262,11 +264,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           <span data-method-text>{methodNames[method]}{method === "wallet" && <small>{formatUgx(view.availableWalletUgx)}</small>}{method === "referral" && <small>{view.availableReferralDays} days available</small>}</span>
         </label>)}</CheckoutChoices>
         {!topUp && draft.method && <CheckoutFundingFields>
-          {["mtn", "airtel"].includes(draft.method) && <TextInput label="Wallet to use (UGX)" type="number" inputMode="numeric" min={0}
-            max={Math.min(view.availableWalletUgx, plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0)} step={1}
-            value={draft.walletUgx} onChange={e => update({ walletUgx: e.target.value })} />}
-          <TextInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} type="number" inputMode="numeric" min={0}
-            max={Math.min(365, view.availableReferralDays)} step={1} value={draft.referralDays} onChange={e => update({ referralDays: e.target.value })} />
+          {["mtn", "airtel"].includes(draft.method) && <CheckoutFundingInput label="Wallet to use (UGX)" maxLabel="Use max wallet amount" disabled={busy}
+            maximum={walletMaximum} value={draft.walletUgx} onValueChange={walletUgx => update({ walletUgx })} />}
+          <CheckoutFundingInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} maxLabel="Use max referral days" disabled={busy}
+            maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays })} />
         </CheckoutFundingFields>}
         {draft.method && <PaymentDestination selection={selection()} />}
         <WizardActions><Button variant="secondary" onClick={() => update({ step: 0 })}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>

@@ -26,10 +26,11 @@ test("manual evidence remains valid after failed extraction and original text is
 
 test("funding inputs cap edits and restored choices at spendable balances and package cost", () => {
   const planId = randomUUID(), plans = [{ id: planId, priceUgx: 5000 }];
-  const draft = { purpose: "plan", planId, walletUgx: "99999999999999999999", referralDays: "99", accepted: true };
+  const draft = { purpose: "plan", planId, method: "mtn", walletUgx: "99999999999999999999", referralDays: "99", accepted: true };
   const available = { availableWalletUgx: 3000, availableReferralDays: 3 };
   assert.deepEqual(capCheckoutFunding(draft, available, plans), { ...draft, walletUgx: "3000", referralDays: "3", accepted: false });
   assert.equal(capCheckoutFunding(draft, { ...available, availableWalletUgx: 10000 }, plans).walletUgx, "5000");
+  assert.equal(capCheckoutFunding(draft, { ...available, availableWalletUgx: 10000 }, plans).method, "wallet", "Fully funded purchases omit external payment proof.");
   assert.equal(capCheckoutFunding({ ...draft, referralDays: "999" }, { ...available, availableReferralDays: 500 }, plans).referralDays, "365");
   const lowered = capCheckoutFunding({ ...draft, walletUgx: "3000", referralDays: "3" }, { availableWalletUgx: 0, availableReferralDays: 0 }, plans);
   assert.equal(lowered.walletUgx, "0"); assert.equal(lowered.referralDays, "0"); assert.equal(lowered.accepted, false);
