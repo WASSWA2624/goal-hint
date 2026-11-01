@@ -42,14 +42,14 @@ export const FilterDrawer = styled.div`
   min-inline-size: 0;
   ${media.belowDesktop} {
     background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
   }
 `;
 
 export const FilterToggle = styled.button`
   display: flex; align-items: center; gap: 8px; inline-size: 100%; min-block-size: 48px; padding: 0 14px;
-  border: 0; color: ${({ theme }) => theme.color.link}; background: none;
+  border: 0; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
   font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: start; cursor: pointer;
   > svg { flex: none; font-size: 1.125rem; }
   > span { margin-inline-start: 4px; }
@@ -64,8 +64,8 @@ export const FilterBody = styled.div<{ $open: boolean }>`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 8px; min-inline-size: 0;
   > * { min-inline-size: 0; }
   > :nth-child(n + 3) { grid-column: 1 / -1; }
-  ${({ $open, theme }) => css`${media.belowDesktop} {
-    padding: 12px 0 14px; border-block-start: ${theme.border.width} solid ${theme.color.border};
+  ${({ $open }) => css`${media.belowDesktop} {
+    padding: 12px 0 14px; border-block-start: 0;
     ${!$open && css`display: none;`}
   }`}
 `;
@@ -99,7 +99,7 @@ export const AuditSummary = styled.div`
 
 export const AuditFeed = styled(RecordListScroll)`
   scroll-margin-block-start: calc(var(--app-header-height, 4rem) + 16px);
-  > * + * { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  > * + * { border-block-start: 0; }
   &:focus { outline: none; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
 `;
@@ -126,7 +126,7 @@ export const AuditEvent = styled.details`
   ${media.desktop} {
     > summary { grid-template-columns: 28px minmax(0, 1fr) auto; min-block-size: 54px; gap: 0 8px; padding: 8px 10px; }
     > summary > svg:last-child { display: none; }
-    > summary[aria-current="true"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
+    > summary[aria-current="true"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
     > [data-audit-inline-details] { display: none; }
   }
 `;
@@ -181,7 +181,7 @@ export const EventLink = styled(ButtonLink)`
 export const AuditPager = styled.nav`
   inline-size: 100%;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; min-inline-size: 0; padding: 0;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > button { gap: 2px; padding-inline: 2px; font-size: 0.75rem; }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; white-space: nowrap; }
   ${media.desktop} { padding-block: 4px; }

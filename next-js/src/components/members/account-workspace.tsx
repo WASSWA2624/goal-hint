@@ -23,7 +23,7 @@ const Sidebar = styled.aside`
     display: flex; flex-direction: column; gap: 6px; align-self: start; position: sticky;
     inset-block-start: var(--app-header-height, 3rem); min-block-size: calc(100dvh - var(--app-header-height, 3rem));
     max-block-size: calc(100dvh - var(--app-header-height, 3rem)); overflow-y: auto;
-    padding: 8px 10px; background: ${({ theme }) => theme.color.surface}; border-inline-end: 1px solid ${({ theme }) => theme.color.border};
+    padding: 8px 10px; background: ${({ theme }) => theme.color.surface}; border-inline-end: 0;
   }
   > h2 { display: flex; align-items: center; min-block-size: 32px; margin: 0; padding-inline: 10px;
     color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption};
@@ -34,7 +34,7 @@ const Links = styled.ul`
 `;
 const SidebarFoot = styled.div`
   display: grid; gap: 8px; margin-block-start: auto; padding: 16px 10px 0;
-  border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; overflow-wrap: anywhere; }
 `;
 const LogOut = styled(MemberSignOut)`
@@ -43,7 +43,7 @@ const LogOut = styled(MemberSignOut)`
 `;
 const SectionMenu = styled.details`
   position: relative; z-index: 15; background: ${({ theme }) => theme.color.surface};
-  border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   ${media.desktop} { display: none; }
   > summary { display: flex; align-items: center; gap: 10px; min-block-size: 48px; padding-inline: 16px; list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
@@ -51,7 +51,7 @@ const SectionMenu = styled.details`
   }
   nav { position: absolute; inset: 100% 0 auto; padding: 10px; background: ${({ theme }) => theme.color.surface};
     max-block-size: calc(100dvh - var(--app-header-height, 3rem) - 48px - var(--app-mobile-tab-height, 3rem) - 16px); overflow-y: auto;
-    border-block-end: 1px solid ${({ theme }) => theme.color.border}; box-shadow: ${({ theme }) => theme.shadow.popover}; }
+    border-block-end: 0; box-shadow: ${({ theme }) => theme.shadow.popover}; }
 `;
 const Content = styled.article`
   min-inline-size: 0; padding: ${({ theme }) => `${theme.space.md} ${theme.space.md} ${theme.space.lg}`}; display: grid; align-content: start; gap: ${({ theme }) => theme.space.md}; overflow-wrap: anywhere;

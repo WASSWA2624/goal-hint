@@ -6,6 +6,7 @@ import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { createMessages } from "@/i18n/messages";
 import { Icon } from "./icons";
+import { filledAction, filledField } from "./filled-surfaces";
 
 export type ButtonVariant = "primary" | "secondary" | "quiet";
 
@@ -54,7 +55,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   max-inline-size: 100%;
   padding-block: 6px;
   padding-inline: 12px;
-  border: ${({ theme }) => theme.border.width} solid;
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: ${({ theme }) => theme.typography.scale.body};
@@ -79,24 +80,17 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
     switch ($variant) {
       case "secondary":
         return css`
-          color: ${theme.color.text};
-          background: ${theme.color.surface};
-          border-color: ${theme.color.buttonBorder};
-
-          ${media.hover} {
-            &:hover { background: ${theme.color.surfaceMuted}; }
-          }
+          ${filledAction}
         `;
       case "quiet":
         return css`
           color: ${theme.color.link};
-          background: transparent;
-          border-color: transparent;
+          background: ${theme.color.surfaceMuted};
 
           ${media.hover} {
             &:hover {
               color: ${theme.color.brandHover};
-              background: ${theme.color.surfaceMuted};
+              background: ${theme.color.brandSoft};
             }
           }
         `;
@@ -104,12 +98,10 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
         return css`
           color: ${theme.color.onAction};
           background: ${theme.gradient.action};
-          border-color: ${theme.gradient.action};
 
           ${media.hover} {
             &:hover {
               background: ${theme.gradient.actionHover};
-              border-color: ${theme.gradient.actionHover};
             }
           }
         `;
@@ -132,7 +124,6 @@ const ButtonControl = styled.button<{ $variant: ButtonVariant; $large?: boolean 
   &:disabled {
     color: ${({ theme }) => theme.color.disabledText};
     background: ${({ theme }) => theme.color.disabledSurface};
-    border-color: ${({ theme }) => theme.color.border};
     cursor: not-allowed;
   }
 `;
@@ -187,10 +178,13 @@ const inputTreatment = css<{ $invalid: boolean }>`
   padding-block: 6px;
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid
-    ${({ theme, $invalid }) =>
-      $invalid ? theme.color.outcome.incorrect.border : theme.color.controlBorder};
+  ${filledField}
+  ${({ theme, $invalid }) => $invalid && css`
+    &, &:hover, &:focus-within {
+      color: ${theme.color.outcome.incorrect.text};
+      background: ${theme.color.outcome.incorrect.background};
+    }
+  `}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   line-height: 1.25;
@@ -367,7 +361,7 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
 const Segments = styled.fieldset`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
+  gap: 4px;
   min-inline-size: 0;
   margin: 0;
   padding: 0;
@@ -384,9 +378,9 @@ const Segments = styled.fieldset`
     box-sizing: border-box;
     min-block-size: 3rem;
     padding: 8px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: 0;
     color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.brandSoft};
     font-size: ${({ theme }) => theme.typography.scale.body};
     cursor: pointer;
   }

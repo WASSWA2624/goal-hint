@@ -15,7 +15,7 @@ const compactControl = css`
   max-inline-size: 100%;
   padding: 4px 9px;
   color: ${({ theme }) => theme.color.text};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.75rem;
@@ -119,7 +119,7 @@ export const DateControls = styled.div`
   min-inline-size: 0;
   margin-inline-start: 8px;
   padding-inline-start: 14px;
-  border-inline-start: 1px solid ${({ theme }) => theme.color.border};
+  border-inline-start: 0;
   @media (max-width: 79.99rem) { margin-inline-start: 2px; padding-inline-start: 8px; gap: 6px; }
   ${media.desktop} {
     @media (max-width: 79.99rem) { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
@@ -133,8 +133,8 @@ export const DateSelect = styled(SelectMenu)`
     ${filterButtonColors}
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     box-shadow: none;
-    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
-    ${media.desktop} { font-size: .8125rem; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
+    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
+    ${media.desktop} { font-size: .8125rem;  }
   }
   ${media.belowDesktop} {
     flex: 1; inline-size: 100%;
@@ -154,7 +154,7 @@ export const CustomRangeButton = styled(FilterButton)`
   > svg { color: ${({ theme }) => theme.color.brand}; }
   > svg { flex: none; font-size: 0.875rem; }
   @media (pointer: coarse) { min-block-size: 44px; }
-  ${media.desktop} { font-size: .8125rem; font-weight: 600; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
+  ${media.desktop} { font-size: .8125rem; font-weight: 600;  }
   ${media.belowDesktop} { min-block-size: 32px; padding: 2px 6px; }
 `;
 
@@ -235,11 +235,11 @@ export const ResetButton = styled(FilterButton)`
   gap: 5px;
   min-block-size: 34px;
   padding: 4px 10px;
-  border-color: ${({ theme }) => theme.color.buttonBorder};
+
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surface};
   > svg { flex: none; font-size: 0.875rem; }
-  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; } }
+  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};  } }
   @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; }
   ${media.belowDesktop} { min-block-size: 32px; padding: 2px 6px; }
@@ -318,7 +318,7 @@ export const DateFields = styled.div`
     min-block-size: 40px;
     padding: 7px 9px;
     font-size: 0.875rem;
-    &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+    &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   }
   ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr); input { font-size: 1rem; } }
 `;

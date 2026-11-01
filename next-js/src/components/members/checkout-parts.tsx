@@ -15,19 +15,19 @@ export function CheckoutDialog(props: CriteriaDialogProps) {
 
 export const CheckoutPanel = styled.section`
   display: grid; gap: 12px; inline-size: 100%; max-inline-size: 40rem; min-inline-size: 0;
-  margin-inline: auto; padding: 16px; border: 1px solid ${({ theme }) => theme.color.border};
+  margin-inline: auto; padding: 16px; border: 0;
   background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.none};
   h2, h3, p { margin: 0; } form, fieldset { min-inline-size: 0; }
-  form { display: grid; gap: 12px; } fieldset { margin: 0; padding: 10px; border: 1px solid ${({ theme }) => theme.color.border}; }
+  form { display: grid; gap: 12px; } fieldset { margin: 0; padding: 10px; border: 0; }
   label { overflow-wrap: anywhere; } input, textarea, select { max-inline-size: 100%; }
   textarea { inline-size: 100%; resize: vertical; }
 `;
 export const CheckoutChoices = styled.fieldset`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
   > label, > a { position: relative; display: flex; align-items: center; justify-content: start; gap: 6px; padding: 8px; min-block-size: 44px; min-inline-size: 0;
-    border: 1px solid ${({ theme }) => theme.color.border}; cursor: pointer; }
+    border: 0; cursor: pointer; }
   > a { text-align: start; font-weight: inherit; border-radius: ${({ theme }) => theme.radius.none}; }
-  > label:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
+  > label:has(input:checked) {  background: ${({ theme }) => theme.color.brandSoft}; }
   > label:has(input:focus-visible) { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   > label:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
   > :last-child:nth-child(2) { grid-column: 1 / -1; }
@@ -60,7 +60,7 @@ export function CheckoutFundingInput({ label, value, maximum, maxLabel, disabled
 }
 export const CheckoutPayee = styled.div`
   display: grid; gap: 2px; padding-block-start: 8px; margin-block-start: 6px;
-  border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > div { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
   strong { font-size: 20px; line-height: 28px; font-variant-numeric: tabular-nums; }
   small { color: ${({ theme }) => theme.color.mutedText}; overflow-wrap: anywhere; font-size: 13px; line-height: 18px; }
@@ -81,14 +81,14 @@ export const CheckoutEvidenceField = styled.div`
 export const CheckoutMessage = styled.textarea`
   display: block; box-sizing: border-box; inline-size: 100%; min-inline-size: 0; min-block-size: 88px;
   padding: 10px; resize: vertical; font: inherit; font-size: 15px; line-height: 21px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  border: 0; border-radius: ${({ theme }) => theme.radius.control};
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.field};
   ${focusTreatment}
 `;
 export const CheckoutScreenshot = styled.div`
   display: grid; gap: 8px; min-inline-size: 0; padding: 10px;
-  border: 1px dashed ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
-  background: ${({ theme }) => theme.color.surface};
+  border: 0; border-radius: ${({ theme }) => theme.radius.control};
+  background: ${({ theme }) => theme.color.surfaceMuted};
   > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button { min-block-size: 38px; padding: 6px 10px; font-size: 13px; }
   svg { inline-size: 18px; block-size: 18px; }

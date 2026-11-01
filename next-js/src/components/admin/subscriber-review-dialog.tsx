@@ -48,7 +48,7 @@ export function SubscriberReviewDialog({ open, title, onClose, children, footer,
 const Dialog = styled.dialog`
   position: fixed; inset: 0; inline-size: min(40rem, calc(100vw - 24px)); max-inline-size: calc(100vw - 24px);
   max-block-size: calc(100dvh - 24px); min-inline-size: 0; margin: auto; padding: 0; overflow: hidden;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.overlay};
+  border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit;
   &[open] { display: flex; flex-direction: column; }
   &::backdrop { background: ${({ theme }) => theme.color.scrim}; }
@@ -56,7 +56,7 @@ const Dialog = styled.dialog`
 `;
 const Header = styled.header`
   display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   h2 { margin: 0; min-inline-size: 0; font-size: 1rem; overflow-wrap: anywhere; }
 `;
 const CloseButton = styled(ActionButton)`
@@ -70,7 +70,7 @@ const Body = styled.div`
 `;
 const Footer = styled.footer`
   display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 14px;
-  border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > button { min-block-size: 36px; }
   @media (pointer: coarse) { > button { min-block-size: 44px; } }
 `;

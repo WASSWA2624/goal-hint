@@ -95,7 +95,7 @@ const Banner = styled.section`
   padding: 14px 16px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   ${media.desktop} {
     inset-inline: auto 24px;
@@ -123,6 +123,6 @@ const ChoicePanel = styled.div`
   gap: 8px;
   padding: 14px 16px;
   background: ${({ theme }) => theme.color.surfaceMuted};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   ${Choices} { max-inline-size: 24rem; }
 `;

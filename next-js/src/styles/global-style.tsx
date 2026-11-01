@@ -121,8 +121,38 @@ export const GlobalStyle = createGlobalStyle`
     font: inherit;
   }
 
+  input[type="checkbox"], input[type="radio"] {
+    appearance: none;
+    display: inline-block;
+    flex: none;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    padding: 0;
+    border: 0;
+    background-color: ${({ theme }) => theme.color.controlBorder};
+    background-position: center;
+    background-repeat: no-repeat;
+    vertical-align: middle;
+    cursor: pointer;
+  }
   input[type="checkbox"] { border-radius: ${({ theme }) => theme.radius.small}; }
   input[type="radio"] { border-radius: ${({ theme }) => theme.radius.circle}; }
+  input:is([type="checkbox"], [type="radio"]):checked,
+  input[type="checkbox"]:indeterminate { background-color: ${({ theme }) => theme.gradient.action}; }
+  input[type="checkbox"]:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m4 10 4 4 8-8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+  input[type="checkbox"]:indeterminate {
+    background-image: linear-gradient(white, white);
+    background-size: 60% 2px;
+  }
+  input[type="radio"]:checked {
+    background-image: radial-gradient(circle, ${({ theme }) => theme.color.onAction} 35%, transparent 40%);
+  }
+  input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.5; cursor: not-allowed; }
+  @media (forced-colors: active) {
+    input[type="checkbox"], input[type="radio"] { appearance: auto; }
+  }
   :where(fieldset) { border-radius: ${({ theme }) => theme.radius.surface}; }
   :where(dialog) { border-radius: ${({ theme }) => theme.radius.overlay}; }
 

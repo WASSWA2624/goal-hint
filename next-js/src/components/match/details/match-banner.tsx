@@ -61,7 +61,7 @@ const Box = styled.section<{ $touchline: boolean }>`
     gap: 8px 28px;
     margin-inline: 0;
     padding: 15px 24px 18px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
     min-block-size: ${({ $touchline }) => $touchline ? "128px" : "auto"};
   }

@@ -54,7 +54,7 @@ const BarButton = styled.button`
   min-block-size: 2.5rem;
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
@@ -62,7 +62,7 @@ const BarButton = styled.button`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
   > svg { font-size: 1.125rem; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   ${focusRing}
 `;
 const Weekdays = styled.div`
@@ -96,7 +96,7 @@ const DayButton = styled.button`
   &[aria-current="date"] {
     color: ${({ theme }) => theme.color.accent.teal.text};
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    box-shadow: inset 0 0 0 1px ${({ theme }) => theme.color.brand};
+    background: ${({ theme }) => theme.color.brandSoft};
   }
   &[data-in-range] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
   &[data-endpoint] {
@@ -119,13 +119,13 @@ const Footer = styled.div`
   flex: none;
   gap: 8px;
   padding: 8px 14px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > button {
     min-block-size: 2.75rem;
     padding-inline: 12px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     font: inherit;
     font-size: 0.8125rem;
@@ -133,7 +133,7 @@ const Footer = styled.div`
     cursor: pointer;
     ${focusRing}
   }
-  > button:last-child { flex: 1; color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; border-color: ${({ theme }) => theme.gradient.action}; }
+  > button:last-child { flex: 1; color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action};  }
 `;
 
 /**

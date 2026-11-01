@@ -1,5 +1,6 @@
 "use client";
 
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled from "styled-components";
 import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import type { LiveMatchSnapshot, LiveMatchStatistics, LiveMatchEvents } from "@/domain/live-match";
@@ -20,11 +21,12 @@ const Frame = styled(Surface)<{ $embedded: boolean }>`
   ${({ $embedded, theme }) => $embedded ? `&& { padding: 0; border: 0; border-radius: ${theme.radius.none}; }` : ""}
 `;
 const Stats = styled.table`
+  ${filledTableRows}
   inline-size: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
-  th, td { padding: 8px 4px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+  th, td { padding: 8px 4px; border-block-end: 0; }
   th { text-align: start; }
   td, thead th:not(:first-child) { text-align: end; }
   th:first-child { inline-size: 44%; }
@@ -47,7 +49,7 @@ const EventToolbar = styled.div`
   [data-current-live]::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: ${({ theme }) => theme.radius.circle}; background: currentColor; }
 `;
 const EventSource = styled.details`
-  margin-block-start: 12px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  margin-block-start: 12px; border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem;
   > summary { padding-block: 12px; cursor: pointer; }
   > div { display: grid; gap: 6px; padding-block-end: 8px; }

@@ -7,7 +7,7 @@ import { media } from "@/styles/theme";
 export const codePresentation = css`
   [data-code-form-stack] { gap: 18px; }
   [data-grant-section] { display: grid; min-inline-size: 0; gap: 14px; }
-  [data-grant-payment] { border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 8px; }
+  [data-grant-payment] { border-block-start: 0; padding-block-start: 8px; }
   [data-code-facts] { background: ${({ theme }) => theme.color.surface}; }
   ${media.desktop} {
     [data-grant-section="account"] { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }

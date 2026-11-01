@@ -5,7 +5,7 @@ import { media } from "@/styles/theme";
 export const compactHeaderSurface = css`
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
-  border-block-end: 1px solid ${({ theme }) => theme.header.border};
+  border-block-end: 0;
 `;
 
 /** Keep enlarged controls readable by allowing the header to grow onto another row. */
@@ -27,7 +27,7 @@ export const compactHeaderControl = css`
   min-inline-size: 2.75rem;
   min-block-size: 1.75rem;
   padding: 0 6px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.75rem;

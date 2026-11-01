@@ -90,7 +90,7 @@ const Card = styled.article`
     container: match-card / inline-size;
     font-family: ${({ theme }) => theme.typography.family};
     /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
     [data-mobile-only] { display: inline; }
     [data-desktop-only] { display: none; }
@@ -223,7 +223,7 @@ const FlagImage = styled.img`
   margin-inline-end: 4px;
   object-fit: cover;
   border-radius: ${({ theme }) => theme.radius.small};
-  box-shadow: 0 0 0 0.5px ${({ theme }) => theme.color.border};
+  box-shadow: none;
   ${tile} { inline-size: 0.9375rem; block-size: 0.625rem; margin-inline-end: 3px; border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
 `;
 const FlagFallback = styled.span`
@@ -339,7 +339,7 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
     justify-self: start; padding: 2px 8px;
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
-    border-inline-start: ${({ theme }) => theme.border.accentWidth} solid ${({ theme, $family }) => theme.color.market[$family].solid};
+    border-inline-start: 0;
     font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
 `;
@@ -384,8 +384,8 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
     > [data-pick-value] {
       max-inline-size: 100%; padding: 4px 7px;
       background: ${({ theme }) => theme.color.surface};
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-      border-inline-start: ${({ theme }) => theme.border.accentWidth} solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
+      border: 0;
+      border-inline-start: 0;
     }
   }
 `;

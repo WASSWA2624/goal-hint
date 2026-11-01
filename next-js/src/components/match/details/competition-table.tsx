@@ -1,5 +1,6 @@
 "use client";
 
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import { useId, useState } from "react";
 import styled from "styled-components";
 import type { StandingRow } from "@/domain/competition-view";
@@ -10,13 +11,14 @@ import { Crest, Note, focusRing, useStableDetails } from "./details-ui";
 
 const Frame = styled.div`min-inline-size: 0; overflow-x: auto; overscroll-behavior-inline: contain;`;
 const Table = styled.table<{ $detailed: boolean }>`
+  ${filledTableRows}
   inline-size: 100%; min-inline-size: ${({ $detailed }) => $detailed ? "29rem" : "17.5rem"};
   table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .75rem; font-variant-numeric: tabular-nums;
-  th, td { block-size: 38px; padding: 4px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; text-align: center;
+  th, td { block-size: 38px; padding: 4px; border-block-end: 0; text-align: center;
     white-space: nowrap; background: ${({ theme }) => theme.color.surface}; }
   thead th { block-size: 30px; background: ${({ theme }) => theme.color.surfaceMuted}; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
   [data-rank] { position: sticky; inset-inline-start: 0; z-index: 1; }
-  [data-team-cell] { position: sticky; inset-inline-start: 26px; z-index: 1; text-align: start; border-inline-end: 1px solid ${({ theme }) => theme.color.border}; }
+  [data-team-cell] { position: sticky; inset-inline-start: 26px; z-index: 1; text-align: start; border-inline-end: 0; }
   thead [data-rank], thead [data-team-cell] { z-index: 2; }
   tbody [data-team-cell] { font-weight: 500; }
   tbody tr[data-side="home"] > * { background: ${({ theme }) => theme.color.accent.orange.soft}; }

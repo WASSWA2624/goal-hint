@@ -5,7 +5,7 @@ import { focusRing } from "./details-ui";
 
 export const TouchlineSurface = styled.div`
   min-inline-size: 0;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   background: ${({ theme }) => theme.color.surface};
 `;
@@ -31,7 +31,7 @@ export const TouchlineBody = styled.div`
 export const TouchlineEmpty = styled.div`
   display: grid; justify-items: start; gap: 12px; padding: 28px;
   background: ${({ theme }) => theme.color.surfaceMuted};
-  border: 1px dashed ${({ theme }) => theme.color.border};
+  border: 0;
   color: ${({ theme }) => theme.color.mutedText}; font-size: .875rem;
   > svg { inline-size: 30px; block-size: 30px; color: ${({ theme }) => theme.color.brand}; }
   > p { margin: 0; }

@@ -58,7 +58,7 @@ const SummaryList = styled.ul`
       padding: 2px 6px;
       border-radius: ${({ theme }) => theme.radius.small};
       background: ${({ theme }) => theme.color.brandSoft};
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      border: 0;
       line-height: 1.4;
       &:not(:last-child)::after { content: none; }
     }
@@ -68,7 +68,7 @@ const AppliedSummary = styled.div`
   min-inline-size: 0;
   margin: 0;
   padding-block-start: 6px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   ${media.desktop} { margin: 0; padding: 0; border: 0; }
 `;
 const SummaryLabel = styled.strong`

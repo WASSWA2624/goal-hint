@@ -23,7 +23,8 @@ const Dialog = styled.dialog`
   overflow: hidden;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  box-shadow: ${({ theme }) => theme.shadow.popover};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};
   font: inherit;
 
@@ -32,6 +33,7 @@ const Dialog = styled.dialog`
 
   /* One successful input tree remains usable before hydration and without JavaScript. */
   &[data-enhanced="false"] {
+    box-shadow: none;
     position: static;
     display: block;
     inline-size: auto;
@@ -39,18 +41,19 @@ const Dialog = styled.dialog`
     max-block-size: none;
     margin: 0;
     overflow: visible;
-    border-color: ${({ theme }) => theme.color.border};
+
   }
 `;
 
 const Header = styled.header`
+  background: ${({ theme }) => theme.color.surfaceMuted};
   display: flex;
   flex: none;
   align-items: center;
   gap: 10px;
   min-inline-size: 0;
   padding: 10px 12px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
 
   > h2 { margin: 0; font-size: 1rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-enhanced="false"] > & { padding: 9px 12px; border: 0; }
@@ -83,6 +86,7 @@ const Body = styled.div`
 `;
 
 const Actions = styled.footer`
+  background: ${({ theme }) => theme.color.surfaceMuted};
   display: flex;
   flex: none;
   flex-wrap: nowrap;
@@ -90,7 +94,7 @@ const Actions = styled.footer`
   justify-content: flex-end;
   gap: 8px;
   padding: 10px 12px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
 
   > [data-dialog-reset] { margin-inline-end: auto; flex: none; }
   [data-enhanced="false"] > & { display: none; }

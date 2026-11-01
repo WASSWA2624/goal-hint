@@ -9,7 +9,7 @@ import { pitchCanvas } from "@/domain/football-pitch";
 
 export { TouchlineStandings } from "./competition-panel";
 const Ground = styled.div`
-  padding: 24px; border: 1px solid ${({ theme }) => theme.color.border};
+  padding: 24px; border: 0;
   > svg { display: block; inline-size: min(100%, 360px); aspect-ratio: ${pitchCanvas.length} / ${pitchCanvas.width}; block-size: auto; margin: 0 auto 20px;
     color: ${({ theme }) => theme.color.accent.emerald.solid}; background: ${({ theme }) => theme.color.accent.emerald.soft}; }
   [data-stripe] { fill: ${({ theme }) => theme.color.accent.emerald.soft}; }

@@ -7,7 +7,7 @@ import { media } from "@/styles/theme";
 /** Slip selections use the same approved Team stack geometry as feed cards. */
 export const CleanLedgerRow = styled.div`
   ${teamStackStyles}
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
   background: ${({ theme }) => theme.color.surface};
   text-decoration: none;

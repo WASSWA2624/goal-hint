@@ -23,7 +23,7 @@ fallback, and native appearance metadata all consume the same active exports.
 | Body and heading families, sizes, weights, and line heights | `typography` |
 | Spacing, content rails, gutters, reading width, and control sizes | `space`, `layout`, `control` |
 | Shared corner geometry and desktop card frames | `radius`, `frame` |
-| Borders and keyboard focus outlines | `border` |
+| Zero decorative border widths and visible keyboard focus outlines | `border` |
 | Mobile match borders, corners, and slip body/header separation | `phoneCardFrame` |
 | Hover elevation and overlay depth | `shadow` |
 | Control, disclosure, and surface transitions, including reduced motion | `motion` |
@@ -46,9 +46,16 @@ Keep the approved composition unless a deliberate theme adjustment calls for a
 change. Preserve default token values when replacing an existing literal so
 unrelated layouts retain their established geometry.
 
-The desktop directions use quiet, single-pixel decorative edges and accent rails, with subtle
-surface separation. Editable fields retain thin, visible boundaries and clear
-focus rings. Soft directions use the shared 8px surface corner; crisp directions
+All production components use filled surfaces without decorative borders, accent
+rails, or inset-shadow frames. `border.width` and `border.accentWidth` are zero in
+every theme. Editable fields use `color.field` and `color.fieldHover`; secondary
+actions use `color.brandSoft`. Captions are adjusted toward the palette's text
+color to retain at least 4.5:1 contrast on filled fields. Shared field, action,
+and table treatments live in `components/ui/filled-surfaces.ts`. Keyboard-only
+focus outlines remain visible, including on controls whose inner input is
+transparent. Native checkboxes and radios use solid fills and explicit checked
+marks, with a system appearance fallback in forced-color mode. Soft directions
+use the shared 8px surface corner; crisp directions
 use the smaller scale. Their spacing tokens reduce unnecessary panel padding
 and workspace gaps without shrinking control targets or compromising contrast.
 
@@ -60,20 +67,20 @@ fills, text selection, scrollbar colors, or interaction treatment.
 Approved card-separation option 01 uses a cool porcelain page (`#EDF1F7`),
 white cards and mobile slip headers, a contrasting slip body (`#E9EEF6`),
 blue desktop slip headers (`#DCE8FB`),
-and defined card frames (`#D3DDEA`). Cobalt Night provides its corresponding
-dark inset/header/frame colors through the same `phoneCardFrame` contract.
+and spacing between cards. Cobalt Night provides its corresponding
+dark inset/header colors through the same `phoneCardFrame` contract.
 Match tiles share 4px corners and slip frames use 8px corners. Below 64rem,
 standalone matches have 8px gaps, nested selections have 6px gaps and padding,
 and Best slips and Slip Builder both have 14px between slips. Desktop retains
-continuous match rows, straight internal seams, and 4.5px between slips.
+continuous match rows with alternating tonal fills and 4.5px between slips.
 Filter actions use filled surfaces without borders; status badges retain their
 semantic fill/text colors without outlines. Header account/theme actions keep
 28px minimum height, no vertical padding, and clearly visible filled backgrounds
 inside the unchanged header rails. Slip header fills use an explicit inner
 radius because native disclosure slots do not reliably inherit corner properties.
-Expanded slips add a 2px card-surface ring around their existing 1px frame
-(white in light mode), keeping the header and selection tray visually joined
-without changing dimensions or disclosure-control positions.
+Expanded slips use the same borderless frame as collapsed slips; header and
+selection-tray fills keep them visually joined. Disclosure controls retain their
+fixed positions. Match chips also use filled backgrounds without borders.
 
 Readability tests validate all ten complete definitions. Browser acceptance
 checks the actual shared screens. Business rules, data services, form actions,

@@ -35,13 +35,12 @@ export const RangeFields = styled.div`
     min-inline-size: 0;
     min-block-size: 1.875rem;
     padding-inline: 4px;
-    background: ${({ theme }) => theme.color.surface};
-    /* Editable field boundaries stay distinct from quiet section frames. */
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    background: ${({ theme }) => theme.color.field};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     ${controlFeedback}
     &:has(input:focus-visible) { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-    &:has(input[aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.outcome.incorrect.border}; }
+    &:has(input[aria-invalid="true"]) { background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   }
   > label > span {
     flex: none;
@@ -89,8 +88,8 @@ export const RangeFields = styled.div`
       max-inline-size: 100%;
       min-block-size: 2.5rem;
       padding: 4px 8px;
-      background: ${({ theme }) => theme.color.surface};
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+      background: ${({ theme }) => theme.color.field};
+      border: 0;
       border-radius: ${({ theme }) => theme.radius.control};
       font-size: 16px;
       line-height: 1.2;
@@ -99,7 +98,7 @@ export const RangeFields = styled.div`
         outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
         outline-offset: 2px;
       }
-      &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.border}; }
+      &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
     }
     input::-webkit-calendar-picker-indicator { inline-size: 16px; block-size: 16px; }
   }

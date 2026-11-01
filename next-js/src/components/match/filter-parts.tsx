@@ -48,7 +48,7 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   > img { flex: none; inline-size: 14px; block-size: 14px; object-fit: contain; }
   > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
   ${media.hover} {
-    &:hover { border-color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].solid : theme.color.border}; }
+    &:hover { background: ${({ theme }) => theme.color.fieldHover}; }
   }
   &[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
   ${focusRing}
@@ -87,7 +87,7 @@ export const IconButton = styled.button`
   block-size: 1.875rem;
   padding: 0;
   color: ${({ theme }) => theme.color.text};
-  background: transparent;
+  background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   /* 16px glyphs sit with the 11px phone controls; desktop keeps 20px. */
@@ -112,7 +112,7 @@ const SelectFace = styled.span`
   min-block-size: 1.875rem;
   padding-inline: 8px 22px;
   color: ${({ theme }) => theme.color.text};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
@@ -164,7 +164,7 @@ const PickerSummary = styled.button`
   min-block-size: 2rem;
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  border: 0;
   ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
@@ -176,7 +176,7 @@ const PickerSummary = styled.button`
   > [data-picker-label] { flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > [data-picker-value] { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; text-align: end; }
   > svg { flex: none; font-size: 1rem; }
-  &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
+  &[aria-expanded="true"] {  background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   ${focusRing}
 `;
@@ -191,7 +191,7 @@ const PickerPanel = styled.div`
   inline-size: min(20rem, var(--picker-max-width, calc(100vw - 32px)));
   padding: ${({ theme }) => theme.space.sm};
   background: var(--filter-panel-background, ${({ theme }) => theme.color.surface});
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   transition-property: none;
@@ -209,7 +209,7 @@ const PickerSearch = styled.input`
   min-block-size: 2.25rem;
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   ${filterControlColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;

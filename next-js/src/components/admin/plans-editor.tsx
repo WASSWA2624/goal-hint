@@ -254,7 +254,7 @@ const ListPanel = styled(Panel)<{ $busy: boolean }>`
 `;
 const ListNotice = styled.div`
   padding: 12px 14px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   ${media.desktop} { padding-inline: 16px; }
 `;
 const PlanList = styled.ol`
@@ -267,7 +267,7 @@ const PlanList = styled.ol`
     gap: 4px;
     min-inline-size: 0;
     padding: 10px 14px 12px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
   }
   > li:last-child { border-block-end: 0; }
   ${media.desktop} { > li { padding-inline: 16px; } }
@@ -309,10 +309,10 @@ const Square = styled.button`
   inline-size: ${({ theme }) => theme.control.minHeight};
   block-size: ${({ theme }) => theme.control.minHeight};
   padding: 0;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.brandSoft};
   cursor: pointer;
   > svg { font-size: 1.125rem; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; opacity: 0.6; }
@@ -331,7 +331,7 @@ const EditForm = styled.form`
   margin-block-start: 6px;
   padding: 12px;
   background: ${({ theme }) => theme.color.page};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${media.desktop} { padding: 14px; }
   @container (min-width: 34rem) { grid-column: 1 / -1; }
@@ -358,7 +358,7 @@ const Fields = styled.div<{ $edit: boolean }>`
 `;
 const Footnote = styled.p`
   padding: 12px 14px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   ${media.desktop} { padding: 14px 16px; }

@@ -34,8 +34,7 @@ const StatusContainer = styled.span<{ $tone: OutcomeTone }>`
   padding: 1px 6px;
   color: ${({ theme, $tone }) => theme.color.outcome[$tone].text};
   background: ${({ theme, $tone }) => theme.color.outcome[$tone].background};
-  border: ${({ theme }) => theme.border.width} solid
-    ${({ theme, $tone }) => theme.color.outcome[$tone].border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   line-height: 1.3;
@@ -71,7 +70,7 @@ const EmptyContainer = styled.section`
   padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   overflow-wrap: anywhere;

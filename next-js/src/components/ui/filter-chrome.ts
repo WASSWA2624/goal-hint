@@ -10,11 +10,10 @@ export const focusRing = css`
   }
 `;
 
-/** Shared Matches and Slip Builder filter palette; fields remain distinct from the page. */
+/** Shared Matches and Slip Builder palette; filled fields remain distinct from their panel. */
 export const filterPanelColors = css`
-  --filter-panel-background: color-mix(in srgb, ${({ theme }) => theme.color.surfaceMuted} 55%, ${({ theme }) => theme.color.page});
-  --filter-field-background: color-mix(in srgb, ${({ theme }) => theme.color.surface} 20%, ${({ theme }) => theme.color.page});
-  --filter-field-border: color-mix(in srgb, ${({ theme }) => theme.color.controlBorder} 97%, ${({ theme }) => theme.color.surfaceMuted});
+  --filter-panel-background: ${({ theme }) => theme.color.surfaceMuted};
+  --filter-field-background: ${({ theme }) => theme.color.field};
 `;
 
 /** Outer phone filter groups share the page edges; individual input boundaries remain visible. */
@@ -34,18 +33,19 @@ export const desktopStickyFilters = css`
 `;
 
 export const filterControlColors = css`
-  background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
-  border-color: var(--filter-field-border, ${({ theme }) => theme.color.controlBorder});
+  border: 0;
+  background: var(--filter-field-background, ${({ theme }) => theme.color.field});
 `;
 
 export const filterButtonColors = css`
-  background: ${({ theme }) => theme.color.surfaceMuted};
+  color: ${({ theme }) => theme.color.link};
+  background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   box-shadow: none;
 `;
 
 export const controlFeedback = css`
-  transition: border-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing}, background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
-  ${media.hover} { &:hover:not([aria-pressed="true"]):not([aria-expanded="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
-  &:focus-within { border-color: ${({ theme }) => theme.color.brand}; }
+  transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
+  ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]):not([aria-expanded="true"]) { background: ${({ theme }) => theme.color.fieldHover}; } }
+  &:focus-within { background: ${({ theme }) => theme.color.fieldHover}; }
 `;

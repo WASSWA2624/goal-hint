@@ -1,5 +1,6 @@
 "use client";
 
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import { useMemo, useState, type CSSProperties } from "react";
 import styled from "styled-components";
 import type { BreakdownRow } from "@/domain/analytics";
@@ -104,7 +105,7 @@ const ExportLink = styled.a`
   align-items: center;
   min-block-size: 32px;
   padding-inline: 10px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   color: ${({ theme }) => theme.color.text};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -117,13 +118,14 @@ const Scroller = styled.div`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; }
 `;
 const Table = styled.table`
+  ${filledTableRows}
   inline-size: 100%;
   border-collapse: collapse;
   font-size: ${({ theme }) => theme.typography.scale.body};
   caption { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   th, td {
     padding: 7px 10px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
     text-align: start;
     vertical-align: middle;
   }

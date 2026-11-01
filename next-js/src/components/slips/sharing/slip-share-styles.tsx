@@ -14,7 +14,7 @@ export const ShareTrigger = styled(Button)`
     ${slipHeaderActionFrame}
     inline-size: var(--slip-header-action-size, 28px); min-inline-size: var(--slip-header-action-size, 28px);
     block-size: var(--slip-header-action-size, 28px); min-block-size: var(--slip-header-action-size, 28px); padding: 0;
-    &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; border-color: ${({ theme }) => theme.color.border}; }
+    &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  }
   }
   &[data-share-icon-only] svg { inline-size: 16px; block-size: 16px; }
 `;
@@ -22,7 +22,7 @@ export const ShareTrigger = styled(Button)`
 export const Drawer = styled.dialog`
   position: fixed; inset-block: 0; inset-inline: auto 0;
   inline-size: min(22rem, 100vw); max-inline-size: 100vw; block-size: 100dvh; max-block-size: 100dvh;
-  margin: 0 0 0 auto; padding: 0; border: 0; border-inline-start: 1px solid ${({ theme }) => theme.color.border};
+  margin: 0 0 0 auto; padding: 0; border: 0; border-inline-start: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   border-start-start-radius: ${({ theme }) => theme.radius.overlay}; border-end-start-radius: ${({ theme }) => theme.radius.overlay};
   background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text};
@@ -34,7 +34,7 @@ export const Drawer = styled.dialog`
 
 export const DrawerHeader = styled.header`
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none;
-  padding: 12px 16px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  padding: 12px 16px; border-block-end: 0;
   h2 { font-size: .9375rem; line-height: 1.3; margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 
@@ -57,12 +57,12 @@ export const DrawerBody = styled.div`
   [data-share-caption] a { overflow-wrap: anywhere; font-size: .6875rem; }
   [data-share-public-note] { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; margin: 12px 0 0; }
   [data-share-error] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
-  textarea { inline-size: 100%; min-block-size: 150px; resize: vertical; background: ${({ theme }) => theme.color.surface};
-    color: inherit; border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: 8px; }
+  textarea { inline-size: 100%; min-block-size: 150px; resize: vertical; background: ${({ theme }) => theme.color.field};
+    color: inherit; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: 8px; }
 `;
 
 export const DrawerFooter = styled.footer`
-  flex: none; padding: 12px 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  flex: none; padding: 12px 16px; border-block-start: 0;
   [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-block-end: 9px; }
   [data-share-primary] { inline-size: 100%; }
   [data-share-feedback] { font-size: .6875rem; margin: 10px 0 0; color: ${({ theme }) => theme.color.mutedText}; }

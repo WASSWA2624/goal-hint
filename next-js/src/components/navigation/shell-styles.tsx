@@ -138,7 +138,7 @@ export const TopNavList = styled.ul`
 
 /**
  * Header links and section icons share the phone tab bar's theme colors. The current
- * page uses stronger text and a 3px accent indicator; hover previews a faint one.
+ * page uses a filled selection; pointer and keyboard feedback share the palette.
  */
 const topLink = css<{ $tone?: AccentName }>`
   position: relative;
@@ -147,29 +147,20 @@ const topLink = css<{ $tone?: AccentName }>`
   gap: 6px;
   padding-inline: 12px;
   color: ${({ theme }) => theme.header.mutedText};
-  border-block-end: 3px solid transparent;
+  border-block-end: 0;
   white-space: nowrap;
   font-size: 0.9375rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   cursor: pointer;
   > svg:first-child { flex: none; font-size: 1.125rem; color: ${({ theme, $tone = "teal" }) => theme.header.tone[$tone]}; }
-  &::after {
-    content: "";
-    position: absolute;
-    inset-inline: 12px;
-    inset-block-end: -1px;
-    block-size: 3px;
-    border-radius: ${({ theme }) => theme.radius.control};
-  }
   ${media.hover} {
-    &:hover { color: ${({ theme }) => theme.header.text}; }
-    &:hover::after { background: ${({ theme }) => theme.header.controlBorder}; }
+    &:hover { color: ${({ theme }) => theme.header.text}; background: ${({ theme }) => theme.header.controlHover}; }
   }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.header.text};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
-    &::after { background: ${({ theme }) => theme.header.accent}; }
+    background: ${({ theme }) => theme.color.brandSoft};
   }
   ${headerFocus}
 `;
@@ -197,16 +188,8 @@ const tabLink = css`
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.header.accent};
-    background: transparent;
+    background: ${({ theme }) => theme.color.brandSoft};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
-    &::before {
-      content: "";
-      position: absolute;
-      inset-block-start: 0;
-      inset-inline: 10%;
-      block-size: 2px;
-      background: ${({ theme }) => theme.header.accent};
-    }
   }
   ${focusRing}
   &:focus-visible { outline-color: ${({ theme }) => theme.header.accent}; outline-offset: -4px; }
@@ -270,7 +253,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   padding: ${({ theme }) => theme.space.xs};
   list-style: none;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
   a {
@@ -307,7 +290,7 @@ export const TabBar = styled.nav`
   z-index: 20;
   padding-block-end: env(safe-area-inset-bottom);
   background: ${({ theme }) => theme.header.navigationBackground};
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.border};
+  border-block-start: 0;
   box-shadow: none;
   ${desktop} { display: none; }
 `;
@@ -327,7 +310,7 @@ export const Footer = styled.footer`
   padding-block: 10px calc(10px + ${mobileTabHeight} + 1px + env(safe-area-inset-bottom));
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surface};
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   font-size: 0.75rem;
   line-height: 1.4;
   ${desktop} { padding-block: 14px; font-size: 0.8125rem; background: ${({ theme }) => theme.color.surfaceMuted}; }

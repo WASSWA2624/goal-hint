@@ -13,7 +13,7 @@ const fieldControl = css`
   min-inline-size: 0;
   min-block-size: 40px;
   padding: 8px 11px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
@@ -22,7 +22,7 @@ const fieldControl = css`
   line-height: 1.3;
   &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
-  &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+  &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   ${controlFeedback}
   ${focusRing}
 `;
@@ -33,7 +33,7 @@ const toolbarFieldControl = css`
   min-block-size: 2rem;
   padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.field};
   font-size: 0.75rem;
   @media (pointer: coarse) { min-block-size: 44px; }
 `;
@@ -47,7 +47,7 @@ export const Panel = styled.form`
   inline-size: 100%;
   min-inline-size: 0;
   padding: 8px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
@@ -103,8 +103,8 @@ export const SectionButton = styled.button`
   > svg:last-child { font-size: 0.75rem; }
   > [data-section-label] { min-inline-size: 0; }
   @media (pointer: coarse) { min-block-size: 44px; }
-  &[data-active="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link}; border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
-  ${media.hover} { &:hover:enabled { border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.rowHover}; } }
+  &[data-active="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link};  background: ${({ theme }) => theme.color.brandSoft}; }
+  ${media.hover} { &:hover:enabled {  background: ${({ theme }) => theme.color.rowHover}; } }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
   ${focusRing}
 `;
@@ -181,7 +181,7 @@ export const ActionButton = styled(Button)`
 export const DialogContent = styled.div`
   min-inline-size: 0;
   fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
-  fieldset + fieldset { margin-block-start: 15px; padding-block-start: 13px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  fieldset + fieldset { margin-block-start: 15px; padding-block-start: 13px; border-block-start: 0; }
   legend { margin-block-end: 7px; padding: 0; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   label[data-input] { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }

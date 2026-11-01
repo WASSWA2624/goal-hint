@@ -10,7 +10,7 @@ export const RadioGroups = styled.div`
   > * { min-inline-size: 0; }
   ${media.desktop} {
     grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 20px;
-    > * + * { padding-inline-start: 20px; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+    > * + * { padding-inline-start: 20px; border-inline-start: 0; }
   }
 `;
 

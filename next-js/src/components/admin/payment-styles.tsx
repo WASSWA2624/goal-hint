@@ -12,10 +12,9 @@ import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFoot
  */
 const panelLook = css`
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 `;
-const hairline = css`${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}`;
 const focusRing = css`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
@@ -70,13 +69,13 @@ export const RefreshSquare = styled.button<{ $changed: boolean }>`
   inline-size: ${({ theme }) => theme.control.minHeight};
   block-size: ${({ theme }) => theme.control.minHeight};
   padding: 0;
-  border: ${hairline};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   cursor: pointer;
   > svg { font-size: 1.125rem; }
-  ${({ theme, $changed }) => $changed && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; border-color: transparent;`}
+  ${({ theme, $changed }) => $changed && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; `}
   &:disabled { cursor: not-allowed; opacity: 0.55; }
   ${focusRing}
 `;
@@ -118,13 +117,13 @@ export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
 `;
 
 export const TicketTray = styled(RecordListScroll)<{ $opened: boolean }>`
-  ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] { border-color: ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; } }`}
+  ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] {  background: ${({ theme }) => theme.color.surface}; } }`}
 `;
 export const Ticket = styled(RecordItem)`
   ${media.belowDesktop} {
     align-content: start; align-items: baseline; gap: 2px 12px; min-block-size: 64px;
     ${panelLook}
-    &[aria-current="true"] { border-color: ${({ theme }) => theme.color.link}; }
+    &[aria-current="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   }
   ${media.desktop} {
     grid-template-columns: 30px minmax(0, 1fr) auto;
@@ -312,13 +311,13 @@ export const ReviewZones = styled.div<{ $proof: boolean }>`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     > * { min-inline-size: 0; }
-    > * + * { border-inline-start: ${hairline}; }
-    ${({ $proof }) => $proof && css`> :last-child { grid-column: 1 / -1; border-inline-start: 0; border-block-start: ${hairline}; }`}
+    > * + * { border-inline-start: 0; }
+    ${({ $proof }) => $proof && css`> :last-child { grid-column: 1 / -1; border-inline-start: 0; border-block-start: 0; }`}
   }
   @media (min-width: 73rem) {
     ${({ $proof }) => $proof && css`
       grid-template-columns: minmax(16rem, 1.15fr) minmax(15rem, 1fr) minmax(17rem, 20rem);
-      > :last-child { grid-column: auto; border-inline-start: ${hairline}; border-block-start: 0; }
+      > :last-child { grid-column: auto; border-inline-start: 0; border-block-start: 0; }
       > :first-child { border-end-start-radius: ${({ theme }) => theme.radius.surface}; }
     `}
   }
@@ -331,7 +330,7 @@ export const ProofZone = styled.section`
   ${media.belowDesktop} {
     gap: 8px;
     padding-block-end: 0;
-    border: ${hairline};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
   }
   ${media.desktop} { padding: 16px 18px 18px; }
@@ -353,7 +352,7 @@ export const ProofImage = styled.img`
   display: block;
   inline-size: 100%;
   block-size: auto;
-  border: ${hairline};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surface};
   ${media.desktop} { inline-size: auto; max-inline-size: 100%; max-block-size: 30rem; margin-inline: auto; object-fit: contain; }
@@ -373,7 +372,7 @@ export const ExpectedZone = styled.section`
   ${zoneBody}
   ${media.belowDesktop} { ${panelLook} }
   ${media.desktop} { padding: 16px 18px 18px; }
-  > dl { border-block-start: ${hairline}; }
+  > dl { border-block-start: 0; }
 `;
 export const BigAmount = styled.div`
   display: grid;
@@ -411,7 +410,7 @@ export const CheckList = styled.ul`
 /** A drawer inside a zone: hairline above, flush with the zone's text; on phones it spans the panel edge to edge. */
 export const ZoneDrawer = styled(Drawer)`
   border-block-end: 0;
-  border-block-start: ${hairline};
+  border-block-start: 0;
   &:last-child { border-block-end: 0; }
   > summary { min-block-size: 44px; padding: 0 ${zonePadding}; }
   > summary > svg:last-child { color: ${({ theme }) => theme.color.mutedText}; }
@@ -476,8 +475,8 @@ export const DecisionBar = styled(RecordFooter)<{ $rejecting: boolean }>`
 export const RejectToggle = styled(ActionButton)<{ $open: boolean }>`
   ${({ theme, $open }) => !$open && css`
     color: ${theme.color.outcome.incorrect.text};
-    background: ${theme.color.surface};
-    border-color: ${theme.color.outcome.incorrect.border};
+    background: ${theme.color.outcome.incorrect.background};
+
   `}
 `;
 export const CopyRow = styled.dd`

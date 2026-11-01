@@ -21,7 +21,7 @@ const Board = styled.div<{ $indexLength: number }>`
     ${desktopMatchBaseStyles}
     ${alignedLedgerStyles}
     background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
     box-shadow: none;
   }
@@ -47,7 +47,7 @@ const List = styled.ul`
   ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    > li + li { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+    > li + li { border-block-start: 0; }
   }
 `;
 const Divider = styled.li`

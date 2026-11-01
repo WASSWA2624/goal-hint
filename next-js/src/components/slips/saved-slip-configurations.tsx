@@ -38,7 +38,7 @@ const Check = styled.label`
 `;
 const EditorPanel = styled.section`
   display: grid; gap: 10px; min-inline-size: 0; padding-block-start: 12px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   h3 { margin: 0; font-size: .9375rem; overflow-wrap: anywhere; }
 `;
 type EditorAction = "create" | "rename" | "update" | "delete";

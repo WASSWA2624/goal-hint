@@ -41,7 +41,7 @@ const Trigger = styled.button`
   > svg { flex: none; font-size: 0.875rem; }
   > svg:last-child { font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
-  &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; }
+  &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   ${controlFeedback}
   ${focusRing}
   ${media.belowDesktop} { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; }
@@ -94,7 +94,7 @@ const Preset = styled.button`
   line-height: 1.3;
   overflow-wrap: anywhere;
   cursor: pointer;
-  &[aria-pressed="true"] { color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; }
+  &[aria-pressed="true"] { color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft};  }
   ${controlFeedback}
   ${focusRing}
   ${media.belowDesktop} { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; }
@@ -105,16 +105,16 @@ const Footer = styled.div`
   flex: none;
   gap: 6px;
   padding: 8px 10px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > button {
     min-inline-size: 0; min-block-size: 44px; padding: 6px 12px;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
+    border: 0; border-radius: ${({ theme }) => theme.radius.control};
     font: inherit; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
     ${focusRing}
   }
-  > button:last-child { color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; border-color: ${({ theme }) => theme.color.brand}; }
-  > button:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; border-color: ${({ theme }) => theme.color.border}; cursor: not-allowed; }
+  > button:last-child { color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action};  }
+  > button:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  cursor: not-allowed; }
   ${media.belowDesktop} {
     padding: 6px 10px;
     > button { min-block-size: 36px; padding: 4px 8px; font-size: 0.75rem; }

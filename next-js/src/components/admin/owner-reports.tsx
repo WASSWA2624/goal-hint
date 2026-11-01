@@ -59,7 +59,7 @@ const Overview = styled(DeskGrid)<{ $notices: boolean }>`
 `;
 const Metrics = styled.div`
   overflow: hidden;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   > dl > div { min-block-size: 64px; }
   /* An odd count would leave a bare hairline cell; the last tile takes the full row instead. */
@@ -109,16 +109,16 @@ const Review = styled(Link)`
   justify-content: center;
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding-inline: 14px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.brandSoft};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-decoration: none;
   white-space: nowrap;
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   ${media.hover} { &:hover { text-decoration: underline; } }
-  ${media.desktop} { min-block-size: 36px; padding-inline: 6px; border-color: transparent; background: transparent; }
+  ${media.desktop} { min-block-size: 36px; padding-inline: 6px;  background: ${({ theme }) => theme.color.brandSoft}; }
 `;
 const QueueMessage = styled.p`
   padding: 14px;

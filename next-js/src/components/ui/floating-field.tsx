@@ -5,7 +5,7 @@ import styled from "styled-components";
 
 type ControlProps = { id?: string } & Pick<AriaAttributes, "aria-describedby" | "aria-invalid">;
 
-/** A persistent, accessible label at the field border, including for filled and restored controls. */
+/** A persistent inset label, including for filled and restored controls. */
 export function FloatingField({ label, children, action, className }: { label: ReactNode; children: ReactElement<ControlProps>; action?: ReactNode; className?: string }) {
   const generated = useId(), id = children.props.id ?? generated;
   return <Frame className={className} data-floating-field data-field-action={!!action}>
@@ -16,15 +16,15 @@ export function FloatingField({ label, children, action, className }: { label: R
 }
 
 const Frame = styled.div`
-  position: relative; min-inline-size: 0; margin-block-start: 6px;
+  position: relative; min-inline-size: 0;
   && > label {
-    position: absolute; z-index: 1; inset-block-start: 0; inset-inline-start: 9px;
-    max-inline-size: calc(100% - 20px); padding-inline: 3px; transform: translateY(-50%);
-    color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surface};
+    position: absolute; z-index: 1; inset-block-start: 6px; inset-inline-start: 10px;
+    max-inline-size: calc(100% - 20px);
+    color: ${({ theme }) => theme.color.mutedText};
     font-size: 12px; line-height: 1; font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap; cursor: text;
   }
-  > input, > textarea { inline-size: 100%; min-block-size: 44px; font-size: 16px; }
+  > input, > textarea { inline-size: 100%; min-block-size: 48px; padding-block: 22px 6px; font-size: 16px; }
   &[data-field-action="true"] > textarea { padding-block-start: 36px; }
   > [data-field-action] { position: absolute; inset-block-start: 3px; inset-inline-end: 3px; display: flex; align-items: center; gap: 4px; }
   > [data-field-action] button { min-block-size: 30px; padding: 3px 8px; font-size: 13px; }

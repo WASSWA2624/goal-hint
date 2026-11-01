@@ -47,7 +47,7 @@ export function SubscriberDirectory({ accounts, selectedId, query, plans, loadin
 const DirectoryError = styled.div`display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0; > span { flex: 1 1 12rem; }`;
 const AdminNumber = styled.p`
   display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
   > svg { flex: none; margin-block-start: 1px; font-size: 1rem; }
   strong { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }

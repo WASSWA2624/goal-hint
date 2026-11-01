@@ -17,7 +17,7 @@ const Loading = styled.div`
 const Placeholder = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) 5.75rem; align-items: center;
   gap: 12px; min-block-size: 38px; padding: 10px 12px;
-  background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.surface};
+  background: ${({ theme }) => theme.color.surface}; border: 0; border-radius: ${({ theme }) => theme.radius.surface};
   > span {
     display: block; block-size: 10px; border-radius: ${({ theme }) => theme.radius.small};
     background: linear-gradient(90deg, ${({ theme }) => theme.color.surfaceMuted} 25%,

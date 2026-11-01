@@ -24,13 +24,13 @@ const Option = styled.button`
   min-block-size: 2.5rem;
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  background: ${({ theme }) => theme.color.brandSoft};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
   cursor: pointer;
-  &[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border-color: ${({ theme }) => theme.color.brand}; }
+  &[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand};  }
   ${media.hover} { &:hover:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.rowHover}; } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;

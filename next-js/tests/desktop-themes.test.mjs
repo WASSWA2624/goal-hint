@@ -43,7 +43,7 @@ test("all desktop directions provide the complete shared application theme contr
   }
 });
 
-test("desktop palettes retain readable text, primary actions, header navigation, and field boundaries", () => {
+test("all palettes retain readable filled controls, primary actions, and header navigation", () => {
   for (const { id, theme } of desktopThemes) {
     const readable = (text, surface, minimum, role) => assert.ok(contrast(text, surface) >= minimum, `${id}: ${role}`);
     for (const surface of [theme.color.surface, theme.color.surfaceMuted, theme.color.page]) {
@@ -51,6 +51,14 @@ test("desktop palettes retain readable text, primary actions, header navigation,
       readable(theme.color.mutedText, surface, 4.5, "secondary text");
       readable(theme.color.controlBorder, surface, 3, "editable field boundary");
     }
+    for (const surface of [theme.color.field, theme.color.fieldHover]) {
+      readable(theme.color.text, surface, 4.5, "filled field text");
+      readable(theme.color.mutedText, surface, 4.5, "filled field label");
+      readable(theme.color.link, surface, 4.5, "filled action label");
+    }
+    assert.notEqual(theme.color.field, theme.color.surface, `${id}: distinct field fill`);
+    assert.equal(theme.border.width, "0px", `${id}: no decorative borders`);
+    assert.equal(theme.border.accentWidth, "0px", `${id}: no accent rails`);
     readable(theme.color.onAction, theme.gradient.action, 4.5, "primary action");
     readable(theme.color.onAction, theme.gradient.actionHover, 4.5, "hovered primary action");
     readable(theme.color.brand, theme.color.brandSoft, 4.5, "selected control");

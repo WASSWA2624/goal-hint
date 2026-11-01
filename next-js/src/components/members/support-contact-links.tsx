@@ -25,7 +25,7 @@ const ContactList = styled.div`
 `;
 const ContactRow = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; min-inline-size: 0;
-  & + & { padding-block-start: 8px; border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
+  & + & { padding-block-start: 8px; border-block-start: 0; }
 `;
 const ContactIdentity = styled.div`
   display: grid; gap: 1px; min-inline-size: 0; font-size: 0.8125rem; line-height: 1.4;

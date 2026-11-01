@@ -36,7 +36,7 @@ const AuthLink = styled(Link)<{ $primary?: boolean }>`
   ${compactHeaderControl}
   color: ${({ theme, $primary }) => $primary ? theme.header.onAccent : theme.header.accent};
   background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.color.brandSoft};
-  border-color: ${({ theme, $primary }) => $primary ? theme.header.accent : "transparent"};
+
   text-decoration: none;
   > svg { display: none; }
   ${media.desktop} { > svg { display: block; } }
@@ -73,7 +73,7 @@ const Popup = styled.div`
   overflow-y: auto;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
@@ -82,7 +82,7 @@ const Identity = styled.div`
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   > svg { flex: none; font-size: 1.5rem; color: ${({ theme }) => theme.color.link}; }
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
   strong { display: block; font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; }
@@ -113,7 +113,7 @@ const SignOut = styled(MemberSignOut)`
     color: ${({ theme }) => theme.color.mutedText};
     background: transparent;
     border: 0;
-    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-start: 0;
     border-radius: ${({ theme }) => theme.radius.none};
     font-size: 0.875rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};

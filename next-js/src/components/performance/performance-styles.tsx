@@ -1,5 +1,6 @@
 "use client";
 
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { joinedDesktopSections, Stack, Surface } from "@/components/ui/layout";
@@ -16,7 +17,7 @@ export const PerformanceFilters = styled.form`
 export const MetricList = styled.dl`
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr)); gap: 12px;
   margin: 0; min-inline-size: 0; font-variant-numeric: tabular-nums;
-  > div { min-inline-size: 0; padding-inline-start: 10px; border-inline-start: 2px solid ${({ theme }) => theme.color.border}; }
+  > div { min-inline-size: 0; padding-inline-start: 10px; border-inline-start: 0; }
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; }
   dd { margin: 2px 0 0; font-size: 1.125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
 `;
@@ -29,8 +30,9 @@ export const TableFrame = styled.div`
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
 export const PerformanceTable = styled.table`
+  ${filledTableRows}
   inline-size: 100%; border-collapse: collapse; font-size: 0.75rem; font-variant-numeric: tabular-nums;
-  th, td { padding: 6px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; text-align: end; white-space: nowrap; }
+  th, td { padding: 6px; border-block-end: 0; text-align: end; white-space: nowrap; }
   th:first-child, td:first-child { text-align: start; }
   th { background: ${({ theme }) => theme.color.surfaceMuted}; }
 `;

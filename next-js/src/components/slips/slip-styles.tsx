@@ -37,7 +37,7 @@ const mobileBuildAction = css`
 `;
 const desktopGroupDivider = css`
   padding-inline-start: 10px;
-  border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-inline-start: 0;
 `;
 const desktopGroupTitle = css`
   color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem;
@@ -193,7 +193,7 @@ export const BuilderEssentials = styled.div`
     min-block-size: ${compactControlHeight}; padding: 4px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 1rem;
     ${filterControlColors}
     ${controlFeedback}
-    &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+    &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   }
   ${media.desktop} {
     grid-template-columns: 4.25rem max-content; gap: 12px;
@@ -209,7 +209,7 @@ export const BuilderEssentials = styled.div`
 export const BuilderOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   min-inline-size: 0; padding-block-start: 6px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   ${media.desktop} { display: contents; }
 `;
 export const CriteriaOptions = styled.div`
@@ -248,7 +248,7 @@ export const CriteriaTrigger = styled(Button)`
       color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
       font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; line-height: 1;
     }
-    &[data-edited="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link}; border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
+    &[data-edited="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link};  background: ${({ theme }) => theme.color.brandSoft}; }
     ${controlFeedback}
   }
   ${media.desktop} { && { inline-size: 100%; min-block-size: ${compactControlHeight}; padding-inline: 8px; } }
@@ -296,7 +296,7 @@ export const TargetGroups = styled(LimitGroups)`
     padding-inline: 3px; border-radius: ${({ theme }) => theme.radius.small};
     ${filterControlColors}
     ${controlFeedback}
-    &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
+    &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   }
   @media (max-width: 22.5rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   ${media.desktop} {
@@ -319,13 +319,13 @@ export const MarketChoice = styled.label`
 `;
 export const MarketField = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-items: start; min-inline-size: 0; padding-block: 9px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   &:first-child { padding-block-start: 0; }
   &:last-child { padding-block-end: 0; border-block-end: 0; }
 `;
 export const ReuseRow = styled.div`
   display: flex; align-items: center; min-inline-size: 0; margin-block-start: 12px; padding-block-start: 10px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; cursor: pointer; }
   input[type="checkbox"] { inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
 `;

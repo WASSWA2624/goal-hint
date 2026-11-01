@@ -67,7 +67,7 @@ export const RailStep = styled.li`
 export const RailNumber = styled.span`
   display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link};
-  border: 1px solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   font-size: 12px; line-height: 1; font-weight: ${({ theme }) => theme.typography.weight.heavy};
 `;
 
@@ -85,10 +85,10 @@ export const Plans = styled.fieldset<{ $columns: number }>`
 export const Plan = styled.label`
   position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 3px 6px; align-content: start;
   min-inline-size: 0; padding: 8px; cursor: pointer;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface};
+  border: 0; background: ${({ theme }) => theme.color.surface};
   border-radius: ${({ theme }) => theme.radius.surface};
   input { inline-size: 14px; block-size: 14px; margin: 2px 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
-  &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
+  &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft};  box-shadow: none; }
   &:has(input:focus-visible) { ${focusRing} }
 `;
 export const PlanName = styled.span`font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere;`;
@@ -103,20 +103,20 @@ export const WalletChoices = styled.fieldset`
 `;
 export const WalletChoice = styled.label`
   position: relative; min-inline-size: 0; cursor: pointer;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  &:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; }
+  &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; }
   input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
   > span { display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
   [data-payment-logo] { inline-size: 40px; block-size: 24px; }
   > span > svg { flex-shrink: 0; inline-size: 12px; block-size: 12px; visibility: hidden; }
-  input:checked + span { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
+  input:checked + span { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; box-shadow: none; }
   input:checked + span > svg { visibility: visible; }
   input:focus-visible + span { ${focusRing}; outline-offset: -3px; }
 `;
 export const Wallet = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; min-inline-size: 0; padding: 10px;
-  background: ${({ theme }) => theme.color.surfaceMuted}; border: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.surfaceMuted}; border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 `;
 export const WalletNumber = styled.span`
@@ -147,11 +147,11 @@ export const StatusTitle = styled.h3`
   ${icons}
 `;
 export const PaymentReviewBox = styled(StatusBox)`
-  border-block-start: 3px solid ${({ theme }) => theme.color.brand}; padding: 16px; gap: 12px;
+  border-block-start: 0; padding: 16px; gap: 12px;
   > header { display: grid; gap: 6px; }
   > header p { color: ${({ theme }) => theme.color.mutedText}; }
-  > [data-payment-summary] { padding-block: 8px; border-block: 1px solid ${({ theme }) => theme.color.border}; }
-  > [data-payment-update], > [data-payment-resubmit] { inline-size: 100%; border-block-start-color: ${({ theme }) => theme.color.border}; }
+  > [data-payment-summary] { padding-block: 8px; border-block: 0; }
+  > [data-payment-update], > [data-payment-resubmit] { inline-size: 100%;  }
 `;
 export const StatusFacts = styled.dl`
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; margin: 0; font-size: 12px; line-height: 18px;
@@ -185,7 +185,7 @@ export const PasteButton = styled(Button)`&& { gap: 6px; padding-inline: 10px; f
 export const FileChoices = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0;`;
 export const FileBox = styled.label`
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;
-  border: 1px dashed ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;
+  border: 0; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;
   border-radius: ${({ theme }) => theme.radius.control};
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
   ${icons}
@@ -201,7 +201,7 @@ export const Assent = styled.label`
 export const Submit = styled(Button)`
   inline-size: 100%; min-block-size: 44px; font-size: 13px; ${icons}
   &[aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};
-    border-color: ${({ theme }) => theme.color.border}; cursor: not-allowed; }
+     cursor: not-allowed; }
 `;
 export const Disclosure = styled.details`
   min-inline-size: 0;
@@ -214,7 +214,7 @@ export const Disclosure = styled.details`
   ul { margin: 0; padding-inline-start: 20px; ${smallText} }
 `;
 export const PageFooter = styled.footer`
-  display: flex; flex-wrap: wrap; align-items: start; gap: 4px 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  display: flex; flex-wrap: wrap; align-items: start; gap: 4px 16px; border-block-start: 0;
   > ${Disclosure}[open] { flex-basis: 100%; order: 1; }
 `;
 export const HelpTitle = styled.h2`font-size: 13px; line-height: 20px;`;

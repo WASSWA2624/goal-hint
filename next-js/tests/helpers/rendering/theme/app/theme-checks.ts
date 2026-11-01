@@ -71,8 +71,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   check("body", theme.color.page);
   check("#theme-controls", theme.color.surface);
-  check("#theme-controls, #theme-checks, #theme-performance [data-performance-summary]", theme.color.border, "borderTopColor");
-  check("#theme-controls [data-surface-control], #theme-control-input, #theme-control-select", theme.color.surface);
+  check("#theme-controls [data-surface-control]", theme.color.brandSoft);
+  check("#theme-control-input, #theme-control-select", theme.color.field);
   check("#theme-slips [data-slip-id]", phone ? theme.phoneCardFrame.inset : theme.color.surface);
   check("#theme-slips [data-slip-summary]", phone ? theme.color.surface : theme.phoneCardFrame.header);
   check("#theme-member-step", theme.color.brandSoft);
@@ -113,8 +113,6 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   assert(!!mark?.src.includes(`mark-${dark ? "inverse" : "primary"}.svg`), "Footer brand mark follows the active theme");
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
-    check("#theme-matches [data-fixture-id]", theme.phoneCardFrame.border, "borderTopColor");
-    check("#theme-slips [data-slip-id]", document.querySelector("#theme-slips [data-slip-disclosure][open]") ? theme.color.surface : theme.phoneCardFrame.border, "borderTopColor");
     check("#theme-slips [data-slip-summary]", theme.color.surface);
     checkRadius("#theme-matches [data-fixture-id], #theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.radius);
     checkRadius("#theme-matches [data-fixture-id] > a", `${Math.max(0, Number.parseFloat(theme.phoneCardFrame.radius) - Number.parseFloat(theme.border.width))}px`);
@@ -145,6 +143,13 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   const dialog = document.querySelector<HTMLDialogElement>("#theme-dialog");
   if (dialog?.open && dialog.dataset.enhanced === "true") check("#theme-dialog", theme.color.surface);
+  for (const element of [...document.querySelectorAll("[data-theme-fixture] *")].filter(visible)) {
+    const style = getComputedStyle(element);
+    const target = element.id || element.tagName.toLowerCase();
+    for (const edge of ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const) {
+      assert(Number.parseFloat(style[edge]) === 0, `${target}: decorative ${edge} must be zero`);
+    }
+  }
   assert(document.documentElement.scrollWidth <= window.innerWidth, "Fixture must not overflow the viewport");
   return errors;
 }

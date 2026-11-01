@@ -70,7 +70,7 @@ export const Surface = styled.section`
   min-inline-size: 0;
   padding: 12px;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => `${theme.border.width} solid ${theme.color.border}`};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${media.tablet} { padding: ${({ theme }) => theme.space.md}; }
   ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; }

@@ -17,13 +17,13 @@ const NumericField = styled(Field)`
   &&[data-slip-floating-field="true"] {
     gap: 0;
     > label {
-      position: absolute; inset-block-start: 0; inset-inline-start: 6px; z-index: 1;
+      position: absolute; inset-block-start: 5px; inset-inline-start: 6px; z-index: 1;
       max-inline-size: calc(100% - 12px); margin: 0; padding-inline: 3px;
-      transform: translateY(-50%); font-size: 0.625rem; line-height: 1;
-      white-space: nowrap; background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
+      font-size: 0.625rem; line-height: 1;
+      white-space: nowrap;
       cursor: text;
     }
-    > input:not([type="hidden"]) { background: var(--filter-field-background, ${({ theme }) => theme.color.surface}); }
+    > input:not([type="hidden"]) { min-block-size: 40px; padding-block: 17px 3px; background: var(--filter-field-background, ${({ theme }) => theme.color.field}); }
     &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
   }
 `;
@@ -52,8 +52,9 @@ const StepButton = styled.button`
 const Warning = styled.span`
   position: fixed; inset: auto; z-index: 1000; margin: 0; padding: 6px 8px;
   inline-size: max-content; max-inline-size: min(20rem, calc(100vw - 16px));
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.incorrect.border};
+  color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background};
+  box-shadow: ${({ theme }) => theme.shadow.popover};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface}; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere;
   pointer-events: none;
 `;

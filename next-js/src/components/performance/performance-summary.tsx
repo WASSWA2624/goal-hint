@@ -13,7 +13,7 @@ const wide = "@container performance-summary (min-width: 56rem)";
 const Panel = styled.div`
   container: performance-summary / inline-size;
   position: relative; min-inline-size: 0; block-size: max(44px, 2.75rem); box-sizing: border-box;
-  border: 1px solid ${({ theme }) => theme.color.border};
+  border: 0;
   background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.surface}; line-height: 1.35;
   ${media.desktop} { block-size: 2.25rem; }
   ${desktopSectionFrame}
@@ -33,7 +33,7 @@ const Header = styled.header`
   > p { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
   ${media.desktop} {
     display: grid; flex: none; gap: 1px; max-inline-size: 40%;
-    padding-inline-end: 12px; border-inline-end: 1px solid ${({ theme }) => theme.color.border};
+    padding-inline-end: 12px; border-inline-end: 0;
   }
 `;
 /** One focusable strip preserves every figure at phone widths without increasing the summary height. */
@@ -57,7 +57,7 @@ const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean }>`
   &::before {
     content: ${({ $tone }) => $tone ? '""' : "none"}; order: 0; flex: none;
     inline-size: 6px; block-size: 6px; margin-inline-end: 4px;
-    background: ${({ $zero }) => $zero ? "transparent" : "var(--summary-tone)"}; border: 1.5px solid var(--summary-tone);
+    background: ${({ $zero }) => $zero ? "transparent" : "var(--summary-tone)"}; border: 0;
   }
   dd {
     order: 1; margin: 0; font-size: 0.75rem; line-height: 1.25;
@@ -88,7 +88,7 @@ const OutcomePercentage = styled.span`
 `;
 const Extras = styled.dl`
   display: flex; flex: none; gap: 8px; margin: 0; padding-inline-start: 8px;
-  border-inline-start: 1px solid ${({ theme }) => theme.color.border};
+  border-inline-start: 0;
 `;
 const Distribution = styled.div`
   position: absolute; inset-inline: 0; inset-block-end: 0; display: flex; block-size: 2px;

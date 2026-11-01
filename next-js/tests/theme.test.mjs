@@ -50,6 +50,10 @@ const readable = (foreground, background, label, minimum = 4.5) => {
 
 test("both themes keep body, controls, captions and outcome text readable", () => {
   for (const theme of [lightTheme, darkTheme]) {
+    for (const background of [theme.color.field, theme.color.fieldHover]) {
+      readable(theme.color.text, background, `${theme.mode} filled field`);
+      readable(theme.color.mutedText, background, `${theme.mode} field label`);
+    }
     for (const background of [theme.color.surface, theme.color.surfaceMuted, theme.color.page, theme.phoneCardFrame.inset, theme.phoneCardFrame.header]) {
       readable(theme.color.text, background, `${theme.mode} body`);
       readable(theme.color.mutedText, background, `${theme.mode} captions`);
@@ -112,7 +116,7 @@ test("active themes use the approved Porcelain Blue and Cobalt Night palettes", 
   for (const [theme, direction] of [[lightTheme, porcelainBlueDirection], [darkTheme, cobaltNightDirection]]) {
     const p = direction.palette;
     for (const [name, expected] of Object.entries({ page: p.page, surface: p.surface, surfaceMuted: p.muted,
-      text: p.text, mutedText: p.secondary, controlBorder: p.control, brandSoft: p.soft, rowHover: p.soft })) {
+      text: p.text, controlBorder: p.control, brandSoft: p.soft, rowHover: p.soft })) {
       assert.equal(theme.color[name], expected, `${direction.name}: ${name}`);
     }
     const link = theme.mode === "dark" ? p.headerAccent : p.accent;
@@ -130,27 +134,21 @@ test("active themes use the approved Porcelain Blue and Cobalt Night palettes", 
   }
 });
 
-test("Porcelain Blue separates page and card surfaces with quiet decorative frames", () => {
+test("Porcelain Blue separates cards and editable controls with fills", () => {
   assert.ok(luminance(lightTheme.color.surface) > luminance(lightTheme.color.page));
   assert.ok(luminance(lightTheme.color.surfaceMuted) > luminance(lightTheme.color.page));
   assert.ok(luminance(lightTheme.phoneCardFrame.inset) < luminance(lightTheme.color.page));
   assert.ok(contrast(lightTheme.phoneCardFrame.header, lightTheme.color.page) >= 1.08, "Collapsed slip headers remain distinct from the page");
-  assert.ok(contrast(lightTheme.phoneCardFrame.border, lightTheme.color.surface) >
-    contrast(lightTheme.color.border, lightTheme.color.surface), "Card outlines are more defined than internal dividers");
-  for (const background of [lightTheme.color.page, lightTheme.color.surface]) {
-    assert.ok(contrast(lightTheme.phoneCardFrame.border, background) <
-      contrast(lightTheme.color.controlBorder, background), "Phone card frames should be quieter than editable-field boundaries");
-  }
+  assert.ok(contrast(lightTheme.color.field, lightTheme.color.surface) >= 1.2, "Fields are distinct from cards");
+  assert.equal(lightTheme.border.width, "0px");
+  assert.equal(lightTheme.border.accentWidth, "0px");
 });
 
-test("dark decorative frames stay quiet while form controls retain visible boundaries", () => {
-  for (const background of [darkTheme.color.page, darkTheme.color.surface]) {
-    assert.ok(contrast(darkTheme.color.border, background) <= 1.6, `Dark divider is too prominent on ${background}`);
-    assert.ok(contrast(darkTheme.phoneCardFrame.border, background) < contrast(darkTheme.color.controlBorder, background),
-      "Card frames remain quieter than editable control boundaries");
-  }
-  assert.ok(contrast(darkTheme.color.buttonBorder, darkTheme.color.surface) <
-    contrast(darkTheme.color.controlBorder, darkTheme.color.surface), "Labeled buttons should have quieter outlines than editable controls");
+test("Cobalt Night uses distinct filled controls and no decorative frames", () => {
+  assert.ok(contrast(darkTheme.color.field, darkTheme.color.surface) >= 1.2, "Dark fields are distinct from cards");
+  assert.equal(darkTheme.border.width, "0px");
+  assert.equal(darkTheme.border.accentWidth, "0px");
+  assert.ok(Number.parseFloat(darkTheme.border.focusWidth) >= 2, "Keyboard focus remains visible");
 });
 
 test("performance outcomes keep the approved quiet semantic fills and readable labels", () => {

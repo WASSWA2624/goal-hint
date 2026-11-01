@@ -20,7 +20,7 @@ import { media } from "@/styles/theme";
 const Cases = styled.ul`
   display: grid; margin: 0; padding: 0; list-style: none;
   > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding-block: 12px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+    border-block-end: 0; }
   > li:last-child { border: 0; }
   h3 { margin: 0; font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   p { margin: 4px 0 0; }
@@ -30,7 +30,7 @@ const Cases = styled.ul`
 const AppealField = styled.label`
   display: grid; gap: 6px; font-size: .875rem;
   textarea { box-sizing: border-box; inline-size: 100%; min-block-size: 7rem; padding: 10px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control}; background: ${({ theme }) => theme.color.surface}; color: inherit; font: inherit; resize: vertical; }
 `;
 

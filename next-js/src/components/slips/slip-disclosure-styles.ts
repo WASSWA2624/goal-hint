@@ -5,7 +5,7 @@ export const slipHeaderActionFrame = css`
   display: grid; place-items: center; box-sizing: border-box;
   color: ${({ theme }) => theme.color.accent.blue.text};
   background: ${({ theme }) => theme.color.accent.blue.soft};
-  border: 1px solid color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.text} 35%, ${({ theme }) => theme.color.border});
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
 `;
 

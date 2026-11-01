@@ -57,5 +57,5 @@ const Filters = styled.div`
 `;
 const Row = styled(RecordItem)`
   grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; text-decoration: none;
-  &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
+  &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
 `;

@@ -13,6 +13,8 @@ export const desktopMatchBaseStyles = css`
     white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums;
   }
   [data-desktop-row] > * { min-inline-size: 0; }
+  li:nth-child(even) > [data-desktop-row],
+  li:nth-child(even) > [data-fixture-id] [data-desktop-row] { background: ${({ theme }) => theme.color.surfaceMuted}; }
   [data-desktop-row]:has(> [data-row-analysis]) { cursor: pointer; }
   [data-desktop-row] :is(a:not([data-row-analysis]), button, input, select, textarea) { position: relative; z-index: 2; }
   @media (hover: hover) {
@@ -94,11 +96,11 @@ export const alignedLedgerStyles = css`
   }
   [data-row-date], [data-row-time] { border: 0; padding: 0; }
   [data-row-country] {
-    border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 6px;
+    border-inline-start: 0; padding-inline-start: 6px;
   }
   [data-row-league] { padding-inline-start: 2px; }
   [data-row-market], [data-row-odds], [data-row-status] {
-    border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 6px;
+    border-inline-start: 0; padding-inline-start: 6px;
   }
 
   [data-row-teams] {

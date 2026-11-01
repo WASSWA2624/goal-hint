@@ -24,7 +24,7 @@ export const DesktopSlipBase = styled.div`
   }
   &&& [data-summary-identity] { flex-wrap: wrap; align-items: center; gap: 3px 9px; padding-inline-start: 2px; white-space: nowrap; font-size: 0.875rem; }
   &&& [data-slip-publication-date] {
-    border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 8px;
+    border-inline-start: 0; padding-inline-start: 8px;
   }
   &&& [data-rank] { font-size: 0.75rem; }
   &&& [data-summary-fact] { flex-wrap: nowrap; flex-direction: row; align-items: baseline; gap: 6px; }
@@ -37,17 +37,9 @@ export const DesktopSlipBase = styled.div`
   &&& [data-summary-status] {
     grid-area: status; justify-self: stretch; display: flex; align-items: center; justify-content: center;
     inline-size: 100%; box-sizing: border-box;
-    border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 6px;
+    border-inline-start: 0; padding-inline-start: 6px;
   }
   &&& [data-summary-action-space] { grid-area: action; inline-size: 4.5rem; block-size: 1.5rem; }
-  &&& [data-summary-fact], &&& [data-summary-count], &&& [data-summary-status], &&& [data-summary-action-space] {
-    position: relative;
-    &::before {
-      content: ""; position: absolute; inset-inline-start: var(--slip-header-separator-offset); inset-block-start: 50%;
-      inline-size: 1px; block-size: 0.875rem; transform: translateY(-50%); background: ${({ theme }) => theme.color.border};
-    }
-  }
-  &&& [data-summary-status]::before { display: none; }
   &&& [data-toggle-chevron] { inset-inline-end: 4px; }
   &&&[data-shareable] [data-slip-summary] {
     grid-template-columns: minmax(0, 1fr) auto auto auto 4.5rem var(--review-status-width, 7rem);
@@ -94,11 +86,11 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       position: absolute;
       inset: 0;
       z-index: 1;
-      border-inline-start: ${({ theme }) => theme.border.accentWidth} solid ${({ theme }) => theme.color.accent.blue.text};
+      border-inline-start: 0;
       border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
       pointer-events: none;
     }
-    [data-compact-slip] { border-color: ${({ theme }) => theme.phoneCardFrame.border}; border-radius: ${({ theme }) => theme.frame.desktopCardRadius}; }
+    [data-compact-slip] {  border-radius: ${({ theme }) => theme.frame.desktopCardRadius}; }
     [data-slip-content] {
       border-end-start-radius: var(--slip-inner-radius);
       border-end-end-radius: var(--slip-inner-radius);

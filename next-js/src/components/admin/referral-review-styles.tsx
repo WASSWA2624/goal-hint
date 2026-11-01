@@ -37,7 +37,7 @@ export const ReviewFacts = styled.dl`
 `;
 export const ReviewHistory = styled.ol`
   display: grid; gap: 8px; list-style: none; margin: 0; padding: 0;
-  > li { padding: 8px 0; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  > li { padding: 8px 0; border-block-start: 0; }
   p { margin: 3px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
   time { color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem; }
 `;

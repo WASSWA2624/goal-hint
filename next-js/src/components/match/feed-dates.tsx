@@ -64,8 +64,8 @@ const PresetList = styled.div`
     white-space: nowrap;
     text-decoration: none;
     ${focusRing}
-    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; color: ${({ theme }) => theme.color.accent.teal.text}; } }
-    &[aria-current="date"] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.accent.teal.text}; } }
+    &[aria-current="date"] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft};  font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   }
 `;
 
@@ -132,11 +132,11 @@ const Day = styled(Link)`
   /* Every day names its weekday and month; today's label is teal. */
   > small[data-today] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   > b { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   &[data-selected] {
     color: ${({ theme }) => theme.color.onAction};
     background: ${({ theme }) => theme.gradient.action};
-    border-color: ${({ theme }) => theme.gradient.action};
+
     > small { color: inherit; }
   }
   /* Drawn inside, so the scrolling strip never clips the ring. */
@@ -149,11 +149,11 @@ const Scroll = styled.button`
   inline-size: 2rem;
   padding: 0;
   color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   font: inherit;
   > svg { font-size: 1.125rem; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   ${focusRing}
 `;
 const CalendarButton = styled.button`
@@ -163,12 +163,12 @@ const CalendarButton = styled.button`
   max-inline-size: 7.5rem;
   padding: 2px 6px;
   color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.brandSoft};
   ${filterButtonColors}
   font: inherit;
   > svg { font-size: 1rem; }
   > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; text-align: center; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   /* The selected custom range uses a filled surface rather than an outline. */
   &[data-current] {
     color: ${({ theme }) => theme.color.link};

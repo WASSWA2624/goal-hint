@@ -31,7 +31,7 @@ const Box = styled.section`
     gap: 11px;
     margin-inline: 0;
     padding: 14px 18px 16px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
   }
   ${desktopContentPadding(true)}

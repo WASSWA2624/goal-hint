@@ -7,8 +7,8 @@ export const paginationControlStyles = css`
   block-size: var(--pagination-cell-height);
   padding: 0;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.brandSoft};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -23,13 +23,13 @@ export const paginationControlStyles = css`
   @media (hover: hover) {
     &:hover:not(:disabled):not([aria-current="page"]) {
       color: ${({ theme }) => theme.color.link};
-      border-color: ${({ theme }) => theme.color.brand};
+      background: ${({ theme }) => theme.color.fieldHover};
     }
   }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.color.onAction};
     background: ${({ theme }) => theme.gradient.action};
-    border-color: transparent;
+
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     &:focus-visible { outline-color: ${({ theme }) => theme.color.onAction}; }
   }

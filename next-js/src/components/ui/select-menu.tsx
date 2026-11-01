@@ -16,14 +16,14 @@ const Root = styled.div`
 const Trigger = styled.button`
   display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
   inline-size: 100%; min-inline-size: 0; min-block-size: 34px; padding: 6px 10px;
-  color: ${({ theme }) => theme.color.text}; border: 1px solid ${({ theme }) => theme.color.controlBorder};
+  color: ${({ theme }) => theme.color.text}; border: 0;
   border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 0.75rem; text-align: start; cursor: pointer;
   ${filterControlColors} ${controlFeedback} ${focusRing}
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   > span > span:not([data-current]) { visibility: hidden; }
   > svg { flex: none; color: ${({ theme }) => theme.color.brand}; }
-  &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; }
+  &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
   @media (pointer: coarse) { min-block-size: 44px; }
 `;
@@ -33,11 +33,11 @@ const Options = styled.ul`
   max-block-size: min(20rem, 50dvh); overflow-y: auto; overscroll-behavior: contain;
   margin: 0; padding: 4px; list-style: none; box-sizing: border-box;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.overlay};
+  border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover}; scrollbar-width: thin;
   > li {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    min-block-size: 34px; padding: 7px 10px; border: 1px solid transparent; border-radius: ${({ theme }) => theme.radius.small};
+    min-block-size: 34px; padding: 7px 10px; border: 0; border-radius: ${({ theme }) => theme.radius.small};
     font-size: 0.75rem; line-height: 1.35; cursor: pointer;
     > svg { flex: none; inline-size: 14px; block-size: 14px; visibility: hidden; }
     &[aria-selected="true"] {
@@ -45,7 +45,7 @@ const Options = styled.ul`
       font-weight: ${({ theme }) => theme.typography.weight.bold};
       > svg { visibility: visible; }
     }
-    &[data-active="true"] { border-color: ${({ theme }) => theme.color.brand}; }
+    &[data-active="true"] { background: ${({ theme }) => theme.color.brandSoft}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     &[data-active="true"]:not([aria-selected="true"]) { background: ${({ theme }) => theme.color.rowHover}; }
     &[aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
     @media (pointer: coarse) { min-block-size: 44px; }

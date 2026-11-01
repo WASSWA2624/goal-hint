@@ -23,7 +23,7 @@ const attention = css`
 export const AccountBlock = styled.section<{ $attention?: boolean }>`
   display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; min-inline-size: 0;
   padding-block: 10px 2px;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   ${({ $attention }) => $attention && attention}
 `;
 export const AccountBlockText = styled.div`
@@ -39,7 +39,7 @@ export const AccountFine = styled.p`
 `;
 export const AccountActivityList = styled.ol`
   list-style: none; margin: 0; padding: 0; display: grid; gap: 8px;
-  li { min-inline-size: 0; padding-block-end: 8px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+  li { min-inline-size: 0; padding-block-end: 8px; border-block-end: 0; }
   li:last-child { border-block-end: 0; padding-block-end: 0; }
   li > p { font-size: ${({ theme }) => theme.typography.scale.body}; }
   time { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }

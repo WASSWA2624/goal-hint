@@ -20,6 +20,11 @@ export const themeFonts = {
 } as const;
 const { manrope, editorial } = themeFonts;
 
+/** Derive complete control fills from each palette without screen-specific colors. */
+const blend = (surface: string, ink: string, amount: number) => "#" + [1, 3, 5].map(offset =>
+  Math.round(Number.parseInt(surface.slice(offset, offset + 2), 16) * (1 - amount)
+    + Number.parseInt(ink.slice(offset, offset + 2), 16) * amount).toString(16).padStart(2, "0")).join("");
+
 /** Approved definitions are shared by the live app and the review gallery. */
 export const porcelainBlueDirection: ThemeDirection = { id: "porcelain-blue", name: "Porcelain Blue", description: "Airy porcelain, assured blue, and quietly precise details.", mode: "light", font: manrope, fontLabel: "Manrope", shape: "subtle",
     palette: { page: "#EDF1F7", surface: "#FFFFFF", muted: "#F1F4FA", text: "#182640", secondary: "#53627A", border: "#DCE3EF", control: "#77859C", accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF", header: "#FFFFFF", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5", cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#DCE8FB" } };
@@ -34,7 +39,8 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
   return {
     ...base,
     color: { ...base.color, page: p.page, surface: p.surface, surfaceMuted: p.muted, text: p.text,
-      mutedText: p.secondary, border: decorativeBorder, controlBorder: p.control, buttonBorder: decorativeBorder,
+      field: blend(p.surface, p.control, 0.22), fieldHover: blend(p.surface, p.control, 0.26),
+      mutedText: blend(p.secondary, p.text, 0.2), border: decorativeBorder, controlBorder: p.control, buttonBorder: decorativeBorder,
       brand: link, brandHover: direction.mode === "dark" ? p.text : p.hover, brandSoft: p.soft,
       link, focus: link, disabledText: p.secondary, disabledSurface: p.muted,
       cardHeader: p.muted, rowHover: p.soft,
@@ -60,7 +66,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
     radius: direction.shape === "crisp" ? { ...base.radius, control: base.radius.small,
       surface: base.radius.control, overlay: base.radius.surface }
       : { ...base.radius, surface: base.radius.overlay },
-    border: { ...base.border, width: "1px", accentWidth: "1px", focusWidth: "2px" },
+    border: { ...base.border, width: "0px", accentWidth: "0px", focusWidth: "2px" },
     frame: { ...base.frame, desktopCardRadius: direction.shape === "crisp" ? base.radius.control : base.radius.overlay },
     space: { ...base.space, md: "14px", lg: "20px", xl: "24px" },
     gradient: { action: p.accent, actionHover: p.hover, tableHeader: p.muted, page: p.page },

@@ -41,7 +41,7 @@ export const OutcomeBadge = styled.span<{ $outcome: OutcomeTone }>`
   padding: 3px 6px;
   color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme, $outcome }) => theme.color.outcome[$outcome].border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.small};
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};

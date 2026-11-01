@@ -95,13 +95,13 @@ export const NetworkGrid = styled.div`
   display: grid;
   min-inline-size: 0;
   > section { display: grid; align-content: start; gap: 12px; min-inline-size: 0; padding: 14px; }
-  > section + section { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  > section + section { border-block-start: 0; }
   ${media.desktop} { > section { padding: 16px; } }
   @container (min-width: 36rem) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     > section + section {
       border-block-start: 0;
-      border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      border-inline-start: 0;
     }
   }
 `;
@@ -207,10 +207,10 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
     min-inline-size: 0;
     min-block-size: 68px;
     padding: 9px 10px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
     color: ${({ theme }) => theme.color.mutedText};
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.surfaceMuted};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
     font-weight: ${({ theme }) => theme.typography.weight.body};
     line-height: 1.35;
@@ -228,9 +228,9 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
     text-transform: uppercase;
   }
   > input:checked + span {
-    border-color: ${({ theme }) => theme.color.link};
+
     background: ${({ theme }) => theme.color.brandSoft};
-    box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand};
+    box-shadow: none;
   }
   > input:focus-visible + span { ${focusRing} }
   ${media.hover} { &:hover > input:not(:checked, :disabled) + span { background: ${({ theme }) => theme.color.rowHover}; } }
@@ -243,7 +243,7 @@ export const ConfirmBox = styled.div`
   gap: 6px;
   min-inline-size: 0;
   padding: 12px 14px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.pending.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.outcome.pending.background};
@@ -324,7 +324,7 @@ export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
   }
   ${media.desktop} {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px;
-    border-radius: ${({ theme }) => theme.radius.none}; padding: 12px 16px; border-block-start: 2px solid ${({ theme }) => theme.color.border};
+    border-radius: ${({ theme }) => theme.radius.none}; padding: 12px 16px; border-block-start: 0;
     > [data-save-wide]:first-child { align-self: center; }
     > [data-save-wide]:last-child { grid-column: 2; grid-row: 1 / span 2; }
     > [data-setting-password] { max-inline-size: 30rem; grid-column: 1; }

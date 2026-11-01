@@ -75,7 +75,7 @@ export const EmptyAccount = styled(Panel)`
   display: grid;
   align-content: center;
   min-block-size: 20rem;
-  border-style: dashed;
+
   h2 { color: ${({ theme }) => theme.color.text}; font-size: 0.9375rem; }
   ${media.belowDesktop} { display: none; }
 `;
@@ -101,7 +101,7 @@ export const BlockedNote = styled.p`
   overflow-wrap: anywhere;
 `;
 export const AccountStats = styled(StatGrid)`
-  border-block: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block: 0;
   ${media.desktop} { > div { padding-inline: 18px; } }
   @container (max-width: 34rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
@@ -114,7 +114,7 @@ export const QuickActions = styled.div`
   > button { inline-size: 100%; min-inline-size: 0; padding-inline: 8px; line-height: 1.25; }
   > button:first-child { grid-column: 1 / -1; }
   > button > svg { flex: none; font-size: 1rem; }
-  > button[aria-expanded="true"] { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 1px; }
+  > button[aria-expanded="true"] { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.desktop} {
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     padding: 14px 18px 16px;
@@ -174,7 +174,7 @@ export const History = styled.ul`
   list-style: none;
   > li {
     display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-block: 8px;
-    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-start: 0;
   }
   > li > span:first-child { display: grid; gap: 2px; min-inline-size: 0; }
   strong, li > span:last-child { font-variant-numeric: tabular-nums; }
@@ -219,6 +219,6 @@ export const SensitiveOptions = styled.div`
   justify-content: space-between;
   gap: 8px 12px;
   padding-block-start: 12px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > p { flex: 1 1 14rem; }
 `;

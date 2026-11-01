@@ -65,7 +65,7 @@ export const Card = styled.section`
   min-inline-size: 0;
   padding: 0 ${({ theme }) => theme.layout.gutter};
   background: ${({ theme }) => theme.color.surface};
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   container: details-card / inline-size;
   ${scrollClearance}
   &[data-open] { padding-block-end: 12px; }
@@ -223,7 +223,7 @@ export const Panel = styled.div`
   gap: 10px;
   min-inline-size: 0;
   padding-block-start: 8px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
 `;
 export const PanelBar = styled.div`
   display: flex;
@@ -250,7 +250,7 @@ export const Choices = styled.div`
     padding-inline: 9px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surfaceMuted};
-    border: ${({ theme }) => theme.border.width} solid transparent;
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     font: inherit;
     font-size: ${size("caption")};
@@ -258,7 +258,7 @@ export const Choices = styled.div`
     white-space: nowrap;
     cursor: pointer;
     ${focusRing}
-    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.border}; } }
+    ${media.hover} { &:hover {  } }
     &[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.accent.blue.solid}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     ${desktop} { font-size: ${size("secondary")}; }
   }
@@ -409,7 +409,7 @@ export const RowList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
-  > li + li { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  > li + li { border-block-start: 0; }
 `;
 export const RowButton = styled.button`
   display: grid;

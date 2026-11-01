@@ -17,7 +17,7 @@ const Toolbar = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-inline-size: 0;
   > label { display: grid; gap: 2px; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
   select { min-block-size: 28px; max-inline-size: 100%; padding: 3px 6px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: 1px solid ${({ theme }) => theme.color.border}; font: inherit; font-size: .75rem; ${focusRing} }
+    border: 0; font: inherit; font-size: .75rem; ${focusRing} }
   > small { margin-inline-start: auto; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const Footnote = styled.div`

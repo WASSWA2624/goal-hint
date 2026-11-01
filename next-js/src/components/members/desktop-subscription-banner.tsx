@@ -15,7 +15,7 @@ const Banner = styled.aside`
   margin: 0;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.navigationBackground};
-  border-block-end: 1px solid ${({ theme }) => theme.header.border};
+  border-block-end: 0;
   ${media.desktop} { display: block; }
 `;
 const Row = styled(Container)`

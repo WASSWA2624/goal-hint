@@ -84,7 +84,7 @@ export const DeskColumn = styled.div`
 export const Panel = styled.section`
   min-inline-size: 0;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
 `;
@@ -99,6 +99,7 @@ export const PanelBody = styled.div`
 `;
 /** Panel heading row: an h2 (15px) on the start side, a link or a quiet count on the end side. */
 export const PanelHead = styled.div`
+  background: ${({ theme }) => theme.color.surfaceMuted};
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -106,7 +107,7 @@ export const PanelHead = styled.div`
   gap: 4px 12px;
   min-block-size: 48px;
   padding: 8px 14px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   h2, h3 { font-size: 0.9375rem; line-height: 1.35; }
   ${desktopContentPadding(true)}
 `;
@@ -128,7 +129,7 @@ export const MetaLine = styled.p`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 
-/** Label on the start side, value on the end side, one fact per row with hairline dividers. */
+/** Label and value pairs use alternating fills for clear row tracking. */
 export const FactList = styled.dl`
   display: grid;
   margin: 0;
@@ -141,20 +142,21 @@ export const FactList = styled.dl`
     gap: 2px 12px;
     min-block-size: 40px;
     padding-block: 9px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
   }
+  > div:nth-child(even) { background: ${({ theme }) => theme.color.surfaceMuted}; }
   > div:last-child { border-block-end: 0; }
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.body}; }
   dd { margin: 0; min-inline-size: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; font-variant-numeric: tabular-nums; text-align: end; overflow-wrap: break-word; }
 `;
 
-/** Metric tiles separated by hairlines; two per row on phones, `$columns` from desktop up. */
+/** Metric tiles separated by spacing; two per row on phones, `$columns` from desktop up. */
 export const StatGrid = styled.dl<{ $columns?: 2 | 3 | 4 }>`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: ${({ theme }) => theme.border.width};
+  gap: 6px;
   margin: 0;
-  background: ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.page};
   > div { display: grid; gap: 2px; align-content: start; min-inline-size: 0; padding: 10px 14px; background: ${({ theme }) => theme.color.surface}; }
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
   dd { margin: 0; font-size: 1.125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -164,7 +166,7 @@ export const StatGrid = styled.dl<{ $columns?: 2 | 3 | 4 }>`
 const segmentSelected = css`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.brandSoft};
-  box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand};
+  box-shadow: none;
 `;
 /**
  * Joined segments for status tabs and section switches. Children are links (aria-current), tab buttons (aria-selected)
@@ -172,11 +174,12 @@ const segmentSelected = css`
  */
 export const Segmented = styled.div`
   display: flex;
+  gap: 4px;
   max-inline-size: 100%;
   overflow-x: auto;
   scrollbar-width: none;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   &::-webkit-scrollbar { display: none; }
   > a, > button {
@@ -188,10 +191,10 @@ export const Segmented = styled.div`
     min-block-size: ${({ theme }) => theme.control.minHeight};
     padding: 0 12px;
     border: 0;
-    border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-inline-end: 0;
     border-radius: ${({ theme }) => theme.radius.none};
     color: ${({ theme }) => theme.color.mutedText};
-    background: transparent;
+    background: ${({ theme }) => theme.color.surfaceMuted};
     font: inherit;
     font-size: ${({ theme }) => theme.typography.scale.body};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -214,7 +217,7 @@ export const Segmented = styled.div`
  */
 export const Drawer = styled.details<{ $tone?: "danger"; $plain?: boolean }>`
   min-inline-size: 0;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   &:last-child { border-block-end: 0; }
   > summary {
     display: flex;
@@ -257,7 +260,7 @@ export const RowList = styled.ul`
   padding: 0;
   list-style: none;
   min-inline-size: 0;
-  > li { min-inline-size: 0; border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  > li { min-inline-size: 0; border-block-end: 0; }
   > li:last-child { border-block-end: 0; }
 `;
 export const rowLayout = css`
@@ -321,7 +324,7 @@ export const Toolbar = styled.div`
   gap: 10px 16px;
   min-inline-size: 0;
   padding: 10px 12px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   > :first-child { flex: 1 1 14rem; max-inline-size: 28rem; }
 `;
 
@@ -351,7 +354,7 @@ export const StickyActions = styled.div`
   margin-inline: -16px;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background: ${({ theme }) => theme.color.page};
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > * { flex: 1 1 0; }
   ${media.desktop} { position: static; margin: 0; padding: 0; background: none; border: 0; }
 `;
@@ -403,7 +406,7 @@ const ResponsiveTitle = styled.h2`
     align-items: center;
     min-block-size: 48px;
     padding: 8px 16px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
     font-size: 0.9375rem;
     line-height: 1.35;
   }
@@ -436,7 +439,7 @@ const ResponsiveBody = styled.div`
   min-inline-size: 0;
   padding: 14px;
   ${media.belowDesktop} {
-    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-start: 0;
     &[data-open="false"] { display: none; }
   }
   ${media.desktop} { padding: 14px 16px 16px; }

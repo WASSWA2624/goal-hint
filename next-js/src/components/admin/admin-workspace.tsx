@@ -172,7 +172,7 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
     min-block-size: calc(100dvh - var(--app-header-height, 4rem));
   }
   ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-  li[data-separated] { margin-block-start: 10px; padding-block-start: 10px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  li[data-separated] { margin-block-start: 10px; padding-block-start: 10px; border-block-start: 0; }
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; max-block-size: 100%; min-block-size: 0; overflow-x: hidden; }`}
   ${media.desktop} {
     overflow-x: hidden;
@@ -201,9 +201,9 @@ const SidebarResize = styled.div<{ $fixed: boolean }>`
   ${media.desktop} {
     display: block; position: sticky; inset-block-start: var(--app-header-height, 3rem); align-self: start;
     block-size: calc(100dvh - var(--app-header-height, 3rem)); min-inline-size: 0;
-    background: ${({ theme }) => theme.color.surface}; border-inline: 1px solid ${({ theme }) => theme.color.border};
+    background: ${({ theme }) => theme.color.surface}; border-inline: 0;
     cursor: col-resize; touch-action: none;
-    &:hover, &:focus-visible { background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.link}; }
+    &:hover, &:focus-visible { background: ${({ theme }) => theme.color.brandSoft};  }
     &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
     &[hidden] { display: none; }
   }
@@ -222,7 +222,7 @@ const MenuBar = styled.details`
   position: relative;
   z-index: 15;
   background: ${({ theme }) => theme.color.surface};
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   ${media.desktop} { display: none; }
   > summary {
     display: flex;
@@ -256,10 +256,10 @@ const MenuPopup = styled.nav`
   overflow-y: auto;
   padding: 6px 8px 10px;
   background: ${({ theme }) => theme.color.surface};
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-  li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: 0; }
 `;
 const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
   min-inline-size: 0;

@@ -17,7 +17,7 @@ export const MatchRow = styled.div`
   [data-teams] { grid-area: teams; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 5px; margin: 0; font-size: 0.8125rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-versus] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
   [data-meta] { grid-area: meta; display: flex; flex-wrap: wrap; gap: 1px 5px; color: ${({ theme }) => theme.color.mutedText}; }
-  [data-country] { &::before { content: "Â· "; } }
+  [data-country] { &::before { content: "· "; } }
   [data-kickoff] { grid-area: kickoff; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 1px 5px; color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; }
   [data-clock] { white-space: nowrap; }
   [data-pick] { grid-area: pick; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 5px; }
@@ -40,7 +40,7 @@ export const CompactCard = styled.article`
   --slip-header-action-gap: 10px;
   --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.border.width}))`};
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.phoneCardFrame.border}; border-radius: ${({ theme }) => theme.radius.surface};
+  border: 0; border-radius: ${({ theme }) => theme.radius.surface};
   container: compact-slip / inline-size;
   /* Explicit expanded-slip frame: retain its thickness with borderless control themes. */
   &:has(> details[open]) {
@@ -65,7 +65,7 @@ export const CompactCard = styled.article`
     &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
     > * { min-inline-size: 0; }
   }
-  header[data-slip-summary]:not([data-mobile-slip-header]) { cursor: default; padding-inline-end: 9px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+  header[data-slip-summary]:not([data-mobile-slip-header]) { cursor: default; padding-inline-end: 9px; border-block-end: 0; }
   [data-summary-identity] { grid-area: identity; display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 7px; }
   h3 { margin: 0; font-size: 0.875rem; line-height: 1.2; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   [data-rank] { color: ${({ theme }) => theme.color.link}; font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
@@ -81,11 +81,11 @@ export const CompactCard = styled.article`
     position: absolute; inset-inline-end: 10px; inset-block-start: 8px;
     inline-size: 24px; block-size: 24px; transform: none;
   }
-  details[open] > summary { border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+  details[open] > summary { border-block-end: 0; }
   details[open] [data-toggle-chevron] { --slip-chevron-rotation: 45deg; }
   ul { list-style: none; display: grid; margin: 0; padding: 0; min-inline-size: 0; }
   li { min-inline-size: 0; }
-  li + li { border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
+  li + li { border-block-start: 0; }
 
   &[data-compact-slip="clean-ledger"] [data-slip-content] > ul { gap: 4px; padding: 4px 6px; }
   &[data-compact-slip="clean-ledger"] [data-slip-content] > ul > li + li { border-block-start: 0; }
@@ -131,10 +131,10 @@ export const CompactCard = styled.article`
   &[data-compact-slip="odds-anchor"] {
     summary { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "identity odds" "count odds" "average odds"; gap: 3px 10px; }
     [data-summary-count], [data-summary-average] { justify-self: start; }
-    [data-summary-odds] { flex-direction: column-reverse; align-items: flex-end; padding-inline-start: 12px; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+    [data-summary-odds] { flex-direction: column-reverse; align-items: flex-end; padding-inline-start: 12px; border-inline-start: 0; }
     [data-summary-odds] strong { font-size: 1.375rem; }
     ${MatchRow} { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "teams odds" "meta odds" "kickoff odds" "pick probability"; gap: 2px 9px; }
-    ${MatchRow} [data-leg-odds] { padding-inline-start: 9px; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+    ${MatchRow} [data-leg-odds] { padding-inline-start: 9px; border-inline-start: 0; }
     ${MatchRow} [data-leg-odds] strong { font-size: 1.0625rem; }
     ${MatchRow} [data-kickoff] { justify-content: flex-start; }
     ${MatchRow} [data-leg-probability] { flex-direction: row; align-items: baseline; gap: 4px; }
@@ -142,10 +142,10 @@ export const CompactCard = styled.article`
 
   /* 04: the numbered ticket gutter is shared by the summary and fixture strips. */
   &[data-compact-slip="ticket-strip"] {
-    summary { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "identity count" "odds average"; border-inline-start: 4px solid ${({ theme }) => theme.color.brand}; }
+    summary { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "identity count" "odds average"; border-inline-start: 0; }
     [data-summary-fact] { gap: 3px; }
     ${MatchRow} { grid-template-columns: 1rem minmax(0, 1fr) auto auto; grid-template-areas: "number teams teams teams" "number meta meta kickoff" "number pick odds probability"; gap: 3px 6px; }
-    ${MatchRow} [data-leg-number] { grid-area: number; display: block; align-self: stretch; padding-block-start: 1px; color: ${({ theme }) => theme.color.mutedText}; border-inline-end: 1px dashed ${({ theme }) => theme.color.border}; }
+    ${MatchRow} [data-leg-number] { grid-area: number; display: block; align-self: stretch; padding-block-start: 1px; color: ${({ theme }) => theme.color.mutedText}; border-inline-end: 0; }
     ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { flex-direction: row; align-items: baseline; gap: 3px; }
   }
 
@@ -153,11 +153,11 @@ export const CompactCard = styled.article`
   &[data-compact-slip="compact-grid"] {
     summary { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "identity identity identity" "odds average count"; gap: 7px 0; padding-inline-end: 9px; }
     [data-summary-fact] { flex-direction: column-reverse; align-items: center; justify-self: stretch; gap: 2px; text-align: center; }
-    [data-summary-average], [data-summary-count] { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+    [data-summary-average], [data-summary-count] { border-inline-start: 0; }
     [data-summary-count] { justify-self: stretch; align-self: stretch; display: grid; place-content: center; text-align: center; padding-inline: 4px; }
     ${MatchRow} { grid-template-columns: minmax(0, 1fr) minmax(3.25rem, auto) minmax(4.5rem, auto); grid-template-areas: "teams teams teams" "meta meta kickoff" "pick odds probability"; gap: 5px 6px; }
-    ${MatchRow} [data-pick], ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 4px; align-self: stretch; }
-    ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { align-items: center; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+    ${MatchRow} [data-pick], ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { border-block-start: 0; padding-block-start: 4px; align-self: stretch; }
+    ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { align-items: center; border-inline-start: 0; }
   }
 
   /* 06: selected outcomes lead; this differs from fixture-first ledgers. */
@@ -167,7 +167,7 @@ export const CompactCard = styled.article`
     [data-summary-odds] { justify-self: end; }
     [data-summary-average] { flex-direction: column-reverse; align-items: flex-end; gap: 1px; }
     ${MatchRow} { grid-template-columns: minmax(3.75rem, 0.8fr) minmax(0, 2fr) auto; grid-template-areas: "pick teams teams" "pick meta meta" "pick kickoff kickoff" "pick odds probability"; gap: 2px 7px; }
-    ${MatchRow} [data-pick] { flex-direction: column-reverse; align-items: flex-start; justify-content: center; align-self: stretch; padding-inline-end: 7px; border-inline-end: 2px solid ${({ theme }) => theme.color.border}; }
+    ${MatchRow} [data-pick] { flex-direction: column-reverse; align-items: flex-start; justify-content: center; align-self: stretch; padding-inline-end: 7px; border-inline-end: 0; }
     ${MatchRow} [data-pick-label] { font-size: 1rem; }
     ${MatchRow} [data-kickoff] { justify-content: flex-start; }
     ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { flex-direction: row; align-items: baseline; gap: 3px; }
@@ -185,19 +185,19 @@ export const CompactCard = styled.article`
     ${MatchRow} [data-teams] { flex-direction: column; gap: 1px; }
     ${MatchRow} [data-versus] { display: none; }
     ${MatchRow} [data-kickoff] { justify-content: flex-start; }
-    ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { align-self: stretch; justify-content: center; padding-inline-start: 7px; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+    ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { align-self: stretch; justify-content: center; padding-inline-start: 7px; border-inline-start: 0; }
   }
 
   /* 08: average and individual probabilities receive the primary vertical rail. */
   &[data-compact-slip="probability-rail"] {
     summary { grid-template-columns: minmax(4.75rem, auto) minmax(0, 1fr) auto; grid-template-areas: "average identity identity" "average count odds"; gap: 4px 10px; }
-    [data-summary-average] { align-self: stretch; justify-self: stretch; flex-direction: column-reverse; align-items: flex-start; justify-content: center; gap: 2px; padding-inline-end: 9px; border-inline-end: 2px solid ${({ theme }) => theme.color.brand}; }
+    [data-summary-average] { align-self: stretch; justify-self: stretch; flex-direction: column-reverse; align-items: flex-start; justify-content: center; gap: 2px; padding-inline-end: 9px; border-inline-end: 0; }
     [data-summary-average] [data-fact-label] { max-inline-size: 5rem; }
     [data-summary-average] strong { font-size: 1.1875rem; }
     [data-summary-count] { justify-self: start; }
     [data-summary-odds] { justify-self: end; }
     ${MatchRow} { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "teams probability" "meta probability" "kickoff probability" "pick odds"; gap: 2px 8px; }
-    ${MatchRow} [data-leg-probability] { align-self: stretch; justify-content: center; border-inline-start: 2px solid ${({ theme }) => theme.color.border}; padding-inline-start: 9px; }
+    ${MatchRow} [data-leg-probability] { align-self: stretch; justify-content: center; border-inline-start: 0; padding-inline-start: 9px; }
     ${MatchRow} [data-leg-probability] strong { font-size: 1rem; }
     ${MatchRow} [data-kickoff] { justify-content: flex-start; }
     ${MatchRow} [data-leg-odds] { flex-direction: row; align-items: baseline; gap: 4px; }
@@ -209,7 +209,7 @@ export const CompactCard = styled.article`
     [data-summary-count] { justify-self: start; }
     [data-summary-odds] { justify-self: end; }
     ${MatchRow} { grid-template-columns: 4.5rem minmax(0, 1fr) auto; grid-template-areas: "kickoff teams teams" "kickoff meta meta" "kickoff pick pick" "kickoff odds probability"; gap: 2px 8px; }
-    ${MatchRow} [data-kickoff] { flex-direction: column-reverse; justify-content: flex-end; align-self: stretch; gap: 2px; padding-inline-end: 7px; border-inline-end: 1px solid ${({ theme }) => theme.color.border}; }
+    ${MatchRow} [data-kickoff] { flex-direction: column-reverse; justify-content: flex-end; align-self: stretch; gap: 2px; padding-inline-end: 7px; border-inline-end: 0; }
     ${MatchRow} [data-clock] { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; white-space: normal; }
     ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { flex-direction: row; align-items: baseline; gap: 4px; }
     ${MatchRow} [data-leg-odds] { justify-self: start; }

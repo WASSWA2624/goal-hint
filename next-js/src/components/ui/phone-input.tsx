@@ -192,8 +192,8 @@ const PhoneControl = styled.div`
 `;
 const CountryTrigger = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px 8px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit; font-size: 0.875rem;
+  border: 0; border-radius: ${({ theme }) => theme.radius.control};
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft}; font: inherit; font-size: 0.875rem;
   white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
   > svg { inline-size: 14px; block-size: 14px; flex: none; }
   &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; }
@@ -208,13 +208,14 @@ const DialFlagFallback = styled.span`
 `;
 const CountryMenu = styled.div`
   position: fixed; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; box-sizing: border-box; padding: 10px;
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.overlay}; overflow: hidden;
+  border: 0; border-radius: ${({ theme }) => theme.radius.overlay}; overflow: hidden;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const CountrySearch = styled.input`
   box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: 44px; padding: 8px 10px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 1rem;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; ${focusTreatment}
+  border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 1rem;
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.field}; ${focusTreatment}
 `;
 const CountrySearchLabel = styled.label`
   position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden;

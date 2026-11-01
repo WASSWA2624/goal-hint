@@ -14,17 +14,17 @@ const Toolbar = styled.div`
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
   > label { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
   select { max-inline-size: 100%; min-inline-size: 0; min-block-size: 30px; padding: 4px 6px; font: inherit;
-    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.border}; ${focusRing} }
+    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border: 0; ${focusRing} }
 `;
 const Control = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-block-size: 30px; padding: 4px 8px;
-  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit; font-size: .6875rem; cursor: pointer;
+  border: 0; border-radius: ${({ theme }) => theme.radius.control};
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft}; font: inherit; font-size: .6875rem; cursor: pointer;
   > svg { inline-size: 14px; block-size: 14px; } &:disabled { opacity: .35; cursor: default; } ${focusRing}
 `;
 const Canvas = styled.div`
   position: relative; min-inline-size: 0; overflow: auto; max-block-size: min(68dvh, 680px);
-  background: ${({ theme }) => theme.color.surfaceMuted}; border: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.surfaceMuted}; border: 0;
   overscroll-behavior: contain; scroll-snap-type: x proximity; scrollbar-width: thin; cursor: grab;
   &[data-dragging] { cursor: grabbing; user-select: none; } ${focusRing}
 `;
@@ -42,10 +42,10 @@ const RoundHeadings = styled.div`
 `;
 const TieCard = styled.button`
   position: absolute; display: grid; grid-template-rows: 16px 25px 25px 14px; align-content: center; gap: 1px;
-  box-sizing: border-box; padding: 6px 8px; border: 1px solid ${({ theme }) => theme.color.border};
+  box-sizing: border-box; padding: 6px 8px; border: 0;
   border-radius: ${({ theme }) => theme.radius.small}; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   font: inherit; text-align: start; cursor: pointer;
-  &[data-current] { border: 2px solid ${({ theme }) => theme.color.brand}; padding: 5px 7px; }
+  &[data-current] { background: ${({ theme }) => theme.color.brandSoft}; }
   > small { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: .5625rem; color: ${({ theme }) => theme.color.mutedText}; }
   > small > b { color: ${({ theme }) => theme.color.brand}; }
   > span { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: .75rem; }
@@ -53,11 +53,11 @@ const TieCard = styled.button`
   > span[data-winner] { font-weight: 800; color: ${({ theme }) => theme.color.accent.emerald.text}; }
   > span > small { font-size: .625rem; color: ${({ theme }) => theme.color.mutedText}; }
   > em { font-size: .5625rem; font-style: normal; color: ${({ theme }) => theme.color.mutedText}; }
-  &:hover { box-shadow: ${({ theme }) => `0 0 0 1px ${theme.color.brand}`}; } ${focusRing}
+  &:hover { background: ${({ theme }) => theme.color.rowHover}; } ${focusRing}
 `;
 const FixtureList = styled.div`
   display: grid; gap: 16px;
-  > section { display: grid; gap: 8px; border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 12px; }
+  > section { display: grid; gap: 8px; border-block-start: 0; padding-block-start: 12px; }
   > section > div { display: flex; align-items: center; gap: 6px; }
   > section > div > span { flex: 1; }
   > section > div > b { font-variant-numeric: tabular-nums; }

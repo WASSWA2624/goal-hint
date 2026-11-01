@@ -32,7 +32,6 @@ const Field = styled.div`
   display: grid;
   gap: 5px;
   min-inline-size: 0;
-  padding-block-start: 5px;
 `;
 
 const Control = styled.div`
@@ -41,12 +40,9 @@ const Control = styled.div`
   > label {
     position: absolute;
     z-index: 1;
-    inset-block-start: 0;
-    inset-inline-start: 8px;
+    inset-block-start: 6px;
+    inset-inline-start: 10px;
     max-inline-size: calc(100% - 16px);
-    padding-inline: 3px;
-    transform: translateY(-50%);
-    background: ${({ theme }) => theme.color.surface};
     color: ${({ theme }) => theme.color.mutedText};
     font-size: 0.6875rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -63,6 +59,8 @@ const Control = styled.div`
     min-inline-size: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     font-weight: normal;
+    min-block-size: 48px;
+    padding-block: 20px 6px;
   }
   > input::placeholder, > textarea::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   > textarea { min-block-size: 5.5rem; resize: vertical; }

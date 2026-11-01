@@ -24,7 +24,7 @@ type Detail = { revision: number; status: string; walletUgx: number; referralDay
 const Review = styled.article`
   display: grid; gap: 14px; padding: 16px; min-inline-size: 0; overflow-y: auto; align-content: start;
   h2, h3, p { margin: 0; } form { display: grid; gap: 10px; min-inline-size: 0; }
-  fieldset { min-inline-size: 0; margin: 0; padding: 12px; border: 1px solid ${({ theme }) => theme.color.border}; }
+  fieldset { min-inline-size: 0; margin: 0; padding: 12px; border: 0; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
   textarea { inline-size: 100%; resize: vertical; } label { overflow-wrap: anywhere; }
 `;

@@ -69,9 +69,9 @@ const Choice = styled.label`
   min-inline-size: 0;
   min-block-size: 44px;
   padding: 6px 8px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.surfaceMuted};
   color: ${({ theme }) => theme.color.text};
   font-size: 0.75rem;
   line-height: 1.25;
@@ -87,6 +87,6 @@ const Choice = styled.label`
   > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-inline-size: 0; }
   > span > span:last-child { overflow-wrap: anywhere; }
   [data-payment-logo] { inline-size: 30px; block-size: 22px; }
-  &:has(> input:checked) { border-color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
-  &:hover:has(> input:not(:disabled)) { border-color: ${({ theme }) => theme.color.link}; }
+  &:has(> input:checked) {  background: ${({ theme }) => theme.color.brandSoft}; }
+  &:hover:has(> input:not(:disabled)) { background: ${({ theme }) => theme.color.rowHover}; }
 `;

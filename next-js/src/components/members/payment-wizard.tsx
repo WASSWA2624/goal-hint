@@ -21,7 +21,7 @@ const Card = styled.section`
   padding: 16px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 
   > h2 {
@@ -79,7 +79,7 @@ const Progress = styled.nav`
     flex: none;
     inline-size: 23px;
     block-size: 23px;
-    border: 1px solid ${({ theme }) => theme.color.border};
+    border: 0;
     font-size: 12px;
     line-height: 1;
   }
@@ -98,7 +98,7 @@ const Progress = styled.nav`
   li[data-complete="true"] { color: ${({ theme }) => theme.color.link}; }
   li[data-complete="true"] > span:first-child {
     background: ${({ theme }) => theme.color.brandSoft};
-    border-color: ${({ theme }) => theme.color.brand};
+
   }
   li[aria-current="step"] {
     color: ${({ theme }) => theme.color.link};
@@ -107,7 +107,7 @@ const Progress = styled.nav`
   li[aria-current="step"] > span:first-child {
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme }) => theme.color.brand};
-    border-color: ${({ theme }) => theme.color.brand};
+
   }
   @media (max-width: 480px) {
     ol { gap: 4px; }
@@ -151,7 +151,7 @@ export const WizardActions = styled.div`
   min-inline-size: 0;
   margin-block-start: 4px;
   padding-block-start: 10px;
-  border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   > button {
     inline-size: 100%;
     min-block-size: 46px;
@@ -162,8 +162,8 @@ export const WizardActions = styled.div`
   }
   > button:not(:last-child):not(:disabled) {
     color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface};
-    border-color: ${({ theme }) => theme.color.controlBorder};
+    background: ${({ theme }) => theme.color.brandSoft};
+
   }
   > button:only-child { grid-column: 1 / -1; }
   svg { inline-size: 18px; block-size: 18px; flex: none; }
@@ -201,7 +201,7 @@ export const WizardReview = styled.dl`
     gap: 8px;
     min-inline-size: 0;
     padding-block: 2px;
-    border-block-end: 1px solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
   }
   > div:last-child { border-block-end: 0; }
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: 14px; line-height: 20px; }

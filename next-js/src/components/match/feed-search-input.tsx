@@ -19,7 +19,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
   grid-template-columns: minmax(0, 1fr) auto;
   min-inline-size: 0;
   min-block-size: 2.75rem;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
@@ -35,7 +35,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
     min-block-size: 2rem;
     padding-inline-start: 8px;
     border-radius: ${({ theme }) => theme.radius.control};
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.field};
     > svg { flex: none; font-size: 0.875rem; color: ${({ theme }) => theme.color.mutedText}; }
     > input, > button { min-block-size: calc(2rem - 2px); font-size: 0.75rem; }
     > input { padding: 4px 0; }
@@ -58,7 +58,7 @@ const Field = styled.div<{ $compact?: boolean; $mobile?: boolean }>`
       align-items: center;
       min-block-size: 36px;
       border-radius: ${({ theme }) => theme.radius.control};
-      background: ${({ theme }) => theme.color.surface};
+      background: ${({ theme }) => theme.color.field};
       > input, > button { min-block-size: 34px; }
       > input { padding: 2px 6px 2px 0; }
       > input::placeholder { font-size: 0.75rem; }

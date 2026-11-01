@@ -1,5 +1,6 @@
 "use client";
 
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import { useRef, useState, useSyncExternalStore } from "react";
 import styled from "styled-components";
 import { Button, ButtonLink, TextInput } from "@/components/ui/controls";
@@ -35,8 +36,9 @@ const InviteTitle = styled.span`
   > svg { color: ${({ theme }) => theme.color.brand}; font-size: 1.25rem; }
 `;
 const History = styled.table`
+  ${filledTableRows}
   border-collapse: collapse; inline-size: 100%; font-size: ${({ theme }) => theme.typography.scale.secondary};
-  th, td { text-align: start; padding: 10px 8px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+  th, td { text-align: start; padding: 10px 8px; border-block-end: 0; }
   th { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   td:last-child, th:last-child { text-align: end; white-space: nowrap; }
   tr:last-child td { border-block-end: 0; }

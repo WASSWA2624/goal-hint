@@ -6,7 +6,7 @@ import { media } from "@/styles/theme";
 
 /** Phones and tablets halve the spacing; desktop keeps the full space tokens. */
 export const DetailMarket = styled(Stack)`
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   padding-block-start: ${({ theme }) => theme.space.sm};
   ${media.desktop} { padding-block-start: ${({ theme }) => theme.space.md}; }
 `;

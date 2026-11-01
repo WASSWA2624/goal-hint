@@ -56,7 +56,7 @@ export const desktopBalancedReview = css`
       min-inline-size: 0;
       > [data-payment-zone] {
         min-inline-size: 0; padding: 16px;
-        border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+        border: 0;
         border-radius: ${({ theme }) => theme.radius.surface}; background: ${({ theme }) => theme.color.surface};
       }
       > [data-payment-zone="decision"] { grid-area: decision; display: grid; align-content: start; gap: 14px; }

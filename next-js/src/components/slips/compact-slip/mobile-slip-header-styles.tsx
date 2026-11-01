@@ -31,7 +31,7 @@ export const MobileHeaderRow = styled.summary`
   [data-header-field], [data-header-status] {
     position: relative; display: flex; align-items: center; align-self: stretch;
     min-inline-size: 0; gap: 2px; padding-inline: 3px;
-    border-inline-start: 1px solid var(--header-rule); white-space: nowrap;
+    border-inline-start: 0; white-space: nowrap;
   }
   [data-header-field] strong { flex-shrink: 0; font-size: 0.6875rem; font-weight: 600; white-space: nowrap; }
   [data-header-label] { flex-shrink: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
@@ -39,7 +39,7 @@ export const MobileHeaderRow = styled.summary`
   &[data-large-odds] [data-header-field="odds"] [data-header-label] { display: none; }
   &[data-large-odds] [data-header-field="odds"] strong { font-size: 0.625rem; }
   [data-header-status] {
-    justify-content: center; border-inline-end: 1px solid var(--header-rule);
+    justify-content: center; border-inline-end: 0;
     color: var(--header-status-ink); font-size: 0.625rem; font-weight: 700;
   }
   &[data-header-outcome="won"] { --header-status-ink: ${({ theme }) => theme.color.outcome.correct.text}; --header-status-fill: ${({ theme }) => theme.color.outcome.correct.background}; }

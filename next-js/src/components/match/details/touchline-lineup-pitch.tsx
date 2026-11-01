@@ -18,7 +18,7 @@ type Lineups = InsightSections["lineups"];
 
 const Field = styled.div`
   position: relative; isolation: isolate; min-inline-size: 0; inline-size: 100%; aspect-ratio: ${pitchCanvas.length} / ${pitchCanvas.width};
-  overflow: hidden; border: 1px solid ${({ theme }) => theme.color.border};
+  overflow: hidden; border: 0;
   background: ${({ theme }) => theme.color.accent.emerald.soft};
   > svg { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; color: ${({ theme }) => theme.color.accent.emerald.text}; pointer-events: none; }
   [data-stripe="0"] { fill: ${({ theme }) => theme.color.accent.emerald.soft}; }

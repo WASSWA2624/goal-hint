@@ -4,6 +4,7 @@ import styled, { css } from "styled-components";
 import { ToolButton } from "@/components/analytics/dashboard/dashboard-styles";
 import { authCopy } from "@/i18n/messages/auth";
 import { media } from "@/styles/theme";
+import { filledField } from "@/components/ui/filled-surfaces";
 
 /**
  * Form parts for owner pages: one column on phones, 44 px targets (40 px from desktop up), bold 13 px labels, and 16 px text
@@ -23,14 +24,13 @@ export const adminControl = css`
   inline-size: 100%;
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding: 8px 10px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  ${filledField}
   font-size: 1rem;
   ${media.desktop} { min-block-size: 40px; padding-block: 6px; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.border}; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
 `;
 export const FieldBlock = styled.label`
@@ -63,7 +63,7 @@ export const ActionButton = styled(ToolButton)`
 export const DangerButton = styled(ActionButton)`
   color: ${({ theme }) => theme.color.outcome.incorrect.text};
   background: ${({ theme }) => theme.color.outcome.incorrect.background};
-  border-color: ${({ theme }) => theme.color.outcome.incorrect.border};
+
 `;
 export const ButtonRow = styled.div`
   display: flex;

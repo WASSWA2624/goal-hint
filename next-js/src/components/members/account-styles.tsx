@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/controls";
 export const AccountCard = styled.section`
   inline-size: 100%; max-inline-size: 26rem; min-inline-size: 0; margin-inline: auto;
   background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   font-size: 0.875rem; line-height: 1.45;
   button, a { min-block-size: 44px; }
@@ -16,9 +16,10 @@ export const AccountCard = styled.section`
   h2 { font-size: 1rem; font-weight: 500; margin: 0 0 12px; }
 `;
 export const AccountCardHeading = styled.div`
+  background: ${({ theme }) => theme.color.surfaceMuted};
   display: flex; align-items: center; gap: 10px;
   min-block-size: 58px; padding: 10px 16px;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   > svg { color: ${({ theme }) => theme.color.link}; inline-size: 18px; block-size: 18px; }
   h1, h2 { margin: 0; font-size: 1.0625rem; font-weight: 500; line-height: 1.3; }
 `;
@@ -43,13 +44,13 @@ export const AccountSessionInfo = styled.details`
   > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   > summary svg { inline-size: 18px; block-size: 18px; }
   > p { position: absolute; inset-inline-end: 0; inset-block-start: 100%; z-index: 2; inline-size: 14rem; max-inline-size: 70vw;
-    padding: 10px 12px; border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface};
+    padding: 10px 12px; border: 0; background: ${({ theme }) => theme.color.surface};
     border-radius: ${({ theme }) => theme.radius.surface};
     color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
 `;
 export const AccountSupport = styled.nav`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 8px;
-  border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 8px;
+  border-block-start: 0; padding-block-start: 8px;
   > * { min-inline-size: 0; }
   form { margin: 0; }
   a, button { display: flex; align-items: center; min-block-size: 44px; padding: 4px 0; border: 0; background: transparent;

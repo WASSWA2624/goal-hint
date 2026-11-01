@@ -32,10 +32,10 @@ const Search = styled.label`
   min-block-size: 1.875rem;
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  background: ${({ theme }) => theme.color.field};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  &:focus-within { border-color: ${({ theme }) => theme.color.accent.blue.solid}; }
+  &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: ${size("secondary")}; outline: none; }
 `;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
@@ -125,7 +125,7 @@ const Footer = styled.div`
   display: grid;
   gap: 2px;
   padding-block-start: 6px;
-  border-block-start: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.border};
+  border-block-start: 0;
 `;
 
 function Time({ at }: { at: UtcInstant | null }) {

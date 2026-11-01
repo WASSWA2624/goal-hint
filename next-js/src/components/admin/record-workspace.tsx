@@ -25,7 +25,7 @@ export const RecordHead = styled.header`
   h1 { font-size: 1.375rem; }
   ${media.desktop} {
     grid-column: 1 / -1; min-block-size: 48px; padding: 4px 12px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
     background: ${({ theme }) => theme.color.surface};
     > h1 { ${visuallyHidden} }
     button, nav { border-radius: ${({ theme }) => theme.radius.control}; }
@@ -35,7 +35,7 @@ export const RecordFeedback = styled.div`
   min-inline-size: 0;
   > p { margin: 0; }
   > p + p { margin-block-start: 8px; }
-  ${media.desktop} { grid-column: 1 / -1; grid-row: 2; padding: 8px 16px; border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  ${media.desktop} { grid-column: 1 / -1; grid-row: 2; padding: 8px 16px; border-block-end: 0; }
 `;
 export const RecordList = styled.section`
   position: relative; display: grid; min-inline-size: 0; gap: 12px;
@@ -43,7 +43,7 @@ export const RecordList = styled.section`
   ${media.desktop} {
     grid-column: 1; grid-row: 3; grid-template-rows: auto minmax(0, 1fr) auto;
     min-block-size: 0; gap: 0; overflow: hidden;
-    border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-inline-end: 0;
     background: ${({ theme }) => theme.color.surface};
   }
 `;
@@ -51,7 +51,7 @@ export const RecordListTools = styled.div`
   display: grid; gap: 8px; min-inline-size: 0;
   ${media.desktop} {
     gap: 4px; padding: 6px 10px 4px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
     input:not([type="checkbox"]):not([type="radio"]), select { min-block-size: 34px; font-size: 0.8125rem; }
     input, select, button { border-radius: ${({ theme }) => theme.radius.control}; }
   }
@@ -71,7 +71,7 @@ export const RecordListFooter = styled.div`
   color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
   ${media.desktop} {
     grid-row: 3; padding: 5px 10px; font-size: 0.6875rem;
-    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-start: 0;
     background: ${({ theme }) => theme.color.surfaceMuted};
   }
 `;
@@ -103,7 +103,7 @@ export const RecordDetailHead = styled.header`
   h2 { min-inline-size: 0; overflow-wrap: anywhere; font-size: 1.0625rem; }
   ${media.desktop} {
     min-block-size: 44px; padding: 6px 12px;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
     background: ${({ theme }) => theme.color.surface};
     a, button { min-block-size: 28px; }
   }
@@ -116,7 +116,7 @@ export const RecordFooter = styled(StickyActions).attrs<{ "data-record-footer"?:
   ${media.desktop} {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
     position: static; min-inline-size: 0; margin: 0; padding: 6px 12px;
-    border: 0; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0; border-block-start: 0;
     background: ${({ theme }) => theme.color.surface};
     > * { flex: 0 1 auto; }
     > button, > a, [data-record-actions] button, [data-record-actions] a { min-inline-size: 0; min-block-size: 32px; padding: 4px 10px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.8125rem; }
@@ -130,14 +130,14 @@ export const RecordFooter = styled(StickyActions).attrs<{ "data-record-footer"?:
 export const RecordItem = styled.button`
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px;
   min-inline-size: 0; inline-size: 100%; padding: 10px 14px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.surface};
+  border: 0; border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text};
   font: inherit; text-align: start; cursor: pointer;
-  &[aria-current="true"], &[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: inset 3px 0 ${({ theme }) => theme.color.link}; }
+  &[aria-current="true"], &[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
   ${media.hover} { &:hover:not(:disabled):not([aria-current="true"]) { background: ${({ theme }) => theme.color.rowHover}; } }
-  ${media.desktop} { min-block-size: 54px; padding: 8px 10px; border: 0; border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.radius.none}; font-size: 0.8125rem; }
+  ${media.desktop} { min-block-size: 54px; padding: 8px 10px; border: 0; border-block-end: 0; border-radius: ${({ theme }) => theme.radius.none}; font-size: 0.8125rem; }
 `;
 export const RecordItemTitle = styled.span`min-inline-size: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere;`;
 export const RecordItemMeta = styled.span`min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; overflow-wrap: anywhere;`;

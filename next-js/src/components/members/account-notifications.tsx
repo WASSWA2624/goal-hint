@@ -19,7 +19,7 @@ import { refreshNotificationUnread } from "./notification-state";
 const List = styled.ul`
   list-style: none; margin: 0; padding: 0; display: grid;
   > li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px 12px; padding: 12px;
-    border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
+    border-block-end: 0; }
   > li:last-child { border-block-end: 0; }
   > li[data-unread] { background: ${({ theme }) => theme.color.brandSoft}; }
   > li > svg { color: ${({ theme }) => theme.color.brand}; margin-block-start: 3px; }

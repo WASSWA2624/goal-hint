@@ -307,7 +307,7 @@ const Tooltip = styled.div`
   pointer-events: none;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
   font-size: ${({ theme }) => theme.typography.scale.secondary};

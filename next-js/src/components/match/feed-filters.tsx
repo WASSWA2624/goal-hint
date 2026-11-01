@@ -73,7 +73,7 @@ const QueryChoices = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;
   > select {
     inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 8px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.radius.control};
+    border: 0; border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     font: inherit; font-size: 0.8125rem;
     ${focusRing}
@@ -125,7 +125,7 @@ const PhoneSort = styled(CompactSelect)`
   flex: 1;
   min-block-size: 2.75rem;
   padding-inline: 28px 24px;
-  border-color: ${({ theme }) => theme.color.controlBorder};
+
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > svg { inset-inline-end: 7px; }
@@ -163,7 +163,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
   &[aria-expanded="true"] {
     color: ${({ theme }) => theme.color.accent.teal.text};
     background: ${({ theme }) => theme.color.brandSoft};
-    border-color: ${({ theme }) => theme.color.brand};
+
   }
   ${controlFeedback}
   ${focusRing}
@@ -177,7 +177,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
     min-inline-size: 44px;
     min-block-size: 44px;
     padding: 0;
-    border-color: ${({ theme }) => theme.color.controlBorder};
+
     border-radius: ${({ theme }) => theme.radius.overlay};
     > svg { font-size: 1rem; }
     > b {
@@ -224,7 +224,7 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
     z-index: 11;
     display: grid;
     padding: 4px 8px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
   }
 `;
@@ -255,7 +255,7 @@ const SheetFooter = styled.div`
     gap: 4px;
     padding: 6px 10px;
     background: ${({ theme }) => theme.color.surface};
-    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-start: 0;
   }
 `;
 const PhoneSection = styled.div`
@@ -303,14 +303,14 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
     flex: none;
     inline-size: 0.75rem;
     block-size: 0.75rem;
-    border: 2px solid ${({ theme, $family }) => theme.color.market[$family].solid};
+    border: 0;
   }
   > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; }
   > svg { flex: none; font-size: 1rem; }
   &[aria-pressed="true"] {
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
-    border-color: ${({ theme, $family }) => theme.color.market[$family].solid};
+
     &::before { background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
   }
   &[aria-disabled="true"] { cursor: not-allowed; }
@@ -365,10 +365,10 @@ const ProbabilityInputs = styled.div`
     min-inline-size: 0;
     padding-inline: 5px;
     /* Editable field boundaries stay distinct from quiet section frames. */
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     ${controlFeedback}
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.field};
     color: ${({ theme }) => theme.color.mutedText};
     font-size: 0.8125rem;
     white-space: nowrap;
@@ -386,7 +386,7 @@ const ProbabilityInputs = styled.div`
     font-variant-numeric: tabular-nums;
     ${focusRing}
   }
-  > label:has([aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.accent.red.text}; }
+  > label:has([aria-invalid="true"]) { background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   ${media.belowDesktop} {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -398,11 +398,11 @@ const ProbabilityInputs = styled.div`
       inline-size: 100%;
       min-block-size: 2.5rem;
       padding: 4px 8px;
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+      border: 0;
       border-radius: ${({ theme }) => theme.radius.control};
       ${controlFeedback}
       font-size: 16px;
-      &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.accent.red.text}; }
+      &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
     }
   }
   ${desktop} {
@@ -441,7 +441,7 @@ const OddsNote = styled.p`
   gap: 7px;
   margin-block-start: 0;
   padding-block-start: 8px;
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: 0.75rem;
   line-height: 1.5;
@@ -468,11 +468,11 @@ const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
   min-inline-size: 0;
   min-block-size: 2.375rem;
   padding-inline: 10px 4px;
-  background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.field};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  &:focus-within { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; }
-  ${media.hover} { &:hover { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; } }
+  &:focus-within { background: ${({ theme }) => theme.color.fieldHover}; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.fieldHover}; } }
 `;
 const FieldName = styled.span<{ $accent: AccentName }>`
   display: inline-flex;
@@ -535,7 +535,7 @@ const OutlineButton = styled(QuietButton)`
   min-block-size: 2rem;
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.8125rem;
-  border-color: transparent;
+
   background: ${({ theme }) => theme.color.surfaceMuted};
   ${media.belowDesktop} {
     background: ${({ theme }) => theme.color.surfaceMuted};

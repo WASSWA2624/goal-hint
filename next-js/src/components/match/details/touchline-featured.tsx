@@ -19,7 +19,7 @@ import { TouchlineLinkButton, TouchlineSurface } from "./touchline-ui";
 
 const Frame = styled(TouchlineSurface)`
   display: flex; gap: 20px; align-items: center; justify-content: space-between;
-  padding: 16px ${({ theme }) => theme.layout.gutter}; border-inline-start: 4px solid ${({ theme }) => theme.color.brand};
+  padding: 16px ${({ theme }) => theme.layout.gutter}; border-inline-start: 0;
   scroll-margin-block-start: calc(var(--app-header-height, 3rem) + 24px);
   background: linear-gradient(90deg, ${({ theme }) => theme.color.brandSoft}, ${({ theme }) => theme.color.surface} 72%);
   @media (max-width: 1199px) { flex-wrap: wrap; gap: 18px; }
@@ -35,7 +35,7 @@ const Lead = styled.div`
 const Numbers = styled.div`
   display: flex; gap: 28px; align-items: center; flex: none; font-variant-numeric: tabular-nums;
   > div { display: grid; gap: 3px; }
-  > div + div { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 24px; }
+  > div + div { border-inline-start: 0; padding-inline-start: 24px; }
   b { font-size: 1.75rem; line-height: 1.3; }
   small { font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
   i { display: block; block-size: 4px; background: ${({ theme }) => theme.color.brand}; margin-block-start: 4px; }
@@ -49,7 +49,7 @@ const Access = styled.div`
   > div { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-block-start: 16px; }
 `;
 const Referral = styled.aside`
-  flex: 0 1 285px; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; padding-inline-start: 24px;
+  flex: 0 1 285px; border-inline-start: 0; padding-inline-start: 24px;
   > svg { color: ${({ theme }) => theme.color.brand}; inline-size: 24px; block-size: 24px; margin-block-end: 8px; }
   strong { display: block; margin-block-end: 6px; font-size: .875rem; }
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem; line-height: 1.8; }

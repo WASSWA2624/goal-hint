@@ -19,7 +19,7 @@ const Timeline = styled.div`
 `;
 const Teams = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) var(--event-time-width) minmax(0, 1fr); gap: 8px;
-  align-items: center; padding-block: 4px 8px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  align-items: center; padding-block: 4px 8px; border-block-end: 0;
   > svg { grid-column: 2; grid-row: 1; justify-self: center; inline-size: 16px; block-size: 16px; color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const Team = styled.div`
@@ -52,7 +52,7 @@ const Minute = styled.span`
 `;
 const Incident = styled.div`
   display: flex; align-items: center; gap: 7px; min-inline-size: 0; grid-row: 1; padding: 6px 8px;
-  border-inline: 2px solid transparent;
+  border-inline: 0;
   &[data-team="home"] { flex-direction: row-reverse; text-align: end; }
   > [data-symbol] { display: flex; flex: none; color: ${({ theme }) => theme.color.accent.violet.text}; }
   > [data-symbol] > svg { inline-size: 24px; block-size: 24px; }

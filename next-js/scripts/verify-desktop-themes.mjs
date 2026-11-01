@@ -45,7 +45,10 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
       if (screen === "analytics") await page.getByText("2,846", { exact: true }).waitFor({ timeout: 10000 });
       const result = await page.evaluate(() => {
         const body = getComputedStyle(document.body), canvas = document.querySelector("[data-preview-canvas]");
-        const studioElement = document.querySelector("[data-theme-studio]"), headerElement = canvas.querySelector("[data-app-header]");
+        const studioElement = document.querySelector("[data-theme-studio]");
+        const headerElement = [...canvas.querySelectorAll("[data-app-header], [data-mobile-app-header] > div")]
+          .find(element => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0)
+          ?? canvas.querySelector("[data-app-header]");
         const studio = studioElement.getBoundingClientRect(), header = headerElement.getBoundingClientRect();
         const muted = getComputedStyle(studioElement.querySelector("p")), surface = getComputedStyle(studioElement);
         const active = getComputedStyle(studioElement.querySelector('nav[aria-label="Desktop themes"] a[aria-current]'));
@@ -54,6 +57,15 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           const child = element.getBoundingClientRect(), parent = element.parentElement.getBoundingClientRect();
           return child.width > 0 && parent.width > 0 && (child.left < parent.left - 2 || child.right > parent.right + 2);
         }).length;
+        const bordered = [...canvas.querySelectorAll("*")].filter(element => {
+          const bounds = element.getBoundingClientRect();
+          if (!bounds.width || !bounds.height) return false;
+          const style = getComputedStyle(element);
+          return ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"]
+            .some(edge => Number.parseFloat(style[edge]) > 0);
+        }).map(element => element.tagName.toLowerCase() + (element.id ? `#${element.id}` : ""));
+        const idleProgressVisible = !document.querySelector('[data-navigation-pending], main [aria-busy="true"]')
+          && [...canvas.querySelectorAll("[data-navigation-progress]")].some(element => getComputedStyle(element).opacity !== "0");
         return { overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
           foreground: body.color, background: body.backgroundColor,
           mutedForeground: muted.color, mutedBackground: surface.backgroundColor,
@@ -61,12 +73,14 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           headerForeground: headerStyle.color, headerBackground: headerStyle.backgroundColor,
           themes: document.querySelectorAll('nav[aria-label="Desktop themes"] a').length,
           screens: document.querySelectorAll('nav[aria-label="Preview screens"] a').length,
-          overlap: header.top < studio.bottom - 1,
-          outsideParent, content: canvas.textContent.trim().length };
+          overlap: header.width > 0 && header.height > 0 && header.top < studio.bottom - 1,
+          outsideParent, bordered, idleProgressVisible, content: canvas.textContent.trim().length };
       });
       const ratio = contrast(result.foreground, result.background);
       if (result.overflow) errors.push(`${theme}/${screen}: horizontal overflow at ${width}px`);
       if (result.outsideParent) errors.push(`${theme}/${screen}: a panel or form exceeds its parent`);
+      if (result.bordered.length) errors.push(`${theme}/${screen}: decorative borders on ${[...new Set(result.bordered)].join(", ")}`);
+      if (result.idleProgressVisible) errors.push(`${theme}/${screen}: idle loading track must not form a header border`);
       if (result.themes !== 10 || result.screens !== 12) errors.push(`${theme}/${screen}: missing navigation`);
       if (result.overlap) errors.push(`${theme}/${screen}: app header overlaps the studio`);
       if (ratio < 4.5) errors.push(`${theme}/${screen}: body contrast ${ratio.toFixed(2)}`);

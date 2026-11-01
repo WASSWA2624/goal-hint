@@ -43,6 +43,9 @@ export interface GoalHintTheme {
     readonly page: string;
     readonly surface: string;
     readonly surfaceMuted: string;
+    /** Filled editable controls, distinct from their containing surface. */
+    readonly field: string;
+    readonly fieldHover: string;
     /** Neutral overlay behind dialogs and sheets in either theme. */
     readonly scrim: string;
     /** Quiet outlines and dividers for non-interactive surfaces. */
@@ -214,6 +217,8 @@ export const foundationLightTheme: GoalHintTheme = {
     page: "#F0F3F8",
     surface: brandTokens.colors.white,
     surfaceMuted: "#E8EDF5",
+    field: "#E0E5ED",
+    fieldHover: "#D6DFEC",
     scrim: "rgb(0 8 20 / 65%)",
     // Neutral section dividers stay quiet; controls retain a contrasting boundary.
     border: "#D9E1ED",
@@ -297,8 +302,8 @@ export const foundationLightTheme: GoalHintTheme = {
   breakpoint: { md: "48rem", lg: "64rem", xl: "80rem" },
   radius: brandTokens.shape.radius,
   border: {
-    width: "1px",
-    accentWidth: "3px",
+    width: "0px",
+    accentWidth: "0px",
     focusWidth: "3px",
     focusOffset: "3px",
   },
@@ -357,6 +362,8 @@ export const foundationDarkTheme: GoalHintTheme = {
     page: "#03111F",
     surface: "#081B2C",
     surfaceMuted: "#0D253B",
+    field: "#1A2E41",
+    fieldHover: "#24405B",
     border: "#142A3D",
     controlBorder: "#58728C",
     buttonBorder: "#263D50",

@@ -18,7 +18,7 @@ const tones = { stats: "blue", markets: "orange", lineups: "emerald", form: "vio
 const Bar = styled.div`
   position: sticky; inset-block-start: calc(var(--review-height, 0px) + var(--app-header-height, ${({ theme }) => theme.header.desktopHeight}));
   z-index: 10; display: flex; align-items: stretch; min-inline-size: 0;
-  background: ${({ theme }) => theme.color.surface}; border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.surface}; border-block-end: 0;
   ${media.belowDesktop} { inset-block-start: var(--review-height, 0px); }
 `;
 const Strip = styled.div`
@@ -29,19 +29,19 @@ const Strip = styled.div`
 const Tab = styled.button`
   display: inline-flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: 6px;
   min-block-size: 46px; padding: 9px 10px; white-space: nowrap;
-  background: transparent; color: ${({ theme }) => theme.color.mutedText}; border: 0; border-block-end: 2px solid transparent;
+  background: transparent; color: ${({ theme }) => theme.color.mutedText}; border: 0; border-block-end: 0;
   border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: .75rem; line-height: 1.4; cursor: pointer;
   > svg { flex: none; inline-size: 16px; block-size: 16px; }
   > svg[data-lock] { inline-size: 11px; block-size: 11px; }
   > [data-tab-icon] { flex: none; inline-size: 22px; block-size: 22px; font-size: 14px; }
-  &[aria-selected="true"] { color: ${({ theme }) => theme.color.brand}; border-block-end-color: currentColor; font-weight: 800; }
+  &[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.brand};  font-weight: 800; }
   &:hover { background: ${({ theme }) => theme.color.brandSoft}; }
   ${focusRing}
   ${media.desktop} { font-size: .8125rem; font-weight: 600; padding-inline: 7px; gap: 5px; }
 `;
 const ScrollButton = styled.button`
   display: grid; flex: none; place-items: center; inline-size: 30px; min-block-size: 46px; padding: 0;
-  background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text}; border: 0; cursor: pointer;
+  background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text}; border: 0; cursor: pointer;
   > svg { inline-size: 16px; block-size: 16px; }
   &:disabled { opacity: .3; cursor: default; }
   ${focusRing}

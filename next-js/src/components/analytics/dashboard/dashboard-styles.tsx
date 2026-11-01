@@ -1,5 +1,6 @@
 "use client";
 
+import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters, mobileFilterPanel } from "@/components/ui/filter-chrome";
@@ -15,7 +16,7 @@ export const TopBar = styled.header`
   z-index: 10;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.border};
+  border-block-end: 0;
 `;
 export const TopBarContent = styled.div`
   display: flex;
@@ -33,7 +34,7 @@ export const Brand = styled.a`
   color: inherit;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   text-decoration: none;
-  span { padding-inline-start: 10px; border-inline-start: 1px solid ${({ theme }) => theme.header.border}; font-weight: 600; }
+  span { padding-inline-start: 10px; border-inline-start: 0; font-weight: 600; }
   &:hover { color: inherit; }
 `;
 export const BrandImage = styled.img`
@@ -79,7 +80,7 @@ export const LivePill = styled.span`
 const headerControl = css`
   min-block-size: 32px;
   padding: 4px 12px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.controlFill};
@@ -117,13 +118,13 @@ export const PageTitle = styled.div`
 `;
 export const Notice = styled.p<{ $tone?: "warning" | "error" | "info" }>`
   padding: 10px 14px;
-  border-inline-start: 4px solid;
+  border-inline-start: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
   font-size: ${({ theme }) => theme.typography.scale.body};
   ${({ theme, $tone = "info" }) => {
     const tone = $tone === "error" ? theme.color.outcome.incorrect : $tone === "warning" ? theme.color.outcome.pending : theme.color.outcome.void;
-    return css`color: ${tone.text}; background: ${tone.background}; border-color: ${tone.border};`;
+    return css`color: ${tone.text}; background: ${tone.background}; `;
   }}
   button { margin-inline-start: 8px; }
 `;
@@ -136,7 +137,7 @@ export const FilterBar = styled.section`
   gap: 10px 12px;
   padding: 12px;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
   ${desktopContentPadding(true)}
@@ -155,10 +156,10 @@ export const Field = styled.label`
     min-block-size: 36px;
     inline-size: 100%;
     padding: 4px 8px;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.field};
     font-size: ${({ theme }) => theme.typography.scale.body};
   }
   ${media.belowDesktop} { flex-basis: calc(50% - 6px); max-inline-size: none; }
@@ -170,15 +171,15 @@ export const ToolButton = styled.button<{ $variant?: "primary" | "secondary" | "
   gap: 6px;
   min-block-size: 36px;
   padding: 4px 12px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  color: ${({ theme }) => theme.color.link};
+  background: ${({ theme }) => theme.color.brandSoft};
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  ${({ theme, $variant }) => $variant === "primary" && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; border-color: ${theme.gradient.action};`}
-  ${({ $variant }) => $variant === "quiet" && css`border-color: transparent; background: transparent;`}
+  ${({ theme, $variant }) => $variant === "primary" && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; `}
+  ${({ theme, $variant }) => $variant === "quiet" && css`background: ${theme.color.surfaceMuted};`}
   &:disabled { cursor: not-allowed; opacity: 0.55; }
   @media (hover: hover) { &:hover:not(:disabled) { filter: brightness(${({ theme }) => theme.interaction.toolHoverBrightness}); } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
@@ -221,9 +222,9 @@ export const Chip = styled.li`
 export const Cards = styled.section<{ $busy?: boolean }>`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  background: ${({ theme }) => theme.color.border};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  gap: 6px;
+  background: ${({ theme }) => theme.color.page};
+  border: 0;
   transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   ${media.tablet} { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -259,7 +260,7 @@ export const Panel = styled.section<{ $busy?: boolean }>`
   min-inline-size: 0;
   padding: 14px;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
   transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
@@ -295,7 +296,7 @@ export const Tabs = styled.div`
   gap: 4px;
   overflow-x: auto;
   padding-block-end: 2px;
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-end: 0;
   scrollbar-width: thin;
 `;
 export const Tab = styled.button<{ $selected: boolean }>`
@@ -303,9 +304,9 @@ export const Tab = styled.button<{ $selected: boolean }>`
   min-block-size: 36px;
   padding: 6px 12px;
   border: 0;
-  border-block-end: 3px solid ${({ theme, $selected }) => ($selected ? theme.color.brand : "transparent")};
+  border-block-end: 0;
   color: ${({ theme, $selected }) => ($selected ? theme.color.text : theme.color.mutedText)};
-  background: transparent;
+  background: ${({ theme, $selected }) => $selected ? theme.color.brandSoft : theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: ${({ theme, $selected }) => ($selected ? theme.typography.weight.bold : theme.typography.weight.medium)};
   cursor: pointer;
@@ -319,10 +320,10 @@ export const Segmented = styled.div`
 export const SegmentButton = styled.button<{ $selected: boolean }>`
   min-block-size: 32px;
   padding: 4px 10px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme, $selected }) => ($selected ? theme.color.brand : theme.color.border)};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme, $selected }) => ($selected ? theme.color.brand : theme.color.mutedText)};
-  background: ${({ theme, $selected }) => ($selected ? theme.color.brandSoft : "transparent")};
+  background: ${({ theme, $selected }) => ($selected ? theme.color.brandSoft : theme.color.surfaceMuted)};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
@@ -371,10 +372,11 @@ export const Muted = styled.p`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 export const SeriesTable = styled.table`
+  ${filledTableRows}
   inline-size: 100%;
   border-collapse: collapse;
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-variant-numeric: tabular-nums;
-  th, td { padding: 4px 8px; border-block-end: 1px solid ${({ theme }) => theme.color.border}; text-align: end; white-space: nowrap; }
+  th, td { padding: 4px 8px; border-block-end: 0; text-align: end; white-space: nowrap; }
   th:first-child, td:first-child { text-align: start; }
 `;

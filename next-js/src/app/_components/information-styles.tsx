@@ -37,8 +37,8 @@ export const HelpSection = styled.section`
   min-inline-size: 0;
   padding: 12px;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-block-start: 2px solid ${({ theme }) => theme.color.border};
+  border: 0;
+  border-block-start: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 `;
 export const HelpList = styled.dl`

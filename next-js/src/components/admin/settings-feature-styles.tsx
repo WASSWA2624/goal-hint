@@ -20,7 +20,7 @@ export const ContactList = styled.div`
 export const ContactRow = styled.section`
   border-radius: ${({ theme }) => theme.radius.surface};
   display: grid; gap: 10px; min-inline-size: 0; padding: 14px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   background: ${({ theme }) => theme.color.surface};
 `;
 export const ContactFields = styled.div`
@@ -41,12 +41,12 @@ export const MessageLayout = styled.div`
 `;
 export const EventList = styled.nav`
   display: grid; gap: 3px; align-content: start; min-inline-size: 0; padding: 12px;
-  border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  > button { display: grid; gap: 3px; padding: 10px 12px; min-block-size: 52px; border: 0; border-inline-start: 3px solid transparent; background: transparent; color: ${({ theme }) => theme.color.text}; font: inherit; text-align: start; cursor: pointer; }
+  border-inline-end: 0;
+  > button { display: grid; gap: 3px; padding: 10px 12px; min-block-size: 52px; border: 0; border-inline-start: 0; background: transparent; color: ${({ theme }) => theme.color.text}; font: inherit; text-align: start; cursor: pointer; }
   > button > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; }
-  > button[aria-current="true"] { border-inline-start-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
+  > button[aria-current="true"] {  background: ${({ theme }) => theme.color.brandSoft}; }
   > button:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
-  @container (max-width: 42rem) { display: flex; overflow-x: auto; border-inline-end: 0; border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; > button { flex: none; min-inline-size: 10rem; } }
+  @container (max-width: 42rem) { display: flex; overflow-x: auto; border-inline-end: 0; border-block-end: 0; > button { flex: none; min-inline-size: 10rem; } }
 `;
 export const MessageOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
@@ -54,9 +54,9 @@ export const MessageOptions = styled.div`
   input { inline-size: 16px; block-size: 16px; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
 export const MessageTabs = styled.div`
-  display: flex; flex-wrap: wrap; gap: 0; border-block-end: 1px solid ${({ theme }) => theme.color.border};
-  button { padding: 8px 14px; border: 0; border-block-end: 2px solid transparent; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font: inherit; cursor: pointer; }
-  button[aria-pressed="true"] { border-block-end-color: ${({ theme }) => theme.color.brand}; color: ${({ theme }) => theme.color.link}; font-weight: 700; }
+  display: flex; flex-wrap: wrap; gap: 0; border-block-end: 0;
+  button { padding: 8px 14px; border: 0; border-block-end: 0; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font: inherit; cursor: pointer; }
+  button[aria-pressed="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; font-weight: 700; }
   button:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
 `;
 export const VariableBar = styled.div`

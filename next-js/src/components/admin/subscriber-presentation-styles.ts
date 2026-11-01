@@ -21,7 +21,7 @@ export const subscriberPresentation = css`
   [data-review-row-meta] { grid-column: 2 / -1; min-inline-size: 0; font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; overflow-wrap: anywhere; }
   [data-subscriber-detail] { container: subscriber-detail / inline-size; }
   [data-subscriber-detail] ${RecordBody} { gap: 8px; padding: 12px; }
-  [data-subscriber-summary] { padding: 0; border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; }
+  [data-subscriber-summary] { padding: 0; border: 0; background: ${({ theme }) => theme.color.surface}; }
   [data-subscriber-summary] > header { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; padding: 10px 12px; min-block-size: 0; }
   [data-subscriber-summary] > header h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.0625rem; line-height: 1.35; }
   [data-subscriber-summary] > header > div { min-inline-size: 0; }
@@ -36,9 +36,9 @@ export const subscriberPresentation = css`
   [data-subscriber-actions] > button { flex: 0 1 auto; inline-size: auto; min-inline-size: 0; min-block-size: 32px; padding: 4px 8px; font-size: 0.75rem; line-height: 1.25; }
   [data-subscriber-actions] > button:first-child { grid-column: auto; }
   [data-subscriber-actions] > button > svg { inline-size: 14px; block-size: 14px; }
-  [data-subscriber-tabs] { display: flex; flex-wrap: nowrap; align-items: stretch; justify-self: stretch; gap: 0; inline-size: 100%; padding: 0; border: 0; border-block-end: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; overflow-x: auto; }
-  [data-subscriber-tabs] > button { flex: 0 0 auto; min-block-size: 34px; padding: 6px 12px; border: 0; border-block-end: 2px solid transparent; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font-size: 0.75rem; white-space: nowrap; }
-  [data-subscriber-tabs] > button[aria-selected="true"] { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; border-block-end-color: ${({ theme }) => theme.color.link}; }
+  [data-subscriber-tabs] { display: flex; flex-wrap: nowrap; align-items: stretch; justify-self: stretch; gap: 0; inline-size: 100%; padding: 0; border: 0; border-block-end: 0; background: ${({ theme }) => theme.color.surface}; overflow-x: auto; }
+  [data-subscriber-tabs] > button { flex: 0 0 auto; min-block-size: 34px; padding: 6px 12px; border: 0; border-block-end: 0; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font-size: 0.75rem; white-space: nowrap; }
+  [data-subscriber-tabs] > button[aria-selected="true"] { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};  }
   [data-subscriber-tab] { min-inline-size: 0; }
   [data-subscriber-tab] > div { gap: 10px; padding: 12px; }
 

@@ -9,6 +9,7 @@ const Track = styled.div`
   inset-block-end: -2px;
   block-size: 3px;
   overflow: hidden;
+  opacity: 0;
   pointer-events: none;
   background: ${({ theme }) => `color-mix(in srgb, ${theme.header.accent} 35%, ${theme.header.background})`};
   > span {
@@ -18,6 +19,7 @@ const Track = styled.div`
     background: ${({ theme }) => theme.header.accent};
   }
   body:has([data-navigation-pending], main [aria-busy="true"]) & {
+    opacity: 1;
     > span { display: block; animation: ${travel} 1.1s linear infinite; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -28,7 +30,7 @@ const Track = styled.div`
   }
 `;
 
-/** The track stays visible; only real router or content loading reveals an accessible busy indicator. */
+/** Real router or content loading reveals the track and its accessible busy indicator. */
 export function NavigationProgress({ label }: { label: string }) {
   return <Track data-navigation-progress><span role="progressbar" aria-label={label} /></Track>;
 }

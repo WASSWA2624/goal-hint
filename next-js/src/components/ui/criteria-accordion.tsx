@@ -9,7 +9,7 @@ import { mobileFilterPanel } from "./filter-chrome";
 const Disclosure = styled.details`
   ${mobileFilterPanel}
   min-inline-size: 0;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > summary {
