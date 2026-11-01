@@ -3,13 +3,19 @@
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { Button } from "@/components/ui/controls";
+import { slipHeaderActionFrame } from "../slip-disclosure-styles";
 
 export const ShareTrigger = styled(Button)`
   && { min-block-size: 28px; min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: ${({ theme }) => theme.radius.control};
     font-size: .75rem; line-height: 1.25; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   svg { inline-size: 14px; block-size: 14px; }
   @media (pointer: coarse) { && { min-block-size: 36px; } }
-  &&[data-share-icon-only] { inline-size: 1.5rem; min-inline-size: 1.5rem; block-size: 1.5rem; min-block-size: 1.5rem; padding: 0; }
+  &&[data-share-icon-only] {
+    ${slipHeaderActionFrame}
+    inline-size: var(--slip-header-action-size, 28px); min-inline-size: var(--slip-header-action-size, 28px);
+    block-size: var(--slip-header-action-size, 28px); min-block-size: var(--slip-header-action-size, 28px); padding: 0;
+    &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; border-color: ${({ theme }) => theme.color.border}; }
+  }
   &[data-share-icon-only] svg { inline-size: 16px; block-size: 16px; }
 `;
 

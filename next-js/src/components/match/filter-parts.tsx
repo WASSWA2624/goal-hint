@@ -35,7 +35,7 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   padding-inline: 9px;
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
-  border: ${({ theme }) => theme.border.width} solid transparent;
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   ${media.desktop} { min-block-size: 1.75rem; font-size: 0.75rem; }
@@ -113,7 +113,7 @@ const SelectFace = styled.span`
   padding-inline: 8px 22px;
   color: ${({ theme }) => theme.color.text};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  ${filterControlColors}
+  ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.body};

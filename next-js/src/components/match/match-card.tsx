@@ -91,7 +91,7 @@ const Card = styled.article`
     font-family: ${({ theme }) => theme.typography.family};
     /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
-    border-radius: ${({ theme }) => theme.radius.none};
+    border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
     [data-mobile-only] { display: inline; }
     [data-desktop-only] { display: none; }
   }
@@ -426,7 +426,7 @@ const Open = styled(Link)`
   /* The link covers the tile, so its press tint lands at once over everything, chips included, in place of the
    * browser's tap overlay, inside the card's border. */
   ${tile} {
-    border-radius: ${({ theme }) => theme.radius.none};
+    border-radius: ${({ theme }) => `max(0px, calc(${theme.phoneCardFrame.radius} - ${theme.border.width}))`};
     -webkit-tap-highlight-color: transparent;
     &:active { background: color-mix(in srgb, ${({ theme }) => theme.color.text} 8%, transparent); }
   }

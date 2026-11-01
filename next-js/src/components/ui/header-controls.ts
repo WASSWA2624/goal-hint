@@ -17,7 +17,7 @@ export const compactHeaderRow = css`
   min-inline-size: 0;
 `;
 
-/** Compact desktop controls keep comfortable, non-overlapping phone touch targets. */
+/** Compact actions remain centered inside the existing header rail. */
 export const compactHeaderControl = css`
   display: inline-flex;
   flex: none;
@@ -25,8 +25,8 @@ export const compactHeaderControl = css`
   justify-content: center;
   gap: 4px;
   min-inline-size: 2.75rem;
-  min-block-size: 2.75rem;
-  padding: 4px 6px;
+  min-block-size: 1.75rem;
+  padding: 0 6px;
   border: 1px solid transparent;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
@@ -39,7 +39,7 @@ export const compactHeaderControl = css`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
   ${media.desktop} {
     min-inline-size: 2rem;
-    min-block-size: 2rem;
+    min-block-size: 1.75rem;
     padding-inline: 9px;
     font-size: 0.8125rem;
   }
@@ -49,11 +49,10 @@ export const compactHeaderControl = css`
 export const compactHeaderIconControl = css`
   ${compactHeaderControl}
   inline-size: 2.75rem;
-  padding: 4px;
+  padding: 0 4px;
   border: 0;
-  color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.controlFill};
-  background: color-mix(in srgb, ${({ theme }) => theme.header.accent} 9%, transparent);
+  color: ${({ theme }) => theme.header.accent};
+  background: ${({ theme }) => theme.color.brandSoft};
   transition: background-color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing}, color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing};
   ${media.desktop} { inline-size: 2rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; } }

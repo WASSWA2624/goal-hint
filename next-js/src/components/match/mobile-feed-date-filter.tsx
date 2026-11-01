@@ -9,7 +9,7 @@ import { feedDatePresets, isFeedDatePreset, resolveFeedDates, type DateSelection
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DateRangePicker } from "./feed-dates";
-import { controlFeedback, focusRing } from "./filter-parts";
+import { controlFeedback, filterButtonColors, focusRing } from "./filter-parts";
 import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
 
 type DateDraft = { preset: FeedDatePreset | null; from: string; to: string };
@@ -29,7 +29,7 @@ const Trigger = styled.button`
   padding: 6px 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;
@@ -86,7 +86,7 @@ const Preset = styled.button`
   padding: 6px 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;

@@ -55,7 +55,7 @@ const BarButton = styled.button`
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: 0.8125rem;

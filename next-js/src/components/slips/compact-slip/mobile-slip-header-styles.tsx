@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import { slipDisclosureIndicator } from "../slip-disclosure-styles";
 
 /** Minimal rules: stable metadata columns with compact, even text padding. */
 export const MobileHeaderRow = styled.summary`
@@ -8,7 +9,7 @@ export const MobileHeaderRow = styled.summary`
   --header-rule: ${({ theme }) => `color-mix(in srgb, ${theme.color.border} 65%, transparent)`};
   --header-status-ink: ${({ theme }) => theme.color.outcome.pending.text};
   --header-status-fill: ${({ theme }) => theme.color.outcome.pending.background};
-  display: grid;
+  position: relative; display: grid;
   grid-template-columns: 2.75rem 4rem minmax(4.625rem, 1fr) 3.625rem 3.125rem 0.5rem;
   align-items: center; min-inline-size: 0;
   min-block-size: var(--header-height); block-size: var(--header-height);
@@ -47,9 +48,9 @@ export const MobileHeaderRow = styled.summary`
   [data-header-chevron] {
     justify-self: center; inline-size: 5px; block-size: 5px;
     border-inline-end: 1.5px solid currentColor; border-block-end: 1.5px solid currentColor;
-    transform: rotate(45deg);
+    transform: rotate(-45deg);
   }
-  details[open] > & [data-header-chevron] { transform: rotate(225deg); }
+  details[open] > & [data-header-chevron] { transform: rotate(45deg); --slip-chevron-rotation: 45deg; }
   &[data-header-only] [data-header-chevron] { visibility: hidden; }
 
   @container compact-slip (max-width: 21rem) {
@@ -66,10 +67,17 @@ export const MobileHeaderRow = styled.summary`
   /* Compact Rail is shared by every production mobile slip. Historical samples stay isolated. */
   &&:not([data-header-variant]) {
     --header-height: 2.75rem;
-    grid-template-columns: minmax(0, 1fr) min(6rem, 96px) 1.5rem;
-    background: ${({ theme }) => `color-mix(in srgb, ${theme.color.surface} 96%, ${theme.color.accent.blue.text})`};
+    grid-template-columns: minmax(0, 1fr) min(6rem, 96px) var(--slip-header-action-size);
+    grid-template-rows: minmax(32px, auto) auto;
+    background: ${({ theme }) => theme.color.surface};
+    [data-header-chevron] {
+      ${slipDisclosureIndicator}
+      position: absolute; inset-inline-end: 6px; inset-block-start: 8px;
+      inline-size: var(--slip-header-action-size); block-size: var(--slip-header-action-size);
+      border-radius: ${({ theme }) => theme.radius.control}; transform: none;
+    }
     /* Match badges end after the selection list's 6px gutter, 1px frame and 8px padding. */
-    gap: 2px 6px; padding: 3px 6px 3px 9px; block-size: auto; white-space: normal;
+    gap: 4px 6px; padding: 6px 6px 6px 9px; block-size: auto; white-space: normal;
     > h3, > h3[data-dense-identity] {
       grid-column: 1; grid-row: 1; flex-wrap: wrap; gap: 1px 5px; align-items: baseline;
       padding: 0; font-size: 0.875rem; text-align: start; line-height: 1.3;
@@ -129,8 +137,8 @@ export const MobileHeaderRow = styled.summary`
   }
   /* Keep the sibling Share icon and status on the same compact row. */
   &&:not([data-header-variant])[data-header-action] {
-    grid-template-rows: minmax(1.5rem, auto) auto;
+    /* Independent fixed slots keep Share clear of the disclosure indicator. */
+    grid-template-columns: minmax(0, 1fr) min(6rem, 96px) calc(2 * var(--slip-header-action-size) + var(--slip-header-action-gap));
     > h3 { align-self: center; }
-    [data-header-status] { align-self: start; min-block-size: 1.5rem; }
   }
 `;

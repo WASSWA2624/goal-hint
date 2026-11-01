@@ -8,7 +8,7 @@ import { media } from "@/styles/theme";
 export const CleanLedgerRow = styled.div`
   ${teamStackStyles}
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.phoneCardFrame.border};
-  border-radius: ${({ theme }) => theme.radius.none};
+  border-radius: ${({ theme }) => theme.phoneCardFrame.radius};
   background: ${({ theme }) => theme.color.surface};
   text-decoration: none;
   ${media.belowDesktop} {

@@ -42,10 +42,24 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   checkRadius("#theme-controls, #theme-admin-panel, #theme-performance [data-performance-summary]", phone ? theme.radius.surface : theme.radius.none);
   checkRadius("#theme-large-action, #theme-admin-record, [data-subscribe-layout=stepwise]", theme.radius.surface);
   if (!phone) checkRadius("#theme-matches [data-match-board]", theme.radius.none);
-  checkRadius("#theme-slips [data-slip-id]", phone ? {
-    borderTopLeftRadius: theme.radius.none, borderBottomLeftRadius: theme.radius.none,
-    borderTopRightRadius: theme.radius.control, borderBottomRightRadius: theme.radius.control,
-  } : theme.frame.desktopCardRadius);
+  checkRadius("#theme-slips [data-slip-id]", phone ? theme.radius.surface : theme.frame.desktopCardRadius);
+  for (const summary of [...document.querySelectorAll("#theme-slips summary[data-slip-summary]")].filter(visible)) {
+    const innerRadius = `${Math.max(0, Number.parseFloat(theme.radius.surface) - Number.parseFloat(theme.border.width))}px`;
+    const expanded = summary.parentElement?.hasAttribute("open");
+    checkRadius("#theme-slips summary[data-slip-summary]", {
+      borderTopLeftRadius: innerRadius, borderTopRightRadius: innerRadius,
+      borderBottomLeftRadius: expanded ? theme.radius.none : innerRadius,
+      borderBottomRightRadius: expanded ? theme.radius.none : innerRadius,
+    });
+    const indicator = summary.querySelector("[data-header-chevron], [data-toggle-chevron]");
+    assert(!!indicator && visible(indicator), "Collapsible slips retain a visible disclosure indicator");
+    if (!indicator) continue;
+    const rect = indicator.getBoundingClientRect(), header = summary.getBoundingClientRect();
+    assert(Math.abs(rect.top - header.top - 8) < 0.1, "Disclosure indicator stays in its fixed header slot");
+    const rotation = new DOMMatrix(getComputedStyle(indicator, "::after").transform);
+    assert(summary.parentElement?.hasAttribute("open") ? rotation.b > 0 : rotation.b < 0,
+      "Disclosure indicator faces right when collapsed and down when expanded");
+  }
   checkRadius("#theme-joined-controls", theme.radius.control);
   checkRadius("#theme-joined-controls > button", theme.radius.none);
   const dateFace = document.querySelector("[data-slip-period-select]");
@@ -59,7 +73,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   check("#theme-controls", theme.color.surface);
   check("#theme-controls, #theme-checks, #theme-performance [data-performance-summary]", theme.color.border, "borderTopColor");
   check("#theme-controls [data-surface-control], #theme-control-input, #theme-control-select", theme.color.surface);
-  check("#theme-slips [data-slip-id]", theme.color.surface);
+  check("#theme-slips [data-slip-id]", phone ? theme.phoneCardFrame.inset : theme.color.surface);
+  check("#theme-slips [data-slip-summary]", phone ? theme.color.surface : theme.phoneCardFrame.header);
   check("#theme-member-step", theme.color.brandSoft);
   check("#theme-member-step", theme.color.link, "color");
   check("#theme-performance [data-performance-summary]", theme.color.surface);
@@ -98,8 +113,14 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   assert(!!mark?.src.includes(`mark-${dark ? "inverse" : "primary"}.svg`), "Footer brand mark follows the active theme");
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
-    check("#theme-matches [data-fixture-id], #theme-slips [data-slip-id]", theme.phoneCardFrame.border, "borderTopColor");
-    check("#theme-slips [data-slip-summary]", `color-mix(in srgb, ${theme.color.surface} 96%, ${theme.color.accent.blue.text})`);
+    check("#theme-matches [data-fixture-id]", theme.phoneCardFrame.border, "borderTopColor");
+    check("#theme-slips [data-slip-id]", document.querySelector("#theme-slips [data-slip-disclosure][open]") ? theme.color.surface : theme.phoneCardFrame.border, "borderTopColor");
+    check("#theme-slips [data-slip-summary]", theme.color.surface);
+    checkRadius("#theme-matches [data-fixture-id], #theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.radius);
+    checkRadius("#theme-matches [data-fixture-id] > a", `${Math.max(0, Number.parseFloat(theme.phoneCardFrame.radius) - Number.parseFloat(theme.border.width))}px`);
+    if (document.querySelector("#theme-slips [data-slip-disclosure][open]")) {
+      check("#theme-slips [data-slip-selection] > [data-fixture-id]", theme.color.surface);
+    }
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {
     // Matches and slips use the same aligned match-row treatment, without the former table header or stripes.

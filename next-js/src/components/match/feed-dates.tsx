@@ -12,7 +12,7 @@ import { selectFeedDates } from "@/domain/feed-controls";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type DateSelection, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { focusRing, plainClick } from "./filter-parts";
+import { filterButtonColors, focusRing, plainClick } from "./filter-parts";
 
 const DateCalendar = dynamic(() => import("./date-calendar").then((module) => module.DateCalendar));
 
@@ -57,7 +57,7 @@ const PresetList = styled.div`
     padding-inline: 12px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.8125rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -127,7 +127,7 @@ const Day = styled(Link)`
   inline-size: 100%;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   > small { color: ${({ theme }) => theme.color.mutedText}; }
   /* Every day names its weekday and month; today's label is teal. */
   > small[data-today] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
@@ -150,7 +150,7 @@ const Scroll = styled.button`
   padding: 0;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border: 0;
   font: inherit;
   > svg { font-size: 1.125rem; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
@@ -164,16 +164,15 @@ const CalendarButton = styled.button`
   padding: 2px 6px;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.controlBorder};
+  ${filterButtonColors}
   font: inherit;
   > svg { font-size: 1rem; }
   > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; text-align: center; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
-  /* The current date range: a solid brand outline on the plain surface, without a blue fill. */
+  /* The selected custom range uses a filled surface rather than an outline. */
   &[data-current] {
     color: ${({ theme }) => theme.color.link};
-    background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
+    background: ${({ theme }) => theme.color.brandSoft};
     > small { color: ${({ theme }) => theme.color.mutedText}; }
   }
   ${focusRing}

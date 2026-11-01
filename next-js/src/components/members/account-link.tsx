@@ -34,8 +34,8 @@ const Actions = styled.div`
 `;
 const AuthLink = styled(Link)<{ $primary?: boolean }>`
   ${compactHeaderControl}
-  color: ${({ theme, $primary }) => $primary ? theme.header.onAccent : theme.header.text};
-  background: ${({ theme, $primary }) => $primary ? theme.header.accent : "transparent"};
+  color: ${({ theme, $primary }) => $primary ? theme.header.onAccent : theme.header.accent};
+  background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.color.brandSoft};
   border-color: ${({ theme, $primary }) => $primary ? theme.header.accent : "transparent"};
   text-decoration: none;
   > svg { display: none; }

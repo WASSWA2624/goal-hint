@@ -47,14 +47,23 @@ reusable components define the appropriate explicit token for their role.
 
 Round the outside of a joined group and keep its internal seams straight.
 Shared desktop slips use `theme.frame.desktopCardRadius` for the outer card and
-its full-height rail; the approved application themes use 8px. Mobile slips use square leading corners for the blue rail
-and `control` corners on the trailing edge.
+its full-height rail; the approved application themes use 8px. Mobile slips
+use `surface` (8px in the approved themes) on all four outer corners, without
+the former blue leading rail.
 Desktop review themes can select a restrained corner through
 `theme.frame.desktopCardRadius`, taking its value from this same radius scale.
 Theme card frames, hover backgrounds, and their full-height rails consume the
 shared setting together.
-The approved Team stack mobile match cards use `none`, including their framed
-rows inside expanded slips. Their existing slip headers retain their own corners.
+The approved Team stack mobile match cards and framed selections inside expanded
+slips use `theme.phoneCardFrame.radius`, mapped to `control` (4px). Slip headers
+inherit the outer slip corners. Desktop match rows keep their straight joined seams.
+Disclosure indicators are pinned 8px below the header's top edge in both states.
+Only the inner chevron rotates: right when collapsed, down when expanded. On
+mobile, Share and disclosure use matching 28px frames with `control` corners,
+aligned tops and a 10px gap; the metrics occupy their own clear row below.
+Desktop retains its circular disclosure frame. A mobile match card's covering
+analysis link uses the outer radius minus the frame width, so its pressed tint
+and focus outline cannot square off the visible corners.
 Headers and edge rows with their own fills must follow the parent's exposed
 corners using logical corner properties, `inherit`, or an inset radius reduced
 by the border width. Do not hide overflow on a general panel just to round it:

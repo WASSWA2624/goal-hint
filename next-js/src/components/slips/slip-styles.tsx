@@ -78,8 +78,8 @@ export const SlipStack = styled(Stack)`
   }
 `;
 /** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
-export const SlipList = styled.div<{ $phoneGap?: number }>`
-  display: grid; min-inline-size: 0; gap: ${({ $phoneGap = 10 }) => $phoneGap}px;
+export const SlipList = styled.div`
+  display: grid; min-inline-size: 0; gap: 14px;
   ${media.desktop} { gap: 4.5px; }
   ${desktopContentPadding()}
 `;

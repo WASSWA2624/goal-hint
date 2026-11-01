@@ -117,7 +117,6 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
     </ToggleRow>
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedDetails>
-        <span data-applied-label>{m.text("bestSlips.filters.applied")}</span>
         <AppliedSelection data-applied-selection>
           {appliedQuery.period === "custom" && currentRange ? <RangeButton type="button" onClick={(event) => openDates(event.currentTarget)}
             aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} aria-label={m.text("bestSlips.filters.editDates", { range: currentRange })}>

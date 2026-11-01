@@ -36,7 +36,7 @@ import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, useP
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
 const buttonBorder = css`
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  border: 0;
 `;
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
@@ -142,7 +142,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
   min-block-size: 2.75rem;
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.surfaceMuted};
   ${buttonBorder}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
@@ -289,7 +289,7 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
   min-block-size: 2.75rem;
   padding: 6px 10px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.surfaceMuted};
   ${buttonBorder}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
@@ -423,8 +423,8 @@ const QuietButton = styled.button`
   min-block-size: 1.875rem;
   padding-inline: 10px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.buttonBorder};
+  background: ${({ theme }) => theme.color.surfaceMuted};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -536,9 +536,9 @@ const OutlineButton = styled(QuietButton)`
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.8125rem;
   border-color: transparent;
-  background: transparent;
+  background: ${({ theme }) => theme.color.surfaceMuted};
   ${media.belowDesktop} {
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.color.surfaceMuted};
     ${buttonBorder}
   }
 `;

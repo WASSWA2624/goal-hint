@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
 import { desktopStickyFilters } from "@/components/ui/filter-chrome";
 import { desktopContentPadding } from "@/components/ui/layout";
-import { controlFeedback, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
   box-sizing: border-box;
@@ -92,8 +92,7 @@ export const SectionButton = styled.button`
   padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.surface};
+  ${filterButtonColors}
   font: inherit;
   font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -163,6 +162,8 @@ export const SortField = styled.label`
 
 export const ActionButton = styled(Button)`
   && {
+    border: 0;
+    &[type="reset"] { background: ${({ theme }) => theme.color.surfaceMuted}; }
     flex: none;
     gap: 6px;
     min-inline-size: 0;

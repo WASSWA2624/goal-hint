@@ -39,9 +39,9 @@ export const filterControlColors = css`
 `;
 
 export const filterButtonColors = css`
-  background: var(--filter-field-background, ${({ theme }) => theme.color.surface});
-  border-color: ${({ theme }) => theme.mode === "dark" ? theme.color.buttonBorder
-    : `var(--filter-field-border, ${theme.color.buttonBorder})`};
+  background: ${({ theme }) => theme.color.surfaceMuted};
+  border: 0;
+  box-shadow: none;
 `;
 
 export const controlFeedback = css`

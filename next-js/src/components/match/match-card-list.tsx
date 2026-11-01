@@ -39,9 +39,9 @@ const List = styled.ul`
   ${media.belowDesktop} {
     /* Keep framed cards separate and every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
-    gap: 6px;
+    gap: 8px;
     > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto 112px; }
-    > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.radius.none}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
+    > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.phoneCardFrame.radius}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
   ${media.desktop} {

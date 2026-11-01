@@ -98,10 +98,9 @@ const Submit = styled.button`
   min-block-size: 2.625rem;
   padding-inline: 14px;
   border: 0;
-  border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
-  background: transparent;
+  background: ${({ theme }) => theme.color.surfaceMuted};
   font: inherit;
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};

@@ -24,6 +24,7 @@ fallback, and native appearance metadata all consume the same active exports.
 | Spacing, content rails, gutters, reading width, and control sizes | `space`, `layout`, `control` |
 | Shared corner geometry and desktop card frames | `radius`, `frame` |
 | Borders and keyboard focus outlines | `border` |
+| Mobile match borders, corners, and slip body/header separation | `phoneCardFrame` |
 | Hover elevation and overlay depth | `shadow` |
 | Control, disclosure, and surface transitions, including reduced motion | `motion` |
 | Hover brightness and pressed feedback | `interaction` |
@@ -55,6 +56,24 @@ The review-only navigator owns its own positioning. Its measured height offsets
 the real app headers and sidebars; it is not part of the selected app theme.
 No review-only appearance overrides are required for headings, logos, header
 fills, text selection, scrollbar colors, or interaction treatment.
+
+Approved card-separation option 01 uses a cool porcelain page (`#EDF1F7`),
+white cards and mobile slip headers, a contrasting slip body (`#E9EEF6`),
+blue desktop slip headers (`#DCE8FB`),
+and defined card frames (`#D3DDEA`). Cobalt Night provides its corresponding
+dark inset/header/frame colors through the same `phoneCardFrame` contract.
+Match tiles share 4px corners and slip frames use 8px corners. Below 64rem,
+standalone matches have 8px gaps, nested selections have 6px gaps and padding,
+and Best slips and Slip Builder both have 14px between slips. Desktop retains
+continuous match rows, straight internal seams, and 4.5px between slips.
+Filter actions use filled surfaces without borders; status badges retain their
+semantic fill/text colors without outlines. Header account/theme actions keep
+28px minimum height, no vertical padding, and clearly visible filled backgrounds
+inside the unchanged header rails. Slip header fills use an explicit inner
+radius because native disclosure slots do not reliably inherit corner properties.
+Expanded slips add a 2px card-surface ring around their existing 1px frame
+(white in light mode), keeping the header and selection tray visually joined
+without changing dimensions or disclosure-control positions.
 
 Readability tests validate all ten complete definitions. Browser acceptance
 checks the actual shared screens. Business rules, data services, form actions,

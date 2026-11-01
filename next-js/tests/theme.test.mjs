@@ -50,7 +50,7 @@ const readable = (foreground, background, label, minimum = 4.5) => {
 
 test("both themes keep body, controls, captions and outcome text readable", () => {
   for (const theme of [lightTheme, darkTheme]) {
-    for (const background of [theme.color.surface, theme.color.surfaceMuted, theme.color.page]) {
+    for (const background of [theme.color.surface, theme.color.surfaceMuted, theme.color.page, theme.phoneCardFrame.inset, theme.phoneCardFrame.header]) {
       readable(theme.color.text, background, `${theme.mode} body`);
       readable(theme.color.mutedText, background, `${theme.mode} captions`);
       readable(theme.color.link, background, `${theme.mode} links`);
@@ -80,6 +80,7 @@ test("both themes keep body, controls, captions and outcome text readable", () =
     for (const [outcome, colors] of Object.entries(theme.color.outcome)) {
       readable(colors.text, colors.background, `${theme.mode} ${outcome}`);
       readable(colors.text, theme.color.surface, `${theme.mode} inline ${outcome}`);
+      readable(colors.text, theme.phoneCardFrame.header, `${theme.mode} slip header ${outcome}`);
     }
     for (const [verdict, colors] of Object.entries(theme.color.verdict)) {
       readable(colors.text, colors.fill, `${theme.mode} ${verdict} verdict`);
@@ -132,7 +133,10 @@ test("active themes use the approved Porcelain Blue and Cobalt Night palettes", 
 test("Porcelain Blue separates page and card surfaces with quiet decorative frames", () => {
   assert.ok(luminance(lightTheme.color.surface) > luminance(lightTheme.color.page));
   assert.ok(luminance(lightTheme.color.surfaceMuted) > luminance(lightTheme.color.page));
-  assert.equal(lightTheme.phoneCardFrame.border, lightTheme.color.border);
+  assert.ok(luminance(lightTheme.phoneCardFrame.inset) < luminance(lightTheme.color.page));
+  assert.ok(contrast(lightTheme.phoneCardFrame.header, lightTheme.color.page) >= 1.08, "Collapsed slip headers remain distinct from the page");
+  assert.ok(contrast(lightTheme.phoneCardFrame.border, lightTheme.color.surface) >
+    contrast(lightTheme.color.border, lightTheme.color.surface), "Card outlines are more defined than internal dividers");
   for (const background of [lightTheme.color.page, lightTheme.color.surface]) {
     assert.ok(contrast(lightTheme.phoneCardFrame.border, background) <
       contrast(lightTheme.color.controlBorder, background), "Phone card frames should be quieter than editable-field boundaries");
@@ -141,9 +145,9 @@ test("Porcelain Blue separates page and card surfaces with quiet decorative fram
 
 test("dark decorative frames stay quiet while form controls retain visible boundaries", () => {
   for (const background of [darkTheme.color.page, darkTheme.color.surface]) {
-    for (const border of [darkTheme.color.border, darkTheme.phoneCardFrame.border]) {
-      assert.ok(contrast(border, background) <= 1.6, `Dark decorative frame ${border} is too prominent on ${background}`);
-    }
+    assert.ok(contrast(darkTheme.color.border, background) <= 1.6, `Dark divider is too prominent on ${background}`);
+    assert.ok(contrast(darkTheme.phoneCardFrame.border, background) < contrast(darkTheme.color.controlBorder, background),
+      "Card frames remain quieter than editable control boundaries");
   }
   assert.ok(contrast(darkTheme.color.buttonBorder, darkTheme.color.surface) <
     contrast(darkTheme.color.controlBorder, darkTheme.color.surface), "Labeled buttons should have quieter outlines than editable controls");

@@ -61,7 +61,7 @@ export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount
         </>}
         {variant ? <span data-status-full>{label}</span> : <SlipStatusBadge outcome={outcome} status={status} locale={locale} />}
       </span>
-      {variant && <span data-header-chevron aria-hidden="true" />}
+      {!headerOnly && <span data-header-chevron aria-hidden="true" />}
       <span id={noteId} hidden>{m.text("slips.averageHint")}</span>
     </MobileHeaderRow>;
 }

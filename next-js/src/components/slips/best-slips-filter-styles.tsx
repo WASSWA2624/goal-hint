@@ -58,7 +58,7 @@ const toggleGroup = css`
   gap: 2px;
   padding: 2px;
   background: ${({ theme }) => theme.color.surface};
-  border: 1px solid ${({ theme }) => theme.color.border};
+  border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   min-inline-size: 0;
 `;
@@ -105,7 +105,6 @@ export const FilterButton = styled.button`
   cursor: pointer;
   &[aria-pressed="true"] {
     color: ${({ theme }) => theme.color.link};
-    border-color: ${({ theme }) => theme.color.brand};
     background: ${({ theme }) => theme.color.brandSoft};
   }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
@@ -131,8 +130,9 @@ export const DateControls = styled.div`
 export const DateSelect = styled(SelectMenu)`
   flex: none;
   > [data-select-trigger] {
+    ${filterButtonColors}
     font-weight: ${({ theme }) => theme.typography.weight.medium};
-    box-shadow: 0 1px 2px color-mix(in srgb, ${({ theme }) => theme.color.text} 6%, transparent);
+    box-shadow: none;
     ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
     ${media.desktop} { font-size: .8125rem; border-color: ${({ theme }) => theme.color.accent.blue.text}; }
   }
@@ -175,7 +175,7 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   min-block-size: 28px;
   padding: 3px 6px;
   white-space: nowrap;
-  border: 1px solid transparent;
+  border: 0;
   color: var(--result-text);
   background: color-mix(in srgb, var(--result-background) 55%, ${({ theme }) => theme.color.surface});
   &::before { content: ""; inline-size: 5px; block-size: 5px; background: currentColor; }
@@ -187,10 +187,9 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
   &[aria-pressed="true"] {
     color: ${({ theme }) => theme.color.surface};
     background: var(--result-text);
-    border-color: var(--result-text);
   }
   ${media.hover} {
-    &:hover:not([aria-pressed="true"]) { background: var(--result-background); border-color: var(--result-text); }
+    &:hover:not([aria-pressed="true"]) { background: var(--result-background); }
     &[aria-pressed="true"]:hover { background: var(--result-text); }
   }
   @media (max-width: 79.99rem) { gap: 3px; padding-inline: 4px; }
@@ -206,14 +205,13 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
     ${({ theme, $status }) => $status === "all" && css`
       &[aria-pressed="true"], &[aria-pressed="true"]:hover {
         color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft};
-        border-color: ${theme.color.accent.blue.text};
       }
       &[aria-pressed="true"]:focus-visible { outline-color: ${theme.color.accent.blue.text}; }
     `}
   }
   ${media.belowDesktop} {
     display: grid; grid-template-columns: max-content max-content; justify-content: center; align-content: center;
-    gap: 1px 3px; min-block-size: 36px; padding: 2px 4px; border-color: var(--result-text);
+    gap: 1px 3px; min-block-size: 36px; padding: 2px 4px;
     border-radius: ${({ theme }) => theme.radius.control}; font-size: .75rem; line-height: 1.2; text-align: center;
     &::before { display: none; }
     > span:first-of-type { grid-column: 1 / -1; }
@@ -221,9 +219,9 @@ export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
     [data-slip-result-percent] { grid-row: 2; font-size: .6875rem; }
     [data-mobile-result-percent] { display: inline; }
     ${({ theme, $status }) => $status === "all" && css`
-      color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft}; border-color: ${theme.color.accent.blue.text};
+      color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft};
       &[aria-pressed="true"], &[aria-pressed="true"]:hover {
-        color: ${theme.color.accent.blue.soft}; background: ${theme.color.accent.blue.text}; border-color: ${theme.color.accent.blue.text};
+        color: ${theme.color.accent.blue.soft}; background: ${theme.color.accent.blue.text};
       }
     `}
   }
@@ -280,8 +278,7 @@ export const AppliedSummary = styled.div`
   }
   ${media.belowDesktop} {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 2px 8px;
-    [data-applied-label] { grid-column: 1 / -1; }
-    [data-best-slips-summary] { grid-column: 2; grid-row: 2; text-align: end; }
+    [data-best-slips-summary] { grid-column: 2; grid-row: 1; text-align: end; }
   }
 `;
 
@@ -298,7 +295,7 @@ export const AppliedDetails = styled.div`
 export const AppliedSelection = styled.span`
   display: contents;
   ${media.belowDesktop} {
-    grid-column: 1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: baseline;
+    grid-column: 1; grid-row: 1; display: flex; flex-wrap: wrap; align-items: baseline;
     gap: 2px 4px; min-inline-size: 0; text-align: start;
     > span { min-inline-size: 0; }
   }

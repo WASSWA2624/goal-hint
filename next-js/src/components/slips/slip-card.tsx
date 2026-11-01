@@ -18,14 +18,9 @@ import type { SlipHeaderPublication } from "./slip-header-meta";
 const PhoneSlipFallback = styled.div`
   position: relative; min-inline-size: 0;
   [data-phone-shareable] { position: relative; }
-  [data-phone-share-action] { position: absolute; inset-block-start: 3px; inset-inline-end: 6px; }
-  ${media.belowDesktop} {
-    [data-compact-slip="clean-ledger"] {
-      border-radius: ${({ theme }) => theme.radius.control};
-      border-start-start-radius: ${({ theme }) => theme.radius.none};
-      border-end-start-radius: ${({ theme }) => theme.radius.none};
-      border-inline-start: 4px solid ${({ theme }) => theme.color.accent.blue.text};
-    }
+  [data-phone-share-action] {
+    position: absolute; inset-block-start: 8px;
+    inset-inline-end: calc(6px + var(--slip-header-action-size) + var(--slip-header-action-gap));
   }
   ${media.desktop} {
     @media (scripting: enabled) { [data-slip-content] { display: none; } }

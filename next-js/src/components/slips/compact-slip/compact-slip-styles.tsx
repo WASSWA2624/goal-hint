@@ -1,6 +1,8 @@
 "use client";
 
 import styled from "styled-components";
+import { media } from "@/styles/theme";
+import { slipDisclosureIndicator } from "../slip-disclosure-styles";
 
 /** A full-row link leaves the compact content with one generous, predictable analysis target. */
 export const MatchRow = styled.div`
@@ -15,7 +17,7 @@ export const MatchRow = styled.div`
   [data-teams] { grid-area: teams; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 5px; margin: 0; font-size: 0.8125rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-versus] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
   [data-meta] { grid-area: meta; display: flex; flex-wrap: wrap; gap: 1px 5px; color: ${({ theme }) => theme.color.mutedText}; }
-  [data-country] { &::before { content: "· "; } }
+  [data-country] { &::before { content: "Â· "; } }
   [data-kickoff] { grid-area: kickoff; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 1px 5px; color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; }
   [data-clock] { white-space: nowrap; }
   [data-pick] { grid-area: pick; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 5px; }
@@ -34,13 +36,25 @@ export const MatchRow = styled.div`
 `;
 
 export const CompactCard = styled.article`
+  --slip-header-action-size: 28px;
+  --slip-header-action-gap: 10px;
+  --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.border.width}))`};
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   border: 1px solid ${({ theme }) => theme.phoneCardFrame.border}; border-radius: ${({ theme }) => theme.radius.surface};
   container: compact-slip / inline-size;
+  /* Explicit expanded-slip frame: retain its thickness with borderless control themes. */
+  &:has(> details[open]) {
+    border-color: ${({ theme }) => theme.color.surface};
+    outline: ${({ theme }) => `max(2px, calc(3px - ${theme.border.width}))`} solid ${({ theme }) => theme.color.surface};
+    outline-offset: 0;
+  }
   /* Paint joined headers inside the outer curve without clipping focus or tooltips. */
-  > details { border-radius: inherit; }
-  [data-slip-summary] { border-start-start-radius: inherit; border-start-end-radius: inherit; }
-  > details:not([open]) > [data-slip-summary], > header[data-slip-summary] { border-end-start-radius: inherit; border-end-end-radius: inherit; }
+  > details { border-radius: var(--slip-inner-radius); }
+  /* Native disclosure slots do not reliably inherit non-inherited corner properties. */
+  [data-slip-summary] { border-start-start-radius: var(--slip-inner-radius); border-start-end-radius: var(--slip-inner-radius); }
+  > details:not([open]) > [data-slip-summary], > header[data-slip-summary], [data-slip-content] {
+    border-end-start-radius: var(--slip-inner-radius); border-end-end-radius: var(--slip-inner-radius);
+  }
   details { min-inline-size: 0; }
   [data-slip-summary]:not([data-mobile-slip-header]) {
     position: relative; display: grid; align-items: center; min-inline-size: 0; min-block-size: 44px;
@@ -62,15 +76,25 @@ export const CompactCard = styled.article`
   [data-summary-average] { grid-area: average; justify-self: end; }
   [data-summary-count] { grid-area: count; justify-self: end; }
   [data-summary-status] { grid-column: 1 / -1; justify-self: end; }
-  [data-toggle-chevron] { position: absolute; inset-inline-end: 10px; inset-block-start: calc(50% - 4px); inline-size: 6px; block-size: 6px; border-inline-end: 2px solid currentColor; border-block-end: 2px solid currentColor; transform: rotate(45deg); }
+  [data-toggle-chevron] {
+    ${slipDisclosureIndicator}
+    position: absolute; inset-inline-end: 10px; inset-block-start: 8px;
+    inline-size: 24px; block-size: 24px; transform: none;
+  }
   details[open] > summary { border-block-end: 1px solid ${({ theme }) => theme.color.border}; }
-  details[open] [data-toggle-chevron] { transform: rotate(225deg); inset-block-start: calc(50% - 1px); }
+  details[open] [data-toggle-chevron] { --slip-chevron-rotation: 45deg; }
   ul { list-style: none; display: grid; margin: 0; padding: 0; min-inline-size: 0; }
   li { min-inline-size: 0; }
   li + li { border-block-start: 1px solid ${({ theme }) => theme.color.border}; }
 
   &[data-compact-slip="clean-ledger"] [data-slip-content] > ul { gap: 4px; padding: 4px 6px; }
   &[data-compact-slip="clean-ledger"] [data-slip-content] > ul > li + li { border-block-start: 0; }
+  ${media.belowDesktop} {
+    &[data-compact-slip="clean-ledger"] {
+      background: ${({ theme }) => theme.phoneCardFrame.inset};
+      [data-slip-content] > ul { gap: 6px; padding: 6px; }
+    }
+  }
 
   &[data-compact-slip="clean-ledger"] [data-slip-summary]:not([data-mobile-slip-header]) { padding-block: 4px; row-gap: 2px; }
   @container compact-slip (max-width: 12rem) {
@@ -131,8 +155,6 @@ export const CompactCard = styled.article`
     [data-summary-fact] { flex-direction: column-reverse; align-items: center; justify-self: stretch; gap: 2px; text-align: center; }
     [data-summary-average], [data-summary-count] { border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
     [data-summary-count] { justify-self: stretch; align-self: stretch; display: grid; place-content: center; text-align: center; padding-inline: 4px; }
-    [data-toggle-chevron] { inset-block-start: 12px; }
-    details[open] [data-toggle-chevron] { inset-block-start: 15px; }
     ${MatchRow} { grid-template-columns: minmax(0, 1fr) minmax(3.25rem, auto) minmax(4.5rem, auto); grid-template-areas: "teams teams teams" "meta meta kickoff" "pick odds probability"; gap: 5px 6px; }
     ${MatchRow} [data-pick], ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 4px; align-self: stretch; }
     ${MatchRow} [data-leg-odds], ${MatchRow} [data-leg-probability] { align-items: center; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }

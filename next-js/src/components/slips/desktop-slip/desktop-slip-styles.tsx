@@ -20,7 +20,7 @@ export const DesktopSlipBase = styled.div`
     min-block-size: 2.25rem; block-size: auto;
     column-gap: var(--slip-header-gap); row-gap: 0; padding: 4px var(--slip-header-end) 4px 12px;
     white-space: nowrap; font-size: 0.75rem; line-height: 1.25;
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.phoneCardFrame.header};
   }
   &&& [data-summary-identity] { flex-wrap: wrap; align-items: center; gap: 3px 9px; padding-inline-start: 2px; white-space: nowrap; font-size: 0.875rem; }
   &&& [data-slip-publication-date] {
@@ -85,9 +85,9 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       ${slipDisclosureIndicator}
       --slip-chevron-size: 7px;
       inline-size: 1.75rem; block-size: 1.75rem;
-      inset-inline-end: calc((var(--slip-header-end) - 1.75rem) / 2); inset-block-start: 50%; transform: translateY(-50%);
+      inset-inline-end: calc((var(--slip-header-end) - 1.75rem) / 2); inset-block-start: 8px; transform: none;
     }
-    &&& [data-slip-disclosure][open] > [data-slip-summary] [data-toggle-chevron] { --slip-chevron-rotation: 225deg; }
+    &&& [data-slip-disclosure][open] > [data-slip-summary] [data-toggle-chevron] { --slip-chevron-rotation: 45deg; }
     /* Draw on the outer frame so the rail spans matches without affecting their layout. */
     &::before {
       content: "";
@@ -98,10 +98,10 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
       pointer-events: none;
     }
-    [data-compact-slip] { border-color: ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.frame.desktopCardRadius}; }
+    [data-compact-slip] { border-color: ${({ theme }) => theme.phoneCardFrame.border}; border-radius: ${({ theme }) => theme.frame.desktopCardRadius}; }
     [data-slip-content] {
-      border-end-start-radius: ${({ theme }) => theme.frame.desktopCardRadius};
-      border-end-end-radius: ${({ theme }) => theme.frame.desktopCardRadius};
+      border-end-start-radius: var(--slip-inner-radius);
+      border-end-end-radius: var(--slip-inner-radius);
     }
     [data-slip-content] > ul,
     [data-slip-content] > ul > li:last-child,
@@ -114,7 +114,7 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
     &&& [data-compact-slip] > header[data-slip-summary] {
       min-block-size: 44px;
       color: ${({ theme }) => theme.color.text};
-      background: ${({ theme }) => theme.color.surface};
+      background: ${({ theme }) => theme.phoneCardFrame.header};
       [data-summary-identity] > span:first-child { font-size: .9375rem; font-weight: 700; }
       [data-summary-odds] strong, [data-summary-average] strong {
         color: ${({ theme }) => theme.color.accent.blue.text}; font-size: .9375rem; font-weight: 700;
@@ -124,7 +124,7 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       [data-rank] { color: ${({ theme }) => theme.color.accent.blue.text}; }
       [data-slip-status] { font-size: .8125rem; font-weight: 600; }
       &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
-      ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.color.surface} 94%, ${({ theme }) => theme.color.accent.blue.text}); } }
+      ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.phoneCardFrame.header} 94%, ${({ theme }) => theme.color.surface}); } }
     }
     &:not(:has([data-slip-disclosure][open])) {
       [data-slip-header-action] { inset-block-start: 0; block-size: 44px; display: flex; align-items: center; }
