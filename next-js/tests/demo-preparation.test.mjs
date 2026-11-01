@@ -36,7 +36,7 @@ test("route bundles reuse one catalog preparation and recent date observations f
           publishedReads++; return ids.map(fixtureId => ({ fixtureId, id: fixtureId, marketCount: 4n }));
         }
         if (sql.includes("COUNT(*) AS fixtures")) {
-          proofs++; return [{ fixtures: 560n, forecasts: 560n, markets: 560n, states: 560n, prices: 560n, coherent: 560n,
+          proofs++; return [{ fixtures: 20n, forecasts: 20n, markets: 20n, states: 20n, prices: 20n, coherent: 20n,
             oldestQuote: new Date(now - 1000), generation: 1n }];
         }
         if (sql.includes("COUNT(*) AS count")) return [{ count: 0n }];

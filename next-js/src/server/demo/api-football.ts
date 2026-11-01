@@ -4,7 +4,7 @@ import { demoLiveFixtureOdds, demoLiveOddsAvailable, demoLiveOddsBets } from "./
 
 import { DEMO_START_DATE, DEMO_END_DATE, DEMO_MATCHES_PER_DAY, DEMO_DAY_MS, DEMO_START_MS, DEMO_DAYS,
   DEMO_FIXTURE_ID_BASE, demoFootballCatalog, demoLeagueById, demoTeamById, demoCountryFlag,
-  demoRawTeam, demoRawLeague, demoDateIndex, demoDateAt, demoFixtureCoordinates, demoFixtureTeams, demoHash,
+  demoRawTeam, demoRawLeague, demoDateIndex, demoDateAt, demoFixtureCoordinates, demoFixtureTeams, demoFixtureSlots, demoHash,
   type DemoTeam, type DemoLeague } from "./api-football-catalog.ts";
 export { DEMO_START_DATE, DEMO_END_DATE, DEMO_MATCHES_PER_DAY, DEMO_DAYS, demoFootballCatalog,
   demoDateIndex, demoDateAt, demoFixtureCoordinates, demoFixtureTeams, demoLeagueById, demoTeamById };
@@ -188,7 +188,7 @@ export function demoFixtureById(id: number, nowMs = Date.now(), timezone = "Afri
 }
 export function demoFixturesForDate(date: string, nowMs = Date.now()): ApiFootballDemoFixture[] {
   const day = demoDateIndex(date);
-  return day === null ? [] : Array.from({ length: DEMO_MATCHES_PER_DAY }, (_, slot) => demoFixtureById(DEMO_FIXTURE_ID_BASE + day * 1_000 + slot, nowMs)!);
+  return day === null ? [] : demoFixtureSlots(day).map(slot => demoFixtureById(DEMO_FIXTURE_ID_BASE + day * 1_000 + slot, nowMs)!);
 }
 
 export function demoFixtureEvents(id: number, nowMs = Date.now()) {
@@ -604,7 +604,10 @@ function fixtureRows(params: Parameters, nowMs: number) {
     const start = Math.max(0, Math.floor((Date.parse(`${from}T00:00:00Z`) - DEMO_START_MS) / DEMO_DAY_MS) - 1);
     const end = Math.min(DEMO_DAYS - 1, Math.floor((Date.parse(`${to}T00:00:00Z`) - DEMO_START_MS) / DEMO_DAY_MS) + 1);
     rows = [];
-    for (let day = start; day <= end; day += 1) for (let slot = 0; slot < DEMO_MATCHES_PER_DAY; slot += 1) {
+    // The stored demo schedule is curated; provider team/competition history
+    // remains complete so form, standings and player aggregates stay coherent.
+    const historySlots = params.team || params.league ? Array.from({ length: demoFootballCatalog.leagues.length * 10 }, (_, slot) => slot) : null;
+    for (let day = start; day <= end; day += 1) for (const slot of historySlots ?? demoFixtureSlots(day)) {
       const teams = demoFixtureTeams(day, slot);
       if (params.league && teams.league.id !== Number(params.league) || params.team && teams.home.id !== Number(params.team) && teams.away.id !== Number(params.team)) continue;
       const fixture = demoFixtureById(DEMO_FIXTURE_ID_BASE + day * 1_000 + slot, nowMs, timezone)!;

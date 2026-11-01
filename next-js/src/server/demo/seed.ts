@@ -595,7 +595,7 @@ export async function ensureDemoDates(database: DatabaseRuntime, requested: read
     if (!operation) {
       operation = (async () => {
         const fixtures = demoFixturesForDate(date, nowMs), ids = fixtures.map((f) => demoId("fixture", f.fixture.id));
-        // Count only these 560 sets via the market primary key. Prisma's relation
+        // Count only this day's selected sets via the market primary key. Prisma's relation
         // aggregate can group the entire market archive before applying the date filter.
         const published = await database.query((tx) => tx.$queryRaw<{ id: string; fixtureId: string; marketCount: bigint }[]>(Prisma.sql`
           SELECT s.id,s.fixtureId,(SELECT COUNT(*) FROM MarketPrediction m WHERE m.setId=s.id) AS marketCount

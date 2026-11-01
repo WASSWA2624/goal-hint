@@ -127,10 +127,10 @@ function actualCandidates(date) {
   });
 }
 
-test("real raw demo prices and forecast probabilities supply more than ten current and diverse historical slips", () => {
+test("the smaller daily cohort supplies qualifying current slips and won/lost historical examples", () => {
   for (const date of ["2026-10-28", "2026-10-27", "2026-10-26"]) {
     const candidates = actualCandidates(date), result = buildDemoSlipSnapshots(date, candidates, now);
-    assert.ok(result.slips.length > 10 && result.slips.length <= demoSlipRules.count, date);
+    assert.ok(result.slips.length >= (date === "2026-10-28" ? 1 : 2) && result.slips.length <= demoSlipRules.count, date);
     assert.ok(result.slips.every((slip) => !demoSlipQuote(slip.selections).belowMinimum && !demoSlipQuote(slip.selections).aboveMaximum));
     if (date !== "2026-10-28") {
       const outcomes = new Map(candidates.map((candidate) => [`${candidate.selection.fixtureId}:${candidate.selection.family}`, candidate.outcome]));

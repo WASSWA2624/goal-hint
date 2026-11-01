@@ -4,7 +4,7 @@ import "server-only";
  * Country/competition names provide familiar context; fixtures and clubs are invented. */
 export const DEMO_START_DATE = "2026-01-01";
 export const DEMO_END_DATE = "2026-11-30";
-export const DEMO_MATCHES_PER_DAY = 560;
+export const DEMO_MATCHES_PER_DAY = 20;
 export const DEMO_DAY_MS = 86_400_000;
 export const DEMO_START_MS = Date.parse(`${DEMO_START_DATE}T00:00:00Z`);
 export const DEMO_DAYS = Math.floor((Date.parse(`${DEMO_END_DATE}T00:00:00Z`) - DEMO_START_MS) / DEMO_DAY_MS) + 1;
@@ -113,10 +113,19 @@ export function demoDateIndex(date: string): number | null {
   return Number.isInteger(index) && index >= 0 && index < DEMO_DAYS ? index : null;
 }
 export const demoDateAt = (index: number) => new Date(DEMO_START_MS + index * DEMO_DAY_MS).toISOString().slice(0, 10);
+/** Rotate countries and pairings without changing the identities of existing fixtures.
+ * Twenty distinct competitions per day cover all 56 groups over successive days. */
+export function demoFixtureSlots(day: number): number[] {
+  return Array.from({ length: DEMO_MATCHES_PER_DAY }, (_, index) => {
+    const league = (day * 13 + index * 3) % leagues.length;
+    return league * 10 + (Math.floor(day / 3) + index) % 10;
+  });
+}
 export function demoFixtureCoordinates(id: number): Readonly<{ day: number; slot: number }> | null {
   if (!Number.isSafeInteger(id)) return null;
   const value = id - DEMO_FIXTURE_ID_BASE, day = Math.floor(value / 1_000), slot = value % 1_000;
-  return day >= 0 && day < DEMO_DAYS && slot >= 0 && slot < DEMO_MATCHES_PER_DAY ? { day, slot } : null;
+  // Legacy slot identities also support coherent historical team evidence.
+  return day >= 0 && day < DEMO_DAYS && slot >= 0 && slot < leagues.length * 10 ? { day, slot } : null;
 }
 export function demoFixtureTeams(day: number, slot: number) {
   const league = leagues[Math.floor(slot / 10)]!, pair = slot % 10, round = Math.floor(day / 3) % 19;

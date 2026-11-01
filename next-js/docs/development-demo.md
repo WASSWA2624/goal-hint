@@ -67,8 +67,11 @@ Production and tests never select the development demo.
 ## Coverage and storage
 
 The deterministic schedule covers every Africa/Kampala reporting date from
-**1 January through 30 November 2026 inclusive**: **334 days × 560 fixtures =
-187,040 fixtures**, with 56 competition groups and 3,360 invented clubs. Stable
+**1 January through 30 November 2026 inclusive**: **334 days × 20 fixtures =
+6,680 fixtures**, with 56 competition groups and 3,360 invented clubs. Twenty
+distinct competitions are selected each day, rotating countries and pairings
+across the calendar. Existing fixture identities, teams, kickoffs and match
+outcomes are preserved for the retained selection. Stable
 synthetic IDs use their own ranges. Club names, players, schedules, match results,
 predictions and prices are fictional; familiar country and competition names
 provide context. They do not represent actual fixtures or published bookmaker
@@ -91,6 +94,13 @@ performance, slip generation and saved-slip services continue to read the same
 production tables and validators. A first visit to an unmaterialized date range
 can take longer than subsequent visits. Dates outside this dataset have no demo
 fixtures.
+
+Provider team/competition history remains complete in memory for consistent
+form, standings and player statistics. That background evidence does not add
+canonical fixture rows to the curated daily schedule. Every normal restart and
+date materialization uses the same 20-match selection.
+Stored form and head-to-head lists can be shorter because the retained canonical
+schedule is a sample, while provider aggregates describe the larger fictional history.
 
 The demo enables synthetic public odds and local member access. The seeded
 member is **+256700000001**, password **DemoGoalHint2026!**, with synthetic access

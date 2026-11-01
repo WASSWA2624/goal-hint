@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { demoFixtureById, demoFixtureKickoff, demoFixtureModel, demoFixtureStatistics, demoFixturesForDate,
+import { demoFixtureById, demoFixtureKickoff, demoFixtureModel, demoFixtureStatistics, demoFixturesForDate, demoDateAt, demoDateIndex,
   demoScoreProbabilities } from "../src/server/demo/api-football.ts";
 import { demoHash } from "../src/server/demo/api-football-catalog.ts";
 import { demoLiveFixtureOdds, demoLiveOddsAvailable, demoLiveOddsBets } from "../src/server/demo/api-football-live-odds.ts";
 
 const minute = 60_000, finishedAt = Date.parse("2026-11-03T12:00:00Z");
-const completed = demoFixturesForDate("2026-11-01", finishedAt);
+// A week of the smaller schedule retains explicit extra-time and suspension cases.
+const completed = Array.from({ length: 7 }, (_, offset) => demoFixturesForDate(demoDateAt(demoDateIndex("2026-11-01") - offset), finishedAt)).flat();
 const fixture = completed.find(row => row.fixture.status.short === "FT"), id = fixture.fixture.id, kickoff = demoFixtureKickoff(id);
 const read = (at, fixtureId = id, betId) => demoLiveFixtureOdds(demoFixtureById(fixtureId, at), demoFixtureModel(fixtureId), at,
   demoScoreProbabilities, { ...(betId === undefined ? {} : { betId }), statistics: demoFixtureStatistics(fixtureId, at) });

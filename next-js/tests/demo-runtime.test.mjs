@@ -67,7 +67,7 @@ test("development policy adapter uses local payloads without real credentials, f
       maxRequests:2,maxPages:1,maxRows:1000,maxResponseBytes:4000000,
       retry:{maxAttempts:1,baseDelayMs:0,maxDelayMs:0},cacheMaxAgeMs:0 });
     assert.equal(result.status,'complete',JSON.stringify(result.error));
-    assert.ok(result.data.length>=500);
+    assert.equal(result.data.length,20);
     assert.equal(result.requestsDispatched,1);
   `;
   const result = spawnSync(process.execPath, ["--conditions=react-server", "--input-type=module", "-e", script], {

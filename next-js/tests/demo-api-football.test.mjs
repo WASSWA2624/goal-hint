@@ -14,15 +14,16 @@ const context = (endpoint) => ({ retrievedAt: utcInstantFromEpochMilliseconds(no
   verifyRegulationScore: () => true, verifyHalfTimeScore: () => true });
 const request = (endpoint, parameters = {}, at = now) => demoApiFootballResponse(endpoint, parameters, at);
 
-test("all 334 reporting days contain 560 unique, diverse matches with no double-booked teams", () => {
+test("all 334 reporting days contain 20 unique, diverse matches with no double-booked teams", () => {
   assert.equal(DEMO_START_DATE, "2026-01-01"); assert.equal(DEMO_END_DATE, "2026-11-30");
-  assert.equal(DEMO_DAYS, 334); assert.equal(DEMO_MATCHES_PER_DAY, 560);
+  assert.equal(DEMO_DAYS, 334); assert.equal(DEMO_MATCHES_PER_DAY, 20);
   assert.equal(demoFootballCatalog.leagues.length, 56); assert.equal(demoFootballCatalog.teams.length, 3_360);
   const ids = new Set(), countries = new Set(), scores = new Set(), statuses = new Set();
   const lastPlayed = new Map();
   for (let day = 0; day < DEMO_DAYS; day += 1) {
     const date = demoDateAt(day), rows = demoFixturesForDate(date, now), todayTeams = new Set();
-    assert.equal(rows.length, 560, date);
+    assert.equal(rows.length, 20, date);
+    assert.equal(new Set(rows.map(row => row.league.id)).size, 20, date);
     for (const row of rows) {
       assert.ok(!ids.has(row.fixture.id)); ids.add(row.fixture.id);
       assert.equal(row.fixture.date.slice(0, 10), date);
@@ -31,13 +32,13 @@ test("all 334 reporting days contain 560 unique, diverse matches with no double-
       scores.add(`${row.goals.home}:${row.goals.away}`);
       for (const team of [row.teams.home, row.teams.away]) {
         assert.ok(!todayTeams.has(team.id), `${team.id} double-booked on ${date}`); todayTeams.add(team.id);
-        if (lastPlayed.has(team.id)) assert.equal(day - lastPlayed.get(team.id), 3);
+        if (lastPlayed.has(team.id)) assert.ok(day - lastPlayed.get(team.id) >= 3);
         lastPlayed.set(team.id, day);
       }
     }
   }
-  assert.equal(ids.size, 187_040); assert.equal(countries.size, 56); assert.ok(scores.size >= 40);
-  for (const status of ["NS", "FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO", "TBD", "1H", "HT", "2H"]) assert.ok(statuses.has(status), status);
+  assert.equal(ids.size, 6_680); assert.equal(countries.size, 56); assert.ok(scores.size >= 40);
+  for (const status of ["NS", "FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO", "TBD", "1H", "2H"]) assert.ok(statuses.has(status), status);
   for (const invalid of ["2025-12-31", "2026-12-01", "2026-02-30", "invalid"]) assert.deepEqual(demoFixturesForDate(invalid, now), []);
 });
 
@@ -70,7 +71,7 @@ test("official list/detail shape and envelope do not leak internal generator met
   const list = request("/fixtures", { date: "2026-10-27", timezone: "Africa/Kampala" });
   assert.deepEqual(Object.keys(list).sort(), ["errors", "get", "paging", "parameters", "response", "results"]);
   assert.equal(list.get, "fixtures"); assert.deepEqual(list.parameters, { date: "2026-10-27", timezone: "Africa/Kampala" });
-  assert.equal(list.results, 560); assert.deepEqual(list.errors, []); assert.deepEqual(list.paging, { current: 1, total: 1 });
+  assert.equal(list.results, 20); assert.deepEqual(list.errors, []); assert.deepEqual(list.paging, { current: 1, total: 1 });
   const row = list.response[0];
   assert.deepEqual(Object.keys(row).sort(), ["fixture", "goals", "league", "score", "teams"]);
   assert.deepEqual(Object.keys(row.teams.home).sort(), ["id", "logo", "name", "winner"]);
@@ -173,7 +174,7 @@ test("live-all includes prior-day kickoffs still playing after local midnight", 
 test("odds preserve official bookmaker/bet/value shape, decimal strings and pagination", () => {
   const first = request("odds", { date: "2026-11-30", timezone: "Africa/Kampala", bookmaker: "8", page: "1" });
   const second = request("odds", { date: "2026-11-30", timezone: "Africa/Kampala", bookmaker: "8", page: "2" });
-  assert.equal(first.results, 10); assert.deepEqual(first.paging, { current: 1, total: 56 });
+  assert.equal(first.results, 10); assert.deepEqual(first.paging, { current: 1, total: 2 });
   assert.equal(second.paging.current, 2); assert.equal(new Set([...first.response, ...second.response].map((r) => r.fixture.id)).size, 20);
   for (const row of first.response) {
     assert.equal(row.bookmakers.length, 1); assert.equal(row.bookmakers[0].id, 8);
@@ -193,7 +194,7 @@ test("local fetch honors URL/query protocol without invoking a live service", as
   const fetcher = createDemoApiFootballFetch({ now: () => now });
   const response = await fetcher("https://v3.football.api-sports.io/fixtures?date=2026-11-30&timezone=Africa%2FKampala");
   assert.equal(response.status, 200); assert.equal(response.headers.get("content-type"), "application/json");
-  const body = await response.json(); assert.equal(body.results, 560); assert.equal(body.get, "fixtures");
+  const body = await response.json(); assert.equal(body.results, 20); assert.equal(body.get, "fixtures");
   assert.equal((await fetcher("https://v3.football.api-sports.io/fixtures", { method: "POST" })).status, 405);
   const controller = new AbortController(); controller.abort();
   await assert.rejects(fetcher("https://v3.football.api-sports.io/fixtures", { signal: controller.signal }), { name: "AbortError" });
@@ -204,7 +205,7 @@ test("local fetch honors URL/query protocol without invoking a live service", as
 test("timezone dates, explicit unknown IDs, empty parameters and season selectors follow provider semantics", () => {
   for (const timezone of ["UTC", "Africa/Kampala", "America/New_York", "Asia/Tokyo"]) {
     const rows = request("fixtures", { date: "2026-10-28", timezone }).response;
-    assert.ok(rows.length >= 500);
+    assert.ok(rows.length >= 10 && rows.length <= 30);
     assert.ok(rows.every((r) => r.fixture.date.startsWith("2026-10-28T")));
     assert.ok(rows.every((r) => r.fixture.timezone === timezone && Date.parse(r.fixture.date) === r.fixture.timestamp * 1_000));
     const odds = request("odds", { date: "2026-10-28", timezone, bookmaker: "8" }).response;
@@ -234,7 +235,7 @@ test("head-to-head last filter selects the last meeting and leaderboards rank ac
     assert.deepEqual(numbers, [...numbers].sort((a, b) => b - a)); assert.ok(numbers[0] > 0);
   }
   const teamId = fixture.teams.home.id;
-  const history = request("fixtures", { team: String(teamId), league: "700001", season: "2026", status: "FT-AET-PEN" }).response;
+  const history = request("fixtures", { team: String(teamId), league: String(fixture.league.id), season: "2026", status: "FT-AET-PEN" }).response;
   const player = request("players", { team: String(teamId), season: "2026" }).response.find((r) => r.statistics[0].games.position === "Attacker");
   const goalEvents = history.flatMap((row) => demoFixtureEvents(row.fixture.id, now))
     .filter((event) => event.player.id === player.player.id && event.type === "Goal" && event.detail !== "Own Goal");

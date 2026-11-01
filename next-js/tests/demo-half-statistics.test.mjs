@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { demoApiFootballResponse, demoFixtureById, demoFixtureEvents, demoFixtureKickoff, demoFixturesForDate,
+import { demoApiFootballResponse, demoFixtureById, demoFixtureEvents, demoFixtureKickoff, demoFixturesForDate, demoDateAt, demoDateIndex,
   demoFixtureStatistics, demoFixtureStatisticsPeriods } from "../src/server/demo/api-football.ts";
 
 const complete = Date.parse("2026-12-01T12:00:00Z");
-const fixtures = demoFixturesForDate("2026-10-27", complete);
+// A week of the smaller schedule retains explicit extra-time and suspension cases.
+const fixtures = Array.from({ length: 7 }, (_, offset) => demoFixturesForDate(demoDateAt(demoDateIndex("2026-10-27") - offset), complete)).flat();
 const fixture = fixtures.find(row => row.fixture.status.short === "FT"
   && demoFixtureById(row.fixture.id, demoFixtureKickoff(row.fixture.id) + 70 * 60_000).fixture.status.short === "2H");
 const id = fixture.fixture.id, kickoff = demoFixtureKickoff(id);
