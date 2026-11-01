@@ -135,10 +135,16 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
   useEffect(() => {
     const element = root.current;
     if (!element || !enhanced) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (open && !element.open) {
       element.showModal();
       element.querySelector<HTMLElement>('input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled)')?.focus();
     } else if (!open && element.open) element.close();
+    return () => {
+      if (element.open) element.close();
+      // React may already have removed a conditionally rendered dialog.
+      if (open && opener?.isConnected) opener.focus({ preventScroll: true });
+    };
   }, [enhanced, open]);
 
   return <Dialog id={id} ref={root} className={className} open={enhanced ? undefined : true}

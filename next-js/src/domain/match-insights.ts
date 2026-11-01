@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { matchSections } from "./match-view.ts";
 import { contentAccessSchema } from "./content-access.ts";
+import { competitionViewSchema } from "./competition-view.ts";
 
 /**
  * Match insights are read-only projections of stored data: verified regulation results from
@@ -67,6 +68,7 @@ export const insightSectionsSchema = z.strictObject({
     nextFixtures: z.strictObject({ home: upcomingFixtureSchema.nullable(), away: upcomingFixtureSchema.nullable() }),
     venue: insightVenueSchema.nullable().optional(),
     standings: z.strictObject({ home: insightStandingSchema.nullable(), away: insightStandingSchema.nullable(), retrievedAt: at }).nullable().optional(),
+    competitionView: competitionViewSchema.nullable().optional(),
   }),
   /** Assignment is separate from officiating statistics; missing observations stay explicit. */
   referee: z.discriminatedUnion("state", [z.strictObject({ state: z.literal("not-available") }),

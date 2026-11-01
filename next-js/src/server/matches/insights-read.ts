@@ -10,6 +10,7 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { storedCycleDisplay } from "../predictions/history-read.ts";
 import { publicRevisionAnalysis } from "./detail-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
+import { readCompetitionView } from "./competition-read.ts";
 
 const finished = ["finished-regulation", "finished-extra-time", "finished-penalties"] as const;
 const bounds = Object.freeze({ formPerTeam: 40, meetings: 60 });
@@ -151,6 +152,9 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
     }
   }
   const competition = fixture.season.competition;
+  const competitionView = await readCompetitionView(tx, { seasonId: fixture.seasonId, season: fixture.season.year,
+    competitionId: competition.id, competitionName: competition.name, competitionType: competition.type,
+    provider: fixture.provider, round: fixture.round }, asOf);
   return storedMatchInsightsSchema.parse({ fixtureId, asOf, home: team(fixture.homeTeam), away: team(fixture.awayTeam), sections: {
     form: { home: homeForm, away: awayForm },
     h2h: { meetings },
@@ -163,7 +167,7 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
     context: { competition: { id: competition.id, name: text(competition.name), country: text(competition.country), logoUrl: logo(competition.logoUrl),
       round: text(fixture.round) }, kickoffAt: fixture.kickoff?.getTime() ?? null, restDays: { home: rest(homeForm), away: rest(awayForm) },
       lastResults: { home: homeForm[0] ?? null, away: awayForm[0] ?? null }, nextFixtures: { home: await next(homeId), away: await next(awayId) },
-      venue: publicFixtureVenue(fixture.externalId, fixture.facts, asOf) },
+      venue: publicFixtureVenue(fixture.externalId, fixture.facts, asOf), competitionView },
     referee: publicRefereeAssignment(fixture.externalId, fixture.facts, asOf),
     history: { state: "available" },
   } });

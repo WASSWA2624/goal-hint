@@ -1,12 +1,14 @@
 import "server-only";
 
-import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { insightStandingSchema, lineupSchema, newsItemSchema, playerSchema, storedMatchInsightsSchema, summarize, type StoredMatchInsights } from "../../domain/match-insights.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { normalizeAvailability } from "../football/api-football-normalize.ts";
 import { publicFixtureVenue } from "../matches/insights-read.ts";
-import { demoApiFootballResponse, demoFixtureById, demoFixtureLineups, demoFixturePlayers, type ApiFootballDemoFixture } from "./api-football.ts";
+import { normalizeStoredStandings } from "../matches/competition-read.ts";
+import { knockoutStage } from "../../domain/competition-view.ts";
+import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
+import { demoApiFootballResponse, demoFixtureById, demoFixtureLineups, demoFixturePlayers, demoTeamById, type ApiFootballDemoFixture } from "./api-football.ts";
 import { demoId } from "./forecast.ts";
 
 type VenueFacts = { providerFixtureId: bigint; venueName: string | null; venueCity: string | null; infoRetrievedAt: Date | null };
@@ -14,20 +16,21 @@ type Binding = Readonly<{ provider: string; externalId: bigint; homeTeamId: stri
 type Player = StoredMatchInsights["sections"]["players"]["players"][number];
 type Lineups = StoredMatchInsights["sections"]["lineups"];
 type Context = StoredMatchInsights["sections"]["context"];
-const standingResponseSchema = z.array(z.object({ league: z.object({ id: z.number().int().positive(),
-  standings: z.array(z.array(z.object({ rank: z.number().int().positive(), team: z.object({ id: z.number().int().positive() }),
-    points: z.number().int().nonnegative(), group: z.string(), all: z.object({ played: z.number().int().nonnegative() }) }))) }) }));
-
-function demoCurrentStandings(fixture: ApiFootballDemoFixture, asOf: number): Context["standings"] {
+function demoCurrentStandings(fixture: ApiFootballDemoFixture, asOf: number) {
   const raw = demoApiFootballResponse("standings", { league: String(fixture.league.id), season: String(fixture.league.season) }, asOf);
-  const table = standingResponseSchema.parse(raw.response).find((row) => row.league.id === fixture.league.id)?.league.standings.flat();
-  if (!table) return null;
+  const tables = normalizeStoredStandings(raw, { season: fixture.league.season, externalId: fixture.league.id,
+    competitionName: fixture.league.name, provider: "api-football", retrievedAt: asOf }, externalId => {
+    const team = demoTeamById(externalId);
+    return team ? { id: demoId("team", externalId), name: team.name, shortName: team.code,
+      logoUrl: isSafeRemoteImageUrl(team.logo) ? team.logo : null } : null;
+  });
   const standing = (teamId: number) => {
-    const row = table.find((entry) => entry.team.id === teamId);
-    return row ? insightStandingSchema.parse({ rank: row.rank, points: row.points, played: row.all.played, group: row.group }) : null;
+    const group = tables?.groups.find(group => group.rows.some(row => row.team.id === demoId("team", teamId)));
+    const row = group?.rows.find(row => row.team.id === demoId("team", teamId));
+    return row ? insightStandingSchema.parse({ rank: row.rank, points: row.points, played: row.played, group: group?.name ?? fixture.league.name }) : null;
   };
   const home = standing(fixture.teams.home.id), away = standing(fixture.teams.away.id);
-  return home || away ? { home, away, retrievedAt: asOf } : null;
+  return { tables, legacy: home || away ? { home, away, retrievedAt: asOf } : null };
 }
 
 /** API-Football does not publish news. These app reports are explicitly synthetic,
@@ -109,9 +112,11 @@ export function projectDemoCurrentAvailability(insights: StoredMatchInsights, bi
         number: games.number, position: games.position, grid: null, role: games.substitute ? "substitute" : "starting" }));
     }
   }
+  const standings = demoCurrentStandings(fixture, asOf), bracket = insights.sections.context.competitionView?.bracket ?? null;
   const context: Context = { ...insights.sections.context,
     venue: binding.facts ? publicFixtureVenue(binding.externalId, binding.facts, asOf) : insights.sections.context.venue ?? null,
-    standings: demoCurrentStandings(fixture, asOf) };
+    standings: standings.legacy, competitionView: standings.tables || bracket ? { season: fixture.league.season, tables: standings.tables,
+      bracket, defaultView: bracket && (knockoutStage(fixture.league.round) || !standings.tables) ? "bracket" : "table" } : null };
   const news = demoAuxiliaryReports(insights, fixture, lineups, context, asOf);
   return storedMatchInsightsSchema.parse({ ...insights, asOf,
     sections: { ...insights.sections, lineups, players: { players: [...players.values()].slice(0, 120) }, context, news } });

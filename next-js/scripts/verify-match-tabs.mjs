@@ -81,7 +81,7 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
         return {
           stable: window.__matchTabFrames.every(frame => frame.every((position, index) => position === window.__matchTabFrames[0][index])),
           visible: before.deep ? Math.abs(box.top - bar.bottom) < 1 && scrollY < before.scroll
-            && parseFloat(panel.style.getPropertyValue('--match-panel-min-size')) <= innerHeight : scrollY === before.scroll,
+            && parseFloat(panel.style.minBlockSize) <= innerHeight : scrollY === before.scroll,
         };
       }, before);
       check(result.stable && result.visible, label);
@@ -202,6 +202,7 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await results.getByRole("radio", { name: "Arsenal", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     await page.waitForFunction(() => new URL(location.href).searchParams.get("team") === "away");
+    await page.waitForFunction(element => element.checked, await results.getByRole("radio", { name: "Liverpool", exact: true }).elementHandle());
     check(await results.getByRole("radio", { name: "Liverpool", exact: true }).isChecked(), "native radio arrow keys update the selected team");
     await choose(results.getByRole("radio", { name: "Arsenal", exact: true }));
     check(await panel.locator("[data-results-filters] > section").evaluateAll(elements => elements.map(element => element.dataset.row).join(",")) === "teams,venues,matches", "three toggle rows are Teams, Venues, Matches");

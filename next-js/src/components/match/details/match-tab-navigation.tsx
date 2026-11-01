@@ -107,11 +107,18 @@ export function MatchTabNavigation({ selected, allowed, onSelect }: { selected: 
     if (wide) return;
     const list = strip.current, target = list?.querySelector<HTMLElement>(`[data-match-tab="${selected}"]`);
     if (!list || !target) return;
-    const box = list.getBoundingClientRect(), tab = target.getBoundingClientRect();
-    const last = list.scrollWidth - list.clientWidth;
-    const left = selected === matchDetailTabs[0] ? 0 : selected === matchDetailTabs.at(-1) ? last
-      : Math.max(0, Math.min(last, list.scrollLeft + tab.left + tab.width / 2 - box.left - box.width / 2));
-    list.scrollTo({ left, behavior: "instant" });
+    const center = () => {
+      const box = list.getBoundingClientRect(), tab = target.getBoundingClientRect();
+      const last = list.scrollWidth - list.clientWidth;
+      const left = selected === matchDetailTabs[0] ? 0 : selected === matchDetailTabs.at(-1) ? last
+        : Math.max(0, Math.min(last, list.scrollLeft + tab.left + tab.width / 2 - box.left - box.width / 2));
+      list.scrollTo({ left, behavior: "instant" });
+    };
+    center();
+    // Selected font weight and responsive widths can settle after this commit.
+    const observer = new ResizeObserver(center);
+    observer.observe(list); observer.observe(target);
+    return () => observer.disconnect();
   }, [selected, wide]);
   const visible = wide ? matchDetailTabs.slice(0, count) : matchDetailTabs;
   const overflow = wide ? matchDetailTabs.slice(count) : [];

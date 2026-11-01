@@ -42,7 +42,7 @@ export function createMatchInsightsService(options: Readonly<{ database: Databas
       // Demo availability follows its current simulation clock across confirmation
       // boundaries, independently of the cached immutable prediction evidence.
       return !demo && options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { view: "match-insights-v1", id }, parse: (value) => storedMatchInsightsSchema.parse(value) }), read) : await read();
+        query: { view: "match-insights-v2", id }, parse: (value) => storedMatchInsightsSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");

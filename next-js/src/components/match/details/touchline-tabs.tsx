@@ -26,7 +26,7 @@ const Surface = styled(TouchlineSurface)`
 `;
 const Panel = styled.div`
   padding: 16px ${({ theme }) => theme.layout.gutter}; min-inline-size: 0;
-  min-block-size: max(min(280px, 40dvh), var(--match-panel-min-size, 0px));
+  min-block-size: min(280px, 40dvh);
   scroll-margin-block-start: calc(var(--review-height, 0px) + var(--app-header-height, 3rem) + 64px);
   ${media.belowDesktop} { padding: 12px; scroll-margin-block-start: calc(var(--review-height, 0px) + 50px);
   }
@@ -61,7 +61,11 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
     if (!element) return;
     // Reserve only the space beneath the current viewport. A shorter panel must neither
     // clamp the page's scroll position nor pull its sticky tabs out of their container.
-    element.style.setProperty("--match-panel-min-size", `${Math.max(0, window.innerHeight - element.getBoundingClientRect().top)}px`);
+    const minimum = `${Math.max(Math.min(280, window.innerHeight * .4), window.innerHeight - element.getBoundingClientRect().top)}px`;
+    if (element.style.minBlockSize === minimum) return;
+    element.style.minBlockSize = minimum;
+    // Establish the scroll floor before React removes a longer panel's content.
+    void element.offsetHeight;
   }, []);
   useLayoutEffect(() => {
     if (previousTab.current === selected) return;
@@ -91,7 +95,7 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
           {Boolean(data.liveMatch?.statistics.items.length) && <Observations kind="statistics" />}
         </>}
         {selected === "form" && <FormAndH2H view={view} />}
-        {selected === "standings" && <TouchlineStandings />}
+        {selected === "standings" && <TouchlineStandings view={view} />}
         {selected === "lineups" && <Section section="lineups" view={view} heading={false}><LineupsSection /></Section>}
         {selected === "players" && <Section section="players" view={view} heading={false}><PlayersSection /></Section>}
         {selected === "markets" && <ViewProvider value={{ ...view, marketsOpen: true }}><DisclosureProvider value={embeddedDisclosure}><MarketsCard embedded /></DisclosureProvider></ViewProvider>}

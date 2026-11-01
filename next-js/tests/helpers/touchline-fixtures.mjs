@@ -5,6 +5,7 @@ import { validateMarketSnapshot, marketRules } from "../../src/domain/markets.ts
 import { storedMatchInsightsSchema } from "../../src/domain/match-insights.ts";
 import { storedMatchDetailResponseSchema } from "../../src/domain/match-detail.ts";
 import { sampleMatchObservations } from "./match-event-fixtures.mjs";
+import { sampleCompetitionViews } from "./competition-fixtures.mjs";
 
 const sample = fixtureForReview(new URLSearchParams({ viewer: "subscriber" }));
 const accepted = validateMarketSnapshot(Object.fromEntries(Object.entries({
@@ -67,6 +68,7 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
   ];
   sections.context.venue = { name: "Emirates Stadium", city: "London", retrievedAt: now };
   sections.context.standings = { home: { rank: 2, points: 23, played: 10, group: "Premier League" }, away: { rank: 3, points: 21, played: 10, group: "Premier League" }, retrievedAt: now };
+  sections.context.competitionView = sampleCompetitionViews(now, sections.form).league;
   sections.referee = { state: "available", name: "Chris Morgan", retrievedAt: now };
   sections.news.items = [{ id: "training", kind: "report", publisher: "Synthetic club report", title: "Both squads complete their final training session", details: [], url: null, publishedAt: now, retrievedAt: now }];
   if (["live", "finished-regulation"].includes(name)) value.detail.liveMatch = sampleMatchObservations(value.detail);
@@ -75,3 +77,24 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
   value.feed.records = [value.detail.fixture];
   return [name, value];
 }));
+
+for (const [name,index,kind] of [['knockout',7,'cup'],['group-stage',8,'mixed'],['partial-bracket',9,'partial']]) {
+  const value=structuredClone(touchlineScenarios['finished-regulation']);
+  const id=`10000000-0000-4000-8000-${String(index).padStart(12,'0')}`;
+  for (const detail of [value.detail,value.prior]) {
+    detail.fixture.fixtureId=id; detail.route={...detail.route,fixtureId:id,slug:name,path:`/en/matches/${id}/${name}`};
+    detail.fixture.competition={...detail.fixture.competition,id:'club-championship',name:'Club Championship'};
+    detail.fixture.status=kind==='mixed'?'finished-regulation':'finished-penalties'; detail.fixture.score={home:2,away:kind==='mixed'?1:2}; detail.fixture.scorePeriod='regulation'; detail.liveMatch=null;
+  }
+  value.insights.fixtureId=id;
+  value.insights.sections.context.competition={...value.insights.sections.context.competition,id:'club-championship',name:'Club Championship',round:kind==='mixed'?'Group Stage':'Quarter-finals'};
+  value.insights.sections.context.standings=null;
+  value.insights.sections.context.competitionView=sampleCompetitionViews(now,value.insights.sections.form)[kind];
+  if (kind==='partial') {
+    const match=value.insights.sections.context.competitionView.bracket.rounds[1].ties[0].fixtures[0];
+    match.fixtureId=id; match.slug=name;
+  }
+  value.insights=storedMatchInsightsSchema.parse(value.insights);
+  value.detail=storedMatchDetailResponseSchema.parse(value.detail); value.prior=storedMatchDetailResponseSchema.parse(value.prior);
+  value.feed.records=[value.detail.fixture]; touchlineScenarios[name]=value;
+}
