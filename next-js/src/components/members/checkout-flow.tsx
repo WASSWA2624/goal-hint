@@ -1,0 +1,335 @@
+"use client";
+import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { Button, TextInput } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { CardIcon, CheckIcon, ClipboardIcon, CopyIcon, GiftIcon, ImageIcon } from "@/components/ui/icons";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
+import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
+import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
+import { paymentEvidence } from "@/domain/payment-sms";
+import { paymentEvidenceDate } from "@/domain/payment-evidence-date";
+import { formatPeriodEnd } from "@/domain/subscription-period";
+import { validMobilePhone } from "@/domain/phone-mobile";
+import { normalizeTransactionId, parseTransactionId } from "@/domain/payment";
+import { localUgandaPhone } from "@/domain/phone";
+import { refreshMemberSession } from "./member-session";
+import { PaymentWizard, WizardActions, WizardNotice, WizardPlans } from "./payment-wizard";
+import { Plan, PlanName, PlanPrice, Preview } from "./subscribe-styles";
+import { preparePaymentImage } from "./payment-image";
+import { readScreenshotText } from "./payment-ocr";
+import { CheckoutActions, CheckoutChoices, CheckoutEvidenceField, CheckoutFundingFields, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutScreenshot, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
+import { MobileMoneyLogo } from "./mobile-money-logo";
+import { loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
+
+const emptyView: CheckoutView = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
+const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Referral days" };
+const localDate = (date = new Date()) => new Date(+date - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+async function send<T>(body: Record<string, unknown>, image: Blob | null = null): Promise<T> {
+  const data = new FormData(); data.set("payload", JSON.stringify(body));
+  if (image) data.set("image", image, "payment.jpg");
+  const response = await fetch("/api/account/checkout", { method: "POST", body: data, credentials: "same-origin" });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.message ?? "Unable to save. Your draft is kept; try again.");
+  return result;
+}
+
+export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false }: {
+  locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
+  account: { id: string; phone: string }; initialView: CheckoutView; topUp?: boolean;
+}) {
+  const router = useRouter(), [view, setView] = useState(initialView ?? emptyView);
+  const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
+    method: "", walletUgx: "0", referralDays: "0", topUpUgx: "", transactionId: "", amountUgx: "", payerPhone: account.phone,
+    paidAt: localDate(), text: "", extracted: {}, originalText: "", accepted: false, attachingId: null });
+  const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(""), [preview, setPreview] = useState(""), [storageWarning, setStorageWarning] = useState(false);
+  const [readingActive, setReadingActive] = useState(false), readingAbort = useRef<AbortController | null>(null);
+  const [showNew, setShowNew] = useState(false), submitting = useRef(false), heading = useRef<HTMLHeadingElement>(null);
+  const [quoteEpoch, setQuoteEpoch] = useState(0), lastQuoteKey = useRef<string | null>(null);
+  const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null), screenshotInput = useRef<HTMLInputElement>(null);
+  const [pasteHint, setPasteHint] = useState("");
+  const key = `${account.id}:${topUp ? "topup" : "plan"}`;
+  const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings, plans.find(p => p.id === draft.planId)?.priceUgx ?? Infinity);
+  useEffect(() => {
+    let alive = true;
+    void loadCheckoutDraft(key).then(stored => {
+      if (!alive) return;
+      if (stored?.draft && stored.draft.purpose === (topUp ? "topup" : stored.draft.purpose)) {
+        setDraft({ ...stored.draft, accepted: false }); setImage(stored.image);
+      } else setDraft(current => {
+        const previous = initialView.lastMethod;
+        const method = previous && Object.hasOwn(methodNames, previous)
+          && checkoutMethodAvailable(previous, initialView, settings, plans.find(p => p.id === current.planId)?.priceUgx ?? Infinity)
+          && (!topUp || previous === "mtn" || previous === "airtel") ? previous as CheckoutSelection["method"] : "";
+        return { ...current, requestKey: crypto.randomUUID(), method,
+          purpose: topUp ? "topup" : method === "referral" ? "referral" : "plan",
+          walletUgx: method === "wallet" ? String(plans.find(p => p.id === current.planId)?.priceUgx ?? 0) : "0",
+          referralDays: method === "referral" ? String(Math.min(365, initialView.availableReferralDays)) : "0" };
+      });
+      setLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [key, topUp, initialView, plans, settings]);
+  useEffect(() => { if (loaded) void saveCheckoutDraft(key, { draft, image }).then(saved => setStorageWarning(!saved)); }, [key, loaded, draft, image]);
+  useEffect(() => {
+    if (!image) return;
+    const url = URL.createObjectURL(image);
+    Promise.resolve().then(() => setPreview(url));
+    return () => URL.revokeObjectURL(url);
+  }, [image]);
+  useEffect(() => () => readingAbort.current?.abort(), []);
+  async function refresh() {
+    const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin" });
+    if (!response.ok) throw new Error("Status could not refresh. Your request is kept.");
+    const next: CheckoutView = await response.json(); setView(next);
+    if (next.requests.some(r => r.status === "approved")) { void refreshMemberSession(); router.refresh(); }
+    return next;
+  }
+  useEffect(() => {
+    let alive = true;
+    const update = () => { if (document.visibilityState === "visible") void fetch("/api/account/checkout", { cache: "no-store" }).then(async r => {
+      if (!r.ok || !alive) return; const next: CheckoutView = await r.json();
+      if (alive) { setView(next); void refreshMemberSession(); }
+    }).catch(() => {}); };
+    const timer = setInterval(update, 20_000); window.addEventListener("focus", update); window.addEventListener("online", update);
+    document.addEventListener("visibilitychange", update);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update); };
+  }, []);
+  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => ({ ...d, ...values, accepted: values.accepted ?? false })); setError(""); };
+  const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
+    method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
+  const selectionKey = JSON.stringify(selection());
+  useEffect(() => {
+    const retry = () => setQuoteEpoch(epoch => epoch + 1);
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, []);
+  useEffect(() => {
+    if (!loaded || draft.step !== 2 || draft.attachingId) return;
+    let alive = true;
+    void send<CheckoutQuote>({ action: "quote", selection: JSON.parse(selectionKey) }).then(value => { if (alive) {
+      if (lastQuoteKey.current && lastQuoteKey.current !== value.quoteKey) {
+        setDraft(d => ({ ...d, accepted: false })); setError("Funding changed. Check the updated summary and confirm again.");
+      }
+      lastQuoteKey.current = value.quoteKey; setQuote(value);
+    } })
+      .catch(e => { if (alive) { setQuote(null); setError(e.message); } });
+    return () => { alive = false; };
+  }, [loaded, draft.step, draft.attachingId, selectionKey, quoteEpoch]);
+  useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded, draft.step]);
+  async function next() {
+    setError("");
+    if (draft.step === 0) { update({ step: 1 }); return; }
+    if (!draft.method) { setError("Choose a payment method."); return; }
+    setBusy(true);
+    try { const value = await send<CheckoutQuote>({ action: "quote", selection: selection() }); lastQuoteKey.current = value.quoteKey; setQuote(value); update({ step: 2 }); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  const attaching = view.requests.find(r => r.id === draft.attachingId);
+  const external = !!attaching || ["mtn", "airtel"].includes(draft.method);
+  async function submit(event: FormEvent) {
+    event.preventDefault(); if (submitting.current) return;
+    if (!draft.accepted) { setError("Check the details and confirm the purchase terms."); return; }
+    if (external && !image && !draft.text.trim()) { setError("Paste a transaction message or add a screenshot before submitting."); return; }
+    if (external && (!parseTransactionId(draft.transactionId) || !validMobilePhone(draft.payerPhone) || !Number.isSafeInteger(Number(draft.amountUgx)) || Number(draft.amountUgx) <= 0 || !Number.isFinite(Date.parse(draft.paidAt)))) {
+      setError("Enter the transaction ID, reported amount, payer number and payment date."); return;
+    }
+    submitting.current = true; setBusy(true); setError("");
+    try {
+      const proof = external ? { transactionId: draft.transactionId, amountUgx: Number(draft.amountUgx), payerPhone: draft.payerPhone,
+        paidAt: new Date(draft.paidAt).toISOString(), original: { text: draft.text.trim() ? draft.originalText || draft.text : "", extracted: draft.extracted } } : undefined;
+      const q = attaching ? null : await send<CheckoutQuote>({ action: "quote", selection: selection() });
+      if (q && (!quote || q.quoteKey !== quote.quoteKey)) { setQuote(q); update({ accepted: false }); throw new Error("Funding changed. Check the updated summary and confirm again."); }
+      const saved = await send<CheckoutRequest>(attaching ? { action: "attach", id: attaching.id, proof }
+        : { action: "confirm", selection: selection(), requestKey: draft.requestKey, quoteKey: q!.quoteKey, confirmed: true, ...(proof ? { proof } : {}) }, image);
+      await refresh();
+      setShowNew(false); setDraft({ ...initial(), requestKey: crypto.randomUUID() }); setImage(null); setQuote(null);
+      if (saved.receipts.some(r => r.disputed)) setError(duplicateReceiptMessage);
+    } catch (e) { setError((e as Error).message); }
+    finally { submitting.current = false; setBusy(false); }
+  }
+  function extract(text: string, fromScreenshot = false) {
+    const evidence = paymentEvidence(text, { mtn: settings.mtnNumber, airtel: settings.airtelNumber });
+    const sender = /\b(?:from|sender)\s*[:=]?\s*(\+?\d[\d -]{7,18})/iu.exec(text)?.[1];
+    const foundDate = paymentEvidenceDate(text), paidAt = foundDate ? localDate(new Date(foundDate)) : null;
+    const extracted = { transactionId: evidence.transactionId, amountUgx: evidence.amount, payerPhone: sender ? validMobilePhone(sender) : null, paidAt };
+    update({ ...(fromScreenshot && draft.text.trim() ? {} : { text, originalText: text }),
+      extracted: { ...draft.extracted, ...extracted, ...(fromScreenshot ? { screenshotText: text } : {}) }, ...(evidence.transactionId ? { transactionId: evidence.transactionId } : {}),
+      ...(evidence.amount !== null ? { amountUgx: String(evidence.amount) } : {}), ...(extracted.payerPhone ? { payerPhone: extracted.payerPhone } : {}), ...(paidAt ? { paidAt } : {}) });
+    setReading(evidence.transactionId || evidence.amount ? "Details extracted. Check and correct every field below." : "Details could not be extracted. Enter them below; your evidence is kept.");
+  }
+  async function chooseImage(file?: File) {
+    if (!file) return;
+    readingAbort.current?.abort();
+    const controller = new AbortController(); readingAbort.current = controller;
+    let prepared = false;
+    setBusy(true); setReadingActive(true); setReading("Reading screenshot…");
+    try {
+      const screenshot = await preparePaymentImage(file); prepared = true; setImage(screenshot);
+      // Persist the screenshot before OCR so closing the app during extraction cannot lose evidence.
+      await saveCheckoutDraft(key, { draft, image: screenshot });
+      if (controller.signal.aborted) { setReading("Enter the details manually; the screenshot is kept."); return; }
+      const text = await readScreenshotText(screenshot, () => {}, controller.signal); extract(text.slice(0, 12000), true);
+    } catch { setReading(prepared ? "Enter the details manually; the screenshot is kept." : "This image could not be prepared. Choose another image or enter details manually."); }
+    finally { setBusy(false); setReadingActive(false); }
+  }
+  async function pasteMessage() {
+    setPasteHint("");
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) throw new Error();
+      extract(text.slice(0, 12000));
+    } catch { messageInput.current?.focus(); setPasteHint("Paste your transaction message into the field, or add a screenshot."); }
+  }
+  async function pasteScreenshot() {
+    setPasteHint("");
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const type = item.types.find(type => type.startsWith("image/"));
+        if (type) { const blob = await item.getType(type); await chooseImage(new File([blob], "payment-screenshot", { type })); return; }
+      }
+      setPasteHint("No screenshot was found on the clipboard. Copy an image or choose a file.");
+    } catch { setPasteHint("Paste a copied image into the screenshot box, or choose an image file."); }
+  }
+  function receiveScreenshot(event: ClipboardEvent<HTMLDivElement>) {
+    const file = [...event.clipboardData.items].find(item => item.kind === "file" && item.type.startsWith("image/"))?.getAsFile();
+    if (!file || busy) return;
+    event.preventDefault(); void chooseImage(file);
+  }
+  const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
+  const visibleRequests = view.requests.slice(0, 5);
+  const showForm = loaded && (showNew || active.length === 0 || !!attaching);
+  const effectiveQuote = attaching ? { ...attaching, purpose: attaching.purpose as CheckoutQuote["purpose"] } : quote;
+  const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
+  function startReceipt(request: CheckoutRequest) {
+    setQuote(null); setShowNew(true); setImage(null);
+    setDraft({ ...initial(), requestKey: crypto.randomUUID(), step: 2, purpose: request.purpose as CheckoutDraft["purpose"], planId: request.planId ?? "",
+      method: request.method as CheckoutDraft["method"], attachingId: request.id });
+  }
+  return <>
+    {visibleRequests.map(request => <CheckoutPanel key={request.id} data-checkout-status={request.status}>
+      <header role="status"><h2>{checkoutLabels[request.status] ?? request.status}</h2><p>Request ID: <strong>{request.reference}</strong></p></header>
+      {request.status === "approved" ? <p>{request.purpose === "topup" ? "Wallet credited." : `Access until ${request.endsAt ? formatPeriodEnd(new Date(request.endsAt)) : "—"} (EAT).`}</p>
+        : <><p>{request.planName} · {formatUgx(request.priceUgx)}</p>
+          {request.verifiedUgx > 0 && <p>Verified: {formatUgx(request.verifiedUgx)} · Remaining: {formatUgx(request.remainingUgx)}</p>}
+          {request.status === "pending" && <p>Your subscription activates after the admin verifies enough incoming funds.</p>}</>}
+      {request.status !== "approved" && request.reportedUgx > 0 && request.verifiedUgx === 0 && <p>Reported payment: {formatUgx(request.reportedUgx)}.
+        {request.reportedUgx < request.amountToSend ? ` If confirmed, ${formatUgx(request.amountToSend - request.reportedUgx)} remains.`
+          : request.reportedUgx > request.amountToSend ? ` If confirmed, ${formatUgx(request.reportedUgx - request.amountToSend)} extra will be added to your wallet.` : " Awaiting verification."}</p>}
+      {request.reason && <p>{request.reason}</p>}
+      {request.receipts.some(r => r.disputed) && <p>{duplicateReceiptMessage}</p>}
+      {request.receipts.length > 0 && <ul>{request.receipts.map(receipt => <li key={receipt.id}>{receipt.transactionId} · reported {formatUgx(receipt.amountUgx)} · {receipt.withdrawn ? "evidence withdrawn" : receipt.disputed ? "disputed" : receipt.verified ? "verified" : "awaiting verification"}
+        {!receipt.withdrawn && !receipt.verified && (checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => {
+          setBusy(true); try { await send({ action: "withdraw", id: request.id, claimId: receipt.id }); await refresh(); }
+          catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+        }}>Withdraw incorrect evidence</Button>}</li>)}</ul>}
+      <CheckoutActions>
+        {([...(checkoutOpenStatuses as readonly string[]), "rejected", "cancelled", "superseded"]).includes(request.status) && <>
+          {request.reservationUntil && request.status !== "disputed" && <Button variant="secondary" disabled={busy} onClick={() => startReceipt(request)}>Add payment / correction</Button>}
+          {!request.reservationUntil && <Button disabled={busy} onClick={async () => {
+            setBusy(true); setError("");
+            const walletUgx = Math.min(request.walletUgx, view.availableWalletUgx), referralDays = Math.min(request.referralDays, view.availableReferralDays);
+            try { await send({ action: "reconfirm", id: request.id, walletUgx, referralDays, amountToSend: request.priceUgx - walletUgx, confirmed: true }); await refresh(); }
+            catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+          }}>{["rejected", "cancelled", "superseded"].includes(request.status) ? "Resubmit" : "Confirm"} {formatUgx(Math.min(request.walletUgx, view.availableWalletUgx))} wallet + {Math.min(request.referralDays, view.availableReferralDays)} referral days; cash {formatUgx(request.priceUgx - Math.min(request.walletUgx, view.availableWalletUgx))}</Button>}
+          {(checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => { setBusy(true); try { await send({ action: "cancel", id: request.id }); await refresh(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>Cancel request</Button>}
+        </>}
+        {["rejected", "cancelled", "approved"].includes(request.status) && <Button variant="secondary" onClick={() => { setShowNew(true); update({ step: 0, attachingId: null, requestKey: crypto.randomUUID(), transactionId: "" }); }}>Start another purchase</Button>}
+      </CheckoutActions>
+      <CheckoutSupport settings={settings} reference={request.reference} />
+    </CheckoutPanel>)}
+    {error && <CheckoutPanel><p role="alert">{error}</p></CheckoutPanel>}
+    {storageWarning && <p role="status">Browser storage is unavailable. Keep this page open to preserve your draft.</p>}
+    {!loaded && <p role="status">Restoring checkout…</p>}
+    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={3} hideTitle title={["Choose package", "Choose Payment Methods", "Confirm"][draft.step]!} headingRef={heading}>
+      {draft.step === 0 && <>
+        {topUp ? <TextInput label="Wallet top-up (UGX)" inputMode="numeric" value={draft.topUpUgx} onChange={e => update({ topUpUgx: e.target.value.replace(/\D/gu, "") })} />
+          : <WizardPlans $columns={1} aria-label="Packages">{plans.map(plan => <Plan key={plan.id}><input type="radio" name="checkout-package" checked={draft.planId === plan.id} onChange={() => update({ planId: plan.id })} />
+            <PlanName>{plan.name} · {plan.durationDays} {plan.durationDays === 1 ? "day" : "days"}</PlanName><PlanPrice>{formatUgx(plan.priceUgx)}</PlanPrice></Plan>)}</WizardPlans>}
+        <WizardActions><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
+      </>}
+      {draft.step === 1 && <>
+        <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(Object.keys(methodNames) as CheckoutSelection["method"][]).filter(method => topUp ? ["mtn", "airtel"].includes(method) : true).map(method => <label key={method}>
+          <input type="radio" name="checkout-method" checked={draft.method === method} disabled={busy || !networkAvailable(method)} onChange={() => update({ method,
+            purpose: topUp ? "topup" : method === "referral" ? "referral" : "plan", walletUgx: method === "wallet" ? String(plans.find(p => p.id === draft.planId)?.priceUgx ?? 0) : "0",
+            referralDays: method === "referral" ? String(Math.min(365, view.availableReferralDays)) : draft.referralDays })} />
+          {method === "mtn" || method === "airtel" ? <CheckoutProviderMark><MobileMoneyLogo network={method} /></CheckoutProviderMark> : method === "wallet" ? <CardIcon /> : <GiftIcon />}
+          <span data-method-text>{methodNames[method]}{method === "wallet" && <small>{formatUgx(view.availableWalletUgx)}</small>}{method === "referral" && <small>{view.availableReferralDays} days available</small>}</span>
+        </label>)}</CheckoutChoices>
+        {!topUp && draft.method && <CheckoutFundingFields>
+          {["mtn", "airtel"].includes(draft.method) && <TextInput label="Wallet to use (UGX)" inputMode="numeric" value={draft.walletUgx} onChange={e => update({ walletUgx: e.target.value.replace(/\D/gu, "") })} />}
+          <TextInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} inputMode="numeric" value={draft.referralDays} onChange={e => update({ referralDays: e.target.value.replace(/\D/gu, "") })} />
+        </CheckoutFundingFields>}
+        {draft.method && <PaymentDestination selection={selection()} />}
+        <WizardActions><Button variant="secondary" onClick={() => update({ step: 0 })}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
+      </>}
+      {draft.step === 2 && <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+        {external && <>
+          <WizardNotice id={`${evidenceId}-requirement`}>Add a transaction message or screenshot. At least one is required.</WizardNotice>
+          <CheckoutEvidenceField>
+            <header><label htmlFor={`${evidenceId}-message`}>Transaction message</label><Button type="button" variant="quiet" disabled={busy} onClick={() => void pasteMessage()}><ClipboardIcon />Paste</Button></header>
+            <CheckoutMessage ref={messageInput} id={`${evidenceId}-message`} rows={3} maxLength={12000} disabled={readingActive} required={!image}
+              aria-describedby={`${evidenceId}-requirement`} placeholder="Enter or paste your payment transaction message here"
+              value={draft.text} onChange={e => update({ text: e.target.value })} onBlur={() => { if (draft.text && draft.text !== draft.originalText) extract(draft.text); }} />
+          </CheckoutEvidenceField>
+          <CheckoutEvidenceField>
+            <header><label htmlFor={`${evidenceId}-screenshot`}>Payment screenshot</label></header>
+            <VisuallyHidden as="input" ref={screenshotInput} id={`${evidenceId}-screenshot`} type="file" accept="image/*" disabled={busy}
+              onChange={e => { void chooseImage(e.currentTarget.files?.[0]); e.currentTarget.value = ""; }} />
+            <CheckoutScreenshot role="group" tabIndex={0} aria-label="Choose or paste a payment screenshot" aria-describedby={`${evidenceId}-requirement`} onPaste={receiveScreenshot}>
+              <div><Button type="button" variant="secondary" disabled={busy} onClick={() => screenshotInput.current?.click()}><ImageIcon />Choose image</Button>
+                <Button type="button" variant="quiet" disabled={busy} onClick={() => void pasteScreenshot()}><ClipboardIcon />Paste image</Button></div>
+              {image && preview ? <div data-screenshot-preview><a href={preview} target="_blank" rel="noopener"><Preview src={preview} alt="Payment screenshot preview" /></a>
+                <Button type="button" variant="quiet" disabled={busy} onClick={() => setImage(null)}>Remove</Button></div>
+                : <p>Choose an image, paste a copied screenshot here, or use the transaction message above.</p>}
+            </CheckoutScreenshot>
+          </CheckoutEvidenceField>
+          {pasteHint && <WizardNotice role="status">{pasteHint}</WizardNotice>}
+          {reading && <p role="status">{reading}</p>}
+          {readingActive && <Button type="button" variant="quiet" onClick={() => readingAbort.current?.abort()}>Enter details manually</Button>}
+          <TextInput label="Transaction ID" leading={<CardIcon />} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+            placeholder="Check the ID from your message or screenshot" value={draft.transactionId} onChange={e => update({ transactionId: normalizeTransactionId(e.target.value) })} />
+          <TextInput label="Reported amount (UGX)" required disabled={readingActive} inputMode="numeric" value={draft.amountUgx} onChange={e => update({ amountUgx: e.target.value.replace(/\D/gu, "") })} />
+          <PhoneInput label="My number" hint="Number used to make payment." required disabled={readingActive} value={draft.payerPhone} onValueChange={payerPhone => update({ payerPhone })} />
+          <TextInput label="Payment date and time" hint={draft.extracted.paidAt ? "Filled from your evidence in your local time. You can edit it." : "Check or edit the payment date and time."}
+            required disabled={readingActive} type="datetime-local" value={draft.paidAt} onChange={e => update({ paidAt: e.target.value })} />
+        </>}
+        {summary}
+        <label><input type="checkbox" checked={draft.accepted} onChange={e => update({ accepted: e.target.checked })} /> I checked these details and confirm this {draft.purpose === "referral" ? "redemption" : "purchase"}. I accept the <a href="/en/terms" target="_blank" rel="noopener">terms</a>.</label>
+        <WizardActions><Button type="button" variant="secondary" disabled={busy} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>
+          <Button type="submit" disabled={busy || !draft.accepted || !attaching && !quote || external && !image && !draft.text.trim()}>{busy ? "Saving…" : external ? "Submit for review" : draft.purpose === "referral" ? "Redeem referral days" : "Confirm purchase"}</Button></WizardActions>
+        <WizardNotice>{external ? "Reported details and extraction do not verify payment. The admin checks the incoming transfer." : "Your available balance is debited only when you confirm."}</WizardNotice>
+      </form>}
+    </PaymentWizard>}
+  </>;
+}
+
+function PaymentDestination({ selection }: { selection: CheckoutSelection }) {
+  const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  const identity = JSON.stringify(selection);
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(() => { void send<CheckoutQuote>({ action: "quote", selection: JSON.parse(identity) }).then(q => {
+      if (alive) { setQuote(q); setError(""); setCopied(false); setCopyError(""); }
+    }).catch(e => { if (alive) { setQuote(null); setError(e.message); } }); }, 200);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [identity]);
+  if (error) return <p role="status">{error}</p>;
+  if (!quote || quote.method !== selection.method || quote.walletUgx !== selection.walletUgx || quote.referralDays !== selection.referralDays || quote.planId !== selection.planId) return <p role="status">Calculating payment…</p>;
+  return <div data-payment-destination><CheckoutPaySummary quote={quote} />
+    {quote.recipient && (quote.method === "mtn" || quote.method === "airtel") && <CheckoutPayee>
+      <div><CheckoutProviderMark><MobileMoneyLogo network={quote.method} /></CheckoutProviderMark><strong>{localUgandaPhone(quote.recipient)}</strong>
+        <Button type="button" variant="quiet" aria-label={copied ? "Number copied" : `Copy ${methodNames[quote.method]} receiving number`} title={copied ? "Copied" : "Copy number"}
+          onClick={() => { void navigator.clipboard.writeText(quote.recipient!).then(() => setCopied(true)).catch(() => setCopyError("Select and copy the receiving number.")); }}>{copied ? <CheckIcon /> : <CopyIcon />}</Button></div>
+      <small>{quote.recipientName}</small>
+      {copyError && <small role="status">{copyError}</small>}
+    </CheckoutPayee>}
+  </div>;
+}

@@ -1,10 +1,11 @@
 import "server-only";
 import { paymentNoticeRules } from "../../domain/payment-notification.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import { Prisma } from "../generated/prisma/client.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import { lockMemberAccount } from "./access-codes.ts";
 import { memberAdminPhones } from "./member-admin.ts";
+import { lockSettings } from "./settings.ts";
 const DAY = 86_400_000, HOUR = 3_600_000, BATCH = 100;
 export type MembersPurgeResult = Readonly<{ claimed: boolean; images: number; sessions: number; buckets: number; accounts: number; notices: number }>;
 /** The database claim is shared by the web, CLI and every worker; no member metadata is deleted. */
@@ -18,7 +19,8 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
     if (!result.claimed) return result;
     try {
       const settings = await database.query(tx => tx.subscriptionSettings.findUniqueOrThrow({ where: { id: 1 }, select: { screenshotRetentionDays: true } }));
-      const imageWhere: Prisma.PaymentSubmissionWhereInput = { imagePurgedAt: null, screenshot: { isNot: null }, OR: [
+      const imageWhere: Prisma.PaymentSubmissionWhereInput = { workflowVersion: 1, imagePurgedAt: null, screenshot: { isNot: null },
+        receiptClaims: { none: { receipt: { OR: [{ disputed: true }, { verifiedAt: { not: null }, allocatedSubmissionId: null }] } } }, OR: [
         { status: { in: ["approved", "reversed"] }, decidedAt: { lte: new Date(+at - settings.screenshotRetentionDays * DAY) } },
         { status: { in: ["rejected", "superseded"] }, decidedAt: { lte: new Date(+at - 7 * DAY) } },
       ] };
@@ -26,11 +28,29 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
       result.images = await drain(() => database.transaction(async tx => {
         const selected = await tx.paymentSubmission.findMany({ where: imageWhere, select: { id: true, accountId: true }, orderBy: { id: "asc" }, take: BATCH });
         for (const id of [...new Set(selected.map(s => s.accountId))].sort()) await lockMemberAccount(tx, id);
+        await lockSettings(tx, "system:members-purge", at);
         const rows = await tx.paymentSubmission.findMany({ where: { ...imageWhere, id: { in: selected.map(s => s.id) } }, select: { id: true } });
         const ids = rows.map(r => r.id);
         const removed = await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: ids } } });
         await tx.paymentSubmission.updateMany({ where: { id: { in: ids } }, data: { imagePurgedAt: at } });
         return removed.count;
+      }, { isolationLevel: "ReadCommitted" }));
+      result.images += await drain(() => database.transaction(async tx => {
+        // Serialize retention with verification/dispute decisions before choosing eligible evidence.
+        await lockSettings(tx, "system:members-purge", at);
+        const rows = await tx.paymentReceiptClaim.findMany({ where: { purgedAt: null, receipt: { disputed: false,
+          OR: [{ verifiedAt: null }, { allocatedSubmissionId: { not: null } }] }, submission: { OR: [
+          { status: { in: ["approved", "reversed"] }, decidedAt: { lte: new Date(+at - settings.screenshotRetentionDays * DAY) } },
+          { status: { in: ["rejected", "cancelled"] }, decidedAt: { lte: new Date(+at - 7 * DAY) } },
+        ] } }, select: { id: true, submissionId: true }, take: BATCH });
+        const ids = rows.map(row => row.id);
+        await tx.paymentReceiptEvidence.updateMany({ where: { claimId: { in: ids } }, data: { image: null } });
+        const count = (await tx.paymentReceiptClaim.updateMany({ where: { id: { in: ids }, purgedAt: null }, data: {
+          image: null, original: Prisma.DbNull, corrections: Prisma.DbNull, payerPhone: null, purgedAt: at,
+        } })).count;
+        await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: rows.map(row => row.submissionId) }, submission: { workflowVersion: 2,
+          receiptClaims: { some: {}, none: { purgedAt: null } } } } });
+        return count;
       }, { isolationLevel: "ReadCommitted" }));
       result.sessions = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM MemberSession WHERE expiresAt <= ${at} LIMIT ${BATCH}`));
       await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM MemberVerification WHERE expiresAt <= ${at} LIMIT ${BATCH}`));

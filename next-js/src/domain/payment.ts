@@ -1,6 +1,7 @@
 import type { MobileNetwork } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
 import { validTopUp, type CreditView } from "./wallet.ts";
+import type { CheckoutView } from "./checkout.ts";
 
 // A plan report claims the chosen plan's price; a top-up (purpose "topup", no plan) claims the amount the member chose to add
 // (topUpAmount). A transaction ID is required; a screenshot is optional. The amount the browser read from an attached image
@@ -51,6 +52,7 @@ export type PaymentStatus = Readonly<{ reference: string; status: string; reject
  * was refused or reversed after the newer report was sent.
  */
 export type PaymentView = Readonly<{ acceptedTerms: boolean; status: PaymentStatus | null; credit?: CreditView | null;
+  checkout?: CheckoutView | null;
   otherStatus?: PaymentStatus | null }>;
 
 export function canOpenMoneyMenu(userAgent: string): boolean {

@@ -8,9 +8,9 @@ test("database health checks current account fields with zero-row reads after co
     return run({ async $queryRaw(statement) { statements.push(statement); return []; } });
   } });
   assert.equal(status, "ready");
-  assert.equal(statements.length, 5);
+  assert.equal(statements.length, 14);
   for (const statement of statements) {
-    assert.match(statement.sql, /^SELECT .*\s+FROM `Member(?:Account|Session|Verification|Referral|Notification)` WHERE 1 = 0$/u);
+    assert.match(statement.sql, /^SELECT .*\s+FROM `(?:Member\w+|Referral\w+|Payment\w+)` WHERE 1 = 0$/u);
     assert.deepEqual(statement.values, []);
   }
   const account = statements.find(statement => statement.sql.includes("FROM `MemberAccount`"));

@@ -22,12 +22,12 @@ function fixture(target, rows = []) {
 }
 
 test("a historical payment uses its current status and remains selectable beyond the queue limit", async () => {
-  const target = payment(targetId, "reversed"), rows = Array.from({ length: 100 }, (_, index) => payment(`queue-${index}`));
+  const target = payment(targetId, "reversed"), rows = Array.from({ length: 30 }, (_, index) => payment(`queue-${index}`));
   const { review, reads } = fixture(target, rows);
   const queue = await review.list("pending", targetId);
   assert.equal(queue.tab, "approved");
   assert.equal(queue.targetFound, true);
-  assert.equal(queue.payments.length, 100);
+  assert.equal(queue.payments.length, 30);
   assert.equal(queue.payments.at(-1).id, targetId);
   assert.deepEqual(reads.find(read => read.kind === "queue").query.where, { status: { in: ["approved", "reversed"] } });
 });
@@ -50,7 +50,7 @@ test("a deleted target is explicitly unavailable even when the ordinary queue ha
 test("ordinary queue requests keep their existing status filter without an exact-record lookup", async () => {
   const { review, reads } = fixture(null);
   const queue = await review.list("superseded");
-  assert.deepEqual(queue, { pendingCount: 4, payments: [] });
+  assert.deepEqual(queue, { pendingCount: 4, payments: [], page: 1, pageSize: 30, total: 4, search: "" });
   assert.deepEqual(reads.find(read => read.kind === "queue").query.where, { status: "superseded" });
   assert.equal(reads.some(read => read.kind === "target"), false);
 });

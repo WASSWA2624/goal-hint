@@ -17,7 +17,7 @@ const owner = "synthetic-owner";
 function fixture() {
   const account = { id: randomUUID(), phone: "256700000111", phoneVerifiedAt: new Date(instant), blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
-  let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [], walletEntry: [], paymentNotificationOutbox: [],
+  let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], paymentReceipt: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [], walletEntry: [], paymentNotificationOutbox: [],
     subscriptionSettings: [{ ...defaultSubscriptionSettings, id: 1, updatedAt: new Date(instant) }] };
   let committed = structuredClone(state), tail = Promise.resolve(), transactions = 0, abortCommit = null;
   const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => {
@@ -134,7 +134,7 @@ test("only manual grants that record actual payment details notify", async () =>
   assert.equal(paid.status, "created"); assert.equal(paid.notification, "sent"); assert.equal(f.approvals.length, 1);
   assert.equal(f.state.paymentSubmission[0].transactionRef, "SYNTHETICMANUAL");
   assert.equal(+f.approvals[0].expiresAt, +paid.grant.endsAt);
-  assert.equal((await codes.manual({ ...fields, network: "airtel", transactionRef: "SYNTHETICMANUAL" }, owner)).status, "duplicate");
+  assert.equal((await codes.manual({ ...fields, network: "mtn", transactionRef: "SYNTHETICMANUAL" }, owner)).status, "duplicate");
   await codes.extend(paid.grant.id, 1, owner); await codes.revoke(paid.grant.id, "owner-revoked", owner);
   assert.equal((await codes.reversePayment(paid.grant.paymentSubmissionId, "network-reversal", owner)).status, "saved");
   assert.equal(f.approvals.length, 1); assert.equal(f.rejections.length, 0);
@@ -186,7 +186,7 @@ test("payment decision HTTP responses report notification status without changin
   const context = (id, body) => ({ services: { database: f.database }, owner: { username: owner }, request: new Request(`http://localhost/api/admin/payments/${id}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   }) });
-  const approval = await handlers.POST(context(a.id, { action: "approve", planId: f.plan.id, network: "mtn", transactionId: "SYNTHETIC-HTTP", amount: 5000 }));
+  const approval = await handlers.POST(context(a.id, { action: "approve", verified: true, planId: f.plan.id, network: "mtn", transactionId: "SYNTHETIC-HTTP", amount: 5000 }));
   assert.equal(approval.status, 201); const approved = await approval.json();
   assert.equal(approved.status, "approved"); assert.equal(approved.notification, "failed");
   assert.equal(approved.reference, `P${a.reference}`);

@@ -23,7 +23,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   const fields=(tid,other={})=>({planId,network:"mtn",transactionRef:tid,amountReceivedUgx:5000,...other});
   await t.test("two reports, punctuation variants and a manual code race all serialize to one approval",async()=>{
     for(const pair of [["RACEA","RACEA"],["RACE.B","RACEB"]]){const a=await report(await member(),pair[0]),b=await report(await member(),pair[1]);const r=await Promise.all([codes.approvePayment(a.id,fields(pair[0]),"owner"),codes.approvePayment(b.id,fields(pair[1]),"owner")]);assert.deepEqual(r.map(x=>x.status).sort(),["created","duplicate"]);}
-    const a=await report(await member(),"RACEMANUAL"),m=await member(); const r=await Promise.all([codes.approvePayment(a.id,fields("RACEMANUAL"),"owner"),codes.manual({phone:m.phone,planId,network:"airtel",transactionRef:"RACE.MANUAL",amountReceivedUgx:5000,note:"Synthetic race"},"owner")]);assert.deepEqual(r.map(x=>x.status).sort(),["created","duplicate"]);
+    const a=await report(await member(),"RACEMANUAL"),m=await member(); const r=await Promise.all([codes.approvePayment(a.id,fields("RACEMANUAL"),"owner"),codes.manual({phone:m.phone,planId,network:"mtn",transactionRef:"RACE.MANUAL",amountReceivedUgx:5000,note:"Synthetic race"},"owner")]);assert.deepEqual(r.map(x=>x.status).sort(),["created","duplicate"]);
   });
   await t.test("edited values persist; renewal carries entitlement with no further code entry",async()=>{
     const who=await member(), row=await report(who,"EDITOLD"); const first=await codes.approvePayment(row.id,fields("EDIT-NEW",{network:"airtel",amountReceivedUgx:6000}),"owner");assert.equal(first.status,"created");assert.equal(+first.grant.startsAt,clock);assert.equal(first.grant.devicesUnlocked,1);
@@ -35,9 +35,9 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   });
   await t.test("stolen-ID recovery keeps the ID unapprovable and records the real money once",async()=>{
     const stranger=await member(),payer=await member(),p=await report(stranger,"STOLEN.TEST",{payerPhone:payer.phone});await codes.approvePayment(p.id,fields("STOLEN.TEST"),"owner");
-    assert.equal((await payments.submit(payer,{planId,payerPhone:payer.phone,network:"airtel",transactionId:"STOLENTEST",amount:5000,accepted:true},jpeg())).status,"duplicate");
+    assert.equal((await payments.submit(payer,{planId,payerPhone:payer.phone,network:"mtn",transactionId:"STOLENTEST",amount:5000,accepted:true},jpeg())).status,"duplicate");
     assert.equal((await codes.reversePayment(p.id,"wrong-account","owner")).status,"saved");assert.equal((await codes.manual({phone:payer.phone,planId,amountReceivedUgx:5000,note:`for P${p.reference}`},"owner")).status,"created");
-    assert.equal((await codes.manual({phone:payer.phone,planId,network:"airtel",transactionRef:"STOLENTEST",amountReceivedUgx:5000,note:"Synthetic duplicate"},"owner")).status,"duplicate");
+    assert.equal((await codes.manual({phone:payer.phone,planId,network:"mtn",transactionRef:"STOLENTEST",amountReceivedUgx:5000,note:"Synthetic duplicate"},"owner")).status,"duplicate");
     const [paid,manual]=await db.query(tx=>Promise.all([tx.paymentSubmission.aggregate({where:{id:p.id,status:"approved"},_sum:{amountReceivedUgx:true}}),tx.accessCode.aggregate({where:{accountId:payer.accountId,source:"manual"},_sum:{amountReceivedUgx:true}})]));assert.equal((paid._sum.amountReceivedUgx??0)+(manual._sum.amountReceivedUgx??0),5000);
   });
   await t.test("review checks and reject store decisions and purge images only when requested",async()=>{
@@ -50,7 +50,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
     const who=await member(),row=await report(who,"HTTPONLYONCE");
     const services={database:db,config:{...config,production:true}};
     const context=body=>({services,owner:{username:"owner"},request:new Request(`http://localhost/api/admin/payments/${row.id}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})});
-    const fields={action:"approve",planId,network:"mtn",transactionId:"HTTPONLYONCE",amount:5000};
+    const fields={action:"approve",verified:true,planId,network:"mtn",transactionId:"HTTPONLYONCE",amount:5000};
     const handlers=createReviewHandlers({notifications:silentPaymentNotifications});const r=await handlers.POST(context(fields));assert.equal(r.status,201);const reply=await r.json();assert.equal(reply.status,"approved");assert.equal(reply.devicesUnlocked,1);assert.equal(reply.notification,"unavailable");assert.ok(!("delivery" in reply));assert.ok(!("code" in reply));
     const second=await handlers.POST(context(fields));assert.equal(second.status,409);
     const code=await db.query(tx=>tx.accessCode.findUniqueOrThrow({where:{paymentSubmissionId:row.id}}));

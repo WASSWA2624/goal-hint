@@ -50,6 +50,8 @@ export const HeadEnd = styled(DeskHeadEnd)``;
 
 /** Four equal status tabs on phones, wrapping long labels instead of scrolling. */
 export const StatusTabs = styled(Segmented)`
+  flex-wrap: wrap;
+  overflow-x: visible;
   && > a[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
   ${media.belowDesktop} {
     display: grid;

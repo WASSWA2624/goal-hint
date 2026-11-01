@@ -15,6 +15,8 @@ import { deleteSubscriber } from "./delete-subscriber.ts";
 import { countedManualWhere, countedPaymentWhere } from "./revenue.ts";
 import { rememberRegistrationPhone } from "../members/referrals.ts";
 import { scrubReferralReviewEvidence } from "../members/referral-reviews.ts";
+import { Prisma } from "../generated/prisma/client.ts";
+import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 
 export function revenueBounds(now: number) {
   const today = getReportingDate(utcInstantFromEpochMilliseconds(now));
@@ -25,7 +27,7 @@ export function revenueBounds(now: number) {
 export function createSubscribers(database: DatabaseRuntime, now = Date.now, config?: Pick<AnalyticsConfig, "key">) {
   return {
     async pendingPayments(): Promise<readonly OwnerPaymentSummary[]> {
-      return database.query(async tx => (await tx.paymentSubmission.findMany({ where: { status: "pending" },
+      return database.query(async tx => (await tx.paymentSubmission.findMany({ where: { status: { in: [...checkoutOpenStatuses] } },
         orderBy: [{ submittedAt: "asc" }, { id: "asc" }], take: 2,
         select: { id: true, reference: true, claimedNetwork: true, claimedAmountUgx: true, submittedAt: true } }))
         .map(row => ({ id: row.id, reference: formatPaymentReference(row.reference), network: row.claimedNetwork,
@@ -39,7 +41,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
           tx.accessCode.aggregate({ where: countedManualWhere({ gte: since, lte: at }), _sum: { amountReceivedUgx: true } }),
         ]); return (payments._sum.amountReceivedUgx ?? 0) + (manual._sum.amountReceivedUgx ?? 0); }
         const [pending, active, weekRevenue, monthRevenue, trials, busy, settings] = await Promise.all([
-          tx.paymentSubmission.count({ where: { status: "pending" } }),
+          tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } }),
           tx.$queryRaw<{ total: bigint }[]>`WITH RECURSIVE PaidCodes AS (
             SELECT c.id, c.replacedById FROM AccessCode c LEFT JOIN PaymentSubmission p ON p.id = c.paymentSubmissionId
             WHERE (c.source = 'payment' AND p.status = 'approved' AND p.reversedAt IS NULL)
@@ -109,6 +111,9 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             if (action === "block") deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
             break;
           case "erase": {
+            await tx.paymentSubmission.updateMany({ where: { accountId: id, reservationActive: true }, data: { reservationActive: false, status: "cancelled" } });
+            await tx.paymentReceiptEvidence.updateMany({ where: { claim: { submission: { accountId: id } } }, data: { image: null } });
+            await tx.paymentReceiptClaim.updateMany({ where: { submission: { accountId: id } }, data: { payerPhone: null, image: null, imageSha256: null, original: Prisma.DbNull, corrections: Prisma.DbNull, purgedAt: at } });
             if (account.phone) await rememberRegistrationPhone(tx, config ?? await getAnalyticsConfig(), account.phone, at);
             await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
             await tx.savedSlip.deleteMany({ where: { accountId: id } });

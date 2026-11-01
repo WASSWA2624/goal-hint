@@ -31,11 +31,12 @@ const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
 
 test("member write routes use the shared factories; sign-in and devices enforce origin, mode and device unlock", async () => {
-  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["payments", "createPaymentHandler"]]) {
+  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"]]) {
     const route = `src/app/api/account/${segment}/route.ts`;
     assert.ok(memberRoutes.includes(route));
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
   }
+  for (const segment of ["payments", "checkout"]) assert.match(await source(`src/app/api/account/${segment}/route.ts`), /createCheckoutHandlers/);
   for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null }, { codeEnteredAt: new Date(0), blocked: false }]) {
     const services = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, settings: { settings: { paywallMode: mode } },
     auth: { login: async (_phone, password) => password ? ({ status: "authenticated", token: "t".repeat(43), phone: "256700000101" }) : ({ status: "unauthorized", message: "Enter your password." }) }, sessions: {

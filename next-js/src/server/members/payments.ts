@@ -86,7 +86,7 @@ export function createPayments({ database, config, now = Date.now, environment =
           const plan = topUp === null && fields.planId ? await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } }) : null;
           if (topUp === null && !plan?.active || !settings[fields.network === "mtn" ? "mtnNumber" : "airtelNumber"]
             || !fields.accepted && !await acceptedTerms(tx, member, at)) return rollback({ status: "invalid" });
-          if (await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: { in: [`mtn:${key}`, `airtel:${key}`] } }, select: { id: true } })) return rollback({ status: "duplicate" });
+          if (await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: `${fields.network}:${key}` }, select: { id: true } })) return rollback({ status: "duplicate" });
           const stored = await bucket(tx, "upload-stored", member.tokenHash, at), site = await bucket(tx, "upload-site", "all", at);
           if (stored.count >= paymentRules.sessionStored) return rollback({ status: "busy" });
           if (site.bytes + imageBytes > paymentRules.siteBytes) { await busyAudit(tx, at); return { status: "busy" }; }
@@ -94,7 +94,7 @@ export function createPayments({ database, config, now = Date.now, environment =
           if (image && !dimensions) return rollback({ status: "invalid" });
           // A new report replaces only a waiting report of the same purpose: a top-up never cancels a pending plan payment.
           const purpose = topUp === null ? "plan" : "topup";
-          await tx.paymentSubmission.updateMany({ where: { accountId: member.accountId, status: "pending", purpose },
+          await tx.paymentSubmission.updateMany({ where: { accountId: member.accountId, status: "pending", purpose, workflowVersion: 1 },
             data: { status: "superseded", decidedAt: at, decidedBy: "system:superseded" } });
           const reference = newReference().slice(2), id = randomUUID();
           // The claim is the plan's price, or the top-up the member chose; the owner records the amount actually received.

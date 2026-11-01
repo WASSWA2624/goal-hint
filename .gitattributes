@@ -7,3 +7,5 @@ next-js/prisma/migrations/20261031120000_referral_rewards/migration.sql text eol
 next-js/prisma/mariadb/20261031120000_referral_rewards.sql text eol=lf
 next-js/prisma/migrations/20261031104143_account_notifications/migration.sql text eol=lf
 next-js/prisma/mariadb/20261031104143_account_notifications.sql text eol=lf
+next-js/prisma/migrations/20261101120000_payment_checkout/migration.sql text eol=lf
+next-js/prisma/mariadb/20261101120000_payment_checkout.sql text eol=lf

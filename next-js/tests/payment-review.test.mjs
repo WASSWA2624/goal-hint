@@ -42,7 +42,7 @@ test("pending review is strict, oldest first, and invalid tabs use the same queu
     const queue = await f.review.list(tab);
     assert.deepEqual(queue.payments.map(row => row.id), ["oldest", "later"]);
     assert.equal(queue.pendingCount, 2);
-    assert.deepEqual(Object.keys(queue).sort(), ["payments", "pendingCount"]);
+    assert.deepEqual(Object.keys(queue).sort(), ["page", "pageSize", "payments", "pendingCount", "search", "total"]);
   }
 });
 
@@ -53,7 +53,7 @@ test("history tabs keep superseded reports separate and retain reversals without
   assert.deepEqual((await f.review.list("superseded")).payments.map(row => row.id), ["old"]);
   const rejected = await f.review.list("rejected");
   assert.deepEqual(rejected.payments.map(row => row.id), ["rejected"]);
-  assert.deepEqual(Object.keys(rejected).sort(), ["payments", "pendingCount"]);
+  assert.deepEqual(Object.keys(rejected).sort(), ["page", "pageSize", "payments", "pendingCount", "search", "total"]);
   const pending = await f.review.list();
   assert.deepEqual(pending.payments.map(row => row.id), ["pending"]);
   assert.ok(!f.calls.includes("payers"), "No sending numbers means no account lookup.");
@@ -99,9 +99,9 @@ test("code lookup accepts current and legacy payment references and preserves ra
 
 test("empty queues avoid unrelated proof and payer evidence queries", async () => {
   const f = fixture();
-  assert.deepEqual(await f.review.list(), { pendingCount: 0, payments: [] });
-  assert.deepEqual(f.calls, ["payments", "count"]);
+  assert.deepEqual(await f.review.list(), { pendingCount: 0, payments: [], page: 1, pageSize: 30, total: 0, search: "" });
+  assert.deepEqual(f.calls, ["count", "payments", "count"]);
   f.calls.length = 0;
   await f.review.list("approved");
-  assert.deepEqual(f.calls, ["payments", "count"]);
+  assert.deepEqual(f.calls, ["count", "payments", "count"]);
 });

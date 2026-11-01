@@ -4,8 +4,7 @@ import { referralRules, remainingRewardMs, validReferralCode, type ReferralSumma
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { MemberAccount, Prisma } from "../generated/prisma/client.ts";
-import { accessCodeTransaction, createAccessPeriod, lockMemberAccount } from "./access-codes.ts";
-import { unlockedDeviceLimit } from "./device-grants.ts";
+import { accessCodeTransaction, lockMemberAccount } from "./access-codes.ts";
 import { isMemberAdminPhone } from "./member-admin.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 
@@ -53,9 +52,9 @@ export async function awardReferralRegistration(tx: Prisma.TransactionClient, co
     await tx.memberReferral.update({ where: { id: registration.id }, data: { status: "ineligible" } });
     return;
   }
-  const grant = await createAccessPeriod(tx, inviter, { source: "referral", planName: "Earned access", durationDays: 1,
-    priceUgx: 0, amountReceivedUgx: 0 }, "system:referral", at, { maximum: await unlockedDeviceLimit(tx) });
-  await tx.memberReferral.update({ where: { id: registration.id }, data: { status: "rewarded", rewardedAt: at, accessCodeId: grant.id } });
+  await tx.referralCredit.create({ data: { id: randomUUID(), accountId: inviter.id, referralId: registration.id,
+    requestKey: `award:${registration.id}`, days: 1, kind: "award", createdAt: at } });
+  await tx.memberReferral.update({ where: { id: registration.id }, data: { status: "rewarded", rewardedAt: at } });
 }
 
 export function createReferrals({ database, now = Date.now }: { database: DatabaseRuntime; now?: () => number }) {
@@ -96,14 +95,16 @@ export function createReferrals({ database, now = Date.now }: { database: Databa
         if (!eligibleInviter(account) || account.phone !== member.phone || !session?.authenticatedAt || session.passwordResetAt
           || session.accountId !== member.accountId || session.expiresAt <= at) return null;
         const code = await ensureReferralCode(tx, account);
-        const [verified, history, periods] = await Promise.all([
+        const [verified, history, periods, credits, reserved] = await Promise.all([
           tx.memberReferral.count({ where: { inviterId: member.accountId, status: "rewarded" } }),
           tx.memberReferral.findMany({ where: { inviterId: member.accountId }, orderBy: [{ registeredAt: "desc" }, { id: "desc" }], take: referralRules.historyLimit,
             select: { id: true, registeredAt: true, rewardedAt: true, status: true } }),
           tx.accessCode.findMany({ where: { accountId: member.accountId, source: "referral", revokedAt: null, endsAt: { gt: at } },
             select: { startsAt: true, endsAt: true, source: true, revokedAt: true } }),
+          tx.referralCredit.aggregate({ where: { accountId: member.accountId }, _sum: { days: true } }),
+          tx.paymentSubmission.aggregate({ where: { accountId: member.accountId, reservationActive: true }, _sum: { referralDays: true } }),
         ]);
-        return { code, verified, earnedDays: verified, remainingMs: remainingRewardMs(periods, at), history: history.map(row => ({
+        return { code, verified, earnedDays: verified, availableDays: Math.max(0, (credits._sum.days ?? 0) - (reserved._sum.referralDays ?? 0)), remainingMs: remainingRewardMs(periods, at), history: history.map(row => ({
           id: row.id, registeredAt: row.registeredAt.toISOString(), rewardedAt: row.rewardedAt?.toISOString() ?? null,
           status: row.status === "rewarded" ? "rewarded" as const : row.status === "pending" ? "pending" as const : "ineligible" as const,
         })) };

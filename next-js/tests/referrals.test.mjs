@@ -66,15 +66,13 @@ test("registration captures attribution once; verification awards a full day wit
   assert.equal(JSON.stringify([...f.referrals.values()]).includes(friend), false, "No raw phone is retained in the reward ledger");
   const { result, otp } = await verify(f, pending);
   const summary = await owner.referrals.read(owner.member);
-  assert.equal(summary.verified, 1); assert.equal(summary.earnedDays, 1); assert.equal(summary.remainingMs, DAY);
+  assert.equal(summary.verified, 1); assert.equal(summary.earnedDays, 1); assert.equal(summary.availableDays, 1); assert.equal(summary.remainingMs, 0);
   assert.equal(summary.history[0].status, "rewarded"); assert.equal(summary.code, owner.summary.code);
-  const reward = [...f.accessCodes.values()][0];
-  assert.equal(reward.source, "referral"); assert.equal(+reward.endsAt - +reward.startsAt, DAY);
-  assert.equal(reward.priceUgx, 0); assert.equal(reward.amountReceivedUgx, 0);
-  assert.ok((await f.sessionService.verify(owner.token)).codeEnteredAt, "An expired/free inviter receives normal device access");
+  assert.equal(f.referralCredits.size, 1); assert.equal([...f.referralCredits.values()][0].days, 1);
+  assert.equal((await f.sessionService.verify(owner.token)).codeEnteredAt, null, "Earned days wait for explicit redemption");
   assert.equal((await f.service.verifyAccount(otp, pending.token, address)).status, "unauthorized");
   assert.equal((await f.service.login(friend, password, address, result.token)).status, "authenticated");
-  assert.equal(f.accessCodes.size, 1, "Replayed verification and later logins never award again");
+  assert.equal(f.accessCodes.size, 0); assert.equal(f.referralCredits.size, 1, "Replayed verification and later logins never award again");
   assert.equal(JSON.stringify(summary).includes(registration.phoneKey), false);
 });
 
@@ -84,7 +82,7 @@ test("simultaneous verification consumes one code and awards only once", async (
   const otp = f.messages.at(-1).code;
   const results = await Promise.all([f.service.verifyAccount(otp, pending.token, address), f.service.verifyAccount(otp, pending.token, address)]);
   assert.deepEqual(results.map(row => row.status).sort(), ["authenticated", "unauthorized"]);
-  assert.equal(f.accessCodes.size, 1); assert.equal((await owner.referrals.read(owner.member)).earnedDays, 1);
+  assert.equal(f.referralCredits.size, 1); assert.equal((await owner.referrals.read(owner.member)).availableDays, 1);
 });
 
 test("a failed award rolls back verification and its access period, allowing a safe retry", async () => {
@@ -93,28 +91,28 @@ test("a failed award rolls back verification and its access period, allowing a s
   const otp = f.messages.at(-1).code, update = f.tx.memberReferral.update;
   f.tx.memberReferral.update = async () => { throw new Error("Synthetic ledger failure"); };
   await assert.rejects(f.service.verifyAccount(otp, pending.token, address), /Synthetic ledger/);
-  assert.equal(f.accessCodes.size, 0); assert.equal(f.accounts.get(pending.accountId).phoneVerifiedAt, null);
+  assert.equal(f.referralCredits.size, 0); assert.equal(f.accessCodes.size, 0); assert.equal(f.accounts.get(pending.accountId).phoneVerifiedAt, null);
   assert.equal([...f.referrals.values()][0].status, "pending");
   f.tx.memberReferral.update = update;
   assert.equal((await f.service.verifyAccount(otp, pending.token, address)).status, "authenticated");
-  assert.equal(f.accessCodes.size, 1);
+  assert.equal(f.referralCredits.size, 1); assert.equal(f.accessCodes.size, 0);
 });
 
-test("rewards accumulate across multiple registrations and remain behind all paid/trial periods", async () => {
+test("redeemable days accumulate without activating or expiring during paid access", async () => {
   const f = fixture({ trialDays: 0 }), owner = await inviter(f), at = new Date(f.now());
   await f.database.transaction(tx => createAccessPeriod(tx, f.accounts.get(owner.member.accountId), {
     source: "manual", planName: "Weekly", durationDays: 7, priceUgx: 0 }, "admin", at, { maximum: 2 }));
   for (const phone of [friend, "256700000003", "256700000004"]) await verify(f, await register(f, owner.summary.code, phone));
-  const rewards = [...f.accessCodes.values()].filter(row => row.source === "referral").sort((a, b) => +a.startsAt - +b.startsAt);
-  assert.equal(+rewards[0].startsAt, +at + 7 * DAY); assert.equal(+rewards[2].endsAt, +at + 10 * DAY);
-  assert.equal((await owner.referrals.read(owner.member)).remainingMs, 3 * DAY);
+  assert.equal(f.accessCodes.size, 1); assert.equal(f.referralCredits.size, 3);
+  assert.equal((await owner.referrals.read(owner.member)).availableDays, 3);
   f.advance(7 * DAY + HOUR);
-  assert.equal((await owner.referrals.read(owner.member)).remainingMs, 3 * DAY - HOUR);
+  assert.equal((await owner.referrals.read(owner.member)).availableDays, 3);
 });
 
 test("a paid purchase pauses earned access and preserves exact unused milliseconds", async () => {
   const f = fixture({ trialDays: 0 }), owner = await inviter(f);
   await verify(f, await register(f, owner.summary.code));
+  await f.database.transaction(tx => createAccessPeriod(tx, f.accounts.get(owner.member.accountId), { source: "referral", planName: "Historical earned access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0 }, "historical", new Date(f.now()), { maximum: 2 }));
   const original = [...f.accessCodes.values()][0];
   f.advance(5 * HOUR + 1234);
   const at = new Date(f.now()), left = DAY - 5 * HOUR - 1234;
@@ -234,13 +232,14 @@ test("the real link, registration and verification HTTP handlers complete a refe
   assert.equal((await createMemberAuthHandler("verification", source)(request("verification", { channel: "sms" }, pendingCookie))).status, 200);
   assert.equal((await createMemberAuthHandler("verify", source)(request("verify", { code: f.messages.at(-1).code }, pendingCookie))).status, 200);
   const summary = await owner.referrals.read(owner.member);
-  assert.equal(summary.earnedDays, 1); assert.equal(summary.remainingMs, DAY);
+  assert.equal(summary.earnedDays, 1); assert.equal(summary.availableDays, 1); assert.equal(summary.remainingMs, 0);
 });
 
 test("auto-renew waits through the final reward instant, then debits credit exactly once", async () => {
   const f = fixture({ trialDays: 0 }), owner = await inviter(f);
   f.settings.paywallMode = "test";
   await verify(f, await register(f, owner.summary.code));
+  await f.database.transaction(tx => createAccessPeriod(tx, f.accounts.get(owner.member.accountId), { source: "referral", planName: "Historical earned access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0 }, "historical", new Date(f.now()), { maximum: 2 }));
   const account = f.accounts.get(owner.member.accountId), planId = randomUUID(), entries = [];
   Object.assign(account, { creditUgx: 5000, autoRenew: true, autoRenewPlanId: planId, autoRenewTermsVersion: null });
   f.tx.subscriptionPlan = { async findUnique() { return { id: planId, active: true, name: "Daily", priceUgx: 1000, durationDays: 1 }; } };

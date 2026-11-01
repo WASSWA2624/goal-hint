@@ -11,7 +11,7 @@ const labelledId = (raw: string | undefined) => { const id = parseTransactionId(
 const amountPhrase = String.raw`\b(?:sent|send|paid|received|transferred)\s+(?:(?:an?\s+)?amount\s+(?:of\s+)?)?(?:UGX|USh|Shs)\.?\s*([\d,]+)(?:\.\d{1,2})?\b`;
 const validAmount = (raw: string) => { const value = Number(raw.replaceAll(",", "")); return Number.isSafeInteger(value) && value >= 100 && value <= 10_000_000 ? value : undefined; };
 
-/** Label-based suggestions only. Raw messages are never persisted or submitted. */
+/** Label-based suggestions only. The caller owns evidence retention; extraction never verifies payment. */
 export function parsePaymentSms(text: string, ownerNumbers: Readonly<Partial<Record<MobileNetwork, string | null>>>): PaymentSms {
   if (text.length > 12_000) return {};
   const result: { -readonly [K in keyof PaymentSms]: PaymentSms[K] } = {};

@@ -55,6 +55,7 @@ export function AccountReferralSummary({ locale, summary, returnTo }: { locale: 
     actions={<AccountActionLink href={accountSectionHref(locale, "referrals", returnTo)} prefetch={false}>{m.text("referrals.invite")}</AccountActionLink>}>
     {!summary ? <AccountFine role="status">{m.text("referrals.unavailable")}</AccountFine> : <AccountFacts $columns={2}>
       <div><dt>{m.text("referrals.verified")}</dt><dd>{m.number(summary.verified)}</dd></div>
+      {summary.availableDays !== undefined && <div><dt>Days available to redeem</dt><dd>{summary.availableDays} · <a href={`/${locale}/subscribe`}>Redeem days</a></dd></div>}
       <div><dt>{m.text("referrals.remaining")}</dt><dd>{rewardTime(locale, summary.remainingMs)}</dd></div>
     </AccountFacts>}
   </AccountPanel>;
@@ -95,6 +96,7 @@ export function AccountReferrals({ locale, summary }: { locale: string; summary:
     </AccountPanel>
     <AccountPanel title={m.text("referrals.rewards")} data-referral-rewards>
       <AccountFacts $columns={3}>
+        {summary.availableDays !== undefined && <div><dt>Days available to redeem</dt><dd>{summary.availableDays} · <a href={`/${locale}/subscribe`}>Redeem days</a></dd></div>}
         <div><dt>{m.text("referrals.verified")}</dt><dd>{m.number(summary.verified)}</dd></div>
         <div><dt>{m.text("referrals.earned")}</dt><dd>{m.number(summary.earnedDays)}</dd></div>
         <div><dt>{m.text("referrals.remaining")}</dt><dd>{rewardTime(locale, summary.remainingMs)}</dd></div>

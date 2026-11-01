@@ -1708,6 +1708,7 @@ model MemberAccount {
   registration     MemberReferral?     @relation("ReferralRegistration")
   referrals        MemberReferral[]    @relation("ReferralInviter")
   notifications    MemberNotification[]
+  referralCredits  ReferralCredit[]
 
   @@index([autoRenew])
   @@index([autoRenewPlanId])
@@ -1961,11 +1962,21 @@ model PaymentSubmission {
   imagePurgedAt        DateTime?          @db.DateTime(3)
   reversedAt           DateTime?          @db.DateTime(3)
   reverseReason        String?            @db.VarChar(16)
+  workflowVersion      Int                @default(1) @db.UnsignedTinyInt
+  requestKey           String?            @unique @db.Char(36)
+  method               String?            @db.VarChar(8)
+  receivingNumber      String?            @db.VarChar(15)
+  walletUgx            Int                @default(0) @db.UnsignedInt
+  referralDays         Int                @default(0) @db.UnsignedSmallInt
+  reservationActive    Boolean            @default(false)
+  reservationUntil     DateTime?          @db.DateTime(3)
+  revision             Int                @default(0) @db.UnsignedInt
   account              MemberAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   plan                 SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   screenshot           PaymentScreenshot?
   code                 AccessCode?
   walletEntries        WalletEntry[]
+  receiptClaims        PaymentReceiptClaim[]
 
   @@unique([id, accountId])
   @@index([claimedTxnKey])
@@ -1973,6 +1984,96 @@ model PaymentSubmission {
   @@index([accountId, submittedAt])
   @@index([imageSha256])
   @@index([planId])
+  @@index([accountId, reservationActive, reservationUntil], map: "PaymentSubmission_reservation_idx")
+}
+
+// Provider identity is independent of screenshots and claims. Verification never allocates money.
+// Allocation is permanent, including when a later competing claim disputes an approved payment.
+model PaymentReceipt {
+  id                   String   @id @db.Char(36)
+  provider             String   @db.VarChar(8)
+  transactionKey       String   @db.VarChar(40)
+  transactionId        String   @db.VarChar(40)
+  disputed             Boolean  @default(false)
+  verifiedAt           DateTime? @db.DateTime(3)
+  verifiedBy           String?  @db.VarChar(64)
+  amountUgx            Int?     @db.UnsignedInt
+  recipient            String?  @db.VarChar(15)
+  senderPhone          String?  @db.VarChar(15)
+  receivedAt           DateTime? @db.DateTime(3)
+  intendedSubmissionId String?  @db.Char(36)
+  allocatedSubmissionId String? @db.Char(36)
+  allocatedAt          DateTime? @db.DateTime(3)
+  resolution           String?  @db.VarChar(500)
+  resolvedAt           DateTime? @db.DateTime(3)
+  resolvedBy           String?  @db.VarChar(64)
+  claims               PaymentReceiptClaim[]
+
+  @@unique([provider, transactionKey])
+  @@index([disputed, verifiedAt])
+  @@index([allocatedSubmissionId])
+}
+
+// Original and corrected details are private evidence, retained separately from the accounting identity.
+model PaymentReceiptClaim {
+  id             String   @id @db.Char(36)
+  submissionId   String   @db.Char(36)
+  receiptId      String   @db.Char(36)
+  amountUgx      Int      @db.UnsignedInt
+  payerPhone     String?  @db.VarChar(15)
+  paidAt         DateTime @db.DateTime(3)
+  original       Json?
+  corrections    Json?
+  withdrawn      Boolean @default(false)
+  purgedAt       DateTime? @db.DateTime(3)
+  image          Bytes?  @db.MediumBlob
+  imageSha256    String? @db.Char(64)
+  createdAt      DateTime @db.DateTime(3)
+  submission     PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  receipt        PaymentReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  evidence       PaymentReceiptEvidence[]
+
+  @@unique([submissionId, receiptId])
+  @@index([receiptId])
+}
+
+model PaymentReceiptEvidence {
+  id          String @id @db.Char(36)
+  claimId     String @db.Char(36)
+  image       Bytes? @db.MediumBlob
+  imageSha256 String @db.Char(64)
+  createdAt   DateTime @db.DateTime(3)
+  claim       PaymentReceiptClaim @relation(fields: [claimId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([claimId, imageSha256])
+}
+
+// One qualifying registration earns one day. Redemption and transfer rows never convert days to money.
+model ReferralCredit {
+  id           String   @id @db.Char(36)
+  accountId    String   @db.Char(36)
+  referralId   String?  @unique @db.Char(36)
+  requestKey   String   @unique @db.VarChar(80)
+  days         Int
+  kind         String   @db.VarChar(12)
+  createdAt    DateTime @db.DateTime(3)
+  account      MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([accountId, createdAt])
+}
+
+// Append-only metadata; sensitive bank records and customer narratives stay in the private evidence tables.
+model PaymentEvent {
+  id           String   @id @db.Char(36)
+  submissionId String   @db.Char(36)
+  receiptId    String?  @db.Char(36)
+  action       String   @db.VarChar(32)
+  actor        String   @db.VarChar(64)
+  reason       String?  @db.VarChar(500)
+  details      Json?
+  createdAt    DateTime @db.DateTime(3)
+
+  @@index([submissionId, createdAt])
 }
 
 // Screenshot bytes (JPEG only), apart from the submission so lists never load them. Served only to the owner; the members

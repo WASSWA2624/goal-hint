@@ -3,7 +3,7 @@ import type { SubscriptionPeriod } from "./subscription-period.ts";
 import { walletRules } from "./wallet.ts";
 import type { ReferralReviewReason } from "./referral-reviews.ts";
 
-export const accountNotificationKinds = ["payment-approved", "payment-rejected", "access-activated", "access-expiring", "access-expired", "referral-earned",
+export const accountNotificationKinds = ["payment-approved", "payment-rejected", "payment-updated", "access-activated", "access-expiring", "access-expired", "referral-earned",
   "referral-reviewed", "referral-reversed", "referral-restored"] as const;
 export type AccountNotificationKind = typeof accountNotificationKinds[number];
 export const accountNotificationRules = Object.freeze({ pageSize: 20, retentionMs: 90 * 86_400_000, leadMs: walletRules.renewLeadMs, pollMs: 60_000, sweepMs: walletRules.jobSlotMs });

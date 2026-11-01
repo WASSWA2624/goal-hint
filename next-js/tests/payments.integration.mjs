@@ -48,14 +48,14 @@ test("real MySQL payment transactions, budgets, snapshots, assent and retired tr
     assert.equal(stored.priceUgx, 5000); assert.equal(stored.durationDays, 7); assert.equal(stored.planName, "Weekly");
     await database.query((tx) => tx.subscriptionPlan.update({ where: { id: planId }, data: { priceUgx: 5000, durationDays: 7, name: "Weekly" } }));
   });
-  await t.test("pending ID duplicates are accepted; an approved ID across networks and punctuation stores nothing", async () => {
+  await t.test("pending ID duplicates are accepted; an approved ID on the same provider and punctuation stores nothing", async () => {
     const first = await member(), second = await member(), transactionId = `TEST.REUSE-${++serial}`;
     const a = await report(first, fields({ transactionId })), b = await report(second, fields({ transactionId, network: "airtel" }));
     assert.equal(a.status, "saved"); assert.equal(b.status, "saved");
     const row = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: a.reference.slice(1) } }));
     const approved = await codes.approvePayment(row.id, { network: "mtn", transactionRef: transactionId, amountReceivedUgx: 5000, planId }, "synthetic-owner"); assert.equal(approved.status, "created");
     const before = await count();
-    const result = await report(await member(), fields({ transactionId: transactionId.replace(/[.-]/gu, ""), network: "airtel" }));
+    const result = await report(await member(), fields({ transactionId: transactionId.replace(/[.-]/gu, ""), network: "mtn" }));
     assert.equal(result.status, "duplicate"); assert.equal(await count(), before);
     const otherDevice = await payments.view(await member(first.phone), settings); assert.equal(otherDevice.status.reference, a.reference);
     const visible = await payments.view(first, settings); assert.equal(visible.status.reference, a.reference); assert.ok(visible.status.endsAt);

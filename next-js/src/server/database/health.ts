@@ -15,6 +15,11 @@ const accountTables = {
   ReferralReviewEvidence: Prisma.ReferralReviewEvidenceScalarFieldEnum,
   ReferralReviewEvent: Prisma.ReferralReviewEventScalarFieldEnum,
   ReferralGrantReversal: Prisma.ReferralGrantReversalScalarFieldEnum,
+  PaymentReceipt: Prisma.PaymentReceiptScalarFieldEnum,
+  PaymentReceiptClaim: Prisma.PaymentReceiptClaimScalarFieldEnum,
+  PaymentReceiptEvidence: Prisma.PaymentReceiptEvidenceScalarFieldEnum,
+  ReferralCredit: Prisma.ReferralCreditScalarFieldEnum,
+  PaymentEvent: Prisma.PaymentEventScalarFieldEnum,
 };
 // Identifiers come only from these generated model fields and the fixed table names above.
 const identifier = (name: string) => Prisma.raw(`\`${name}\``);

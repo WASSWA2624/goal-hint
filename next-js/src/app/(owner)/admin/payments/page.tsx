@@ -8,20 +8,21 @@ import { adminPageGate } from "@/server/admin/admin-http";
 import { createPaymentReview } from "@/server/admin/payment-review";
 import { plansServiceFor } from "@/server/members/plans";
 import { uuid } from "@/server/admin/codes-http";
+import { checkoutOpenStatuses } from "@/domain/checkout";
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }): Promise<Metadata> {
   const page = await adminPageGate(searchParams);
-  const count = page.owner && page.services.database ? await page.services.database.query(tx => tx.paymentSubmission.count({ where: { status: "pending" } })).catch(() => null) : null;
+  const count = page.owner && page.services.database ? await page.services.database.query(tx => tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } })).catch(() => null) : null;
   return { title: `${count ? `(${count}) ` : ""}Payments · Admin · Goal Hint` };
 }
 export default async function AdminPaymentsPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
   if (!page.owner) redirectToAccountLogin();
-  const params = await searchParams, tab = typeof params.tab === "string" && ["pending", "approved", "rejected", "superseded"].includes(params.tab) ? params.tab : "pending";
+  const params = await searchParams, tab = typeof params.tab === "string" && ["pending", "remaining", "disputed", "correction", "reconfirm", "approved", "rejected", "cancelled", "superseded", "reconciliation"].includes(params.tab) ? params.tab : "pending";
   const paymentId = uuid(params.paymentId) ? params.paymentId : undefined;
   const invalidTarget = params.paymentId !== undefined && !paymentId;
   const db = page.services.database;
   const [data, plans] = db ? await Promise.all([
-    createPaymentReview(db).list(tab, paymentId).catch(() => null),
+    createPaymentReview(db).list(tab, paymentId, { page: Number(params.page ?? 1), search: typeof params.search === "string" ? params.search : "" }).catch(() => null),
     plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
   const resolvedTab = data?.tab ?? tab;

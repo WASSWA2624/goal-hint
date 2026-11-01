@@ -5,6 +5,8 @@ import { json, privateHeaders } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 import { createPaymentReview } from "./payment-review.ts";
 import type { PaymentNotifications } from "../members/payment-notifications.ts";
+import { createCheckoutReview } from "./checkout-review.ts";
+import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
 export const invalidAction = () => json({ message: "Check the action and values." }, 400);
@@ -59,13 +61,29 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
   return {
     async GET({ services, request }: AdminContext) {
       if (!services.database) return storageUnavailable();
-      try { if (new URL(request.url).searchParams.has("count")) return json({ pendingCount: await services.database.query(tx => tx.paymentSubmission.count({ where: { status: "pending" } })) });
-        return json(await createPaymentReview(services.database).list(new URL(request.url).searchParams.get("tab") ?? "pending")); } catch { return storageUnavailable(); }
+      try { if (new URL(request.url).searchParams.has("count")) return json({ pendingCount: await services.database.query(tx => tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } })) });
+        const id = paymentId(request);
+        if (id && uuid(id)) return json(await createCheckoutReview(services.database).detail(id));
+        const params = new URL(request.url).searchParams;
+        return json(await createPaymentReview(services.database).list(params.get("tab") ?? "pending", undefined,
+          { page: Number(params.get("page") ?? 1), search: params.get("search") ?? "" })); } catch { return storageUnavailable(); }
     },
     async screenshot({ services, request }: AdminContext) {
       const id = paymentId(request); if (!uuid(id)) return invalidAction();
       if (!services.database) return storageUnavailable();
       try {
+        const evidenceId = new URL(request.url).searchParams.get("evidenceId");
+        if (uuid(evidenceId)) {
+          const evidence = await createCheckoutReview(services.database).evidence(id, evidenceId);
+          return evidence?.image ? new Response(new Uint8Array(evidence.image), { headers: { ...privateHeaders, "Content-Type": "image/jpeg",
+            "Content-Security-Policy": "sandbox; default-src 'none'", "Cross-Origin-Resource-Policy": "same-origin" } }) : json({ message: "Evidence unavailable." }, 404);
+        }
+        const claimId = new URL(request.url).searchParams.get("claimId");
+        if (uuid(claimId)) {
+          const claim = await createCheckoutReview(services.database).image(id, claimId);
+          return claim?.image ? new Response(new Uint8Array(claim.image), { headers: { ...privateHeaders, "Content-Type": "image/jpeg",
+            "Content-Security-Policy": "sandbox; default-src 'none'", "Cross-Origin-Resource-Policy": "same-origin" } }) : json({ message: "Evidence unavailable." }, 404);
+        }
         const row = await createPaymentReview(services.database).screenshot(id);
         return row ? new Response(new Uint8Array(row.data), { headers: { ...privateHeaders, "Content-Type": "image/jpeg", "X-Content-Type-Options": "nosniff",
           "Content-Security-Policy": "sandbox; default-src 'none'", "Content-Disposition": "inline", "Cross-Origin-Resource-Policy": "same-origin" } }) : json({ message: "Image unavailable or purged." }, 404);
@@ -78,7 +96,12 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
       const read = await readJsonBody(request); if ("refusal" in read) return read.refusal;
       const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config, ...(notifications ? { notifications } : {}) });
       try {
+        if (["verify-receipt", "approve-checkout", "reject-checkout", "request-correction", "mark-disputed", "resolve-dispute"].includes(String(b.action))) {
+          const outcome = await createCheckoutReview(services.database).act(id, b, owner.username);
+          return json(outcome, outcome.ok ? 200 : 409);
+        }
         if (b.action === "approve") {
+          if (b.verified !== true) return json({ message: "Verify the actual incoming transfer before approval." }, 400);
           // A top-up report needs no plan: the stored report, never the request, decides that it is a top-up.
           if (!["mtn", "airtel"].includes(String(b.network)) || typeof b.transactionId !== "string" || b.planId !== undefined && !uuid(b.planId) || typeof b.amount !== "number") return invalidAction();
           return codeAnswer(await codes.approvePayment(id, { network: b.network as "mtn" | "airtel", transactionRef: normalizeTransactionId(b.transactionId), amountReceivedUgx: b.amount,

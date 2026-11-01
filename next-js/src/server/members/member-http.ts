@@ -19,6 +19,7 @@ import { createAccountDashboard, type AccountDashboardService } from "./account-
 import { createReferrals, type ReferralsService } from "./referrals.ts";
 import { createAccountNotifications, type AccountNotificationsService } from "./account-notifications.ts";
 import { createReferralReviews, type ReferralReviews } from "./referral-reviews.ts";
+import { createCheckout, type Checkout } from "./checkout.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
 export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null;
@@ -28,6 +29,7 @@ export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: Setti
   referrals?: ReferralsService | null;
   notifications?: AccountNotificationsService | null;
   referralReviews?: ReferralReviews | null;
+  checkout?: Checkout | null;
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
@@ -46,6 +48,7 @@ export async function getMemberServices(): Promise<MemberServices> {
     referrals: database && keyed ? createReferrals({ database }) : null,
     notifications: database && keyed ? createAccountNotifications({ database }) : null,
     referralReviews: database && keyed ? createReferralReviews({ database, config }) : null,
+    checkout: database && keyed ? createCheckout({ database, config }) : null,
     offer: database ? () => readOffer(database) : null };
 }
 

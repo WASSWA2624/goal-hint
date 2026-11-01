@@ -128,6 +128,8 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         }
 
         for (const phone of scope.exclusivePhones) await rememberRegistrationPhone(tx, config, phone, new Date());
+        if (await tx.paymentReceiptClaim.count({ where: { submissionId: { in: scope.paymentIds } } }))
+          return rollback({ status: "refused", message: "This account has payment receipt accounting. Erase its personal data instead of deleting its records." });
         await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
         await tx.savedSlip.deleteMany({ where: { accountId: id } }); // Fixture links cascade; the fixtures remain shared.
         await tx.memberSession.deleteMany({ where: { accountId: id } });

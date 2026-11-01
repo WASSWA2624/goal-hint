@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
 import { awardReferralRegistration, createReferrals } from "../src/server/members/referrals.ts";
-import { createAccessCodes } from "../src/server/members/access-codes.ts";
+import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
@@ -64,6 +64,13 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   const results = await Promise.all([auth.verifyAccount(invited.otp, invited.pending.token, "198.51.100.9"), auth.verifyAccount(invited.otp, invited.pending.token, "198.51.100.10")]);
   assert.deepEqual(results.map(row => row.status).sort(), ["authenticated", "unauthorized"]);
   assert.equal((await referrals.read(member)).earnedDays, 1);
+  assert.equal((await referrals.read(member)).availableDays, 1);
+  assert.equal(await f.database.query(tx => tx.accessCode.count({ where: { accountId: member.accountId, source: "referral" } })), 0,
+    "New rewards remain redeemable until explicit confirmation");
+  // Model a retained historical reward independently of the newly earned ledger day.
+  await f.database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, member.accountId), {
+    source: "referral", planName: "Historical earned access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
+  }, "historical-fixture", new Date(time), { maximum: 1 }));
   let reward = await f.database.query(tx => tx.accessCode.findFirst({ where: { accountId: member.accountId, source: "referral" } }));
   assert.equal(+reward.startsAt, +paid.grant.endsAt); assert.equal(+reward.endsAt - +reward.startsAt, DAY);
   assert.equal((await codes.extend(reward.id, 1, "synthetic-owner")).status, "refused", "Earned awards cannot be extended as paid grants");
@@ -101,6 +108,9 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   const movingMember = await sessions.verify(movingLogin.token), movingLink = (await referrals.read(movingMember)).code;
   const movingFriend = await signup("256700009108", movingLink);
   await auth.verifyAccount(movingFriend.otp, movingFriend.pending.token, "198.51.100.9");
+  await f.database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, movingMember.accountId), {
+    source: "referral", planName: "Historical earned access", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
+  }, "historical-fixture", new Date(time), { maximum: 1 }));
   const originalEarned = await f.database.query(tx => tx.accessCode.findFirst({ where: { accountId: movingMember.accountId, source: "referral" } }));
   const originalPaid = await codes.manual({ phone: "256700009107", durationDays: 1, amountReceivedUgx: 0, note: "Synthetic transfer policy check" }, "synthetic-owner");
   assert.equal(originalPaid.status, "created");
@@ -111,7 +121,8 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   assert.equal(+transferred.endsAt - +transferred.startsAt, DAY);
   assert.equal((await f.database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { id: originalPaid.grant.id } }))).accountId, movingMember.accountId);
   const immutableAward = await f.database.query(tx => tx.memberReferral.findUniqueOrThrow({ where: { accountId: movingFriend.pending.accountId } }));
-  assert.equal(immutableAward.inviterId, movingMember.accountId); assert.equal(immutableAward.accessCodeId, originalEarned.id);
+  assert.equal(immutableAward.inviterId, movingMember.accountId); assert.equal(immutableAward.accessCodeId, null);
+  assert.equal((await f.database.query(tx => tx.referralCredit.aggregate({ where: { accountId: moved.grant.accountId }, _sum: { days: true } })))._sum.days, 1);
   assert.equal(await f.database.query(tx => tx.accountMove.count({ where: { fromAccountId: movingMember.accountId, toAccountId: moved.grant.accountId } })), 1);
   assert.equal(await f.database.query(tx => tx.ownerAuditEvent.count({ where: { action: "number_changed", accountId: moved.grant.accountId } })), 1);
 });

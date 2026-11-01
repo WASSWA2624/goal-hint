@@ -34,7 +34,7 @@ test("one shared address permits independent verified referral awards; claimed/u
     assert.equal(pending.status, "authenticated");
     const account = f.accounts.get(pending.accountId), config = { key: () => { assert.fail("Unverified identity must not reach reward keying"); } };
     await f.database.transaction(tx => awardReferralRegistration(tx, config, account, new Date(f.now())));
-    assert.equal(f.accessCodes.size, phone.endsWith("2") ? 0 : 1, "An unverified identity cannot grant a reward");
+    assert.equal(f.referralCredits.size, phone.endsWith("2") ? 0 : 1, "An unverified identity cannot grant a reward");
     await f.service.requestVerification("sms", pending.token, address);
     const code = f.messages.at(-1).code;
     const verified = await f.service.verifyAccount(code, pending.token, address);
@@ -42,7 +42,7 @@ test("one shared address permits independent verified referral awards; claimed/u
     assert.equal((await f.service.verifyAccount(code, pending.token, "203.0.113.100")).status, "unauthorized");
   }
   assert.equal([...f.referrals.values()].filter(row => row.status === "rewarded").length, 2);
-  const grants = [...f.accessCodes.values()];
-  assert.equal(grants.length, 2); assert.ok(grants.every(row => row.accountId === inviter.id && row.durationDays === 1));
-  assert.equal(+grants[1].startsAt, +grants[0].endsAt);
+  const grants = [...f.referralCredits.values()];
+  assert.equal(grants.length, 2); assert.ok(grants.every(row => row.accountId === inviter.id && row.days === 1));
+  assert.equal(f.accessCodes.size, 0, "Referral awards wait for explicit redemption");
 });

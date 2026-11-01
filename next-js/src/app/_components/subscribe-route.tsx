@@ -42,7 +42,11 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
         const [status, availablePlans, payment] = await Promise.allSettled([
           subscriptionMember ? resolved.codes?.subscriptionStatus(subscriptionMember) ?? null : null,
           salesOpen ? plans() : [],
-          salesOpen && member && !member.blocked ? resolved.payments?.view(member) ?? null : null,
+          salesOpen && member && !member.blocked ? Promise.all([resolved.payments?.view(member) ?? null, resolved.checkout?.read(member) ?? null])
+            .then(([payment, checkout]) => {
+              if (resolved.checkout && !checkout) throw new Error("Checkout unavailable.");
+              return payment ? { ...payment, ...(checkout ? { checkout } : {}) } : null;
+            }) : null,
         ]);
         subscription = status.status === "fulfilled" ? status.value : null;
         offers = availablePlans.status === "fulfilled" ? availablePlans.value.filter((plan) => plan.active) : [];

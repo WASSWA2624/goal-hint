@@ -25,6 +25,14 @@ export async function lockedCredit(tx: Prisma.TransactionClient, accountId: stri
   return row ? Number(row.creditUgx) : null;
 }
 
+/** Spendable credit under the account lock; ledger balances still record the full amount held. */
+export async function spendableCredit(tx: Prisma.TransactionClient, accountId: string): Promise<number | null> {
+  const balance = await lockedCredit(tx, accountId);
+  if (balance === null) return null;
+  const reserved = await tx.paymentSubmission.aggregate({ where: { accountId, reservationActive: true }, _sum: { walletUgx: true } });
+  return balance - (reserved._sum.walletUgx ?? 0);
+}
+
 /**
  * The only way credit changes: one ledger row and the cached balance in the same transaction, under the account's row lock.
  * The next entry number comes from a locking read too (a shared lock: FOR UPDATE would need an UPDATE grant the append-only
@@ -36,6 +44,10 @@ export async function appendWalletEntry(tx: Prisma.TransactionClient, accountId:
   const balance = await lockedCredit(tx, accountId);
   if (balance === null) throw new Error("The account no longer exists.");
   const balanceAfter = balance + entry.amountUgx, entryNumber = await lastEntryNumber(tx, accountId) + 1, id = randomUUID();
+  if (entry.amountUgx < 0 && ["purchase", "renewal"].includes(entry.kind)) {
+    const reserved = await tx.paymentSubmission.aggregate({ where: { accountId, reservationActive: true }, _sum: { walletUgx: true } });
+    if (balanceAfter < (reserved._sum.walletUgx ?? 0)) throw new InsufficientCredit(Math.max(0, balance - (reserved._sum.walletUgx ?? 0)));
+  }
   if (entry.amountUgx < 0 && balanceAfter < 0 && !entry.allowNegative) throw new InsufficientCredit(balance);
   await tx.walletEntry.create({ data: { id, accountId, entryNumber, kind: entry.kind, amountUgx: entry.amountUgx, balanceAfter,
     paymentSubmissionId: entry.paymentSubmissionId ?? null, accessCodeId: entry.accessCodeId ?? null, requestKey: entry.requestKey ?? null,

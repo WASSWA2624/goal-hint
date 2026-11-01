@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, type ReactNode, type Ref } from "react";
+import { useId, type CSSProperties, type ReactNode, type Ref } from "react";
 import styled from "styled-components";
 import { Button, FieldMessage, focusTreatment } from "@/components/ui/controls";
 import { CheckIcon } from "@/components/ui/icons";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { createMessages } from "@/i18n/messages";
 import { Assent, ConfirmPreview, CopyButton, FileBox, FileChoices, FileField, Note, Plan, PlanName, PlanPrice, Plans, PaymentTransfer, Preview, RowButton, Wallet, WalletChoice, WalletChoices, WalletMeta, WalletNumber } from "./subscribe-styles";
 
@@ -57,7 +58,7 @@ const Progress = styled.nav`
   min-inline-size: 0;
   ol {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--payment-steps, 4), minmax(0, 1fr));
     gap: 8px;
     margin: 0;
     padding: 0;
@@ -101,27 +102,31 @@ const Progress = styled.nav`
   @media (max-width: 480px) {
     ol { gap: 4px; }
     li { flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
+    &[data-inline-labels="true"] li { flex-direction: row; justify-content: center; }
   }
 `;
 
 /** Present one stage at a time; the caller owns navigation, validation and data. */
-export function PaymentWizard({ locale, step, title, children, headingRef }: {
+export function PaymentWizard({ locale, step, title, children, headingRef, totalSteps = 4, hideTitle = false }: {
   locale: string;
   step: PaymentStep;
   title: string;
   children: ReactNode;
   headingRef?: Ref<HTMLHeadingElement>;
+  totalSteps?: 3 | 4;
+  hideTitle?: boolean;
 }) {
   const m = createMessages(locale), titleId = useId();
   const labels = ["subscribe.wizard.package", "subscribe.wizard.pay", "subscribe.wizard.proof", "subscribe.wizard.review"] as const;
-  return <Card data-subscribe-layout="stepwise" data-payment-step={step + 1} aria-labelledby={titleId}>
-    <Progress aria-label={m.text("subscribe.wizard.progress")} data-payment-progress>
-      <ol>{labels.map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined} data-complete={index < step}>
+  return <Card data-subscribe-layout="stepwise" data-payment-step={step + 1} aria-labelledby={titleId} style={{ "--payment-steps": totalSteps } as CSSProperties}>
+    <Progress aria-label={m.text("subscribe.wizard.progress")} data-payment-progress data-inline-labels={totalSteps === 3}>
+      <ol>{labels.slice(0, totalSteps).map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined} data-complete={index < step}>
         <span aria-hidden="true">{index < step ? <CheckIcon /> : index + 1}</span>
-        <span>{m.text(label)}</span>
+        <span>{totalSteps === 3 && index === 2 ? "Confirm" : m.text(label)}</span>
       </li>)}</ol>
     </Progress>
-    <h2 id={titleId} ref={headingRef} tabIndex={-1}>{title}</h2>
+    {hideTitle ? <VisuallyHidden as="h2" id={titleId} ref={headingRef} tabIndex={-1}>{title}</VisuallyHidden>
+      : <h2 id={titleId} ref={headingRef} tabIndex={-1}>{title}</h2>}
     {children}
   </Card>;
 }

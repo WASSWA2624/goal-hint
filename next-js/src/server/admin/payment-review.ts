@@ -12,6 +12,7 @@ import type { PaymentNotifications, PaymentRejectionNotification } from "../memb
 import { createQueuedPaymentNotifications } from "../members/payment-notification-outbox.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
+import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 const reference = (row?: { reference: string }) => row ? formatPaymentReference(row.reference) : null;
@@ -19,31 +20,41 @@ const paymentSelect = {
   id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
   claimedAmountUgx: true, screenshotAmountUgx: true, purpose: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
   transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } },
+  workflowVersion: true,
 } as const satisfies Prisma.PaymentSubmissionSelect;
 export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createQueuedPaymentNotifications(database) }: {
   notifications?: PaymentNotifications;
 } = {}) {
   return {
-    async list(tab = "pending", paymentId?: string): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
+    async list(tab = "pending", paymentId?: string, options: { page?: number; search?: string } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
       return database.query(async tx => {
         // An old audit event may describe a payment whose status has since changed.
         const target = paymentId ? await tx.paymentSubmission.findUnique({ where: { id: paymentId }, select: paymentSelect }) : null;
         const requested = target?.status === "reversed" ? "approved" : target?.status ?? tab;
-        const selected = ["pending", "approved", "rejected", "superseded"].includes(requested) ? requested : "pending";
-        const rows = await tx.paymentSubmission.findMany({ where: { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected },
-          orderBy: [{ submittedAt: selected === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100,
+        const selected = ["pending", "remaining", "disputed", "correction", "reconfirm", "approved", "rejected", "cancelled", "superseded", "reconciliation"].includes(requested) ? requested : "pending";
+        const page = Math.max(1, Math.min(100000, Math.floor(options.page ?? 1) || 1)), search = (options.search ?? "").trim().slice(0, 100), pageSize = 30;
+        const where: Prisma.PaymentSubmissionWhereInput = selected === "reconciliation" ? { receiptClaims: { some: { receipt: { verifiedAt: { not: null }, allocatedSubmissionId: null } } } }
+          : { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected === "pending" ? { in: [...checkoutOpenStatuses] } : selected };
+        const normalized = search.toUpperCase().replace(/[^A-Z0-9]/gu, ""), phone = search.replace(/[^0-9]/gu, "");
+        if (search) where.OR = [{ reference: { contains: search.toUpperCase().replace(/^P-?/u, "") } },
+          ...(phone ? [{ payerPhone: { contains: phone } }] : []),
+          ...(normalized ? [{ claimedTxnKey: { contains: normalized } }, { receiptClaims: { some: { OR: [
+            { receipt: { transactionKey: { contains: normalized } } }, ...(phone ? [{ payerPhone: { contains: phone } }] : [])] } } }] : [])];
+        const total = await tx.paymentSubmission.count({ where });
+        const rows = await tx.paymentSubmission.findMany({ where,
+          orderBy: [{ submittedAt: (checkoutOpenStatuses as readonly string[]).includes(selected) ? "asc" : "desc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize,
           select: paymentSelect });
         // Keep the queue bounded while making the exact historical report available.
-        if (target && !rows.some(row => row.id === target.id)) rows.splice(99, rows.length > 99 ? 1 : 0, target);
+        if (target && !rows.some(row => row.id === target.id)) rows.splice(pageSize - 1, rows.length >= pageSize ? 1 : 0, target);
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
         const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
         const [related, payers, pendingCount] = await Promise.all([
           keys.length || hashes.length ? tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
             select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }) : [],
           phones.length ? tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }) : [],
-          tx.paymentSubmission.count({ where: { status: "pending" } }),
+          tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } }),
         ]);
-        return { pendingCount, ...(paymentId ? { tab: selected, targetFound: !!target } : {}), payments: rows.map(r => ({ id: r.id, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
+        return { pendingCount, page, pageSize, total, search, ...(paymentId ? { tab: selected, targetFound: !!target } : {}), payments: rows.map(r => ({ id: r.id, workflowVersion: r.workflowVersion, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx,
           purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, accountCreditUgx: r.account.creditUgx, planId: r.planId,
           planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
@@ -65,6 +76,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
         if (!initial) return rollback({ status: "refused", message: "This payment cannot be rejected." });
         const account = await lockMemberAccount(tx, initial.accountId);
         const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id } });
+        if (row.workflowVersion === 2) return rollback({ status: "refused", message: "Use the checkout review controls to release reservations and retain receipt accounting." });
         if (!["pending", "superseded"].includes(row.status)) return rollback({ status: "refused", message: "This payment cannot be rejected." });
         const at = new Date(now());
         await tx.paymentSubmission.update({ where: { id }, data: { status: "rejected", rejectReason: reason as string, rejectText: text.trim() || null, decidedAt: at, decidedBy: actor,

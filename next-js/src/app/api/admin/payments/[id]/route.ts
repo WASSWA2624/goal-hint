@@ -4,3 +4,4 @@ import { createReviewHandlers } from "../../../../../server/admin/codes-http.ts"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const POST = adminRoute(createReviewHandlers().POST);
+export const GET = adminRoute(createReviewHandlers().GET);

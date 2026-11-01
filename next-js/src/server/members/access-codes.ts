@@ -20,9 +20,10 @@ import { decide, lockSettings } from "./settings.ts";
 import type { PaymentNotifications } from "./payment-notifications.ts";
 import { createQueuedPaymentNotifications } from "./payment-notification-outbox.ts";
 import { acceptedTerms } from "./member-terms.ts";
-import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit } from "./wallet.ts";
+import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit, spendableCredit } from "./wallet.ts";
 import { rechainRewardPeriods } from "./referral-periods.ts";
 import { transferReferralReviewClaims } from "./referral-review-transfer.ts";
+import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 
 export const generateCode = () => Array.from({ length: 12 }, () => accessCodeAlphabet[randomInt(32)]).join("");
 export const newSalt = () => randomBytes(16);
@@ -61,7 +62,7 @@ export type PaymentApproval = Readonly<{ network: "mtn" | "airtel"; transactionR
 type Snapshot = Readonly<{ planId?: string | null; planName: string; durationDays: number; priceUgx: number; extensionDays?: number }>;
 type Creation = Snapshot & Readonly<{ source: string; paymentSubmissionId?: string; amountReceivedUgx?: number; note?: string; termsVersion?: string | null }>;
 /** Who gets a new period's unlocks: the owner's device cap, and sessions that always get a slot (the submitting one). */
-type Devices = Readonly<{ maximum: number; prefer?: readonly string[] }>;
+type Devices = Readonly<{ maximum: number; prefer?: readonly string[]; appendAfterCurrent?: boolean }>;
 
 export async function lockMemberAccount(tx: Prisma.TransactionClient, id: string) {
   await tx.$queryRaw`SELECT id FROM MemberAccount WHERE id = ${id} FOR UPDATE`;
@@ -69,9 +70,9 @@ export async function lockMemberAccount(tx: Prisma.TransactionClient, id: string
 }
 
 /** The account lock serializes confirmation and renewal. */
-export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot & { source?: string }, now: Date, termsVersion: string | null) {
+export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot & { source?: string }, now: Date, termsVersion: string | null, appendAfterCurrent = false) {
   const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null,
-    ...(code.source !== "referral" ? { source: { not: "referral" } } : {}) }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
+    ...(code.source !== "referral" && !appendAfterCurrent ? { source: { not: "referral" } } : {}) }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
   const startsAt = new Date(Math.max(now.getTime(), latest?.endsAt.getTime() ?? 0));
   return { activatedAt: now, startsAt, endsAt: new Date(startsAt.getTime() + (code.durationDays + (code.extensionDays ?? 0)) * subscriptionDayMs), termsVersion };
 }
@@ -99,11 +100,11 @@ export async function createAccessPeriod(tx: Prisma.TransactionClient, account: 
   if (exactRewardMs !== undefined && (fields.source !== "referral" || !Number.isSafeInteger(exactRewardMs) || exactRewardMs <= 0 || exactRewardMs > subscriptionDayMs))
     throw new RangeError("An exact restoration must be a bounded unused earned day.");
   // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
-  const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null);
+  const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null, devices.appendAfterCurrent);
   if (exactRewardMs !== undefined) period.endsAt = new Date(+period.startsAt + exactRewardMs);
   const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
     codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
-  if (fields.source !== "referral") await rechainRewardPeriods(tx, account.id, at);
+  if (fields.source !== "referral" && !devices.appendAfterCurrent) await rechainRewardPeriods(tx, account.id, at);
   await audit(tx, account.id, code.id, "code_created", actor, at, { source: fields.source, reference, durationDays: code.durationDays,
     extensionDays: code.extensionDays, startsAt: code.startsAt, endsAt: code.endsAt });
   const devicesUnlocked = await grantDevices(tx, { accountId: account.id, codeId: code.id, at, maximum: devices.maximum, prefer: devices.prefer ?? [], actor });
@@ -168,8 +169,10 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
     if (!key || transactionRef.length > 40 || !["mtn", "airtel"].includes(fields.network) || !validAmount(fields.amountReceivedUgx)) return invalid();
     // The existing singleton lock serializes owner confirmations across accounts and networks, independently of key rotation.
     const settings = await lockSettings(tx, actor, at);
-    const duplicate = await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: { in: [`mtn:${key}`, `airtel:${key}`] } }, select: { id: true } });
+    const receipt = await tx.paymentReceipt.findUnique({ where: { provider_transactionKey: { provider: fields.network, transactionKey: key } } });
+    const duplicate = await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: `${fields.network}:${key}` }, select: { id: true } });
     if (duplicate) return { status: "duplicate", message: "This transaction ID was already approved.", submissionId: duplicate.id };
+    if (receipt) return { status: "duplicate", message: "This receipt is linked to a checkout. Use its receipt verification and ownership controls." };
     const existing = submissionId ? await tx.paymentSubmission.findUnique({ where: { id: submissionId } }) : null;
     if (submissionId && (!existing || existing.accountId !== account.id || !["pending", "superseded"].includes(existing.status))) return refused();
     const decision = { status: "approved", network: fields.network, transactionRef, amountReceivedUgx: fields.amountReceivedUgx,
@@ -180,6 +183,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         return invalid(`A top-up must be UGX ${walletRules.topUpMinUgx.toLocaleString("en-UG")} to ${walletRules.topUpMaxUgx.toLocaleString("en-UG")} received.`);
       }
       const submission = await tx.paymentSubmission.update({ where: { id: existing.id }, data: decision });
+      await tx.paymentReceipt.create({ data: { id: randomUUID(), provider: fields.network, transactionKey: key, transactionId: transactionRef,
+        verifiedAt: at, verifiedBy: actor, amountUgx: fields.amountReceivedUgx, recipient: settings[fields.network === "mtn" ? "mtnNumber" : "airtelNumber"] ?? "historical",
+        receivedAt: at, intendedSubmissionId: submission.id, allocatedSubmissionId: submission.id, allocatedAt: at } });
       const entry = await appendWalletEntry(tx, account.id, { kind: "topup", amountUgx: fields.amountReceivedUgx, actor: "admin", at, paymentSubmissionId: submission.id });
       await audit(tx, account.id, submission.id, "payment_approved", actor, at, { purpose: "topup", amountReceivedUgx: fields.amountReceivedUgx,
         creditAddedUgx: fields.amountReceivedUgx, balanceUgx: entry.balanceAfter }, "payment");
@@ -198,10 +204,13 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       priceUgx: offer.priceUgx, ...decision };
     // What was received above the price actually charged becomes credit; a larger excess is more likely a typing slip.
     const excess = fields.amountReceivedUgx - final.priceUgx;
-    if (excess > walletRules.excessMaxUgx) return invalid(`UGX ${excess.toLocaleString("en-UG")} above the price is more than UGX ${walletRules.excessMaxUgx.toLocaleString("en-UG")}; check the amount received.`);
+    if (excess < 0) return invalid(`UGX ${(-excess).toLocaleString("en-UG")} remains. Request the remaining payment before approval.`);
     const submission = existing ? await tx.paymentSubmission.update({ where: { id: existing.id }, data: final })
       : await tx.paymentSubmission.create({ data: { ...final, id: randomUUID(), accountId: account.id, reference: newReference().slice(2), source: "owner",
         submittedAt: at, claimedNetwork: fields.network, claimedTxnRef: final.transactionRef, claimedTxnKey: key, claimedAmountUgx: fields.amountReceivedUgx } });
+    await tx.paymentReceipt.create({ data: { id: randomUUID(), provider: fields.network, transactionKey: key, transactionId: transactionRef,
+      verifiedAt: at, verifiedBy: actor, amountUgx: fields.amountReceivedUgx, recipient: settings[fields.network === "mtn" ? "mtnNumber" : "airtelNumber"] ?? "historical",
+      receivedAt: at, intendedSubmissionId: submission.id, allocatedSubmissionId: submission.id, allocatedAt: at } });
     // The report's own session always gets a slot, even on a full account; other signed-in devices fill free slots.
     const grant = await create(tx, account, { source: "payment", paymentSubmissionId: submission.id, planId: plan.id, planName: final.planName,
       durationDays: final.durationDays, priceUgx: final.priceUgx, termsVersion: existing?.termsVersion ?? null, ...(note ? { note } : {}) }, actor, at,
@@ -279,6 +288,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         phone = null;
         const submission = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!submission) return rollback(refused());
+        if (submission.workflowVersion === 2) return rollback(invalid("Use the receipt verification controls for this checkout."));
+        if (["approved", "reversed"].includes(submission.status)) return rollback({ status: "duplicate", message: "This request was already approved.", submissionId: submission.id });
         const account = await lockMemberAccount(tx, submission.accountId);
         if (!account || account.blockedAt || account.erasedAt) return rollback(refused());
         phone = account.phone;
@@ -337,6 +348,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         const old = await tx.memberAccount.findUnique({ where: { id: accountId } });
         destination = await tx.memberAccount.findUniqueOrThrow({ where: { id: destination.id } });
         if (!old || old.blockedAt || old.erasedAt || destination.blockedAt || destination.erasedAt) return rollback(refused());
+        if (await tx.paymentSubmission.count({ where: { accountId: { in: [accountId, destination.id] }, workflowVersion: 2, OR: [
+          { status: { in: [...checkoutOpenStatuses] } }, { receiptClaims: { some: { receipt: { verifiedAt: { not: null }, allocatedSubmissionId: null } } } },
+        ] } })) return rollback(invalid("Resolve open payment requests and unapplied receipts before changing the account number."));
         const codes = await tx.accessCode.findMany({ where: { accountId, revokedAt: null, endsAt: { gt: at } } });
         const rewards = codes.filter(code => code.source === "referral");
         const days = remainingDays(codes.filter(code => code.source !== "referral"), at), credit = await lockedCredit(tx, accountId) ?? 0;
@@ -344,7 +358,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (await tx.paymentSubmission.count({ where: { accountId, purpose: "topup", status: { in: ["pending", "superseded"] } } })) {
           return rollback(invalid("Approve or reject the waiting credit top-up first, so its credit moves too."));
         }
-        if (days === 0 && credit === 0 && !rewards.length) return rollback(invalid("There is no remaining access or credit to move."));
+        const referralBalance = (await tx.referralCredit.aggregate({ where: { accountId }, _sum: { days: true } }))._sum.days ?? 0;
+        if (days === 0 && credit === 0 && !rewards.length && referralBalance === 0) return rollback(invalid("There is no remaining access or credit to move."));
         if (days !== 0 && !validDays(days)) return rollback(invalid("Remaining access must be between 1 and 366 days."));
         // The new number's signed-in devices get the remaining days; the old number's devices lock with its last period.
         const grant = days ? await create(tx, destination, { source: "number-change", planName: "Transferred access", durationDays: days, priceUgx: 0 }, actor, at,
@@ -363,6 +378,13 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         await tx.accountMove.create({ data: { fromAccountId: accountId, toAccountId: destination.id, fromEntryNumber: await lastEntryNumber(tx, accountId),
           movedAt: new Date(now()) } });
         await transferReferralReviewClaims(tx, accountId, destination.id);
+        if (referralBalance > 0) {
+          const moveKey = randomUUID();
+          await tx.referralCredit.createMany({ data: [
+            { id: randomUUID(), accountId, days: -referralBalance, kind: "transfer", requestKey: `move-out:${moveKey}`, createdAt: at },
+            { id: randomUUID(), accountId: destination.id, days: referralBalance, kind: "transfer", requestKey: `move-in:${moveKey}`, createdAt: at },
+          ] });
+        }
         // Credit follows the person, a debt included; both accounts are already locked in sorted order.
         if (credit) {
           await appendWalletEntry(tx, accountId, { kind: "transfer", amountUgx: -credit, actor: "admin", at, note: "Moved to the account's new number", allowNegative: true });
@@ -401,6 +423,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
           for (const accountId of locked) await lockMemberAccount(tx, accountId);
           const submission = await tx.paymentSubmission.findUnique({ where: { id } });
           if (!submission || submission.status !== "approved" || !locked.includes(submission.accountId)) return rollback(refused());
+          if (submission.workflowVersion === 2) return rollback(invalid("Use checkout reconciliation and ownership resolution for these allocated receipts."));
           const topup = submission.purpose === "topup";
           if (!topup && !chain.length) return rollback(refused());
           let live = topup ? null : await tx.accessCode.findUniqueOrThrow({ where: { paymentSubmissionId: id } });
@@ -460,7 +483,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: input.planId } });
         if (!plan?.active) return rollback(invalid("Choose a plan."));
         if (!input.accepted && !await acceptedTerms(tx, member, at)) return rollback(invalid("Accept the terms to continue."));
-        const balance = await lockedCredit(tx, account.id);
+        const balance = await spendableCredit(tx, account.id);
         if (balance === null || balance < plan.priceUgx) return rollback(insufficient());
         const grant = await create(tx, account, { source: "credit", planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx,
           termsVersion: termsNotice.reviewedOn }, "member", at, { maximum: await unlockedDeviceLimit(tx), prefer: [member.tokenHash] });
@@ -497,7 +520,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (!latest || latest.source === "referral" && latest.endsAt > at
           || !renewalDue(latest.endsAt, at, walletRules.renewLeadMs, maxLapseMs) || !await salesOpen(tx)) return "skipped";
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: account.autoRenewPlanId } });
-        const balance = await lockedCredit(tx, accountId);
+        const balance = await spendableCredit(tx, accountId);
         if (!plan?.active || balance === null || balance < plan.priceUgx) return "skipped";
         // One renewal per period end. If the owner revoked it, the same end is not bought again; the member buys by hand.
         const requestKey = `renewal:${accountId}:${+latest.endsAt}`;

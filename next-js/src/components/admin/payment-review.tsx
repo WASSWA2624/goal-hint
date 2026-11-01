@@ -38,6 +38,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
   const [network, setNetwork] = useState(p.network), [id, setId] = useState(() => normalizeTransactionId(p.transactionId || "")), [amount, setAmount] = useState(String(p.amount));
   const topUp = p.purpose === "topup", [planId, setPlanId] = useState(p.planId ?? "");
   const [sms, setSms] = useState<PaymentSms>({}), [hasSms, setHasSms] = useState(false);
+  const [verified, setVerified] = useState(false);
   const [zoomed, setZoomed] = useState(false), [rejecting, setRejecting] = useState(false), [smsOpen, setSmsOpen] = useState(false);
   const rejectFocus = useRef(false), [tall, setTall] = useState(true);
   /** Phones clip a screenshot taller than the 280 × 184 preview; a wide one shows whole, without the enlarge toggle. */
@@ -52,7 +53,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
   const validPlan = topUp || !!planId && (planId === p.planId || plans.some(plan => plan.id === planId && plan.active));
   const price = changedPlan?.priceUgx ?? p.price, duration = changedPlan?.durationDays ?? p.durationDays;
   const excess = !topUp && validAmount ? Number(amount) - price : 0;
-  const canApprove = !!p.accountPhone && !!parseTransactionId(id) && validAmount && ["mtn", "airtel"].includes(network) && validPlan;
+  const canApprove = verified && !!p.accountPhone && !!parseTransactionId(id) && validAmount && ["mtn", "airtel"].includes(network) && validPlan && (topUp || Number(amount) >= price);
   const shownNetwork = pending ? network : p.final?.network || p.network, screenshot = `/api/admin/payments/${p.id}/screenshot`;
   const approvalId = `payment-approval-${p.id}`, rejectId = `payment-reject-${p.id}`;
 
@@ -72,7 +73,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
     event.preventDefault();
     if (action.busy || !canApprove) return;
     onStart();
-    await action.send(`/api/admin/payments/${p.id}`, { action: "approve", network, transactionId: id, amount: Number(amount), ...(topUp ? {} : { planId }) }, "", true, onResolved);
+    await action.send(`/api/admin/payments/${p.id}`, { action: "approve", verified: true, network, transactionId: id, amount: Number(amount), ...(topUp ? {} : { planId }) }, "", true, onResolved);
   }
   /** The phone decision bar opens the reject panel and moves focus into it; Cancel closes it and keeps focus on the bar. */
   const toggleReject = () => { rejectFocus.current = !rejecting; setRejecting(!rejecting); };
@@ -164,6 +165,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
               {hasSms && <Hint role="status">{sms.transactionId && sms.amount !== undefined ? "Payment details updated." : "Enter the missing details above."}
                 {sms.counterparty && ` Sender: ${phoneLabel(sms.counterparty)}${sms.counterparty === p.payerPhone ? " · matches payer" : " · check payer"}.`}</Hint>}
             </div></ZoneDrawer>
+            <CheckField><input type="checkbox" checked={verified} onChange={event => setVerified(event.target.checked)} required />I checked the actual incoming transfer: ID, amount, recipient, successful receipt and available sender details.</CheckField>
           </ApprovalForm>
           <RejectDrawer id={rejectId} $tone="danger" open={rejecting} onToggle={event => closedReject(event.currentTarget)} data-reject>
             <summary><CloseIcon />Reject<ChevronDownIcon /></summary>

@@ -13,10 +13,11 @@ import { paymentWarnings, PaymentReview, type PaymentRecovery } from "./payment-
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { paymentSortOptions, sortPayments, type PaymentSort } from "./payment-order";
+import { CheckoutReview } from "./checkout-review";
 import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueuePanel, QueueSummary, RefreshSquare, ReviewBack, ReviewNav, ReviewSection,
   SearchField, StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketPhone, TicketPlan, TicketProvider, TicketRef, TicketTime, TicketTray, TicketWarn } from "./payment-styles";
 
-const tabLabels = { pending: "Pending", approved: "Approved", rejected: "Rejected", superseded: "Replaced reports" };
+const tabLabels = { pending: "Pending", remaining: "Part-paid", disputed: "Disputed", approved: "Approved", rejected: "Rejected", cancelled: "Cancelled", reconciliation: "Unallocated funds" };
 const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
 const searchText = (value: string) => value.toLowerCase().replace(/[\s()+.-]/gu, "");
 const desktopQuery = "(min-width: 64rem)";
@@ -41,7 +42,7 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   const action = { ...mutation, busy: mutation.busy || refreshing };
   const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverDesktopSnapshot);
-  const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(initialPaymentId ?? queue.payments[0]?.id ?? "");
+  const [search, setSearch] = useState(queue.search ?? ""), [selectedId, setSelectedId] = useState(initialPaymentId ?? queue.payments[0]?.id ?? "");
   const [provider, setProvider] = useState("all"), [sort, setSort] = useState<PaymentSort>("queue");
   const [detailOpen, setDetailOpen] = useState(!!initialPaymentId), [completed, setCompleted] = useState<readonly string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
@@ -49,8 +50,8 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   const focusNext = useRef(false), stepFocus = useRef<"previous" | "next" | null>(null);
   const refreshFocus = useRef<HTMLButtonElement | null>(null);
   const lastHash = useRef<string | null>(null);
-  const query = searchText(search);
-  const payments = sortPayments(queue.payments.filter(payment => !(completed.includes(payment.id) && ["pending", "superseded"].includes(payment.status))
+  const query = queue.total === undefined ? searchText(search) : "";
+  const payments = sortPayments(queue.payments.filter(payment => !completed.includes(payment.id)
     && (!desktop || provider === "all" || (payment.final?.network || payment.network) === provider) && (!query || searchText([
     payment.reference, payment.accountPhone ?? "", payment.payerPhone ?? "", payment.transactionId, payment.final?.transactionId ?? "", payment.planName,
   ].join(" ")).includes(query))), desktop ? sort : "queue");
@@ -169,15 +170,19 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
     <QueuePanel aria-labelledby="payment-queue-title" $reviewing={reviewing}>
       <h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"} queue</h2>
       <QueueBar>
+        <form action="/admin/payments" method="get"><input type="hidden" name="tab" value={tab} /><input type="hidden" name="search" value={search} />
         <SearchField><label htmlFor="payment-search">Find a payment</label><SearchIcon aria-hidden="true" />
           <input id="payment-search" type="search" placeholder="Phone, transaction ID or reference" value={search} maxLength={100} disabled={action.busy} autoComplete="off"
             onChange={event => setSearch(event.target.value)} /></SearchField>
+        <ActionButton type="submit">Search all requests</ActionButton></form>
         <QueueFilters>
           <label><span>Payment provider</span><select aria-label="Payment provider" value={provider} disabled={action.busy} onChange={event => setProvider(event.target.value)}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></label>
           <label><span>Sort payments</span><select aria-label="Sort payments" value={sort} disabled={action.busy} onChange={event => setSort(event.target.value as PaymentSort)}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         </QueueFilters>
       </QueueBar>
-      <QueueSummary><span data-payment-count>{payments.length} {tab === "pending" ? "waiting" : payments.length === 1 ? "report" : "reports"}</span><span>Up to 100</span><span>{desktop && sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
+      <QueueSummary><span data-payment-count>{payments.length} of {queue.total ?? payments.length} requests</span><span>{desktop && sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
+        {queue.page && <nav aria-label="Payment pages">{queue.page > 1 && <Link href={`/admin/payments?tab=${tab}&page=${queue.page - 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Previous page</Link>}{" "}
+          Page {queue.page}{" "}{queue.page * (queue.pageSize ?? 30) < (queue.total ?? 0) && <Link href={`/admin/payments?tab=${tab}&page=${queue.page + 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Next page</Link>}</nav>}
         {queueChanged && <span role="status" data-payment-queue-updated>Queue updated</span>}</QueueSummary>
       {payments.length ? <TicketTray $opened={opened} data-payment-queue-scroll tabIndex={0} aria-label="Payment list">{payments.map(payment => {
         const warnings = paymentWarnings(payment).length, network = payment.final?.network || payment.network;
@@ -194,7 +199,7 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
         {(search || desktop && provider !== "all") && <ActionButton type="button" disabled={action.busy} onClick={() => { setSearch(""); setProvider("all"); }}>Clear filters</ActionButton>}</QueueEmpty>}
     </QueuePanel>
     <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}>
-      {selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
+      {selected?.workflowVersion === 2 ? <CheckoutReview key={selected.id} payment={selected} nav={nav} onResolved={() => { resolved(selected.id); refreshAdmin(); }} /> : selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
         onStart={() => { setRefreshMessage(""); setActionReference(selected.reference); }} onResolved={() => resolved(selected.id)}
         onRecovery={value => setRecoveries(shown => ({ ...shown, [selected.id]: value }))} /> : <QueueEmpty data-payment-review-empty><CheckIcon /><strong>No payment selected</strong><span>Choose another status or clear the filters.</span></QueueEmpty>}
     </ReviewSection>

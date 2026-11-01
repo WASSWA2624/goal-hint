@@ -25,5 +25,6 @@ export function scheduleRewardPeriods<T extends EarnedPeriod & { id: string }>(p
 
 export type ReferralSummary = Readonly<{
   code: string; verified: number; earnedDays: number; remainingMs: number;
+  availableDays?: number;
   history: readonly Readonly<{ id: string; registeredAt: string; rewardedAt: string | null; status: "pending" | "rewarded" | "ineligible" }>[];
 }>;

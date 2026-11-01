@@ -1,7 +1,7 @@
 /**
  * Reads the text of a payment screenshot on this device with tesseract.js, loaded from this site's /ocr/ files (copied by
  * scripts/ocr-assets.mjs) only when a member picks an image. The image is not sent anywhere to be read, and nothing is kept in
- * browser storage: the language file comes from the browser's ordinary HTTP cache after the first use.
+ * by this reader: checkout owns draft persistence. The language file uses the browser's ordinary HTTP cache.
  */
 // The SIMD probe from wasm-feature-detect: a one-instruction module that only validates when the engine has SIMD.
 const simdProbe = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
