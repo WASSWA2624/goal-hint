@@ -49,6 +49,13 @@ chronological sequence is reversed, rather than adding stoppage minutes to the
 base minute; this preserves period boundaries and distinct same-minute incidents.
 See the provider's [event endpoint guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide).
 
+Consecutive incidents with the same recorded minute share a row and one central
+time label. Home incidents occupy the left column and away incidents the right;
+multiple incidents for one team remain visible in latest-first order within its
+column. Added minutes are part of the grouping key: 90+2 and 90+3 remain separate,
+as do 45+2 and 47. Unknown times remain separate rather than implying simultaneity.
+Period dividers always break a minute group.
+
 Football symbols distinguish normal goals, own goals, scored/missed penalties,
 yellow/red cards, second-yellow dismissals, substitutions and VAR reviews.
 Accessible labels and tooltips accompany symbols; special goal/dismissal outcomes

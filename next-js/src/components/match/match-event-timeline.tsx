@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import type { LiveMatchEvent } from "@/domain/live-match";
-import { matchEventPresentation, matchTimelineEntries, substitutionPlayers, type MatchTimelineContext, type MatchTimelineEntry } from "@/domain/match-event-presentation";
+import { matchEventPresentation, matchTimelineRows, substitutionPlayers, type MatchTimelineContext, type MatchTimelineEntry, type MatchTimelineRow } from "@/domain/match-event-presentation";
 import type { Messages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { TeamLogo } from "./team-logo";
@@ -39,6 +39,9 @@ const List = styled.ol`
 const Row = styled.li`
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--event-time-width) minmax(0, 1fr);
   column-gap: 8px; align-items: center; min-inline-size: 0; padding-block: 1px;
+`;
+const TeamEvents = styled.div`
+  display: flex; flex-direction: column; gap: 2px; grid-row: 1; align-self: start; min-inline-size: 0;
 `;
 const Minute = styled.span`
   grid-column: 2; grid-row: 1; justify-self: center; z-index: 1;
@@ -100,16 +103,11 @@ function PeriodRow({ entry, m }: { entry: Extract<MatchTimelineEntry, { type: "p
   </Period>;
 }
 
-function EventRow({ event, home, away, m }: { event: LiveMatchEvent; home: string; away: string; m: Messages }) {
+function EventIncident({ event, home, away, m }: { event: LiveMatchEvent; home: string; away: string; m: Messages }) {
   const { kind, detail, comments } = matchEventPresentation(event), players = substitutionPlayers(event);
   const namedKind = ["own-goal", "penalty-goal", "missed-penalty", "second-yellow"].includes(kind);
-  const minute = event.elapsed === null ? m.text("liveMatch.minuteUnknown")
-    : `${m.number(event.elapsed)}${event.extra ? `+${m.number(event.extra)}` : ""}′`;
-  return <Row data-match-event={event.sequence} data-event-team={event.team} data-event-kind={kind}>
-    <Minute data-event-minute title={minute} aria-label={minute}>
-      {event.elapsed === null ? "—" : <>{m.number(event.elapsed)}{event.extra !== null && event.extra > 0 && <span>+{m.number(event.extra)}</span>}′</>}
-    </Minute>
-    <Incident data-team={event.team} data-kind={kind} role="group" aria-label={event.team === "home" ? home : away}>
+  return <Incident data-match-event={event.sequence} data-event-team={event.team} data-event-kind={kind}
+      data-team={event.team} data-kind={kind} role="group" aria-label={event.team === "home" ? home : away}>
       <span data-symbol role="img" aria-hidden={namedKind || undefined} aria-label={m.text(`liveMatch.incident.${kind}`)} title={m.text(`liveMatch.incident.${kind}`)}><MatchEventSymbol kind={kind} /></span><div>
         {namedKind && <span data-event-label>{m.text(`liveMatch.incident.${kind}`)}</span>}
         {event.type === "substitution" ? <>
@@ -121,7 +119,19 @@ function EventRow({ event, home, away, m }: { event: LiveMatchEvent; home: strin
         </>}
         {detail && <small data-event-detail>{detail}</small>}{comments && <small>{comments}</small>}
       </div>
-    </Incident>
+    </Incident>;
+}
+
+function MinuteRow({ row, home, away, m }: { row: Extract<MatchTimelineRow, { type: "minute" }>; home: string; away: string; m: Messages }) {
+  const minute = row.elapsed === null ? m.text("liveMatch.minuteUnknown")
+    : `${m.number(row.elapsed)}${row.extra ? `+${m.number(row.extra)}` : ""}′`;
+  return <Row data-event-row={row.key} aria-label={minute}>
+    <Minute data-event-minute title={minute} aria-label={minute}>
+      {row.elapsed === null ? "—" : <>{m.number(row.elapsed)}{row.extra !== null && row.extra > 0 && <span>+{m.number(row.extra)}</span>}′</>}
+    </Minute>
+    {(["home", "away"] as const).map(team => <TeamEvents key={team} data-team={team}>
+      {row.events.filter(event => event.team === team).map(event => <EventIncident key={event.sequence} event={event} home={home} away={away} m={m} />)}
+    </TeamEvents>)}
   </Row>;
 }
 
@@ -137,8 +147,8 @@ export function MatchEventTimeline({ events, home, away, homeLogoUrl, awayLogoUr
       <Team data-team="away"><TeamLogo name={away} url={awayLogoUrl ?? undefined} eager={false} size={24} /><div><strong>{away}</strong><small>{m.text("liveMatch.away")}</small></div></Team>
     </Teams>
     <List aria-label={m.text("liveMatch.timelineLabel")}>
-      {matchTimelineEntries(events, context).map(entry => entry.type === "event"
-        ? <EventRow key={entry.event.sequence} event={entry.event} home={home} away={away} m={m} />
+      {matchTimelineRows(events, context).map(entry => entry.type === "minute"
+        ? <MinuteRow key={entry.key} row={entry} home={home} away={away} m={m} />
         : <PeriodRow key={entry.key} entry={entry} m={m} />)}
     </List>
   </Timeline>;

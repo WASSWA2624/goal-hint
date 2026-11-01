@@ -39,6 +39,24 @@ export type MatchPeriodMarker = "half-time" | "extra-time" | "extra-time-interva
 export type MatchTimelineEntry = { type: "event"; event: LiveMatchEvent } | {
   type: "period"; key: string; period: MatchPeriodMarker; boundary: number | null; afterExtraTime: boolean;
 };
+export type MatchTimelineRow = Exclude<MatchTimelineEntry, { type: "event" }> | {
+  type: "minute"; key: number; elapsed: number | null; extra: number | null; events: LiveMatchEvent[];
+};
+
+/** Share a clock only for consecutive, known full minutes, never across a period divider. */
+export function matchTimelineRows(items: readonly LiveMatchEvent[], context: MatchTimelineContext): MatchTimelineRow[] {
+  const rows: MatchTimelineRow[] = [];
+  for (const entry of matchTimelineEntries(items, context)) {
+    if (entry.type === "period") { rows.push(entry); continue; }
+    const event = entry.event, previous = rows.at(-1);
+    if (previous?.type === "minute" && event.elapsed !== null && previous.elapsed === event.elapsed && (previous.extra ?? 0) === (event.extra ?? 0)) {
+      previous.events.push(event);
+    } else {
+      rows.push({ type: "minute", key: event.sequence, elapsed: event.elapsed, extra: event.extra, events: [event] });
+    }
+  }
+  return rows;
+}
 
 /** Contextual period dividers, not fabricated whistle events or announced stoppage durations. */
 export function matchTimelineEntries(items: readonly LiveMatchEvent[], context: MatchTimelineContext): MatchTimelineEntry[] {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { matchEventPresentation, matchTimelineEntries, newestMatchEvents, substitutionPlayers } from "../src/domain/match-event-presentation.ts";
+import { matchEventPresentation, matchTimelineEntries, matchTimelineRows, newestMatchEvents, substitutionPlayers } from "../src/domain/match-event-presentation.ts";
 import { matchEventSamples } from "./helpers/match-event-fixtures.mjs";
 import { createMessages } from "../src/i18n/messages.ts";
 
@@ -47,6 +47,30 @@ test("substitutions keep incoming and outgoing names distinct, preserving missin
 
 const context = (overrides = {}) => ({ status: "live", observedStatus: "live", clock: null, ...overrides });
 const position = (entries, sequence) => entries.findIndex(entry => entry.type === "event" && entry.event.sequence === sequence);
+
+test("a shared minute retains every incident and each team's latest-first order", () => {
+  const events = Array.from({ length: 5 }, (_, index) => event({ sequence: index + 1, elapsed: 74, team: index % 2 ? "away" : "home" }));
+  const before = structuredClone(events), rows = matchTimelineRows(events, context());
+  assert.equal(rows.length, 2); // one minute plus the contextual half-time divider
+  const row = rows[0];
+  assert.equal(row.type, "minute"); assert.equal(row.elapsed, 74);
+  assert.deepEqual(row.events.map(event => event.sequence), [5, 4, 3, 2, 1]);
+  assert.deepEqual(row.events.filter(event => event.team === "home").map(event => event.sequence), [5, 3, 1]);
+  assert.deepEqual(row.events.filter(event => event.team === "away").map(event => event.sequence), [4, 2]);
+  assert.deepEqual(events, before);
+});
+
+test("grouping keeps added minutes, unknown times and period dividers distinct", () => {
+  const events = [event({ elapsed: 45, extra: 2 }), event({ sequence: 2, elapsed: 47 }),
+    event({ sequence: 3, elapsed: 90, extra: null }), event({ sequence: 4, elapsed: 90, extra: 0, team: "away" }),
+    event({ sequence: 5, elapsed: 90, extra: 2 }), event({ sequence: 6, elapsed: 90, extra: 3 }),
+    event({ sequence: 7, elapsed: null }), event({ sequence: 8, elapsed: null, team: "away" }),
+    event({ sequence: 9, elapsed: 90, extra: 3 })];
+  const rows = matchTimelineRows(events, context({ status: "finished-regulation" }));
+  assert.deepEqual(rows.map(row => row.type === "period" ? row.period : row.events.map(event => event.sequence)),
+    ["full-time", [9], [8], [7], [6], [5], "added-time", [4, 3], [2], "half-time", [1], "added-time"]);
+  assert.deepEqual(matchTimelineRows([], context()), []);
+});
 
 test("period dividers surround recorded added time without inventing whistle minutes or extra time", () => {
   const entries = matchTimelineEntries(matchEventSamples, context({ status: "finished-regulation", observedStatus: "finished-regulation" }));

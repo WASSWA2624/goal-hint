@@ -19,17 +19,24 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     await page.setExtraHTTPHeaders({ "x-test-viewer": "anonymous" });
     await page.goto(origin + path(5, "finished-regulation"), { waitUntil: "networkidle" });
     await page.locator("[data-match-event-timeline]").waitFor();
-    const sequence = await page.locator("[data-match-event]").evaluateAll(rows => rows.map(row => Number(row.dataset.matchEvent)));
-    check(JSON.stringify(sequence) === JSON.stringify(Array.from({ length: 15 }, (_, index) => 15 - index)), "newest events first, preserving every source incident");
-    check(await page.locator('[data-match-event="15"] [data-event-minute]').innerText() === "90+7′", "stoppage-time minute preserved");
-    check(await page.locator('[data-match-event="4"] [data-event-minute]').innerText() === "45+2′", "first-half added time preserved");
+    const sequence = await page.locator("[data-event-row]").evaluateAll(rows => rows.map(row => [...row.querySelectorAll("[data-match-event]")].map(event => Number(event.dataset.matchEvent)).sort((a, b) => b - a)));
+    check(JSON.stringify(sequence) === JSON.stringify([[15], [14], [13], [12], [11], [10], [9, 8], [7], [6], [5], [4], [3], [2], [1]]), "newest minute rows first, preserving every source incident");
+    const minuteFor = sequence => page.locator("[data-event-row]").filter({ has: page.locator(`[data-match-event="${sequence}"]`) }).locator("[data-event-minute]");
+    check(await minuteFor(15).innerText() === "90+7′", "stoppage-time minute preserved");
+    check(await minuteFor(4).innerText() === "45+2′", "first-half added time preserved");
+    const paired = page.locator('[data-event-row]').filter({ has: page.locator('[data-match-event="8"]') });
+    check(await paired.locator('[data-match-event="9"]').count() === 1 && await paired.locator('[data-event-minute]').count() === 1, "both teams share one row and one minute");
+    check(await paired.evaluate(row => {
+      const home = row.querySelector('[data-match-event="8"]').getBoundingClientRect(), away = row.querySelector('[data-match-event="9"]').getBoundingClientRect();
+      return Math.abs(home.top - away.top) <= 1 && row.getBoundingClientRect().height <= 40;
+    }), "simultaneous home and away incidents occupy the same horizontal row");
     check(await page.locator('[data-event-period="full-time"]').count() === 1 && await page.locator('[data-event-period="half-time"]').count() === 1, "full-time and half-time dividers");
     check(await page.locator('[data-event-period="added-time"]').count() === 2 && await page.locator('[data-event-period="extra-time"]').count() === 0, "added time remains distinct from extra-time periods");
     check(await page.locator('[data-event-toolbar]').evaluate(toolbar => toolbar.getBoundingClientRect().height <= 40), "one compact desktop toolbar");
     check(await page.locator('[data-match-event]').evaluateAll(rows => rows.every(row => row.getBoundingClientRect().height <= 48)), "desktop incidents fit horizontal rows");
-    const placement = await page.locator("[data-match-event]").evaluateAll(rows => rows.every(row => {
-      const minute = row.querySelector("[data-event-minute]").getBoundingClientRect(), incident = row.querySelector('[role="group"]').getBoundingClientRect();
-      return row.dataset.eventTeam === "home" ? incident.right < minute.left : incident.left > minute.right;
+    const placement = await page.locator("[data-match-event]").evaluateAll(events => events.every(event => {
+      const minute = event.closest('[data-event-row]').querySelector("[data-event-minute]").getBoundingClientRect(), incident = event.getBoundingClientRect();
+      return event.dataset.eventTeam === "home" ? incident.right < minute.left : incident.left > minute.right;
     }));
     check(placement, "home on left and away on right");
     for (const kind of ["goal", "own-goal", "penalty-goal", "missed-penalty", "yellow-card", "red-card", "second-yellow", "substitution", "var"])
@@ -51,8 +58,8 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     await page.setExtraHTTPHeaders({ "x-test-viewer": "entitled" });
     await page.goto(origin + path(2, "live"), { waitUntil: "networkidle" });
     await page.locator("[data-match-event-timeline]").waitFor();
-    check(await page.locator('[data-match-event="10"] [data-event-minute]').innerText() === "—", "unknown minute stays unknown");
-    check(await page.locator('[data-match-event="10"] [data-event-minute]').getAttribute("aria-label") === "Time not supplied", "unknown minute has an accessible label");
+    check(await minuteFor(10).innerText() === "—", "unknown minute stays unknown");
+    check(await minuteFor(10).getAttribute("aria-label") === "Time not supplied", "unknown minute has an accessible label");
     check(await page.locator('[data-match-event="10"] [data-event-symbol="card"]').count() === 1, "unknown card detail is not assigned a yellow/red colour");
     check((await page.locator("[data-active-match-tab]").innerText()).includes("missing or could not be refreshed"), "partial coverage remains visible");
     checks.push("partial source, unknown minute and unknown card type");
@@ -79,6 +86,7 @@ export async function verifyMatchEvents(page, { origin = "http://127.0.0.1:3118"
     await page.getByText("Match events (15)", { exact: true }).click();
     await page.locator("[data-match-event-timeline]").waitFor();
     check(await page.locator("[data-match-event]").count() === 15, "phone reuses full visual timeline");
+    check(await page.locator('[data-event-row]').count() === 14 && await paired.locator('[data-match-event]').count() === 2, "phone also shares same-minute events");
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "phone has no horizontal overflow");
     await capture("match-events-phone");
     checks.push("390px phone timeline");
