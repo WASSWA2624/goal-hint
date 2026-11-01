@@ -246,7 +246,7 @@ def verify_detail(origin, directory, scenarios):
         assert visible.count("data-detail-market=") == 4, name
         match('data-match-detail', visible)
         match('data-section="markets"', visible)
-        match('All Markets &amp; Odds', visible)
+        match('Markets &amp; Odds', visible)
         no_match(r"/_next/image|\s\$[\w-]+=", visible)
         if snapshot:
             assert f'data-detail-revision="{snapshot["revisionId"]}"' in visible
@@ -297,7 +297,7 @@ def verify_detail(origin, directory, scenarios):
     match("noindex, follow", html)
     _, stats = get(origin, data["route"]["path"] + "?section=stats")
     match('data-section="stats"', stats)
-    match("Team Comparison", stats)
+    match("Team Stats", stats)
     print(f"PASS {count} stored detail HTML scenarios, canonical metadata/redirect and unknown-fixture 404.")
 
 
