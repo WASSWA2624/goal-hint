@@ -123,10 +123,11 @@ export type CriteriaDialogProps = Readonly<{
   className?: string;
   busy?: boolean;
   dismissOnBackdrop?: boolean;
+  dismissOnEscape?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, dismissOnEscape = true, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -142,7 +143,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
 
   return <Dialog id={id} ref={root} className={className} open={enhanced ? undefined : true}
     aria-labelledby={titleId} aria-busy={busy} data-criteria-dialog="" data-slip-criteria-group={group} data-enhanced={enhanced ? "true" : "false"}
-    onCancel={(event) => { event.preventDefault(); onCancel(); }}
+    onCancel={(event) => { event.preventDefault(); if (dismissOnEscape) onCancel(); }}
     onClick={(event) => {
       if (!dismissOnBackdrop || event.target !== event.currentTarget || !enhanced) return;
       const bounds = event.currentTarget.getBoundingClientRect();

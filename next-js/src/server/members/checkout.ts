@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { checkoutOpenStatuses, checkoutRules, checkoutSelectionSchema, duplicateReceiptMessage, fundingAmounts, receiptInputSchema,
+import { checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSelectionSchema, duplicateReceiptMessage, fundingAmounts, receiptInputSchema,
   type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView, type ReceiptInput } from "../../domain/checkout.ts";
 import { formatPaymentReference, parseTransactionId, transactionKey } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
@@ -167,6 +167,30 @@ export function createCheckout({ database, config, now = Date.now, environment =
   }
 
   return Object.freeze({
+    async checkEvidence(member: MemberIdentity, input: unknown) {
+      const parsed = checkoutEvidenceSchema.safeParse(input);
+      if (!parsed.success || !parseTransactionId(parsed.data.transactionId)) return fail("Enter a valid transaction ID and payment provider.");
+      return run(async (tx, at) => {
+        if (!await currentMember(tx, member, at)) return fail("Sign in again to check this payment.");
+        if (!await takeMemberLimit(tx, config, { purpose: "checkout-evidence", value: member.accountId, maximum: 30, windowMs: 60_000 }, at))
+          return fail("Too many payment checks. Wait a minute and try again.");
+        const { provider, transactionId, submissionId, imageSha256 } = parsed.data;
+        const receipt = await tx.paymentReceipt.findUnique({ where: { provider_transactionKey: { provider, transactionKey: transactionKey(transactionId) } },
+          select: { id: true, allocatedSubmissionId: true } });
+        const own = receipt ? await tx.paymentReceiptClaim.findFirst({ where: { receiptId: receipt.id, submission: { accountId: member.accountId } },
+          select: { submissionId: true, submission: { select: { reference: true } } } }) : null;
+        const allocation = !own && receipt?.allocatedSubmissionId ? await tx.paymentSubmission.findFirst({
+          where: { id: receipt.allocatedSubmissionId, accountId: member.accountId }, select: { id: true, reference: true } }) : null;
+        const ownId = own?.submissionId ?? allocation?.id, reference = own?.submission.reference ?? allocation?.reference;
+        const current = !!ownId && ownId === submissionId;
+        // Only this member's image history is checked; never disclose another member's evidence or identity.
+        const repeated = imageSha256 ? await tx.paymentSubmission.findFirst({ where: { accountId: member.accountId, id: { not: submissionId ?? "" }, OR: [
+          { imageSha256 }, { receiptClaims: { some: { OR: [{ imageSha256 }, { evidence: { some: { imageSha256 } } }] } } },
+        ] }, select: { id: true } }) : null;
+        const reuse = current ? "current" as const : ownId ? "own" as const : receipt ? "reported" as const : "available" as const;
+        return { ok: true as const, value: { reuse, imageRepeated: !!repeated, ...(reference ? { reference: formatPaymentReference(reference) } : {}) } };
+      });
+    },
     async allow(member: MemberIdentity, address: string): Promise<boolean> {
       return run(async (tx, at) => {
         if (!await currentMember(tx, member, at)) return false;

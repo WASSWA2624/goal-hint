@@ -6,6 +6,18 @@ import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
 import { capCheckoutFunding, chooseCheckoutMethod } from "../src/components/members/checkout-draft.ts";
+import { inspectPaymentScreenshot, unreadableScreenshotMessage } from "../src/domain/payment-screenshot.ts";
+
+test("screenshots need a readable transaction ID and amount, without treating OCR as verification", () => {
+  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+  const valid = inspectPaymentScreenshot("MTN Mobile Money. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers);
+  assert.equal(valid.ok, true); assert.equal(valid.evidence.transactionId, "DEMO123456");
+  for (const text of ["Holiday photo", "UGX 5,000", "Transaction ID: DEMO123456", "DEMO123456"])
+    assert.deepEqual(inspectPaymentScreenshot(text, "mtn", numbers), { ok: false, message: unreadableScreenshotMessage });
+  const wrong = inspectPaymentScreenshot("Airtel Money. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers);
+  assert.equal(wrong.ok, false); assert.match(wrong.message, /selected MTN/);
+  assert.equal(inspectPaymentScreenshot("MTN. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers, "OTHER987654").ok, false);
+});
 
 test("checkout uses integer funding and referral days never reduce the cash price", () => {
   assert.deepEqual(fundingAmounts(5000, 2000, 1000), { amountToSend: 3000, remainingUgx: 2000, excessUgx: 0 });
@@ -99,9 +111,9 @@ test("evidence dates accept provider formats, EAT and explicit zones without nor
 
 test("checkout HTTP enforces identity, origin, upload content and rate limits with private responses", async () => {
   const member = { accountId: randomUUID(), tokenHash: "a".repeat(64), phone: "256700000123", blocked: false };
-  let identity = member, allowed = true, called = 0;
+  let identity = member, allowed = true, called = 0, checked = 0;
   const services = async () => ({ config: { production: false }, settings: { settings: { paywallMode: "test" } }, sessions: { async verify() { return identity; } }, payments: {},
-    checkout: { async allow() { return allowed; }, async confirm(_member, selection, requestKey, quoteKey, confirmed, proof, image) {
+    checkout: { async allow() { return allowed; }, async checkEvidence(_member, input) { checked++; assert.equal(input.provider, "mtn"); return { ok: true, value: { reuse: "available", imageRepeated: false } }; }, async confirm(_member, selection, requestKey, quoteKey, confirmed, proof, image) {
       called++; assert.equal(selection.purpose, "plan"); assert.equal(confirmed, true); assert.equal(proof.original.text, "original evidence"); assert.deepEqual(image, jpeg());
       return { ok: true, value: { requestKey, quoteKey } };
     } } });
@@ -115,6 +127,12 @@ test("checkout HTTP enforces identity, origin, upload content and rate limits wi
   identity = null; assert.equal((await handler(request())).status, 403); identity = member;
   allowed = false; assert.equal((await handler(request())).status, 429); allowed = true;
   assert.equal((await handler(request("same-origin", Buffer.from("spoofed image")))).status, 400);
+  const duplicatePhotos = await request().formData(); duplicatePhotos.append("image", new File([jpeg()], "second.jpg", { type: "image/jpeg" }));
+  const refused = await handler(new Request("http://localhost/api/account/checkout", { method: "POST", headers: { "sec-fetch-site": "same-origin" }, body: duplicatePhotos }));
+  assert.equal(refused.status, 400); assert.match((await refused.json()).message, /one screenshot per transaction/);
+  const check = new FormData(); check.set("payload", JSON.stringify({ action: "check-evidence", evidence: { provider: "mtn", transactionId: "TEST1234" } }));
+  const checkResponse = await handler(new Request("http://localhost/api/account/checkout", { method: "POST", headers: { "sec-fetch-site": "same-origin" }, body: check }));
+  assert.equal(checkResponse.status, 200); assert.equal(checked, 1); assert.equal(checkResponse.headers.get("cache-control"), "no-store");
   const response = await handler(request()); assert.equal(response.status, 200); assert.equal(called, 1);
   assert.equal(response.headers.get("cache-control"), "no-store"); assert.match(response.headers.get("x-robots-tag"), /noindex/);
 });

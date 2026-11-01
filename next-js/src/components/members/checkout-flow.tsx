@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, TextInput } from "@/components/ui/controls";
-import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
+import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { CardIcon, CheckIcon, ClipboardIcon, CopyIcon, GiftIcon, ImageIcon } from "@/components/ui/icons";
+import { CardIcon, CheckIcon, ClipboardIcon, CopyIcon, GiftIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
+import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
+import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { paymentEvidence } from "@/domain/payment-sms";
@@ -17,24 +18,16 @@ import { normalizeTransactionId, parseTransactionId } from "@/domain/payment";
 import { localUgandaPhone } from "@/domain/phone";
 import { refreshMemberSession } from "./member-session";
 import { PaymentWizard, WizardActions, WizardNotice, WizardPlans } from "./payment-wizard";
-import { Plan, PlanName, PlanPrice, Preview } from "./subscribe-styles";
-import { preparePaymentImage } from "./payment-image";
-import { readScreenshotText } from "./payment-ocr";
-import { CheckoutActions, CheckoutChoices, CheckoutEvidenceField, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutScreenshot, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
+import { Plan, PlanName, PlanPrice } from "./subscribe-styles";
+import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutEvidenceField, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
+import { PaymentScreenshot, screenshotDigest } from "./payment-screenshot";
+import { sendCheckout as send } from "./checkout-client";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { capCheckoutFunding, chooseCheckoutMethod, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
 
 const emptyView: CheckoutView = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
 const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Referral days" };
 const localDate = (date = new Date()) => new Date(+date - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-async function send<T>(body: Record<string, unknown>, image: Blob | null = null): Promise<T> {
-  const data = new FormData(); data.set("payload", JSON.stringify(body));
-  if (image) data.set("image", image, "payment.jpg");
-  const response = await fetch("/api/account/checkout", { method: "POST", body: data, credentials: "same-origin" });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.message ?? "Unable to save. Your draft is kept; try again.");
-  return result;
-}
 
 export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
@@ -46,12 +39,12 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     paidAt: localDate(), text: "", extracted: {}, originalText: "", accepted: false, attachingId: null });
   const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [reading, setReading] = useState(""), [preview, setPreview] = useState(""), storageWarning = useRef(false);
-  const [notice, setNotice] = useState<{ title: string; message: string; submit?: boolean } | null>(null);
-  const [readingActive, setReadingActive] = useState(false), readingAbort = useRef<AbortController | null>(null);
+  const [reading, setReading] = useState(""), storageWarning = useRef(false);
+  const [notice, setNotice] = useState<{ title: string; message: string; confirm?: () => void; confirmLabel?: string; cancelLabel?: string } | null>(null);
+  const [readingActive, setReadingActive] = useState(false);
   const [showNew, setShowNew] = useState(false), submitting = useRef(false), heading = useRef<HTMLHeadingElement>(null);
   const [quoteEpoch, setQuoteEpoch] = useState(0), lastQuoteKey = useRef<string | null>(null);
-  const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null), screenshotInput = useRef<HTMLInputElement>(null);
+  const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null);
   const key = `${account.id}:${topUp ? "topup" : "plan"}`;
   const selectedPlanPrice = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
   const walletMaximum = Math.min(view.availableWalletUgx, selectedPlanPrice);
@@ -78,13 +71,6 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     if (!saved && !storageWarning.current) setError("Browser storage is unavailable. Keep this page open to preserve your draft.");
     storageWarning.current = !saved;
   }); }, [key, loaded, draft, image]);
-  useEffect(() => {
-    if (!image) return;
-    const url = URL.createObjectURL(image);
-    Promise.resolve().then(() => setPreview(url));
-    return () => URL.revokeObjectURL(url);
-  }, [image]);
-  useEffect(() => () => readingAbort.current?.abort(), []);
   async function refresh() {
     const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin" });
     if (!response.ok) throw new Error("Status could not refresh. Your request is kept.");
@@ -139,25 +125,39 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   }
   const attaching = view.requests.find(r => r.id === draft.attachingId);
   const external = !!attaching || ["mtn", "airtel"].includes(draft.method);
+  const receiptProvider = (attaching?.method ?? draft.method) === "airtel" ? "airtel" : "mtn";
+  const screenshotReady = !!image && draft.screenshot?.version === 1 && draft.screenshot.provider === receiptProvider;
   const effectiveQuote = attaching ? { ...attaching, purpose: attaching.purpose as CheckoutQuote["purpose"] } : quote;
-  async function submit(event?: FormEvent, adjustmentAccepted = false) {
-    event?.preventDefault(); if (submitting.current) return;
+  async function submit(event?: FormEvent, adjustmentAccepted = false, reuseAccepted = false) {
+    event?.preventDefault(); if (submitting.current || readingActive) return;
     if (!draft.accepted) { setError("Check the details and confirm the purchase terms."); return; }
+    if (external && image && !screenshotReady) { setError("Recheck or remove the saved screenshot before submitting. Use a clear screenshot for the selected payment provider."); return; }
     if (external && !image && !draft.text.trim()) { setError("Paste a transaction message or add a screenshot before submitting."); return; }
     if (external && (!parseTransactionId(draft.transactionId) || !validMobilePhone(draft.payerPhone) || !Number.isSafeInteger(Number(draft.amountUgx)) || Number(draft.amountUgx) <= 0 || !Number.isFinite(Date.parse(draft.paidAt)))) {
       setError("Enter the transaction ID, reported amount, payer number and payment date."); return;
     }
-    if (external && effectiveQuote && !adjustmentAccepted) {
-      const difference = Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) - effectiveQuote.amountToSend;
-      if (difference !== 0) {
-        setNotice({ title: difference > 0 ? "Extra payment" : "Remaining payment", submit: true,
-          message: difference > 0 ? `If confirmed, ${formatUgx(difference)} extra will be added to your wallet.`
-            : `If confirmed, ${formatUgx(-difference)} will remain. Your request stays open until the full payment is verified.` });
-        return;
-      }
-    }
     submitting.current = true; setBusy(true); setError("");
     try {
+      if (external) {
+        const imageSha256 = image ? await screenshotDigest(image) : null;
+        if (image && imageSha256 !== draft.screenshot?.imageSha256) throw new Error("This screenshot has changed. Recheck it before submitting.");
+        const check = await send<CheckoutEvidenceCheck>({ action: "check-evidence", evidence: { provider: receiptProvider, transactionId: draft.transactionId,
+          submissionId: attaching?.id ?? null, imageSha256 } });
+        if (check.reuse === "own") throw new Error(`This transaction is already linked to your request ${check.reference ?? ""}. Use the existing request; it cannot be credited twice.`);
+        if (!reuseAccepted && (check.reuse === "reported" || check.imageRepeated)) {
+          setNotice({ title: "Payment already reported", message: "This payment or screenshot has already been reported and cannot be credited twice. Review the details, or submit an ownership claim if this is your payment. The admin will check it before any allocation.",
+            cancelLabel: "Review details", confirmLabel: "Submit for review", confirm: () => { void submit(undefined, adjustmentAccepted, true); } }); return;
+        }
+      }
+      if (external && effectiveQuote && !adjustmentAccepted) {
+        const difference = Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) - effectiveQuote.amountToSend;
+        if (difference !== 0) {
+          setNotice({ title: difference > 0 ? "Extra payment" : "Remaining payment", cancelLabel: "Review amount",
+            confirm: () => { void submit(undefined, true, reuseAccepted); },
+            message: difference > 0 ? `If confirmed, ${formatUgx(difference)} extra will be added to your wallet.`
+              : `If confirmed, ${formatUgx(-difference)} will remain. Your request stays open until the full payment is verified.` }); return;
+        }
+      }
       const proof = external ? { transactionId: draft.transactionId, amountUgx: Number(draft.amountUgx), payerPhone: draft.payerPhone,
         paidAt: new Date(draft.paidAt).toISOString(), original: { text: draft.text.trim() ? draft.originalText || draft.text : "", extracted: draft.extracted } } : undefined;
       const q = attaching ? null : await send<CheckoutQuote>({ action: "quote", selection: selection() });
@@ -170,34 +170,16 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     } catch (e) { setError((e as Error).message); }
     finally { submitting.current = false; setBusy(false); }
   }
-  function extract(text: string, fromScreenshot = false) {
+  function extract(text: string, fromScreenshot = false, screenshot?: ScreenshotMetadata) {
     const evidence = paymentEvidence(text, { mtn: settings.mtnNumber, airtel: settings.airtelNumber });
     const sender = /\b(?:from|sender)\s*[:=]?\s*(\+?\d[\d -]{7,18})/iu.exec(text)?.[1];
     const foundDate = paymentEvidenceDate(text), paidAt = foundDate ? localDate(new Date(foundDate)) : null;
     const extracted = { transactionId: evidence.transactionId, amountUgx: evidence.amount, payerPhone: sender ? validMobilePhone(sender) : null, paidAt };
-    update({ ...(fromScreenshot && draft.text.trim() ? {} : { text, originalText: text }),
+    update({ ...(fromScreenshot ? {} : { text, originalText: text }), ...(screenshot ? { screenshot } : {}),
       extracted: { ...draft.extracted, ...extracted, ...(fromScreenshot ? { screenshotText: text } : {}) }, ...(evidence.transactionId ? { transactionId: evidence.transactionId } : {}),
       ...(evidence.amount !== null ? { amountUgx: String(evidence.amount) } : {}), ...(extracted.payerPhone ? { payerPhone: extracted.payerPhone } : {}), ...(paidAt ? { paidAt } : {}) });
     setReading(evidence.transactionId || evidence.amount ? "Details extracted. Check and correct every field below." : "");
-    if (!evidence.transactionId && !evidence.amount) setError("Details could not be extracted. Enter them manually; your evidence is kept.");
-  }
-  async function chooseImage(file?: File) {
-    if (!file) return;
-    readingAbort.current?.abort();
-    const controller = new AbortController(); readingAbort.current = controller;
-    let prepared = false;
-    setBusy(true); setReadingActive(true); setReading("Reading screenshot…");
-    try {
-      const screenshot = await preparePaymentImage(file); prepared = true; setImage(screenshot);
-      // Persist the screenshot before OCR so closing the app during extraction cannot lose evidence.
-      await saveCheckoutDraft(key, { draft, image: screenshot });
-      if (controller.signal.aborted) { setReading("Enter the details manually; the screenshot is kept."); return; }
-      const text = await readScreenshotText(screenshot, () => {}, controller.signal); extract(text.slice(0, 12000), true);
-    } catch {
-      setReading("");
-      if (!controller.signal.aborted) setError(prepared ? "Enter the details manually; the screenshot is kept." : "This image could not be prepared. Choose another image or paste a transaction message.");
-    }
-    finally { setBusy(false); setReadingActive(false); }
+    if (!evidence.transactionId && !evidence.amount) setError("We couldn’t find transaction details in this message. Paste the complete payment message, or check and enter its transaction details below.");
   }
   async function pasteMessage() {
     setError("");
@@ -206,22 +188,6 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       if (!text.trim()) throw new Error();
       extract(text.slice(0, 12000));
     } catch { messageInput.current?.focus(); setError("Paste your transaction message into the field, or add a screenshot."); }
-  }
-  async function pasteScreenshot() {
-    setError("");
-    try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        const type = item.types.find(type => type.startsWith("image/"));
-        if (type) { const blob = await item.getType(type); await chooseImage(new File([blob], "payment-screenshot", { type })); return; }
-      }
-      setError("No screenshot was found on the clipboard. Copy an image or choose a file.");
-    } catch { setError("Paste a copied image into the screenshot box, or choose an image file."); }
-  }
-  function receiveScreenshot(event: ClipboardEvent<HTMLDivElement>) {
-    const file = [...event.clipboardData.items].find(item => item.kind === "file" && item.type.startsWith("image/"))?.getAsFile();
-    if (!file || busy) return;
-    event.preventDefault(); void chooseImage(file);
   }
   const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
   const visibleRequests = view.requests.slice(0, 5);
@@ -264,14 +230,14 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       </CheckoutActions>
       <CheckoutSupport settings={settings} reference={request.reference} />
     </CheckoutPanel>)}
-    {(error || notice) && <CriteriaDialog id={`${evidenceId}-notice`} title={error ? "Check payment details" : notice!.title} open
+    {(error || notice) && <CheckoutDialog id={`${evidenceId}-notice`} title={error ? "Check payment details" : notice!.title} open
       closeLabel="Close message" onCancel={() => { setError(""); setNotice(null); }}
-      footer={<>{!error && notice?.submit ? <>
-        <CriteriaDialogButton variant="secondary" onClick={() => setNotice(null)}>Review amount</CriteriaDialogButton>
-        <CriteriaDialogButton onClick={() => { setNotice(null); void submit(undefined, true); }}>Submit</CriteriaDialogButton>
+      footer={<>{!error && notice?.confirm ? <>
+        <CriteriaDialogButton variant="secondary" onClick={() => setNotice(null)}>{notice.cancelLabel ?? "Review details"}</CriteriaDialogButton>
+        <CriteriaDialogButton onClick={() => { const action = notice.confirm!; setNotice(null); action(); }}>{notice.confirmLabel ?? "Submit"}</CriteriaDialogButton>
       </> : <CriteriaDialogButton onClick={() => { setError(""); setNotice(null); }}>OK</CriteriaDialogButton>}</>}>
       <p>{error || notice?.message}</p>
-    </CriteriaDialog>}
+    </CheckoutDialog>}
     {!loaded && <p role="status">Restoring checkout…</p>}
     {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={3} hideTitle title={["Choose package", "Choose Payment Methods", "Confirm"][draft.step]!} headingRef={heading}>
       {draft.step === 0 && <>
@@ -301,24 +267,17 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         {external && <>
           <WizardNotice id={`${evidenceId}-requirement`}>Add a transaction message or screenshot. At least one is required.</WizardNotice>
           <CheckoutEvidenceField>
-            <header><label htmlFor={`${evidenceId}-message`}>Transaction message</label><Button type="button" variant="quiet" disabled={busy} onClick={() => void pasteMessage()}><ClipboardIcon />Paste</Button></header>
-            <CheckoutMessage ref={messageInput} id={`${evidenceId}-message`} rows={3} maxLength={12000} disabled={readingActive} required={!image}
+            <header><label htmlFor={`${evidenceId}-message`}>Transaction message</label><Button type="button" variant="quiet" disabled={busy || readingActive} onClick={() => void pasteMessage()}><ClipboardIcon />Paste</Button></header>
+            <CheckoutMessage ref={messageInput} id={`${evidenceId}-message`} rows={3} maxLength={12000} disabled={readingActive} required={!screenshotReady}
               aria-describedby={`${evidenceId}-requirement`} placeholder="Enter or paste your payment transaction message here"
               value={draft.text} onChange={e => update({ text: e.target.value })} onBlur={() => { if (draft.text && draft.text !== draft.originalText) extract(draft.text); }} />
           </CheckoutEvidenceField>
-          <CheckoutEvidenceField>
-            <header><label htmlFor={`${evidenceId}-screenshot`}>Payment screenshot</label></header>
-            <VisuallyHidden as="input" ref={screenshotInput} id={`${evidenceId}-screenshot`} type="file" accept="image/*" disabled={busy}
-              onChange={e => { void chooseImage(e.currentTarget.files?.[0]); e.currentTarget.value = ""; }} />
-            <CheckoutScreenshot role="group" tabIndex={0} aria-label="Choose or paste a payment screenshot" aria-describedby={`${evidenceId}-requirement`} onPaste={receiveScreenshot}>
-              <div><Button type="button" variant="secondary" disabled={busy} onClick={() => screenshotInput.current?.click()}><ImageIcon />Choose image</Button>
-                <Button type="button" variant="quiet" disabled={busy} onClick={() => void pasteScreenshot()}><ClipboardIcon />Paste image</Button></div>
-              {image && preview && <div data-screenshot-preview><a href={preview} target="_blank" rel="noopener"><Preview src={preview} alt="Payment screenshot preview" /></a>
-                <Button type="button" variant="quiet" disabled={busy} onClick={() => setImage(null)}>Remove</Button></div>}
-            </CheckoutScreenshot>
-          </CheckoutEvidenceField>
+          <PaymentScreenshot image={image} metadata={draft.screenshot ?? null} provider={receiptProvider} numbers={{ mtn: settings.mtnNumber, airtel: settings.airtelNumber }} messageTransactionId={paymentEvidence(draft.text).transactionId}
+            submissionId={attaching?.id ?? null} disabled={busy} requirementId={`${evidenceId}-requirement`} onBusyChange={setReadingActive}
+            onPasteMessage={() => messageInput.current?.focus()} onAccept={(screenshot, metadata, text) => { setImage(screenshot); extract(text, true, metadata); }}
+            onRemove={() => { setImage(null); setReading(""); update({ screenshot: null,
+              extracted: Object.fromEntries(Object.entries(draft.extracted).filter(([name]) => !name.startsWith("screenshot"))) }); }} />
           {reading && <p role="status">{reading}</p>}
-          {readingActive && <Button type="button" variant="quiet" onClick={() => readingAbort.current?.abort()}>Enter details manually</Button>}
           <TextInput label="Transaction ID" leading={<CardIcon />} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
             placeholder="Check the ID from your message or screenshot" value={draft.transactionId} onChange={e => update({ transactionId: normalizeTransactionId(e.target.value) })} />
           <TextInput label="Reported amount (UGX)" required disabled={readingActive} inputMode="numeric" value={draft.amountUgx} onChange={e => update({ amountUgx: e.target.value.replace(/\D/gu, "") })} />
@@ -327,10 +286,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
             required disabled={readingActive} type="datetime-local" value={draft.paidAt} onChange={e => update({ paidAt: e.target.value })} />
         </>}
         {summary}
-        <label><input type="checkbox" checked={draft.accepted} onChange={e => update({ accepted: e.target.checked })} /> I checked these details and confirm this {draft.purpose === "referral" ? "redemption" : "purchase"}. I accept the <a href="/en/terms" target="_blank" rel="noopener">terms</a>.</label>
-        <WizardActions><Button type="button" variant="secondary" disabled={busy} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>
-          <Button type="submit" disabled={busy || !draft.accepted || !attaching && !quote || external && !image && !draft.text.trim()}>{busy ? "Saving…" : "Submit"}</Button></WizardActions>
-        {external ? <Button variant="quiet" onClick={() => setNotice({ title: "Payment verification", message: "Reported details and extraction do not verify payment. The admin checks the incoming transfer." })}>About payment verification</Button>
+        <label><input type="checkbox" disabled={readingActive} checked={draft.accepted} onChange={e => update({ accepted: e.target.checked })} /> I checked these details and confirm this {draft.purpose === "referral" ? "redemption" : "purchase"}. I accept the <a href="/en/terms" target="_blank" rel="noopener">terms</a>.</label>
+        <WizardActions><Button type="button" variant="secondary" disabled={busy || readingActive} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>
+          <Button type="submit" disabled={busy || readingActive || !draft.accepted || !attaching && !quote || external && (!!image && !screenshotReady || !image && !draft.text.trim())}>{busy ? "Saving…" : "Submit"}</Button></WizardActions>
+        {external ? <Button variant="quiet" disabled={busy || readingActive} onClick={() => setNotice({ title: "Payment verification", message: "Reported details and extraction do not verify payment. The admin checks the incoming transfer." })}>About payment verification</Button>
           : <WizardNotice>Your available balance is debited only when you confirm.</WizardNotice>}
       </form>}
     </PaymentWizard>}

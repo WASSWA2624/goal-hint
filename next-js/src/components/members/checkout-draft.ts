@@ -1,10 +1,11 @@
 import type { CheckoutSelection, CheckoutView } from "@/domain/checkout";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
+import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
 
 export type CheckoutDraft = { requestKey: string; step: 0 | 1 | 2; purpose: CheckoutSelection["purpose"]; planId: string;
   method: CheckoutSelection["method"] | ""; useWallet: boolean; useReferral: boolean; walletUgx: string; referralDays: string; topUpUgx: string;
   transactionId: string; amountUgx: string; payerPhone: string; paidAt: string; text: string;
-  extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null };
+  extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null; screenshot?: ScreenshotMetadata | null };
 
 /** Apply current spendable balances to edits, restored drafts and balance refreshes. */
 export function capCheckoutFunding(draft: CheckoutDraft, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,

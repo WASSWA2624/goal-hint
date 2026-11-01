@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
@@ -92,6 +92,27 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: who.accountId } })), 0);
     const valid = await submit(who, selection, { ...proof(), original: { text: "Unreadable transaction message; fields corrected manually", extracted: {} } });
     assert.equal(valid.status, "pending");
+  });
+  await t.test("evidence checks find reused IDs privately, scope images to their owner and preserve one photo", async () => {
+    const a = await member(), b = await member(), image = jpeg(), receipt = proof(), selection = select();
+    const quote = await checkout.quote(a, selection);
+    const saved = await checkout.confirm(a, selection, randomUUID(), quote.value.quoteKey, true, receipt, image);
+    assert.equal(saved.ok, true);
+    const input = { provider: "mtn", transactionId: receipt.transactionId, imageSha256: createHash("sha256").update(image).digest("hex") };
+    const own = await checkout.checkEvidence(a, input);
+    assert.equal(own.value.reuse, "own"); assert.equal(own.value.reference, saved.value.reference); assert.equal(own.value.imageRepeated, true);
+    const current = await checkout.checkEvidence(a, { ...input, submissionId: saved.value.id });
+    assert.equal(current.value.reuse, "current"); assert.equal(current.value.imageRepeated, false);
+    const other = await checkout.checkEvidence(b, { ...input, submissionId: saved.value.id });
+    assert.deepEqual(other.value, { reuse: "reported", imageRepeated: false });
+    const another = await checkout.checkEvidence(a, { ...input, transactionId: "UNUSED123456" });
+    assert.equal(another.value.reuse, "available"); assert.equal(another.value.imageRepeated, true);
+    assert.equal((await checkout.checkEvidence(b, { ...input, provider: "airtel" })).value.reuse, "available");
+    for (let i = 0; i < 2; i++) assert.equal((await checkout.attach(a, saved.value.id, receipt, image)).ok, true);
+    assert.equal(await database.query(tx => tx.paymentReceiptClaim.count({ where: { submissionId: saved.value.id } })), 1);
+    assert.equal(await database.query(tx => tx.paymentReceiptEvidence.count({ where: { claim: { submissionId: saved.value.id } } })), 0);
+    assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: b.accountId } })), 0);
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: saved.value.id } })), 0);
   });
   await t.test("combined funding, shortfall plus top-up, excess and concurrent approval allocate once", async () => {
     const who = await member(); await fund(who, 2000, 1);

@@ -7,6 +7,11 @@ import { supportContactsOf, type SupportContactSettings } from "@/domain/support
 import { telHref, waHref } from "@/domain/phone";
 import { WizardReview } from "./payment-wizard";
 import { Button, TextInput, focusTreatment } from "@/components/ui/controls";
+import { CriteriaDialog, type CriteriaDialogProps } from "@/components/ui/criteria-dialog";
+
+export function CheckoutDialog(props: CriteriaDialogProps) {
+  return <CriteriaDialog {...props} dismissOnBackdrop={false} dismissOnEscape={false} />;
+}
 
 export const CheckoutPanel = styled.section`
   display: grid; gap: 12px; inline-size: 100%; max-inline-size: 40rem; min-inline-size: 0;
@@ -88,6 +93,7 @@ export const CheckoutScreenshot = styled.div`
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 13px; line-height: 18px; }
   [data-screenshot-preview] { display: flex; flex-wrap: nowrap; justify-content: space-between; }
   [data-screenshot-preview] a { min-inline-size: 0; ${focusTreatment} }
+  [data-screenshot-preview] button { flex: none; min-block-size: 36px; padding: 4px 8px; }
   img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: 100px; object-fit: contain; }
   ${focusTreatment}
 `;

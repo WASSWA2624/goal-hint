@@ -20,6 +20,9 @@ export const receiptInputSchema = z.object({
   original: z.object({ text: z.string().max(12_000), extracted: z.record(z.string(), z.union([z.string(), z.number(), z.null()])) }).strict(),
 }).strict();
 export type ReceiptInput = z.infer<typeof receiptInputSchema>;
+export const checkoutEvidenceSchema = z.object({ provider: z.enum(["mtn", "airtel"]), transactionId: z.string().trim().min(4).max(40),
+  submissionId: z.uuid().nullable().default(null), imageSha256: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null) }).strict();
+export type CheckoutEvidenceCheck = { reuse: "available" | "current" | "own" | "reported"; imageRepeated: boolean; reference?: string };
 export type CheckoutQuote = CheckoutSelection & { quoteKey: string; planName: string; priceUgx: number; durationDays: number;
   amountToSend: number; availableWalletUgx: number; availableReferralDays: number; recipient: string | null; recipientName: string | null };
 export type CheckoutRequest = { id: string; reference: string; status: string; purpose: string; method: string; planId: string | null;

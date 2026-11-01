@@ -21,7 +21,8 @@ export function createCheckoutHandlers(services: MemberServicesSource = getMembe
       try {
         if (request.headers.get("content-type")?.startsWith("multipart/form-data")) {
           const data = await new Response(raw, { headers: { "content-type": request.headers.get("content-type")! } }).formData();
-          if ([...data.keys()].some(k => !["payload", "image"].includes(k)) || data.getAll("payload").length !== 1 || data.getAll("image").length > 1) throw new Error();
+          if (data.getAll("image").length > 1) return json({ message: "Use one screenshot per transaction. Choose one image and try again." }, 400);
+          if ([...data.keys()].some(k => !["payload", "image"].includes(k)) || data.getAll("payload").length !== 1) throw new Error();
           body = JSON.parse(String(data.get("payload")));
           const file = data.get("image");
           if (file !== null) {
@@ -35,6 +36,7 @@ export function createCheckoutHandlers(services: MemberServicesSource = getMembe
       let result;
       const id = typeof body.id === "string" && /^[a-f0-9-]{36}$/iu.test(body.id) ? body.id : "";
       switch (body.action) {
+        case "check-evidence": result = await services.checkout.checkEvidence(member!, body.evidence); break;
         case "quote": result = await services.checkout.quote(member!, body.selection); break;
         case "confirm": result = await services.checkout.confirm(member!, body.selection, String(body.requestKey ?? ""), String(body.quoteKey ?? ""), body.confirmed === true, body.proof, image); break;
         case "attach": result = await services.checkout.attach(member!, id, body.proof, image); break;

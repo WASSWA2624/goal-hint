@@ -1,11 +1,19 @@
-import type { CheckoutQuote, CheckoutRequest, CheckoutSelection, CheckoutView } from "@/domain/checkout";
+import type { CheckoutEvidenceCheck, CheckoutQuote, CheckoutRequest, CheckoutSelection, CheckoutView } from "@/domain/checkout";
 import { fundingAmounts } from "@/domain/checkout";
+import { transactionKey } from "@/domain/payment";
 import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const, mtnNumber: "256700000901", mtnName: "SYNTHETIC MTN PAYEE",
   airtelNumber: "256700000902", airtelName: "SYNTHETIC AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904" };
 export const plans = [1, 7, 30].map((durationDays, i) => ({ id: `00000000-0000-4000-8000-00000000000${i}`,
   name: ["Daily", "Weekly", "Monthly"][i]!, priceUgx: [1000, 5000, 20000][i]!, durationDays, active: true, sortOrder: i, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z" }));
-const state = globalThis as typeof globalThis & { checkoutFixture?: CheckoutView };
+const state = globalThis as typeof globalThis & { checkoutFixture?: CheckoutView; checkoutFixtureImages?: Map<string, string> };
+export function checkEvidence(input: { provider: string; transactionId: string; submissionId?: string | null; imageSha256?: string | null }): CheckoutEvidenceCheck {
+  const own = view().requests.find(row => row.method === input.provider && row.receipts.some(receipt => transactionKey(receipt.transactionId) === transactionKey(input.transactionId)));
+  return { reuse: own ? own.id === input.submissionId ? "current" : "own" : ["999988887777", "DEMOREUSED001"].includes(transactionKey(input.transactionId)) ? "reported" : "available",
+    imageRepeated: !!input.imageSha256 && [...state.checkoutFixtureImages ?? []].some(([id, hash]) => id !== input.submissionId && hash === input.imageSha256),
+    ...(own ? { reference: own.reference } : {}) };
+}
+export function rememberImage(id: string, hash: string) { (state.checkoutFixtureImages ??= new Map()).set(id, hash); }
 export function view(): CheckoutView { return state.checkoutFixture ??= { availableWalletUgx: 3000, availableReferralDays: 7, lastMethod: null, requests: [] }; }
 export function quote(selection: CheckoutSelection): CheckoutQuote {
   const plan = plans.find(p => p.id === selection.planId) ?? plans[0]!;
@@ -18,7 +26,7 @@ export function quote(selection: CheckoutSelection): CheckoutQuote {
     quoteKey: `synthetic:${JSON.stringify(selection)}` };
 }
 export function confirm(selection: CheckoutSelection, id: string, proof?: { transactionId: string; amountUgx: number; paidAt: string }): CheckoutRequest {
-  const existing = view().requests.find(r => r.id === id); if (existing) return existing;
+  const existing = view().requests.find(r => r.id === id || r.method === selection.method && proof && r.receipts.some(receipt => transactionKey(receipt.transactionId) === transactionKey(proof.transactionId))); if (existing) return existing;
   const q = quote(selection), external = q.amountToSend > 0;
   const row: CheckoutRequest = { ...q, id, reference: "PTEST", status: external ? "pending" : "approved", method: selection.method,
     reportedUgx: proof?.amountUgx ?? 0, verifiedUgx: 0, remainingUgx: q.amountToSend, excessUgx: 0,
