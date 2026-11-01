@@ -9,7 +9,7 @@ import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calend
 import { formLetters } from "@/domain/match-details";
 import type { InsightResult } from "@/domain/match-insights";
 import {
-  comparisonMetrics, formRecords, headToHead, pageOf, perMatchValue, resultFor, teamComparison,
+  combinedFormRecords, comparisonMetrics, formRecords, headToHead, pageOf, perMatchValue, resultFor, teamComparison,
   type ComparisonMetric,
 } from "@/domain/match-insight-presentation";
 import { formWindows, openItem, type FormWindow, type MatchSection, type VenueFocus } from "@/domain/match-view";
@@ -98,7 +98,7 @@ export function RecordPanel({ record }: { record: InsightResult }) {
 
 /** A stored result: plain clicks open it in place, while the row stays a real link to its own match page. */
 const RecordRow = styled(RowButton)`
-  grid-template-columns: 3.9rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
+  grid-template-columns: 4.25rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
   gap: 6px; min-block-size: 44px; text-decoration: none; font-size: .75rem;
   > time { color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
   > span[data-team] { display: flex; align-items: center; gap: 4px; min-inline-size: 0; }
@@ -108,7 +108,7 @@ const RecordRow = styled(RowButton)`
   [data-winner="true"] { font-weight: 800; color: ${({ theme }) => theme.color.text}; }
   [data-winner="false"] { color: ${({ theme }) => theme.color.mutedText}; }
   ${media.belowDesktop} { padding-inline: 0; gap: 4px; font-size: .6875rem;
-    grid-template-columns: 3.4rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
+    grid-template-columns: 4.25rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
     > span[data-team] > :first-child:not(:last-child) { display: none; }
   }
 `;
@@ -137,7 +137,7 @@ function ResultRows({ records, section }: {
         <RecordRow as={Link} href={matchHref(record.fixtureId, record.slug, locale)} prefetch={false} data-item-key={record.fixtureId}
           aria-label={`${messages.reportingInstant(at(record.kickoffAt))} · ${homeName} ${record.homeGoals}–${record.awayGoals} ${awayName}`}
           onClick={event => plainClick(event, () => update(current => openItem(current, section, record.fixtureId)))}>
-          <time dateTime={toUtcIsoString(at(record.kickoffAt))} title={messages.reportingInstant(at(record.kickoffAt))}>{messages.reportingDay(at(record.kickoffAt))}</time>
+          <time dateTime={toUtcIsoString(at(record.kickoffAt))} title={messages.reportingInstant(at(record.kickoffAt))}>{messages.shortKickoffDate(at(record.kickoffAt), true)}</time>
           <span data-result-side="home"><FormLetters letters={[resultFor(record, record.home.id)]} label={messages.text("touchline.resultForTeam", { team: homeName })} /></span>
           <span data-team="home" data-winner={!draw && record.homeGoals > record.awayGoals} title={homeName}>
             <Crest name={homeName} url={record.home.logoUrl} size={16} /><span>{homeName}</span>
@@ -235,13 +235,16 @@ export const StatsSection = memo(function StatsSection() {
   </SectionCard>;
 });
 
-export const FormSection = memo(function FormSection({ singleTeam = false }: { singleTeam?: boolean }) {
+export const FormSection = memo(function FormSection({ sharedFilters = false }: { sharedFilters?: boolean }) {
   const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "form";
   const form = useInsightSection(fixtureId, "form", open, preview);
   const all = form.data ?? preview?.sections.form ?? { home: [], away: [] };
-  const sides = singleTeam ? [view.team === "away" ? "away" as const : "home" as const] : view.team === "both" ? (["home", "away"] as const) : [view.team];
   const team = (side: "home" | "away") => side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
+  const records = view.team === "both" ? combinedFormRecords(all, team("home").id, team("away").id, view.venue, view.window)
+    : formRecords(all[view.team], team(view.team).id, view.venue, view.window);
+  const summary = view.team === "both" ? null : teamComparison(records, [], team(view.team).id, "").home;
+  const paged = pageOf(records, view.page, pageSize);
   const record = view.item ? [...all.home, ...all.away].find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
@@ -253,24 +256,18 @@ export const FormSection = memo(function FormSection({ singleTeam = false }: { s
     itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={form.loading} error={form.error} onRetry={form.retry} />
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
-      {!singleTeam && <PanelBar>
+      {!sharedFilters && <PanelBar>
         <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(value) => update((current) => ({ ...current, team: value, page: 1 }), "replace")}
           options={[{ value: "both", label: messages.text("details.bothTeams") }, { value: "home", label: home }, { value: "away", label: away }]} />
       </PanelBar>}
-      {!singleTeam && <FormFilters />}
-      {sides.map((side) => {
-        const records = formRecords(all[side], team(side).id, view.venue, view.window), summary = teamComparison(records, [], team(side).id, "").home;
-        const paged = pageOf(records, view.page, pageSize);
-        return <div key={side} style={{ display: "grid", gap: 6 }}>
-          {!singleTeam && <Strong>{side === "home" ? home : away}</Strong>}
-          {records.length ? <>
-            <Note>{messages.text("details.formSummary", { wins: messages.number(summary.wins), draws: messages.number(summary.draws), losses: messages.number(summary.losses),
-              scored: messages.number(summary.goalsFor), conceded: messages.number(summary.goalsAgainst), count: messages.plural("details.sampleResults", records.length) })}</Note>
-            <ResultRows records={paged.items} section="form" />
-            <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
-          </> : <Note>{messages.text("details.noStoredResults")}</Note>}
-        </div>;
-      })}
+      {!sharedFilters && <FormFilters />}
+      {records.length ? <>
+        <Note>{summary ? messages.text("details.formSummary", { wins: messages.number(summary.wins), draws: messages.number(summary.draws), losses: messages.number(summary.losses),
+          scored: messages.number(summary.goalsFor), conceded: messages.number(summary.goalsAgainst), count: messages.plural("details.sampleResults", records.length) })
+          : messages.plural("details.sampleResults", records.length)}</Note>
+        <ResultRows records={paged.items} section="form" />
+        <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
+      </> : <Note>{messages.text("details.noStoredResults")}</Note>}
     </div>}
   </SectionCard>;
 });

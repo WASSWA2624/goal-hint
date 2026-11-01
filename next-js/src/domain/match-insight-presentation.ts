@@ -32,6 +32,15 @@ export function formRecords(records: readonly InsightResult[], teamId: string, v
   return window > 0 ? filtered.slice(0, window) : filtered;
 }
 
+/** One chronological fixture list, with venue filtering per club and a shared result limit. */
+export function combinedFormRecords(form: Readonly<{ home: readonly InsightResult[]; away: readonly InsightResult[] }>,
+  homeId: string, awayId: string, venue: "all" | "home" | "away", window: number): InsightResult[] {
+  const records = [...formRecords(form.home, homeId, venue, 0), ...formRecords(form.away, awayId, venue, 0)];
+  const unique = [...new Map(records.map(record => [record.fixtureId, record])).values()]
+    .sort((a, b) => b.kickoffAt - a.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
+  return window > 0 ? unique.slice(0, window) : unique;
+}
+
 /** Head-to-head totals from the fixture's home-team perspective. */
 export function headToHead(meetings: readonly InsightResult[], homeTeamId: string) {
   let homeWins = 0, draws = 0, awayWins = 0, goals = 0, btts = 0, over = 0;

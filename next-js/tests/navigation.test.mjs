@@ -175,3 +175,11 @@ test("reporting-date labels retain the named EAT day rather than the host timezo
   assert.equal(messages.reportingDate(parseReportingDate("2026-10-09")), "Friday, October 9, 2026");
   assert.equal(messages.reportingDate(parseReportingDate("2024-02-29")), "Thursday, February 29, 2024");
 });
+
+test("result dates include the year in the selected display zone without changing compact kickoff labels", () => {
+  const instant = parseUtcInstant("2026-12-31T23:30:00Z");
+  const kampala = createMessages("en"), newYork = createMessages("en", undefined, "America/New_York");
+  assert.equal(kampala.shortKickoffDate(instant), "1-Jan");
+  assert.equal(kampala.shortKickoffDate(instant, true), "1-Jan-2027");
+  assert.equal(newYork.shortKickoffDate(instant, true), "31-Dec-2026");
+});

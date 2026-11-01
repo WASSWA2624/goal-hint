@@ -45,6 +45,24 @@ test("the shared tab list has one combined results tab and old H2H links retain 
   }
 });
 
+test("Form defaults to both clubs and ten combined fixtures while other sections keep five", () => {
+  for (const parameters of [{ panel: "form" }, { section: "form" }, { panel: "stats", section: "form" }]) {
+    const view = parseMatchDetailsView(parameters);
+    assert.equal(view.team, "both"); assert.equal(view.window, 10); assert.equal(view.section, "form");
+    assert.equal(parseMatchDetailsView(serializeMatchView(view)).window, 10);
+  }
+  const opened = openDetailTab(parseMatchView({ section: "stats", team: "away", window: "20", item: "old" }), "form");
+  assert.equal(opened.team, "both"); assert.equal(opened.window, 10); assert.equal(opened.page, 1); assert.equal(opened.item, null);
+  for (const window of [0, 5, 10, 20]) {
+    const view = parseMatchDetailsView({ panel: "form", team: "away", window: String(window) });
+    const query = serializeMatchView(view);
+    assert.equal(view.team, "away"); assert.equal(parseMatchDetailsView(query).window, window);
+    assert.equal(query.get("window"), window === 10 ? null : String(window));
+  }
+  assert.equal(parseMatchView({ section: "form", window: "invalid" }).window, 10);
+  for (const section of ["stats", "h2h", "players", "lineups"]) assert.equal(parseMatchDetailsView({ section }).window, 5);
+});
+
 test("optional player details preserve old snapshots and reject invalid ages and fixture ratings", () => {
   const base = { id: 1, team: "home", name: "Sample player", number: 9, position: "F", grid: "4:1", role: "starting" };
   assert.deepEqual(playerSchema.parse(base), base);

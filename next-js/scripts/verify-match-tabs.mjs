@@ -104,8 +104,10 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
       }
       check(await panel.locator('[data-results-filters] fieldset').evaluateAll(groups => groups.every(group => {
         const labels = [...group.querySelectorAll('label')].map(label => label.getBoundingClientRect());
-        return labels.every(label => Math.abs(label.top - labels[0].top) < 1);
-      })), `${width}: radio options fit on one row per filter`);
+        return labels.every((label, index) => labels.slice(index + 1).every(other =>
+          Math.min(label.right, other.right) - Math.max(label.left, other.left) <= 1
+          || Math.min(label.bottom, other.bottom) - Math.max(label.top, other.top) <= 1));
+      })), `${width}: all filter radio choices stay distinct and readable`);
       check(await panel.locator('[data-results-filters] > section').evaluateAll((groups, width) => {
         const boxes = groups.map(group => group.getBoundingClientRect());
         return width >= 1024 ? boxes.every(box => box.top === boxes[0].top)
@@ -161,16 +163,49 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     check(await panel.getByRole("heading", { name: "Source and timing", exact: true }).count() === 1, "featured pick opens its full market details");
     await select("form");
     const results = panel.getByRole("group", { name: "Teams", exact: true });
-    check(await results.getByRole("radio", { name: "Arsenal", exact: true }).isChecked(), "results default to the home club");
-    check(await panel.locator('[data-results-filters] input[type="radio"]').count() === 10
+    check(await results.getByRole("radio", { name: "Both teams", exact: true }).isChecked(), "results default to both clubs");
+    const samples = panel.getByRole('group', { name:'Matches', exact:true });
+    check(await samples.getByRole('radio', {name:'Last 10',exact:true}).isChecked(), "combined form defaults to the latest ten fixtures in total");
+    check(await panel.locator('[data-results-filters] input[type="radio"]').count() === 11
       && await panel.locator('[data-results-filters] button').count() === 0, "result filters use compact native radio choices");
+    const formResponse = await page.request.get(`${origin}/api/matches/10000000-0000-4000-8000-000000000005/insights?section=form`);
+    const source = (await formResponse.json()).data;
+    const combined = (venue, window = 0) => {
+      const eligible = (records, team) => records.filter(record => venue === 'all' || record[venue].id === team);
+      const unique = [...new Map([...eligible(source.home, 'ars'), ...eligible(source.away, 'liv')].map(record => [record.fixtureId, record])).values()]
+        .sort((a,b) => b.kickoffAt - a.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
+      return window > 0 ? unique.slice(0, window) : unique;
+    };
+    const rowIds = () => panel.locator('[data-result-list] a').evaluateAll(rows => rows.map(row => row.dataset.itemKey));
+    check(JSON.stringify(await rowIds()) === JSON.stringify(combined('all', 10).map(record => record.fixtureId)), "both clubs share one deduplicated list in true newest-first order");
+    check(await panel.locator('[data-result-list] time').evaluateAll(dates => dates.every(date => /-\d{4}$/u.test(date.textContent)
+      && date.scrollWidth <= date.clientWidth)), "fixture years stay fully visible in compact result dates");
+    await capture('shared-tabs-both-teams-mobile');
+    const venues = panel.getByRole('group', {name:'Venues',exact:true});
+    for (const [venue, label] of [['home','Home games'],['away','Away games']]) {
+      await choose(venues.getByRole('radio', {name:label,exact:true}));
+      check(JSON.stringify(await rowIds()) === JSON.stringify(combined(venue, 10).map(record => record.fixtureId)), `${venue}: venue choice is applied to each club before merging`);
+    }
+    await choose(venues.getByRole('radio', {name:'All venues',exact:true}));
+    await choose(samples.getByRole('radio', {name:'Last 5',exact:true}));
+    check((await rowIds()).length === 5, "Last 5 limits the combined list rather than each team");
+    await choose(samples.getByRole('radio', {name:'All stored',exact:true}));
+    await panel.getByRole('button', {name:'Page 2',exact:true}).click();
+    await page.waitForFunction(() => new URL(location.href).searchParams.get('page') === '2');
+    check(JSON.stringify(await rowIds()) === JSON.stringify(combined('all').slice(10).map(record => record.fixtureId)), "shared fixture appears only once across combined pagination");
+    await page.reload({waitUntil:'networkidle'});
+    await page.locator('[data-match-design="phone"]').waitFor();
+    check(await results.getByRole('radio', {name:'Both teams',exact:true}).isChecked()
+      && await samples.getByRole('radio', {name:'All stored',exact:true}).isChecked()
+      && JSON.stringify(await rowIds()) === JSON.stringify(combined('all').slice(10).map(record => record.fixtureId)), "combined team, sample and page survive refresh");
+    await choose(samples.getByRole('radio', {name:'Last 10',exact:true}));
     await results.getByRole("radio", { name: "Arsenal", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     await page.waitForFunction(() => new URL(location.href).searchParams.get("team") === "away");
     check(await results.getByRole("radio", { name: "Liverpool", exact: true }).isChecked(), "native radio arrow keys update the selected team");
     await choose(results.getByRole("radio", { name: "Arsenal", exact: true }));
     check(await panel.locator("[data-results-filters] > section").evaluateAll(elements => elements.map(element => element.dataset.row).join(",")) === "teams,venues,matches", "three toggle rows are Teams, Venues, Matches");
-    for (const name of ["Arsenal", "Liverpool", "Head-to-Head"]) {
+    for (const name of ["Both teams", "Arsenal", "Liverpool", "Head-to-Head"]) {
       await choose(results.getByRole("radio", { name, exact: true }));
       const rows = panel.locator("[data-result-list] a");
       check(await rows.count() > 0, `${name}: selected results available`);

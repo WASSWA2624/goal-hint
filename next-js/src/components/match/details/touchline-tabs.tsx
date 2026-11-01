@@ -3,7 +3,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import styled from "styled-components";
 import { detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDetailTab } from "@/domain/match-detail-tabs";
-import { formWindows, openSection, type FormWindow, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
+import { formWindows, openSection, type FormWindow, type TeamFocus, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { LockIcon } from "@/components/ui/icons";
 import { RadioGroup, RadioGroups } from "@/components/ui/radio-group";
@@ -31,6 +31,9 @@ const Panel = styled.div`
   ${media.belowDesktop} { padding: 12px; scroll-margin-block-start: calc(var(--review-height, 0px) + 50px);
   }
   ${focusRing}
+`;
+const ResultFilters = styled(RadioGroups)`
+  ${media.desktop} { grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)); }
 `;
 
 /** Reuse the existing section bodies with independent item state and shared group filters. */
@@ -106,17 +109,18 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
 function FormAndH2H({ view }: { view: MatchView }) {
   const { home, away, messages, update } = useStableDetails();
   const section = view.section === "h2h" ? "h2h" : "form";
-  const selected = section === "h2h" ? "h2h" : view.team === "away" ? "away" : "home";
-  function chooseTeam(value: "home" | "away" | "h2h") {
+  const selected = section === "h2h" ? "h2h" : view.team;
+  function chooseTeam(value: TeamFocus | "h2h") {
     update(current => ({ ...openDetailTab(current, "form"), section: value === "h2h" ? "h2h" : "form",
-      team: value === "away" ? "away" : "home", venue: current.venue, window: current.window,
+      team: value === "h2h" ? "both" : value, venue: current.venue, window: current.window,
       tab: value === "h2h" && current.window === 0 ? "h2h-all" : null }), "replace");
   }
   return <>
-    <RadioGroups data-results-filters>
+    <ResultFilters data-results-filters>
       <section data-row="teams">
         <RadioGroup label={messages.text("touchline.teams")} value={selected} onChange={chooseTeam}
-          options={[{ value: "home", label: home }, { value: "away", label: away }, { value: "h2h", label: messages.text("details.section.h2h") }]} />
+          options={[{ value: "both", label: messages.text("details.bothTeams") }, { value: "home", label: home },
+            { value: "away", label: away }, { value: "h2h", label: messages.text("details.section.h2h") }]} />
       </section>
       <section data-row="venues">
         <RadioGroup label={messages.text("touchline.venues")} value={view.venue} onChange={(venue: VenueFocus) => update(current => ({ ...current, venue, page: 1, item: null }), "replace")}
@@ -128,8 +132,8 @@ function FormAndH2H({ view }: { view: MatchView }) {
           tab: section === "h2h" && window === 0 ? "h2h-all" : null }), "replace")}
           options={formWindows.map(value => ({ value, label: value === 0 ? messages.text("details.allStored") : messages.text("details.lastN", { count: String(value) }) }))} />
       </section>
-    </RadioGroups>
-    <Section section={section} view={view} heading={false}>{section === "h2h" ? <H2HSection filters={false} /> : <FormSection singleTeam />}</Section>
+    </ResultFilters>
+    <Section section={section} view={view} heading={false}>{section === "h2h" ? <H2HSection filters={false} /> : <FormSection sharedFilters />}</Section>
   </>;
 
 }

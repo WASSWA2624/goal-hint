@@ -88,6 +88,6 @@ export const insightsPreviewSchema = z.strictObject({ fixtureId: id, asOf: at, h
 export type InsightsPreview = z.infer<typeof insightsPreviewSchema>;
 
 export {
-  formRecords, headToHead, injuryStatus, insightsPreview,
+  combinedFormRecords, formRecords, headToHead, injuryStatus, insightsPreview,
   pageOf, perMatchValue, previewHoldsSection, previewRules, resultFor, summarize, teamComparison,
 } from "./match-insight-presentation.ts";

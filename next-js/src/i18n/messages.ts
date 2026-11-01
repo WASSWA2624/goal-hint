@@ -147,11 +147,11 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     reportingTime(value: UtcInstant): string {
       return times.format(displayInstant(value));
     },
-    /** Day first with a short month, using the same display zone as the kickoff clock. */
-    shortKickoffDate(value: UtcInstant): string {
-      const parts = instantDays.formatToParts(displayInstant(value));
+    /** Day first with a short month and optional year, in the kickoff clock's display zone. */
+    shortKickoffDate(value: UtcInstant, includeYear = false): string {
+      const parts = (includeYear ? instants : instantDays).formatToParts(displayInstant(value));
       const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)!.value;
-      return `${part("day")}-${part("month")}`;
+      return `${part("day")}-${part("month")}${includeYear ? `-${part("year")}` : ""}`;
     },
     /** Compact 12-hour kickoff, with an explicit uppercase AM/PM frame. */
     shortKickoffTime(value: UtcInstant): string {

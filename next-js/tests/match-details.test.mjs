@@ -7,7 +7,7 @@ import {
   defaultMatchView, openItem, openSection, parseMatchView, serializeMatchView, splitMatchViewParameters,
 } from '../src/domain/match-view.ts';
 import {
-  formRecords, headToHead, insightsPreview, matchInsightsSchema, pageOf, perMatchValue, previewHoldsSection, previewRules, resultFor, summarize,
+  combinedFormRecords, formRecords, headToHead, insightsPreview, matchInsightsSchema, pageOf, perMatchValue, previewHoldsSection, previewRules, resultFor, summarize,
   teamComparison,
 } from '../src/domain/match-insights.ts';
 import {
@@ -82,6 +82,29 @@ test('pagination exposes every page of a complete collection, clamping out-of-ra
   const items = Array.from({ length: 23 }, (_, index) => index);
   assert.deepEqual(pageOf(items, 3, 10), { items: [20, 21, 22], page: 3, pages: 3, total: 23 });
   assert.deepEqual(pageOf(items, 99, 10).page, 3); assert.deepEqual(pageOf([], 2, 10), { items: [], page: 1, pages: 1, total: 0 });
+});
+
+test('combined form is one chronological fixture list with per-club venues and a shared window', () => {
+  const shared = result(home, away, 2, 1, { kickoffAt: 500 });
+  const homeAway = result(other, home, 0, 1, { kickoffAt: 800 });
+  const homeHome = result(home, other, 1, 0, { kickoffAt: 900 });
+  const awayHome = result(away, other, 2, 0, { kickoffAt: 700 });
+  const awayAway = result(other, away, 1, 2, { kickoffAt: 600 });
+  const old = result(away, other, 0, 0, { kickoffAt: 100 });
+  const form = Object.freeze({ home: Object.freeze([shared, homeAway, homeHome]),
+    away: Object.freeze([old, awayHome, { ...shared }, awayAway]) });
+  const ids = records => records.map(record => record.fixtureId);
+  assert.deepEqual(ids(combinedFormRecords(form, home, away, 'all', 0)), ids([homeHome, homeAway, awayHome, awayAway, shared, old]));
+  assert.deepEqual(ids(combinedFormRecords(form, home, away, 'all', 3)), ids([homeHome, homeAway, awayHome]));
+  assert.deepEqual(ids(combinedFormRecords(form, home, away, 'home', 0)), ids([homeHome, awayHome, shared, old]));
+  assert.deepEqual(ids(combinedFormRecords(form, home, away, 'away', 0)), ids([homeAway, awayAway, shared]));
+  assert.deepEqual(ids(combinedFormRecords({ home: form.home, away: [] }, home, away, 'all', 10)), ids([homeHome, homeAway, shared]));
+  assert.deepEqual(combinedFormRecords({ home: [], away: [] }, home, away, 'all', 10), []);
+  assert.equal(form.home[0], shared); assert.equal(form.away[0], old);
+  const many = Array.from({ length: 15 }, (_, i) => result(home, other, 1, 0, { kickoffAt: 2000 + i }));
+  const latest = result(away, other, 1, 0, { kickoffAt: 3000 });
+  const limited = combinedFormRecords({ home: many, away: [latest] }, home, away, 'all', 10);
+  assert.equal(limited.length, 10); assert.equal(limited[0], latest); assert.equal(limited[9], many[6]);
 });
 
 function insights() {

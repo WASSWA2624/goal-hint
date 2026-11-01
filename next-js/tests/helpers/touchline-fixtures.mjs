@@ -50,12 +50,14 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
     const squad = sample.squads[index];
     sections.lineups[side] = { team: side, formation: squad.formation, status: "confirmed", updatedAt: side === "home" ? now : null, retrievedAt: now,
       starters: squad.starters.map((entry, i) => player(entry, side, "starting", i)), substitutes: squad.substitutes.map((entry, i) => player(entry, side, "substitute", i + 20)) };
-    sections.form[side] = sample.form[index].records.map((row, i) => ({ fixtureId: `${side}-recent-${i}`, slug: "recent-result", kickoffAt: now - (i + 1) * 7 * 86400000,
+    sections.form[side] = sample.form[index].records.map((row, i) => ({ fixtureId: `${side}-recent-${i}`, slug: "recent-result", kickoffAt: now - (i + 1) * (side === "home" ? 7 : 13) * 86400000,
       competition: { id: "premier-league", name: "Premier League", logoUrl: null },
       home: row.venue === "H" ? teams[side] : { id: `opponent-${i}`, name: row.opponent, logoUrl: null },
       away: row.venue === "H" ? { id: `opponent-${i}`, name: row.opponent, logoUrl: null } : teams[side],
       homeGoals: row.venue === "H" ? row.scored : row.conceded, awayGoals: row.venue === "H" ? row.conceded : row.scored, status: "finished-regulation" }));
   }
+  // The same past meeting belongs to both clubs' form without becoming two fixtures.
+  for (const side of ["home", "away"]) sections.form[side].push(sections.h2h.meetings[0]);
   sections.players.players = Object.values(sections.lineups).flatMap(squad => [...squad.starters, ...squad.substitutes]);
   sections.injuries.injuries = [
     { team: "home", playerId: 901, playerName: "Adrian Cole", nationality: "England", status: "out", type: "Injury", reason: "Hamstring injury",

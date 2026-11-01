@@ -38,6 +38,7 @@ export type MatchView = Readonly<{
 
 export const defaultMatchView: MatchView = Object.freeze({ panel: null, marketsOpen: true, marketCategory: "popular", marketSearch: "", market: null,
   section: null, tab: null, item: null, page: 1, team: "both", venue: "all", window: 5, competition: null });
+const defaultWindow = (section: MatchSection | null): FormWindow => section === "form" ? 10 : 5;
 
 /** Keys owned by the view; everything else in the URL belongs to other features. */
 export const matchViewKeys = Object.freeze(["panel", "mk", "mcat", "mq", "market", "section", "tab", "item", "page", "team", "venue", "window", "comp"] as const);
@@ -56,9 +57,10 @@ const oneOf = <T extends string>(values: readonly T[], value: string | undefined
 
 export function parseMatchView(input: Parameters): MatchView {
   const get = reader(input);
-  const section = oneOf<MatchSection | "">([...matchSections, ""], get("section"), "") || (get("panel") === "h2h" ? "h2h" : null);
+  const section = oneOf<MatchSection | "">([...matchSections, ""], get("section"), "")
+    || (get("panel") === "h2h" ? "h2h" : get("panel") === "form" ? "form" : null);
   const page = Number(get("page"));
-  const window = Number(get("window") ?? 5);
+  const window = Number(get("window") ?? defaultWindow(section));
   const search = (get("mq") ?? "").normalize("NFC").replace(/[\u0000-\u001f\u007f]/gu, "").slice(0, 80);
   const item = get("item"), tab = get("tab"), market = get("market"), competition = get("comp");
   return {
@@ -74,7 +76,7 @@ export function parseMatchView(input: Parameters): MatchView {
     page: section && Number.isSafeInteger(page) && page >= 1 && page <= 1000 ? page : 1,
     team: section ? oneOf<TeamFocus>(["both", "home", "away"], get("team"), "both") : "both",
     venue: section ? oneOf<VenueFocus>(["all", "home", "away"], get("venue"), "all") : "all",
-    window: section && (formWindows as readonly number[]).includes(window) ? window as FormWindow : 5,
+    window: section && (formWindows as readonly number[]).includes(window) ? window as FormWindow : defaultWindow(section),
     competition: section && competition !== undefined && identifier.test(competition) ? competition : null,
   };
 }
@@ -105,7 +107,7 @@ export function serializeMatchView(view: MatchView, base: URLSearchParams = new 
     if (view.page !== 1) result.set("page", String(view.page));
     if (view.team !== "both") result.set("team", view.team);
     if (view.venue !== "all") result.set("venue", view.venue);
-    if (view.window !== 5) result.set("window", String(view.window));
+    if (view.window !== defaultWindow(view.section)) result.set("window", String(view.window));
     if (view.competition) result.set("comp", view.competition);
   }
   return result;
@@ -114,7 +116,7 @@ export function serializeMatchView(view: MatchView, base: URLSearchParams = new 
 /** Opening another section resets the previous section's own tabs, items and filters. */
 export function openSection(view: MatchView, section: MatchSection | null): MatchView {
   const reset = Object.fromEntries(sectionKeys.map((key) => [key === "comp" ? "competition" : key, defaultMatchView[key === "comp" ? "competition" : key]]));
-  return { ...view, ...reset, section, panel: null };
+  return { ...view, ...reset, section, panel: null, window: defaultWindow(section) };
 }
 
 /** Opens one item, opening its section first (with fresh section filters) when needed. */
