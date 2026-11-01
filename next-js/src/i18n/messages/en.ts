@@ -924,7 +924,7 @@ export const en = {
   "details.sectionFailed": "This section could not be loaded. The preview above is still shown.",
   "details.versus": "VS",
   "details.kickoffUnknown": "Kickoff time not confirmed",
-  "details.verdict": "Our verdict",
+  "details.verdict": "Prediction",
   "details.chance": "chance",
   "details.publishedAt": "Published {time}",
   "details.resultChances": "Match result chances: {chances}",
