@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import styled from "styled-components";
 import { detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDetailTab } from "@/domain/match-detail-tabs";
 import { formWindows, openSection, type FormWindow, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { LockIcon } from "@/components/ui/icons";
-import { RadioGroup } from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroups } from "@/components/ui/radio-group";
 import { LiveMatchPanel } from "../live-match-panel";
 import { DetailsProvider, Note, ViewProvider, focusRing, useStableDetails } from "./details-ui";
 import { DisclosureProvider } from "./section-card";
@@ -32,10 +32,6 @@ const Panel = styled.div`
   }
   ${focusRing}
 `;
-const ResultFilters = styled.div`
-  display: grid; gap: 8px;
-  > section { min-inline-size: 0; }
-`;
 
 /** Reuse the existing section bodies with independent item state and shared group filters. */
 function Section({ section, view, children, heading = true }: { section: MatchSection; view: MatchView; children: ReactNode; heading?: boolean }) {
@@ -56,13 +52,29 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
   const { data, messages, update } = useStableDetails();
   const panel = useRef<HTMLDivElement>(null);
   const selected = detailTabForView(view), allowed = hasMatchPredictionAccess(data);
-  function preserveViewport() {
+  const previousTab = useRef(selected);
+  const preserveViewport = useCallback(() => {
     const element = panel.current;
     if (!element) return;
     // Reserve only the space beneath the current viewport. A shorter panel must neither
     // clamp the page's scroll position nor pull its sticky tabs out of their container.
     element.style.setProperty("--match-panel-min-size", `${Math.max(0, window.innerHeight - element.getBoundingClientRect().top)}px`);
-  }
+  }, []);
+  useLayoutEffect(() => {
+    if (previousTab.current === selected) return;
+    previousTab.current = selected;
+    const element = panel.current, navigation = element?.previousElementSibling;
+    if (!element || !(navigation instanceof HTMLElement)) return;
+    const content = element.getBoundingClientRect(), bar = navigation.getBoundingClientRect();
+    if (content.top < bar.bottom - 1) {
+      const inset = Number.parseFloat(getComputedStyle(navigation).top) || 0;
+      // Scroll on the retained height first, then release the old tab's reserved space.
+      // Both happen before paint, with the sticky tabs still at their existing position.
+      // Round up so fractional CSS pixels cannot unpin the sticky navigation.
+      window.scrollTo({ top: Math.max(0, Math.ceil(window.scrollY + content.top - bar.height - inset)), behavior: "instant" });
+    }
+    preserveViewport();
+  }, [selected, preserveViewport]);
   function select(tab: MatchDetailTab) { preserveViewport(); update(current => openDetailTab(current, tab)); }
   return <Surface data-touchline-tabs onClickCapture={preserveViewport} onChangeCapture={preserveViewport}
     onKeyDownCapture={event => { if (["Enter", " ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) preserveViewport(); }}>
@@ -101,7 +113,7 @@ function FormAndH2H({ view }: { view: MatchView }) {
       tab: value === "h2h" && current.window === 0 ? "h2h-all" : null }), "replace");
   }
   return <>
-    <ResultFilters data-results-filters>
+    <RadioGroups data-results-filters>
       <section data-row="teams">
         <RadioGroup label={messages.text("touchline.teams")} value={selected} onChange={chooseTeam}
           options={[{ value: "home", label: home }, { value: "away", label: away }, { value: "h2h", label: messages.text("details.section.h2h") }]} />
@@ -116,7 +128,7 @@ function FormAndH2H({ view }: { view: MatchView }) {
           tab: section === "h2h" && window === 0 ? "h2h-all" : null }), "replace")}
           options={formWindows.map(value => ({ value, label: value === 0 ? messages.text("details.allStored") : messages.text("details.lastN", { count: String(value) }) }))} />
       </section>
-    </ResultFilters>
+    </RadioGroups>
     <Section section={section} view={view} heading={false}>{section === "h2h" ? <H2HSection filters={false} /> : <FormSection singleTeam />}</Section>
   </>;
 

@@ -44,7 +44,8 @@ export async function verifyTouchline(page, { origin = "http://127.0.0.1:3112", 
           check(await page.locator("[data-touchline-pitch] button").count() === 22, "22 formation players");
           check(await page.locator("[data-formation]").count() === 2, "both formations shown beside teams");
           check(await page.locator('[data-section="lineups"]').getByText("Daniel Mercer", { exact: true }).count() === 1, "starter appears once");
-          await page.getByRole("combobox", { name: "Player detail", exact: true }).selectOption("position");
+          await page.getByRole("group", { name: "Player detail", exact: true }).getByRole("radio", { name: "Position", exact: true }).click();
+          await page.locator('[data-touchline-pitch] [data-profile="position"]').first().waitFor();
           check(await page.locator("[data-position]").count() === 22, "position detail mode");
           const geometry = await page.locator("[data-touchline-pitch]").evaluate(field => {
             const pitch = field.getBoundingClientRect(), players = [...field.querySelectorAll("button")];

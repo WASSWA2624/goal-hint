@@ -2,6 +2,17 @@
 
 import { useId } from "react";
 import styled from "styled-components";
+import { media } from "@/styles/theme";
+
+/** Related filters stack on phones and share a labelled, divided row on desktop. */
+export const RadioGroups = styled.div`
+  display: grid; gap: 8px; min-inline-size: 0;
+  > * { min-inline-size: 0; }
+  ${media.desktop} {
+    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 20px;
+    > * + * { padding-inline-start: 20px; border-inline-start: 1px solid ${({ theme }) => theme.color.border}; }
+  }
+`;
 
 const Group = styled.fieldset`
   display: flex; flex-wrap: wrap; gap: 4px 12px;

@@ -4,6 +4,7 @@ import Link from "@/components/navigation/navigation-link";
 import { memo, useRef } from "react";
 import styled from "styled-components";
 import { media } from "@/styles/theme";
+import { RadioGroup, RadioGroups } from "@/components/ui/radio-group";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { formLetters } from "@/domain/match-details";
 import type { InsightResult } from "@/domain/match-insights";
@@ -153,11 +154,7 @@ function ResultRows({ records, section }: {
   </RowList>;
 }
 
-const SelectFilters = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
-  > label { display: grid; gap: 4px; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
-  select { inline-size: 100%; min-inline-size: 0; min-block-size: 36px; padding: 5px 7px; font: inherit; font-size: .8125rem;
-    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border: 1px solid ${({ theme }) => theme.color.controlBorder}; }
+const MobileFilters = styled(RadioGroups)`
   ${media.desktop} { display: none; }
 `;
 const DesktopFilters = styled.div`${media.belowDesktop} { display: none; }`;
@@ -169,14 +166,10 @@ function FormFilters({ venueLabels }: { venueLabels?: Record<VenueFocus, string>
   const venues = (["all", "home", "away"] as const).map(value => ({ value, label: venueLabels?.[value] ?? messages.text(`details.venue.${value}`) }));
   const windows = formWindows.map(value => ({ value, label: value === 0 ? messages.text("details.allStored") : messages.text("details.lastN", { count: String(value) }) }));
   return <>
-    <SelectFilters data-form-filters>
-      <label>{messages.text("details.venue")}<select aria-label={messages.text("details.venue")} value={view.venue} onChange={event => setVenue(event.target.value as VenueFocus)}>
-        {venues.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select></label>
-      <label>{messages.text("details.window")}<select aria-label={messages.text("details.window")} value={view.window} onChange={event => setWindow(Number(event.target.value) as FormWindow)}>
-        {windows.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select></label>
-    </SelectFilters>
+    <MobileFilters data-form-filters>
+      <RadioGroup label={messages.text("details.venue")} value={view.venue} onChange={setVenue} options={venues} />
+      <RadioGroup label={messages.text("details.window")} value={view.window} onChange={setWindow} options={windows} />
+    </MobileFilters>
     <DesktopFilters><PanelBar>
       <ChoiceGroup label={messages.text("details.venue")} value={view.venue} onChange={setVenue} options={venues} />
       <ChoiceGroup label={messages.text("details.window")} value={view.window} onChange={setWindow} options={windows} />

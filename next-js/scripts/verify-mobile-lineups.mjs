@@ -29,7 +29,7 @@ export async function verifyMobileLineups(page, { origin = "http://127.0.0.1:311
       const centres = buttons.every(button => {
         const shirt = button.querySelector("[data-shirt]").getBoundingClientRect(), y = shirt.top + shirt.height / 2;
         return shirt.left >= box.left && shirt.right <= box.right && shirt.top >= box.top && shirt.bottom <= box.bottom
-          && (button.dataset.side === "home" ? y > middle : y < middle);
+          && (button.dataset.side === "home" ? y < middle : y > middle);
       });
       const circle = field.querySelector("[data-centre-circle]").getBoundingClientRect();
       const overlap = buttons.some((button, index) => buttons.slice(index + 1).some(other => {
@@ -75,7 +75,8 @@ export async function verifyMobileLineups(page, { origin = "http://127.0.0.1:311
     check((await section.innerText()).includes("Suspended"), "absence opens its existing player availability details");
     await section.getByRole("button", { name: /Back to list/u }).click();
     check(await roster.getAttribute("data-team-roster") === "away" && await pitch.locator("button").count() === 22, "player Back restores the selected team and full pitch");
-    await section.getByLabel("Player detail", { exact: true }).selectOption("position");
+    await section.getByRole("group", { name: "Player detail", exact: true }).getByRole("radio", { name: "Position", exact: true }).click();
+    await pitch.locator('[data-profile="position"]').first().waitFor();
     await geometry(390);
     check(await pitch.locator("[data-phone-position]").count() === 22 && (await pitch.innerText()).includes("GK"), "mobile position mode labels the shirts without expanding player targets");
     await capture("mobile-lineups-positions", 390);

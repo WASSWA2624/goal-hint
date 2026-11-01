@@ -23,6 +23,10 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await button.click();
     await page.locator(`[data-active-match-tab="${id}"]`).waitFor();
   }
+  async function choose(radio) {
+    if (!await radio.isChecked()) await radio.click();
+    await page.waitForFunction(element => element.checked, await radio.elementHandle());
+  }
   async function capture(name) {
     if (!captureDirectory) return;
     const viewport = page.viewportSize();
@@ -57,30 +61,39 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${id}: no page overflow`);
     }
     check(navigations.length === navigationCount, "tab changes do not navigate or refetch the server page");
-    async function stableSwitch(id, label) {
-      await page.evaluate(() => {
-        const read = () => [scrollY, document.querySelector('[data-match-tab-navigation]').getBoundingClientRect().top,
-          document.querySelector('[data-verdict]').getBoundingClientRect().top];
+    async function contentSwitch(id, label) {
+      const before = await page.evaluate(() => {
+        const bar = document.querySelector('[data-match-tab-navigation]').getBoundingClientRect();
+        const panel = document.querySelector('#match-information-panel').getBoundingClientRect();
+        const read = () => [document.querySelector('[data-match-tab-navigation]').getBoundingClientRect().top,
+          scrollY + document.querySelector('[data-verdict]').getBoundingClientRect().top];
         window.__matchTabFrames = [read()]; window.__matchTabSampling = true;
         const sample = () => { if (!window.__matchTabSampling) return; window.__matchTabFrames.push(read()); requestAnimationFrame(sample); };
         requestAnimationFrame(sample);
+        return { scroll: scrollY, deep: panel.top < bar.bottom - 1 };
       });
       await select(id);
-      const stable = await page.evaluate(async () => {
+      const result = await page.evaluate(async before => {
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         window.__matchTabSampling = false;
-        return window.__matchTabFrames.every(frame => frame.every((position, index) => position === window.__matchTabFrames[0][index]));
-      });
-      check(stable, label);
+        const panel = document.querySelector('#match-information-panel'), box = panel.getBoundingClientRect();
+        const bar = document.querySelector('[data-match-tab-navigation]').getBoundingClientRect();
+        return {
+          stable: window.__matchTabFrames.every(frame => frame.every((position, index) => position === window.__matchTabFrames[0][index])),
+          visible: before.deep ? Math.abs(box.top - bar.bottom) < 1 && scrollY < before.scroll
+            && parseFloat(panel.style.getPropertyValue('--match-panel-min-size')) <= innerHeight : scrollY === before.scroll,
+        };
+      }, before);
+      check(result.stable && result.visible, label);
     }
     for (const width of [320, 390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       await page.locator(`[data-match-design="${width < 1024 ? "phone" : "touchline"}"]`).waitFor();
       for (const depth of [0, 200, 650, "bottom"]) {
-        await select("lineups");
-        await page.evaluate(depth => window.scrollTo(0, depth === "bottom" ? document.documentElement.scrollHeight - innerHeight : depth), depth);
         for (const id of ["referee", "markets", "lineups", "history", "form"]) {
-          await stableSwitch(id, `${width}/${depth}/${id}: tabs, prediction and page scroll stay pixel-stable`);
+          await select(id === "lineups" ? "form" : "lineups");
+          await page.evaluate(depth => window.scrollTo(0, depth === "bottom" ? document.documentElement.scrollHeight - innerHeight : depth), depth);
+          await contentSwitch(id, `${width}/${depth}/${id}: new content starts below stable tabs and the prediction stays unchanged`);
           if (width < 1024) check(await nav.evaluate(element => {
             const selected = element.querySelector('[aria-selected="true"]'), box = selected.getBoundingClientRect(), strip = element.getBoundingClientRect();
             const desired = Math.max(0, Math.min(element.scrollWidth - element.clientWidth,
@@ -93,6 +106,12 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
         const labels = [...group.querySelectorAll('label')].map(label => label.getBoundingClientRect());
         return labels.every(label => Math.abs(label.top - labels[0].top) < 1);
       })), `${width}: radio options fit on one row per filter`);
+      check(await panel.locator('[data-results-filters] > section').evaluateAll((groups, width) => {
+        const boxes = groups.map(group => group.getBoundingClientRect());
+        return width >= 1024 ? boxes.every(box => box.top === boxes[0].top)
+          && groups.slice(1).every(group => getComputedStyle(group).borderInlineStartWidth === '1px')
+          : boxes.every((box, index) => index === 0 || box.top >= boxes[index - 1].bottom);
+      }, width), `${width}: labelled filter groups use divided desktop columns and stacked mobile rows`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('[data-match-design="phone"]').waitFor();
@@ -103,13 +122,16 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     check(await rolloverHero.evaluate(element => element.isConnected) && navigations.length === navigationCount, "day rollover refreshes observations without refreshing the page");
     await page.evaluate(() => { window.__matchTestNow = Date.parse("2026-10-09T09:00:00Z"); });
     await select("stats");
-    const filters = panel.locator("[data-form-filters] select");
-    check(await filters.count() === 2 && await filters.nth(0).getAttribute("aria-label") === "Venue", "venue dropdown precedes match sample");
-    await filters.nth(0).selectOption("away"); await filters.nth(1).selectOption("10");
+    const filters = panel.locator("[data-form-filters]");
+    check(await filters.locator('legend').allTextContents().then(labels => labels.join(',') === 'Venue,Results window')
+      && await filters.locator('input[type="radio"]').count() === 7 && await filters.locator('select').count() === 0, "mobile statistics use venue then match-sample radio groups");
+    await choose(filters.getByRole('radio', { name: 'Away games', exact: true }));
+    await choose(filters.getByRole('radio', { name: 'Last 10', exact: true }));
     check(new URL(page.url()).searchParams.get("venue") === "away" && new URL(page.url()).searchParams.get("window") === "10", "statistics filters persist in the URL");
     await page.reload({ waitUntil: "networkidle" });
     await page.locator('[data-match-design="phone"]').waitFor();
-    check(await filters.nth(0).inputValue() === "away" && await filters.nth(1).inputValue() === "10", "statistics filters survive refresh");
+    check(await filters.getByRole('radio', { name: 'Away games', exact: true }).isChecked()
+      && await filters.getByRole('radio', { name: 'Last 10', exact: true }).isChecked(), "statistics radio filters survive refresh");
     await capture("shared-tabs-statistics-mobile");
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 }); await select("markets");
@@ -146,10 +168,10 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await page.keyboard.press("ArrowRight");
     await page.waitForFunction(() => new URL(location.href).searchParams.get("team") === "away");
     check(await results.getByRole("radio", { name: "Liverpool", exact: true }).isChecked(), "native radio arrow keys update the selected team");
-    await results.getByRole("radio", { name: "Arsenal", exact: true }).check();
+    await choose(results.getByRole("radio", { name: "Arsenal", exact: true }));
     check(await panel.locator("[data-results-filters] > section").evaluateAll(elements => elements.map(element => element.dataset.row).join(",")) === "teams,venues,matches", "three toggle rows are Teams, Venues, Matches");
     for (const name of ["Arsenal", "Liverpool", "Head-to-Head"]) {
-      await results.getByRole("radio", { name, exact: true }).check();
+      await choose(results.getByRole("radio", { name, exact: true }));
       const rows = panel.locator("[data-result-list] a");
       check(await rows.count() > 0, `${name}: selected results available`);
       check(await rows.first().evaluate(element => [...element.children].filter(child => !child.hidden).map(child => child.tagName === "TIME" ? "date" : child.dataset.resultSide ? child.dataset.resultSide + "Result" : child.dataset.team ?? "score").join(",")) === "date,homeResult,home,score,away,awayResult", `${name}: actual fixture order and two result markers`);
@@ -160,7 +182,7 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
         return element.querySelector('[data-result-side="home"]').textContent === home && element.querySelector('[data-result-side="away"]').textContent === away;
       })), `${name}: each club gets its own correct W/D/L marker`);
     }
-    await panel.getByRole("group", { name: "Matches", exact: true }).getByRole("radio", { name: "Last 20", exact: true }).check();
+    await choose(panel.getByRole("group", { name: "Matches", exact: true }).getByRole("radio", { name: "Last 20", exact: true }));
     check(new URL(page.url()).searchParams.get("window") === "20", "results match-sample toggle updates its URL");
     await capture("shared-tabs-results-mobile");
     await panel.locator("[data-result-list] a").first().click();
@@ -180,9 +202,10 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
       return column.querySelector('[data-pitch-teams] [data-side="home"]').getBoundingClientRect().bottom <= box.top + 1
         && column.querySelector('[data-pitch-teams] [data-side="away"]').getBoundingClientRect().top >= box.bottom - 1;
     }), "team names and formations match their ends of the pitch");
-    const detail = panel.getByRole("combobox", { name: "Player detail", exact: true });
+    const detail = panel.getByRole("group", { name: "Player detail", exact: true });
+    check(await detail.getByRole('radio').count() === 5 && await panel.getByRole('combobox', {name:'Player detail',exact:true}).count() === 0, "lineup player details use five labelled radio choices");
     for (const field of ["position", "nationality", "age", "rating", "number"]) {
-      await detail.selectOption(field);
+      await choose(detail.locator(`input[value="${field}"]`));
       check(await pitch.locator("button[data-item-key]").count() === 22, `${field}: complete pitch retained`);
       if (field !== "number") check(await pitch.locator("[data-phone-position]").count() === 22, `${field}: selected values on shirts`);
       const expected = { nationality: "ENG", age: "20", rating: "7.0" }[field];
@@ -193,7 +216,7 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await panel.locator('[data-team-roster="away"]').waitFor();
     check(await panel.locator('[data-team-roster="away"]').count() === 1 && await pitch.locator("button").count() === 22, "team switching keeps both pitch halves");
     check((await panel.locator('[data-team-absences="away"]').innerText()).includes("Daniel Rey"), "team availability stays below the bench");
-    await detail.selectOption("nationality");
+    await choose(detail.locator('input[value="nationality"]'));
     await pitch.locator('[data-profile="nationality"]').first().waitFor();
     check(await pitch.locator("[data-nationality-flag]").count() === 22, "nationality mode adds flags to the pitch");
     check(await panel.locator('[data-team-roster="away"] [data-lineup-players="starters"] [data-country-label] img').count() === 11
@@ -212,7 +235,16 @@ export async function verifyMatchTabs(page, { origin = "http://127.0.0.1:3118", 
     await select("history");
     check(await page.locator('[data-active-match-tab="history"]').count() === 1, "desktop More items select their content");
     await page.setViewportSize({ width: 1440, height: 1000 });
+    await select('form');
+    await capture('shared-tabs-results-desktop');
+    await select('lineups');
+    check(await detail.getByRole('radio').count() === 5, "desktop lineup player details also use radio choices");
+    await choose(detail.locator('input[value="rating"]'));
+    await pitch.locator('[data-profile="rating"]').first().waitFor();
+    check(await detail.locator('input[value="rating"]').isChecked() && await pitch.locator('button[data-item-key]').count() === 22, "desktop radio selection preserves the complete pitch");
     await select("stats");
+    check(await panel.getByRole('group', { name:'Venue', exact:true }).getByRole('button').count() === 3
+      && await panel.getByRole('radio').count() === 0, "desktop statistics keep their existing controls");
     check(await nav.evaluate(element => element.scrollWidth <= element.clientWidth + 1), "desktop tabs fit as a normal row");
     check(await nav.locator('[data-match-tab]').evaluateAll(elements => elements.every(element => {
       const style = getComputedStyle(element); return parseFloat(style.fontSize) >= 13 && Number(style.fontWeight) >= 600;

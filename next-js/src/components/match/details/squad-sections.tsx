@@ -2,6 +2,7 @@
 
 import { memo, useId, useRef } from "react";
 import styled from "styled-components";
+import { RadioGroup } from "@/components/ui/radio-group";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { horizontalPitchPositions, parsePlayerKey, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
 import type { InsightSections } from "@/domain/match-insights";
@@ -230,12 +231,10 @@ export const LineupsSection = memo(function LineupsSection() {
     itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
-      <PanelBar>{embedded && <TeamChoice />}<label>{messages.text("touchline.profileDetails")} <select aria-label={messages.text("touchline.profileDetails")} value={display} onChange={event => {
-        const tab = event.target.value === "number" ? null : `lineup-${event.target.value}`;
+      <PanelBar>{embedded && <TeamChoice />}<RadioGroup label={messages.text("touchline.profileDetails")} value={display} onChange={field => {
+        const tab = field === "number" ? null : `lineup-${field}`;
         update(current => ({ ...current, tab }), "replace");
-      }}>
-        {lineupDisplayFields.map(field => <option key={field} value={field}>{lineupDetailLabel(messages, field)}</option>)}
-      </select></label></PanelBar>
+      }} options={lineupDisplayFields.map(value => ({ value, label: lineupDetailLabel(messages, value) }))} /></PanelBar>
       {!Object.values(lineups).some(lineup => lineup && [...lineup.starters, ...lineup.substitutes].some(player => lineupDetailValue(messages, player, display) !== null)) && any &&
         <Note>{messages.text("touchline.playerDetailMissing", { detail: lineupDetailLabel(messages, display) })}</Note>}
       <LineupWorkspace $pitch={embedded && hasPitch}>
