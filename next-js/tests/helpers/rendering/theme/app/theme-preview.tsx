@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import styled, { useTheme } from "styled-components";
+import { useTheme } from "styled-components";
 import { Badge } from "@/components/admin/admin-form";
 import { Panel as AdminPanel, PanelBody, Segmented } from "@/components/admin/desk-styles";
 import { RecordCard } from "@/components/admin/record-workspace";
@@ -22,10 +22,7 @@ import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import type { BuiltSlip } from "@/domain/slip-builder";
 import { defaultBestSlipsQuery } from "@/domain/best-slips-query";
 import { parseReportingDate } from "@/domain/calendar";
-import { media } from "@/styles/theme";
 import { checkRenderedTheme } from "./theme-checks";
-
-const DatePreview = styled.div`${media.belowDesktop} { display: none; }`;
 
 export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; slip: BuiltSlip }) {
   const theme = useTheme();
@@ -56,7 +53,7 @@ export function ThemePreview({ fixtures, slip }: { fixtures: FixtureSnapshot[]; 
     </Stack></Surface>
     <section id="theme-radius"><Stack $gap="sm">
       <SectionHeading>Corner radius across screens</SectionHeading>
-      <DatePreview><BestSlipsFilters query={query} today={parseReportingDate("2026-10-19")} locale="en" onChange={setQuery} /></DatePreview>
+      <div id="theme-filters"><BestSlipsFilters query={query} today={parseReportingDate("2026-10-19")} locale="en" onChange={setQuery} /></div>
       <AdminPanel id="theme-admin-panel"><PanelBody>
         <Inline><Badge id="theme-radius-badge">Active</Badge></Inline>
         <Segmented id="theme-joined-controls"><button type="button" aria-pressed="true">Active</button><button type="button">History</button></Segmented>

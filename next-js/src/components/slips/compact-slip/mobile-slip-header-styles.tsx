@@ -16,7 +16,7 @@ export const MobileHeaderRow = styled.summary`
   /* Override the card's generic narrow summary spacing without affecting its match rows. */
   && { gap: 0; padding: 0 2px; }
   box-sizing: border-box; list-style: none; cursor: pointer;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.mobileHeader};
   font-size: 0.6875rem; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums;
   &::-webkit-details-marker { display: none; }
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
@@ -69,7 +69,7 @@ export const MobileHeaderRow = styled.summary`
     --header-height: 2.75rem;
     grid-template-columns: minmax(0, 1fr) min(6rem, 96px) var(--slip-header-action-size);
     grid-template-rows: minmax(32px, auto) auto;
-    background: ${({ theme }) => theme.color.surface};
+    background: ${({ theme }) => theme.phoneCardFrame.mobileHeader};
     [data-header-chevron] {
       ${slipDisclosureIndicator}
       position: absolute; inset-inline-end: 6px; inset-block-start: 8px;

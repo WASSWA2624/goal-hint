@@ -34,14 +34,11 @@ export const FiltersPanel = styled.section`
   min-inline-size: 0;
   padding: 0;
   color: ${({ theme }) => theme.color.text};
-  background: transparent;
+  background: ${({ theme }) => theme.color.page};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   ${media.desktop} { padding-block: 8px; background: ${({ theme }) => theme.color.page}; }
   ${desktopContentPadding()}
-  ${media.belowDesktop} {
-    background: color-mix(in srgb, ${({ theme }) => theme.color.accent.blue.soft} 65%, ${({ theme }) => theme.color.surface});
-  }
 `;
 
 export const FiltersRow = styled.div`

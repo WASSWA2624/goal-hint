@@ -23,11 +23,13 @@ Stable scopes for additional computed-style assertions: `[data-app-header]`,
 `#theme-phone-header`, `#theme-controls`, `#theme-control-input`,
 `#theme-control-select`, `#theme-member-step`, `#theme-matches [data-fixture-id]`,
 `#theme-slips [data-slip-id]`, `[data-slip-summary]`, `[data-pick-state]`,
-`#theme-performance [data-summary-outcome]` and
+`#theme-performance [data-summary-outcome]`, `#theme-filters [data-best-slips-filters]` and
 `#theme-dialog`. `[data-open-theme-dialog]` opens the real modal dialog.
 
-The fixture checks surface equality, adaptive branding, homogeneous neutral fills,
-mobile slip number panels and desktop table headers. It also checks shared surface
+The fixture checks the white light-mode canvas and filter section, adaptive branding,
+homogeneous neutral fills, mobile slip headers and preserved selection surfaces.
+Check collapsed slips, expanded slips, and open dialogs in each mode after the
+disclosure transition has settled. It also checks shared surface
 borders, phone match/slip frames, and the Won, Lost and Pending performance fills,
 labels, numbers and icons against their semantic theme colors. The light-header
 and dark phone-card assertions independently catch the reported mixed-theme

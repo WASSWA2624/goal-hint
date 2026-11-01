@@ -35,7 +35,7 @@ export const teamStackStyles = css`
     grid-area: number; display: grid; place-items: center; align-self: center;
     inline-size: 18px; block-size: 18px; padding: 0;
     color: ${({ theme }) => theme.color.link}; font-size: min(16px, calc(28px / var(--match-number-digits, 1)));
-    background: ${({ theme }) => `color-mix(in srgb, ${theme.color.surface} 96%, ${theme.color.accent.blue.text})`};
+    background: color-mix(in srgb, var(--match-surface, ${({ theme }) => theme.color.surface}) 96%, ${({ theme }) => theme.color.accent.blue.text});
     font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1;
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }

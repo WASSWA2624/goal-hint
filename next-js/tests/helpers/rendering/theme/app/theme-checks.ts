@@ -70,11 +70,16 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     checkRadius(`#${CSS.escape(dialog.id)}`, theme.radius.overlay);
   }
   check("body", theme.color.page);
+  check("#theme-filters [data-best-slips-filters]", theme.color.page);
+  if (!dark) {
+    check("body", "#FFFFFF");
+    assert(theme.color.surface !== theme.color.page, "Light components retain a distinct fill on the white page");
+  }
   check("#theme-controls", theme.color.surface);
   check("#theme-controls [data-surface-control]", theme.color.brandSoft);
   check("#theme-control-input, #theme-control-select", theme.color.field);
   check("#theme-slips [data-slip-id]", phone ? theme.phoneCardFrame.inset : theme.color.surface);
-  check("#theme-slips [data-slip-summary]", phone ? theme.color.surface : theme.phoneCardFrame.header);
+  check("#theme-slips [data-slip-summary]", phone ? theme.phoneCardFrame.mobileHeader : theme.phoneCardFrame.header);
   check("#theme-member-step", theme.color.brandSoft);
   check("#theme-member-step", theme.color.link, "color");
   check("#theme-performance [data-performance-summary]", theme.color.surface);
@@ -113,11 +118,11 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   assert(!!mark?.src.includes(`mark-${dark ? "inverse" : "primary"}.svg`), "Footer brand mark follows the active theme");
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
-    check("#theme-slips [data-slip-summary]", theme.color.surface);
+    check("#theme-slips [data-slip-summary]", theme.phoneCardFrame.mobileHeader);
     checkRadius("#theme-matches [data-fixture-id], #theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.radius);
     checkRadius("#theme-matches [data-fixture-id] > a", `${Math.max(0, Number.parseFloat(theme.phoneCardFrame.radius) - Number.parseFloat(theme.border.width))}px`);
     if (document.querySelector("#theme-slips [data-slip-disclosure][open]")) {
-      check("#theme-slips [data-slip-selection] > [data-fixture-id]", theme.color.surface);
+      check("#theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.selection);
     }
     check("nav:has([data-responsive-navigation=\"mobile\"])", theme.header.navigationBackground);
   } else {

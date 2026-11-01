@@ -44,8 +44,8 @@ export const CompactCard = styled.article`
   container: compact-slip / inline-size;
   /* Explicit expanded-slip frame: retain its thickness with borderless control themes. */
   &:has(> details[open]) {
-    border-color: ${({ theme }) => theme.color.surface};
-    outline: ${({ theme }) => `max(2px, calc(3px - ${theme.border.width}))`} solid ${({ theme }) => theme.color.surface};
+    border-color: ${({ theme }) => theme.phoneCardFrame.selection};
+    outline: ${({ theme }) => `max(2px, calc(3px - ${theme.border.width}))`} solid ${({ theme }) => theme.phoneCardFrame.selection};
     outline-offset: 0;
   }
   /* Paint joined headers inside the outer curve without clipping focus or tooltips. */

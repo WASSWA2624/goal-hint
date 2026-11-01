@@ -12,12 +12,14 @@ export const focusRing = css`
 
 /** Shared Matches and Slip Builder palette; filled fields remain distinct from their panel. */
 export const filterPanelColors = css`
+  background: ${({ theme }) => theme.color.page};
   --filter-panel-background: ${({ theme }) => theme.color.surfaceMuted};
   --filter-field-background: ${({ theme }) => theme.color.field};
 `;
 
 /** Outer phone filter groups share the page edges; individual input boundaries remain visible. */
 export const mobileFilterPanel = css`
+  background: ${({ theme }) => theme.color.page};
   ${media.belowDesktop} {
     && { border: 0; border-radius: ${({ theme }) => theme.radius.none}; padding-inline: 0; box-shadow: none; }
   }

@@ -54,7 +54,8 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(theme.color.text, background, `${theme.mode} filled field`);
       readable(theme.color.mutedText, background, `${theme.mode} field label`);
     }
-    for (const background of [theme.color.surface, theme.color.surfaceMuted, theme.color.page, theme.phoneCardFrame.inset, theme.phoneCardFrame.header]) {
+    for (const background of [theme.color.surface, theme.color.surfaceMuted, theme.color.page, theme.phoneCardFrame.inset,
+      theme.phoneCardFrame.header, theme.phoneCardFrame.mobileHeader, theme.phoneCardFrame.selection]) {
       readable(theme.color.text, background, `${theme.mode} body`);
       readable(theme.color.mutedText, background, `${theme.mode} captions`);
       readable(theme.color.link, background, `${theme.mode} links`);
@@ -85,6 +86,8 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(colors.text, colors.background, `${theme.mode} ${outcome}`);
       readable(colors.text, theme.color.surface, `${theme.mode} inline ${outcome}`);
       readable(colors.text, theme.phoneCardFrame.header, `${theme.mode} slip header ${outcome}`);
+      readable(colors.text, theme.phoneCardFrame.mobileHeader, `${theme.mode} mobile slip header ${outcome}`);
+      readable(colors.text, theme.phoneCardFrame.selection, `${theme.mode} slip selection ${outcome}`);
     }
     for (const [verdict, colors] of Object.entries(theme.color.verdict)) {
       readable(colors.text, colors.fill, `${theme.mode} ${verdict} verdict`);
@@ -134,17 +137,26 @@ test("active themes use the approved Porcelain Blue and Cobalt Night palettes", 
   }
 });
 
-test("Porcelain Blue separates cards and editable controls with fills", () => {
-  assert.ok(luminance(lightTheme.color.surface) > luminance(lightTheme.color.page));
-  assert.ok(luminance(lightTheme.color.surfaceMuted) > luminance(lightTheme.color.page));
-  assert.ok(luminance(lightTheme.phoneCardFrame.inset) < luminance(lightTheme.color.page));
-  assert.ok(contrast(lightTheme.phoneCardFrame.header, lightTheme.color.page) >= 1.08, "Collapsed slip headers remain distinct from the page");
+test("Porcelain Blue separates filled components from its white page and preserves mobile slip bodies", () => {
+  assert.equal(lightTheme.color.page, "#FFFFFF");
+  assert.equal(lightTheme.gradient.page, "#FFFFFF");
+  for (const fill of [lightTheme.color.surface, lightTheme.color.surfaceMuted, lightTheme.header.background,
+    lightTheme.phoneCardFrame.mobileHeader, lightTheme.phoneCardFrame.header, lightTheme.phoneCardFrame.inset]) {
+    assert.ok(contrast(fill, lightTheme.color.page) >= 1.08, `${fill}: components remain distinct from the white page`);
+  }
+  assert.equal(lightTheme.phoneCardFrame.mobileHeader, "#EDF1F7", "Mobile headers reuse the former page fill");
+  assert.equal(lightTheme.phoneCardFrame.inset, "#E9EEF6", "Mobile slip bodies keep their original inset");
+  assert.equal(lightTheme.phoneCardFrame.selection, "#FFFFFF", "Selections keep their original white fill");
+  assert.equal(lightTheme.phoneCardFrame.header, "#DCE8FB", "Desktop slip headers keep their original fill");
   assert.ok(contrast(lightTheme.color.field, lightTheme.color.surface) >= 1.2, "Fields are distinct from cards");
   assert.equal(lightTheme.border.width, "0px");
   assert.equal(lightTheme.border.accentWidth, "0px");
 });
 
 test("Cobalt Night uses distinct filled controls and no decorative frames", () => {
+  assert.equal(darkTheme.color.page, "#0B1220");
+  assert.equal(darkTheme.phoneCardFrame.mobileHeader, darkTheme.color.surface);
+  assert.equal(darkTheme.phoneCardFrame.selection, darkTheme.color.surface);
   assert.ok(contrast(darkTheme.color.field, darkTheme.color.surface) >= 1.2, "Dark fields are distinct from cards");
   assert.equal(darkTheme.border.width, "0px");
   assert.equal(darkTheme.border.accentWidth, "0px");

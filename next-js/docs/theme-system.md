@@ -64,11 +64,18 @@ the real app headers and sidebars; it is not part of the selected app theme.
 No review-only appearance overrides are required for headings, logos, header
 fills, text selection, scrollbar colors, or interaction treatment.
 
-Approved card-separation option 01 uses a cool porcelain page (`#EDF1F7`),
-white cards and mobile slip headers, a contrasting slip body (`#E9EEF6`),
-blue desktop slip headers (`#DCE8FB`),
-and spacing between cards. Cobalt Night provides its corresponding
-dark inset/header colors through the same `phoneCardFrame` contract.
+Porcelain Blue uses a white page (`#FFFFFF`) at every viewport width. Shared
+cards, panels, menus, navigation, and header surfaces use cool porcelain
+(`#EDF1F7`) so their fills remain visible against the page. Filter sections share
+`color.page`; their fields, buttons, and selected states retain contrasting fills.
+The palette can override `fieldHover` to keep blue labels readable on hover.
+Mobile slip headers reuse the former page color (`#EDF1F7`) through
+`phoneCardFrame.mobileHeader`. Their inset body (`#E9EEF6`) and white selections
+(`phoneCardFrame.selection`) keep their original colors, including selection
+number fills. Desktop slip headers retain `#DCE8FB`. These independent settings
+prevent app-wide surface adjustments from recoloring mobile slip bodies.
+Cobalt Night and the review palettes derive compact headers and selections from
+their existing surfaces through the same contract.
 Match tiles share 4px corners and slip frames use 8px corners. Below 64rem,
 standalone matches have 8px gaps, nested selections have 6px gaps and padding,
 and Best slips and Slip Builder both have 14px between slips. Desktop retains

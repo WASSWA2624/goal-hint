@@ -5,6 +5,8 @@ type ThemePalette = Readonly<{
   border: string; control: string; accent: string; hover: string; soft: string;
   header: string; headerText: string; headerMuted: string; headerAccent: string;
   cardBorder?: string; cardInset?: string; cardHeader?: string;
+  mobileSlipHeader?: string; slipSelection?: string;
+  fieldHover?: string;
 }>;
 export type ThemeDirection = Readonly<{
   id: string; name: string; description: string; mode: "light" | "dark";
@@ -26,8 +28,18 @@ const blend = (surface: string, ink: string, amount: number) => "#" + [1, 3, 5].
     + Number.parseInt(ink.slice(offset, offset + 2), 16) * amount).toString(16).padStart(2, "0")).join("");
 
 /** Approved definitions are shared by the live app and the review gallery. */
-export const porcelainBlueDirection: ThemeDirection = { id: "porcelain-blue", name: "Porcelain Blue", description: "Airy porcelain, assured blue, and quietly precise details.", mode: "light", font: manrope, fontLabel: "Manrope", shape: "subtle",
-    palette: { page: "#EDF1F7", surface: "#FFFFFF", muted: "#F1F4FA", text: "#182640", secondary: "#53627A", border: "#DCE3EF", control: "#77859C", accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF", header: "#FFFFFF", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5", cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#DCE8FB" } };
+export const porcelainBlueDirection: ThemeDirection = {
+  id: "porcelain-blue", name: "Porcelain Blue", description: "Airy porcelain, assured blue, and quietly precise details.",
+  mode: "light", font: manrope, fontLabel: "Manrope", shape: "subtle",
+  palette: {
+    page: "#FFFFFF", surface: "#EDF1F7", muted: "#F1F4FA", text: "#182640", secondary: "#53627A",
+    border: "#DCE3EF", control: "#77859C", fieldHover: "#D2D8E2",
+    accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF",
+    header: "#EDF1F7", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
+    cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#DCE8FB",
+    mobileSlipHeader: "#EDF1F7", slipSelection: "#FFFFFF",
+  },
+};
 export const cobaltNightDirection: ThemeDirection = { id: "cobalt-night", name: "Cobalt Night", description: "Midnight navy, layered blue surfaces, and electric cobalt actions.", mode: "dark", font: manrope, fontLabel: "Manrope", shape: "subtle",
     palette: { page: "#0B1220", surface: "#131E30", muted: "#19263B", text: "#ECF2FF", secondary: "#A9B9D3", border: "#2C3B53", control: "#657995", accent: "#3268D9", hover: "#2858BD", soft: "#21385A", header: "#101929", headerText: "#ECF2FF", headerMuted: "#A9B9D3", headerAccent: "#9DC0FF", cardBorder: "#34465F", cardInset: "#19263B", cardHeader: "#1B2C45" } };
 
@@ -39,7 +51,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
   return {
     ...base,
     color: { ...base.color, page: p.page, surface: p.surface, surfaceMuted: p.muted, text: p.text,
-      field: blend(p.surface, p.control, 0.22), fieldHover: blend(p.surface, p.control, 0.26),
+      field: blend(p.surface, p.control, 0.22), fieldHover: p.fieldHover ?? blend(p.surface, p.control, 0.26),
       mutedText: blend(p.secondary, p.text, 0.2), border: decorativeBorder, controlBorder: p.control, buttonBorder: decorativeBorder,
       brand: link, brandHover: direction.mode === "dark" ? p.text : p.hover, brandSoft: p.soft,
       link, focus: link, disabledText: p.secondary, disabledSurface: p.muted,
@@ -77,7 +89,8 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
     interaction: { ...base.interaction, pressedFilter: "brightness(0.94)" },
     scrollbarColor: `${p.control} ${p.page}`,
     phoneCardFrame: { ...base.phoneCardFrame, border: p.cardBorder ?? decorativeBorder,
-      inset: p.cardInset ?? p.muted, header: p.cardHeader ?? p.muted },
+      inset: p.cardInset ?? p.muted, header: p.cardHeader ?? p.muted,
+      mobileHeader: p.mobileSlipHeader ?? p.surface, selection: p.slipSelection ?? p.surface },
   };
 }
 

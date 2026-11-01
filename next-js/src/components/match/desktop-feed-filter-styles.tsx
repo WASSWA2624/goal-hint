@@ -50,7 +50,7 @@ export const Panel = styled.form`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.page};
   [data-criteria-dialog] { background: var(--filter-panel-background); }
   ${desktopContentPadding(true)}
 `;

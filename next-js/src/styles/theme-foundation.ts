@@ -205,7 +205,15 @@ export interface GoalHintTheme {
     readonly popover: string;
   };
   /** Shared compact match frames and the contrasting slip body/header around them. */
-  readonly phoneCardFrame: Readonly<{ border: string; radius: string; shadow: string; inset: string; header: string }>;
+  readonly phoneCardFrame: Readonly<{
+    border: string; radius: string; shadow: string; inset: string;
+    /** Desktop slip header, independent of the compact header and selection fills. */
+    header: string;
+    /** Compact slip headers can reuse a previous canvas without changing their bodies. */
+    mobileHeader: string;
+    /** Original slip selection fill, independent of standalone card surfaces. */
+    selection: string;
+  }>;
 }
 
 /** Semantic foundation; approved presets choose the active application appearance. */
@@ -348,7 +356,7 @@ export const foundationLightTheme: GoalHintTheme = {
     cardHover: "none",
     popover: "0 8px 24px rgb(7 23 71 / 16%)",
   },
-  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#E8EDF5", header: "#F1F4FA" },
+  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#E8EDF5", header: "#F1F4FA", mobileHeader: brandTokens.colors.white, selection: brandTokens.colors.white },
 };
 
 /** The same semantic contract keeps every native control and detail panel readable in dark mode. */
@@ -445,5 +453,5 @@ export const foundationDarkTheme: GoalHintTheme = {
     },
   },
   shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
-  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", header: "#0D253B" },
+  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", header: "#0D253B", mobileHeader: "#081B2C", selection: "#081B2C" },
 };
