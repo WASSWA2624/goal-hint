@@ -124,7 +124,7 @@ export function FundingBreakdown({ quote: q, reportedUgx }: { quote: Pick<Checko
         {q.durationDays > 0 && <div><dt>Access time</dt><dd>{q.durationDays} purchased {q.durationDays === 1 ? "day" : "days"}{q.referralDays > 0 ? ` + ${q.referralDays} referral ${q.referralDays === 1 ? "day" : "days"}` : ""}</dd></div>}
       </>}
       <div><dt>{q.amountToSend > 0 ? "Amount to send" : "Cash due"}</dt><dd><strong>{formatUgx(q.amountToSend)}</strong></dd></div>
-      {reportedUgx !== undefined && <div><dt>Reported payment</dt><dd>{formatUgx(reportedUgx)}</dd></div>}
+      {reportedUgx !== undefined && <div><dt>Amount paid</dt><dd>{formatUgx(reportedUgx)}</dd></div>}
       {reportedUgx !== undefined && amounts.remainingUgx > 0 && <div><dt>Remaining if confirmed</dt><dd>{formatUgx(amounts.remainingUgx)}</dd></div>}
     </WizardReview>
   </div>;

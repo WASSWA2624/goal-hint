@@ -272,12 +272,12 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         : <><p>{request.planName} · {formatUgx(request.priceUgx)}</p>
           {request.verifiedUgx > 0 && <p>Verified: {formatUgx(request.verifiedUgx)} · Remaining: {formatUgx(request.remainingUgx)}</p>}
           {request.status === "pending" && <p>Your subscription activates after the admin verifies enough incoming funds.</p>}</>}
-      {request.status !== "approved" && request.reportedUgx > 0 && request.verifiedUgx === 0 && <p>Reported payment: {formatUgx(request.reportedUgx)}.
+      {request.status !== "approved" && request.reportedUgx > 0 && request.verifiedUgx === 0 && <p>Amount paid: {formatUgx(request.reportedUgx)}.
         {request.reportedUgx < request.amountToSend ? ` If confirmed, ${formatUgx(request.amountToSend - request.reportedUgx)} remains.`
           : request.reportedUgx > request.amountToSend ? ` If confirmed, ${formatUgx(request.reportedUgx - request.amountToSend)} extra will be added to your wallet.` : " Awaiting verification."}</p>}
       {request.reason && <p>{request.reason}</p>}
       {request.receipts.some(r => r.disputed) && <p>{duplicateReceiptMessage}</p>}
-      {request.receipts.length > 0 && <ul>{request.receipts.map(receipt => <li key={receipt.id}>{receipt.transactionId} · reported {formatUgx(receipt.amountUgx)} · {receipt.withdrawn ? "evidence withdrawn" : receipt.disputed ? "disputed" : receipt.verified ? "verified" : "awaiting verification"}
+      {request.receipts.length > 0 && <ul>{request.receipts.map(receipt => <li key={receipt.id}>{receipt.transactionId} · amount paid {formatUgx(receipt.amountUgx)} · {receipt.withdrawn ? "evidence withdrawn" : receipt.disputed ? "disputed" : receipt.verified ? "verified" : "awaiting verification"}
         {!receipt.withdrawn && !receipt.verified && (checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => {
           setBusy(true); try { await send({ action: "withdraw", id: request.id, claimId: receipt.id }); await refresh(); }
           catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -364,7 +364,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
           {reading && <VisuallyHidden role="status">{reading}</VisuallyHidden>}
           <FloatingField label="Transaction ID"><InputControl $invalid={false} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
             value={draft.transactionId} onChange={e => update({ transactionId: normalizeTransactionId(e.target.value) })} /></FloatingField>
-          <AmountInput label="Reported amount (UGX)" required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => update({ amountUgx })} />
+          <AmountInput label="Amount paid (UGX)" required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => update({ amountUgx })} />
           <PhoneInput label="Number used to pay" floatingLabel formatValue required disabled={readingActive} value={draft.payerPhone} onValueChange={payerPhone => update({ payerPhone })} />
         </>}
         <WizardActions><Button variant="secondary" disabled={busy || readingActive} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>

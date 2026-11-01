@@ -35,7 +35,7 @@ export function checkoutEvidenceWarnings(input: EvidenceComparison, provider: Mo
     if (input.transactionId && source.evidence.transactionId && transactionKey(input.transactionId) !== transactionKey(source.evidence.transactionId))
       warnings.push({ id: `${source.id}.reported-id`, message: `The ${source.label} shows transaction ID ${source.evidence.transactionId}, while the entered ID is ${input.transactionId}.` });
     if (input.amountUgx && Number(input.amountUgx) > 0 && source.evidence.amount !== null && Number(input.amountUgx) !== source.evidence.amount)
-      warnings.push({ id: `${source.id}.reported-amount`, message: `The ${source.label} shows ${money(source.evidence.amount)}, while the reported amount is ${money(Number(input.amountUgx))}.` });
+      warnings.push({ id: `${source.id}.reported-amount`, message: `The ${source.label} shows ${money(source.evidence.amount)}, while you entered ${money(Number(input.amountUgx))} as the amount paid.` });
   }
   const [message, screenshot] = sources;
   if (message && screenshot) {
@@ -93,6 +93,6 @@ export function checkoutDetailsIssue(input: { text: string; screenshotText: stri
   if (input.hasImage && !input.screenshotReady) return "Recheck or remove the saved screenshot before continuing.";
   if (!input.hasImage && !input.text.trim()) return "Add a payment screenshot or paste the transaction message before continuing. The filled-in transaction details are kept, but at least one evidence source is required.";
   if (!parseTransactionId(input.transactionId) || !Number.isSafeInteger(Number(input.amountUgx)) || Number(input.amountUgx) <= 0 || Number(input.amountUgx) > 2_000_000_000 || !validMobilePhone(input.payerPhone))
-    return "Enter a valid transaction ID, reported amount and the number used to make payment.";
+    return "Enter a valid transaction ID, amount paid and the number used to make payment.";
   return null;
 }
