@@ -8,7 +8,7 @@ import { paymentDateNotExtracted, paymentEvidenceDate } from "../src/domain/paym
 import { checkoutDetailsIssue, checkoutEvidenceWarnings, inspectPaymentMessage, paymentDestinationMismatch, receiptEvidenceValidation } from "../src/domain/checkout-evidence.ts";
 import { deleteGroupedDigit, digitCaret, groupInteger } from "../src/domain/input-format.ts";
 import { formatNationalPhone, splitPhoneValue } from "../src/domain/phone-countries.ts";
-import { capCheckoutFunding, chooseCheckoutMethod } from "../src/components/members/checkout-draft.ts";
+import { capCheckoutFunding, chooseCheckoutMethod, chooseCheckoutPackage } from "../src/components/members/checkout-draft.ts";
 import { inspectPaymentScreenshot, unreadableScreenshotMessage } from "../src/domain/payment-screenshot.ts";
 
 test("screenshots need a readable transaction ID and amount, without treating OCR as verification", () => {
@@ -157,10 +157,34 @@ test("referral days add to a paid package and also remain redeemable alone", () 
   assert.equal(wallet.method, "mtn"); assert.equal(wallet.walletUgx, "3000"); assert.equal(wallet.referralDays, "7");
   const removed = chooseCheckoutMethod(wallet, "referral", false, balances, plans);
   assert.equal(removed.referralDays, "0"); assert.equal(removed.walletUgx, "3000"); assert.equal(removed.method, "mtn");
-  const alone = chooseCheckoutMethod({ ...draft, method: "" }, "referral", true, balances, plans);
+  const alone = chooseCheckoutMethod(chooseCheckoutPackage(draft, false, balances, plans), "referral", true, balances, plans);
   assert.equal(alone.purpose, "referral"); assert.equal(alone.method, "referral");
   const thenPaid = chooseCheckoutMethod(alone, "airtel", true, balances, plans);
   assert.equal(thenPaid.purpose, "plan"); assert.equal(thenPaid.method, "airtel"); assert.equal(thenPaid.referralDays, "7");
+});
+
+test("package selection is independent of provider, wallet and referral choices across edits and restoration", () => {
+  const plans = [{ id: randomUUID(), priceUgx: 5000 }, { id: randomUUID(), priceUgx: 1000 }];
+  const balances = { availableWalletUgx: 3000, availableReferralDays: 7 };
+  const draft = { purpose: "plan", usePackage: true, planId: plans[0].id, method: "", useWallet: false, useReferral: false,
+    walletUgx: "0", referralDays: "0", accepted: false };
+  const both = chooseCheckoutMethod(draft, "referral", true, balances, plans);
+  assert.equal(both.purpose, "plan", "Selecting referral days before a provider does not silently remove the package.");
+  assert.equal(both.method, ""); assert.equal(both.referralDays, "7");
+  const partial = chooseCheckoutMethod(both, "wallet", true, balances, plans);
+  const alone = chooseCheckoutPackage(partial, false, balances, plans);
+  assert.equal(alone.purpose, "referral"); assert.equal(alone.method, "referral");
+  assert.equal(alone.walletUgx, "0"); assert.equal(alone.useWallet, false); assert.equal(alone.referralDays, "7");
+  assert.equal(capCheckoutFunding(alone, balances, plans), alone, "Saved referral-only intent survives restoration.");
+  const reselected = chooseCheckoutPackage(alone, true, balances, plans);
+  assert.equal(reselected.purpose, "plan"); assert.equal(reselected.method, "");
+  assert.equal(reselected.planId, plans[0].id); assert.equal(reselected.referralDays, "7");
+  const packageOnly = chooseCheckoutMethod(reselected, "referral", false, balances, plans);
+  assert.equal(packageOnly.purpose, "plan"); assert.equal(packageOnly.referralDays, "0");
+  assert.equal(capCheckoutFunding({ ...both, referralDays: "99" }, { ...balances, availableReferralDays: 0 }, plans).referralDays, "0");
+  const legacy = { ...alone }; delete legacy.usePackage;
+  assert.equal(capCheckoutFunding(legacy, balances, plans).purpose, "referral");
+  assert.deepEqual(balances, { availableWalletUgx: 3000, availableReferralDays: 7 }, "Choice changes never debit balances.");
 });
 
 test("evidence dates accept provider formats, EAT and explicit zones without normalizing invalid calendar dates", () => {

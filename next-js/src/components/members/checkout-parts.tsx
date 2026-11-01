@@ -24,15 +24,17 @@ export const CheckoutPanel = styled.section`
 `;
 export const CheckoutChoices = styled.fieldset`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
-  > label { position: relative; display: flex; align-items: center; gap: 6px; padding: 8px; min-block-size: 44px; min-inline-size: 0;
+  > label, > a { position: relative; display: flex; align-items: center; justify-content: start; gap: 6px; padding: 8px; min-block-size: 44px; min-inline-size: 0;
     border: 1px solid ${({ theme }) => theme.color.border}; cursor: pointer; }
+  > a { text-align: start; font-weight: inherit; border-radius: ${({ theme }) => theme.radius.none}; }
   > label:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
   > label:has(input:focus-visible) { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   > label:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+  > :last-child:nth-child(2) { grid-column: 1 / -1; }
   input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: inherit; }
   [data-method-text] { flex: 1; min-inline-size: 0; font-size: 13px; line-height: 18px; }
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 12px; }
-  > label > svg { flex: none; inline-size: 22px; block-size: 22px; color: ${({ theme }) => theme.color.brand}; }
+  > label > svg, > a > svg { flex: none; inline-size: 22px; block-size: 22px; color: ${({ theme }) => theme.color.brand}; }
 `;
 export const CheckoutProviderMark = styled.span`
   display: inline-flex; align-items: center; justify-content: center; flex: none;
@@ -101,7 +103,8 @@ const PayLine = styled.div`
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 12px; line-height: 18px; }
   strong { font-variant-numeric: tabular-nums; }
 `;
-export function CheckoutPaySummary({ quote: q }: { quote: CheckoutQuote }) {
+export type CheckoutPayPreview = Pick<CheckoutQuote, "purpose" | "method" | "walletUgx" | "referralDays" | "priceUgx" | "durationDays" | "amountToSend" | "recipient" | "recipientName">;
+export function CheckoutPaySummary({ quote: q }: { quote: CheckoutPayPreview }) {
   const days = `${q.durationDays} ${q.durationDays === 1 ? "day" : "days"}`;
   return <PayLine data-pay-summary>
     <p>{q.purpose === "referral" ? <>Redeem <strong>{q.referralDays} referral {q.referralDays === 1 ? "day" : "days"}</strong> · UGX 0 due</>
