@@ -1,5 +1,7 @@
 import "server-only";
 
+import { authCopy } from "../../i18n/messages/auth.ts";
+
 import { cookies } from "next/headers.js";
 import { z } from "zod";
 import { referralReviewCursor, referralReviewMutationSchema, referralReviewStatuses } from "../../domain/referral-reviews.ts";
@@ -12,7 +14,7 @@ import { readJsonBody, type AdminContext } from "./admin-http.ts";
 
 const lookup = z.strictObject({ action: z.literal("grants"), search: z.string().trim().max(60) });
 const fail = (status: string) => json({ error: status, message: status === "conflict" ? "This case changed. Refresh and try again."
-  : status === "forbidden" ? "Sign in again with an administrator account." : "Unable to apply this action. Check the case and try again." },
+  : status === "forbidden" ? authCopy.administratorLoginAgain : "Unable to apply this action. Check the case and try again." },
 status === "conflict" ? 409 : status === "forbidden" ? 403 : status === "not-found" ? 404 : 400);
 
 export function createReferralReviewHandlers({ verify = verifyMemberAdminSession, create = createReferralReviews } = {}) {

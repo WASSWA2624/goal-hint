@@ -1,3 +1,4 @@
+import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
@@ -181,7 +182,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
       const parsed = checkoutEvidenceSchema.safeParse(input);
       if (!parsed.success || !parseTransactionId(parsed.data.transactionId)) return fail("Enter a valid transaction ID and payment provider.");
       return run(async (tx, at) => {
-        if (!await currentMember(tx, member, at)) return fail("Sign in again to check this payment.");
+        if (!await currentMember(tx, member, at)) return fail(authCopy.paymentLoginAgain);
         if (!await takeMemberLimit(tx, config, { purpose: "checkout-evidence", value: member.accountId, maximum: 30, windowMs: 60_000 }, at))
           return fail("Too many payment checks. Wait a minute and try again.");
         const { provider, transactionId, submissionId, imageSha256 } = parsed.data;
@@ -221,7 +222,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     async quote(member: MemberIdentity, input: unknown): Promise<Result<CheckoutQuote>> {
       const parsed = checkoutSelectionSchema.safeParse(input); if (!parsed.success) return fail("Check the payment choices.");
       return run(async (tx, at) => {
-        if (!await currentMember(tx, member, at)) return fail("Sign in again to continue.");
+        if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
         await expire(tx, member.accountId, at);
         return quote(tx, parsed.data, at, member.accountId);
       });
@@ -231,7 +232,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
       if (!parsed.success || !confirmed || !/^[a-f0-9-]{36}$/iu.test(requestKey) || receipt && !receipt.success) return fail("Confirm the payment details and terms.");
       return accessCodeTransaction(database, async (tx, rollback) => {
         const at = new Date(now()), account = await currentMember(tx, member, at);
-        if (!account) return rollback(fail("Sign in again to continue."));
+        if (!account) return rollback(fail(authCopy.loginAgain));
         const previous = await tx.paymentSubmission.findUnique({ where: { requestKey } });
         if (previous) return previous.accountId === account.id ? { ok: true, value: await requestView(tx, previous) } : fail("Request unavailable.");
         await expire(tx, account.id, at);
@@ -270,7 +271,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     async attach(member: MemberIdentity, id: string, proof: unknown, image: Buffer | null = null): Promise<Result<CheckoutRequest>> {
       const parsed = receiptInputSchema.safeParse(proof); if (!parsed.success) return fail("Check the transaction details.");
       return run(async (tx, at) => {
-        if (!await currentMember(tx, member, at)) return fail("Sign in again to continue.");
+        if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
         await lockSettings(tx, "checkout", at);
         await expire(tx, member.accountId, at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
@@ -284,7 +285,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     async reconfirm(member: MemberIdentity, id: string, walletUgx: number, referralDays: number, amountToSend: number, confirmed: boolean): Promise<Result<CheckoutRequest>> {
       if (!confirmed || ![walletUgx, referralDays, amountToSend].every(v => Number.isSafeInteger(v) && v >= 0)) return fail("Confirm your funding choices.");
       return run(async (tx, at) => {
-        if (!await currentMember(tx, member, at)) return fail("Sign in again to continue.");
+        if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
         await lockSettings(tx, "checkout", at); await expire(tx, member.accountId, at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!row || row.workflowVersion !== 2 || row.accountId !== member.accountId || ![...checkoutOpenStatuses, "rejected", "cancelled", "superseded"].includes(row.status) || row.reservationActive) return fail("This request cannot be reconfirmed.");
@@ -300,7 +301,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     },
     async cancel(member: MemberIdentity, id: string): Promise<Result<CheckoutRequest>> {
       return run(async (tx, at) => {
-        if (!await currentMember(tx, member, at)) return fail("Sign in again to continue.");
+        if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
         await lockSettings(tx, "checkout", at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!row || row.accountId !== member.accountId || row.workflowVersion !== 2) return fail("Request unavailable.");
@@ -313,7 +314,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     },
     async withdraw(member: MemberIdentity, id: string, claimId: string): Promise<Result<CheckoutRequest>> {
       return run(async (tx, at) => {
-        if (!await currentMember(tx, member, at)) return fail("Sign in again to continue.");
+        if (!await currentMember(tx, member, at)) return fail(authCopy.loginAgain);
         await lockSettings(tx, "checkout", at);
         const row = await tx.paymentSubmission.findUnique({ where: { id } });
         const claim = await tx.paymentReceiptClaim.findFirst({ where: { id: claimId, submissionId: id }, include: { receipt: true } });

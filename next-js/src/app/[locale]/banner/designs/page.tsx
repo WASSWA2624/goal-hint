@@ -1,9 +1,10 @@
+import { authCopy } from "@/i18n/messages/auth";
 import type { Metadata } from "next";
 import { BannerDesignGallery } from "@/components/members/banner-review/banner-design-gallery";
 
 export const metadata: Metadata = {
   title: "Desktop banner designs | Goal Hint",
-  description: "Compare ten desktop subscription banners for signed-out visitors, members and active subscribers.",
+  description: authCopy.bannerMetadata,
   robots: { index: false, follow: false },
 };
 

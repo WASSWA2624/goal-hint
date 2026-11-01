@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { authLabels } from "../../i18n/messages/auth.ts";
+import { authCopy } from "../../i18n/messages/auth.ts";
 
 import { autoRenewFor } from "../members/auto-renew.ts";
 import { membersPurgeFor } from "../members/purge.ts";
@@ -39,10 +39,10 @@ export function adminRoute(handler: (context: AdminContext) => Promise<Response>
     const resolved = await services();
     if (session === "optional") return (handler as (context: SignOutContext) => Promise<Response>)({ request, services: resolved });
     if (!resolved.database) {
-      return json({ error: "unavailable", message: "Account sign-in is unavailable." }, 503);
+      return json({ error: "unavailable", message: authCopy.loginUnavailable }, 503);
     }
     const owner = await requireOwner(resolved, request);
-    if (!owner) return json({ error: "unauthorized", message: `${authLabels.signIn} with an administrator account.` }, 401);
+    if (!owner) return json({ error: "unauthorized", message: authCopy.administratorRequired }, 401);
     return handler({ request, owner, services: resolved });
   };
 }

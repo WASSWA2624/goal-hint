@@ -1,3 +1,4 @@
+import { authCopy } from "../i18n/messages/auth.ts";
 import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
 import { supportContactsOf, type SupportContact } from "./support-contacts.ts";
@@ -111,7 +112,7 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   paymentNote: "Extra payment note",
   reviewTime: "Typical review time",
   maxUnlockedDevices: "Unlocked devices per account",
-  trialDays: "Free trial on registration (days)",
+  trialDays: authCopy.trialRegistrationDays,
   screenshotRetentionDays: "Keep screenshots after approval (days)",
 });
 

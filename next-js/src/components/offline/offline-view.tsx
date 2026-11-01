@@ -1,5 +1,6 @@
 "use client";
 
+import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { HeaderBrand } from "@/components/ui/brand";
@@ -60,7 +61,7 @@ export function OfflineView() {
           <p>Showing an anonymous saved view. Scores and match status may have changed.</p>
           <p>Saved <time data-offline-saved-at dateTime={new Date(snapshot.capturedAt).toISOString()}>{new Date(snapshot.capturedAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" })} EAT</time>.</p>
         </> : <p>{supported ? "No usable saved matches are available. Connect to the internet and try again." : "This route was not saved. Open saved matches or reconnect to use it."}</p>}
-        <p>Predictions, sign-in, account changes and payments need an internet connection. Nothing is queued or submitted from this view.</p>
+        <p>{authCopy.offlineConnection}</p>
         <OfflineUpdateNotice />
         <Inline><Button variant="secondary" onClick={() => location.reload()}>Try online again</Button>
           {!supported && <Link href="/en/matches">Open saved matches</Link>}</Inline>

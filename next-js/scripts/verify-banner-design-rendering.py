@@ -104,16 +104,16 @@ def verify(origin, directory):
         assert siblings.index(banner) == siblings.index(header) + 1, "The banner must immediately follow the app header."
         state = sample["attrs"]["data-banner-sample"]
         actions = action_names(document, banner)
-        auth_actions = {name for name in actions if name in ("sign in", "sign up")}
+        auth_actions = {name for name in actions if name in ("login", "register")}
         if state == "signed-out":
-            assert auth_actions == {"sign in", "sign up"}, "Signed-out visitors need both authentication actions in the message."
+            assert auth_actions == {"login", "register"}, "Logged-out visitors need both authentication actions in the message."
             assert "subscribe" not in actions, "Signed-out visitors must authenticate before subscribing."
         elif state == "unsubscribed":
             assert "subscribe" in actions, "Signed-in users without access need a subscription action."
             assert not auth_actions, "Signed-in users must not be asked to authenticate again."
         else:
             assert not auth_actions and "subscribe" not in actions, "Active subscribers must not receive acquisition actions."
-        assert not any(name in ("login", "log in", "register") for name in actions), "Review actions must use consistent Sign in / Sign up terminology."
+        assert not any(name in ("sign in", "sign up", "sign out", "log in") for name in actions), "Review actions must use consistent Login / Register terminology."
     assert sum(node["tag"] == "main" for node in document.elements) == 1, "The review needs one main landmark."
     assert sum(node["tag"] == "h1" for node in document.elements) == 1, "The review needs one page heading."
     robots = [node["attrs"].get("content", "") for node in document.elements

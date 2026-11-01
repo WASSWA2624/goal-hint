@@ -1,3 +1,4 @@
+import { authCopy } from "../i18n/messages/auth.ts";
 import { toCsv } from "./analytics-csv.ts";
 import { addReportingDays, CalendarValidationError, getReportingDate, getReportingDayBounds, parseReportingDate,
   utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
@@ -5,7 +6,7 @@ import type { OwnerAuditRow } from "./owner-members.ts";
 import { publicPolicy } from "./public-policy.ts";
 
 export const auditCategories = Object.freeze([
-  { value: "security", label: "Sign-in & security" },
+  { value: "security", label: authCopy.securityCategory },
   { value: "accounts", label: "Accounts" },
   { value: "payments", label: "Payments" },
   { value: "access", label: "Access" },
@@ -33,9 +34,9 @@ export type AuditDateBounds = Readonly<{ gte: Date; lt: Date }>;
 
 type ActionDescription = Readonly<{ label: string; category: AuditCategory }>;
 const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze({
-  owner_signed_in: { label: "Administrator signed in", category: "security" },
-  owner_signed_out: { label: "Administrator signed out", category: "security" },
-  owner_sign_in_refused: { label: "Administrator sign-in refused", category: "security" },
+  owner_signed_in: { label: authCopy.administratorLoggedIn, category: "security" },
+  owner_signed_out: { label: authCopy.administratorLoggedOut, category: "security" },
+  owner_sign_in_refused: { label: authCopy.administratorLoginRefused, category: "security" },
   settings_changed: { label: "Settings updated", category: "settings" },
   settings_password_refused: { label: "Settings password refused", category: "security" },
   paywall_mode_changed: { label: "Paid access mode changed", category: "settings" },
@@ -57,7 +58,7 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
   trial_sent: { label: "Trial granted", category: "access" },
   trial_dismissed: { label: "Trial dismissed", category: "access" },
   member_note_changed: { label: "Account note updated", category: "accounts" },
-  member_signed_out_all: { label: "All devices signed out", category: "security" },
+  member_signed_out_all: { label: authCopy.allDevicesLoggedOutEvent, category: "security" },
   member_blocked: { label: "Account blocked", category: "accounts" },
   member_unblocked: { label: "Account unblocked", category: "accounts" },
   member_erased: { label: "Account erased", category: "accounts" },

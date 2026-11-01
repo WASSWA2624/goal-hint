@@ -18,7 +18,7 @@ test("every recorded action has a friendly label and an explicit category withou
   }
   assert.equal(new Set(auditCategories.map(item => item.value)).size, auditCategories.length);
   assert.equal(auditActionLabel("payment_approved"), "Payment approved");
-  assert.equal(auditCategoryLabel(auditCategory("password_reset")), "Sign-in & security");
+  assert.equal(auditCategoryLabel(auditCategory("password_reset")), "Login & security");
   assert.equal(auditTargetLabel("member-session"), "Device");
 });
 

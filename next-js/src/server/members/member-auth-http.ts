@@ -1,3 +1,4 @@
+import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
 import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
@@ -55,7 +56,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       const memberName = memberCookieName(services.config.production), currentToken = readCookie(request, memberName);
       const binding: AuthBinding = { member: await services.sessions.verify(currentToken) }, address = clientAddress(request.headers);
       if ((action === "forgot" || action === "reset-code") && binding.member)
-        return json({ error: "signed-in", message: "Use Change password in Account while signed in." }, 409);
+        return json({ error: "signed-in", message: authCopy.passwordWhileLoggedIn }, 409);
       if (action === "forgot" || action === "verification") {
         const result = action === "forgot" ? await services.auth.requestPasswordReset(body.phone, address, body.channel)
           : await services.auth.requestVerification(body.channel, currentToken, address);

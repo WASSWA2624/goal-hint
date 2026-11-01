@@ -1,9 +1,9 @@
-import { authLabels } from "./auth.ts";
+import { authVerbs, authLabels } from "./auth.ts";
 
 export const slipsMessages = {
   "slips.signInToBuild": `${authLabels.signIn} to build slips`,
   "slips.subscribeToBuild": "Subscribe to build slips",
-  "slips.access.signIn": `Set your slip preferences above, then ${authLabels.signIn.toLowerCase()} to continue. Building slips with match predictions and odds requires an active subscription.`,
+  "slips.access.signIn": `Set your slip preferences above, then ${authVerbs.signIn} to continue. Building slips with match predictions and odds requires an active subscription.`,
   "slips.access.subscribe": "An active subscription is required to build slips with match predictions and odds. Use Subscribe to build slips above to choose a plan and unlock generation.",
   "slips.access.ready": "Choose your settings above, then select Build slips to generate slips with match predictions and odds.",
   "slips.toolbar.editRanges": "Edit ranges",

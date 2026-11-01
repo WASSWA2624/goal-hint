@@ -1,5 +1,6 @@
 "use client";
 
+import { authCopy } from "@/i18n/messages/auth";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
@@ -29,7 +30,7 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange }: {
       <option value="all">All access</option><option value="active">Active</option><option value="queued">Queued</option><option value="none">No current access</option></select></FloatingField>
     <FloatingField label="Package"><select value={query.plan} onChange={event => onQueryChange({ ...query, plan: event.currentTarget.value })}>
       <option value="all">All packages</option>{names.map(name => <option key={name} value={name}>{name}</option>)}<option value="none">No current package</option></select></FloatingField>
-    <FloatingField label="Last sign-in"><select value={query.recent} onChange={event => onQueryChange({ ...query, recent: event.currentTarget.value as SubscriberDirectoryQuery["recent"] })}>
+    <FloatingField label={authCopy.lastLogin}><select value={query.recent} onChange={event => onQueryChange({ ...query, recent: event.currentTarget.value as SubscriberDirectoryQuery["recent"] })}>
       <option value="all">Any time</option><option value="1">Within 24 hours</option><option value="7">Within 7 days</option><option value="30">Within 30 days</option></select></FloatingField>
   </Filters>;
 }
@@ -43,7 +44,7 @@ export function SubscriberAccountRow({ account, selected, href, onSelect }: {
     <span data-review-network role="img" aria-label={networkLabel} title={networkLabel}>{account.network ? <MobileMoneyLogo network={account.network} /> : <GlobeIcon />}</span>
     <RecordItemTitle data-review-phone>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</RecordItemTitle>
     <Badge data-review-row-status data-subscriber-status={account.status} $tone={account.status === "open" ? "good" : account.status === "blocked" ? "warning" : "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge>
-    <RecordItemMeta data-review-row-meta>{account.planNames.length ? account.planNames.join(", ") : accessLabels[account.access]} · <span data-subscriber-last-sign-in>Last sign-in <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></span></RecordItemMeta>
+    <RecordItemMeta data-review-row-meta>{account.planNames.length ? account.planNames.join(", ") : accessLabels[account.access]} · <span data-subscriber-last-sign-in>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></span></RecordItemMeta>
   </>;
   const attributes = { "data-review-subscriber-row": account.id, "data-subscriber-row": account.id };
   return href ? <Row {...attributes} as={Link} href={href} prefetch={false} aria-current={selected ? "page" : undefined}>{content}</Row>

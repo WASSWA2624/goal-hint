@@ -1,4 +1,4 @@
-import { authLabels } from "../../../i18n/messages/auth.ts";
+import { authCopy, authLabels } from "../../../i18n/messages/auth.ts";
 
 export type BannerReviewState = "signed-out" | "unsubscribed" | "active";
 
@@ -28,8 +28,8 @@ export const bannerReviewOffer = {
 } as const;
 
 export const bannerReviewStates = [
-  { id: "signed-out", label: "Signed out", description: "Create an account or return to an existing one." },
-  { id: "unsubscribed", label: "Signed in · No subscription", description: "Choose a plan to unlock full access." },
+  { id: "signed-out", label: authCopy.bannerGuest, description: "Create an account or return to an existing one." },
+  { id: "unsubscribed", label: authCopy.bannerMember, description: "Choose a plan to unlock full access." },
   { id: "active", label: "Active subscriber", description: "Access confirmation, with no subscription advertising." },
 ] as const satisfies readonly { id: BannerReviewState; label: string; description: string }[];
 

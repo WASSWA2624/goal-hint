@@ -57,7 +57,7 @@ export function fixtureAuthHandler(action: FixtureAction) {
         async verifyPasswordReset(_phone: unknown, code: unknown) { return verify(code, true); },
         async resetPassword() { return scenario === "unavailable" ? unavailable() : authenticated(); },
         async changePassword(_password: unknown, binding: { member: unknown }) {
-          return !binding.member ? { status: "unauthorized", message: "Sign in to change your password." }
+          return !binding.member ? { status: "unauthorized", message: "Log in to change your password." }
             : scenario === "unavailable" ? unavailable() : authenticated();
         },
         async changePhone(phone: unknown, current: unknown, binding: { member: unknown }) {

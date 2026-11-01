@@ -6,7 +6,7 @@ from lib.runtime import ROOT, main_guard
 
 def verify(origin):
     token = "a" * 32
-    for viewer, expected in [("guest", "Sign in"), ("member", "Check access"), ("eligible", "Arsenal")]:
+    for viewer, expected in [("guest", "Login"), ("member", "Check access"), ("eligible", "Arsenal")]:
         response = request(origin, "/s/" + token, headers={"Cookie": "fixture-sharing-viewer=" + viewer})
         assert response.status == 200
         assert expected in visible_html(response.text)

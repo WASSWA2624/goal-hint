@@ -1,5 +1,7 @@
 import "server-only";
 
+import { authCopy } from "../../i18n/messages/auth.ts";
+
 import { protectedSettingFields, type SettingsPageData } from "../../domain/subscription-settings.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { clientAddress, clientAddressDiagnostics, json } from "../http/private-http.ts";
@@ -39,7 +41,7 @@ async function answer(outcome: SettingsOutcome, service: SettingsService, reques
           429, { "Retry-After": String(check.retryAfterSeconds) });
       }
       if (check.status === "invalid") return json({ error: "password-invalid", message: "That password is not right." }, 403);
-      return json({ error: "unavailable", message: "Owner sign-in is unavailable, so protected settings cannot change now." }, 503);
+      return json({ error: "unavailable", message: authCopy.settingsLoginUnavailable }, 503);
     }
   }
 }

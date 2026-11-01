@@ -111,7 +111,7 @@ test("temporary failures retain live values while session expiry clears them and
   await view.reply(live(5));
   await view.reply({ message: "Unavailable" }, 503);
   assert.equal(getLiveVisitorsSnapshot(), 5);
-  await view.reply({ message: "Sign in to view analytics." }, 401);
+  await view.reply({ message: "Log in to view analytics." }, 401);
   assert.equal(getLiveReportSnapshot(), null);
   assert.equal(view.reloads(), 1);
   const before = view.requests.length;

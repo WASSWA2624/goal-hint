@@ -358,7 +358,7 @@ def verify_custom_numeric_bounds(document, expected):
 
 def verify_builder_access(origin, directory):
     for viewer, label, destination in [
-        ("guest", "Sign in", "/en/account"),
+        ("guest", "Login", "/en/account"),
         ("member", "Subscribe", "/en/subscribe"),
         ("subscriber", "Build slips", None),
     ]:
@@ -375,7 +375,7 @@ def verify_builder_access(origin, directory):
         assert {node.attrs["data-slip-summary-layout"] for node in summary} == {"mobile", "desktop"}, f"{path}: responsive summaries"
         desktop_summary = next(node for node in summary if node.attrs["data-slip-summary-layout"] == "desktop")
         assert all(caption in desktop_summary.text for caption in ["Date", "Time", "Markets", "Selection"]), f"{path}: desktop summary identifies each setting"
-        desktop_label = {"guest": "Sign in to build slips", "member": "Subscribe to build slips", "subscriber": label}[viewer]
+        desktop_label = {"guest": "Login to build slips", "member": "Subscribe to build slips", "subscriber": label}[viewer]
         account_actions = document.nodes(attr="data-slip-access-action")
         assert len(account_actions) == 1, f"{path}: one account-aware toolbar action without a duplicate below"
         for account_action in account_actions:
@@ -384,10 +384,10 @@ def verify_builder_access(origin, directory):
         status = {node.attrs["data-slip-access-message"]: node.text.strip() for node in document.nodes(attr="data-slip-access-message")}
         assert set(status) == {"mobile", "desktop"}, f"{path}: responsive account status guidance"
         if destination:
-            assert ("Sign in above" if viewer == "guest" else "Subscribe above") in status["mobile"], f"{path}: mobile guidance matches the account action"
+            assert ("Login above" if viewer == "guest" else "Subscribe above") in status["mobile"], f"{path}: mobile guidance matches the account action"
             assert "subscription" in status["mobile"].lower() if viewer == "guest" else "predictions and odds" in status["mobile"], f"{path}: mobile guidance explains access"
             assert "active subscription" in status["desktop"].lower(), f"{path}: desktop explains the subscription requirement"
-            assert ("sign in" if viewer == "guest" else "Subscribe to build slips above") in status["desktop"], f"{path}: desktop guidance matches the account action"
+            assert ("log in" if viewer == "guest" else "Subscribe to build slips above") in status["desktop"], f"{path}: desktop guidance matches the account action"
         else:
             assert "tap Build slips" in status["mobile"], f"{path}: mobile ready guidance points to the primary action"
             assert "select Build slips" in status["desktop"], f"{path}: eligible members receive generation guidance"
@@ -397,12 +397,12 @@ def verify_builder_access(origin, directory):
                 target = urlsplit(account_action.attrs["href"])
                 assert target.path == destination and parse_qs(target.query).get("return") == ["/en/slips"], f"{path}: retains Slip Builder return destination"
                 if viewer == "guest":
-                    assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Sign in rather than registration"
+                    assert parse_qs(target.query).get("view") == ["login"], f"{path}: guests open Login rather than registration"
             assert not any(node.attrs.get("type") == "submit" for node in actions[0].nodes("button")), f"{path}: access-restricted toolbar cannot submit a build"
         else:
             submit = [node for node in actions[0].nodes("button") if node.attrs.get("type") == "submit"]
             assert len(submit) == 1 and submit[0] in account_actions, f"{path}: eligible members build slips"
-    print("PASS Slip Builder access actions: desktop/mobile labels and status guidance, titled categories, one toolbar action, Sign in/login, Subscribe and Build slips.", flush=True)
+    print("PASS Slip Builder access actions: desktop/mobile labels and status guidance, titled categories, one toolbar action, Login/login, Subscribe and Build slips.", flush=True)
 
 
 def verify_generated_limits(document, *, total_min, total_max, odds_min, odds_max, prob_min, prob_max, selections, reuse):

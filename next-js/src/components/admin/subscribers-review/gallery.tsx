@@ -1,5 +1,6 @@
 "use client";
 
+import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
@@ -41,7 +42,7 @@ export function SubscriberDesignGallery() {
       <SampleHeading aria-live="polite"><div><h2>{design.id} · {design.name} {design.id === "01" && <Badge $tone="good">Selected · Applied</Badge>}</h2><p>{design.description}</p></div><span>Shared components · Desktop & mobile</span></SampleHeading>
       <Preview aria-label={`${design.name} subscriber interface sample`}><header><HeaderBrand height={20} /><span>Admin / Subscribers</span></header>
         <PreviewCanvas><SubscriberReviewWorkbench key={`${design.id}-${revision}`} variant={design.variant} demo={demo} /></PreviewCanvas>
-        <PreviewNote>Fictional records and network assignments · 29 October 2026 snapshot. Actions stay inside this preview. Recent sign-in is not live online presence.</PreviewNote>
+        <PreviewNote>{authCopy.subscriberPreviewNote}</PreviewNote>
       </Preview>
       <Overview id="all-subscriber-samples" aria-label="All ten subscriber samples"><h2>Choose a direction</h2><p>Each layout keeps search and scrolling separate from the subscriber’s details. The same forms open in dialogs.</p>
         <div>{subscriberDesigns.map((item, position) => <OverviewCard key={item.id} type="button" data-subscriber-design-option={item.id} aria-current={position === index ? "true" : undefined}

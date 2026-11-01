@@ -1,3 +1,4 @@
+import { authCopy } from "@/i18n/messages/auth";
 export type HeaderReviewVariant =
   | "balanced"
   | "slim"
@@ -107,7 +108,7 @@ export const headerReviewDesigns: readonly HeaderReviewDesign[] = [
     id: 8,
     variant: "contrast",
     name: "Action emphasis",
-    description: "Accent-filled payment or sign-up actions stand out beside subtly tinted theme and account controls.",
+    description: authCopy.headerActionEmphasis,
     desktopHeight: 48,
     mobileHeight: 48,
     controlHeight: 32,

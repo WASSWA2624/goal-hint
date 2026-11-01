@@ -1,7 +1,8 @@
+import { authCopy } from "../i18n/messages/auth.ts";
 import type { ReferralReviewReason, ReferralReviewStatus } from "./referral-reviews.ts";
 
 export const referralReviewReasonLabel: Readonly<Record<ReferralReviewReason, string>> = {
-  "duplicate-award": "Duplicate reward", "proven-self-referral": "Self-referral", "verified-abuse": "Verified registration abuse",
+  "duplicate-award": "Duplicate reward", "proven-self-referral": "Self-referral", "verified-abuse": authCopy.registrationAbuse,
 };
 export const referralReviewStatusLabel: Readonly<Record<ReferralReviewStatus, string>> = {
   open: "Awaiting decision", "no-action": "Closed without removal", reversed: "Unused reward removed", appealed: "Appeal pending",

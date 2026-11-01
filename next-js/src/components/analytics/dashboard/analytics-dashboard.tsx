@@ -7,7 +7,7 @@ import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonM
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
 import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analytics-datasets";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { authLabels } from "@/i18n/messages/auth";
+import { authCopy } from "@/i18n/messages/auth";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
@@ -73,7 +73,7 @@ const definitions: readonly (readonly [string, string])[] = [
   ["Clicks, searches, downloads", "Link and button labels (never typed text), match search terms with emails and long numbers redacted, outbound domains and downloaded files."],
   ["Sources and campaigns", "Channel from UTM tags, then ad click identifiers (reduced to the network), then the referring domain; no referrer means Direct."],
   ["Location and technology", "Country and city are approximate: from the browser's time zone, or a trusted edge header when configured. Browser, OS and device come from the user agent, which is not stored."],
-  ["Who is counted", "Only browsers that allowed analytics. Global Privacy Control, Do Not Track, bots, automated browsers and signed-in or previously signed-in administrators are excluded."],
+  ["Who is counted", authCopy.analyticsCounted],
   ["Dates and comparisons", "Days run in East Africa Time. Comparisons use the preceding period of equal length or the same dates a year earlier."],
 ];
 
@@ -226,8 +226,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
           </Cards>
           {empty ? <Panel>
             <EmptyChart>
-              No visits recorded for {formatRange(selection)}{Object.keys(filters).length ? " with these filters" : ""}. Visitors appear here once they
-              allow analytics in the consent banner; your own browser is excluded after you {authLabels.signIn.toLowerCase()}.
+              No visits recorded for {formatRange(selection)}{Object.keys(filters).length ? " with these filters" : ""}. {authCopy.analyticsExcluded}
             </EmptyChart>
           </Panel> : <>
             <TrendPanel report={report} metric={metric} onMetric={setMetric} busy={busy} compareLabel={compareLabel} exportHref={exportHref("timeseries")} />

@@ -65,7 +65,7 @@ test("a committed pending intent survives process replacement and sends minimal 
   const first = await f.worker().run(); assert.equal(first.sent, 1);
   assert.equal((await f.worker().run()).examined, 0); assert.equal(f.calls.length, 1);
   assert.equal(f.state.rows[0].status, "sent"); assert.equal(f.state.audits[0].details.status, "sent");
-  assert.match(f.calls[0].message, /Sign in/u); assert.doesNotMatch(f.calls[0].message, /payment|UGX|approved|expiry|balance/iu);
+  assert.match(f.calls[0].message, /Log in/u); assert.doesNotMatch(f.calls[0].message, /payment|UGX|approved|expiry|balance/iu);
   assert.ok(!JSON.stringify(f.state.rows).includes(f.state.accounts[0].phone));
   assert.ok(!JSON.stringify(f.state.audits).includes(f.state.accounts[0].phone));
 });

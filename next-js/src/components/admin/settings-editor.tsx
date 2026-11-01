@@ -1,5 +1,6 @@
 "use client";
 
+import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -333,7 +334,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
                   : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => resolve(key === "contact" ? "contactPhone" : "mtnNumber")}>{requirementLabels[key]}</button>
                     : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList>
               </RequirementBox>}
-              <TwoUp>{range("trialDays", "Free trial on sign-up", "0 disables trials for new accounts.")}
+              <TwoUp>{range("trialDays", authCopy.trialRegistration, "0 disables trials for new accounts.")}
                 <FieldBlock htmlFor="setting-screenshotRetentionDays">Keep payment proofs after approval · days
                   <input {...field("screenshotRetentionDays", true)} type="number" inputMode="numeric" min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} />
                   {error("screenshotRetentionDays")}<Hint id="setting-screenshotRetentionDays-hint">{settingsRules.screenshotRetentionDays.min}–{settingsRules.screenshotRetentionDays.max} days</Hint>

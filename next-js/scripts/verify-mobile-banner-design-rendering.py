@@ -44,10 +44,10 @@ def verify(origin, directory):
         siblings = header["parent"]["children"]
         assert siblings.index(banner) == siblings.index(header) + 1, "The banner must immediately follow the app header."
         actions = desktop_review.action_names(document, banner)
-        authentication = {name for name in actions if name in {"sign in", "sign up"}}
+        authentication = {name for name in actions if name in {"login", "register"}}
         state = sample["attrs"]["data-mobile-banner-sample"]
         if state == "signed-out":
-            assert authentication == {"sign in", "sign up"}, "Visitors need both authentication actions."
+            assert authentication == {"login", "register"}, "Visitors need both authentication actions."
             assert "subscribe" not in actions, "Visitors must authenticate before subscribing."
         elif state == "unsubscribed":
             assert "subscribe" in actions and not authentication, "Signed-in members need Subscribe without authentication prompts."

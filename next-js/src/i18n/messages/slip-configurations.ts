@@ -35,6 +35,6 @@ export const slipConfigurationMessages = {
   "slipConfigs.error.name-taken": "A filter already has that name. Choose another.",
   "slipConfigs.error.conflict": "This filter changed on another device. Review it and try again.",
   "slipConfigs.error.not-found": "This filter was deleted. Choose another.",
-  "slipConfigs.error.forbidden": "Sign in again to manage Custom Filters.",
+  "slipConfigs.error.forbidden": "Log in again to manage Custom Filters.",
   "slipConfigs.error.unavailable": "Custom Filters are unavailable. Try again.",
 } as const;

@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { authLabels } from "@/i18n/messages/auth";
+import { authCopy } from "@/i18n/messages/auth";
 import type { OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { formatPhone, type MobileNetwork } from "@/domain/phone";
@@ -31,7 +31,7 @@ type Tab = "overview" | "access" | "payments" | "credit" | "devices";
 const tabs: readonly Tab[] = ["overview", "access", "payments", "credit", "devices"];
 const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", credit: "Credit", devices: "Devices" };
 const actionTitles: Record<AccountAction, string> = { grant: "Grant access", number: "Change number",
-  block: "Account restriction", devices: `${authLabels.signOut} all devices` };
+  block: "Account restriction", devices: authCopy.logoutAllDevices };
 const codeTones = { active: "good", queued: "warning" } as const;
 const paymentTones = { approved: "good", pending: "warning" } as const;
 
@@ -72,7 +72,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
   }
   async function signOutDevices() {
     if (action.busy) return;
-    const reply = await action.send(path, { action: "sign-out-all" }, "All devices signed out."); if (reply.ok) closeAction();
+    const reply = await action.send(path, { action: "sign-out-all" }, authCopy.allDevicesLoggedOut); if (reply.ok) closeAction();
   }
   function tabKey(event: KeyboardEvent<HTMLDivElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -93,12 +93,12 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     {active === "number" && <ChangeNumber formId={`${id}-form-number`} externalActions={externalActionControls} path={path} action={action} onSaved={closeAction} />}
     {active === "block" && <CompactForm id={`${id}-form-block`} method="post" action={action.localOnly ? "#" : path} onSubmit={async event => {
       event.preventDefault(); if (action.busy) return;
-      const reply = await action.send(path, { action: account.blockedAt ? "unblock" : "block", value: new FormData(event.currentTarget).get("reason") }, account.blockedAt ? "Account unblocked." : "Account blocked and devices signed out.");
+      const reply = await action.send(path, { action: account.blockedAt ? "unblock" : "block", value: new FormData(event.currentTarget).get("reason") }, account.blockedAt ? "Account unblocked." : authCopy.blockedDevicesLoggedOut);
       if (reply.ok) closeAction();
-    }}><MutedText>{account.blockedAt ? `Allow this member to ${authLabels.signIn.toLowerCase()} again.` : `Prevent sign-in and ${authLabels.signOut.toLowerCase()} every device.`}</MutedText>
+    }}><MutedText>{account.blockedAt ? authCopy.unblockHelp : authCopy.blockHelp}</MutedText>
       <FieldBlock>Reason<input name="reason" required maxLength={200} disabled={action.busy} /></FieldBlock>
       {!externalActionControls && <ActionButton type="submit" $variant="primary" disabled={action.busy}>{account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</CompactForm>}
-    {active === "devices" && <><MutedText>The member will need to {authLabels.signIn.toLowerCase()} again on every device.</MutedText>{!externalActionControls && <div><ActionButton type="button" disabled={action.busy} onClick={() => void signOutDevices()}>{actionTitles.devices}</ActionButton></div>}</>}
+    {active === "devices" && <><MutedText>{authCopy.devicesLoginHelp}</MutedText>{!externalActionControls && <div><ActionButton type="button" disabled={action.busy} onClick={() => void signOutDevices()}>{actionTitles.devices}</ActionButton></div>}</>}
   </>;
   const footer = removal ? <><ActionButton type="button" disabled={action.busy} onClick={closeRemoval}>Cancel</ActionButton><DangerButton type="submit" form={`${id}-remove`} disabled={action.busy || !removalConfirmed}>{removal === "delete" ? "Permanently delete account" : "Erase personal data"}</DangerButton></>
       : active ? <><ActionButton type="button" disabled={action.busy} onClick={closeAction}>Cancel</ActionButton>{active === "devices"
@@ -114,7 +114,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       <AccountTop>
         <div>
           <h2>{dialogMode && network && <MobileMoneyLogo network={network} />}{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</h2>
-          <MetaLine>Last sign-in {formatPeriodEnd(new Date(account.lastSignInAt))}</MetaLine>
+          <MetaLine>{authCopy.lastLogin} {formatPeriodEnd(new Date(account.lastSignInAt))}</MetaLine>
           {account.blockedReason && <BlockedNote role="note">Blocked: {account.blockedReason}</BlockedNote>}
         </div>
         <Badges><Badge $tone={erased ? "muted" : account.blockedAt ? "warning" : "good"}>{erased ? "Erased" : account.blockedAt ? "Blocked" : "Open"}</Badge>
@@ -126,7 +126,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
         {task("grant", "Grant access", <GiftIcon />)}
         {task("number", "Change number", <SwapIcon />)}
         {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
-        {task("devices", `${authLabels.signOut} devices`, <SignOutIcon />)}
+        {task("devices", authCopy.logoutDevices, <SignOutIcon />)}
       </QuickActions>}
     </Panel>
     {active && !dialogMode && <ActionPanel id={`${id}-action-panel`} role="region" aria-labelledby={`${id}-action-title`} data-subscriber-action-panel={active}

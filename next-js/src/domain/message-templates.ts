@@ -1,3 +1,4 @@
+import { authCopy } from "../i18n/messages/auth.ts";
 /** Owner-editable content. Event sources and supported transports remain a reviewed application contract. */
 export const messageEventKeys = ["welcome", "account-verification", "password-reset", "payment-received", "payment-approved",
   "payment-rejected", "credit-added", "subscription-renewed"] as const;
@@ -43,7 +44,7 @@ export const messagingChannelNotes = Object.freeze({
   whatsapp: "WhatsApp requires recipient consent and a provider-approved template with matching parameter order.",
   email: "Email is not configured. Member accounts currently have no verified email address or email delivery provider.",
 });
-const genericUpdate = "Goal Hint: Your account has been updated. Sign in to view the details or contact admin for help.";
+const genericUpdate = authCopy.accountUpdate;
 export const defaultMessageTemplates: MessageTemplateSettings = {
   version: 1,
   events: Object.fromEntries(messageEvents.map(event => [event.key, {

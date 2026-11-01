@@ -1,4 +1,5 @@
 "use client";
+import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
@@ -32,7 +33,7 @@ export function grantNotice(body: AdminReply["body"]): string | null {
   if (body.status === "credited") return [`Approved · ${credit}`, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
   if (typeof body.endsAt !== "string" || typeof body.devicesUnlocked !== "number") return null;
   const n = body.devicesUnlocked, line = `${body.status === "approved" ? "Approved" : "Granted"} · access until ${formatPeriodEnd(new Date(body.endsAt))} · ${n} device${n === 1 ? "" : "s"} unlocked`;
-  const grant = n ? line : `${line}. Devices already unlocked keep access; the member's next sign-in unlocks one.`;
+  const grant = n ? line : `${line}. ${authCopy.accessNextLogin}`;
   return [grant, credit, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
 }
 export function useCodeAction(onChanged?: () => Promise<void>, options?: CodeActionOptions) {
@@ -111,7 +112,7 @@ export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "
     {!withoutTransaction && <PlainDrawer data-grant-payment><summary>Payment details · optional<ChevronDownIcon /></summary>
       <GrantSection><NetworkChoice disabled={action.busy} />
         <FieldBlock>Transaction ID<input name="transactionId" maxLength={40} autoComplete="off" placeholder="Enter the payment reference" disabled={action.busy} /></FieldBlock></GrantSection></PlainDrawer>}
-    {!compact && <Hint as="p" data-grant-hint>Signed-in devices unlock at once; others unlock when the member signs in.</Hint>}
+    {!compact && <Hint as="p" data-grant-hint>{authCopy.accessDeviceHelp}</Hint>}
     {!externalActions && <GrantButton type="submit" $variant="primary" $inline={fixedPhone} disabled={action.busy}>Grant access manually</GrantButton>}</FormStack></form>;
 }
 const NoWrap = styled.span`white-space: nowrap;`;

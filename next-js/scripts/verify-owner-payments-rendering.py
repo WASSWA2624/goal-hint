@@ -476,7 +476,7 @@ def overview_notices(origin):
                 "The member may receive this notice twice"]:
             assert label in panel, label
         match(r'href="/admin/subscribers\?accountId=00000000-0000-4000-8000-000000000100"', panel)
-        for leaked in ["Your account has been updated", "Sign in to view"]:
+        for leaked in ["Your account has been updated", "Log in to view"]:
             assert leaked not in html, leaked
         for claim in ["proof of receipt", "delivered", "received"]:
             assert claim not in panel, claim

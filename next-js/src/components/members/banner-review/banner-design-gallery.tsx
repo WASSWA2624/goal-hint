@@ -1,5 +1,6 @@
 "use client";
 
+import { authCopy } from "@/i18n/messages/auth";
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
 import { MoonIcon, SunIcon } from "@/components/ui/icons";
@@ -44,7 +45,7 @@ export function BannerDesignGallery({ locale }: { locale: string }) {
         <Intro>
           <span>Goal Hint · Desktop banner review</span>
           <h1>A small invitation. The right next step.</h1>
-          <p>Compare ten compact banners directly beneath the same app header. Each shows signed-out visitors, signed-in members without a subscription, and active subscribers. Option 01 is applied on desktop. Mobile keeps its existing design.</p>
+          <p>{authCopy.bannerDescription}</p>
         </Intro>
         <Toolbar aria-label="Banner preview settings">
           <label><span>Design</span><select aria-label="Design option" value={option} onChange={(event) => setOption(Number(event.target.value))}>

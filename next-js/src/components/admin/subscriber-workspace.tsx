@@ -1,5 +1,6 @@
 "use client";
 
+import { authCopy } from "@/i18n/messages/auth";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
@@ -47,7 +48,7 @@ export function SubscribersWorkspace({ accounts, detail: selected, plans, initia
         headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(currentQuery.current) });
       if (response.status === 401 || response.status === 403) {
         if (version === generation.current) { setListed([]); router.refresh(); }
-        failureMessage = "Your administrator session has ended. Sign in again.";
+        failureMessage = authCopy.administratorSessionEnded;
         throw new Error(failureMessage);
       }
       const body: unknown = await response.json();

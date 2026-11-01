@@ -129,7 +129,7 @@ def directory_rendering(origin: str) -> None:
     stats = summary.one(attribute="data-subscriber-stats")
     assert [term.text() for term in stats.all("dt")] == ["Unlocked devices", "Access periods", "Unlocks · 30 days", "Credit"]
     actions = summary.one(attribute="data-subscriber-actions").all("button")
-    assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Sign out devices"]
+    assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Log out devices"]
     assert all(button.attributes.get("aria-haspopup") == "dialog" and button.attributes.get("aria-expanded") == "false" for button in actions)
     tabs = detail.one(attribute="data-subscriber-tabs")
     assert [re.sub(r" \(\d+\)$", "", button.text()) for button in tabs.all("button")] == ["Overview", "Access", "Payments", "Credit", "Devices"]
