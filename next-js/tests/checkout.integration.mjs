@@ -29,7 +29,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     for (let i = 0; i < days; i++) await database.query(tx => tx.referralCredit.create({ data: { id: randomUUID(), accountId: who.accountId, referralId: randomUUID(), requestKey: randomUUID(), days: 1, kind: "award", createdAt: new Date(now()) } }));
   }
   const select = (patch = {}) => ({ purpose: "plan", planId, method: "mtn", walletUgx: 0, referralDays: 0, topUpUgx: 0, ...patch });
-  const proof = (amountUgx = 5000, transactionId = `TEST${randomUUID().replaceAll("-", "").slice(0, 18)}`) => ({ transactionId, amountUgx, payerPhone: "256700000123", paidAt: new Date(now()).toISOString(), original: { text: "Synthetic payment evidence", extracted: { amountUgx } } });
+  const proof = (amountUgx = 5000, transactionId = `TEST${randomUUID().replaceAll("-", "").slice(0, 18)}`) => ({ transactionId, amountUgx, warningsAccepted: true, payerPhone: "256700000123", paidAt: new Date(now()).toISOString(), original: { text: "Synthetic payment evidence", extracted: { amountUgx } } });
   async function submit(who, selection = select(), receipt = proof(), requestKey = randomUUID()) {
     const quote = await checkout.quote(who, selection); assert.equal(quote.ok, true, quote.message);
     const saved = await checkout.confirm(who, selection, requestKey, quote.value.quoteKey, true, selection.method === "wallet" || selection.method === "referral" ? undefined : receipt);
@@ -41,6 +41,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
   }
   async function verify(id, amountUgx, index = 0) {
     const detail = await review.detail(id), claim = detail.claims.find(c => c.amountUgx === amountUgx && !c.receipt.verifiedAt) ?? detail.claims[index];
+    if (!claim.validation.reviewed) assert.equal((await act(id, { action: "review-evidence", claimId: claim.id, warningsChecked: true, reason: "Checked the original evidence and incoming account records" })).ok, true);
     return act(id, { action: "verify-receipt", receiptId: claim.receipt.id, amountUgx, recipient: detail.receivingNumber, senderPhone: "256700000123",
       receivedAt: new Date(now()).toISOString(), transactionChecked: true, recipientChecked: true, successfulReceipt: true, senderChecked: true });
   }
@@ -114,24 +115,36 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: b.accountId } })), 0);
     assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: saved.value.id } })), 0);
   });
-  await t.test("provider and recipient contradictions are refused without reserving balances or changing evidence", async () => {
+  await t.test("evidence warnings require customer acknowledgement and a separate admin review before approval", async () => {
     const who = await member(); await fund(who, 1000, 1);
     const selection = select({ method: "airtel", walletUgx: 1000, referralDays: 1 }), quote = await checkout.quote(who, selection);
     for (const original of [
       { text: "Paid UGX 4,000 to 0700000901. Transaction ID: WRONG12345", extracted: {} },
       { text: "Airtel. Paid UGX 4,000 to 0700000901. Transaction ID: WRONG12345", extracted: {} },
       { text: "", extracted: { screenshotText: "Paid UGX 4,000 to 0700000901. Transaction ID: WRONG12345" } },
+      { text: "MTN. Paid UGX 4,000 to 0700000901", extracted: { validationVersion: 1, validationWarnings: "[]", validationFingerprint: "forged" } },
     ]) {
-      const refused = await checkout.confirm(who, selection, randomUUID(), quote.value.quoteKey, true, { ...proof(4000), original }, original.text ? null : jpeg());
-      assert.equal(refused.ok, false); assert.match(refused.message, /receiving number/);
+      const refused = await checkout.confirm(who, selection, randomUUID(), quote.value.quoteKey, true, { ...proof(4000), warningsAccepted: false, original }, original.text ? null : jpeg());
+      assert.equal(refused.ok, false); assert.equal(refused.code, "evidence-warning");
     }
     assert.equal(await database.query(tx => tx.paymentSubmission.count({ where: { accountId: who.accountId } })), 0);
     assert.equal((await checkout.read(who)).availableWalletUgx, 1000); assert.equal((await checkout.read(who)).availableReferralDays, 1);
     const request = await submit(who, selection, proof(4000));
     const before = (await review.detail(request.id)).claims[0];
     const correction = await checkout.attach(who, request.id, { ...proof(4000, before.receipt.transactionId), original: { text: "MTN. Paid UGX 4,000 to 0700000901", extracted: {} } });
-    assert.equal(correction.ok, false);
-    assert.deepEqual((await review.detail(request.id)).claims[0].corrections, before.corrections);
+    assert.equal(correction.ok, true);
+    let claim = (await review.detail(request.id)).claims[0];
+    assert.equal(claim.validation.reviewed, false); assert.ok(claim.validation.warnings.some(w => w.id === "message.method"));
+    assert.equal((await act(request.id, { action: "approve-checkout" })).code, "evidence-review");
+    assert.equal((await act(request.id, { action: "review-evidence", claimId: claim.id, warningsChecked: false, reason: "Checked incoming records" })).ok, false);
+    assert.equal((await act(request.id, { action: "verify-receipt", receiptId: claim.receipt.id, amountUgx: 4000, recipient: "256700000901", senderPhone: "256700000123",
+      receivedAt: new Date(now()).toISOString(), transactionChecked: true, recipientChecked: true, successfulReceipt: true, senderChecked: true })).ok, false, "An MTN transfer cannot be verified against the selected Airtel receiving account");
+    assert.equal((await act(request.id, { action: "review-evidence", claimId: claim.id, warningsChecked: true, reason: "Requested clarification of the provider discrepancy" })).ok, true);
+    assert.equal((await review.detail(request.id)).claims[0].validation.reviewed, true);
+    assert.equal((await act(request.id, { action: "approve-checkout" })).ok, false, "Reviewing a warning never verifies incoming funds");
+    await checkout.attach(who, request.id, { ...proof(4001, claim.receipt.transactionId), original: { text: "MTN. Paid UGX 4,001 to 0700000901", extracted: {} } });
+    claim = (await review.detail(request.id)).claims[0]; assert.equal(claim.validation.reviewed, false, "New evidence invalidates the previous admin review");
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: request.id } })), 0);
   });
   await t.test("combined funding, shortfall plus top-up, excess and concurrent approval allocate once", async () => {
     const who = await member(); await fund(who, 2000, 1);

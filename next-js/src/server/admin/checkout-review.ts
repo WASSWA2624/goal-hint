@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { checkoutOpenStatuses, checkoutRules, fundingAmounts } from "../../domain/checkout.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
+import { receiptEvidenceValidation } from "../../domain/checkout-evidence.ts";
 import { auditTextErrors } from "./audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { accessCodeTransaction, lockMemberAccount } from "../members/access-codes.ts";
@@ -15,6 +16,7 @@ export const checkoutReviewSchema = z.discriminatedUnion("action", [
     recipient: z.string(), senderPhone: z.string(), receivedAt: z.iso.datetime({ offset: true }),
     transactionChecked: z.literal(true), recipientChecked: z.literal(true), successfulReceipt: z.literal(true), senderChecked: z.literal(true) }),
   z.object({ ...base, action: z.literal("approve-checkout") }),
+  z.object({ ...base, action: z.literal("review-evidence"), claimId: z.uuid(), warningsChecked: z.literal(true), reason }),
   z.object({ ...base, action: z.enum(["reject-checkout", "request-correction", "mark-disputed"]), reason }),
   z.object({ ...base, action: z.literal("resolve-dispute"), receiptId: z.uuid(), intendedSubmissionId: z.uuid(), reason,
     contactedVerifiedPayer: z.literal(true), ownershipClear: z.literal(true) }),
@@ -34,7 +36,7 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
             evidence: { select: { id: true, createdAt: true } } } });
         const verifiedUgx = claims.reduce((sum, c) => sum + (!c.withdrawn && c.receipt.verifiedAt && !c.receipt.disputed && c.receipt.intendedSubmissionId === id ? c.receipt.amountUgx ?? 0 : 0), 0);
         return { ...row, verifiedUgx, ...fundingAmounts(row.priceUgx, row.walletUgx, verifiedUgx),
-          claims: claims.map(({ submission, ...claim }) => ({ ...claim, legacyImage: !!submission.screenshot,
+          claims: claims.map(({ submission, ...claim }) => ({ ...claim, validation: receiptEvidenceValidation(claim.original, claim.corrections), legacyImage: !!submission.screenshot,
             imageIsLegacy: !!submission.screenshot && claim.imageSha256 === submission.imageSha256 })),
           events: await tx.paymentEvent.findMany({ where: { submissionId: id }, orderBy: { createdAt: "desc" }, take: 100 }) };
       });
@@ -63,6 +65,18 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
         if (row.status === "approved" && action.action === "approve-checkout") return { ok: true };
         if (row.revision !== action.revision) return { ok: false, message: "Another reviewer changed this request. Refresh and check the latest details." };
         if (action.action === "approve-checkout") return allocateCheckout(tx, row, at, actor);
+        if (action.action === "review-evidence") {
+          if (!(checkoutOpenStatuses as readonly string[]).includes(row.status)) return { ok: false, message: "This request is closed." };
+          const claim = await tx.paymentReceiptClaim.findFirst({ where: { id: action.claimId, submissionId: id, withdrawn: false } });
+          const validation = claim && receiptEvidenceValidation(claim.original, claim.corrections);
+          if (!claim || !validation?.warnings.length || !validation.fingerprint) return { ok: false, message: "No current evidence warnings are available for this claim." };
+          const history = Array.isArray(claim.corrections) ? claim.corrections : claim.corrections ? [claim.corrections] : [];
+          await tx.paymentReceiptClaim.update({ where: { id: claim.id }, data: { corrections: [...history, { kind: "warning-review",
+            validationFingerprint: validation.fingerprint, actor, at: at.toISOString(), reason: action.reason }] } });
+          await tx.paymentSubmission.update({ where: { id }, data: { revision: { increment: 1 } } });
+          await paymentEvent(tx, id, "evidence_warnings_reviewed", actor, at, action.reason, claim.receiptId, { claimId: claim.id, warningIds: validation.warnings.map(w => w.id) });
+          return { ok: true };
+        }
         if (action.action === "verify-receipt") {
           const claim = await tx.paymentReceiptClaim.findUnique({ where: { submissionId_receiptId: { submissionId: id, receiptId: action.receiptId } }, include: { receipt: true } });
           const recipient = validMobilePhone(action.recipient), senderPhone = action.senderPhone ? validMobilePhone(action.senderPhone) : null;

@@ -5,7 +5,7 @@ import { checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSe
   type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView, type ReceiptInput } from "../../domain/checkout.ts";
 import { formatPaymentReference, parseTransactionId, transactionKey } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
-import { paymentDestinationMismatch } from "../../domain/checkout-evidence.ts";
+import { checkoutEvidenceWarnings, receiptEvidenceValidation } from "../../domain/checkout-evidence.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
@@ -120,10 +120,13 @@ export function createCheckout({ database, config, now = Date.now, environment =
     const provider = row.method!, key = transactionKey(transactionId);
     const settings = configuredSubscriptionSettings(await lockSettings(tx, "checkout", at), environment);
     const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber, [provider]: row.receivingNumber ?? (provider === "mtn" ? settings.mtnNumber : settings.airtelNumber) };
-    for (const [source, text] of [["transaction message", input.original.text], ["screenshot", image ? input.original.extracted.screenshotText : ""]] as const) {
-      const mismatch = typeof text === "string" ? paymentDestinationMismatch(text, provider as "mtn" | "airtel", numbers, source) : null;
-      if (mismatch) return fail(mismatch);
-    }
+    const screenshotText = image && typeof input.original.extracted.screenshotText === "string" ? input.original.extracted.screenshotText : "";
+    const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);
+    if (warnings.length && !input.warningsAccepted) return fail("Review the payment evidence warnings and choose Continue for admin review before submitting.", "evidence-warning");
+    const fingerprint = createHash("sha256").update(JSON.stringify([provider, transactionId, input.amountUgx, payerPhone, input.paidAt, input.original.text, screenshotText,
+      image ? createHash("sha256").update(image).digest("hex") : null, warnings])).digest("hex");
+    const original = { ...input.original, extracted: { ...input.original.extracted, validationVersion: 1, selectedProvider: provider,
+      validationWarnings: JSON.stringify(warnings), validationFingerprint: fingerprint, validationAcknowledgedAt: warnings.length ? at.toISOString() : null } };
     let receipt = await tx.paymentReceipt.findUnique({ where: { provider_transactionKey: { provider, transactionKey: key } } });
     if (!receipt) {
       // Legacy approvals made after migration also block reuse in this workflow.
@@ -138,7 +141,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
       if (!receipt.verifiedAt && !receipt.allocatedSubmissionId) {
         const corrections = Array.isArray(existing.corrections) ? existing.corrections : existing.corrections ? [existing.corrections] : [];
         await tx.paymentReceiptClaim.update({ where: { id: existing.id }, data: { amountUgx: input.amountUgx, payerPhone, paidAt, withdrawn: false,
-          corrections: [...corrections, { transactionId, amountUgx: input.amountUgx, payerPhone, paidAt: input.paidAt, evidence: input.original }],
+          corrections: [...corrections, { transactionId, amountUgx: input.amountUgx, payerPhone, paidAt: input.paidAt, evidence: original }],
           ...(!existing.image && image ? { image: new Uint8Array(image), imageSha256: createHash("sha256").update(image).digest("hex") } : {}) } });
         if (existing.image && image) {
           const imageSha256 = createHash("sha256").update(image).digest("hex");
@@ -158,7 +161,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     const correction = { transactionId, amountUgx: input.amountUgx, payerPhone, paidAt: input.paidAt };
     if (!await reserveImage(tx, image, at)) return fail("Screenshot storage is busy. Keep your draft and try later, or submit manual details.");
     await tx.paymentReceiptClaim.create({ data: { id: randomUUID(), submissionId: row.id, receiptId: receipt.id, amountUgx: input.amountUgx,
-      payerPhone, paidAt, original: input.original, corrections: correction, createdAt: at,
+      payerPhone, paidAt, original, corrections: correction, createdAt: at,
       ...(image ? { image: new Uint8Array(image), imageSha256: createHash("sha256").update(image).digest("hex") } : {}) } });
     if (collision) {
       await tx.paymentReceipt.update({ where: { id: receipt.id }, data: { disputed: true } });
@@ -339,7 +342,9 @@ export async function allocateCheckout(tx: Tx, row: PaymentSubmission, at: Date,
     await paymentEvent(tx, row.id, "funding_changed", actor, at);
     return fail("Available funding changed. The customer must check and confirm the new payable amount.", "reconfirm");
   }
-  const claims = await tx.paymentReceiptClaim.findMany({ where: { submissionId: row.id, withdrawn: false }, select: { receipt: true } });
+  const claims = await tx.paymentReceiptClaim.findMany({ where: { submissionId: row.id, withdrawn: false }, select: { receipt: true, original: true, corrections: true } });
+  if (claims.some(claim => !receiptEvidenceValidation(claim.original, claim.corrections).reviewed))
+    return fail("Review the evidence discrepancies and record the admin's findings before approval.", "evidence-review");
   if (claims.some(c => c.receipt.disputed)) return fail("Resolve ownership before approval.");
   const receipts = claims.map(c => c.receipt).filter(r => r.verifiedAt && r.intendedSubmissionId === row.id);
   if (claims.some(c => !c.receipt.verifiedAt)) return fail("Verify each attached receipt or request correction of unverified evidence before approval.");

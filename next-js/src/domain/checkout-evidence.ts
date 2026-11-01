@@ -1,21 +1,80 @@
-import { paymentDestination, paymentEvidence, sameTransactionId } from "./payment-sms.ts";
+import { paymentDestination, paymentEvidence } from "./payment-sms.ts";
 import { normalizePhone, localUgandaPhone, type MobileNetwork } from "./phone.ts";
-import { parseTransactionId } from "./payment.ts";
+import { parseTransactionId, transactionKey } from "./payment.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
 
 type Numbers = Readonly<Record<MobileNetwork, string | null>>;
 const names = { mtn: "MTN Mobile Money", airtel: "Airtel Money" };
 
 /** Validate clipboard content before it can replace a message or its extracted fields. */
-export function inspectPaymentMessage(text: string, provider: MobileNetwork, numbers: Numbers, screenshotTransactionId: string | null = null) {
-  const evidence = paymentEvidence(text, numbers, { bare: false });
+export function inspectPaymentMessage(text: string) {
+  const evidence = paymentEvidence(text, {}, { bare: false });
   if (text.length > 12_000 || !evidence.transactionId || evidence.amount === null) return { ok: false as const,
     message: "This is not a readable payment transaction message. Paste the complete MTN or Airtel message with its transaction ID and amount. Your current message has not changed." };
-  const mismatch = paymentDestinationMismatch(text, provider, numbers, "transaction message");
-  if (mismatch) return { ok: false as const, message: mismatch };
-  if (screenshotTransactionId && !sameTransactionId(screenshotTransactionId, evidence.transactionId)) return { ok: false as const,
-    message: "The transaction message and screenshot show different transaction IDs. Paste the message for this payment, or remove or replace the screenshot. Your current message has not changed." };
   return { ok: true as const, evidence };
+}
+
+export type PaymentEvidenceWarning = Readonly<{ id: string; message: string }>;
+export type EvidenceComparison = Readonly<{ text: string; screenshotText: string; hasImage: boolean; transactionId?: string; amountUgx?: string }>;
+
+/** Advisory comparisons. OCR and labels cannot verify that a transfer arrived. */
+export function checkoutEvidenceWarnings(input: EvidenceComparison, provider: MobileNetwork, numbers: Numbers): PaymentEvidenceWarning[] {
+  const sources = [
+    ...(input.text.trim() ? [{ id: "message", label: "transaction message", text: input.text }] : []),
+    ...(input.hasImage ? [{ id: "screenshot", label: "screenshot", text: input.screenshotText }] : []),
+  ].map(source => {
+    const destination = paymentDestination(source.text, numbers);
+    const network = destination.network ?? (["mtn", "airtel"] as const).find(key => destination.recipient && normalizePhone(numbers[key]) === destination.recipient) ?? null;
+    return { ...source, destination, network, evidence: paymentEvidence(source.text, numbers, { bare: false }) };
+  });
+  const warnings: PaymentEvidenceWarning[] = [], money = (amount: number) => `UGX ${amount.toLocaleString("en-UG")}`;
+  for (const source of sources) {
+    const mismatch = paymentDestinationMismatch(source.text, provider, numbers, source.label);
+    if (mismatch) warnings.push({ id: `${source.id}.method`, message: mismatch });
+    if (!source.network) warnings.push({ id: `${source.id}.unknown-provider`, message: `We couldn’t confidently identify MTN or Airtel in the ${source.label}. You selected ${names[provider]}; the admin will check the receiving account.` });
+    if (input.transactionId && source.evidence.transactionId && transactionKey(input.transactionId) !== transactionKey(source.evidence.transactionId))
+      warnings.push({ id: `${source.id}.reported-id`, message: `The ${source.label} shows transaction ID ${source.evidence.transactionId}, while the entered ID is ${input.transactionId}.` });
+    if (input.amountUgx && Number(input.amountUgx) > 0 && source.evidence.amount !== null && Number(input.amountUgx) !== source.evidence.amount)
+      warnings.push({ id: `${source.id}.reported-amount`, message: `The ${source.label} shows ${money(source.evidence.amount)}, while the reported amount is ${money(Number(input.amountUgx))}.` });
+  }
+  const [message, screenshot] = sources;
+  if (message && screenshot) {
+    if (message.evidence.transactionId && screenshot.evidence.transactionId && transactionKey(message.evidence.transactionId) !== transactionKey(screenshot.evidence.transactionId))
+      warnings.push({ id: "sources.id", message: `The message shows transaction ID ${message.evidence.transactionId}; the screenshot shows ${screenshot.evidence.transactionId}. They may refer to different payments.` });
+    if (message.evidence.amount !== null && screenshot.evidence.amount !== null && message.evidence.amount !== screenshot.evidence.amount)
+      warnings.push({ id: "sources.amount", message: `The message shows ${money(message.evidence.amount)}; the screenshot shows ${money(screenshot.evidence.amount)}.` });
+    if (message.network && screenshot.network && message.network !== screenshot.network)
+      warnings.push({ id: "sources.provider", message: `The message appears to be from ${names[message.network]}; the screenshot appears to be from ${names[screenshot.network]}.` });
+    if (message.destination.recipient && screenshot.destination.recipient && message.destination.recipient !== screenshot.destination.recipient)
+      warnings.push({ id: "sources.recipient", message: `The message shows receiving number ${localUgandaPhone(message.destination.recipient)}; the screenshot shows ${localUgandaPhone(screenshot.destination.recipient)}.` });
+  }
+  return warnings;
+}
+
+const record = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+export type ReceiptEvidenceValidation = { warnings: PaymentEvidenceWarning[]; fingerprint: string | null; reviewed: boolean; selectedProvider: string | null };
+
+/** Only server-created validation records and server-only correction markers qualify for review. */
+export function receiptEvidenceValidation(original: unknown, corrections: unknown): ReceiptEvidenceValidation {
+  const history = Array.isArray(corrections) ? corrections : corrections ? [corrections] : [];
+  const latest = history.map(record).filter(entry => entry?.evidence).at(-1)?.evidence ?? original;
+  const fields = record(record(latest)?.extracted);
+  let warnings: PaymentEvidenceWarning[] = [];
+  if (fields?.validationVersion === 1 && typeof fields.validationWarnings === "string") {
+    try {
+      const parsed: unknown = JSON.parse(fields.validationWarnings);
+      if (Array.isArray(parsed)) warnings = parsed.flatMap(value => {
+        const item = record(value);
+        return typeof item?.id === "string" && typeof item.message === "string" ? [{ id: item.id, message: item.message }] : [];
+      });
+    } catch { /* Historical evidence may predate validation metadata. */ }
+  }
+  const fingerprint = typeof fields?.validationFingerprint === "string" ? fields.validationFingerprint : null;
+  return { warnings, fingerprint, selectedProvider: typeof fields?.selectedProvider === "string" ? fields.selectedProvider : null,
+    reviewed: warnings.length === 0 || !!fingerprint && history.some(value => {
+      const entry = record(value);
+      return entry?.kind === "warning-review" && entry.validationFingerprint === fingerprint;
+    }) };
 }
 
 export function paymentDestinationMismatch(text: string, provider: MobileNetwork, numbers: Numbers, source = "evidence"): string | null {
@@ -30,15 +89,9 @@ export function paymentDestinationMismatch(text: string, provider: MobileNetwork
 
 /** Run for both entry and final submission; edits and restored drafts must not bypass evidence checks. */
 export function checkoutDetailsIssue(input: { text: string; screenshotText: string; hasImage: boolean; screenshotReady: boolean;
-  transactionId: string; amountUgx: string; payerPhone: string }, provider: MobileNetwork, numbers: Numbers): string | null {
+  transactionId: string; amountUgx: string; payerPhone: string }): string | null {
   if (input.hasImage && !input.screenshotReady) return "Recheck or remove the saved screenshot before continuing.";
   if (!input.hasImage && !input.text.trim()) return "Add a payment screenshot or paste the transaction message before continuing. The filled-in transaction details are kept, but at least one evidence source is required.";
-  for (const [source, text] of [["transaction message", input.text], ["screenshot", input.screenshotText]] as const) {
-    const mismatch = paymentDestinationMismatch(text, provider, numbers, source);
-    if (mismatch) return mismatch;
-  }
-  const messageId = paymentEvidence(input.text).transactionId, screenshotId = paymentEvidence(input.screenshotText, {}, { bare: false }).transactionId;
-  if (messageId && screenshotId && !sameTransactionId(messageId, screenshotId)) return "The message and screenshot show different transaction IDs. Use evidence for the same payment.";
   if (!parseTransactionId(input.transactionId) || !Number.isSafeInteger(Number(input.amountUgx)) || Number(input.amountUgx) <= 0 || Number(input.amountUgx) > 2_000_000_000 || !validMobilePhone(input.payerPhone))
     return "Enter a valid transaction ID, reported amount and the number used to make payment.";
   return null;

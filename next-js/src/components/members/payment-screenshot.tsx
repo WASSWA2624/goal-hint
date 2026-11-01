@@ -21,9 +21,9 @@ type Picked = { file: File; url: string };
 type Dialog = { title: string; message: string; kind: "error" | "duplicate" | "replace" | "pick" | "reuse";
   candidate?: Candidate; text?: string; metadata?: ScreenshotMetadata; files?: Picked[] };
 
-export function PaymentScreenshot({ image, metadata, provider, numbers, messageTransactionId, submissionId, disabled, requirementId, optional = false, onAccept, onRemove, onBusyChange, onPasteMessage }: {
-  image: Blob | null; metadata?: ScreenshotMetadata | null; provider: "mtn" | "airtel"; numbers: { mtn: string | null; airtel: string | null };
-  messageTransactionId: string | null; submissionId: string | null; disabled: boolean; requirementId: string; onAccept: (image: Blob, metadata: ScreenshotMetadata, text: string) => void;
+export function PaymentScreenshot({ image, metadata, provider, submissionId, disabled, requirementId, optional = false, onAccept, onRemove, onBusyChange, onPasteMessage }: {
+  image: Blob | null; metadata?: ScreenshotMetadata | null; provider: "mtn" | "airtel";
+  submissionId: string | null; disabled: boolean; requirementId: string; onAccept: (image: Blob, metadata: ScreenshotMetadata, text: string) => void;
   optional?: boolean;
   onRemove: () => void; onBusyChange: (busy: boolean) => void; onPasteMessage: () => void;
 }) {
@@ -47,7 +47,7 @@ export function PaymentScreenshot({ image, metadata, provider, numbers, messageT
         if (!controller.signal.aborted && mounted.current) setProgress(value.stage === "preparing" ? "Preparing screenshot reader…" : `Reading screenshot… ${value.progress}%`);
       }, controller.signal)).slice(0, 12000);
       if (controller.signal.aborted || !mounted.current) return;
-      const checked = inspectPaymentScreenshot(text, provider, numbers, messageTransactionId);
+      const checked = inspectPaymentScreenshot(text);
       if (!checked.ok) { failure(checked.message); return; }
       setProgress("Checking transaction…");
       checking = true;
@@ -123,7 +123,7 @@ export function PaymentScreenshot({ image, metadata, provider, numbers, messageT
     event.preventDefault(); void choose(files);
   }
   const busy = disabled || !!progress;
-  const ready = !!image && metadata?.version === 1 && metadata.provider === provider;
+  const ready = !!image && metadata?.version === 1;
   return <CheckoutEvidenceField>
     <header><label htmlFor={`${id}-file`}>Payment screenshot{optional ? " (optional)" : ""}</label></header>
     <VisuallyHidden as="input" ref={input} id={`${id}-file`} type="file" accept="image/*" disabled={busy}

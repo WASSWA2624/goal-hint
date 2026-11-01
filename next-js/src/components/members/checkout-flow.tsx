@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InputControl } from "@/components/ui/controls";
 import { FloatingField } from "@/components/ui/floating-field";
@@ -13,7 +13,7 @@ import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { paymentEvidence } from "@/domain/payment-sms";
-import { checkoutDetailsIssue, inspectPaymentMessage, paymentDestinationMismatch } from "@/domain/checkout-evidence";
+import { checkoutDetailsIssue, checkoutEvidenceWarnings, inspectPaymentMessage, type PaymentEvidenceWarning as EvidenceWarning } from "@/domain/checkout-evidence";
 import { paymentEvidenceDate } from "@/domain/payment-evidence-date";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { validMobilePhone } from "@/domain/phone-mobile";
@@ -26,6 +26,7 @@ import { Plan, PlanName, PlanPrice } from "./subscribe-styles";
 import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { PaymentScreenshot, screenshotDigest } from "./payment-screenshot";
 import { PaymentImagePreview } from "./payment-image-preview";
+import { PaymentEvidenceWarning } from "./payment-evidence-warning";
 import { sendCheckout as send } from "./checkout-client";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { capCheckoutFunding, chooseCheckoutMethod, loadCheckoutDraft, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
@@ -51,6 +52,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const [reading, setReading] = useState(""), storageWarning = useRef(false);
   const [notice, setNotice] = useState<{ title: string; message: string; confirm?: () => void; confirmLabel?: string; cancelLabel?: string } | null>(null);
   const [readingActive, setReadingActive] = useState(false);
+  const [warningDialog, setWarningDialog] = useState<{ warnings: EvidenceWarning[]; key: string; continue?: () => void } | null>(null);
+  const [warningsAccepted, setWarningsAccepted] = useState(""), autoWarningKey = useRef("");
   const [showNew, setShowNew] = useState(false), submitting = useRef(false), heading = useRef<HTMLHeadingElement>(null);
   const [quoteEpoch, setQuoteEpoch] = useState(0), lastQuoteKey = useRef<string | null>(null);
   const evidenceId = useId(), messageInput = useRef<HTMLTextAreaElement>(null);
@@ -136,26 +139,49 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const attaching = view.requests.find(r => r.id === draft.attachingId);
   const external = !!attaching || ["mtn", "airtel"].includes(draft.method);
   const receiptProvider = (attaching?.method ?? draft.method) === "airtel" ? "airtel" : "mtn";
-  const screenshotReady = !!image && draft.screenshot?.version === 1 && draft.screenshot.provider === receiptProvider;
-  const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber };
+  const screenshotReady = !!image && draft.screenshot?.version === 1;
+  const numbers = useMemo(() => ({ mtn: settings.mtnNumber, airtel: settings.airtelNumber,
+    ...(quote?.method === receiptProvider && quote.recipient ? { [receiptProvider]: quote.recipient } : {}) }),
+  [settings.mtnNumber, settings.airtelNumber, quote?.method, quote?.recipient, receiptProvider]);
   const screenshotText = image && typeof draft.extracted.screenshotText === "string" ? draft.extracted.screenshotText : "";
+  const hasImage = !!image;
+  const warnings = useMemo(() => external ? checkoutEvidenceWarnings({ text: draft.text, screenshotText, hasImage,
+    transactionId: draft.transactionId, amountUgx: draft.amountUgx }, receiptProvider, numbers) : [],
+  [external, draft.text, screenshotText, hasImage, draft.transactionId, draft.amountUgx, receiptProvider, numbers]);
+  const warningKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.text, screenshotText, draft.screenshot?.imageSha256, draft.transactionId, draft.amountUgx, draft.payerPhone]);
+  const sourceKey = JSON.stringify([draft.requestKey, receiptProvider, numbers, draft.originalText, screenshotText, hasImage]);
+  useEffect(() => {
+    if (!loaded || draft.step < 1 || !external || busy || readingActive || error || notice || warningDialog || draft.text !== draft.originalText) return;
+    if (!warnings.length || warningsAccepted === warningKey) { autoWarningKey.current = sourceKey; return; }
+    if (autoWarningKey.current === sourceKey) return;
+    const timer = setTimeout(() => { autoWarningKey.current = sourceKey; setWarningDialog({ warnings, key: warningKey }); }, 0);
+    return () => clearTimeout(timer);
+  }, [loaded, draft.step, external, busy, readingActive, error, notice, warningDialog, draft.text, draft.originalText, warnings, warningsAccepted, warningKey, sourceKey]);
   const effectiveQuote = attaching ? { ...attaching, purpose: attaching.purpose as CheckoutQuote["purpose"] } : quote;
+  function acknowledgeWarnings(action: () => void, acceptedKey = warningsAccepted) {
+    if (!warnings.length || acceptedKey === warningKey) return false;
+    autoWarningKey.current = sourceKey;
+    setWarningDialog({ warnings, key: warningKey, continue: action });
+    return true;
+  }
   function detailsIssue() {
-    return external ? checkoutDetailsIssue({ ...draft, screenshotText, hasImage: !!image, screenshotReady }, receiptProvider, numbers) : null;
+    return external ? checkoutDetailsIssue({ ...draft, screenshotText, hasImage, screenshotReady }) : null;
   }
   function review(event: FormEvent) {
     event.preventDefault();
     if (busy || readingActive) return;
     const issue = detailsIssue();
     if (issue) { setError(issue); return; }
+    if (acknowledgeWarnings(() => update({ step: 3 }))) return;
     update({ step: 3 });
   }
-  async function submit(event?: FormEvent, adjustmentAccepted = false, reuseAccepted = false) {
+  async function submit(event?: FormEvent, adjustmentAccepted = false, reuseAccepted = false, acceptedWarningKey = warningsAccepted) {
     event?.preventDefault(); if (submitting.current || readingActive) return;
     if (draft.step !== 3) return;
     if (!draft.accepted) { setError("Check the details and confirm the purchase terms."); return; }
     const issue = detailsIssue();
     if (issue) { update({ step: 2 }); setError(issue); return; }
+    if (acknowledgeWarnings(() => { void submit(undefined, adjustmentAccepted, reuseAccepted, warningKey); }, acceptedWarningKey)) return;
     submitting.current = true; setBusy(true); setError("");
     try {
       if (external) {
@@ -166,21 +192,21 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         if (check.reuse === "own") throw new Error(`This transaction is already linked to your request ${check.reference ?? ""}. Use the existing request; it cannot be credited twice.`);
         if (!reuseAccepted && (check.reuse === "reported" || check.imageRepeated)) {
           setNotice({ title: "Payment already reported", message: "This payment or screenshot has already been reported and cannot be credited twice. Review the details, or submit an ownership claim if this is your payment. The admin will check it before any allocation.",
-            cancelLabel: "Review details", confirmLabel: "Submit for review", confirm: () => { void submit(undefined, adjustmentAccepted, true); } }); return;
+            cancelLabel: "Review details", confirmLabel: "Submit for review", confirm: () => { void submit(undefined, adjustmentAccepted, true, acceptedWarningKey); } }); return;
         }
       }
       if (external && effectiveQuote && !adjustmentAccepted) {
         const difference = Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) - effectiveQuote.amountToSend;
         if (difference !== 0) {
           setNotice({ title: difference > 0 ? "Extra payment" : "Remaining payment", cancelLabel: "Review amount",
-            confirm: () => { void submit(undefined, true, reuseAccepted); },
+            confirm: () => { void submit(undefined, true, reuseAccepted, acceptedWarningKey); },
             message: difference > 0 ? `If confirmed, ${formatUgx(difference)} extra will be added to your wallet.`
               : `If confirmed, ${formatUgx(-difference)} will remain. Your request stays open until the full payment is verified.` }); return;
         }
       }
       const evidenceDate = paymentEvidenceDate(draft.text) ?? paymentEvidenceDate(screenshotText);
       const proof = external ? { transactionId: draft.transactionId, amountUgx: Number(draft.amountUgx), payerPhone: draft.payerPhone,
-        paidAt: evidenceDate ?? new Date().toISOString(), original: { text: draft.text.trim(),
+        warningsAccepted: !warnings.length || acceptedWarningKey === warningKey, paidAt: evidenceDate ?? new Date().toISOString(), original: { text: draft.text.trim(),
           extracted: { ...draft.extracted, paymentDateSource: evidenceDate ? "evidence" : "submission" } } } : undefined;
       const q = attaching ? null : await send<CheckoutQuote>({ action: "quote", selection: selection() });
       if (q && (!quote || q.quoteKey !== quote.quoteKey)) { setQuote(q); update({ accepted: false }); throw new Error("Funding changed. Check the updated summary and confirm again."); }
@@ -201,12 +227,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       extracted: { ...draft.extracted, ...extracted, ...(fromScreenshot ? { screenshotText: text } : {}) }, ...(evidence.transactionId ? { transactionId: evidence.transactionId } : {}),
       ...(evidence.amount !== null ? { amountUgx: String(evidence.amount) } : {}), ...(extracted.payerPhone ? { payerPhone: extracted.payerPhone } : {}), ...(paidAt ? { paidAt } : {}) });
     setReading(evidence.transactionId || evidence.amount ? "Details extracted. Check and correct every field below." : "");
-    const mismatch = paymentDestinationMismatch(text, receiptProvider, numbers, fromScreenshot ? "screenshot" : "transaction message");
-    if (mismatch) setError(mismatch);
-    else if (!evidence.transactionId && !evidence.amount) setError("We couldn’t find transaction details in this message. Paste the complete payment message, or check and enter its transaction details below.");
+    if (!evidence.transactionId && !evidence.amount) setError("We couldn’t find transaction details in this message. Paste the complete payment message, or check and enter its transaction details below.");
   }
   function pasteTransactionMessage(text: string) {
-    const checked = inspectPaymentMessage(text, receiptProvider, numbers, image ? draft.screenshot?.transactionId ?? paymentEvidence(screenshotText).transactionId : null);
+    const checked = inspectPaymentMessage(text);
     if (!checked.ok) { setError(checked.message); return; }
     extract(text);
   }
@@ -230,6 +254,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       method: request.method as CheckoutDraft["method"], attachingId: request.id });
   }
   return <>
+    {warningDialog && <PaymentEvidenceWarning warnings={warningDialog.warnings} onCancel={() => setWarningDialog(null)}
+      {...(!attaching ? { onChangeMethod: () => { setWarningDialog(null); update({ step: 1 }); } } : {})}
+      onContinue={() => { const action = warningDialog.continue; setWarningsAccepted(warningDialog.key); setWarningDialog(null); action?.(); }} />}
     {visibleRequests.map(request => <CheckoutPanel key={request.id} data-checkout-status={request.status}>
       <header role="status"><h2>{checkoutLabels[request.status] ?? request.status}</h2><p>Request ID: <strong>{request.reference}</strong></p></header>
       {request.status === "approved" ? <p>{request.purpose === "topup" ? "Wallet credited." : `Access until ${request.endsAt ? formatPeriodEnd(new Date(request.endsAt)) : "—"} (EAT).`}</p>
@@ -309,7 +336,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
                 if (draft.text && draft.text !== draft.originalText) extract(draft.text);
               }} />
           </FloatingField>
-          <PaymentScreenshot image={image} metadata={draft.screenshot ?? null} provider={receiptProvider} numbers={numbers} optional={!!draft.text.trim()} messageTransactionId={paymentEvidence(draft.text).transactionId}
+          <PaymentScreenshot image={image} metadata={draft.screenshot ?? null} provider={receiptProvider} optional={!!draft.text.trim()}
             submissionId={attaching?.id ?? null} disabled={busy} requirementId={`${evidenceId}-requirement`} onBusyChange={setReadingActive}
             onPasteMessage={() => messageInput.current?.focus()} onAccept={(screenshot, metadata, text) => { setImage(screenshot); extract(text, true, metadata); }}
             onRemove={() => { setImage(null); setReading(""); update({ screenshot: null,

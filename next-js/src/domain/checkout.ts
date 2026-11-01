@@ -17,6 +17,7 @@ export type CheckoutSelection = z.infer<typeof checkoutSelectionSchema>;
 export const receiptInputSchema = z.object({
   transactionId: z.string().trim().min(4).max(40), amountUgx: money.min(1), payerPhone: z.string().min(8).max(20),
   paidAt: z.iso.datetime({ offset: true }),
+  warningsAccepted: z.boolean().default(false),
   original: z.object({ text: z.string().max(12_000), extracted: z.record(z.string(), z.union([z.string(), z.number(), z.null()])) }).strict(),
 }).strict();
 export type ReceiptInput = z.infer<typeof receiptInputSchema>;

@@ -5,21 +5,18 @@ import { checkoutMethodAvailable, checkoutSelectionSchema, receiptInputSchema, f
 import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { paymentDateNotExtracted, paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
-import { checkoutDetailsIssue, inspectPaymentMessage, paymentDestinationMismatch } from "../src/domain/checkout-evidence.ts";
+import { checkoutDetailsIssue, checkoutEvidenceWarnings, inspectPaymentMessage, paymentDestinationMismatch, receiptEvidenceValidation } from "../src/domain/checkout-evidence.ts";
 import { deleteGroupedDigit, digitCaret, groupInteger } from "../src/domain/input-format.ts";
 import { formatNationalPhone, splitPhoneValue } from "../src/domain/phone-countries.ts";
 import { capCheckoutFunding, chooseCheckoutMethod } from "../src/components/members/checkout-draft.ts";
 import { inspectPaymentScreenshot, unreadableScreenshotMessage } from "../src/domain/payment-screenshot.ts";
 
 test("screenshots need a readable transaction ID and amount, without treating OCR as verification", () => {
-  const numbers = { mtn: "256700000901", airtel: "256700000902" };
-  const valid = inspectPaymentScreenshot("MTN Mobile Money. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers);
+  const valid = inspectPaymentScreenshot("MTN Mobile Money. Paid UGX 5,000. Transaction ID: DEMO123456");
   assert.equal(valid.ok, true); assert.equal(valid.evidence.transactionId, "DEMO123456");
   for (const text of ["Holiday photo", "UGX 5,000", "Transaction ID: DEMO123456", "DEMO123456"])
-    assert.deepEqual(inspectPaymentScreenshot(text, "mtn", numbers), { ok: false, message: unreadableScreenshotMessage });
-  const wrong = inspectPaymentScreenshot("Airtel Money. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers);
-  assert.equal(wrong.ok, false); assert.match(wrong.message, /selected MTN/);
-  assert.equal(inspectPaymentScreenshot("MTN. Paid UGX 5,000. Transaction ID: DEMO123456", "mtn", numbers, "OTHER987654").ok, false);
+    assert.deepEqual(inspectPaymentScreenshot(text), { ok: false, message: unreadableScreenshotMessage });
+  assert.equal(inspectPaymentScreenshot("Airtel Money. Paid UGX 5,000. Transaction ID: DEMO123456").ok, true);
 });
 
 test("provider checks compare receiving numbers separately from branding and exclude the payer", () => {
@@ -33,32 +30,44 @@ test("provider checks compare receiving numbers separately from branding and exc
   assert.equal(paymentDestinationMismatch(thread, "airtel", numbers), null);
 });
 
-test("message paste requires a complete readable transaction and compatible provider and screenshot", () => {
-  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+test("message paste requires a complete readable transaction; discrepancies are separate warnings", () => {
   const message = "MTN Mobile Money. You have sent UGX 5,000 to 0700000901. Transaction ID: TEST123456";
-  const valid = inspectPaymentMessage(message, "mtn", numbers);
+  const valid = inspectPaymentMessage(message);
   assert.equal(valid.ok, true); assert.equal(valid.evidence.transactionId, "TEST123456"); assert.equal(valid.evidence.amount, 5000);
   for (const text of ["", "shopping list", "5000", "TEST123456", "Transaction ID: TEST123456", "Paid UGX 5,000", "Fee UGX 500. Balance UGX 12,000. Transaction ID: TEST123456", `${message}${" ".repeat(12001)}`]) {
-    const rejected = inspectPaymentMessage(text, "mtn", numbers);
+    const rejected = inspectPaymentMessage(text);
     assert.equal(rejected.ok, false); assert.match(rejected.message, /complete MTN or Airtel message/);
   }
-  assert.equal(inspectPaymentMessage(message, "airtel", numbers).ok, false);
-  assert.equal(inspectPaymentMessage(message, "mtn", numbers, "TEST123456").ok, true);
-  const conflict = inspectPaymentMessage(message, "mtn", numbers, "OTHER99887766");
-  assert.equal(conflict.ok, false); assert.match(conflict.message, /different transaction IDs/);
-  assert.equal(inspectPaymentMessage("Airtel Money. Paid UGX 5,000 to 0700000902. TID: AIR123456", "airtel", numbers).ok, true);
+  assert.equal(inspectPaymentMessage("Airtel Money. Paid UGX 5,000 to 0700000902. TID: AIR123456").ok, true);
 });
 
-test("details require either evidence source and recheck provider changes before review", () => {
-  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+test("structural validation requires evidence and valid fields while discrepancies remain advisory", () => {
   const text = "MTN. Paid UGX 5,000 to 0700000901. Transaction ID: TEST12345";
   const input = { text, screenshotText: "", hasImage: false, screenshotReady: false, transactionId: "TEST12345", amountUgx: "5000", payerPhone: "256700000123" };
-  assert.equal(checkoutDetailsIssue(input, "mtn", numbers), null);
-  assert.match(checkoutDetailsIssue({ ...input, text: "" }, "mtn", numbers), /at least one/);
-  assert.equal(checkoutDetailsIssue({ ...input, text: "", screenshotText: text, hasImage: true, screenshotReady: true }, "mtn", numbers), null);
-  assert.match(checkoutDetailsIssue({ ...input, text: "", hasImage: true }, "mtn", numbers), /Recheck/);
-  assert.match(checkoutDetailsIssue(input, "airtel", numbers), /selected Airtel/);
-  assert.match(checkoutDetailsIssue({ ...input, screenshotText: text.replace("TEST12345", "DIFFERENT998877"), hasImage: true, screenshotReady: true }, "mtn", numbers), /different transaction/);
+  assert.equal(checkoutDetailsIssue(input), null);
+  assert.match(checkoutDetailsIssue({ ...input, text: "" }), /at least one/);
+  assert.equal(checkoutDetailsIssue({ ...input, text: "", screenshotText: text, hasImage: true, screenshotReady: true }), null);
+  assert.match(checkoutDetailsIssue({ ...input, text: "", hasImage: true }), /Recheck/);
+  assert.equal(checkoutDetailsIssue({ ...input, screenshotText: text.replace("TEST12345", "DIFFERENT998877"), hasImage: true, screenshotReady: true }), null);
+});
+
+test("advisory warnings cover method, source disagreements, entered fields and uncertain providers", () => {
+  const numbers = { mtn: "256700000901", airtel: "256700000902" };
+  const text = "MTN Mobile Money. Paid UGX 5,000 to 0700000901. Transaction ID: TEST12345";
+  const input = { text, screenshotText: text, hasImage: true, transactionId: "TEST12345", amountUgx: "5000" };
+  assert.deepEqual(checkoutEvidenceWarnings(input, "mtn", numbers), []);
+  assert.ok(checkoutEvidenceWarnings({ ...input, screenshotText: text.replace("TEST12345", "TEST12346") }, "mtn", numbers).some(w => w.id === "sources.id"), "Even one differing ID character warrants an advisory check");
+  assert.ok(checkoutEvidenceWarnings(input, "airtel", numbers).some(w => w.id === "message.method"));
+  const other = "Airtel Money. Paid UGX 6,000 to 0700000902. Transaction ID: OTHER99887766";
+  const ids = checkoutEvidenceWarnings({ ...input, screenshotText: other }, "mtn", numbers).map(w => w.id);
+  for (const id of ["screenshot.method", "screenshot.reported-id", "screenshot.reported-amount", "sources.id", "sources.amount", "sources.provider", "sources.recipient"]) assert.ok(ids.includes(id), id);
+  assert.ok(checkoutEvidenceWarnings({ ...input, text: "Transaction ID: TEST12345. Paid UGX 5,000", hasImage: false }, "mtn", numbers).some(w => w.id === "message.unknown-provider"));
+  const warning = { id: "message.method", message: "Provider differs" }, fingerprint = "a".repeat(64);
+  const original = { extracted: { validationVersion: 1, validationWarnings: JSON.stringify([warning]), validationFingerprint: fingerprint, selectedProvider: "mtn" } };
+  assert.equal(receiptEvidenceValidation(original, []).reviewed, false);
+  const history = [{ kind: "warning-review", validationFingerprint: fingerprint }];
+  assert.equal(receiptEvidenceValidation(original, history).reviewed, true);
+  assert.equal(receiptEvidenceValidation(original, [...history, { evidence: { extracted: { ...original.extracted, validationFingerprint: "b".repeat(64) } } }]).reviewed, false);
 });
 
 test("amount and phone displays retain canonical values and support edits around separators", () => {

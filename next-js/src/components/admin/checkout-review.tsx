@@ -6,6 +6,7 @@ import { formatUgx } from "@/domain/subscription-plans";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { checkoutLabels, checkoutOpenStatuses } from "@/domain/checkout";
 import { paymentDateNotExtracted as dateNotExtracted } from "@/domain/payment-evidence-date";
+import type { ReceiptEvidenceValidation } from "@/domain/checkout-evidence";
 import type { OwnerPayment } from "@/domain/owner-members";
 import { CheckoutActions } from "../members/checkout-parts";
 import { WizardReview } from "../members/payment-wizard";
@@ -17,7 +18,7 @@ type Receipt = { id: string; provider: string; transactionId: string; verifiedAt
 type Detail = { revision: number; status: string; walletUgx: number; referralDays: number; receivingNumber: string | null;
   reservationActive: boolean; reservationUntil: string | null; amountToSend: number; remainingUgx: number; excessUgx: number; verifiedUgx: number;
   claims: { id: string; receipt: Receipt; amountUgx: number; payerPhone: string | null; paidAt: string; original: unknown; corrections: unknown; imageSha256: string | null; withdrawn: boolean; purgedAt: string | null;
-    legacyImage: boolean; imageIsLegacy: boolean;
+    legacyImage: boolean; imageIsLegacy: boolean; validation: ReceiptEvidenceValidation;
     evidence: { id: string; createdAt: string }[] }[];
   events: { id: string; action: string; actor: string; reason: string | null; createdAt: string }[] };
 const Review = styled.article`
@@ -71,6 +72,17 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
         {detail.excessUgx > 0 && <div><dt>Wallet excess on approval</dt><dd>{formatUgx(detail.excessUgx)}</dd></div>}
       </WizardReview>
       {detail.claims.map(claim => <fieldset key={`${claim.id}:${detail.revision}`}><legend>{claim.receipt.provider.toUpperCase()} · {claim.receipt.transactionId}</legend>
+        {claim.validation.warnings.length > 0 && <section aria-label="Evidence discrepancies">
+          <p><strong>Customer continued with evidence warnings</strong> · Selected {claim.validation.selectedProvider?.toUpperCase()}</p>
+          <ul>{claim.validation.warnings.map(warning => <li key={warning.id}>{warning.message}</li>)}</ul>
+          <p>Verify the actual transfer on the selected receiving account. If the provider or transaction identity is wrong, request correction; do not credit it under another provider.</p>
+          {claim.validation.reviewed ? <p>Admin findings recorded for this evidence.</p> : !claim.withdrawn && pending && <form onSubmit={event => {
+            event.preventDefault(); const data = new FormData(event.currentTarget);
+            void act({ action: "review-evidence", claimId: claim.id, warningsChecked: data.has("warningsChecked"), reason: data.get("reason") });
+          }}><label>Findings and action taken<textarea name="reason" required minLength={3} maxLength={500} rows={2} /></label>
+            <label><input name="warningsChecked" type="checkbox" required /> Checked these differences against the original evidence and receiving-account records</label>
+            <Button variant="secondary" type="submit" disabled={busy}>Record evidence review</Button></form>}
+        </section>}
         <p>{claim.withdrawn ? "Withdrawn evidence · " : ""}Reported {formatUgx(claim.amountUgx)} · payer {claim.payerPhone ?? "unavailable"} · {dateNotExtracted(claim.original) ? "Payment date not read from evidence" : `${formatPeriodEnd(new Date(claim.paidAt))} EAT`}</p>
         {claim.purgedAt ? <p>Private evidence removed under the retention policy. Accounting is retained.</p> : <>
           {claim.legacyImage && <a href={`${url}/screenshot`} target="_blank" rel="noopener">Original screenshot</a>}
@@ -111,7 +123,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
         </form>}
       </fieldset>)}
       {pending && <>
-        <Button disabled={busy || blocked || detail.remainingUgx > 0 || !detail.reservationActive} onClick={() => void act({ action: "approve-checkout" }, true)}>Approve and next</Button>
+        <Button disabled={busy || blocked || detail.claims.some(c => !c.withdrawn && !c.validation.reviewed) || detail.remainingUgx > 0 || !detail.reservationActive} onClick={() => void act({ action: "approve-checkout" }, true)}>Approve and next</Button>
         <label>Reason / correction<textarea value={reason} maxLength={500} rows={2} onChange={event => setReason(event.target.value)} /></label>
         <CheckoutActions>
           <Button variant="secondary" disabled={busy || reason.trim().length < 3} onClick={() => void act({ action: "request-correction", reason })}>Request correction</Button>

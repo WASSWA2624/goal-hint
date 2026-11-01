@@ -96,7 +96,7 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
       const read = await readJsonBody(request); if ("refusal" in read) return read.refusal;
       const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config, ...(notifications ? { notifications } : {}) });
       try {
-        if (["verify-receipt", "approve-checkout", "reject-checkout", "request-correction", "mark-disputed", "resolve-dispute"].includes(String(b.action))) {
+        if (["verify-receipt", "approve-checkout", "review-evidence", "reject-checkout", "request-correction", "mark-disputed", "resolve-dispute"].includes(String(b.action))) {
           const outcome = await createCheckoutReview(services.database).act(id, b, owner.username);
           return json(outcome, outcome.ok ? 200 : 409);
         }
