@@ -6,25 +6,18 @@ import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { HeaderBrand } from "@/components/ui/brand";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
-import { defaultMatchView, openSection, type MatchSection, type MatchView } from "@/domain/match-view";
 import { feedReturnStorageKey, homeHref, matchesHref } from "@/domain/navigation";
 import { useMessages } from "@/i18n/use-messages";
 import { media } from "@/styles/theme";
 import { BackIcon } from "./details-icons";
-import { DetailsProvider, Note, ViewProvider, desktop, focusRing, size, useStableDetails } from "./details-ui";
-import { ContextSection, HistorySection, NewsSection, RefereeSection } from "./info-sections";
+import { DetailsProvider, Note, desktop, focusRing, size, useStableDetails } from "./details-ui";
 import { MatchBanner } from "./match-banner";
-import { MarketsCard } from "./markets-card";
-import { AnalysisDrawer } from "./analysis-drawer";
 import { Verdict } from "./verdict";
-import { LineupsSection, PlayersSection } from "./squad-sections";
-import { FormSection, H2HSection, StatsSection } from "./team-sections";
-import { DisclosureProvider } from "./section-card";
 import { useMatchView, useOpenByDefault } from "./use-match-view";
 import { TouchlineFeatured } from "./touchline-featured";
 import { TouchlineTabs } from "./touchline-tabs";
@@ -109,23 +102,6 @@ const BackLink = styled(Link)`
   }
 `;
 
-/**
- * The drawers in reading order: markets first, then the reasons, the match itself, the teams and the record.
- * Phones run them as one full-bleed list; desktop frames the list. An opened drawer reveals its section in place.
- */
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: start;
-  min-inline-size: 0;
-  ${(["markets", "analysis", "stats", "lineups", "form", "h2h", "players", "news", "context", "referee", "history"] as const)
-    .map((section, index) => `> [data-section="${section}"] { order: ${index}; }`).join("\n")}
-  ${media.belowDesktop} { margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter}); }
-  ${desktop} {
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-block-end: 0;
-  }
-`;
 const subscribeNever = () => () => {};
 /** The feed's last URL, written by the feed page; storage can be blocked, so null falls back to today. */
 function readFeedReturn(): string | null {
@@ -155,46 +131,6 @@ function PhoneHeader() {
   </PhoneHeaderGroup>;
 }
 
-/**
- * One section's view and disclosure. Desktop opens every section by default and remembers the reader's own
- * collapse; phones open one section at a time through the URL. The URL's section gets the live view, other open
- * sections a stable default view, closed ones a shared value that changes only with the URL's section, so
- * filters, pages and items inside one section re-render that card alone. Handlers read the URL through `update`.
- */
-function SectionView({ section, view, closed, byDefault, children }: {
-  section: MatchSection; view: MatchView; closed: MatchView; byDefault: boolean; children: ReactNode;
-}) {
-  const details = useStableDetails();
-  const focused = view.section === section;
-  // `choice`: the reader's own open or closed state on desktop. `inside`: the next focus change comes from this
-  // section's own controls (a filter, a page, an item) and must not move the page.
-  const [state, setState] = useState(() => ({ choice: null as boolean | null, focused, inside: false, reveal: focused ? 1 : 0 }));
-  if (state.focused !== focused) setState({ ...state, focused, inside: false, reveal: focused && !state.inside ? state.reveal + 1 : state.reveal });
-  const open = focused || (byDefault && state.choice !== false);
-  const expanded = useMemo(() => ({ ...defaultMatchView, section }), [section]);
-  // Interactions inside a section first make it the URL's section, so its filters, pages and items are addressable.
-  const scoped = useMemo(() => ({ ...details, update: ((change, mode) => {
-    setState((current) => ({ ...current, inside: true }));
-    details.update((current) => change(current.section === section ? current : openSection(current, section)), mode);
-  }) satisfies typeof details.update }), [details, section]);
-  const toggle = useCallback(() => {
-    if (open) {
-      setState((current) => ({ ...current, choice: false }));
-      if (focused) details.update((current) => openSection(current, null));
-    } else {
-      setState((current) => ({ ...current, choice: true, reveal: byDefault ? current.reveal + 1 : current.reveal }));
-      if (!byDefault) details.update((current) => openSection(current, section));
-    }
-  }, [byDefault, details, focused, open, section]);
-  const disclosure = useMemo(() => ({ open, byDefault: open && !focused && state.choice === null, reveal: state.reveal, toggle }),
-    [focused, open, state.choice, state.reveal, toggle]);
-  return <DetailsProvider value={scoped}>
-    <DisclosureProvider value={disclosure}>
-      <ViewProvider value={focused ? view : open ? expanded : closed}>{children}</ViewProvider>
-    </DisclosureProvider>
-  </DetailsProvider>;
-}
-
 export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false, showAccount = false, offer = null }: {
   data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean; showAccount?: boolean; offer?: SubscriptionOffer | null;
 }) {
@@ -212,30 +148,13 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
   }, [go, historyRequested, view]);
   const value = useMemo(() => ({ data, preview, locale, messages, go, update, home, away, fixtureId: fixture.fixtureId, history, showAccount, offer }),
     [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, update, showAccount, offer]);
-  const closed = useMemo(() => ({ ...defaultMatchView, section: view.section }), [view.section]);
-  const { marketsOpen, market, marketCategory, marketSearch } = view;
-  const markets = useMemo(() => ({ ...defaultMatchView, marketsOpen, market, marketCategory, marketSearch }),
-    [market, marketCategory, marketSearch, marketsOpen]);
-  const scoped = { view, closed, byDefault };
   return <DetailsProvider value={value}>
     <Page data-match-detail data-match-design={byDefault ? "touchline" : "phone"} data-fixture-id={fixture.fixtureId} data-detail-revision={data.snapshot?.revisionId ?? ""}>
       <PhoneHeader />
       <DesktopBackLink />
       <MatchBanner touchline={byDefault} />
       {byDefault ? <TouchlineFeatured /> : <Verdict />}
-      {byDefault ? <TouchlineTabs view={view} /> : <Grid>
-        <ViewProvider value={markets}><MarketsCard /></ViewProvider>
-        <AnalysisDrawer />
-        <SectionView section="stats" {...scoped}><StatsSection /></SectionView>
-        <SectionView section="h2h" {...scoped}><H2HSection /></SectionView>
-        <SectionView section="form" {...scoped}><FormSection /></SectionView>
-        <SectionView section="lineups" {...scoped}><LineupsSection /></SectionView>
-        <SectionView section="players" {...scoped}><PlayersSection /></SectionView>
-        <SectionView section="news" {...scoped}><NewsSection /></SectionView>
-        <SectionView section="context" {...scoped}><ContextSection /></SectionView>
-        <SectionView section="referee" {...scoped}><RefereeSection /></SectionView>
-        <SectionView section="history" {...scoped}><HistorySection /></SectionView>
-      </Grid>}
+      <TouchlineTabs view={view} />
       {!byDefault && <Note>{messages.text("details.disclaimer")}</Note>}
     </Page>
   </DetailsProvider>;

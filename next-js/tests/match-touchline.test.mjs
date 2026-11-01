@@ -4,6 +4,7 @@ import { matchDetailTabs, detailTabForView, openDetailTab, hasMatchPredictionAcc
 import { parseMatchView, parseMatchDetailsView, serializeMatchView, splitMatchViewParameters, openItem } from "../src/domain/match-view.ts";
 import { horizontalPitchPositions } from "../src/domain/match-details.ts";
 import { pitchCanvasPosition, referencePitch, pitchCanvas } from "../src/domain/football-pitch.ts";
+import { playerSchema } from "../src/domain/match-insights.ts";
 
 test("legacy injury links open the combined team sheet and retain the selected team/player", () => {
   const input = new URLSearchParams("section=injuries&team=away&item=away-17&tab=out&page=3&mk=closed&revision=kept");
@@ -24,12 +25,31 @@ test("Touchline tabs preserve deep links, revision state and their own section c
     const split = splitMatchViewParameters(Object.fromEntries(parameters));
     assert.equal(split.view.panel, panel); assert.deepEqual(split.rest, { revision: "kept", cycleAnchor: "7" });
   }
-  for (const [section, panel] of [["form", "stats"], ["players", "lineups"], ["injuries", "lineups"], ["history", "analysis"], ["referee", "venue"]]) {
+  for (const [section, panel] of [["form", "form"], ["h2h", "form"], ["players", "players"], ["injuries", "lineups"], ["history", "history"], ["referee", "referee"]]) {
     assert.equal(detailTabForView(parseMatchView({ section })), panel);
   }
   assert.equal(detailTabForView(parseMatchView({ market: "total-goals" })), "markets");
-  assert.equal(detailTabForView(openItem(openDetailTab(parseMatchView({}), "stats"), "news", "article-1")), "analysis");
+  assert.equal(detailTabForView(openItem(openDetailTab(parseMatchView({}), "stats"), "news", "article-1")), "news");
   assert.equal(parseMatchView({ panel: "invalid" }).panel, null);
+});
+
+test("the shared tab list has one combined results tab and old H2H links retain their controls", () => {
+  assert.deepEqual(matchDetailTabs.slice(0, 5), ["stats", "markets", "lineups", "form", "analysis"]);
+  const view = parseMatchView({ panel: "h2h", venue: "away", tab: "h2h-all", page: "2" });
+  assert.equal(view.panel, "form"); assert.equal(view.section, "h2h"); assert.equal(view.venue, "away");
+  assert.equal(view.tab, "h2h-all"); assert.equal(view.page, 2);
+  assert.equal(detailTabForView(view), "form");
+  for (const [panel, section, expected] of [["stats", "form", "form"], ["lineups", "players", "players"], ["analysis", "history", "history"], ["analysis", "news", "news"], ["venue", "referee", "referee"]]) {
+    const migrated = parseMatchDetailsView({ panel, section, item: "kept" });
+    assert.equal(migrated.panel, expected); assert.equal(migrated.item, "kept");
+  }
+});
+
+test("optional player details preserve old snapshots and reject invalid ages and fixture ratings", () => {
+  const base = { id: 1, team: "home", name: "Sample player", number: 9, position: "F", grid: "4:1", role: "starting" };
+  assert.deepEqual(playerSchema.parse(base), base);
+  assert.equal(playerSchema.parse({ ...base, nationality: "England", age: 28, rating: 7.4 }).rating, 7.4);
+  for (const extra of [{ age: -1 }, { age: 121 }, { rating: 11 }, { rating: Infinity }]) assert.equal(playerSchema.safeParse({ ...base, ...extra }).success, false);
 });
 
 test("pitch projections share a uniform reference scale and preserve mirrored halves", () => {

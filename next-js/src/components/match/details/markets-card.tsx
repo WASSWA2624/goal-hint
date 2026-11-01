@@ -61,41 +61,25 @@ const Head = styled.div`
 /** One table row per market from 320px; the narrowest phones use two lines. Below desktop a row reads like
  * the verdict: market name, pick with its live standing, and the chance. */
 const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
-  grid-template-columns: minmax(0, 1fr) auto 0.875rem;
-  grid-template-areas: "name pick chevron" "bar bar chevron";
-  column-gap: 8px;
-  @container details-card (min-width: 20rem) {
-    grid-template-columns: ${columns};
-    grid-template-areas: "name pick bar chevron";
-  }
-  @container details-card (min-width: 27rem) { grid-template-columns: ${wideColumns}; }
-  > span[data-bar] > span { display: none; }
-  @container details-card (max-width: 19.99rem) { > span[data-bar] > span { display: block; } }
-  @container details-card (min-width: 27rem) { > span[data-bar] > span { display: block; } }
-  > span[data-name] { grid-area: name; display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  > span[data-name] > span:last-child { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-name] > span:first-child { inline-size: 1.375rem; block-size: 1.375rem; border-radius: ${({ theme }) => theme.radius.small}; font-size: ${size("body")}; }
-  > span[data-pick] { grid-area: pick; padding: 3px 6px; border: 1px solid ${({ theme }) => theme.color.border}; border-inline-start: 3px solid ${({ theme, $family }) => theme.color.market[$family].solid}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
-  > span[data-bar] { grid-area: bar; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
-  > span[data-bar] > b { min-inline-size: 2.25rem; }
-  > svg { grid-area: chevron; color: ${({ theme }) => theme.color.mutedText}; }
-  > span[data-code] { display: none; grid-area: code; color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > span[data-pick] > :is([data-standing], [data-outcome]) { margin-inline-start: 6px; vertical-align: -0.2em; }
-  /* Doubled class: these phone rules outrank the card-width container queries above. */
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.1fr) 4rem .75rem;
+  align-items: center; gap: 8px; min-block-size: 44px;
+  > span[data-name] { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+  > span[data-name] > span:first-child { flex: none; inline-size: 1.25rem; block-size: 1.25rem; font-size: .8125rem; }
+  > span[data-name] > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  > span[data-pick] { display: flex; align-items: center; gap: 5px; min-inline-size: 0; font-weight: 700; }
+  > span[data-pick] > span:first-child { display: inline-flex; align-items: center; gap: 4px; min-inline-size: 0; white-space: nowrap; }
+  > span[data-pick] > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+  > span[data-pick] [data-selected-odds] { flex: none; }
+  > span[data-bar] { font-variant-numeric: tabular-nums; text-align: end; }
+  > svg { color: ${({ theme }) => theme.color.mutedText}; }
   ${media.belowDesktop} {
-    && {
-      grid-template-columns: 3.25rem minmax(0, 1fr) auto 0.875rem;
-      grid-template-areas: "code pick bar chevron";
-      column-gap: 10px;
-      min-block-size: 2.5rem;
-      padding-inline: 0;
-    }
-    && > span[data-name] { display: none; }
-    && > span[data-code] { display: block; }
-    && > span[data-pick] { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0; border: 0; font-size: ${size("body")}; }
-    && > span[data-pick] > :is([data-standing], [data-outcome]) { flex: none; margin: 0; white-space: nowrap; }
-    && > span[data-bar] > b { min-inline-size: 0; font-size: ${size("emphasis")}; text-align: end; }
-    && > span[data-bar] > span { display: none; }
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto .625rem;
+    gap: 6px; padding: 7px 0; font-size: .75rem;
+    > span[data-name] { font-size: .6875rem; gap: 4px; }
+    > span[data-name] > span:first-child { inline-size: 1rem; block-size: 1rem; font-size: .6875rem; }
+    > span[data-bar] > b { font-size: .875rem; }
+    > span[data-pick] > :is([data-standing], [data-outcome]) { font-size: .625rem; }
+    [data-selected-odds] { font-size: .625rem; }
   }
 `;
 const Tools = styled.div`
@@ -263,7 +247,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
       onToggle={() => update((current) => ({ ...current, marketsOpen: !current.marketsOpen, market: current.marketsOpen ? null : current.market }))}
       headingId="section-markets-title" />}
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
-      {view.marketsOpen && (view.market && view.market !== featured ? <MarketPanel family={view.market} /> : <Body>
+      {view.marketsOpen && (view.market ? <MarketPanel family={view.market} /> : <Body>
         <Tools>
           <Search><SearchIcon aria-hidden="true" /><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
             aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>
@@ -285,10 +269,10 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
                   aria-label={[messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) }),
                     price ? `${messages.text("details.odds")}: ${price}` : null,
                     standing ? messages.text("details.standingLabel", { standing: messages.text(`details.standing.${standing}`) }) : null].filter(Boolean).join(". ")}>
-                  <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span>{marketName(messages, family)}</span></span>
-                  <span data-code aria-hidden="true">{marketName(messages, family)}</span>
+                  <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span title={marketName(messages, family)}>{marketName(messages, family)}</span></span>
+
                   <span data-pick><span>{item ? <PredictionOutcome messages={messages} selection={item.market.selection} /> : pick}<PredictionOdds odds={price} /></span>{standing ? <Standing standing={standing} compact /> : settled && <DetailOutcome status={settled} />}</span>
-                  <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b><ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${item.market.selectedProbability * 100}%` }} /></ProbabilityBar></>
+                  <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b></>
                     : <b>—</b>}</span>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}><path d="m9 6 6 6-6 6" /></svg>
                 </MarketRow>

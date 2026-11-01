@@ -6,11 +6,12 @@ import { isCompletedFixtureStatus } from "./market-settlement.ts";
 export { matchDetailTabs, type MatchDetailTab } from "./match-view.ts";
 export const hasMatchPredictionAccess = (data: MatchDetailResponse) => data.access.tier === "full" || isCompletedFixtureStatus(data.fixture.status);
 const sections: Record<MatchDetailTab, MatchSection | null> = {
-  stats: "stats", h2h: "h2h", standings: "context", lineups: "lineups", markets: null, events: null, venue: "context", analysis: "news",
+  stats: "stats", markets: null, lineups: "lineups", form: "form", analysis: null, events: null,
+  standings: "context", players: "players", news: "news", venue: "context", referee: "referee", history: "history",
 };
 const sectionTabs: Record<MatchSection, MatchDetailTab> = {
-  stats: "stats", form: "stats", h2h: "h2h", lineups: "lineups", players: "lineups", injuries: "lineups",
-  news: "analysis", history: "analysis", context: "venue", referee: "venue",
+  stats: "stats", form: "form", h2h: "form", lineups: "lineups", players: "players", injuries: "lineups",
+  news: "news", history: "history", context: "venue", referee: "referee",
 };
 export function detailTabForView(view: MatchView): MatchDetailTab {
   return view.panel ?? (view.market ? "markets" : view.section ? sectionTabs[view.section] : "stats");

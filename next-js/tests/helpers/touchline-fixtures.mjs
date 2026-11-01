@@ -17,7 +17,9 @@ const grids = { home: ["1:1", "2:1", "2:2", "2:3", "2:4", "3:1", "3:2", "3:3", "
 const team = value => value.id === "ars" ? teams.home : teams.away;
 const player = (value, side, role, index) => ({ id: index + (side === "home" ? 1 : 101), team: side, name: value.name,
   number: value.number, position: value.position.startsWith("Goal") ? "G" : value.position.includes("back") ? "D" : value.position.includes("fielder") ? "M" : "F",
-  grid: role === "starting" ? grids[side][index] : null, role });
+  grid: role === "starting" ? grids[side][index] : null, role,
+  nationality: ["England", "France", "Ghana", "Brazil"][index % 4], age: 20 + index % 12,
+  rating: index % 4 === 3 ? null : 7 + (index % 9) / 10 });
 const result = (value, index) => ({ fixtureId: `meeting-${index}`, slug: "arsenal-liverpool", kickoffAt: Date.parse(value.date),
   competition: { id: value.competition.replaceAll(" ", "-"), name: value.competition, logoUrl: null },
   home: team(value.home), away: team(value.away), homeGoals: value.homeScore, awayGoals: value.awayScore, status: "finished-regulation" });
@@ -37,7 +39,8 @@ export const touchlineScenarios = Object.fromEntries(Object.entries(accessScenar
       detail.snapshot.analysis.uncertainty = { text: "Selection changes and a cautious opening could affect the match pattern.", sourceUrls: [] };
     }
     if (detail.fixture.forecast) detail.fixture.forecast.markets = detail.snapshot.markets.map(({ market, reasons, uncertainty }) => ({ market, reasons, uncertainty }));
-    detail.fixture.prices = [];
+    detail.fixture.prices = detail.fixture.forecast ? [{ family: "match-result", selection: "home-win", price: "2.15", basis: "bookmaker", retrievedAt: now, providerUpdatedAt: null },
+      { family: "double-chance", selection: "home-or-draw", price: "1.45", basis: "bookmaker", retrievedAt: now, providerUpdatedAt: null }] : [];
     if (detail.fixture.forecast) detail.fixture.unavailableMarkets = [];
   }
   const sections = value.insights.sections;

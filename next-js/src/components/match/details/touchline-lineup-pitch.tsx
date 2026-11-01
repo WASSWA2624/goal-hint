@@ -4,11 +4,11 @@ import styled from "styled-components";
 import type { CSSProperties } from "react";
 import { media } from "@/styles/theme";
 import { pitchCanvas, pitchCanvasPosition, referencePitch } from "@/domain/football-pitch";
-import { horizontalPitchPositions, playerKey, positionGroup } from "@/domain/match-details";
+import { horizontalPitchPositions, playerKey } from "@/domain/match-details";
 import type { InsightSections } from "@/domain/match-insights";
 import { FootballPitch } from "../football-pitch";
 import { focusRing, useStableDetails } from "./details-ui";
-import { playerPositionLabel } from "./labels";
+import { lineupDetailLabel, lineupDetailValue, type LineupDisplay } from "./lineup-player-detail";
 
 type Side = "home" | "away";
 type Lineups = InsightSections["lineups"];
@@ -51,7 +51,7 @@ const Marker = styled.button`
     [data-shirt], [data-shirt] > svg { inline-size: 24px; block-size: 26px; }
     [data-shirt] > b { inset-block-start: 7px; }
     [data-shirt] > [data-phone-position] { display: block; font-size: .5rem; }
-    &[data-profile="position"] [data-shirt-number] { display: none; }
+    &:not([data-profile="number"]) [data-shirt-number] { display: none; }
     [data-player-name] { display: none; }
     [data-phone-name] { display: block; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     [data-position] { display: none; }
@@ -69,7 +69,7 @@ const compactName = (name: string) => {
 };
 
 /** Both sides share one field. No positions are inferred when provider grid coordinates are absent. */
-export function TouchlineLineupPitch({ lineups, sides, display, selectTeam = false }: { lineups: Lineups; sides: readonly Side[]; display: "number" | "position"; selectTeam?: boolean }) {
+export function TouchlineLineupPitch({ lineups, sides, display, selectTeam = false }: { lineups: Lineups; sides: readonly Side[]; display: LineupDisplay; selectTeam?: boolean }) {
   const { messages, home, away, update } = useStableDetails();
   const teams = sides.map(side => {
     const positions = horizontalPitchPositions(lineups[side]?.starters ?? [], side, lineups[side]?.formation);
@@ -82,19 +82,19 @@ export function TouchlineLineupPitch({ lineups, sides, display, selectTeam = fal
   return <Field data-touchline-pitch role="group" aria-label={messages.text("details.formationView")}>
     <FootballPitch aria-hidden="true" />
     {teams.map(({ side, positions, width, phoneWidth }) => <div key={side} role="group" aria-label={side === "home" ? home : away}>
-      {positions?.map(({ player, x, y }) => { const point = pitchCanvasPosition(x, y), group = positionGroup(player.position);
+      {positions?.map(({ player, x, y }) => { const point = pitchCanvasPosition(x, y);
         return <Marker type="button" key={player.id} data-side={side} data-profile={display} data-item-key={playerKey(side, player.id)}
         style={{ "--player-x": `${point.x}%`, "--player-y": `${point.y}%`, "--player-width": `${width * referencePitch.length / pitchCanvas.length}%`,
           "--phone-x": `${point.y}%`, "--phone-y": `${100 - point.x}%`, "--phone-width": `${phoneWidth}%` } as CSSProperties}
         onClick={() => update(current => ({ ...current, ...(selectTeam ? { team: side } : {}), item: playerKey(side, player.id) }))}
-        title={`${player.name ?? messages.text("details.playerUnknown")} · ${playerPositionLabel(messages, player.position)}`}
-        aria-label={`${messages.text("details.playerOpen", { player: player.name ?? messages.text("details.playerUnknown") })} · ${playerPositionLabel(messages, player.position)}`}>
+        title={`${player.name ?? messages.text("details.playerUnknown")} · ${lineupDetailLabel(messages, display)}: ${lineupDetailValue(messages, player, display) ?? messages.text("details.notProvided")}`}
+        aria-label={`${messages.text("details.playerOpen", { player: player.name ?? messages.text("details.playerUnknown") })} · ${lineupDetailLabel(messages, display)}: ${lineupDetailValue(messages, player, display) ?? messages.text("details.notProvided")}`}>
         <span data-shirt aria-hidden="true"><svg viewBox="0 0 42 44" fill="currentColor" stroke="white" strokeWidth="1"><path d="m12 3-9 5-2 10 7 3 3-5v26h20V16l3 5 7-3-2-10-9-5c-1 7-17 7-18 0Z" /></svg><b data-shirt-number>{player.number ?? "–"}</b>
-          {display === "position" && <b data-phone-position>{group ? { G: "GK", D: "DEF", M: "MID", F: "FWD" }[group] : "–"}</b>}
+          {display !== "number" && <b data-phone-position>{lineupDetailValue(messages, player, display, true) ?? "–"}</b>}
         </span>
         <span data-player-name>{player.name ?? messages.text("details.playerUnknown")}</span>
         <span data-phone-name aria-hidden="true">{player.name ? compactName(player.name) : messages.text("details.playerUnknown")}</span>
-        {display === "position" && <span data-position>{playerPositionLabel(messages, player.position)}</span>}
+        {display !== "number" && <span data-position>{lineupDetailValue(messages, player, display) ?? "–"}</span>}
       </Marker>; })}
     </div>)}
   </Field>;

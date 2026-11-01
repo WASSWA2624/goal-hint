@@ -7,7 +7,7 @@ import { isMarketFamily, type MarketFamily } from "./markets.ts";
  */
 export const matchSections = ["stats", "h2h", "form", "lineups", "players", "news", "injuries", "context", "referee", "history"] as const;
 export type MatchSection = (typeof matchSections)[number];
-export const matchDetailTabs = ["stats", "h2h", "standings", "lineups", "markets", "events", "venue", "analysis"] as const;
+export const matchDetailTabs = ["stats", "markets", "lineups", "form", "analysis", "events", "standings", "players", "news", "venue", "referee", "history"] as const;
 export type MatchDetailTab = (typeof matchDetailTabs)[number];
 export const marketCategories = ["popular", "results", "goals", "btts", "double-chance", "draw-no-bet", "handicaps", "corners",
   "cards", "halves", "correct-score", "clean-sheets", "specials"] as const;
@@ -18,9 +18,9 @@ export type TeamFocus = "both" | "home" | "away";
 export type VenueFocus = "all" | "home" | "away";
 
 export type MatchView = Readonly<{
-  /** Desktop information tab; null resolves legacy section/market links. */
+  /** Shared information tab; null resolves legacy section/market links. */
   panel: MatchDetailTab | null;
-  /** All Markets & Odds starts expanded; `mk=closed` collapses it. */
+  /** Legacy market-disclosure state; the selected Markets tab always shows its content. */
   marketsOpen: boolean;
   marketCategory: MarketCategory;
   marketSearch: string;
@@ -56,13 +56,13 @@ const oneOf = <T extends string>(values: readonly T[], value: string | undefined
 
 export function parseMatchView(input: Parameters): MatchView {
   const get = reader(input);
-  const section = oneOf<MatchSection | "">([...matchSections, ""], get("section"), "") || null;
+  const section = oneOf<MatchSection | "">([...matchSections, ""], get("section"), "") || (get("panel") === "h2h" ? "h2h" : null);
   const page = Number(get("page"));
   const window = Number(get("window") ?? 5);
   const search = (get("mq") ?? "").normalize("NFC").replace(/[\u0000-\u001f\u007f]/gu, "").slice(0, 80);
   const item = get("item"), tab = get("tab"), market = get("market"), competition = get("comp");
   return {
-    panel: oneOf<MatchDetailTab | "">([...matchDetailTabs, ""], get("panel"), "") || null,
+    panel: oneOf<MatchDetailTab | "">([...matchDetailTabs, ""], get("panel") === "h2h" ? "form" : get("panel"), "") || null,
     marketsOpen: get("mk") !== "closed",
     marketCategory: oneOf(marketCategories, get("mcat"), "popular"),
     marketSearch: search,
@@ -82,7 +82,11 @@ export function parseMatchView(input: Parameters): MatchView {
 /** Availability now belongs to the team sheet; old links retain their team/player. */
 export function parseMatchDetailsView(input: Parameters): MatchView {
   const view = parseMatchView(input);
-  return view.section === "injuries" ? { ...view, section: "lineups", tab: null, page: 1 } : view;
+  if (view.section === "injuries") return { ...view, panel: "lineups", section: "lineups", tab: null, page: 1 };
+  const legacy: Record<string, MatchDetailTab> = { "stats:form": "form", "lineups:players": "players",
+    "analysis:news": "news", "analysis:history": "history", "venue:referee": "referee" };
+  const panel = legacy[`${view.panel}:${view.section}`];
+  return panel ? { ...view, panel } : view;
 }
 
 /** Serializes only non-default view state, preserving every unrelated key and its order. */

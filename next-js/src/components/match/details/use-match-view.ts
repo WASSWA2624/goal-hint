@@ -40,8 +40,8 @@ function subscribeDesktop(change: () => void) {
   return () => list.removeEventListener("change", change);
 }
 /**
- * Desktop opens every section by default; phones keep one-line drawers. The server renders the desktop default
- * and phones close the sections as soon as they hydrate (CSS hides them until then).
+ * Share one responsive boundary for the featured prediction and lineup layouts. The server renders
+ * the desktop layout; phones switch to their compact presentation when they hydrate.
  */
 export function useOpenByDefault(): boolean {
   return useSyncExternalStore(subscribeDesktop, () => window.matchMedia(desktopQuery).matches, () => true);

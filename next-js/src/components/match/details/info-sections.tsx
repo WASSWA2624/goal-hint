@@ -9,6 +9,7 @@ import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calend
 import { providerImageSource } from "@/components/ui/provider-image";
 import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
+import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { openItem } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
 import { plainClick } from "@/components/match/filter-parts";
@@ -74,15 +75,18 @@ function NewsRows({ items }: { items: readonly NewsItem[] }) {
   </li>)}</>;
 }
 
-export const NewsSection = memo(function NewsSection() {
-  const { preview, messages, view, update, fixtureId } = useDetails();
+export const NewsSection = memo(function NewsSection({ omitPredictionAnalysis = false }: { omitPredictionAnalysis?: boolean }) {
+  const { data, preview, messages, view, update, fixtureId } = useDetails();
   const open = view.section === "news";
   const news = useInsightSection(fixtureId, "news", open, preview);
-  const items = news.data?.items ?? preview?.sections.news.items ?? [];
-  const total = news.data?.items.length ?? preview?.totals.news ?? 0;
+  const supplied = news.data?.items ?? preview?.sections.news.items ?? [];
+  const analysis = fullDetailSnapshot(data)?.analysis;
+  const predictionTexts = new Set([...(analysis?.reasons.map(reason => reason.text) ?? []), analysis?.uncertainty?.text]);
+  const items = omitPredictionAnalysis ? supplied.filter(item => item.kind !== "analysis" || !predictionTexts.has(item.title)) : supplied;
+  const total = omitPredictionAnalysis ? items.length : news.data?.items.length ?? preview?.totals.news ?? 0;
   const kind = (["report", "analysis"] as const).find((entry) => entry === view.tab) ?? null;
   const filtered = items.filter((item) => kind === null || item.kind === kind), paged = pageOf(filtered, view.page, 10);
-  const selected = view.item ? items.find((item) => item.id === view.item) ?? null : null;
+  const selected = view.item ? supplied.find((item) => item.id === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
   const limited = news.data?.limitedNews ?? preview?.sections.news.limitedNews ?? false;

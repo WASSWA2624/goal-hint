@@ -31,7 +31,10 @@ export const upcomingFixtureSchema = z.strictObject({ fixtureId: id, slug: insig
 const teamSide = z.enum(["home", "away"]);
 export const playerSchema = z.strictObject({ id: z.number().int().positive(), team: teamSide, name: text(256).nullable(),
   number: z.number().int().min(0).max(999).nullable(), position: text(32).nullable(), grid: text(16).nullable(),
-  role: z.enum(["starting", "substitute"]).nullable() });
+  role: z.enum(["starting", "substitute"]).nullable(),
+  nationality: text(128).nullable().optional(), age: z.number().int().min(0).max(120).nullable().optional(),
+  /** A supplied rating for this fixture, never a season or career average. */
+  rating: z.number().min(0).max(10).nullable().optional() });
 export const lineupSchema = z.strictObject({ team: teamSide, formation: text(32).nullable(), status: z.enum(["confirmed"]),
   updatedAt: at.nullable(), retrievedAt: at, starters: z.array(playerSchema).max(30), substitutes: z.array(playerSchema).max(40) });
 export const injurySchema = z.strictObject({ team: teamSide, playerId: z.number().int().positive(), playerName: text(256).nullable(),

@@ -10,6 +10,7 @@ import { noPickReason } from "@/domain/feed-presentation";
 import { detailRecordNotices } from "@/domain/detail-presentation";
 import { featuredFamily, liveStanding, marketRow, selectedDetailPrice } from "@/domain/match-details";
 import { toUtcIsoString } from "@/domain/calendar";
+import { openDetailTab } from "@/domain/match-detail-tabs";
 import type { MarketFamily } from "@/domain/markets";
 import { media } from "@/styles/theme";
 import { desktopContentPadding } from "@/components/ui/layout";
@@ -113,7 +114,7 @@ export const Verdict = memo(function Verdict() {
   return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
       {standing ? <Standing standing={standing} /> : settled && settled !== "pending" ? <DetailOutcome status={settled} /> : null}</Eyebrow>
-    <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))}
+    <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...openDetailTab(current, "markets"), market: featured }))}
       aria-label={[messages.text("details.featuredOpen", { market: marketName(messages, featured), pick, probability: chance }),
         price ? `${messages.text("details.odds")}: ${price}` : null].filter(Boolean).join(". ")}>
       <span data-pick><strong><PredictionOutcome messages={messages} selection={item.market.selection} /></strong><small>{marketName(messages, featured)}<PredictionOdds odds={price} /></small></span>

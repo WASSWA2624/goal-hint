@@ -108,7 +108,10 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
         if (!playerId) continue;
         const role: "starting" | "substitute" | null = value.role === "starting" || value.role === "substitute" ? value.role : null;
         const player = { id: playerId, team: side, name: string(value.playerName), number: integer(value.number), position: string(value.position)?.slice(0, 32) ?? null,
-          grid: string(value.grid)?.slice(0, 16) ?? null, role };
+          grid: string(value.grid)?.slice(0, 16) ?? null, role,
+          nationality: string(value.nationality)?.slice(0, 128) ?? null,
+          age: typeof value.age === "number" && Number.isSafeInteger(value.age) && value.age >= 0 && value.age <= 120 ? value.age : null,
+          rating: typeof value.rating === "number" && Number.isFinite(value.rating) && value.rating >= 0 && value.rating <= 10 ? value.rating : null };
         players.set(`${side}:${playerId}`, player);
         const lineup = lineups[side] ?? { team: side, formation: string(value.formation)?.slice(0, 32) ?? null, status: "confirmed" as const,
           updatedAt: claim.asOfAt, retrievedAt: source.retrievedAt, starters: [], substitutes: [] };

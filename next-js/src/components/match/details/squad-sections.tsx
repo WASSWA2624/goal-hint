@@ -12,10 +12,11 @@ import { InjuryIcon, LineupIcon, PlayerIcon } from "./details-icons";
 import {
   ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, size, useDetails, type Messages,
 } from "./details-ui";
-import { ItemPanel, SectionCard, useEmbeddedSection, useReturnFocus } from "./section-card";
-import { useInsightSection } from "./use-match-view";
+import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
+import { useInsightSection, useOpenByDefault } from "./use-match-view";
 import { TouchlineLineupPitch } from "./touchline-lineup-pitch";
 import { playerPositionLabel } from "./labels";
+import { lineupDisplayFields, lineupDisplayFromTab, lineupDetailLabel, lineupDetailValue } from "./lineup-player-detail";
 import { Icon } from "@/components/ui/icons";
 
 type Player = InsightSections["players"]["players"][number];
@@ -45,6 +46,9 @@ function PlayerPanel({ player, injury, lineup }: { player: Player | null; injury
       <dt>{messages.text("details.team")}</dt><dd>{side === "home" ? home : away}</dd>
       <dt>{messages.text("details.number")}</dt><dd>{player?.number ?? "—"}</dd>
       <dt>{messages.text("details.position")}</dt><dd>{playerPositionLabel(messages, player?.position ?? null)}</dd>
+      {(["nationality", "age", "rating"] as const).map(field => <div key={field} style={{ display: "contents" }}>
+        <dt>{lineupDetailLabel(messages, field)}</dt><dd>{lineupDetailValue(messages, player, field) ?? messages.text("details.notProvided")}</dd>
+      </div>)}
       <dt>{messages.text("details.lineupRole")}</dt><dd>{player?.role ? messages.text(`details.role.${player.role}`)
         : messages.text(lineup ? "details.notInLineup" : "details.lineupNotPublished")}</dd>
       <dt>{messages.text("details.availability")}</dt><dd>{injury ? <>
@@ -155,11 +159,12 @@ function LineupTeamTabs({ selected, panelId }: { selected: "home" | "away"; pane
 }
 
 function LineupPlayerList({ players, side, kind }: { players: Lineup["starters"]; side: "home" | "away"; kind: "starters" | "substitutes" }) {
-  const { messages, update } = useDetails();
+  const { messages, update, view } = useDetails();
+  const display = lineupDisplayFromTab(view.tab);
   return <RowList data-lineup-players={kind}>{players.map(player => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
     onClick={() => update(current => ({ ...current, item: playerKey(side, player.id) }))}>
     <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span>
-    <span>{player.position ? playerPositionLabel(messages, player.position) : ""}</span><span />
+    <span data-player-detail>{lineupDetailValue(messages, player, display === "number" ? "position" : display) ?? "–"}</span><span />
   </PlayerRow></li>)}</RowList>;
 }
 
@@ -173,7 +178,7 @@ function LineupTimestamp({ lineup, teamName }: { lineup: Lineup; teamName?: stri
 
 function LineupRosters({ lineups, sides, hasPitch, injuries }: { lineups: InsightSections["lineups"]; sides: readonly ("home" | "away")[]; hasPitch: boolean; injuries: readonly Injury[] }) {
   const { data, messages, home, away } = useDetails();
-  const embedded = useEmbeddedSection();
+  const embedded = useOpenByDefault();
   return <LineupGrid $besidePitch={embedded && hasPitch} $single={sides.length === 1} data-touchline-bench={embedded && hasPitch || undefined}>
     {sides.map(side => {
       const lineup = lineups[side];
@@ -196,8 +201,8 @@ export const LineupsSection = memo(function LineupsSection() {
   const { data, messages, home, away, view, update } = useDetails();
   const open = view.section === "lineups";
   const lookup = usePlayerLookup(open);
-  const embedded = useEmbeddedSection();
-  const display = view.tab === "lineup-position" ? "position" : "number";
+  const embedded = useOpenByDefault();
+  const display = lineupDisplayFromTab(view.tab);
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
   const lineups = lookup.allLineups;
@@ -218,12 +223,13 @@ export const LineupsSection = memo(function LineupsSection() {
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>{embedded && <TeamChoice />}<label>{messages.text("touchline.profileDetails")} <select aria-label={messages.text("touchline.profileDetails")} value={display} onChange={event => {
-        const tab = event.target.value === "position" ? "lineup-position" : null;
+        const tab = event.target.value === "number" ? null : `lineup-${event.target.value}`;
         update(current => ({ ...current, tab }), "replace");
       }}>
-        <option value="number">{messages.text("details.number")}</option><option value="position">{messages.text("details.position")}</option>
-        {embedded && <><option disabled>{messages.text("touchline.age")} · {messages.text("details.notAvailable")}</option><option disabled>{messages.text("touchline.rating")} · {messages.text("details.notAvailable")}</option></>}
+        {lineupDisplayFields.map(field => <option key={field} value={field}>{lineupDetailLabel(messages, field)}</option>)}
       </select></label></PanelBar>
+      {!Object.values(lineups).some(lineup => lineup && [...lineup.starters, ...lineup.substitutes].some(player => lineupDetailValue(messages, player, display) !== null)) && any &&
+        <Note>{messages.text("touchline.playerDetailMissing", { detail: lineupDetailLabel(messages, display) })}</Note>}
       <LineupWorkspace $pitch={embedded && hasPitch}>
       <div data-field-column>
         {hasPitch && <PitchTeams>{pitchSides.map(side => <div key={side} data-side={side}>
@@ -233,7 +239,6 @@ export const LineupsSection = memo(function LineupsSection() {
         </div>)}</PitchTeams>}
         {hasPitch ? <TouchlineLineupPitch lineups={lineups} sides={pitchSides} display={display} selectTeam={!embedded} />
           : any && <Note>{messages.text("touchline.positionsMissing")}</Note>}
-        {hasPitch && <Note>{messages.text("touchline.formationSchematic")}</Note>}
       </div>
       <div style={{ minWidth: 0 }}>
         {!embedded && <LineupTeamTabs selected={selected} panelId={panelId} />}
@@ -244,7 +249,7 @@ export const LineupsSection = memo(function LineupsSection() {
       </LineupWorkspace>
       <TeamSheetDetails><summary>{messages.text("touchline.teamSheetDetails")}</summary><div>
         {sides.map(side => { const lineup = lineups[side]; return lineup && <LineupTimestamp key={side} lineup={lineup} teamName={side === "home" ? home : away} />; })}
-        <Note>{messages.text("touchline.playerDetailsMissing")}</Note><Note>{messages.text("details.managerMissing")}</Note><Note>{messages.text("details.injuryBasis")}</Note>
+        <Note>{messages.text("details.managerMissing")}</Note><Note>{messages.text("details.injuryBasis")}</Note>
       </div></TeamSheetDetails>
     </div>}
   </SectionCard>;
