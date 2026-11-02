@@ -40,6 +40,7 @@ const HeaderImage = styled.img<{ $height: number | undefined }>`
   inline-size: calc(var(--header-brand-height) * 10490 / 1500);
   block-size: var(--header-brand-height);
   aspect-ratio: 10490 / 1500;
+  @media (max-width: 359px) { --header-brand-height: ${({ $height }) => $height ?? 18}px; }
   ${media.desktop} { --header-brand-height: ${({ $height }) => $height ?? 24}px; }
 `;
 

@@ -29,6 +29,7 @@ const Actions = styled.div`
   align-items: center;
   justify-content: flex-end;
   margin-inline-start: auto;
+  margin-inline-end: ${({ theme }) => theme.space.sm};
   gap: 4px;
   ${media.desktop} { gap: 6px; }
 `;

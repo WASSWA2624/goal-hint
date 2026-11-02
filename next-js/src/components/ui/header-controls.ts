@@ -61,13 +61,14 @@ export const compactHeaderIconControl = css`
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
-/** Branding has no padded clear space; its home link remains easy to tap. */
+/** Brand home links keep a small leading inset and a full tap target. */
 export const compactHeaderBrand = css`
   display: inline-flex;
   flex: none;
   align-items: center;
   min-inline-size: 0;
   min-block-size: 2.75rem;
+  margin-inline-start: ${({ theme }) => theme.space.sm};
   padding: 0;
   text-decoration: none;
   > span { padding: 0; }
