@@ -9,7 +9,7 @@ import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, Sor
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useClientReady } from "@/components/ui/use-client-ready";
 import { dialogFooterSurface } from "@/components/ui/dialog-surfaces";
-import { mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { pageFilterPanel } from "@/components/ui/filter-chrome";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -71,7 +71,7 @@ const Panel = styled.form`
     gap: var(--gh-spacing-1_5); padding-inline: var(--gh-spacing-1_5);
     &[data-mobile-compact-filters] { gap: var(--gh-spacing-1); padding-inline: 0; }
   }
-  ${mobileFilterPanel}
+  ${pageFilterPanel}
 `;
 const QueryChoices = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-1_5); min-inline-size: 0;

@@ -2,7 +2,7 @@
 
 import { controlBodyHeight, inlineControlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
-import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing, mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing, pageFilterPanel } from "@/components/ui/filter-chrome";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { SelectMenu } from "@/components/ui/select-menu";
@@ -28,7 +28,7 @@ const compactControl = css`
 
 export const FiltersPanel = styled.section`
   ${filterPanelColors}
-  ${mobileFilterPanel}
+  ${pageFilterPanel}
   display: grid;
   gap: var(--gh-spacing-1_25);
   min-inline-size: 0;

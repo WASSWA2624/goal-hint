@@ -3,6 +3,7 @@
 import { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { sectionSurface, nativeSelectSurface, nativeTextFieldSurface, textFieldSelector } from "./filled-surfaces";
+import { contentGutter } from "./layout";
 
 export const focusRing = css`
   &:focus-visible {
@@ -25,6 +26,12 @@ export const mobileFilterPanel = css`
   ${media.belowDesktop} {
     && { border: 0; border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
   }
+`;
+
+/** Page filters share the header's outer rails; standalone previews retain the themed gutter. */
+export const pageFilterPanel = css`
+  ${mobileFilterPanel}
+  &&& { padding-inline: ${contentGutter}; }
 `;
 
 export const filterControlColors = css`
