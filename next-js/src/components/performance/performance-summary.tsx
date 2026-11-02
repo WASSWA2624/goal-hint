@@ -91,10 +91,10 @@ const Extras = styled.dl`
   border-inline-start: 0;
 `;
 /** One compact, accessible presentation for full-period match and slip outcomes. */
-export function PerformanceSummary({ counts, locale, kind, title, period, headingLevel = 2, showCoverage = true }: {
+export function PerformanceSummary({ counts, locale, kind, title, period, headingLevel = 2, showCoverage = true, showAll = false }: {
   counts: PerformanceSummaryCounts; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
-  showCoverage?: boolean | undefined;
+  showCoverage?: boolean | undefined; showAll?: boolean;
 }) {
   const m = createMessages(locale), label = title ?? m.text("performance.summary.title");
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
@@ -110,14 +110,14 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
   const voidOutcome = { key: "void", tone: "void" as const, label: m.text("performance.void"), count: counts.void ?? 0 };
   const cancelledOutcome = { key: "cancelled", tone: "void" as const, label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 };
   const extras = [voidOutcome, cancelledOutcome, ...coverage.filter(({ key }) => showCoverage || key !== "unavailable")]
-    .filter(({ count }) => count > 0);
+    .filter(({ key, count }) => count > 0 || showAll && (key === "void" || key === "cancelled"));
   return <Panel role="group" aria-label={label} data-performance-summary={kind}>
     <Content>
       <Header tabIndex={0} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
       <Figures tabIndex={0} role="region" aria-label={`${label}: ${m.text("performance.summary.figures")}`} data-performance-figures>
       <Counts>
-        {showCoverage && <Count $zero={counts.total === 0}><dt>{m.text(`performance.summary.${kind}`)}</dt><dd>{m.number(counts.total)}</dd></Count>}
-        {predicted && <PredictedCount $zero={predicted.total === 0} data-summary-predicted>
+        {(showCoverage || showAll) && <Count $zero={counts.total === 0}><dt>{m.text(showAll ? "performance.summary.all" : `performance.summary.${kind}`)}</dt><dd>{m.number(showAll && predicted ? predicted.total : counts.total)}</dd></Count>}
+        {predicted && !showAll && <PredictedCount $zero={predicted.total === 0} data-summary-predicted>
           <dt>{m.text("performance.summary.predicted")}</dt><dd>{m.number(predicted.total)}</dd>
         </PredictedCount>}
         {outcomes.map(({ key, tone, label, count, icon: OutcomeIcon }) => {

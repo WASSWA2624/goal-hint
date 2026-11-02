@@ -43,19 +43,20 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
         const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds, context.completedOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
-        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
+        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
-            SUM(CASE WHEN m.available=TRUE AND c.state='void' THEN 1 ELSE 0 END) AS void
+            SUM(CASE WHEN m.available=TRUE AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,
+            SUM(CASE WHEN m.available=TRUE AND c.state='void' AND f.status='canceled' THEN 1 ELSE 0 END) AS cancelled
           ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total);
-        const performance = await readFeedPerformance(tx, sql, { total, available: Number(matching.available ?? 0), void: Number(matching.void ?? 0) },
+        const performance = await readFeedPerformance(tx, sql, { total, available: Number(matching.available ?? 0), void: Number(matching.void ?? 0), cancelled: Number(matching.cancelled ?? 0) },
           options.cache ? { key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined);
         return freezeEvidence(storedSummarySchema.parse({ performance, total, paginationVersion, asOf }));
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, page: 1, projection: "feed-summary-v2", completedOnly: context.completedOnly === true, today, dates: { from: range.startDate, to: range.endDate } },
+        query: { ...query, page: 1, projection: "feed-summary-v4", completedOnly: context.completedOnly === true, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

@@ -6,6 +6,7 @@ import { getDateInTimeZone, getDayBoundsInTimeZone, validTimeZone } from "./devi
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
+import { browseRules } from "./browse-period.ts";
 import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
@@ -33,6 +34,7 @@ export type ProbabilityRange = Readonly<{ min: number; max: number }>;
 /** "only" keeps fixtures whose shown pick exists; "all" includes fixtures without a prediction. */
 export type PicksFilter = "all" | "only";
 export type FeedQuery = Readonly<{
+  summary?: "yesterday" | undefined;
   locale: Locale;
   dates: DateSelection;
   search: string;
@@ -69,9 +71,10 @@ export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100
 export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "desc", probability: "desc" });
 /** Matches screen and Reset defaults; the public API keeps its existing date and sort defaults. */
 export const matchFeedPageDefaults = Object.freeze({
-  dates: Object.freeze({ kind: "today" }),
-  sort: Object.freeze({ by: "probability", direction: "desc" }),
-} as const satisfies Pick<FeedQuery, "dates" | "sort">);
+  dates: Object.freeze({ kind: "last-30-days" }),
+  sort: Object.freeze({ by: "kickoff", direction: "desc" }),
+  summary: "yesterday",
+} as const satisfies Pick<FeedQuery, "dates" | "sort" | "summary">);
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -81,7 +84,7 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
+const keys = new Set(["summary", "date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
 export const feedQueryKeys: ReadonlySet<string> = keys;
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
@@ -216,6 +219,8 @@ function oddsRange(value: string | undefined, enabled: boolean): OddsRange | nul
 export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; asOf?: number; locale?: string; routeDate?: string; providerOdds?: boolean }): FeedQuery {
   const values = parameters(input);
   const get = (key: string) => values.get(key);
+  const summary = get("summary");
+  if (summary !== undefined && summary !== "yesterday") fail();
   const date = get("date");
   const from = get("from");
   const to = get("to");
@@ -256,7 +261,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const by = get("sort") ?? "kickoff", direction = get("dir");
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
-    locale: resolveLocale(context.locale), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}),
+    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}),
     leagues, countries, status: parseFeedStatus(get("status")), markets,
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
@@ -278,6 +283,8 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, s
   const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   return { ...query,
+    ...(!dated && !explicitDates ? { summary: "yesterday" as const } : {}),
+    pageSize: has("pageSize") ? query.pageSize : browseRules.pageSize,
     dates: dated || explicitDates ? query.dates : matchFeedPageDefaults.dates,
     sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
     picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly),
@@ -294,6 +301,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
       !["asc", "desc"].includes(query.sort.direction)) fail();
   const result = new URLSearchParams();
   const dates = query.dates;
+  if (query.summary) result.set("summary", query.summary);
   if (dates.kind === "date") result.set("date", dates.date);
   else if (dates.kind === "range") { result.set("from", dates.from); result.set("to", dates.to); }
   else if (dates.kind !== defaultFeedDatePreset) result.set("when", dates.kind);
@@ -330,7 +338,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   // Validate callers as well as URL inputs; never silently normalize an invalid query.
   // An odds range can only exist in a query that parsed it, so the re-check accepts the key it serialized.
   const checked = parseFeedQuery(result, { today, locale: query.locale, ...(odds === null ? {} : { providerOdds: true }) });
-  if (checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
+  if (checked.summary !== query.summary || checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
       checked.status !== query.status || !sameList(checked.markets, markets) ||
       checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max ||

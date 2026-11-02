@@ -6,6 +6,7 @@ import { useId, useRef, useState, type FocusEvent, type ReactNode } from "react"
 import { CalendarIcon, ResetIcon } from "@/components/ui/icons";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
+import type { PeriodPerformance } from "@/domain/browse-period";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { AppliedDetails, AppliedSelection, AppliedSummary, CustomRangeButton, DateControls, DateError, DateFields, DateHint, DateSelect, FiltersPanel,
@@ -13,7 +14,7 @@ import { AppliedDetails, AppliedSelection, AppliedSummary, CustomRangeButton, Da
 
 const dateOptions = [
   ["last7", "feed.date.last-7-days"], ["last3", "feed.date.last-3-days"],
-  ["yesterday", "feed.date.yesterday"], ["today", "feed.date.today"], ["tomorrow", "feed.date.tomorrow"],
+  ["last30", "feed.date.last-30-days"], ["yesterday", "feed.date.yesterday"], ["today", "feed.date.today"], ["tomorrow", "feed.date.tomorrow"],
   ["next3", "feed.date.next-3-days"], ["next7", "feed.date.next-7-days"],
 ] as const satisfies readonly (readonly [BestSlipsQuery["period"], TextKey])[];
 const results = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
@@ -30,10 +31,10 @@ function revealResultToggle({ currentTarget, target }: FocusEvent<HTMLDivElement
 }
 
 /** Responsive date/result controls; custom dates stay a local draft until Apply. */
-export function BestSlipsFilters({ query, appliedQuery = query, today, locale, busy = false, updating = false, statistics, countSummary, onChange }: {
+export function BestSlipsFilters({ query, appliedQuery = query, today, locale, busy = false, updating = false, statistics, summary, countSummary, onChange }: {
   query: BestSlipsQuery; today: ReportingDate; locale: string; entitled?: boolean; busy?: boolean; onChange: (query: BestSlipsQuery) => void;
   appliedQuery?: BestSlipsQuery; updating?: boolean;
-  statistics?: PerformanceSummaryCounts | null | undefined; countSummary?: ReactNode;
+  summary?: PeriodPerformance | undefined; statistics?: PerformanceSummaryCounts | null | undefined; countSummary?: ReactNode;
 }) {
   const m = createMessages(locale), prefix = useId();
   const [open, setOpen] = useState(false), [dates, setDates] = useState<DateDraft>({ from: today, to: today });
@@ -52,8 +53,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     requestAnimationFrame(() => opener.current?.focus());
   }
   function changeStatus(status: BestSlipsQuery["status"]) {
-    onChange({ period: query.period, status, page: 1,
-      ...(query.from ? { from: query.from } : {}), ...(query.to ? { to: query.to } : {}) });
+    onChange(query.summary ? { period: "yesterday", status, page: 1 } : { ...query, status, page: 1 });
   }
   function invalid(key: TextKey) {
     setIssue(key);
@@ -80,6 +80,9 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     : query.period === "last30" ? "feed.date.last-30-days" : query.period === "next30" ? "feed.date.next-30-days" : "bestSlips.filters.allDates");
   const selectablePeriod = dateOptions.some(([period]) => period === query.period);
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
+    {summary && <DateHint data-performance-period>{m.text(appliedQuery.summary ? "history.yesterday" : "history.performance")}
+      {summary.from && summary.to && <> · {m.reportingDateMedium(summary.from)}{summary.from !== summary.to && ` – ${m.reportingDateMedium(summary.to)}`} · EAT</>}
+    </DateHint>}
     <ToggleRow data-slip-toggle-row>
       <ResultGroup role="group" aria-label={m.text("bestSlips.filters.result")} onFocusCapture={revealResultToggle}>
         {results.map((status) => {
@@ -119,7 +122,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     </ToggleRow>
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedDetails>
-        <AppliedSelection data-applied-selection>
+        <AppliedSelection data-applied-selection><span>{m.text("history.browsing")}:</span>
           {appliedQuery.period === "custom" && currentRange ? <RangeButton type="button" onClick={(event) => openDates(event.currentTarget)}
             aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} aria-label={m.text("bestSlips.filters.editDates", { range: currentRange })}>
             <CalendarIcon />{currentRange}

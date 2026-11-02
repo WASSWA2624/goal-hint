@@ -35,17 +35,17 @@ export function selectFeedStatus(query: FeedQuery, status: FeedStatus, today: Re
     const period = status === "scheduled" ? upcomingPeriods[dates.kind] : status === "finished" ? completedPeriods[dates.kind] : undefined;
     if (period) dates = { kind: period };
   }
-  return synchronizeFeedStatusDates({ ...query, status, dates, page: 1 }, today);
+  return synchronizeFeedStatusDates({ ...query, summary: undefined, status, dates, page: 1 }, today);
 }
 
 /** Live stays on Today until the visitor chooses another status. */
 export function selectFeedDates(query: FeedQuery, dates: DateSelection, today: ReportingDate): FeedQuery {
-  return synchronizeFeedStatusDates({ ...query, dates, page: 1 }, today);
+  return synchronizeFeedStatusDates({ ...query, summary: undefined, dates, page: 1 }, today);
 }
 
 /** Draft text stays editable; normalization happens once, at submission. */
 export function applyFeedDraft(draft: FeedQuery, today: ReportingDate): FeedQuery {
-  const parameters = serializeFeedQuery({ ...draft, search: "", page: 1 }, today);
+  const parameters = serializeFeedQuery({ ...draft, ...(draft.dates.kind !== "last-30-days" ? { summary: undefined } : {}), search: "", page: 1 }, today);
   parameters.set("q", draft.search);
   return synchronizeFeedStatusDates(parseFeedQuery(parameters, { today, locale: draft.locale }), today);
 }

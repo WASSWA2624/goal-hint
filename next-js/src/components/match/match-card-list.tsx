@@ -80,8 +80,8 @@ const Divider = styled.li`
 
 /** A titled break inside the list, such as the start of similar search results. Its heading shares the level of the
  * cards' own titles, so heading navigation meets it between the last exact match and the first similar one. */
-export function MatchListDivider({ title, note }: { title: string; note?: string | null }) {
-  return <Divider data-list-divider=""><h2>{title}</h2>{note && <p>{note}</p>}</Divider>;
+export function MatchListDivider({ title, note, as = "li" }: { title: string; note?: string | null; as?: "li" | "div" }) {
+  return <Divider as={as} data-list-divider=""><h2>{title}</h2>{note && <p>{note}</p>}</Divider>;
 }
 
 /** Shared Team stack cards below 64rem and the slip/builder's Aligned ledger rows above it. */

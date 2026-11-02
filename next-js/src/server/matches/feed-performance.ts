@@ -17,7 +17,8 @@ import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 type Summary = z.infer<typeof feedPerformanceSchema>;
 const batchSize = 500, batchCacheLifetimeMs = 6 * 60 * 60 * 1000;
 const batchDeltaSchema = z.strictObject({ won: z.number().int().min(0).max(batchSize), lost: z.number().int().min(0).max(batchSize),
-  void: z.number().int().min(0).max(batchSize) }).refine(value => value.won + value.lost + value.void <= batchSize);
+  void: z.number().int().min(0).max(batchSize), cancelled: z.number().int().min(0).max(batchSize).default(0) })
+  .refine(value => value.won + value.lost + value.void + value.cancelled <= batchSize);
 type BatchDelta = z.infer<typeof batchDeltaSchema>;
 type SummaryCacheContext = Readonly<{ key: string; nowMs: number }>;
 
@@ -42,8 +43,9 @@ type Sample = HistoryRow & Readonly<{
  * open picks are pending, missing picks unavailable, and void cycles stay distinct from losses.
  * Keyset batches bound memory without limiting the reporting period or using the visible page. */
 export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>,
-  counts: Readonly<{ total: number; available: number; void: number }>, cache?: SummaryCacheContext): Promise<Summary> {
-  const summary: Summary = { total: counts.total, won: 0, lost: 0, pending: counts.available - counts.void,
+  counts: Readonly<{ total: number; available: number; void: number; cancelled?: number }>, cache?: SummaryCacheContext): Promise<Summary> {
+  const summary: Summary = { total: counts.total, won: 0, lost: 0, pending: counts.available - counts.void - (counts.cancelled ?? 0),
+    ...(counts.cancelled === undefined ? {} : { cancelled: counts.cancelled }),
     void: counts.void, unavailable: counts.total - counts.available };
   if (summary.pending === 0) return summary;
   let after: { kickoff: Date; fixtureId: string } | null = null;
@@ -60,7 +62,7 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
     if (!(last.kickoff instanceof Date)) throw new MatchFeedError("unavailable");
     after = { kickoff: last.kickoff, fixtureId: last.id };
     const ids = candidates.map((fixture) => fixture.id);
-    const key = cache ? evidenceFingerprint({ contract: "feed-performance-batch-v1", query: cache.key, ids }) : null;
+    const key = cache ? evidenceFingerprint({ contract: "feed-performance-batch-v3", splitCancelled: counts.cancelled !== undefined, query: cache.key, ids }) : null;
     const tags = ["global:catalog", ...new Set(candidates.map(fixture => `date:${getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()))}`))];
     let generations: Readonly<Record<string, string>> | null = null;
     if (key && cache) {
@@ -73,15 +75,15 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
         if (entry && parsed.success && entry.createdAt.getTime() <= cache.nowMs && entry.expiresAt.getTime() > cache.nowMs
           && entry.expiresAt.getTime() - entry.createdAt.getTime() <= batchCacheLifetimeMs
           && evidenceFingerprint(entry.generations) === evidenceFingerprint(generations)
-          && parsed.data.won + parsed.data.lost + parsed.data.void <= candidates.length
-          && parsed.data.won + parsed.data.lost + parsed.data.void <= summary.pending) {
+          && parsed.data.won + parsed.data.lost + parsed.data.void + parsed.data.cancelled <= candidates.length
+          && parsed.data.won + parsed.data.lost + parsed.data.void + parsed.data.cancelled <= summary.pending) {
           applyDelta(summary, parsed.data);
           if (candidates.length < batchSize) break;
           continue;
         }
       } catch { generations = null; }
     }
-    const delta: BatchDelta = { won: 0, lost: 0, void: 0 };
+    const delta: BatchDelta = { won: 0, lost: 0, void: 0, cancelled: 0 };
     const rows: Sample[] = await tx.$queryRaw<Sample[]>(Prisma.sql`SELECT STRAIGHT_JOIN r.*,f.kickoff AS fixtureKickoff,
       f.status AS fixtureStatus, f.regulationHome AS fixtureRegulationHome, f.regulationAway AS fixtureRegulationAway,
       f.regulationVerifiedAt AS fixtureRegulationVerifiedAt, f.regulationEvidenceRef AS fixtureRegulationEvidenceRef,
@@ -125,7 +127,8 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
         && result?.regulation.verified && result.regulation.home !== null && result.regulation.away !== null
         ? selectionOccurred(row.currentSelection, result.regulation.home, result.regulation.away) ? "correct" : "incorrect" : previous.status;
       const status = selectedStatus === "correct" ? "won" : selectedStatus === "incorrect" ? "lost" : selectedStatus;
-      if (status === "won" || status === "lost" || status === "void") delta[status]++;
+      if (status === "void" && row.fixtureStatus === "canceled" && counts.cancelled !== undefined) delta.cancelled++;
+      else if (status === "won" || status === "lost" || status === "void") delta[status]++;
     }
     applyDelta(summary, delta);
     if (key && cache && generations) {
@@ -144,8 +147,10 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
 }
 
 function applyDelta(summary: Summary, delta: BatchDelta): void {
-  const completed = delta.won + delta.lost + delta.void;
+  const completed = delta.won + delta.lost + delta.void + delta.cancelled;
+  if (delta.cancelled && summary.cancelled === undefined) throw new MatchFeedError("unavailable");
   if (completed > summary.pending) throw new MatchFeedError("unavailable");
   summary.pending -= completed;
   summary.won += delta.won; summary.lost += delta.lost; summary.void += delta.void;
+  if (summary.cancelled !== undefined) summary.cancelled += delta.cancelled;
 }

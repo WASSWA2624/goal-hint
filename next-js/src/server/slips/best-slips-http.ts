@@ -14,7 +14,7 @@ export function createBestSlipsHandler({ read = readBestSlips, browse = readBest
       const parsed = parameters.size ? parseBestSlipsQuery(parameters, getReportingDate(utcInstantFromEpochMilliseconds(now()))) : null;
       const viewer = await access(request);
       const defaultPeriod = !parameters.has("period");
-      const queryFor = () => parsed && defaultPeriod ? { ...parsed, period: defaultBestSlipsQuery().period } : parsed;
+      const queryFor = () => parsed && defaultPeriod ? { ...parsed, period: defaultBestSlipsQuery().period, summary: "yesterday" as const } : parsed;
       let query = queryFor(), result = query ? await browse(viewer, query) : await read(viewer);
       let finalViewer = await access(request);
       if (viewer.tier !== finalViewer.tier) {

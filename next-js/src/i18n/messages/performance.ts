@@ -1,4 +1,5 @@
 export const performanceMessages = {
+  "performance.summary.all": "All",
   "performance.summary.title": "Overall performance",
   "performance.summary.figures": "Performance figures",
   "performance.summary.loading": "Loading overall performance…",

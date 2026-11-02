@@ -1,90 +1,117 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { BestSlipsResult } from "@/domain/best-slips";
-import { bestSlipsQueryRules, defaultBestSlipsQuery, parseBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
-import { bestSlipsStatisticsMatch, findBestSlipsSnapshot, rememberBestSlipsSnapshot, type BestSlipsBrowseCache } from "@/domain/best-slips-client";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { SlipsBrowseResult } from "@/domain/best-slips";
+import { bestSlipsQueryRules, defaultBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
+import { appendSlipBrowse, slipBrowseScope } from "@/domain/slip-browse-window";
 
-type ResponseState = Readonly<{
-  source: BestSlipsResult; entitled: boolean; key: string; attempt: number; data: BestSlipsResult | null; failed: boolean;
-}>;
-type NavigationState = Readonly<{ entitled: boolean; desktop: boolean; query: BestSlipsQuery }>;
-
-/** Both layouts reuse the same date/result queries, paging, cache and access checks. */
-export function useBestSlipsBrowse(initial: BestSlipsResult, desktop: boolean, onAccessChanged: () => void) {
-  const [response, setResponse] = useState<ResponseState | null>(null);
-  const [observedAccess, setObservedAccess] = useState<Readonly<{ source: BestSlipsResult; entitled: boolean }> | null>(null);
-  const initialEntitled = initial.entitled === true;
-  // Keep the most recent access observation while a different filter request is loading.
-  const entitled = observedAccess?.source === initial ? observedAccess.entitled : initialEntitled;
-  const [cache, setCache] = useState<BestSlipsBrowseCache>(() => ({ source: initial, entitled, snapshots: [] }));
-  if (cache.source !== initial || cache.entitled !== entitled) setCache({ source: initial, entitled, snapshots: [] });
-  const [navigation, setNavigation] = useState<NavigationState>(() => ({ entitled, desktop, query: defaultBestSlipsQuery() }));
-  // Access or layout changes restart from the viewer's daily default; pages still work on either layout.
-  const navigationMatches = navigation.entitled === entitled && navigation.desktop === desktop;
-  if (!navigationMatches) setNavigation({ entitled, desktop, query: defaultBestSlipsQuery() });
-  const query = navigationMatches ? navigation.query : defaultBestSlipsQuery();
-  const [attempt, setAttempt] = useState(0);
-  const staleAccess = entitled !== initialEntitled;
-  const refined = staleAccess || query.period !== defaultBestSlipsQuery().period || query.status !== "all" || query.page !== 1 || !!query.cursor;
-  const key = serializeBestSlipsQuery(query).toString();
-  const current = response?.source === initial && response.entitled === entitled && response.key === key && response.attempt === attempt ? response : null;
-  const visible = !refined ? findBestSlipsSnapshot(cache, initial, entitled, query)
-    ?? { data: initial, query: defaultBestSlipsQuery(), retained: false }
-    : current?.data ? { data: current.data, query, retained: false } : findBestSlipsSnapshot(cache, initial, entitled, query);
-  const shouldRead = refined || attempt > 0 || visible?.retained === true;
-  const requesting = shouldRead && !current;
-  const revokeAccess = useCallback(() => {
-    setObservedAccess({ source: initial, entitled: false });
-    onAccessChanged();
-  }, [initial, onAccessChanged]);
-
+type Intent = { query: BestSlipsQuery; mode: "replace" | "append" | "refresh"; revision: number };
+/** Both slip collections share paging, pinned dates, cancellation and access-safe refreshes. */
+export function useBestSlipsBrowse(initial: SlipsBrowseResult, onAccessChanged: () => void, endpoint = "/api/best-slips") {
+  const seedKey = `${initial.day}:${initial.entitled}:${initial.access?.signedIn}`;
+  const [seed, setSeed] = useState(seedKey);
+  const [content, setContent] = useState(initial);
+  const [intent, setIntent] = useState<Intent>(() => ({ query: initial.browse?.query ?? defaultBestSlipsQuery(), mode: "refresh", revision: 0 }));
+  const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
+  const root = useRef<HTMLDivElement>(null), latest = useRef(content), lock = useRef(false);
+  const pending = useRef<AbortController | null>(null);
+  const compensation = useRef<{ key: string; top: number } | null>(null);
+  if (seed !== seedKey) {
+    setBusy(false); setFailed(false); setSeed(seedKey); setContent(initial); setIntent({ query: initial.browse?.query ?? defaultBestSlipsQuery(), mode: "refresh", revision: 0 });
+  }
+  const accepted = seed === seedKey ? content : initial;
+  useLayoutEffect(() => {
+    latest.current = accepted;
+    const anchor = compensation.current;
+    if (anchor) {
+      const element = root.current?.querySelector(`[data-slip-key="${CSS.escape(anchor.key)}"]`);
+      if (element) window.scrollBy(0, element.getBoundingClientRect().top - anchor.top);
+      compensation.current = null;
+    }
+  }, [accepted]);
   useEffect(() => {
-    if (!shouldRead) return;
-    const requestedQuery = parseBestSlipsQuery(new URLSearchParams(key), initial.day);
-    const controller = new AbortController();
-    let disposed = false;
-    const timeout = window.setTimeout(() => controller.abort(), 30_000);
-    const load = async () => {
-      try {
-        const request = await fetch(`/api/best-slips?${key}`, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
-        if ((request.status === 401 || request.status === 403) && entitled && !disposed) revokeAccess();
-        if (!request.ok) throw new Error("Slip filters unavailable.");
-        const data: BestSlipsResult = await request.json();
-        if (!data || !Array.isArray(data.slips) || !data.browse || typeof data.entitled !== "boolean" || data.state === "data-unavailable") throw new Error("Invalid slip response.");
-        if (data.day !== initial.day) { if (!disposed) onAccessChanged(); throw new Error("Slip date changed."); }
-        if (serializeBestSlipsQuery(data.browse.query).toString() !== key) throw new Error("Slip query changed.");
-        if (controller.signal.aborted) throw new Error("Slip read timed out.");
-        if (!disposed) {
-          setResponse({ source: initial, entitled: data.entitled, key, attempt, data, failed: false });
-          setCache((previous) => rememberBestSlipsSnapshot(previous, initial, requestedQuery, data));
-          if (data.entitled !== entitled) {
-            setObservedAccess({ source: initial, entitled: data.entitled });
-            onAccessChanged();
-          } else if (!refined && !bestSlipsStatisticsMatch(initial, data)) onAccessChanged();
-        }
-      } catch {
-        if (!disposed) setResponse({ source: initial, entitled, key, attempt, data: null, failed: true });
-      } finally {
-        window.clearTimeout(timeout);
+    if (intent.revision === 0) return;
+    const controller = new AbortController(); let active = true; lock.current = true; pending.current = controller;
+    const deadline = window.setTimeout(() => controller.abort(), 30_000);
+    const read = async (query: BestSlipsQuery) => {
+      const response = await fetch(`${endpoint}?${serializeBestSlipsQuery(query)}`, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
+      if (!active || controller.signal.aborted) throw new Error("aborted");
+      if (response.status === 401 || response.status === 403) {
+        setContent((current) => ({ ...current, slips: [], entitled: false, access: { tier: "free", signedIn: false } }));
+        onAccessChanged();
       }
+      if (!response.ok) throw new Error("unavailable");
+      const result: SlipsBrowseResult = await response.json();
+      if (!active || controller.signal.aborted) throw new Error("aborted");
+      if (!result?.browse || !Array.isArray(result.slips) || result.state === "data-unavailable"
+        || serializeBestSlipsQuery(result.browse.query).toString() !== serializeBestSlipsQuery(query).toString()) throw new Error("changed");
+      if (result.day !== initial.day) { onAccessChanged(); throw new Error("changed"); }
+      if (result.entitled !== latest.current.entitled || result.access?.signedIn !== latest.current.access?.signedIn) {
+        setContent(result); onAccessChanged(); throw new Error("access-changed");
+      }
+      return result;
     };
-    void load();
-    return () => { disposed = true; window.clearTimeout(timeout); controller.abort(); };
-  }, [initial, entitled, key, refined, shouldRead, attempt, onAccessChanged, revokeAccess]);
-
-  const change = useCallback((next: BestSlipsQuery) => {
-    setNavigation({ entitled, desktop, query: next }); setAttempt((value) => value + 1);
-  }, [entitled, desktop]);
+    void (async () => {
+      const previous = latest.current;
+      let result: SlipsBrowseResult;
+      if (intent.mode === "refresh" && previous.browse) {
+        const first = previous.browse.firstPage ?? previous.browse.query.page;
+        result = await read({ ...intent.query, page: first });
+        for (let page = first + 1; page <= previous.browse.query.page; page++) result = appendSlipBrowse(result, await read({ ...intent.query, page }));
+      } else {
+        result = await read(intent.query);
+        if (intent.mode === "append") {
+          const anchor = [...(root.current?.querySelectorAll<HTMLElement>("[data-slip-key]") ?? [])]
+            .find((element) => element.getBoundingClientRect().bottom > 0);
+          if (anchor?.dataset.slipKey) compensation.current = { key: anchor.dataset.slipKey, top: anchor.getBoundingClientRect().top };
+          result = appendSlipBrowse(previous, result);
+        }
+      }
+      if (controller.signal.aborted) return;
+      if (result.entitled !== previous.entitled || result.access?.signedIn !== previous.access?.signedIn) onAccessChanged();
+      if (intent.mode === "replace") root.current?.scrollIntoView({ block: "start" });
+      setContent(result);
+    })().catch(() => { if (active) setFailed(true); }).finally(() => {
+      clearTimeout(deadline); if (pending.current === controller) pending.current = null; if (active) { lock.current = false; setBusy(false); }
+    });
+    return () => { active = false; clearTimeout(deadline); controller.abort(); if (pending.current === controller) pending.current = null; lock.current = false; };
+  }, [endpoint, initial.day, intent, onAccessChanged, seedKey]);
+  const request = useCallback((query: BestSlipsQuery, mode: Intent["mode"]) => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setFailed(false);
+    setIntent((current) => ({ query, mode, revision: current.revision + 1 }));
+  }, []);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (latest.current.browse?.query.period !== "all" && !lock.current && document.visibilityState === "visible" && navigator.onLine) request(latest.current.browse?.query ?? defaultBestSlipsQuery(), "refresh");
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [request]);
+  const change = useCallback((query: BestSlipsQuery) => {
+    pending.current?.abort(); lock.current = false;
+    request(query, "replace");
+  }, [request]);
+  const loadMore = useCallback(() => {
+    const browse = latest.current.browse;
+    if (!browse?.hasMore) return;
+    request({ ...browse.query, page: browse.query.page + 1, ...(browse.nextCursor ? { cursor: browse.nextCursor } : {}) }, "append");
+  }, [request]);
   const goToPage = (page: number) => {
-    const total = visible?.data.browse?.total;
-    if (requesting || visible?.retained || total === null || total === undefined || !Number.isSafeInteger(page)
-      || page < 1 || page > Math.min(bestSlipsQueryRules.maximumPage, Math.ceil(total / bestSlipsQueryRules.pageSize)) || page === query.page) return;
-    change({ ...query, page });
+    const browse = latest.current.browse;
+    if (!browse || browse.total == null || !Number.isSafeInteger(page) || page < 1
+      || page > Math.min(bestSlipsQueryRules.maximumPage, Math.ceil(browse.total / bestSlipsQueryRules.pageSize))) return;
+    change({ ...browse.query, page });
   };
-
-  return { query, change, goToPage,
-    entitled, revokeAccess, displayQuery: visible?.query ?? query, retained: visible?.retained ?? false,
-    result: visible?.data ?? null, loading: requesting && !visible, updating: requesting && !!visible,
-    failed: shouldRead && current?.failed === true, retry: () => setAttempt((value) => value + 1) };
+  const revokeAccess = useCallback(() => {
+    pending.current?.abort(); lock.current = false; setBusy(false);
+    setContent((current) => ({ ...current, slips: [], entitled: false,
+      access: { tier: "free", signedIn: current.access?.signedIn ?? false } }));
+    onAccessChanged();
+  }, [onAccessChanged]);
+  const applied = accepted.browse?.query ?? defaultBestSlipsQuery();
+  return { root, query: intent.query, displayQuery: applied, change, goToPage, loadMore,
+    entitled: accepted.entitled === true, revokeAccess, retained: slipBrowseScope(applied) !== slipBrowseScope(intent.query),
+    result: accepted, loading: false, updating: busy, navigating: busy && intent.mode === "replace", failed,
+    retry: () => request(intent.mode === "append" ? applied : intent.query, intent.mode === "append" ? "refresh" : intent.mode),
+  };
 }

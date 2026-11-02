@@ -10,6 +10,7 @@ import type { BestSlipsQuery } from "./best-slips-query.ts";
 import type { SlipStatus } from "./slip-status.ts";
 import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { CardSnapshotPick } from "./match-card.ts";
+import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
@@ -22,8 +23,8 @@ export function compareBestSlips(left: BestSlip, right: BestSlip): number {
 export type BestSlipSummary = Readonly<{
   rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;
 }>;
-export type BestSlipView = BestSlipSummary & Readonly<{
-  slip?: BestSlip; matchStates?: readonly SlipMatchState[];
+export type SlipPreviewView = Omit<BestSlipSummary, "estimatedProbability"> & Readonly<{
+  slip?: BuiltSlip; matchStates?: readonly SlipMatchState[];
   preview?: readonly Readonly<{ fixture: FixtureSnapshot; pick: CardSnapshotPick | null }>[];
   /** Internal read proof; removed by the response projection. Never inferred from slip outcome. */
   completedFixtureIds?: readonly string[];
@@ -32,20 +33,24 @@ export type BestSlipView = BestSlipSummary & Readonly<{
   /** Server proof that every original selection and its canonical fixture are complete. */
   completed?: boolean;
 }>;
-export type BestSlipsResult = Readonly<{
-  day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
+export type BestSlipView = SlipPreviewView & Readonly<{ estimatedProbability: number; slip?: BestSlip }>;
+export type SlipsBrowseResult<T extends SlipPreviewView = SlipPreviewView> = Readonly<{
+  day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly T[];
   /** Unfinished prediction access, freshly checked at the response boundary. */
   entitled?: boolean;
   access?: ContentAccess;
   searchLimited: boolean; partialCoverage: boolean;
   /** The complete date cohort before result filtering or pagination. */
   statistics?: PerformanceSummaryCounts | null;
+  summary?: PeriodPerformance;
   browse?: Readonly<{
-    query: BestSlipsQuery; total: number | null; pageSize: number; hasMore: boolean; nextCursor: string | null;
+    query: BestSlipsQuery; firstPage?: number; version?: string | null; total: number | null; pageSize: number; hasMore: boolean; nextCursor: string | null;
     /** Requested range for exact totals; actually scanned publication dates for All dates. */
     from: ReportingDate | null; to: ReportingDate | null;
   }>;
 }>;
+
+export type BestSlipsResult = SlipsBrowseResult<BestSlipView>;
 
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {
   return { ...defaultSlipCriteria(today), dateTo: today, totalMin: target.minimumTotal, totalMax: target.maximumTotal,

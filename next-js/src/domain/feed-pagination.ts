@@ -36,7 +36,7 @@ export function initialLoadedFeed(data: MatchFeedResponse): LoadedFeed {
 /** All membership and whole-record replacements commit together, never partially. */
 export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
   if (view.data.access.tier !== page.access.tier || view.data.access.signedIn !== page.access.signedIn) throw new FeedPaginationError("changed");
-  if (view.pages >= feedPaginationRules.maximumLoadedPages || page.page !== view.data.nextPage || page.page !== view.lastPage + 1) {
+  if (page.page !== view.data.nextPage || page.page !== view.lastPage + 1) {
     throw new FeedPaginationError("invalid-response");
   }
   if (view.data.paginationVersion === null || page.paginationVersion !== view.data.paginationVersion || page.total !== view.data.total ||
@@ -46,7 +46,9 @@ export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): Loade
   const known = new Set(view.records.map((record) => record.fixtureId));
   // Overlap under an allegedly stable cohort is unsafe: dedup alone could hide a gap.
   if (page.records.some((record) => known.has(record.fixtureId))) throw new FeedPaginationError("changed");
-  return { ...view, data: page, records: [...view.records, ...page.records], lastPage: page.page, pages: view.pages + 1 };
+  const drop = view.pages >= feedPaginationRules.maximumLoadedPages;
+  return { ...view, data: page, records: [...view.records.slice(drop ? page.pageSize : 0), ...page.records],
+    firstPage: view.firstPage + Number(drop), lastPage: page.page, pages: Math.min(view.pages + 1, feedPaginationRules.maximumLoadedPages) };
 }
 export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeedResponse[]): LoadedFeed {
   if (pages.some((page) => page.access.tier !== previous.data.access.tier || page.access.signedIn !== previous.data.access.signedIn)) throw new FeedPaginationError("changed");

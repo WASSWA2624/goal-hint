@@ -28,6 +28,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   const root = useRef<HTMLDivElement>(null), viewRef = useRef(view), enabledRef = useRef(enabled), queryRef = useRef(query);
   const mounted = useRef(false), request = useRef<AbortController | null>(null), entryId = useRef<string | null>(null);
   const restored = useRef(true), retryCheckpoint = useRef<FeedCheckpoint | null>(null), failedMode = useRef<Mode>("append");
+  const scrollAnchor = useRef<{ id: string; top: number } | null>(null);
   const focusTarget = useRef<FocusTarget | null>(null);
   const href = feedQueryHref(query, today), queryKey = feedQueryKey(query, today);
   const announce = useCallback((key: "loading" | "restoring" | "loaded" | "restored" | "refreshed" | "changed" | "failed" | "busy", loaded?: LoadedFeed, added = 0) => {
@@ -49,7 +50,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       paginationVersion: current.data.paginationVersion, savedAt: Date.now() });
   }, [href, queryKey]);
 
-  const run = useCallback(async (mode: Mode, checkpoint?: FeedCheckpoint) => {
+  const run = useCallback(async (mode: Mode, checkpoint?: FeedCheckpoint, automatic = false) => {
     // The synchronous lock also handles two clicks before React paints disabled.
     if (request.current || !enabledRef.current || !mounted.current) return;
     const base = viewRef.current;
@@ -66,30 +67,37 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         next = appendFeedPage(base, await fetchPage(base.data.nextPage!));
       } else {
         const pages: MatchFeedResponse[] = [], last = checkpoint?.lastPage ?? base.lastPage;
-        for (let page = base.firstPage; page <= last; page++) {
+        const start = checkpoint?.firstPage ?? base.firstPage, previous = { ...base, firstPage: start };
+        for (let page = start; page <= last; page++) {
           const received = await fetchPage(page);
           pages.push(received);
           // Validate every boundary while accumulating, before committing anything.
-          replaceFeedPages(base, pages);
+          replaceFeedPages(previous, pages);
           if (received.nextPage === null) break;
         }
-        next = replaceFeedPages(base, pages);
+        next = replaceFeedPages(previous, pages);
       }
       if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
       acceptRun(base.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
       restored.current = true; retryCheckpoint.current = null;
-      if (mode !== "background") focusTarget.current = { fixtureId: mode === "append" ? next.records[base.records.length]?.fixtureId ?? null : checkpoint?.focusFixtureId ?? null,
+      if (next.firstPage > base.firstPage) {
+        const retained = new Set(next.records.map((row) => row.fixtureId));
+        const node = [...(root.current?.querySelectorAll<HTMLElement>("[data-fixture-id]") ?? [])]
+          .find((node) => retained.has(node.dataset.fixtureId ?? "") && node.getBoundingClientRect().bottom > 0);
+        if (node) scrollAnchor.current = { id: node.dataset.fixtureId!, top: node.getBoundingClientRect().top };
+      }
+      if (mode !== "background" && !automatic) focusTarget.current = { fixtureId: mode === "append" ? next.records[next.records.length - next.data.records.length]?.fixtureId ?? null : checkpoint?.focusFixtureId ?? null,
         ...(checkpoint ? { checkpoint } : {}) };
       viewRef.current = next; setView(next);
       if (checkpoint) announce(checkpoint.paginationVersion === next.data.paginationVersion ? "restored" : "refreshed", next);
-      else if (mode !== "background") announce(mode === "append" ? "loaded" : "refreshed", next, next.records.length - base.records.length);
+      else if (mode !== "background") announce(mode === "append" ? "loaded" : "refreshed", next, mode === "append" ? next.data.records.length : 0);
     } catch (cause) {
       if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
       const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
       if (code === "subscription-required" || code === "changed") { router.refresh(); return; }
       if (mode === "background") return;
       failedMode.current = mode; retryCheckpoint.current = checkpoint ?? null; setError(code);
-      focusTarget.current = { fixtureId: null, retry: true };
+      if (!automatic) focusTarget.current = { fixtureId: null, retry: true };
       announce(code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
     } finally {
       clearTimeout(deadline);
@@ -100,6 +108,12 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   useLayoutEffect(() => { queryRef.current = query; }, [query]);
   useLayoutEffect(() => {
     viewRef.current = view; enabledRef.current = enabled;
+    const anchor = scrollAnchor.current;
+    scrollAnchor.current = null;
+    if (anchor) {
+      const node = root.current?.querySelector<HTMLElement>(`[data-fixture-id="${CSS.escape(anchor.id)}"]`);
+      if (node) window.scrollBy({ top: node.getBoundingClientRect().top - anchor.top, behavior: "instant" });
+    }
     const target = focusTarget.current;
     if (!target) return;
     focusTarget.current = null;
@@ -143,7 +157,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     };
   }, [data.page, href, queryKey, run, save]);
 
-  return { view, phase, error, root, refresh: useCallback(() => run("background"), [run]), retry: () => {
+  return { view, phase, error, root, loadMore: (automatic = false) => run("append", undefined, automatic), refresh: useCallback(() => run("background"), [run]), retry: () => {
     const checkpoint = retryCheckpoint.current;
     return run(checkpoint ? "restore" : error === "changed" || error === "stale-data" ? "refresh" : failedMode.current, checkpoint ?? undefined);
   } };

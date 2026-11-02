@@ -4,8 +4,7 @@ import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, qualifiedJointModel, 
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
-import { slipMatchStateForSelection } from "../../domain/slip-match-state.ts";
-import { slipSelectionCard } from "../../domain/slip-card.ts";
+import { gateSlipView } from "./slip-preview.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 import { getDatabase } from "../database/client.ts";
@@ -15,24 +14,7 @@ import { createPublishedSlips } from "./published-slips.ts";
 export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
   const entitled = access.tier === "full";
   return { ...result, entitled, access: { tier: access.tier, signedIn: access.signedIn }, slips: result.slips.map((view) => {
-    const { rank, matchCount, totalOdds, estimatedProbability, averageProbability, id, publicationDay, publishedAt, outcome, status, completed } = view;
-    const summary = { rank, matchCount, totalOdds, estimatedProbability, averageProbability,
-      ...(id !== undefined ? { id } : {}), ...(publicationDay ? { publicationDay } : {}),
-      ...(publishedAt !== undefined ? { publishedAt } : {}), ...(outcome ? { outcome } : {}),
-      ...(status ? { status } : {}), ...(completed !== undefined ? { completed } : {}) };
-    if (view.slip && (entitled || completed === true)) return { ...summary, slip: view.slip,
-      ...(view.matchStates ? { matchStates: view.slip.selections.flatMap((selection) => {
-        const state = slipMatchStateForSelection(selection, view.matchStates); return state ? [state] : [];
-      }) } : {}) };
-    if (!view.slip) return { ...summary, ...(view.preview ? { preview: view.preview } : {}) };
-    const released = new Set(view.completedFixtureIds ?? []);
-    return { ...summary, preview: view.slip.selections.map((selection) => {
-      const state = view.matchStates && slipMatchStateForSelection(selection, view.matchStates);
-      const card = slipSelectionCard(selection);
-      return { fixture: { ...card.fixture, cycleId: null, status: state?.status ?? "unknown",
-        score: state?.score ?? null, liveClock: state?.liveClock ?? null },
-        pick: released.has(selection.fixtureId) ? { ...card.snapshotPick, outcome: state?.outcome ?? "pending" } : null };
-    }) };
+    return gateSlipView(view, access);
   }) };
 }
 
@@ -86,4 +68,8 @@ export function createPublishedBestSlipsService({ read = readPublishedDay, provi
   };
 }
 
-export const readBestSlips = createPublishedBestSlipsService();
+/** The entry screen and its API share the same paginated 30-day collection. */
+export async function readBestSlips(access: ViewerAccess, locale = "en"): Promise<BestSlipsResult> {
+  const [{ readBestSlipsBrowse }, { defaultBestSlipsQuery }] = await Promise.all([import("./best-slips-browse.ts"), import("../../domain/best-slips-query.ts")]);
+  return readBestSlipsBrowse(access, defaultBestSlipsQuery(), locale);
+}

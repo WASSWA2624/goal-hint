@@ -1,21 +1,21 @@
-import type { BestSlipsResult } from "./best-slips.ts";
-import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
+import type { SlipsBrowseResult } from "./best-slips.ts";
+import { bestSlipsQueryRules, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
 import { slipStatusCategory } from "./slip-status.ts";
 
-export type BestSlipsSnapshot = Readonly<{ query: BestSlipsQuery; data: BestSlipsResult }>;
+export type BestSlipsSnapshot = Readonly<{ query: BestSlipsQuery; data: SlipsBrowseResult }>;
 export type BestSlipsBrowseCache = Readonly<{
-  source: BestSlipsResult; entitled: boolean; snapshots: readonly BestSlipsSnapshot[];
+  source: SlipsBrowseResult; entitled: boolean; snapshots: readonly BestSlipsSnapshot[];
 }>;
 const maximumSnapshots = 12;
 
-export function bestSlipsStatisticsMatch(left: BestSlipsResult, right: BestSlipsResult): boolean {
+export function bestSlipsStatisticsMatch(left: SlipsBrowseResult, right: SlipsBrowseResult): boolean {
   const a = left.statistics, b = right.statistics;
   if (!a || !b) return !a && !b;
   return (["total", "won", "lost", "pending", "void", "cancelled", "unavailable", "filteredOut"] as const)
     .every((key) => (a[key] ?? 0) === (b[key] ?? 0));
 }
 
-export function bestSlipsRangeKey(query: BestSlipsQuery, day: BestSlipsResult["day"]): string {
+export function bestSlipsRangeKey(query: BestSlipsQuery, day: SlipsBrowseResult["day"]): string {
   const dates = resolveBestSlipsDates(query, day);
   return `${dates.from ?? "all"}:${dates.to ?? "all"}`;
 }
@@ -23,7 +23,7 @@ export function bestSlipsRangeKey(query: BestSlipsQuery, day: BestSlipsResult["d
 /** Only a complete, unfiltered cohort can establish every result and its exact total locally. */
 export function projectBestSlipsSnapshot(snapshot: BestSlipsSnapshot, query: BestSlipsQuery): BestSlipsSnapshot | null {
   const { data, query: original } = snapshot, browse = data.browse;
-  if (data.state !== "generated" || original.status !== "all" || original.page !== 1 || original.cursor || query.cursor
+  if (original.summary !== query.summary || data.state !== "generated" || original.status !== "all" || original.page !== 1 || original.cursor || query.cursor
     || original.period === "all" || query.period === "all" || !data.statistics || data.statistics.total !== data.slips.length
     || bestSlipsRangeKey(original, data.day) !== bestSlipsRangeKey(query, data.day)
     || browse && (browse.total === null || browse.total !== data.slips.length || browse.hasMore)) return null;
@@ -36,8 +36,8 @@ export function projectBestSlipsSnapshot(snapshot: BestSlipsSnapshot, query: Bes
 }
 
 /** A bounded transient cache belongs to one server seed and one observed access tier. */
-export function rememberBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: BestSlipsResult,
-  query: BestSlipsQuery, data: BestSlipsResult): BestSlipsBrowseCache {
+export function rememberBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: SlipsBrowseResult,
+  query: BestSlipsQuery, data: SlipsBrowseResult): BestSlipsBrowseCache {
   const entitled = data.entitled === true, key = serializeBestSlipsQuery(query).toString();
   if (data.day !== source.day) return cache;
   const previous = cache.source === source && cache.entitled === entitled ? cache.snapshots : [];
@@ -46,11 +46,11 @@ export function rememberBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: B
 }
 
 /** Retained rows always carry their actual query; callers can label an unfinished change honestly. */
-export function findBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: BestSlipsResult, entitled: boolean,
+export function findBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: SlipsBrowseResult, entitled: boolean,
   query: BestSlipsQuery): (BestSlipsSnapshot & Readonly<{ retained: boolean }>) | null {
   const snapshots = cache.source === source && cache.entitled === entitled ? cache.snapshots : [];
   const seed = source.entitled === entitled && source.state === "generated" ? [{
-    query: source.browse?.query ?? defaultBestSlipsQuery(), data: source,
+    query: source.browse?.query ?? { period: "today" as const, status: "all" as const, page: 1 }, data: source,
   }] : [];
   const range = bestSlipsRangeKey(query, source.day), key = serializeBestSlipsQuery(query).toString();
   const candidates = [...snapshots, ...seed].filter((item) => item.data.day === source.day

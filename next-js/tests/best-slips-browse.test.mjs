@@ -72,17 +72,18 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
 }
 const query = (input = {}) => parseBestSlipsQuery(input, today);
 
-test('publication pages show 50 slips and preserve every original rank at the 50, 51 and 100 boundaries', async () => {
-  for (const count of [50, 51, 100]) {
-    const f = fixture(1, count), first = await f.store.browse(query(), today);
-    assert.equal(first.browse.pageSize, 50); assert.equal(first.browse.total, count);
-    assert.equal(first.slips.length, 50); assert.equal(first.browse.hasMore, count > 50);
-    const second = await f.store.browse(query({ page: '2' }), today);
-    assert.equal(second.slips.length, count - 50); assert.equal(second.browse.hasMore, false);
-    const rows = [...first.slips, ...second.slips];
+test('publication pages show 20 slips and preserve every original rank across page boundaries', async () => {
+  for (const count of [20, 21, 50, 51, 100]) {
+    const f = fixture(1, count), rows = [];
+    for (let page = 1; page <= Math.ceil(count / 20); page++) {
+      const data = await f.store.browse(query({ page: String(page) }), today);
+      assert.equal(data.browse.pageSize, 20); assert.equal(data.browse.total, count);
+      assert.equal(data.slips.length, Math.min(20, count - (page - 1) * 20));
+      assert.equal(data.browse.hasMore, page * 20 < count);
+      rows.push(...data.slips);
+    }
     assert.deepEqual(rows.map((view) => view.rank), Array.from({ length: count }, (_, index) => index + 1));
     assert.equal(new Set(rows.map((view) => view.id)).size, count);
-    assert.deepEqual(second.statistics, first.statistics);
   }
 });
 
@@ -106,7 +107,7 @@ test('void, cancelled and pending progress categories filter before pagination w
     const result = await f.store.browse(query({ period: 'last7', status, page: '2' }), today);
     assert.deepEqual(result.statistics, { total: 196, won: 28, lost: 28, pending: 84, void: 28, cancelled: 28 });
     assert.equal(result.browse.total, status === 'pending' ? 84 : 28);
-    assert.equal(result.slips.length, status === 'pending' ? 34 : 0);
+    assert.equal(result.slips.length, status === 'pending' ? 20 : 8);
     assert.ok(result.slips.every((view) => status === 'pending'
       ? ['not-started', 'in-progress', 'pending'].includes(view.status) && view.outcome === 'pending'
       : view.status === status && view.outcome === 'void'));
@@ -163,8 +164,8 @@ test('the browse service retains public counts and releases complete original se
   assert.equal(gated.slips[0].publicationDay, today); assert.equal(gated.slips[0].outcome, 'won');
   assert.equal(gated.slips.find(view => view.rank === 3).preview[0].pick, null);
   const read = createBestSlipsBrowseService({ read: async (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly), providerOdds: true, now: () => now });
-  assert.deepEqual(await read(free, query()), gated);
-  assert.deepEqual(await read(full, query()), gateBestSlips(result, full));
+  assert.deepEqual(await read(free, query()), { ...gated, summary: { from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
+  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
 });
 
 test('a replacement cycle on the same fixture cannot overwrite the original published outcome or row state', async () => {
@@ -188,11 +189,11 @@ test('invalid ranges, unsealed publications and read failures fail closed; disab
 
 test('public completion eligibility precedes statistics, result filtering and every page boundary', async () => {
   const f = fixture(2, 100), rows = [];
-  for (const page of [1, 2, 3, 4]) {
+  for (const page of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     const result = await f.store.browse(query({ period: 'last3', page: String(page) }), today, true);
     assert.equal(result.browse.total, 150); assert.equal(result.statistics.total, 150);
-    assert.equal(result.statistics.pending, 0); assert.equal(result.slips.length, page <= 3 ? 50 : 0);
-    assert.equal(result.browse.hasMore, page < 3);
+    assert.equal(result.statistics.pending, 0); assert.equal(result.slips.length, page <= 7 ? 20 : page === 8 ? 10 : 0);
+    assert.equal(result.browse.hasMore, page < 8);
     assert.ok(result.slips.every(view => view.completed && view.rank % 4 !== 3));
     rows.push(...result.slips);
   }

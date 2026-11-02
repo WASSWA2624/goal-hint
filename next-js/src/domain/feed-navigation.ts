@@ -37,5 +37,5 @@ export function writeFeedCheckpoint(entries: readonly FeedCheckpoint[], checkpoi
   return serialized;
 }
 export function matchingFeedCheckpoint(entries: readonly FeedCheckpoint[], entryId: string, queryKey: string, href: string, firstPage: number) {
-  return entries.find((entry) => entry.entryId === entryId && entry.queryKey === queryKey && entry.href === href && entry.firstPage === firstPage) ?? null;
+  return entries.find((entry) => entry.entryId === entryId && entry.queryKey === queryKey && entry.href === href && entry.firstPage >= firstPage) ?? null;
 }

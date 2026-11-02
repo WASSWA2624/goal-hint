@@ -7,6 +7,7 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { getDatabase } from "../database/client.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
+import { yesterday } from "../../domain/browse-period.ts";
 import { gateBestSlips } from "./best-slips.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
@@ -35,7 +36,14 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
-    try { return gateBestSlips(await read(query, day, _locale, false), access); }
+    try {
+      const result = await read(query, day, _locale, false);
+      const date = yesterday(day);
+      const summary = query.summary === "yesterday"
+        ? await read({ period: "yesterday", status: "all", page: 1 }, day, _locale, false).catch(() => null) : result;
+      return gateBestSlips({ ...result, summary: { from: query.summary ? date : dates.from,
+        to: query.summary ? date : dates.to, statistics: summary?.statistics ?? null } }, access);
+    }
     catch { return { ...empty, state: "data-unavailable" }; }
   };
 }

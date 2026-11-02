@@ -51,5 +51,5 @@ export const filterButtonColors = css`
 export const controlFeedback = css`
   transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]):not([aria-expanded="true"]):not(:is(${textFieldSelector}, select)) { background: ${({ theme }) => theme.color.fieldHover}; } }
-  &:focus-within:not(:is(${textFieldSelector}, select)) { background: ${({ theme }) => theme.color.fieldHover}; }
+  &:focus-within:not([aria-pressed="true"]):not(:is(${textFieldSelector}, select)) { background: ${({ theme }) => theme.color.fieldHover}; }
 `;

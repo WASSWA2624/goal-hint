@@ -33,11 +33,12 @@ const Bar = styled.div`
 `;
 
 /** Numbers navigate; the surrounding arrows only scroll through the sequential number rail. */
-export function FeedPagination({ query, today, data, busy, error, onRetry }: {
+export function FeedPagination({ query, today, data, busy, error, onRetry, firstPage = data.page, shown = data.records.length }: {
+  firstPage?: number; shown?: number;
   query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; busy: boolean; error: FeedPaginationError["code"] | null; onRetry: () => void;
 }) {
   const messages = createMessages(query.locale), page = data.page, total = data.totalPages;
-  const first = data.total === 0 ? 0 : (page - 1) * data.pageSize + 1, last = Math.min(data.total, (page - 1) * data.pageSize + data.records.length);
+  const first = data.total === 0 ? 0 : (firstPage - 1) * data.pageSize + 1, last = Math.min(data.total, (firstPage - 1) * data.pageSize + shown);
   const changed = error === "changed" || error === "stale-data";
   if (total < 1) return null;
   return <Bar data-feed-pagination>

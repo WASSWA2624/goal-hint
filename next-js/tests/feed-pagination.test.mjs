@@ -54,6 +54,21 @@ test('rebasing replaces ordered membership atomically and never rolls whole snap
   assert.throws(()=>replaceFeedPages(old,[first,page(2,['b','c'],version)]),e=>e.code==='changed');
   assert.equal(old.records.length,4);
 });
+test('continuous browsing retains a bounded page window and can restore that window after navigation', () => {
+  const batch = (number) => page(number, [`a-${number}`, `b-${number}`], version, {
+    total: 26, totalPages: 13, coverage: { ...page(1, ["a", "b"]).coverage, knownFixtures: 26 }, nextPage: number < 13 ? number + 1 : null,
+    links: { next: number < 13 ? `/api/matches?page=${number + 1}` : null, previous: number > 1 ? `/api/matches?page=${number - 1}` : null },
+  });
+  let view = initialLoadedFeed(batch(1));
+  for (let number = 2; number <= 12; number++) view = appendFeedPage(view, batch(number));
+  assert.equal(view.pages, 10); assert.equal(view.firstPage, 3); assert.equal(view.lastPage, 12);
+  assert.equal(view.records.length, 20); assert.equal(view.records[0].fixtureId, 'a-3');
+  const checkpoint = { entryId: 'window', queryKey: 'cohort', href: '/en/matches', firstPage: 3, lastPage: 12,
+    scrollY: 2500, focusFixtureId: 'a-12', paginationVersion: version, savedAt: now };
+  assert.equal(feedCheckpointSchema.safeParse(checkpoint).success, true);
+  assert.equal(matchingFeedCheckpoint([checkpoint], 'window', 'cohort', '/en/matches', 1), checkpoint);
+  assert.equal(replaceFeedPages(view, Array.from({ length: 10 }, (_, index) => batch(index + 3))).records.length, 20);
+});
 test('restoration records contain bounded positions only, scoped to entry, query, initial page and expiry', () => {
   const checkpoint={entryId:'entry-a',queryKey:feedQueryKey(query(),today),href:'/en',firstPage:1,lastPage:3,scrollY:15000,
     focusFixtureId:'fixture-70',paginationVersion:version,savedAt:now};

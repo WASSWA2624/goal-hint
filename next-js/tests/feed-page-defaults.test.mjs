@@ -25,12 +25,12 @@ test("page defaults select predictions without changing unrestricted API reads",
   }
 });
 
-test("Matches opens with All, Today, Highest chance and all four markets", () => {
+test("Matches opens with 30 days newest first, yesterday performance and 20 items", () => {
   for (const subscriberOnly of [false, true]) {
     const query = page("", subscriberOnly);
     assert.equal(query.status, "all");
-    assert.deepEqual(query.dates, { kind: "today" });
-    assert.deepEqual(query.sort, { by: "probability", direction: "desc" });
+    assert.deepEqual(query.dates, { kind: "last-30-days" });
+    assert.deepEqual(query.sort, { by: "kickoff", direction: "desc" });
     assert.deepEqual(query.markets, defaultMarkets);
     assert.equal(query.search, "");
     assert.deepEqual(query.leagues, []);
@@ -38,10 +38,10 @@ test("Matches opens with All, Today, Highest chance and all four markets", () =>
     assert.deepEqual(query.probability, { min: 0, max: 100 });
     assert.equal(query.odds, null);
     assert.equal(query.time, undefined);
-    assert.equal(query.page, 1);
+    assert.equal(query.page, 1); assert.equal(query.pageSize, 20); assert.equal(query.summary, "yesterday");
     const parameters = serializeFeedQuery(query, today);
-    assert.equal(parameters.get("when"), "today");
-    assert.equal(parameters.get("sort"), "probability");
+    assert.equal(parameters.get("when"), null);
+    assert.equal(parameters.get("sort"), null);
   }
   assert.deepEqual(parse().dates, { kind: "last-30-days" });
   assert.deepEqual(parse().sort, { by: "kickoff", direction: "desc" });
@@ -70,7 +70,7 @@ test("explicit dates and sorting survive Matches navigation, including API defau
 });
 
 test("Today uses the browsing time zone without adding a kickoff constraint", () => {
-  const query = page("tz=America%2FNew_York");
+  const query = page("when=today&tz=America%2FNew_York");
   const instant = Date.parse("2026-10-28T01:00:00Z");
   const localToday = getFeedToday(query, instant);
   assert.equal(localToday, "2026-10-27");

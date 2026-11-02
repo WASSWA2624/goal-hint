@@ -8,6 +8,7 @@ import { feedPerformanceCacheKey, readFeedPerformance } from '../src/server/matc
 import { feedSql } from '../src/server/matches/feed-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { settlementContextFor, settlementInputFor } from '../src/server/settlement/settlement-read.ts';
+import { fixtureResultFromRow } from '../src/server/results/result-read.ts';
 
 const today = parseReportingDate('2026-10-09'), at = Date.parse('2026-10-09T15:00:00Z');
 const query = parseFeedQuery({ date: today, page: '2', pageSize: '1' }, { today });
@@ -84,6 +85,27 @@ test('cohort counts preserve missing predictions and voids without classifying t
   assert.equal(tx.calls.length, 0);
   assert.deepEqual(await readFeedPerformance(tx, sql, { total: 9, available: 3, void: 0 }),
     { total: 9, won: 0, lost: 0, pending: 3, void: 0, unavailable: 6 });
+});
+
+test('a cancellation remains pending until its original settlement is audited, then has its own category', async () => {
+  const value = sample(); value.row.fixtureStatus = 'canceled';
+  const counts = { total: 1, available: 1, void: 0, cancelled: 0 };
+  assert.deepEqual(await readFeedPerformance(transaction([value]), sql, counts),
+    { total: 1, won: 0, lost: 0, pending: 1, void: 0, cancelled: 0, unavailable: 0 });
+  const row = value.row, result = fixtureResultFromRow(value.resultRow), previous = JSON.parse(row.body);
+  const fixture = { status: row.fixtureStatus, regulationHome: row.fixtureRegulationHome, regulationAway: row.fixtureRegulationAway,
+    regulationVerifiedAt: row.fixtureRegulationVerifiedAt, regulationEvidenceRef: row.fixtureRegulationEvidenceRef };
+  const cycle = { id: row.cycleId, lockedSetId: row.currentLockedSetId, state: 'closed', voidReason: null };
+  const market = { selection: row.storedSelection, source: row.currentSource, selectedProbability: row.storedProbability };
+  const input = settlementInputFor(row.fixtureId, cycle, row.currentFamily, market, result, false,
+    settlementContextFor(fixture, result, null, cycle), previous);
+  assert.equal(input.status, 'void');
+  const recorded = { ...previous, ...input, inputHash: evidenceFingerprint(input) };
+  Object.assign(row, recorded, { at: new Date(at), body: evidenceSerialize(recorded) });
+  assert.deepEqual(await readFeedPerformance(transaction([value]), sql, counts),
+    { total: 1, won: 0, lost: 0, pending: 0, void: 0, cancelled: 1, unavailable: 0 });
+  assert.equal((await readFeedPerformance(transaction([value]), sql, { total: 1, available: 1, void: 0 })).void, 1,
+    'the existing list API keeps its combined void contract');
 });
 
 test('large cohorts continue across bounded batches without losing matches or applying the visible page limit', async () => {

@@ -38,10 +38,10 @@ test('projection paginates the full matching cohort and preserves original ranks
   const first = projectBestSlipsSnapshot({ query: query(), data: source }, query({ status: 'won' }));
   const second = projectBestSlipsSnapshot({ query: query(), data: source }, query({ status: 'won', page: 2 }));
   const ranks = source.slips.filter((view) => view.status === 'won').map((view) => view.rank);
-  assert.equal(first.data.browse.total, 75); assert.equal(first.data.slips.length, 50); assert.equal(first.data.browse.hasMore, true);
-  assert.deepEqual(second.data.slips.map((view) => view.rank), ranks.slice(50));
-  assert.equal(second.data.slips.length, 25); assert.equal(second.data.browse.hasMore, false);
-  assert.deepEqual([...first.data.slips, ...second.data.slips].map((view) => view.rank), ranks);
+  assert.equal(first.data.browse.total, 75); assert.equal(first.data.slips.length, 20); assert.equal(first.data.browse.hasMore, true);
+  assert.deepEqual(second.data.slips.map((view) => view.rank), ranks.slice(20, 40));
+  assert.equal(second.data.slips.length, 20); assert.equal(second.data.browse.hasMore, true);
+  assert.deepEqual([...first.data.slips, ...second.data.slips].map((view) => view.rank), ranks.slice(0, 40));
   assert.equal(second.data.statistics.total, 100);
 });
 
@@ -131,15 +131,15 @@ test('equivalent explicit date ranges can reuse a complete cohort, while unrelat
   assert.equal(findBestSlipsSnapshot(emptyCache(source), source, true, query({ period: 'tomorrow' })), null);
 });
 
-test('the complete daily All source remains available while every rendered page is limited to 50 slips', () => {
+test('the complete daily All source remains available while every rendered page is limited to 20 slips', () => {
   const source = daily(Array.from({ length: 83 }, () => 'pending'));
   const accepted = projectBestSlipsSnapshot({ query: query(), data: source }, query());
   const cache = rememberBestSlipsSnapshot(emptyCache(source), source, query(), accepted.data);
   const visible = findBestSlipsSnapshot(cache, source, true, query());
-  assert.equal(visible.data.slips.length, 50); assert.equal(visible.data.browse.total, 83); assert.equal(visible.data.browse.hasMore, true);
+  assert.equal(visible.data.slips.length, 20); assert.equal(visible.data.browse.total, 83); assert.equal(visible.data.browse.hasMore, true);
   const second = findBestSlipsSnapshot(cache, source, true, query({ page: 2 }));
-  assert.equal(second.retained, false); assert.equal(second.data.slips.length, 33); assert.equal(second.data.slips[0].rank, 51);
-  assert.equal(second.data.browse.hasMore, false); assert.equal(source.slips.length, 83);
+  assert.equal(second.retained, false); assert.equal(second.data.slips.length, 20); assert.equal(second.data.slips[0].rank, 21);
+  assert.equal(second.data.browse.hasMore, true); assert.equal(source.slips.length, 83);
 });
 
 test('returning to All cannot resurrect stale daily counts after a newer filtered response changes the cohort statistics', () => {
@@ -155,6 +155,6 @@ test('returning to All cannot resurrect stale daily counts after a newer filtere
   cache = rememberBestSlipsSnapshot(cache, source, query(), freshAll.data);
   visible = findBestSlipsSnapshot(cache, source, true, query());
   assert.equal(visible.retained, false); assert.equal(visible.query.status, 'all');
-  assert.equal(visible.data, freshAll.data); assert.equal(visible.data.slips.length, 50);
+  assert.equal(visible.data, freshAll.data); assert.equal(visible.data.slips.length, 20);
   assert.equal(visible.data.statistics.won, 1); assert.equal(visible.data.statistics.pending, 82);
 });

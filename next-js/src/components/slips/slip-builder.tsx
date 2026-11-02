@@ -9,6 +9,8 @@ import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
+import { InfiniteResults } from "@/components/ui/infinite-results";
+import { PersonalSlipHistory } from "./personal-slip-history";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
@@ -122,12 +124,12 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
   const result = clearedResult === receivedResult ? null : receivedResult;
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
-  const [pagination, setPagination] = useState({ result, page: 1 });
-  if (pagination.result !== result) setPagination({ result, page: 1 });
+  const [pagination, setPagination] = useState({ result, page: 1, firstPage: 1 });
+  if (pagination.result !== result) setPagination({ result, page: 1, firstPage: 1 });
   const desktop = useDesktopLayout();
   const recheckAccess = useCallback(() => { startTransition(() => router.refresh()); }, [router]);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
-  const formRef = useRef<HTMLFormElement>(null), errorRef = useRef<HTMLParagraphElement>(null);
+  const formRef = useRef<HTMLFormElement>(null), errorRef = useRef<HTMLParagraphElement>(null), resultsRef = useRef<HTMLElement>(null);
   const savedFiltersTrigger = useRef<HTMLButtonElement>(null);
   const [savedFiltersOpen, setSavedFiltersOpen] = useState(false);
   const [selectedConfiguration, setSelectedConfiguration] = useState(configurationId);
@@ -370,8 +372,8 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
   const pageCount = Math.ceil((data?.slips.length ?? 0) / slipPageSize);
-  const page = Math.min(pagination.page, Math.max(1, pageCount)), offset = (page - 1) * slipPageSize;
-  const shownSlips = useMemo(() => data?.slips.slice(offset, offset + slipPageSize) ?? [], [data?.slips, offset]);
+  const page = Math.min(pagination.page, Math.max(1, pageCount)), offset = (pagination.firstPage - 1) * slipPageSize;
+  const shownSlips = useMemo(() => data?.slips.slice(offset, page * slipPageSize) ?? [], [data?.slips, offset, page]);
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
@@ -514,7 +516,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         </CriteriaSummary>
       </CriteriaForm>
     </BuilderPanel>
-    <Results data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
+    <Results ref={resultsRef} data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
       {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
         requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       {subscriberOnly ? null : pending && !generated ? <SlipLoading locale={locale} label={messages.text("slips.building")} /> : generated ? <>
@@ -529,9 +531,12 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>
         </SlipMatchRefreshProvider>
+        <Note>{messages.text("history.showing", { first: messages.number(offset + 1), last: messages.number(offset + shownSlips.length), total: messages.number(data.slips.length) })}</Note>
+        <InfiniteResults hasMore={page < pageCount} busy={pending} locale={locale}
+          onMore={() => setPagination((current) => ({ ...current, page: Math.min(pageCount, current.page + 1) }))} />
         {pageCount > 1 && <NumberedPagination page={page} pages={pageCount} disabled={pending}
           labels={numberedPaginationLabels(messages, messages.text("slips.generated"))}
-          onPage={(next) => setPagination({ result, page: next })} />}
+          onPage={(next) => { resultsRef.current?.scrollIntoView({ block: "start" }); setPagination({ result, page: next, firstPage: next }); }} />}
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={emptyState ? messages.text(`slips.state.${emptyState}.description`) : <SlipStatusCopy
@@ -546,5 +551,6 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {!result && !publicPolicy.features.providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>
     </Results>
+    {signedIn && <PersonalSlipHistory locale={locale} today={today} />}
   </SlipStack>;
 }

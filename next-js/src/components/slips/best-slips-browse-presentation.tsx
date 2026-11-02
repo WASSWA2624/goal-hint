@@ -1,7 +1,7 @@
 "use client";
 
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
-import type { BestSlipsResult } from "@/domain/best-slips";
+import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipsQueryRules } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import styled from "styled-components";
@@ -16,10 +16,10 @@ const Pagination = styled.div`
   }
 `;
 
-export function BestSlipsSummary({ result, period, locale }: { result: BestSlipsResult; period: string; locale: string }) {
+export function BestSlipsSummary({ result, period, locale }: { result: SlipsBrowseResult; period: string; locale: string }) {
   const m = createMessages(locale), browse = result.browse;
   const total = browse?.total ?? (browse ? null : result.slips.length);
-  const first = result.slips.length ? ((browse?.query.page ?? 1) - 1) * (browse?.pageSize ?? result.slips.length) + 1 : 0;
+  const first = result.slips.length ? ((browse?.firstPage ?? browse?.query.page ?? 1) - 1) * (browse?.pageSize ?? result.slips.length) + 1 : 0;
   const dates = browse?.total === null ? browse.from && browse.to
     ? m.text("bestSlips.filters.allDatesRange", { from: m.reportingDateMedium(browse.from), to: m.reportingDateMedium(browse.to) }) : period : null;
   return <span data-best-slips-summary>

@@ -17,8 +17,8 @@ const recordFields = { cycle: fixtureCycleSchema.nullable(),
   availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable(),
   /** Prices for the published picks (052); empty while odds display rights are not recorded. */
   prices: z.array(fixturePriceSchema).max(4).default([]) };
-export const feedPerformanceSchema = z.strictObject({ total: count, won: count, lost: count, pending: count, void: count, unavailable: count })
-  .refine((value) => value.total === value.won + value.lost + value.pending + value.void + value.unavailable,
+export const feedPerformanceSchema = z.strictObject({ total: count, won: count, lost: count, pending: count, void: count, cancelled: count.optional(), unavailable: count })
+  .refine((value) => value.total === value.won + value.lost + value.pending + value.void + (value.cancelled ?? 0) + value.unavailable,
     "Performance counts must account for every matching fixture.");
 export const storedMatchFeedRecordSchema = storedFixtureSnapshotSchema.safeExtend(recordFields);
 export const matchFeedRecordSchema = fixtureSnapshotSchema.safeExtend(recordFields);

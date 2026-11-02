@@ -29,7 +29,7 @@ test('all viewers start today with public previews and subscriber predictions', 
     assert.equal(data.slips[0].publicationDay, today);
     assert.equal(!!data.slips[0].slip, entitled);
     assert.equal(data.slips[0].preview?.[0].pick ?? null, null);
-    assert.equal(defaultBestSlipsQuery(entitled).period, 'today');
+    assert.equal(defaultBestSlipsQuery(entitled).period, 'last30');
   }
   assert.deepEqual(dates, [today, today, today]);
 });
@@ -72,7 +72,7 @@ test('API filters without a date use the viewer default, and unavailable default
       browse: async (_viewer, query) => { received = query; return result([]); } });
     const response = await handler(new Request('https://goalhint.com/api/best-slips?status=won'));
     assert.equal(response.status, 200); assert.equal(received.status, 'won');
-    assert.equal(received.period, 'today');
+    assert.equal(received.period, 'last30');
     const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at, read: async () => { throw new Error('private'); } });
     const data = await read(viewer);
     assert.equal(data.entitled, viewer.tier === 'full'); assert.equal(data.state, 'data-unavailable'); assert.deepEqual(data.slips, []);
@@ -87,8 +87,8 @@ test('API re-reads an implicit default after a subscription change so date, enti
       const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at,
         read: async (day) => { days.push(day); return { ...result([publication(day)]), day }; } });
       const handler = createBestSlipsHandler({ now: () => at, read, access: async () => checks++ === 0 ? initial : final,
-        browse: async (viewer, query) => { days.push(query.period === 'today' ? today : yesterday);
-          return result([publication(query.period === 'today' ? today : yesterday)]); } });
+        browse: async (viewer, query) => { days.push(['today', 'last30'].includes(query.period) ? today : yesterday);
+          return result([publication(['today', 'last30'].includes(query.period) ? today : yesterday)]); } });
       const response = await handler(new Request(`https://goalhint.com/api/best-slips${suffix}`));
       const data = await response.json(), entitled = final.tier === 'full';
       assert.equal(response.status, 200); assert.equal(checks, 3);

@@ -10,6 +10,7 @@ import { DesktopFeedFilters } from "@/components/match/desktop-feed-filters";
 import { plainClick } from "@/components/match/filter-parts";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
+import { InfiniteResults } from "@/components/ui/infinite-results";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
@@ -20,7 +21,7 @@ import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
-import { parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { isAnyKickoffTime } from "@/domain/kickoff-time";
@@ -57,7 +58,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const router = useRouter();
-  const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
+  const { view, phase, error, root, retry, refresh, loadMore } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
   const { data, records } = view;
   // Read when each wait is armed, so the kickoff window always uses the current clock.
   useLiveRefresh({ today, zone: query.zone ?? query.time?.zone ?? null, enabled, interval: () => feedRefreshInterval(data, records, Date.now()), refresh,
@@ -82,6 +83,9 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
     {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
     {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
       {records.map((fixture, index) => <Fragment key={fixture.fixtureId}>
+        {query.sort.by === "kickoff" && fixture.kickoffAt !== null && (index === 0 ||
+          getReportingDate(utcInstantFromEpochMilliseconds(records[index - 1]!.kickoffAt ?? data.asOf)) !== getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt))) &&
+          <MatchListDivider title={messages.reportingDateMedium(getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt)))} note="EAT" />}
         {/* Exact matches come first, so similar results start right after the last exact position. */}
         {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
           note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
@@ -92,7 +96,8 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
         </li>
       </Fragment>)}
     </MatchCardList>}
-    {enabled && <FeedPagination query={query} today={today} data={data} busy={phase !== null} error={error} onRetry={retry} />}
+    {enabled && <InfiniteResults hasMore={data.nextPage !== null} busy={phase !== null} failed={error !== null} locale={query.locale} onMore={error ? retry : loadMore} />}
+    {enabled && <FeedPagination firstPage={view.firstPage} shown={records.length} query={query} today={today} data={data} busy={phase !== null} error={error} onRetry={retry} />}
   </FeedStack>;
 });
 

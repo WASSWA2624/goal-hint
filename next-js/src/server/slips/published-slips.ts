@@ -190,6 +190,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const views: BestSlipView[] = [];
         let total = 0;
+        const membership: string[] = [];
         const offset = (query.page - 1) * bestSlipsQueryRules.pageSize;
         for (let start = 0; start < selected.length; start += bestSlipsQueryRules.scanDays) {
           const batch = selected.slice(start, start + bestSlipsQueryRules.scanDays);
@@ -223,6 +224,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             statistics.total++; statistics[category]++;
             if (cursor && (parent.day > cursor.day || parent.day === cursor.day && row.rank <= cursor.rank)) continue;
             if (query.status !== "all" && category !== query.status) continue;
+            membership.push(row.id);
             const position = total++;
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
             const slip: BestSlip = { ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability };
@@ -237,7 +239,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         return { day: today, state: "generated", slips: retained,
           searchLimited: [...parents.values()].some((value) => value.searchLimited),
           partialCoverage: [...parents.values()].some((value) => value.partialCoverage), statistics: allDates ? null : statistics,
-          browse: { query, total: allDates ? null : total, pageSize: bestSlipsQueryRules.pageSize,
+          browse: { query, version: allDates ? null : evidenceFingerprint(membership), total: allDates ? null : total, pageSize: bestSlipsQueryRules.pageSize,
             hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
             from: allDates ? oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
             to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };

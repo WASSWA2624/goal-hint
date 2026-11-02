@@ -7,6 +7,16 @@ import { fieldShortForms, predictionShortForms } from "../../domain/betting-shor
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "history.yesterday": "Yesterday’s performance",
+  "history.performance": "Performance for selected dates",
+  "history.browsing": "Browsing",
+  "history.loadMore": "Load more",
+  "history.loading": "Loading…",
+  "history.end": "End of this period. Use the date filters to browse another period.",
+  "history.savedTitle": "Your saved slips",
+  "history.savedHint": "Past performance uses your saved slips and their original selections.",
+  "history.showing": "Showing {first}–{last} of {total}",
+
   ...authMessages,
   ...performanceMessages,
   ...liveMatchMessages,

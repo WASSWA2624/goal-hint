@@ -9,13 +9,13 @@ const at = Date.parse('2026-10-09T08:00:00Z'), clock = { now: () => at };
 const counts = { total: 80, won: 0, lost: 0, pending: 20, void: 10, unavailable: 50 };
 const parameters = new URLSearchParams('date=2026-10-09&page=4&country=England&status=finished&market=match-result&prob=20-90');
 
-function database({ summaryOnly = false } = {}) {
+function database({ summaryOnly = false, cancelled = 0n } = {}) {
   const statements = [], ancillary = [];
   const tx = {
     publicCacheTag: { findMany: async () => [] },
     async $queryRaw(statement) {
       statements.push(statement);
-      if (statement.sql.includes('SUM(CASE WHEN m.available=TRUE')) return [{ total: 80n, available: 30n, void: 10n, exact: null }];
+      if (statement.sql.includes('SUM(CASE WHEN m.available=TRUE')) return [{ total: 80n, available: 30n, void: 10n, cancelled, exact: null }];
       if (statement.sql.includes('SELECT STRAIGHT_JOIN f.id,f.kickoff')) return [];
       if (summaryOnly) throw new Error('A summary attempted to hydrate the discarded page.');
       if (statement.sql.includes('GROUP BY l.id')) return [{ id: 'league-1', name: 'Example', country: 'England', logoUrl: null, fixtures: 100n, knownFixtures: 100n }];
@@ -37,8 +37,8 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   const cache = { read: async (descriptor, read) => { descriptors.push(descriptor); return read(); } };
   const fullResult = await createMatchFeedService({ database: full.runtime, competitionIds: [39], clock, cache }).query(parameters);
   const summary = await createMatchFeedSummaryService({ database: lean.runtime, competitionIds: [39], clock, cache }).query(parameters);
-  assert.deepEqual(summary.performance, fullResult.performance);
-  assert.deepEqual(summary.performance, counts);
+  assert.deepEqual(summary.performance, { ...fullResult.performance, cancelled: 0 });
+  assert.deepEqual(summary.performance, { ...counts, cancelled: 0 });
   assert.equal(summary.total, fullResult.total);
   assert.equal(summary.paginationVersion, fullResult.paginationVersion);
   assert.equal(summary.asOf, fullResult.asOf);
@@ -56,6 +56,15 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   assert.deepEqual(lean.ancillary, []);
   assert.deepEqual(lean.options, [{ isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 90_000 }]);
   assert.deepEqual(Object.keys(summary).sort(), ['asOf', 'paginationVersion', 'performance', 'total']);
+});
+
+test('cancelled predictions have their own category and are excluded from pending and void counts', async () => {
+  const db = database({ summaryOnly: true, cancelled: 2n });
+  const result = await createMatchFeedSummaryService({ database: db.runtime, competitionIds: [39], clock }).query(parameters);
+  assert.deepEqual(result.performance, { ...counts, pending: 18, cancelled: 2 });
+  const count = db.statements.find((statement) => statement.sql.includes('AS cancelled'));
+  assert.match(count.sql, /c.state='void' AND f.status<>'canceled'/);
+  assert.match(count.sql, /m.available=TRUE AND c.state='void' AND f.status='canceled'/);
 });
 
 test('summary cache identity ignores the discarded page but changes with filters', async () => {
