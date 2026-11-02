@@ -61,3 +61,9 @@ helpers in `scripts/verify-control-rows.mjs` check exact heights, row edges,
 validation changes and overflow. Exercise both themes and fine/coarse pointers
 at 320, 390, 768, 1024, 1440 and 1920px. `inspectControlHeights` also audits
 visible controls in a production screen or an isolated screen fixture.
+
+Locked mobile match cards replace their score and forecast values with one themed
+access button, while retaining the shared control height. Mobile slip headers
+without a disclosure place their access action in an intrinsic grid track beside
+the status. `scripts/verify-mobile-prediction-access.mjs` checks visible fields,
+button coverage and height, navigation destinations, and status/action separation.

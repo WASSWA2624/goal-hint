@@ -17,6 +17,7 @@ import type { SlipHeaderPublication } from "./slip-header-meta";
 const PhoneSlipFallback = styled.div`
   position: relative; min-inline-size: 0;
   [data-phone-shareable] { position: relative; }
+  &:has([data-header-only]) [data-phone-share-action] { inset-inline-end: var(--gh-spacing-1_5); }
   [data-phone-share-action] {
     position: absolute; inset-block-start: var(--gh-spacing-2);
     inset-inline-end: calc(var(--gh-spacing-1_5) + var(--slip-header-action-size) + var(--slip-header-action-gap));
@@ -25,23 +26,23 @@ const PhoneSlipFallback = styled.div`
 
 export type SlipCardProps = {
   slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[];
-  shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
+  publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication;
 
 /** The shared production slip card for Best Slips, the builder, history and shared snapshots. */
-export const SlipCard = memo(function SlipCard({ slip, index, locale, results, matchStates, shareSource, sharedSlip, initiallyOpen = true,
+export const SlipCard = memo(function SlipCard({ slip, index, locale, results, matchStates, shareSource, sharedSlip, initiallyOpen = true, publicShareHref,
   publicationDay, publishedAt, outcome, status }: SlipCardProps) {
   const desktop = useDesktopLayout();
   const publication = { ...(publicationDay ? { publicationDay } : {}), ...(publishedAt !== undefined ? { publishedAt } : {}),
     ...(outcome ? { outcome } : {}), ...(status ? { status } : {}) };
   if (desktop) return <DesktopSlip slip={slip} index={index} locale={locale} initiallyOpen={initiallyOpen}
-    {...publication}
+    {...publication} {...(publicShareHref ? { publicShareHref } : {})}
     {...(shareSource ? { shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} {...(results ? { results } : {})}
     {...(matchStates ? { matchStates } : {})} />;
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" initiallyOpen={initiallyOpen} showRank={!sharedSlip}
     {...publication}
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})}
-    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} locale={locale} iconOnly
+    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} locale={locale} iconOnly {...(publicShareHref ? { publicHref: publicShareHref } : {})}
       {...(shareSource ? { source: shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} /> : undefined} />
   </PhoneSlipFallback>;
 });

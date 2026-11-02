@@ -34,13 +34,9 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
       const query = parseMatchFeedQuery(parameters, getReportingDate(at), { ...context,
         ...(access.tier === "free" ? { providerOdds: true } : {}), asOf: at });
       if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
-      const initiallyFull = access.tier === "full";
-      let response = await readFeed(parameters, { ...context, completedOnly: !initiallyFull }, clock ?? { now: () => at });
+      const response = await readFeed(parameters, { ...context, completedOnly: false }, clock ?? { now: () => at });
       access = await contentAccess(resolveAccess);
-      if (initiallyFull && access.tier === "free") {
-        if (usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
-        response = await readFeed(parameters, { ...context, completedOnly: true }, clock ?? { now: () => at });
-      }
+      if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
       const result = gateFeedResponse(response, access);
       try { return access.tier === "free" ? matchFeedResponseSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
@@ -51,6 +47,11 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
       catch { throw new MatchFeedError("unavailable"); }
     },
     async insights(...[id, clock]: Parameters<typeof readPublicMatchInsights>) {
+      if ((await contentAccess(resolveAccess)).tier === "free") {
+        let finished = false;
+        try { finished = isCompletedFixtureStatus(await readStatus(id)); } catch { /* Unverified details stay private. */ }
+        if (!finished) throw new MatchFeedError("subscription-required");
+      }
       const response = await readInsights(id, clock);
       const access = await contentAccess(resolveAccess);
       // Status comes from the current canonical fixture, never from a selected historical revision.

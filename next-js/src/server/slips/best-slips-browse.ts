@@ -35,7 +35,7 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
-    try { return gateBestSlips(await read(query, day, _locale, access.tier === "free"), access, access.tier === "free"); }
+    try { return gateBestSlips(await read(query, day, _locale, false), access); }
     catch { return { ...empty, state: "data-unavailable" }; }
   };
 }

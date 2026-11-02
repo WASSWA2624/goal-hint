@@ -68,7 +68,9 @@ function refineFeed(value: Omit<z.infer<typeof storedFeedBaseSchema>, "records">
 export const storedMatchFeedResponseSchema = storedFeedBaseSchema.superRefine(refineFeed);
 export const matchFeedResponseSchema = z.strictObject({ ...storedFeedBaseSchema.shape,
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), access: contentAccessSchema,
-}).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) => isCompletedFixtureStatus(record.status)), "Free match lists contain completed fixtures only.");
+}).superRefine(refineFeed).refine((value) => value.access.tier === "full" || value.records.every((record) =>
+  isCompletedFixtureStatus(record.status) || (!record.prices?.length && (record.forecast === null || "gated" in record.forecast))),
+"Unfinished public matches must not contain prices or predictions.");
 export type StoredMatchFeedResponse = z.infer<typeof storedMatchFeedResponseSchema>;
 export type StoredMatchFeedRecord = z.infer<typeof storedMatchFeedRecordSchema>;
 export type MatchFeedResponse = z.infer<typeof matchFeedResponseSchema>;

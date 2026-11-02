@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import { ButtonLink, TextInput, type TextInputProps } from "@/components/ui/controls";
+import { TextInput, type TextInputProps } from "@/components/ui/controls";
 import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
@@ -31,28 +31,27 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { SlipInputWarning, SlipNumericInput } from "./slip-numeric-input";
 import { SavedSlipConfigurations } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
-import { AccessNotice, ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
+import { UnlockPanel } from "@/components/members/prediction-unlock";
+import { ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
   Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
-  const messages = createMessages(locale);
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
-    <EmptyState headingLevel={1} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
-      action={<ButtonLink size="large" href={subscriberHref(signedIn, slipsHref(locale), "login")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "auth.signIn")}</ButtonLink>} />
+    <UnlockPanel locale={locale} signedIn={signedIn} returnTo={slipsHref(locale)} guestView="login" />
   </SlipStack>;
 }
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
-function SlipBuildActionLabel({ locale, restricted, signedIn, pending = false }: {
+function SlipBuildActionLabel({ locale, restricted, pending = false }: {
   locale: string; restricted: boolean; signedIn: boolean; pending?: boolean;
 }) {
   const messages = createMessages(locale);
   const build = messages.text(pending ? "slips.building" : "slips.build");
   return <BuildActionLabel>
-    <span data-action-label="mobile">{restricted ? messages.text(signedIn ? "slips.subscribeToBuild" : "slips.signInToBuild") : build}</span>
-    <span data-action-label="desktop">{restricted ? messages.text(signedIn ? "slips.subscribeToBuild" : "slips.signInToBuild") : build}</span>
+    <span data-action-label="mobile">{restricted ? messages.text("paywall.unlock") : build}</span>
+    <span data-action-label="desktop">{restricted ? messages.text("paywall.unlock") : build}</span>
   </BuildActionLabel>;
 }
 function SlipStatusCopy({ mobile, desktop }: { mobile: string; desktop: string }) {
@@ -376,9 +375,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
-  const accessRequired = <AccessNotice headingLevel={3} title={messages.text("paywall.slips")} description={<SlipStatusCopy
-    mobile={messages.text(signedIn ? "slips.mobile.access.subscribe" : "slips.mobile.access.signIn")}
-    desktop={messages.text(signedIn ? "slips.access.subscribe" : "slips.access.signIn")} />} />;
+  const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" />;
 
   return <SlipStack data-slip-builder-page aria-busy={pending} onInputCapture={markInteracted} onClickCapture={markInteracted} onKeyDownCapture={markInteracted}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
@@ -520,7 +517,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     <Results data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
       {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
         requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
-      {subscriberOnly ? accessRequired : pending && !generated ? <SlipLoading locale={locale} label={messages.text("slips.building")} /> : generated ? <>
+      {subscriberOnly ? null : pending && !generated ? <SlipLoading locale={locale} label={messages.text("slips.building")} /> : generated ? <>
         {data.jointProbabilities && <Note>{messages.text("slips.jointRanking")}</Note>}
         <SlipMatchRefreshProvider slips={shownSlips} enabled={!pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>

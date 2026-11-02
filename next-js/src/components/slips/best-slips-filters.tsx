@@ -30,7 +30,7 @@ function revealResultToggle({ currentTarget, target }: FocusEvent<HTMLDivElement
 }
 
 /** Responsive date/result controls; custom dates stay a local draft until Apply. */
-export function BestSlipsFilters({ query, appliedQuery = query, today, locale, entitled = false, busy = false, updating = false, statistics, countSummary, onChange }: {
+export function BestSlipsFilters({ query, appliedQuery = query, today, locale, busy = false, updating = false, statistics, countSummary, onChange }: {
   query: BestSlipsQuery; today: ReportingDate; locale: string; entitled?: boolean; busy?: boolean; onChange: (query: BestSlipsQuery) => void;
   appliedQuery?: BestSlipsQuery; updating?: boolean;
   statistics?: PerformanceSummaryCounts | null | undefined; countSummary?: ReactNode;
@@ -115,7 +115,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
           <CalendarIcon />{m.text("bestSlips.filters.customDate")}
         </CustomRangeButton>
       </DateControls>
-      <ResetButton type="button" onClick={() => onChange(defaultBestSlipsQuery(entitled))}><ResetIcon />{m.text("slips.reset")}</ResetButton>
+      <ResetButton type="button" onClick={() => onChange(defaultBestSlipsQuery())}><ResetIcon />{m.text("slips.reset")}</ResetButton>
     </ToggleRow>
     <AppliedSummary data-best-slips-applied aria-live="polite" aria-atomic="true">
       <AppliedDetails>
@@ -132,7 +132,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, e
     </AppliedSummary>
     {open && <RangeDialog id={dialogId} group="best-slips-dates" open={open} title={m.text("bestSlips.filters.customRange")}
       onApply={applyDates} onCancel={closeDates} onReset={() => {
-        const defaults = resolveBestSlipsDates(defaultBestSlipsQuery(entitled), today);
+        const defaults = resolveBestSlipsDates(defaultBestSlipsQuery(), today);
         setDates({ from: defaults.from ?? today, to: defaults.to ?? today }); setIssue(null);
       }}
       resetLabel={m.text("slips.reset")} applyLabel={m.text("bestSlips.filters.applyRange")}

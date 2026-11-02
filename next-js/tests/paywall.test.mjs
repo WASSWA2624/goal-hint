@@ -34,7 +34,7 @@ for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: only co
     assert.deepEqual(details[1].history, scenario.prior.history);
     assert.equal('odds' in details[0], true);
   } else {
-    assert.equal(matchFeedResponseSchema.safeParse(feed).success, false, 'an unfinished row cannot enter a public list');
+    assert.equal(matchFeedResponseSchema.safeParse(feed).success, true, 'unfinished matches enter a public list only after redaction');
     for (const value of details) {
       assert.doesNotMatch(JSON.stringify(value), /SENTINEL-|7\.73|"home-win"/);
       for (const record of [value.fixture]) { walk(record.forecast); assert.deepEqual(record.prices, []); if (record.forecast) assert.deepEqual(record.forecast.probabilities, []); }
@@ -46,7 +46,7 @@ for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: only co
   assert.equal(JSON.stringify(scenario), raw);
   const news = gateInsights(scenario.insights, free).sections.news.items;
   assert.equal(news.some(item => item.kind === 'analysis'), false);
-  assert.ok(news.some(item => item.kind === 'report'));
+  assert.deepEqual(news, []);
 });
 test('strict wire schemas reject full data disguised as free or gated and reject unordered families', () => {
   const scenario = scenarios.scheduled;
@@ -71,14 +71,14 @@ test('all played final statuses expose the original result and revision to guest
     }
   }
 });
-test('probability filters and finished odds are public; active selection and price oracles stay locked', () => {
-  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'prob=1-100', 'prob=0-99', 'sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
-  for (const query of ['picks=only', 'odds=1.50-3.00']) {
+test('finished filters are public; active probability, selection and price oracles stay locked', () => {
+  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
+  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99']) {
     assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), true);
   }
 });
 test('oracle requests return nonrecoverable private 403 before any raw read', async () => {
-  for (const query of ['picks=only', 'odds=1.50-3.00']) {
+  for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99']) {
     const response = await createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now }, async () => free)(new Request(`https://example.test/api/matches?${query}`));
     assert.equal(response.status, 403); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
     assert.equal(response.headers.get('set-cookie'), null);
@@ -133,10 +133,34 @@ test('completed analysis is public only with verified canonical terminal status'
 });
 
 test('locked destinations preserve safe return paths and distinguish guests from members', () => {
+  assert.equal(subscriberHref(false, '/en/best-slips/2026-10-09/1'), '/en/account?view=register&return=%2Fen%2Fbest-slips%2F2026-10-09%2F1');
   assert.equal(subscriberHref(false, '/en/matches'), '/en/account?view=register&return=%2Fen%2Fmatches');
   assert.equal(subscriberHref(true, '/en/slips'), '/en/subscribe?return=%2Fen%2Fslips');
   assert.equal(subscriberHref(false, 'https://outside.test'), '/en/account?view=register');
   assert.equal(subscriberHref(false, '/en', 'login'), '/en/account?view=login&return=%2Fen');
   assert.equal(subscriberHref(true, '/en', 'login'), '/en/subscribe?return=%2Fen');
   assert.equal(subscriberHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
+});
+
+test('the final access check redacts unfinished feed rows after expiry without hiding matches', async () => {
+  let checks = 0, reads = 0;
+  const data = await createGatedReads({ resolveAccess: async () => checks++ === 0 ? full : free,
+    readFeed: async (_query, context) => { reads++; assert.equal(context.completedOnly, false); return scenarios.scheduled.feed; }
+  }).feed(new URLSearchParams(), {}, { now: () => now });
+  assert.equal(reads, 1); assert.equal(data.records.length, scenarios.scheduled.feed.records.length);
+  assert.equal(data.access.tier, 'free'); assert.doesNotMatch(JSON.stringify(data), /SENTINEL-|7\.73|home-win/);
+});
+
+test('missing forecasts remain unavailable for every viewer; locked previews do not invent a forecast', () => {
+  const raw = { ...scenarios.scheduled.feed, records: scenarios.scheduled.feed.records.map(fixture => ({ ...fixture, forecast: null })) };
+  const data = gateFeedResponse(raw, free);
+  assert.ok(data.records.every(fixture => fixture.forecast === null && fixture.prices.length === 0));
+});
+
+test('unfinished detailed analysis is denied before reading it and rechecked after access expires', async () => {
+  await assert.rejects(createGatedReads({ resolveAccess: async () => free, readStatus: async () => 'live',
+    readInsights: async () => assert.fail('protected read') }).insights(scenarios.scheduled.detail.fixture.fixtureId), e => e.code === 'subscription-required');
+  let checks = 0;
+  await assert.rejects(createGatedReads({ resolveAccess: async () => checks++ === 0 ? full : free, readStatus: async () => 'live',
+    readInsights: async () => scenarios.scheduled.insights }).insights(scenarios.scheduled.detail.fixture.fixtureId), e => e.code === 'subscription-required');
 });

@@ -6,12 +6,13 @@ import { getSlipSharingSnapshot, subscribeMemberSession } from "@/components/mem
 import { ShareIcon } from "@/components/ui/icons";
 import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
 import { createMessages } from "@/i18n/messages";
+import { PublicSlipShare } from "./sharing/public-slip-share";
 import { ShareTrigger } from "./sharing/slip-share-styles";
 
 const SlipShareDrawer = dynamic(() => import("./sharing/slip-share-drawer").then((module) => module.SlipShareDrawer));
 const serverCanShare = () => false;
 
-export function SlipShareAction({ source, sharedSlip, locale, iconOnly = false }: { source?: ShareSlipSource; sharedSlip?: SharedSlip; locale: string; iconOnly?: boolean }) {
+export function SlipShareAction({ source, sharedSlip, locale, iconOnly = false, publicHref }: { publicHref?: string; source?: ShareSlipSource; sharedSlip?: SharedSlip; locale: string; iconOnly?: boolean }) {
   const [open, setOpen] = useState(false), [cached, setCached] = useState(sharedSlip);
   const canShare = useSyncExternalStore(subscribeMemberSession, getSlipSharingSnapshot, serverCanShare) && !!(source || sharedSlip);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -21,6 +22,7 @@ export function SlipShareAction({ source, sharedSlip, locale, iconOnly = false }
     setOpen(false);
     requestAnimationFrame(() => trigger.current?.focus());
   }
+  if (!canShare && publicHref) return <PublicSlipShare href={publicHref} locale={locale} iconOnly={iconOnly} />;
   return <>
     <ShareTrigger ref={trigger} type="button" variant="quiet" data-share-slip disabled={!canShare} aria-haspopup="dialog" aria-expanded={open && canShare}
       data-share-icon-only={iconOnly ? "" : undefined} aria-label={iconOnly ? m.text("slipShare.share") : undefined}

@@ -11,27 +11,30 @@ const guest = { tier: 'free', signedIn: false, mode: 'off' };
 const expired = { ...guest, signedIn: true }, subscriber = { ...expired, tier: 'full' };
 function publication(day) {
   const publishedAt = Date.parse(`${day}T06:15:00+03:00`);
-  const slip = { id: `private-${day}`, selections: [{ fixtureId: `private-fixture-${day}` }], totalOdds: '5.00', averageProbability: .7 };
+  const slip = { id: `private-${day}`, selections: [{ fixtureId: `public-fixture-${day}`, kickoffAt: at,
+    homeTeam: { id: 'home', name: 'Home' }, awayTeam: { id: 'away', name: 'Away' }, competition: { id: 'league', name: 'League', country: null },
+    family: 'match-result', selection: 'home-win', odds: '5.00', probability: .7, oddsBasis: 'bookmaker' }], totalOdds: '5.00', averageProbability: .7 };
   return { rank: 1, matchCount: 1, totalOdds: slip.totalOdds, averageProbability: slip.averageProbability,
     estimatedProbability: .7, publicationDay: day, publishedAt, outcome: day < today ? 'won' : 'pending', completed: day < today, slip };
 }
 const result = (slips) => ({ day: today, state: 'generated', searchLimited: false, partialCoverage: false, slips });
 
-test('guest and expired defaults show yesterday while subscribers start today, using the current EAT day as anchor', async () => {
+test('all viewers start today with public previews and subscriber predictions', async () => {
   const dates = [];
   const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at,
     read: async (day) => { dates.push(day); return { ...result([publication(day)]), day }; } });
   for (const viewer of [guest, expired, subscriber]) {
     const data = await read(viewer), entitled = viewer.tier === 'full';
     assert.equal(data.day, today); assert.equal(data.entitled, entitled);
-    assert.equal(data.slips[0].publicationDay, entitled ? today : yesterday);
-    assert.ok(data.slips[0].slip, 'past results and subscriber predictions include the slip');
-    assert.equal(defaultBestSlipsQuery(entitled).period, entitled ? 'today' : 'yesterday');
+    assert.equal(data.slips[0].publicationDay, today);
+    assert.equal(!!data.slips[0].slip, entitled);
+    assert.equal(data.slips[0].preview?.[0].pick ?? null, null);
+    assert.equal(defaultBestSlipsQuery(entitled).period, 'today');
   }
-  assert.deepEqual(dates, [yesterday, yesterday, today]);
+  assert.deepEqual(dates, [today, today, today]);
 });
 
-test('completion, rather than date or an early settled loss, controls public slip visibility', () => {
+test('completion controls prediction release independently of date or an early settled loss', () => {
   const completedToday = { ...publication(today), completed: true, outcome: 'won', status: 'won' };
   const undated = { ...publication(yesterday), publicationDay: undefined };
   const unfinishedOldLoss = { ...publication(yesterday), completed: false, outcome: 'lost', status: 'lost' };
@@ -39,8 +42,8 @@ test('completion, rather than date or an early settled loss, controls public sli
   for (const viewer of [guest, expired]) {
     const data = gateBestSlips(input, viewer);
     assert.equal(data.entitled, false);
-    assert.equal(data.slips.length, 3);
-    assert.ok(data.slips.every(view => view.completed === true && view.slip));
+    assert.equal(data.slips.length, 6);
+    assert.ok(data.slips.every(view => view.completed ? view.slip : view.preview.every(leg => leg.pick === null)));
     assert.equal(data.slips.at(-1).publicationDay, today);
     assert.equal(data.slips.at(-1).outcome, 'won');
   }
@@ -48,7 +51,7 @@ test('completion, rather than date or an early settled loss, controls public sli
   assert.equal(full.entitled, true); assert.equal(full.slips.length, input.slips.length);
 });
 
-test('API expiry re-reads a custom range and only returns completed public slips', async () => {
+test('API expiry re-reads a custom range and returns safe previews with unchanged public totals', async () => {
   let checks = 0;
   const handler = createBestSlipsHandler({ now: () => at, access: async () => checks++ === 0 ? subscriber : expired,
     browse: async (_viewer, query) => ({ ...result([publication(yesterday), publication(today), publication(tomorrow)]), entitled: true,
@@ -58,8 +61,8 @@ test('API expiry re-reads a custom range and only returns completed public slips
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
   const data = await response.json();
   assert.equal(data.entitled, false); assert.ok(data.slips[0].slip);
-  assert.equal(data.slips.length, 1); assert.equal(data.browse.total, 1);
-  assert.doesNotMatch(JSON.stringify(data.slips.slice(1)), /private-fixture|selections|private-/);
+  assert.equal(data.slips.length, 3); assert.equal(data.browse.total, 3);
+  assert.doesNotMatch(JSON.stringify(data.slips.slice(1)), /home-win|oddsBasis|private-/);
 });
 
 test('API filters without a date use the viewer default, and unavailable defaults preserve access state without data', async () => {
@@ -69,7 +72,7 @@ test('API filters without a date use the viewer default, and unavailable default
       browse: async (_viewer, query) => { received = query; return result([]); } });
     const response = await handler(new Request('https://goalhint.com/api/best-slips?status=won'));
     assert.equal(response.status, 200); assert.equal(received.status, 'won');
-    assert.equal(received.period, viewer.tier === 'full' ? 'today' : 'yesterday');
+    assert.equal(received.period, 'today');
     const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at, read: async () => { throw new Error('private'); } });
     const data = await read(viewer);
     assert.equal(data.entitled, viewer.tier === 'full'); assert.equal(data.state, 'data-unavailable'); assert.deepEqual(data.slips, []);
@@ -89,10 +92,10 @@ test('API re-reads an implicit default after a subscription change so date, enti
       const response = await handler(new Request(`https://goalhint.com/api/best-slips${suffix}`));
       const data = await response.json(), entitled = final.tier === 'full';
       assert.equal(response.status, 200); assert.equal(checks, 3);
-      assert.deepEqual(days, initial.tier === 'full' ? [today, yesterday] : [yesterday, today]);
+      assert.deepEqual(days, [today, today]);
       assert.equal(data.entitled, entitled); assert.equal(data.day, today);
-      assert.equal(data.slips[0].publicationDay, entitled ? today : yesterday);
-      assert.ok(data.slips[0].slip);
+      assert.equal(data.slips[0].publicationDay, today);
+      assert.equal(!!data.slips[0].slip, entitled);
     }
   }
 });
@@ -106,4 +109,23 @@ test('a second access change during the fallback read returns no slip data', asy
   const response = await handler(new Request('https://goalhint.com/api/best-slips?period=yesterday'));
   assert.equal(response.status, 503); assert.equal(checks, 3);
   assert.doesNotMatch(await response.text(), /private-fixture|selections|probability/);
+});
+
+test('mixed early-lost slips release only proved complete original selections and never sidecar picks', () => {
+  const first = publication(today).slip.selections[0], pending = { ...first, fixtureId: 'unfinished', odds: '7.73', probability: .6173, selection: 'away-win' };
+  const view = { ...publication(today), outcome: 'lost', status: 'lost', completed: false,
+    completedFixtureIds: [first.fixtureId], slip: { ...publication(today).slip, selections: [first, pending] },
+    matchStates: [{ fixtureId: pending.fixtureId, family: pending.family, selection: pending.selection, status: 'live',
+      score: { home: 1, away: 0 }, liveClock: null, outcome: 'pending' }] };
+  const input = result([view]), raw = JSON.stringify(input);
+  for (const viewer of [guest, expired]) {
+    const safe = gateBestSlips(input, viewer), preview = safe.slips[0].preview;
+    assert.equal(preview.length, 2); assert.equal(preview[0].pick.selection, first.selection);
+    assert.equal(preview[1].pick, null); assert.equal(preview[1].fixture.status, 'live');
+    assert.equal(preview[1].fixture.forecast, null); assert.equal(preview[1].fixture.cycleId, null);
+    assert.doesNotMatch(JSON.stringify(safe), /7\.73|0\.6173|away-win|completedFixtureIds|matchStates/);
+    assert.deepEqual(gateBestSlips(safe, viewer), safe, 'the page and HTTP final projection is idempotent');
+  }
+  assert.equal(JSON.stringify(input), raw);
+  assert.deepEqual(gateBestSlips(input, subscriber).slips[0].slip, view.slip);
 });

@@ -7,8 +7,8 @@ import { publicPolicy } from "./public-policy.ts";
 import { isCompletedFixtureStatus } from "./market-settlement.ts";
 
 export type ContentAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean }>;
-export const usesSubscriberFeedOracle = (query: FeedQuery) => query.status !== "finished" && (query.picks === "only" || query.odds !== null);
-export const withoutSubscriberFeedOracle = (query: FeedQuery): FeedQuery => ({ ...query, odds: null, picks: "all", page: 1 });
+export const usesSubscriberFeedOracle = (query: FeedQuery) => query.status !== "finished" && (query.picks === "only" || query.odds !== null || query.probability.min > 0 || query.probability.max < 100);
+export const withoutSubscriberFeedOracle = (query: FeedQuery): FeedQuery => ({ ...query, odds: null, picks: "all", probability: { min: 0, max: 100 }, page: 1 });
 const wireAccess = ({ tier, signedIn }: ContentAccess): ContentAccess => ({ tier, signedIn });
 const families = (items: readonly { market: { family: (typeof publicPolicy.markets)[number] } }[]) =>
   publicPolicy.markets.filter((family) => items.some((item) => item.market.family === family));
@@ -38,7 +38,12 @@ export function gateDetailResponse(response: StoredMatchDetailResponse, access: 
 }
 
 export function gateInsights(response: StoredMatchInsights, access: ContentAccess, finished = false): MatchInsights {
-  return { ...response, access: wireAccess(access), sections: access.tier === "full" || finished ? response.sections : {
-    ...response.sections, news: { ...response.sections.news, items: response.sections.news.items.filter((item) => item.kind !== "analysis") },
+  if (access.tier === "full" || finished) return { ...response, access: wireAccess(access) };
+  return { fixtureId: response.fixtureId, asOf: response.asOf, home: response.home, away: response.away, access: wireAccess(access), sections: {
+    form: { home: [], away: [] }, h2h: { meetings: [] }, stats: { evidence: [], evidenceRetrievedAt: null },
+    lineups: { home: null, away: null }, players: { players: [] }, injuries: { injuries: [] },
+    news: { items: [], limitedNews: false }, referee: { state: "not-available" }, history: { state: "available" },
+    context: { competition: { ...response.sections.context.competition, round: null }, kickoffAt: null,
+      restDays: { home: null, away: null }, lastResults: { home: null, away: null }, nextFixtures: { home: null, away: null } },
   } };
 }

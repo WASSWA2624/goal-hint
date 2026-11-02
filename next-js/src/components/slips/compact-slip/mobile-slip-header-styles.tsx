@@ -135,8 +135,12 @@ export const MobileHeaderRow = styled.summary`
       [data-header-metrics] { grid-column: 1 / -1; grid-row: 3; }
     }
   }
+  &&:not([data-header-variant])[data-header-only][data-header-action] {
+    grid-template-columns: minmax(0, 1fr) var(--gh-size-24) max-content;
+    [data-header-actions] { grid-column: 3; grid-row: 1; align-self: center; min-inline-size: 0; }
+  }
   /* Keep the sibling Share icon and status on the same compact row. */
-  &&:not([data-header-variant])[data-header-action] {
+  &&:not([data-header-variant])[data-header-action]:not([data-header-only]) {
     /* Independent fixed slots keep Share clear of the disclosure indicator. */
     grid-template-columns: minmax(0, 1fr) min(var(--gh-size-24), var(--gh-size-24)) calc(2 * var(--slip-header-action-size) + var(--slip-header-action-gap));
     > h3 { align-self: center; }

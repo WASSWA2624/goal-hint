@@ -33,7 +33,7 @@ export function createSharedSlipRoute(read = readSharedSlipLanding) {
     return <PublicShell locale={locale} current="slips" app compact><DesktopContent><Stack $gap="md">
       <Inline><PageHeading>{m.text(shared ? "slipShare.sharedTitle" : landing ? "slipShare.accessTitle" : "slipShare.unavailableTitle")}</PageHeading>
         {shared && <MutedText>{m.text("slipShare.createdWith", { name: publicPolicy.name })}</MutedText>}</Inline>
-      {shared ? <SlipCard slip={shared.slip} index={0} locale={locale} sharedSlip={shared} initiallyOpen />
+      {shared ? <SlipCard slip={shared.slip} index={0} locale={locale} sharedSlip={shared} publicShareHref={shared.url} initiallyOpen />
         : landing ? <><p>{m.text(landing.access.signedIn ? "slipShare.accessMember" : "slipShare.accessGuest")}</p><Inline>
           {!landing.access.signedIn && <ButtonLink href={`/en/account?${new URLSearchParams({ view: "login", return: path! })}`} prefetch={false}>{m.text("slipShare.signIn")}</ButtonLink>}
           <ButtonLink variant="secondary" href={`/en/subscribe?${new URLSearchParams({ return: path! })}`} prefetch={false}>{m.text("slipShare.getAccess")}</ButtonLink>

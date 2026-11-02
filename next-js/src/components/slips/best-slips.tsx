@@ -12,8 +12,7 @@ import type { BestSlipsResult } from "@/domain/best-slips";
 import { resolveBestSlipsDates } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
-import { SlipCard, SlipCardSummary } from "./slip-card";
-import { SlipShareAction } from "./slip-share-action";
+import { BestSlipCard } from "./best-slip-card";
 import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
@@ -21,14 +20,13 @@ import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-prese
 import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
-export function BestSlips({ result, locale }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
+export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
   const m = createMessages(locale), router = useRouter();
   const desktop = useDesktopLayout();
   const [refreshing, startRefresh] = useTransition();
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
   const browse = useBestSlipsBrowse(result, desktop, recheckAccess), content = browse.result;
   const dates = resolveBestSlipsDates(desktop ? browse.query : browse.displayQuery, result.day);
-  const requiresSubscription = !browse.entitled;
   const period = dates.from && dates.to
     ? dates.from === dates.to ? `${m.reportingDateMedium(dates.from)} · EAT`
       : m.text("bestSlips.filters.dateRange", { from: m.reportingDateMedium(dates.from), to: m.reportingDateMedium(dates.to) })
@@ -65,7 +63,6 @@ export function BestSlips({ result, locale }: { result: BestSlipsResult; locale:
     {browse.loading ? <SlipLoading locale={locale} />
     : browse.failed && !content ? <CriteriaPanel role="alert"><Stack $gap="sm"><p>{m.text("bestSlips.filters.dataUnavailable")}</p>
       <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton></Stack></CriteriaPanel>
-    : content && content.slips.length === 0 && requiresSubscription && content.state !== "data-unavailable" ? null
     : content && content.slips.length === 0 && content.browse && content.state === "generated" ? <CriteriaPanel role="status"><Stack $gap="sm">
       <h2>{m.text(content.browse.total === null && content.browse.hasMore ? "bestSlips.filters.emptyPage" : "bestSlips.filters.empty")}</h2>
       <p>{m.text(content.browse.total === null && content.browse.hasMore ? "bestSlips.filters.emptyPageHint" : "bestSlips.filters.emptyHint")}</p>
@@ -79,20 +76,7 @@ export function BestSlips({ result, locale }: { result: BestSlipsResult; locale:
       {(content.searchLimited || content.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
       <SlipMatchRefreshProvider slips={watchedSlips} initialStates={initialStates} enabled={desktop && browse.entitled} onAccessRevoked={browse.revokeAccess}>
       <SlipList data-slip-list>{content.slips.map((view) => <div key={view.id ?? view.slip?.id ?? view.rank}>
-        {view.slip ? <SlipCard index={view.rank - 1} locale={locale}
-        {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
-        {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
-        {...(view.status ? { status: view.status } : {})}
-        shareSource={{ source: "best", day: view.publicationDay ?? content.day, slipId: view.slip.id }}
-        slip={view.slip} {...(view.matchStates ? { matchStates: view.matchStates } : {})} /> : <SlipCardSummary key={view.rank} locale={locale} index={view.rank - 1}
-          totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}
-          {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
-          {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
-          {...(view.status ? { status: view.status } : {})} collapsible={false}
-          headerAction={<SlipShareAction locale={locale} iconOnly={!desktop}
-            {...(view.id ? { source: { source: "best", day: view.publicationDay ?? content.day, slipId: view.id } } : {})} />}>
-        {null}
-      </SlipCardSummary>}</div>)}</SlipList>
+        <BestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} /></div>)}</SlipList>
       </SlipMatchRefreshProvider>
     </>}
     {content?.browse?.total !== null && content?.browse?.total !== undefined && <BestSlipsPagination onPage={browse.goToPage}

@@ -1,6 +1,6 @@
 "use client";
 
-import { SubscriberPanel } from "@/components/members/subscriber-panel";
+import { UnlockPanel } from "@/components/members/prediction-unlock";
 
 import { memo } from "react";
 import styled from "styled-components";
@@ -92,14 +92,11 @@ function PredictionRecord() {
  * belong to their own drawers. Tapping the pick opens that market's full details.
  */
 export const Verdict = memo(function Verdict() {
-  const { data, messages, update, locale, offer } = useStableDetails();
+  const { data, messages, update, locale } = useStableDetails();
   const fixture = data.fixture, snapshot = data.snapshot;
   // Locked only over a published forecast; without one, every viewer reads the same no-prediction reason.
   if ("gated" in data.history && snapshot) {
-    const chances = "gated" in snapshot ? snapshot.probabilities : [];
-    const chance = chances.length ? Math.max(...chances.map((entry) => entry.probability)) : null;
-    return <Box><Eyebrow><h2>{messages.text("details.probability")}</h2><strong data-public-probability>{percent(messages, chance)}</strong></Eyebrow>
-      <SubscriberPanel locale={locale} signedIn={data.access.signedIn} offer={offer ?? null} returnTo={data.route.path} /></Box>;
+    return <Box><UnlockPanel locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></Box>;
   }
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
   if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">

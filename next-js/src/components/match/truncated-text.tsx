@@ -12,6 +12,7 @@ const textControlStyles = css`
   &[tabindex="0"] { cursor: help; }
   > [data-ellipsis-text] { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 `;
+const StaticText = styled.span`${textControlStyles}`;
 const TextControl = styled.button`${textControlStyles}`;
 const TextLink = styled(Link)`
   ${textControlStyles}
@@ -45,7 +46,7 @@ function FullTextTooltip({ id, text, anchor, onEnter, onLeave }: {
 }
 
 /** Only clipped names enter the tab order; their full text stays in the DOM and is visible on focus or hover. */
-export function TruncatedText({ text, href }: { text: string; href?: string | undefined }) {
+export function TruncatedText({ text, href, interactive = true }: { text: string; href?: string | undefined; interactive?: boolean }) {
   const trigger = useRef<HTMLButtonElement | HTMLAnchorElement>(null), label = useRef<HTMLSpanElement>(null), id = useId();
   const hovered = useRef(false), tooltipHovered = useRef(false), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [truncated, setTruncated] = useState(false), [open, setOpen] = useState(false);
@@ -90,6 +91,7 @@ export function TruncatedText({ text, href }: { text: string; href?: string | un
     onMouseLeave: () => { hovered.current = false; scheduleClose(); },
   };
   const content = <span ref={label} data-ellipsis-text title="">{text}</span>;
+  if (!interactive) return <StaticText data-truncation title={text}>{content}</StaticText>;
   return <>
     {href ? <TextLink {...controlProps} ref={(element) => { trigger.current = element; }} href={href} prefetch={false}
       data-match-link-alias>{content}</TextLink>

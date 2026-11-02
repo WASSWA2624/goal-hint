@@ -8,6 +8,9 @@ import type { PerformanceSummaryCounts } from "./performance-summary.ts";
 import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-state.ts";
 import type { BestSlipsQuery } from "./best-slips-query.ts";
 import type { SlipStatus } from "./slip-status.ts";
+import type { FixtureSnapshot } from "./fixture-snapshot.ts";
+import type { CardSnapshotPick } from "./match-card.ts";
+import type { ContentAccess } from "./paywall.ts";
 
 export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
 
@@ -21,6 +24,9 @@ export type BestSlipSummary = Readonly<{
 }>;
 export type BestSlipView = BestSlipSummary & Readonly<{
   slip?: BestSlip; matchStates?: readonly SlipMatchState[];
+  preview?: readonly Readonly<{ fixture: FixtureSnapshot; pick: CardSnapshotPick | null }>[];
+  /** Internal read proof; removed by the response projection. Never inferred from slip outcome. */
+  completedFixtureIds?: readonly string[];
   id?: string; publicationDay?: ReportingDate; publishedAt?: number; outcome?: "won" | "lost" | "pending" | "void";
   status?: SlipStatus;
   /** Server proof that every original selection and its canonical fixture are complete. */
@@ -30,8 +36,9 @@ export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
   /** Unfinished prediction access, freshly checked at the response boundary. */
   entitled?: boolean;
+  access?: ContentAccess;
   searchLimited: boolean; partialCoverage: boolean;
-  /** The complete eligible date cohort before result filtering or pagination; public counts exclude unfinished slips. */
+  /** The complete date cohort before result filtering or pagination. */
   statistics?: PerformanceSummaryCounts | null;
   browse?: Readonly<{
     query: BestSlipsQuery; total: number | null; pageSize: number; hasMore: boolean; nextCursor: string | null;

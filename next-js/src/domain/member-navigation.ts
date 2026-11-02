@@ -6,7 +6,7 @@ export const signedOutPath = "/en/matches";
 
 /** Only an English feed, canonical match or shared-slip path can be a member return destination. No queries, fragments or escapes. */
 export function memberReturnPath(value: unknown): string | null {
-  return typeof value === "string" && value.length <= 512 && (["/en", "/en/matches", "/en/slips"].includes(value) || sharedSlipReturnPath(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
+  return typeof value === "string" && value.length <= 512 && (["/en", "/en/matches", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
 }
 
 /** Shared tokens are opaque, canonical paths only; no queries, escapes or external origins. */

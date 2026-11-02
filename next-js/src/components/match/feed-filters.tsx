@@ -687,7 +687,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
 
   const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
   const probabilityErrorId = `${formId}-probability-error`, titleId = `${panelId}-title`, marketsId = `${panelId}-markets`;
-  const probabilityFields = <ProbabilityRangeInputs disabled={false} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
+  const probabilityFields = <ProbabilityRangeInputs disabled={subscriberOnly && query.status !== "finished"} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
   const count = panelFilterCount(query) + (compactPhone

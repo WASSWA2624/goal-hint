@@ -50,7 +50,7 @@ export function findBestSlipsSnapshot(cache: BestSlipsBrowseCache, source: BestS
   query: BestSlipsQuery): (BestSlipsSnapshot & Readonly<{ retained: boolean }>) | null {
   const snapshots = cache.source === source && cache.entitled === entitled ? cache.snapshots : [];
   const seed = source.entitled === entitled && source.state === "generated" ? [{
-    query: source.browse?.query ?? defaultBestSlipsQuery(entitled), data: source,
+    query: source.browse?.query ?? defaultBestSlipsQuery(), data: source,
   }] : [];
   const range = bestSlipsRangeKey(query, source.day), key = serializeBestSlipsQuery(query).toString();
   const candidates = [...snapshots, ...seed].filter((item) => item.data.day === source.day

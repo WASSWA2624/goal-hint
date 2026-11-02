@@ -6,7 +6,7 @@ import { bestSlipCriteria, bestSlipViews, compareBestSlips, jointSlipProbability
 import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
-import { savedSlipCompleted, savedSlipOutcome, savedSlipStatus, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
+import { completedSlipFixtureIds, savedSlipCompleted, savedSlipOutcome, savedSlipStatus, savedSlipSnapshotSchema, savedSlipView } from "../../domain/saved-slips.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
@@ -159,7 +159,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), await databaseTime(tx));
         const statuses = snapshots.map((snapshot) => {
           const outcome = savedSlipOutcome(snapshot.slip, results), status = savedSlipStatus(snapshot.slip, results, outcome);
-          return { outcome, status, completed: savedSlipCompleted(snapshot.slip, results) };
+          return { outcome, status, completed: savedSlipCompleted(snapshot.slip, results), completedFixtureIds: completedSlipFixtureIds(snapshot.slip, results) };
         });
         const views = bestSlipViews(snapshots.map((snapshot) =>
           ({ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability })), true,
@@ -227,7 +227,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
             const slip: BestSlip = { ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability };
             const [view] = bestSlipViews([slip], true, slipMatchStatesFromResults(slip.selections, slipResults));
-            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome, status, completed });
+            views.push({ ...view!, id: row.id, rank: row.rank, publicationDay: parseReportingDate(parent.day), publishedAt: parent.publishedAt, outcome, status, completed, completedFixtureIds: completedSlipFixtureIds(snapshot.slip, slipResults) });
           }
         }
         const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;

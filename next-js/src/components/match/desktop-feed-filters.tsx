@@ -270,7 +270,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
                 ? current.query.markets.filter((market) => market !== family) : [...current.query.markets, family] } }))} />{messages.text(`market.family.${family}`)}
           </label>)}</fieldset>}
         {section === "limits" && <>
-          <fieldset><legend>{messages.text("feed.filters.probabilityLabel")} %</legend><div data-fields>
+          <fieldset disabled={subscriberOnly && draft.query.status !== "finished"}><legend>{messages.text("feed.filters.probabilityLabel")} %</legend><div data-fields>
             {input(messages.text("feed.filters.min"), "probMin", draft.probability.min, (min) => setDraft((current) => ({ ...current, probability: { ...current.probability, min } })))}
             {input(messages.text("feed.filters.max"), "probMax", draft.probability.max, (max) => setDraft((current) => ({ ...current, probability: { ...current.probability, max } })))}
           </div></fieldset>

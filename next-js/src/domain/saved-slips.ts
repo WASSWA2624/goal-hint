@@ -100,10 +100,15 @@ function matchingSavedSlipResult(item: BuiltSlip["selections"][number], results:
 
 /** Public slips require every original selection to be complete and every canonical fixture to have ended. */
 export function savedSlipCompleted(slip: BuiltSlip, results: readonly SavedSlipResult[]): boolean {
-  return slip.selections.length > 0 && slip.selections.every((selection) => {
+  return slip.selections.length > 0 && completedSlipFixtureIds(slip, results).length === slip.selections.length;
+}
+
+/** Per-leg release uses the same original-cycle proof as complete public slips. */
+export function completedSlipFixtureIds(slip: BuiltSlip, results: readonly SavedSlipResult[]): readonly string[] {
+  return slip.selections.flatMap((selection) => {
     const result = matchingSavedSlipResult(selection, results);
     return result !== undefined && (result.fixtureCompleted ?? isCompletedFixtureStatus(result.status))
-      && (!selection.forecast || result.completed === true);
+      && (!selection.forecast || result.completed === true) ? [selection.fixtureId] : [];
   });
 }
 

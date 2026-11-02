@@ -54,7 +54,7 @@ test('raw caches and pagination versions distinguish completed public cohorts fr
   }
 });
 
-test('guests and unsubscribed members read completed fixtures only, while subscribers retain active fixtures', async () => {
+test('every viewer browses every fixture, with unfinished predictions projected according to access', async () => {
   const records = ['scheduled', 'live', 'finished-regulation', 'canceled'].map((status, index) => liveRecord({
     fixtureId: `fixture-${index}`, status, kickoffAt: now - 2 * 86400000,
   }));
@@ -63,22 +63,20 @@ test('guests and unsubscribed members read completed fixtures only, while subscr
     const result = await createGatedReads({ resolveAccess: async () => access, readFeed: async (_query, context) => {
       contexts.push(context); return stored(records.filter((record) => !context.completedOnly || isCompletedFixtureStatus(record.status)));
     } }).feed(new URLSearchParams({ from: '2026-10-01', to: today }), {}, clock);
-    assert.equal(contexts[0].completedOnly, access.tier === 'free');
-    assert.deepEqual(result.records.map((record) => record.status), access.tier === 'full'
-      ? ['scheduled', 'live', 'finished-regulation', 'canceled'] : ['finished-regulation', 'canceled']);
+    assert.equal(contexts[0].completedOnly, false);
+    assert.deepEqual(result.records.map((record) => record.status), ['scheduled', 'live', 'finished-regulation', 'canceled']);
     assert.equal(result.total, result.records.length);
   }
 });
 
-test('an expired subscription re-reads the completed cohort rather than relabeling cached active rows as public', async () => {
+test('expiry redacts accepted active rows and preserves the public list and pagination', async () => {
   let checks = 0; const contexts = [], records = [liveRecord({ status: 'live' })];
   const response = await createGatedReads({ resolveAccess: async () => checks++ === 0 ? full : free,
-    readFeed: async (_query, context) => { contexts.push(context.completedOnly); return stored(context.completedOnly ? [] : records); },
+    readFeed: async (_query, context) => { contexts.push(context.completedOnly); return stored(records); },
   }).feed(new URLSearchParams({ date: today }), {}, clock);
-  assert.deepEqual(contexts, [false, true]); assert.equal(response.total, 0); assert.deepEqual(response.records, []);
-  assert.equal(response.access.tier, 'free');
-  await assert.rejects(createGatedReads({ resolveAccess: async () => free, readFeed: async () => stored(records) })
-    .feed(new URLSearchParams({ date: today }), {}, clock), (error) => error.code === 'unavailable');
+  assert.deepEqual(contexts, [false]); assert.equal(response.total, 1); assert.equal(response.records.length, 1);
+  assert.equal(response.access.tier, 'free'); assert.deepEqual(response.records[0].prices, []);
+  assert.ok(response.records[0].forecast === null || response.records[0].forecast.gated);
 });
 
 test('unfinished current and historical details withhold every forecast chance, history and live envelope', () => {
@@ -98,15 +96,15 @@ test('unfinished current and historical details withhold every forecast chance, 
   assert.deepEqual(gateDetailResponse(completedToday, free).snapshot, completedToday.snapshot, 'current-day completion is public too');
 });
 
-test('public summaries use the completed scope and re-read it on expiry so counts match public lists', async () => {
+test('public summaries use the complete preview scope and recheck filter access on expiry', async () => {
   for (const expires of [false, true]) {
     let checks = 0; const scopes = [];
     const response = await createMatchFeedSummaryHandler(async (_parameters, context) => {
       scopes.push(context.completedOnly); const total = context.completedOnly ? 2 : 5;
       return { performance: { total, won: total, lost: 0, pending: 0, void: 0, unavailable: 0 }, paginationVersion: 'a'.repeat(64), asOf: now };
     }, clock, async () => expires && checks++ === 0 ? full : free)(new Request(`https://example.test/api/matches/summary?date=${today}`));
-    assert.equal(response.status, 200); assert.deepEqual(scopes, expires ? [false, true] : [true]);
-    assert.equal((await response.json()).performance.total, 2);
+    assert.equal(response.status, 200); assert.deepEqual(scopes, [false]);
+    assert.equal((await response.json()).performance.total, 5);
   }
 });
 

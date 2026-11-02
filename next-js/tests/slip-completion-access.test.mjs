@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { savedSlipCompleted, savedSlipOutcome } from '../src/domain/saved-slips.ts';
+import { completedSlipFixtureIds, savedSlipCompleted, savedSlipOutcome } from '../src/domain/saved-slips.ts';
 import { readWithSlipAccess } from '../src/server/slips/slip-access.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 
@@ -54,4 +54,13 @@ test('fresh access rechecks reread the public subset on expiry and reject a seco
   assert.equal(value, 'free'); assert.deepEqual(reads, ['full', 'free']); assert.equal(checks, 3);
   checks = 0;
   await assert.rejects(readWithSlipAccess(async viewer => viewer.tier, async () => ++checks === 2 ? free : full), /access changed/);
+});
+
+test('per-selection public release shares original-cycle proof and withholds replacement or foreign evidence', () => {
+  const first = result(0), pending = result(1, { completed: false, fixtureCompleted: false, status: 'live' });
+  assert.deepEqual(completedSlipFixtureIds(slip, [first, pending]), [slip.selections[0].fixtureId]);
+  for (const change of [{ fixtureCompleted: false }, { completed: false },
+    { forecast: { ...first.forecast, cycleId: 'other' } }, { selection: 'away-win' }]) {
+    assert.deepEqual(completedSlipFixtureIds(slip, [{ ...first, ...change }, pending]), []);
+  }
 });

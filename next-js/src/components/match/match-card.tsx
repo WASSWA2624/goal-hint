@@ -1,7 +1,8 @@
 "use client";
 
 import { SubscriberIcon } from "@/components/ui/icons";
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { UnlockButton } from "@/components/members/prediction-unlock";
+import { subscriberHref } from "@/domain/subscriber-navigation";
 
 import Link from "@/components/navigation/navigation-link";
 import { memo, useContext, useId, useState, type ComponentProps, type ReactNode } from "react";
@@ -42,6 +43,10 @@ export type MatchCardProps = {
   /** The viewer lacks subscriber access: an unfinished fixture's published forecast in an eligible family renders locked even
    * when delivered whole. A fixture without one shows the no-prediction reason every viewer gets. */
   gated?: boolean;
+  /** A containing locked slip owns the single accessible navigation target. */
+  interactive?: boolean;
+  /** A published slip selection whose private fields were removed by the server. */
+  lockedPrediction?: boolean;
   signedIn?: boolean;
   startingPriceUgx?: number | null | undefined;
   analysisSlug: string;
@@ -88,6 +93,10 @@ const Card = styled.article`
   ${tile} {
     ${teamStackStyles}
     container: match-card / inline-size;
+    &[data-mobile-locked] {
+      [data-ledger-facts], [data-ledger-teams] > [data-match-state], > [data-match-open] { display: none; }
+      [data-ledger-teams] { grid-template-columns: minmax(0, 1fr); }
+    }
     font-family: ${({ theme }) => theme.typography.family};
     /* Match and slip tiles share the active theme's shared, shadow-free phone frame. */
     border: 0;
@@ -108,6 +117,14 @@ const Card = styled.article`
   ${wideTable} { grid-template-columns: ${matchTableColumns.full}; }
   /* Touch taps would otherwise leave a stuck tint after returning to the list. */
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+`;
+
+const MobileUnlockArea = styled.div`
+  display: none;
+  ${tile} {
+    grid-area: facts; display: flex; min-inline-size: 0; align-self: stretch;
+    > a { inline-size: 100%; block-size: 100%; padding: var(--gh-spacing-1_5); gap: var(--gh-spacing-1); font-size: var(--gh-font-caption); }
+  }
 `;
 
 const Meta = styled.header`
@@ -553,7 +570,7 @@ function DesktopCard(props: ComponentProps<typeof DesktopMatchRow>) {
 }
 
 function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
-  headingLevel = 2, eagerLogos = false, position, titleNote, startingPriceUgx, offline = false, snapshotPick }: MatchCardProps) {
+  headingLevel = 2, eagerLogos = false, position, titleNote, offline = false, snapshotPick, lockedPrediction = false, signedIn = false, interactive = true }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -563,12 +580,13 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
   // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
   const best = snapshotPick?.family ?? bestCardFamily(fixture, eligible);
-  const gated = snapshotPick ? requiresAccess || gatedForecast !== null
-    : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null);
+  const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
+    : !isCompletedFixtureStatus(fixture.status) && best !== null && (requiresAccess || gatedForecast !== null));
+  const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
+  const targetHref = gated ? subscriberHref(signedIn, detailHref) : detailHref;
   const shownFamily = best ?? eligible[0]!;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const publicChanceLabel = publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 });
-  const unlockLabel = startingPriceUgx ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(startingPriceUgx) }) : messages.text("paywall.unlockPrediction");
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
   const title = messages.text("match.title", { home, away });
@@ -621,11 +639,11 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       }) } : {})}
       outcome={offline ? "unavailable" : outcome} headingLevel={headingLevel} pickState={pickState}
       {...(position !== undefined ? { position } : {})} {...(titleNote ? { titleNote } : {})}
-      {...(!offline ? { analysisHref: matchHref(fixture.fixtureId, analysisSlug, locale) } : {})}
+      {...(!offline && interactive ? { analysisHref: targetHref, ...(gated ? { analysisLabel: messages.text("paywall.unlock") } : {}) } : {})}
       {...(snapshotPick ? { matchState: "snapshot", savedScore: true } : {})}
-      offline={offline} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
+      offline={offline} interactive={interactive} eagerLogos={eagerLogos} {...(!gated && !offline ? { marketFamily: shownFamily } : {})}
       {...(marketDescription ? { marketDescription } : {})}
-      market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.locked")}</span></> : <>
+      market={offline ? <span>Unavailable offline</span> : gated ? <><SubscriberIcon /><span data-subscriber-notice>{messages.text("paywall.unlock")}</span></> : <>
         <span data-market-label aria-hidden="true">{compactMarketName(shownFamily)}</span>
         <strong data-pick-label data-no-pick={missing ?? undefined} title={publication || undefined}>
           {selection ? <span data-pick-selection>{predictionLabel(messages, selection)}</span> : messages.text("match.noPick")}
@@ -634,11 +652,11 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       odds={<span data-card-odds data-pick-price={prediction ? "" : undefined}>{price?.price ?? "—"}</span>}
       probability={gated ? <span data-public-probability>{publicChanceLabel}</span> : <span data-pick-value>{prediction ? percent : "—"}</span>}
       details={offline ? <VisuallyHidden>Predictions are unavailable in the saved view.</VisuallyHidden>
-        : gated ? <SubscriberNotice locale={locale} kind="card" /> : !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
+        : !gated && !prediction && reason ? <span data-no-pick-reason>{reason}</span> : null}
     />;
   }
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
-    data-status={fixture.status} data-mobile-design="team-stack" data-numbered={position !== undefined ? "" : undefined}>
+    data-status={fixture.status} data-mobile-locked={gated && !offline ? "" : undefined} data-mobile-design="team-stack" data-numbered={position !== undefined ? "" : undefined}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta data-ledger-meta>
       {position !== undefined && <Index position={position} $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
@@ -660,15 +678,14 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </Teams>
     <Pick $family={shownFamily} data-ledger-facts data-pick-state={pickState} data-result={result}>
       <MarketName $family={shownFamily} data-ledger-field="market" aria-hidden={gated ? undefined : true} title={family}>
-        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : compactMarketName(shownFamily)}</span>
-        <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
+        <span data-pick-value="" data-mobile-only="">{gated ? null : compactMarketName(shownFamily)}</span>
+        <span data-pick-value="" data-desktop-only="">{gated ? null : family}</span>
       </MarketName>
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
         <PickShort $family={shownFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
         <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={messages.text("details.odds")} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-hidden="true"><Percent>—</Percent></Probability></span>
       </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><SubscriberIcon />
-        <span data-subscriber-notice data-mobile-only="" title={unlockLabel}>{messages.text("paywall.getAccess")}<VisuallyHidden>. {unlockLabel}</VisuallyHidden></span>
-        <span data-desktop-only=""><SubscriberNotice locale={locale} kind="card" /></span>
+        <span data-subscriber-notice>{messages.text("paywall.unlock")}</span>
       </GatedPick>
         <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
         <Probability data-ledger-field="probability" data-stack-label={messages.text("match.columns.probabilityShort")} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>
@@ -692,12 +709,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       </PredictionCell>}
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
+    {gated && !offline && <MobileUnlockArea data-mobile-unlock-area>
+      <UnlockButton locale={locale} signedIn={signedIn} returnTo={detailHref} />
+    </MobileUnlockArea>}
     <Result data-result-badge={offline ? "saved" : result} data-stack-result
       data-live-minute={clock ? clock.minute ?? "" : undefined}>
       <MatchStatus status={fixture.status} outcome={outcome} messages={messages} snapshot={snapshotPick !== undefined} offline={offline} liveClock={fixture.liveClock ?? null} />
     </Result>
-    {!offline && <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
-      <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
+    {!offline && interactive && <Open data-match-open href={targetHref} prefetch={false}>
+      <VisuallyHidden>{gated ? `${messages.text("paywall.unlock")}: ${title}` : messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>}
   </Card>;
 }

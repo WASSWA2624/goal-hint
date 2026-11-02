@@ -263,7 +263,7 @@ test("Team stack cards retain the shared identity, settlement and desktop column
   const result = await styledBlock("Result");
   assert.match(result.tile, /grid-column: 11;\s*grid-row: 2;/u);
   assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 4;/u);
-  assert.match(source, /<\/Pick>\s*<Result data-result-badge=/u);
+  assert.ok(source.indexOf("</Pick>") < source.indexOf("<Result data-result-badge="));
 });
 
 test("the compact mobile forecast retains independent odds, probability and access messages", async () => {

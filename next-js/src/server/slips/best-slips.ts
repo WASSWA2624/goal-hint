@@ -1,43 +1,39 @@
 import "server-only";
 
 import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
-import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { slipMatchStateForSelection } from "../../domain/slip-match-state.ts";
-import { slipStatusCategory } from "../../domain/slip-status.ts";
+import { slipSelectionCard } from "../../domain/slip-card.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 import { getDatabase } from "../database/client.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
-export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess, completedOnly = result.entitled === false): BestSlipsResult {
+/** Explicit public projection; incomplete original selections never cross the response boundary. */
+export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
   const entitled = access.tier === "full";
-  const visible = entitled ? result.slips : result.slips.filter((view) => view.completed === true && view.slip !== undefined);
-  const completeCohort = !result.browse || result.browse.query.page === 1 && !result.browse.hasMore && result.browse.total === result.slips.length;
-  let statistics = result.statistics;
-  if (!entitled && !completedOnly && statistics) {
-    if (completeCohort) {
-      const counts = { total: visible.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
-      for (const view of visible) counts[slipStatusCategory(view.status ?? view.outcome ?? "pending")]++;
-      statistics = counts;
-    } else statistics = null;
-  }
-  return { ...result, entitled, ...(statistics !== undefined ? { statistics } : {}),
-    ...(!entitled && !completedOnly && result.browse ? { browse: { ...result.browse,
-      total: completeCohort ? visible.length : null, hasMore: false, nextCursor: null } } : {}),
-    slips: visible.map((view) => ({ rank: view.rank, matchCount: view.matchCount,
-    totalOdds: view.totalOdds, estimatedProbability: view.estimatedProbability, averageProbability: view.averageProbability,
-    ...(view.id !== undefined ? { id: view.id } : {}),
-    ...(view.publicationDay !== undefined ? { publicationDay: view.publicationDay } : {}),
-    ...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {}),
-    ...(view.outcome !== undefined ? { outcome: view.outcome } : {}),
-    ...(view.status !== undefined ? { status: view.status } : {}),
-    ...(view.completed !== undefined ? { completed: view.completed } : {}),
-    ...(view.slip ? { slip: view.slip,
+  return { ...result, entitled, access: { tier: access.tier, signedIn: access.signedIn }, slips: result.slips.map((view) => {
+    const { rank, matchCount, totalOdds, estimatedProbability, averageProbability, id, publicationDay, publishedAt, outcome, status, completed } = view;
+    const summary = { rank, matchCount, totalOdds, estimatedProbability, averageProbability,
+      ...(id !== undefined ? { id } : {}), ...(publicationDay ? { publicationDay } : {}),
+      ...(publishedAt !== undefined ? { publishedAt } : {}), ...(outcome ? { outcome } : {}),
+      ...(status ? { status } : {}), ...(completed !== undefined ? { completed } : {}) };
+    if (view.slip && (entitled || completed === true)) return { ...summary, slip: view.slip,
       ...(view.matchStates ? { matchStates: view.slip.selections.flatMap((selection) => {
         const state = slipMatchStateForSelection(selection, view.matchStates); return state ? [state] : [];
-      }) } : {}) } : {}) })) };
+      }) } : {}) };
+    if (!view.slip) return { ...summary, ...(view.preview ? { preview: view.preview } : {}) };
+    const released = new Set(view.completedFixtureIds ?? []);
+    return { ...summary, preview: view.slip.selections.map((selection) => {
+      const state = view.matchStates && slipMatchStateForSelection(selection, view.matchStates);
+      const card = slipSelectionCard(selection);
+      return { fixture: { ...card.fixture, cycleId: null, status: state?.status ?? "unknown",
+        score: state?.score ?? null, liveClock: state?.liveClock ?? null },
+        pick: released.has(selection.fixtureId) ? { ...card.snapshotPick, outcome: state?.outcome ?? "pending" } : null };
+    }) };
+  }) };
 }
 
 /** Recomputed from today's current stored cohort; no shared cache ever contains a viewer response. */
@@ -58,10 +54,10 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
     }
     const slips = (result.data?.slips ?? []) as readonly BestSlip[];
     if (slips.some((slip) => !Number.isFinite(slip.estimatedProbability))) return { ...base, state: "model-unavailable" };
-    const visible = access.tier === "full" ? slips : [];
-    return { day, entitled: access.tier === "full", state: result.state, slips: bestSlipViews(visible, access.tier === "full", result.matchStates),
+    const visible = slips;
+    return gateBestSlips({ day, state: result.state, slips: bestSlipViews(visible, true, result.matchStates),
       searchLimited: result.searchLimited, partialCoverage: result.partialCoverage,
-      statistics: { total: visible.length, won: 0, lost: 0, pending: visible.length, void: 0 } };
+      statistics: { total: visible.length, won: 0, lost: 0, pending: visible.length, void: 0 } }, access);
   };
 }
 
@@ -75,17 +71,17 @@ const readPublishedDay: PublishedBestSlipsReader = async (day, _locale, complete
   return createPublishedSlips(database).day(day, completedOnly);
 };
 
-/** Public results start yesterday; current predictions require a valid entitlement. Reads never publish a cohort. */
+/** All viewers browse today; the projection withholds unfinished per-match predictions. */
 export function createPublishedBestSlipsService({ read = readPublishedDay, providerOdds = publicPolicy.features.providerOdds, now = Date.now }: {
   read?: PublishedBestSlipsReader; providerOdds?: boolean; now?: () => number;
 } = {}) {
   return async (access: ViewerAccess, locale = "en"): Promise<BestSlipsResult> => {
-    const day = getReportingDate(utcInstantFromEpochMilliseconds(now())), publicationDay = access.tier === "full" ? day : addReportingDays(day, -1);
+    const day = getReportingDate(utcInstantFromEpochMilliseconds(now()));
     const empty = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
     try {
-      const published = await read(publicationDay, locale, access.tier === "free");
-      return published ? gateBestSlips({ ...published, day }, access, access.tier === "free") : { ...empty, state: "model-unavailable" };
+      const published = await read(day, locale, false);
+      return published ? gateBestSlips({ ...published, day }, access) : { ...empty, state: "model-unavailable" };
     } catch { return { ...empty, state: "data-unavailable" }; }
   };
 }

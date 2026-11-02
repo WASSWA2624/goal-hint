@@ -6,7 +6,7 @@ import { detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDe
 import { formWindows, openSection, type FormWindow, type TeamFocus, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
 import { media } from "@/styles/theme";
 import { contentGutter } from "@/components/ui/layout";
-import { LockIcon } from "@/components/ui/icons";
+import { LockedSurface, UnlockLink } from "@/components/members/prediction-unlock";
 import { RadioGroup, RadioGroups } from "@/components/ui/radio-group";
 import { LiveMatchPanel } from "../live-match-panel";
 import { DetailsProvider, Note, ViewProvider, focusRing, useStableDetails } from "./details-ui";
@@ -15,7 +15,7 @@ import { FormSection, H2HSection, StatsSection } from "./team-sections";
 import { LineupsSection, PlayersSection } from "./squad-sections";
 import { ContextSection, HistorySection, NewsSection, RefereeSection } from "./info-sections";
 import { Explanation, MarketsCard } from "./markets-card";
-import { TouchlineBody, TouchlineEmpty, TouchlineLinkButton, TouchlineSurface, focusMatchAccess } from "./touchline-ui";
+import { TouchlineBody, TouchlineEmpty, TouchlineSurface } from "./touchline-ui";
 import { TouchlineStandings } from "./touchline-venue";
 import { MatchTabNavigation } from "./match-tab-navigation";
 
@@ -53,7 +53,7 @@ function Section({ section, view, children, heading = true }: { section: MatchSe
 }
 
 export function TouchlineTabs({ view }: { view: MatchView }) {
-  const { data, messages, update } = useStableDetails();
+  const { data, locale, messages, update } = useStableDetails();
   const panel = useRef<HTMLDivElement>(null);
   const selected = detailTabForView(view), allowed = hasMatchPredictionAccess(data);
   const previousTab = useRef(selected);
@@ -88,8 +88,7 @@ export function TouchlineTabs({ view }: { view: MatchView }) {
     onKeyDownCapture={event => { if (["Enter", " ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) preserveViewport(); }}>
     <MatchTabNavigation selected={selected} allowed={allowed} onSelect={select} />
     <Panel ref={panel} role="tabpanel" id="match-information-panel" aria-labelledby={`match-tab-${selected}`} tabIndex={0} data-active-match-tab={selected}>
-      {!allowed ? <TouchlineEmpty><LockIcon aria-hidden="true" /><p>{messages.text("touchline.accessAbove")}</p>
-        <TouchlineLinkButton type="button" onClick={focusMatchAccess}>{messages.text("touchline.accessAction")}</TouchlineLinkButton></TouchlineEmpty>
+      {!allowed ? <LockedSurface><TouchlineEmpty><UnlockLink locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} stretch /></TouchlineEmpty></LockedSurface>
       : <TouchlineBody>
         {selected === "stats" && <>
           <Section section="stats" view={view} heading={false}><StatsSection /></Section>

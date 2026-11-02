@@ -29,10 +29,10 @@ export function DesktopSlipDisclosure({ children, headerAction, ...props }: Desk
 }
 
 /** Original snapshot facts and any supplied regulation results remain unchanged by desktop presentation. */
-export function DesktopSlip({ slip, index, locale, results, matchStates, initiallyOpen = false, shareSource, sharedSlip,
+export function DesktopSlip({ slip, index, locale, results, matchStates, initiallyOpen = false, shareSource, sharedSlip, publicShareHref,
   publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus }: {
   slip: BuiltSlip; index: number; locale: string; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
-  shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
+  publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
@@ -41,7 +41,7 @@ export function DesktopSlip({ slip, index, locale, results, matchStates, initial
     totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length} slipId={slip.id} outcome={outcome} status={status}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}
     headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} {...(shareSource ? { source: shareSource } : {})}
-      {...(sharedSlip ? { sharedSlip } : {})} locale={locale} /> : undefined}>
+      {...(sharedSlip ? { sharedSlip } : {})} locale={locale} {...(publicShareHref ? { publicHref: publicShareHref } : {})} /> : undefined}>
     <ul data-slip-selections aria-labelledby={headingId}>{slip.selections.map((selection, selectionIndex) => {
       const result = results?.find((item) => item.fixtureId === selection.fixtureId);
       return <DesktopSlipRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks {...(result ? { result } : {})}

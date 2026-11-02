@@ -14,11 +14,11 @@ export function createBestSlipsHandler({ read = readBestSlips, browse = readBest
       const parsed = parameters.size ? parseBestSlipsQuery(parameters, getReportingDate(utcInstantFromEpochMilliseconds(now()))) : null;
       const viewer = await access(request);
       const defaultPeriod = !parameters.has("period");
-      const queryFor = (entitled: boolean) => parsed && defaultPeriod ? { ...parsed, period: defaultBestSlipsQuery(entitled).period } : parsed;
-      let query = queryFor(viewer.tier === "full"), result = query ? await browse(viewer, query) : await read(viewer);
+      const queryFor = () => parsed && defaultPeriod ? { ...parsed, period: defaultBestSlipsQuery().period } : parsed;
+      let query = queryFor(), result = query ? await browse(viewer, query) : await read(viewer);
       let finalViewer = await access(request);
       if (viewer.tier !== finalViewer.tier) {
-        query = queryFor(finalViewer.tier === "full");
+        query = queryFor();
         result = query ? await browse(finalViewer, query) : await read(finalViewer);
         const checked = await access(request);
         if (checked.tier !== finalViewer.tier) return Response.json({ error: "access-changed" }, { status: 503, headers: privateMatchHeaders });

@@ -111,7 +111,12 @@ test('first qualified publication preserves quotes, model evidence and original 
   assert.equal(day.slips[0].slip.totalOdds, '5.00');
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
   assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
-  assert.deepEqual(gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' }).slips, []);
+  const gated = gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' });
+  assert.equal(gated.slips.length, 1);
+  assert.equal(gated.slips[0].slip, undefined);
+  assert.equal(gated.slips[0].preview[0].fixture.fixtureId, fixtureId(1));
+  assert.equal(gated.slips[0].preview[0].pick, null);
+  assert.doesNotMatch(JSON.stringify(gated), /original-1|home-win|revisionId|selections/);
   assert.doesNotMatch(JSON.stringify(publicViews), /original-1|home-win|selections|cycleId|revisionId|fixtureId/);
 });
 

@@ -102,7 +102,7 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
   </>;
   const header = variant === "clean-ledger"
     ? <MobileSlipHeader totalOdds={totalOdds} averageProbability={averageProbability} selectionCount={selectionCount}
-      index={index} locale={locale} outcome={outcome} status={status} headingId={headingId ?? `${id}-heading`} headerOnly={!collapsible} showRank={showRank} hasAction={!!action}
+      index={index} locale={locale} outcome={outcome} status={status} headingId={headingId ?? `${id}-heading`} headerOnly={!collapsible} showRank={showRank} hasAction={!!action} {...(!collapsible && action ? { action } : {})}
       {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})} />
     : collapsible ? <summary data-slip-toggle data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</summary>
       : <header data-slip-summary aria-describedby={`${id}-average-note`}>{summary}</header>;
@@ -115,7 +115,7 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
       {header}
       <div data-slip-content>{children}</div>
     </>}
-    {action && <div data-phone-share-action>{action}</div>}
+    {action && (variant !== "clean-ledger" || collapsible) && <div data-phone-share-action>{action}</div>}
   </CompactCard>;
 }
 

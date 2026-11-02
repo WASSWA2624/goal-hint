@@ -113,16 +113,16 @@ test('void, cancelled and pending progress categories filter before pagination w
     assert.equal(result.statistics.total, ['won', 'lost', 'pending', 'void', 'cancelled'].reduce((sum, key) => sum + result.statistics[key], 0));
   }
   const current = await f.store.browse(query(), today), gated = gateBestSlips(current, free);
-  assert.deepEqual(gated.slips.map(view => view.status), current.slips.filter(view => view.completed).map(view => view.status));
-  assert.ok(gated.slips.every(view => view.completed && view.slip));
+  assert.deepEqual(gated.slips.map(view => view.status), current.slips.map(view => view.status));
+  assert.ok(gated.slips.every(view => view.completed ? view.slip : view.preview.every(leg => leg.pick === null)));
   let accessChecks = 0;
-  const response = await createBestSlipsHandler({ now: () => now, browse: async (viewer, selected) => f.store.browse(selected, today, viewer.tier === 'free'),
+  const response = await createBestSlipsHandler({ now: () => now, browse: async (viewer, selected) => f.store.browse(selected, today, false),
     access: async () => ++accessChecks === 1 ? full : free })(new Request('https://goalhint.test/api/best-slips?period=today'));
   const expired = await response.json();
   assert.equal(response.status, 200); assert.equal(expired.entitled, false);
-  assert.deepEqual(expired.slips.map(view => view.status), current.slips.filter(view => view.completed).map(view => view.status));
-  assert.ok(expired.slips.every(view => view.completed && view.slip));
-  assert.equal(expired.statistics.total, 16); assert.equal(accessChecks, 3);
+  assert.deepEqual(expired.slips.map(view => view.status), current.slips.map(view => view.status));
+  assert.ok(expired.slips.every(view => view.completed ? view.slip : view.preview.every(leg => leg.pick === null)));
+  assert.equal(expired.statistics.total, 28); assert.equal(accessChecks, 3);
 });
 
 test('exact custom ranges resolve forecast results in bounded batches without truncating older publications', async () => {
@@ -157,14 +157,14 @@ test('an empty All dates scan exposes a continuation for matching older publicat
   assert.ok(f.resultBatches.every((count) => count <= bestSlipsQueryRules.scanDays * 4));
 });
 
-test('the browse service releases complete original selections and filters unfinished rows before public counts', async () => {
+test('the browse service retains public counts and releases complete original selections beside locked previews', async () => {
   const f = fixture(), result = await f.store.browse(query(), today), gated = gateBestSlips(result, free);
-  assert.equal(gated.slips.length, 3); assert.ok(gated.slips.every(view => view.slip && view.completed));
+  assert.equal(gated.slips.length, 4); assert.equal(gated.slips.filter(view => view.slip && view.completed).length, 3);
   assert.equal(gated.slips[0].publicationDay, today); assert.equal(gated.slips[0].outcome, 'won');
-  assert.ok(!gated.slips.some(view => view.rank === 3));
+  assert.equal(gated.slips.find(view => view.rank === 3).preview[0].pick, null);
   const read = createBestSlipsBrowseService({ read: async (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly), providerOdds: true, now: () => now });
   assert.deepEqual(await read(free, query()), gated);
-  assert.deepEqual(await read(full, query()), { ...result, entitled: true });
+  assert.deepEqual(await read(full, query()), gateBestSlips(result, full));
 });
 
 test('a replacement cycle on the same fixture cannot overwrite the original published outcome or row state', async () => {

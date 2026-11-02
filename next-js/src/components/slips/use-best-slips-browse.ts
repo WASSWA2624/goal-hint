@@ -19,18 +19,18 @@ export function useBestSlipsBrowse(initial: BestSlipsResult, desktop: boolean, o
   const entitled = observedAccess?.source === initial ? observedAccess.entitled : initialEntitled;
   const [cache, setCache] = useState<BestSlipsBrowseCache>(() => ({ source: initial, entitled, snapshots: [] }));
   if (cache.source !== initial || cache.entitled !== entitled) setCache({ source: initial, entitled, snapshots: [] });
-  const [navigation, setNavigation] = useState<NavigationState>(() => ({ entitled, desktop, query: defaultBestSlipsQuery(entitled) }));
+  const [navigation, setNavigation] = useState<NavigationState>(() => ({ entitled, desktop, query: defaultBestSlipsQuery() }));
   // Access or layout changes restart from the viewer's daily default; pages still work on either layout.
   const navigationMatches = navigation.entitled === entitled && navigation.desktop === desktop;
-  if (!navigationMatches) setNavigation({ entitled, desktop, query: defaultBestSlipsQuery(entitled) });
-  const query = navigationMatches ? navigation.query : defaultBestSlipsQuery(entitled);
+  if (!navigationMatches) setNavigation({ entitled, desktop, query: defaultBestSlipsQuery() });
+  const query = navigationMatches ? navigation.query : defaultBestSlipsQuery();
   const [attempt, setAttempt] = useState(0);
   const staleAccess = entitled !== initialEntitled;
-  const refined = staleAccess || query.period !== defaultBestSlipsQuery(entitled).period || query.status !== "all" || query.page !== 1 || !!query.cursor;
+  const refined = staleAccess || query.period !== defaultBestSlipsQuery().period || query.status !== "all" || query.page !== 1 || !!query.cursor;
   const key = serializeBestSlipsQuery(query).toString();
   const current = response?.source === initial && response.entitled === entitled && response.key === key && response.attempt === attempt ? response : null;
   const visible = !refined ? findBestSlipsSnapshot(cache, initial, entitled, query)
-    ?? { data: initial, query: defaultBestSlipsQuery(entitled), retained: false }
+    ?? { data: initial, query: defaultBestSlipsQuery(), retained: false }
     : current?.data ? { data: current.data, query, retained: false } : findBestSlipsSnapshot(cache, initial, entitled, query);
   const shouldRead = refined || attempt > 0 || visible?.retained === true;
   const requesting = shouldRead && !current;
