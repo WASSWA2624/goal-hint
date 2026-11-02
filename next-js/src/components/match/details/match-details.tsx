@@ -85,6 +85,7 @@ const BackLink = styled(Link)`
     align-items: center;
     gap: var(--gh-spacing-1);
     justify-self: start;
+    min-block-size: var(--form-control-height);
     padding-inline: ${({ theme }) => theme.space.md};
     color: ${({ theme }) => theme.color.mutedText};
     font-size: ${size("body")};

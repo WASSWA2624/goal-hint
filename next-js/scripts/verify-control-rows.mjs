@@ -79,8 +79,10 @@ export async function verifyUniformControls(page, origin, widths = [320, 390, 76
         for (const row of await page.locator("[data-uniform-row]").all()) {
           const name = await row.getAttribute("data-uniform-row");
           const controls = await row.locator('input:not([type="hidden"], [type="checkbox"], [type="radio"]), select, button, a').evaluateAll(rectangles, true);
-          aligned(controls, `${mode}/${width}/${name}/validation=${validation}`, expected);
-          checks.push({ mode, width, name, validation, height: expected, controls: controls.length });
+          const rowHeight = name === "header controls" ? await row.evaluate((element, expected) => expected
+            - 2 * Number.parseFloat(getComputedStyle(element).getPropertyValue("--gh-headerControl-blockInset")), expected) : expected;
+          aligned(controls, `${mode}/${width}/${name}/validation=${validation}`, rowHeight);
+          checks.push({ mode, width, name, validation, height: rowHeight, controls: controls.length });
         }
       }
       await page.locator("[data-toggle-row-error]").click();
@@ -95,7 +97,7 @@ export async function verifyUniformControls(page, origin, widths = [320, 390, 76
 /** Audit all visible native controls; embedded actions take their enclosing field's geometry. */
 export async function inspectControlHeights(page, scope = "body") {
   return page.locator(scope).evaluate(root => {
-    const expected = matchMedia("(pointer: coarse)").matches ? 44 : 40;
+    const standard = matchMedia("(pointer: coarse)").matches ? 44 : 40;
     const failures = [], controls = [];
     for (const element of root.querySelectorAll('button, summary, select, input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"])')) {
       const bounds = element.getBoundingClientRect(), style = getComputedStyle(element);
@@ -104,6 +106,8 @@ export async function inspectControlHeights(page, scope = "body") {
       if (element.closest('[data-field-trailing], [data-field-action], [data-slip-number-stepper], [data-truncation], [data-slip-header-action], [data-phone-share-action]')) continue;
       if (element.tagName === "BUTTON" && element.closest("[data-floating-control], [data-feed-search]")) continue;
       const height = element.closest("[data-feed-search]")?.getBoundingClientRect().height ?? bounds.height;
+      const expected = style.getPropertyValue("--header-control-height") ? standard
+        - 2 * Number.parseFloat(style.getPropertyValue("--gh-headerControl-blockInset")) : standard;
       const name = element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 45) || element.id;
       controls.push({ name, height });
       const headerAction = element.matches('[data-theme-toggle], [data-account-menu] > summary');

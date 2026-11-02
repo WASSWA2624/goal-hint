@@ -17,6 +17,8 @@ actions. `Inline` already includes it. The row aligns from the top and reserves
 the floating label's 6px space for adjacent actions and action groups when
 fields are present. Helper text and errors stay below the control body.
 Use `data-control-field` on a new field wrapper so the row can recognize it.
+Actions must wrap as whole controls instead of shrinking until their labels
+wrap inside fixed-height bodies. Dialog footers reuse the same row geometry.
 
 Password toggles, search submit icons, number steppers and slip-header actions are embedded controls:
 they fit inside their enclosing field or header. Checkbox/radio glyphs, decorative icons,
@@ -32,6 +34,18 @@ Navigation targets and ordinary page controls retain the full shared metric.
 Slip-header Share and disclosure frames share a smaller height derived from the
 control metric, with equal vertical inset. Keep their full bounds inside the
 header; the disclosure's end gutter must include its frame and side clearance.
+
+Single- and multiple-choice popovers reuse `anchoredPanel` and `useAnchoredPanel`.
+Their width and opening direction follow the available viewport space, including
+after scrolling or resizing; long option lists scroll inside the bounded panel.
+
+`tests/helpers/rendering/layout-bounds` exercises narrow action rows, validation,
+viewport-edge pickers and payment/filter dialogs. Build it with
+`python scripts/verify-layout-bounds-rendering.py --serve`, then run
+`verifyLayoutBounds` from `scripts/verify-layout-bounds.mjs` in fine/coarse pointer
+contexts. `inspectAppLayout` also audits real screens for clipped controls,
+content overflow and unequal row edges while retaining intentional scrolling
+tables, lists and tab strips.
 
 `tests/helpers/rendering/floating-labels` renders real mixed controls, account
 validation, checkout/payment actions, owner tabs and header actions. Build it

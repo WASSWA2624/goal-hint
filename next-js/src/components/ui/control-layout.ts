@@ -31,6 +31,7 @@ export const controlRow = css`
   }
   && > button, && > a {
     ${controlBodyHeight}
+    flex-shrink: 0;
     padding-block: var(--gh-spacing-1);
     margin-block-start: var(--control-row-offset);
     align-self: start;

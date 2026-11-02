@@ -15,7 +15,7 @@ export const ContentsNav = styled.nav`
 
   ${media.belowDesktop} {
     > a {
-      min-block-size: var(--gh-size-8);
+      min-block-size: var(--form-control-height);
       font-size: ${({ theme }) => theme.typography.scale.body};
       line-height: var(--gh-leading-label);
     }

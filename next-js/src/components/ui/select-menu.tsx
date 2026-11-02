@@ -9,6 +9,7 @@ import { selectSurface } from "./filled-surfaces";
 import { FloatingOutline } from "./floating-outline";
 import { floatingLabel, raisedFloatingLabel, floatingOutline, floatingOutlineFocus } from "./floating-field-styles";
 import { useOutsideDismiss } from "./use-outside-dismiss";
+import { anchoredPanel, useAnchoredPanel } from "./anchored-panel";
 
 export type SelectMenuOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
 export type SelectMenuProps = Readonly<{
@@ -37,9 +38,10 @@ const Trigger = styled.button`
   &:focus-within > [data-select-label] { color: ${({ theme }) => theme.color.link}; }
 `;
 const Options = styled.ul`
-  position: absolute; inset-inline-start: 0; inset-block-start: calc(100% + var(--gh-spacing-1_5)); z-index: var(--gh-layer-tooltip);
-  display: grid; gap: var(--gh-spacing-0_5); inline-size: max(100%, var(--gh-size-44)); max-inline-size: calc(100vw - var(--gh-size-8));
-  max-block-size: min(var(--gh-size-80), 50dvh); overflow-y: auto; overscroll-behavior: contain;
+  ${anchoredPanel}
+  z-index: var(--gh-layer-tooltip);
+  display: grid; gap: var(--gh-spacing-0_5); inline-size: max(100%, var(--gh-size-44));
+  max-block-size: min(var(--gh-size-80), 50dvh, var(--anchored-panel-space, 100dvh)); overflow-y: auto; overscroll-behavior: contain;
   margin: 0; padding: var(--gh-spacing-1); list-style: none; box-sizing: border-box;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
@@ -70,6 +72,7 @@ export function SelectMenu({ value, options, label, onValueChange, className, di
   const activeIndex = options.findIndex((option) => option.value === active?.value);
   const close = useCallback(() => { setOpen(false); search.current = { text: "", at: 0 }; }, []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
+  useAnchoredPanel({ open, anchor: trigger, panel });
   useLayoutEffect(() => {
     if (!open) return;
     const list = panel.current, item = list?.children[activeIndex] as HTMLElement | undefined;

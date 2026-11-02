@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { Button } from "./controls";
 import { CloseIcon } from "./icons";
 import { dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
+import { controlRow } from "./control-layout";
 
 const subscribe = () => () => {};
 const serverSnapshot = () => false;
@@ -91,13 +92,14 @@ const Actions = styled.footer`
   ${dialogFooterSurface}
   display: flex;
   flex: none;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--gh-spacing-2);
   padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   border-block-start: 0;
 
+  ${controlRow}
   > [data-dialog-reset] { margin-inline-end: auto; flex: none; }
   [data-enhanced="false"] > & { display: none; }
 `;

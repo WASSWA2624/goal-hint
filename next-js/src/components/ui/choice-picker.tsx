@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { ChevronDownIcon } from "./icons";
 import { closeDetails, useOutsideDismiss } from "./use-outside-dismiss";
 import { VisuallyHidden } from "./visually-hidden";
+import { anchoredPanel, useAnchoredPanel } from "./anchored-panel";
 
 type Option = Readonly<{ value: string; label: string }>;
 const Root = styled.details`
@@ -18,14 +19,16 @@ const Root = styled.details`
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: var(--gh-font-secondary); cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > span { min-inline-size: 0; overflow-wrap: anywhere; }
+    > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     > svg { flex: none; }
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
   &[data-disabled="true"] > summary { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: default; }
   > fieldset {
-    position: absolute; inset-inline: 0; inset-block-start: calc(100% + var(--gh-spacing-0_75)); z-index: var(--gh-layer-picker);
-    margin: 0; padding: var(--gh-spacing-1); min-inline-size: 0; max-block-size: min(var(--gh-size-80), 60dvh); overflow-y: auto;
+    ${anchoredPanel}
+    --anchored-panel-gap: var(--gh-spacing-0_75);
+    inline-size: 100%; z-index: var(--gh-layer-picker);
+    margin: 0; padding: var(--gh-spacing-1); min-inline-size: 0; max-block-size: min(var(--gh-size-80), 60dvh, var(--anchored-panel-space, 100dvh)); overflow-y: auto;
     border: 0;
     border-radius: ${({ theme }) => theme.radius.overlay};
     background: ${({ theme }) => theme.color.surface}; box-shadow: ${({ theme }) => theme.shadow.popover};
@@ -62,10 +65,12 @@ export function ChoicePicker({ name, label, automaticLabel, automaticHint, optio
   onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean;
 }) {
   const root = useRef<HTMLDetailsElement>(null), panelId = useId(), [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLElement>(null), panel = useRef<HTMLFieldSetElement>(null);
   const hydrated = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const inactive = disabled && hydrated;
   const close = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
   useOutsideDismiss({ enabled: open && !inline, root, onDismiss: close });
+  useAnchoredPanel({ open: open && !inline, anchor: trigger, panel });
   const summary = selected.length ? options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") : automaticLabel;
   const choices = options.map((option) => <label key={option.value}><input type="checkbox" name={name} value={option.value} checked={selected.includes(option.value)}
     onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value])} />{option.label}</label>);
@@ -78,10 +83,10 @@ export function ChoicePicker({ name, label, automaticLabel, automaticHint, optio
   return <Root ref={root} data-disabled={inactive} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {
     if (event.key === "Escape" && root.current?.open) { event.preventDefault(); event.stopPropagation(); close(); root.current.querySelector("summary")?.focus(); }
   }}>
-    <summary aria-controls={panelId} aria-label={`${label}: ${summary}`} aria-disabled={inactive || undefined}
+    <summary ref={trigger} aria-controls={panelId} aria-label={`${label}: ${summary}`} aria-disabled={inactive || undefined}
       aria-invalid={invalid || undefined} {...(describedBy ? { "aria-describedby": describedBy } : {})}
       onClick={(event) => { if (inactive) event.preventDefault(); }}><span>{summary}</span><ChevronDownIcon /></summary>
-    <fieldset id={panelId} disabled={inactive}><legend><VisuallyHidden>{label}</VisuallyHidden></legend>
+    <fieldset ref={panel} id={panelId} disabled={inactive}><legend><VisuallyHidden>{label}</VisuallyHidden></legend>
       {hydrated && <button type="button" aria-pressed={selected.length === 0} onClick={() => onChange([])}>{automaticLabel}</button>}
       <p>{automaticHint}</p>
       {choices}
