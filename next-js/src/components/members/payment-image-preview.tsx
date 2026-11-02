@@ -30,16 +30,16 @@ export function PaymentImagePreview({ image, disabled = false }: { image: Blob; 
 
 const Thumbnail = styled.button`
   && {
-    display: inline-flex; align-items: center; justify-content: center; flex: 0 1 auto; min-inline-size: 44px; min-block-size: 44px;
+    display: inline-flex; align-items: center; justify-content: center; flex: 0 1 auto; min-inline-size: var(--gh-size-11); min-block-size: var(--gh-size-11);
     max-inline-size: 100%; padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none}; background: transparent; cursor: zoom-in;
   }
-  && > img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: 96px; object-fit: contain; }
+  && > img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: var(--gh-size-24); object-fit: contain; }
   &:disabled { cursor: wait; }
   ${focusTreatment}
 `;
 const PreviewDialog = styled(CheckoutDialog)`
-  && { inline-size: min(52rem, calc(100vw - 24px)); }
+  && { inline-size: min(var(--gh-size-208), calc(100vw - var(--gh-size-6))); }
 `;
 const FullImage = styled.img`
-  && { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; max-block-size: calc(100dvh - 170px); margin-inline: auto; object-fit: contain; }
+  && { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; max-block-size: calc(100dvh - var(--gh-size-42_5)); margin-inline: auto; object-fit: contain; }
 `;

@@ -52,10 +52,10 @@ export function SubscriberAccountRow({ account, selected, href, onSelect }: {
 }
 
 const Filters = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 8px; min-inline-size: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2_5) var(--gh-spacing-2); min-inline-size: 0;
   > :first-child { grid-column: 1 / -1; }
 `;
 const Row = styled(RecordItem)`
-  grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; text-decoration: none;
+  grid-template-columns: var(--gh-size-7_5) minmax(0, 1fr) auto; align-items: center; text-decoration: none;
   &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
 `;

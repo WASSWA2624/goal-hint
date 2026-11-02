@@ -12,7 +12,7 @@ const Pagination = styled.div`
   ${desktopContentPadding()}
   [aria-current="page"] { background: ${({ theme }) => theme.color.accent.blue.text}; color: ${({ theme }) => theme.color.accent.blue.soft}; }
   ${media.belowDesktop} {
-    > nav { --pagination-min-cell: 2rem; --pagination-gap: 4px; font-size: .75rem; }
+    > nav { --pagination-min-cell: var(--gh-size-8); --pagination-gap: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
   }
 `;
 

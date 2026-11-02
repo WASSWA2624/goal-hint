@@ -12,34 +12,34 @@ import { createMessages, type TextKey } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
 const SavedDialog = styled(CriteriaDialog)`
-  inline-size: min(34rem, calc(100vw - 24px));
+  inline-size: min(var(--gh-size-136), calc(100vw - var(--gh-size-6)));
   > footer { flex-wrap: wrap; }
   ${media.desktop} {
-    inline-size: min(48rem, calc(100vw - 24px));
+    inline-size: min(var(--gh-size-192), calc(100vw - var(--gh-size-6)));
     > footer { flex-wrap: nowrap; }
   }
 `;
 const EditorDialog = styled(CriteriaDialog)`
-  inline-size: min(26rem, calc(100vw - 24px));
+  inline-size: min(var(--gh-size-104), calc(100vw - var(--gh-size-6)));
   > header > h2 { min-inline-size: 0; overflow-wrap: anywhere; }
 `;
 const Content = styled.div`
-  display: grid; gap: 14px; min-inline-size: 0;
-  p { margin: 0; font-size: .8125rem; line-height: 1.45; overflow-wrap: anywhere; }
+  display: grid; gap: var(--gh-spacing-3_5); min-inline-size: 0;
+  p { margin: 0; font-size: var(--gh-font-body); line-height: var(--gh-leading-reading); overflow-wrap: anywhere; }
   [role="alert"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
 `;
 const Row = styled.div`
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-  button { font-size: .8125rem; }
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--gh-spacing-2);
+  button { font-size: var(--gh-font-body); }
 `;
 const Check = styled.label`
-  display: inline-flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px); font-size: .8125rem;
-  input { inline-size: 18px; block-size: 18px; accent-color: ${({ theme }) => theme.color.link}; }
+  display: inline-flex; align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--form-control-height); font-size: var(--gh-font-body);
+  input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); accent-color: ${({ theme }) => theme.color.link}; }
 `;
 const EditorPanel = styled.section`
-  display: grid; gap: 10px; min-inline-size: 0; padding-block-start: 12px;
+  display: grid; gap: var(--gh-spacing-2_5); min-inline-size: 0; padding-block-start: var(--gh-spacing-3);
   border-block-start: 0;
-  h3 { margin: 0; font-size: .9375rem; overflow-wrap: anywhere; }
+  h3 { margin: 0; font-size: var(--gh-font-reading); overflow-wrap: anywhere; }
 `;
 type EditorAction = "create" | "rename" | "update" | "delete";
 type Editor = { action: EditorAction; target: SlipConfiguration | null };

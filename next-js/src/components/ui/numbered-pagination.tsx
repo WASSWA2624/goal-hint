@@ -28,10 +28,10 @@ export function numberedPaginationLabels(messages: Pick<Messages, "text" | "numb
 }
 
 const Frame = styled.nav<{ $compact: boolean }>`
-  --pagination-min-cell: 2rem;
-  --pagination-cell-height: var(--form-control-height, 40px);
-  --pagination-gap: 4px;
-  --pagination-cell-width: max(var(--pagination-min-cell), calc(var(--pagination-digits) * 1ch + 12px));
+  --pagination-min-cell: var(--gh-size-8);
+  --pagination-cell-height: var(--form-control-height);
+  --pagination-gap: var(--gh-spacing-1);
+  --pagination-cell-width: max(var(--pagination-min-cell), calc(var(--pagination-digits) * var(--gh-measure-1) + var(--gh-size-3)));
   --pagination-step: calc(var(--pagination-cell-width) + var(--pagination-gap));
   display: grid;
   /* First page, scroll back, the number rail, scroll forward, last page. */
@@ -41,12 +41,12 @@ const Frame = styled.nav<{ $compact: boolean }>`
   inline-size: 100%;
   max-inline-size: 100%;
   min-inline-size: 0;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   > noscript { display: none; }
   ${media.desktop} {
-    --pagination-min-cell: ${({ $compact }) => $compact ? "1.75rem" : "2.25rem"};
-    --pagination-gap: ${({ $compact }) => $compact ? "4px" : "6px"};
-    font-size: ${({ $compact }) => $compact ? "0.75rem" : "0.875rem"};
+    --pagination-min-cell: ${({ $compact }) => $compact ? "var(--gh-size-7)" : "var(--gh-size-9)"};
+    --pagination-gap: ${({ $compact }) => $compact ? "var(--gh-size-1)" : "var(--gh-size-1_5)"};
+    font-size: ${({ $compact }) => $compact ? "var(--gh-font-secondary)" : "var(--gh-font-emphasis)"};
   }
 `;
 const ScrollButton = styled.button`
@@ -79,7 +79,7 @@ const Viewport = styled.div`
   &::-webkit-scrollbar { display: none; }
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: -3px;
+    outline-offset: calc(-1 * var(--gh-size-0_75));
   }
 `;
 const Numbers = styled.ol`
@@ -92,7 +92,7 @@ const Numbers = styled.ol`
   padding: 0;
   list-style: none;
   > li { flex: 0 0 var(--pagination-cell-width); min-inline-size: 0; }
-  > li[data-pagination-spacer] { block-size: 1px; }
+  > li[data-pagination-spacer] { block-size: var(--gh-size-0_25); }
   > li > a, > li > button { ${paginationControlStyles} }
 `;
 

@@ -18,8 +18,8 @@ const PhoneSlipFallback = styled.div`
   position: relative; min-inline-size: 0;
   [data-phone-shareable] { position: relative; }
   [data-phone-share-action] {
-    position: absolute; inset-block-start: 8px;
-    inset-inline-end: calc(6px + var(--slip-header-action-size) + var(--slip-header-action-gap));
+    position: absolute; inset-block-start: var(--gh-spacing-2);
+    inset-inline-end: calc(var(--gh-spacing-1_5) + var(--slip-header-action-size) + var(--slip-header-action-gap));
   }
 `;
 

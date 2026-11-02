@@ -255,34 +255,34 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
 const DetailCard = styled(RecordCard)<{ $compact: boolean }>`
   ${({ $compact }) => $compact && css`
     border-radius: ${({ theme }) => theme.radius.surface};
-    ${RecordBody} { gap: 8px; padding: 10px; }
+    ${RecordBody} { gap: var(--gh-spacing-2); padding: var(--gh-spacing-2_5); }
     [data-subscriber-summary] { border-radius: ${({ theme }) => theme.radius.surface}; }
     ${AccountTop} {
-      padding: 8px 10px; gap: 6px 12px; min-block-size: 0;
-      h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
-      [data-payment-logo] { inline-size: 28px; block-size: 20px; }
-      ${MetaLine} { font-size: 0.6875rem; }
+      padding: var(--gh-spacing-2) var(--gh-spacing-2_5); gap: var(--gh-spacing-1_5) var(--gh-spacing-3); min-block-size: 0;
+      h2 { display: flex; align-items: center; gap: var(--gh-spacing-2); font-size: var(--gh-font-section); }
+      [data-payment-logo] { inline-size: var(--gh-size-7); block-size: var(--gh-size-5); }
+      ${MetaLine} { font-size: var(--gh-font-caption); }
     }
-    ${Badges} { gap: 4px; }
+    ${Badges} { gap: var(--gh-spacing-1); }
     ${AccountStats} {
       gap: 0;
-      > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 8px; padding: 7px 10px; }
-      dt { font-size: 0.6875rem; }
-      dd { font-size: 0.875rem; }
+      > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--gh-spacing-0_75) var(--gh-spacing-2); padding: var(--gh-spacing-1_75) var(--gh-spacing-2_5); }
+      dt { font-size: var(--gh-font-caption); }
+      dd { font-size: var(--gh-font-emphasis); }
     }
     ${QuickActions} {
-      display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px;
-      > button { flex: 0 1 auto; inline-size: auto; min-block-size: var(--form-control-height, 40px); padding: 4px 8px; font-size: 0.75rem; }
+      display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1_5); padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
+      > button { flex: 0 1 auto; inline-size: auto; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2); font-size: var(--gh-font-secondary); }
       > button:first-child { grid-column: auto; }
-      > button > svg { font-size: 0.875rem; }
-      @media (pointer: coarse) { > button { min-block-size: var(--form-control-height, 40px); } }
+      > button > svg { font-size: var(--gh-font-emphasis); }
+      @media (pointer: coarse) { > button { min-block-size: var(--form-control-height); } }
     }
     ${DetailTabs} {
       display: flex; flex-wrap: nowrap; max-inline-size: 100%; overflow-x: auto; justify-self: stretch;
-      > button { flex: none; min-block-size: var(--form-control-height, 40px); padding: 4px 10px; font-size: 0.75rem; }
-      @media (pointer: coarse) { > button { min-block-size: var(--form-control-height, 40px); } }
+      > button { flex: none; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2_5); font-size: var(--gh-font-secondary); }
+      @media (pointer: coarse) { > button { min-block-size: var(--form-control-height); } }
     }
-    ${TabBody} { gap: 10px; padding: 10px; }
+    ${TabBody} { gap: var(--gh-spacing-2_5); padding: var(--gh-spacing-2_5); }
     ${media.belowDesktop} { ${AccountTop} { align-items: stretch; } }
   `}
 `;

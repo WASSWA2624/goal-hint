@@ -24,28 +24,28 @@ const modalDialogs = () => typeof HTMLDialogElement !== "undefined" && typeof HT
 const serverReady = () => false;
 
 const Box = styled.div`
-  display: grid; gap: 8px; min-inline-size: 0; padding: 8px 10px;
+  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
   border: 0; border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > p { margin: 0; }
   strong { font-variant-numeric: tabular-nums; }
 `;
-const Line = styled.div`display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-inline-size: 0;`;
+const Line = styled.div`display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2); min-inline-size: 0;`;
 /** Day, entry and change on phones; the balance after each entry joins them on desktop. */
 const History = styled.ol`
-  display: grid; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none;
-  font-size: 0.8125rem; line-height: 1.55; color: ${({ theme }) => theme.color.mutedText};
-  li { display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto; gap: 0 8px; }
+  display: grid; gap: var(--gh-spacing-0_5); margin: var(--gh-spacing-1) 0 0; padding: 0; list-style: none;
+  font-size: var(--gh-font-body); line-height: var(--gh-leading-relaxed); color: ${({ theme }) => theme.color.mutedText};
+  li { display: grid; grid-template-columns: var(--gh-size-13) minmax(0, 1fr) auto; gap: 0 var(--gh-spacing-2); }
   li > strong { font-weight: ${({ theme }) => theme.typography.weight.bold}; color: ${({ theme }) => theme.color.text}; }
   li > strong[data-credit-change="in"] { color: ${({ theme }) => theme.color.outcome.correct.text}; }
   li > span:last-child { display: none; text-align: end; }
   ${media.desktop} {
-    font-size: 0.875rem;
-    li { grid-template-columns: 4rem minmax(0, 1fr) auto 9rem; gap: 0 12px; }
+    font-size: var(--gh-font-emphasis);
+    li { grid-template-columns: var(--gh-size-16) minmax(0, 1fr) auto var(--gh-size-36); gap: 0 var(--gh-spacing-3); }
     li > span:last-child { display: block; }
   }
 `;
-const PlanPicker = styled(FloatingField)`max-inline-size: 24rem;`;
+const PlanPicker = styled(FloatingField)`max-inline-size: var(--gh-size-96);`;
 
 async function postCredit(body: unknown) {
   const response = await fetch("/api/account/credit", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

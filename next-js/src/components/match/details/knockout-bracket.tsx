@@ -14,58 +14,58 @@ import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { Crest, Note, focusRing, useStableDetails } from "./details-ui";
 
 const Toolbar = styled.div`
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
-  > label { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
-  select { max-inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font: inherit;
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--gh-spacing-2); min-inline-size: 0;
+  > label { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; font-size: var(--gh-font-caption); color: ${({ theme }) => theme.color.mutedText}; }
+  select { max-inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); font: inherit;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border: 0; ${focusRing} }
   ${inlineControlRow}
 `;
 const Control = styled.button`
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-block-size: var(--form-control-height, 40px); padding: 4px 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_25); min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2);
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft}; font: inherit; font-size: .6875rem; cursor: pointer;
-  > svg { inline-size: 14px; block-size: 14px; } &:disabled { opacity: .35; cursor: default; } ${focusRing}
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft}; font: inherit; font-size: var(--gh-font-caption); cursor: pointer;
+  > svg { inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); } &:disabled { opacity: var(--gh-opacity-35); cursor: default; } ${focusRing}
 `;
 const Canvas = styled.div`
-  position: relative; min-inline-size: 0; overflow: auto; max-block-size: min(68dvh, 680px);
+  position: relative; min-inline-size: 0; overflow: auto; max-block-size: min(68dvh, var(--gh-size-170));
   background: ${({ theme }) => theme.color.surfaceMuted}; border: 0;
   overscroll-behavior: contain; scroll-snap-type: x proximity; scrollbar-width: thin; cursor: grab;
   &[data-dragging] { cursor: grabbing; user-select: none; } ${focusRing}
 `;
 const Scene = styled.div`
   position: relative;
-  > svg { position: absolute; inset-block-start: 32px; inset-inline-start: 0; pointer-events: none; overflow: visible; }
+  > svg { position: absolute; inset-block-start: var(--gh-spacing-8); inset-inline-start: 0; pointer-events: none; overflow: visible; }
   path { fill: none; stroke: ${({ theme }) => theme.color.border}; stroke-width: 2; }
   path[data-relevant] { stroke: ${({ theme }) => theme.color.accent.blue.solid}; }
 `;
 const RoundHeadings = styled.div`
-  position: sticky; inset-block-start: 0; block-size: 32px; z-index: 3; background: ${({ theme }) => theme.color.surfaceMuted};
-  > h3 { position: absolute; inset-block-start: 0; margin: 0; block-size: 32px; display: flex; align-items: center;
-    font-size: .75rem; font-weight: 700; scroll-snap-align: start; scroll-margin-inline-start: 16px; }
+  position: sticky; inset-block-start: 0; block-size: var(--gh-size-8); z-index: var(--gh-layer-control); background: ${({ theme }) => theme.color.surfaceMuted};
+  > h3 { position: absolute; inset-block-start: 0; margin: 0; block-size: var(--gh-size-8); display: flex; align-items: center;
+    font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-bold); scroll-snap-align: start; scroll-margin-inline-start: var(--gh-spacing-4); }
   > h3[data-active] { color: ${({ theme }) => theme.color.brand}; }
 `;
 const TieCard = styled.button`
-  position: absolute; display: grid; grid-template-rows: 16px 25px 25px 14px; align-content: center; gap: 1px;
-  box-sizing: border-box; padding: 6px 8px; border: 0;
+  position: absolute; display: grid; grid-template-rows: var(--gh-size-4) var(--gh-size-6_25) var(--gh-size-6_25) var(--gh-size-3_5); align-content: center; gap: var(--gh-spacing-0_25);
+  box-sizing: border-box; padding: var(--gh-spacing-1_5) var(--gh-spacing-2); border: 0;
   border-radius: ${({ theme }) => theme.radius.small}; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   font: inherit; text-align: start; cursor: pointer;
   &[data-current] { background: ${({ theme }) => theme.color.brandSoft}; }
-  > small { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: .5625rem; color: ${({ theme }) => theme.color.mutedText}; }
+  > small { display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1); font-size: var(--gh-font-micro); color: ${({ theme }) => theme.color.mutedText}; }
   > small > b { color: ${({ theme }) => theme.color.brand}; }
-  > span { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: .75rem; }
+  > span { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; font-size: var(--gh-font-secondary); }
   > span > span[data-name] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
-  > span[data-winner] { font-weight: 800; color: ${({ theme }) => theme.color.accent.emerald.text}; }
-  > span > small { font-size: .625rem; color: ${({ theme }) => theme.color.mutedText}; }
-  > em { font-size: .5625rem; font-style: normal; color: ${({ theme }) => theme.color.mutedText}; }
+  > span[data-winner] { font-weight: var(--gh-weight-heavy); color: ${({ theme }) => theme.color.accent.emerald.text}; }
+  > span > small { font-size: var(--gh-font-micro); color: ${({ theme }) => theme.color.mutedText}; }
+  > em { font-size: var(--gh-font-micro); font-style: normal; color: ${({ theme }) => theme.color.mutedText}; }
   &:hover { background: ${({ theme }) => theme.color.rowHover}; } ${focusRing}
 `;
 const FixtureList = styled.div`
-  display: grid; gap: 16px;
-  > section { display: grid; gap: 8px; border-block-start: 0; padding-block-start: 12px; }
-  > section > div { display: flex; align-items: center; gap: 6px; }
+  display: grid; gap: var(--gh-spacing-4);
+  > section { display: grid; gap: var(--gh-spacing-2); border-block-start: 0; padding-block-start: var(--gh-spacing-3); }
+  > section > div { display: flex; align-items: center; gap: var(--gh-spacing-1_5); }
   > section > div > span { flex: 1; }
   > section > div > b { font-variant-numeric: tabular-nums; }
-  a { color: ${({ theme }) => theme.color.link}; font-size: .8125rem; }
+  a { color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-body); }
 `;
 const scrollBehavior = (animate: boolean) => animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "instant";
 

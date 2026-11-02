@@ -85,44 +85,44 @@ export function AnalyticsChoices() {
 const Banner = styled.section`
   border-radius: ${({ theme }) => theme.radius.overlay};
   position: fixed;
-  z-index: 30;
-  inset-inline: 8px;
-  inset-block-end: calc(3.5rem + 9px + env(safe-area-inset-bottom));
+  z-index: var(--gh-layer-popover);
+  inset-inline: var(--gh-spacing-2);
+  inset-block-end: calc(var(--gh-size-14) + var(--gh-spacing-2_25) + env(safe-area-inset-bottom));
   display: grid;
-  gap: 10px;
-  max-inline-size: 30rem;
+  gap: var(--gh-spacing-2_5);
+  max-inline-size: var(--gh-size-120);
   margin-inline: auto;
-  padding: 14px 16px;
+  padding: var(--gh-spacing-3_5) var(--gh-spacing-4);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   ${media.desktop} {
-    inset-inline: auto 24px;
-    inset-block-end: 24px;
+    inset-inline: auto var(--gh-spacing-6);
+    inset-block-end: var(--gh-spacing-6);
   }
 `;
 const Title = styled.h2`
   font-size: ${({ theme }) => theme.typography.scale.emphasis};
-  ${media.desktop} { font-size: 1rem; }
+  ${media.desktop} { font-size: var(--gh-font-section); }
 `;
 const Text = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  line-height: 1.5;
+  line-height: var(--gh-leading-normal);
   ${media.desktop} { font-size: ${({ theme }) => theme.typography.size.small}; }
 `;
 const Choices = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
 `;
 const ChoicePanel = styled.div`
   border-radius: ${({ theme }) => theme.radius.surface};
   display: grid;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: var(--gh-spacing-2);
+  padding: var(--gh-spacing-3_5) var(--gh-spacing-4);
   background: ${({ theme }) => theme.color.surfaceMuted};
   border: 0;
-  ${Choices} { max-inline-size: 24rem; }
+  ${Choices} { max-inline-size: var(--gh-size-96); }
 `;

@@ -12,38 +12,38 @@ import { Crest, Note, focusRing, useStableDetails } from "./details-ui";
 const Frame = styled.div`min-inline-size: 0; overflow-x: auto; overscroll-behavior-inline: contain;`;
 const Table = styled.table<{ $detailed: boolean }>`
   ${filledTableRows}
-  inline-size: 100%; min-inline-size: ${({ $detailed }) => $detailed ? "29rem" : "17.5rem"};
-  table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .75rem; font-variant-numeric: tabular-nums;
-  th, td { block-size: 38px; padding: 4px; border-block-end: 0; text-align: center;
+  inline-size: 100%; min-inline-size: ${({ $detailed }) => $detailed ? "var(--gh-size-116)" : "var(--gh-size-70)"};
+  table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: var(--gh-font-secondary); font-variant-numeric: tabular-nums;
+  th, td { block-size: var(--gh-size-9_5); padding: var(--gh-spacing-1); border-block-end: 0; text-align: center;
     white-space: nowrap; background: ${({ theme }) => theme.color.surface}; }
-  thead th { block-size: 30px; background: ${({ theme }) => theme.color.surfaceMuted}; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
-  [data-rank] { position: sticky; inset-inline-start: 0; z-index: 1; }
-  [data-team-cell] { position: sticky; inset-inline-start: 26px; z-index: 1; text-align: start; border-inline-end: 0; }
-  thead [data-rank], thead [data-team-cell] { z-index: 2; }
-  tbody [data-team-cell] { font-weight: 500; }
+  thead th { block-size: var(--gh-size-7_5); background: ${({ theme }) => theme.color.surfaceMuted}; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); }
+  [data-rank] { position: sticky; inset-inline-start: 0; z-index: var(--gh-layer-content); }
+  [data-team-cell] { position: sticky; inset-inline-start: var(--gh-spacing-6_5); z-index: var(--gh-layer-content); text-align: start; border-inline-end: 0; }
+  thead [data-rank], thead [data-team-cell] { z-index: var(--gh-layer-raised); }
+  tbody [data-team-cell] { font-weight: var(--gh-weight-medium); }
   tbody tr[data-side="home"] > * { background: ${({ theme }) => theme.color.accent.orange.soft}; }
   tbody tr[data-side="away"] > * { background: ${({ theme }) => theme.color.accent.blue.soft}; }
-  tbody tr[data-side] [data-team-cell] { font-weight: 800; }
-  [data-points] { font-weight: 800; }
+  tbody tr[data-side] [data-team-cell] { font-weight: var(--gh-weight-heavy); }
+  [data-points] { font-weight: var(--gh-weight-heavy); }
   abbr { text-decoration: none; }
-  [data-team-name] { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+  [data-team-name] { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
   [data-team-name] > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   [data-short] { display: none; }
   ${media.belowDesktop} { [data-has-short] [data-full] { display: none; } [data-has-short] [data-short] { display: inline; } }
 `;
 export const FormDot = styled.span<{ $result: "W" | "D" | "L" }>`
-  display: inline-block; flex: none; inline-size: 8px; block-size: 8px; border-radius: ${({ theme }) => theme.radius.circle};
+  display: inline-block; flex: none; inline-size: var(--gh-size-2); block-size: var(--gh-size-2); border-radius: ${({ theme }) => theme.radius.circle};
   background: ${({ theme, $result }) => $result === "W" ? theme.color.accent.emerald.solid
     : $result === "L" ? theme.color.accent.red.solid : theme.color.mutedText};
 `;
 const FormButton = styled.button`
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-block-size: var(--form-control-height, 40px); min-inline-size: 60px;
-  padding: 4px; background: none; border: 0; color: inherit; cursor: pointer; ${focusRing}
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-0_75); min-block-size: var(--form-control-height); min-inline-size: var(--gh-size-15);
+  padding: var(--gh-spacing-1); background: none; border: 0; color: inherit; cursor: pointer; ${focusRing}
 `;
 const FormList = styled.ol`
-  display: grid; gap: 12px; margin: 0; padding: 0; list-style: none;
-  li { display: flex; align-items: center; gap: 10px; }
-  li > div { display: grid; gap: 3px; }
+  display: grid; gap: var(--gh-spacing-3); margin: 0; padding: 0; list-style: none;
+  li { display: flex; align-items: center; gap: var(--gh-spacing-2_5); }
+  li > div { display: grid; gap: var(--gh-spacing-0_75); }
   small { color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const fullColumns = ["played", "wins", "draws", "losses", "goalsFor", "goalsAgainst", "goalDifference", "points"] as const;
@@ -58,8 +58,8 @@ export function CompetitionTable({ rows, detailed }: { rows: readonly StandingRo
   return <>
     <Frame data-standings-scroll tabIndex={0} aria-label={messages.text("details.standings")}>
       <Table $detailed={detailed} data-competition-table data-columns={detailed ? "detailed" : "summary"} aria-label={messages.text("details.standings")}>
-        <colgroup><col style={{ width: 26 }} /><col />
-          {columns.map(column => <col key={column} style={{ width: column === "goalDifference" ? 32 : 28 }} />)}<col style={{ width: 68 }} /></colgroup>
+        <colgroup><col style={{ width: "var(--gh-size-6_5)" }} /><col />
+          {columns.map(column => <col key={column} style={{ width: column === "goalDifference" ? 32 : 28 }} />)}<col style={{ width: "var(--gh-size-17)" }} /></colgroup>
         <thead><tr><th scope="col" data-rank aria-label={messages.text("competition.rank")}>#</th>
           <th scope="col" data-team-cell>{messages.text("details.team")}</th>
           {columns.map(column => <th scope="col" key={column}><abbr title={messages.text(`competition.${column}`)}>{abbreviations[column]}</abbr></th>)}

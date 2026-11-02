@@ -12,7 +12,7 @@ const artwork = {
 
 const Frame = styled.span`
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  inline-size: 76px; block-size: 44px;
+  inline-size: var(--gh-size-19); block-size: var(--gh-size-11);
   img { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; }
 `;
 const Crop = styled.span`

@@ -31,13 +31,13 @@ const StatusContainer = styled.span<{ $tone: OutcomeTone }>`
   align-items: flex-start;
   gap: ${({ theme }) => theme.space.xs};
   max-inline-size: 100%;
-  padding: 1px 6px;
+  padding: var(--gh-spacing-0_25) var(--gh-spacing-1_5);
   color: ${({ theme, $tone }) => theme.color.outcome[$tone].text};
   background: ${({ theme, $tone }) => theme.color.outcome[$tone].background};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  line-height: 1.3;
+  line-height: var(--gh-leading-label);
   ${media.desktop} {
     padding-block: ${({ theme }) => theme.space.xs};
     padding-inline: ${({ theme }) => theme.space.sm};
@@ -54,13 +54,13 @@ const StatusLabel = styled.span`
 /** Phones: centred on the first 1.3 line, (1.3 - 1.1) / 2 = 0.1em. */
 const StatusIcon = styled.svg`
   flex-shrink: 0;
-  inline-size: 1.1em;
-  block-size: 1.1em;
-  margin-block-start: 0.1em;
+  inline-size: var(--gh-relativeSize-1_1);
+  block-size: var(--gh-relativeSize-1_1);
+  margin-block-start: var(--gh-relativeSize-0_1);
   ${media.desktop} {
-    inline-size: 1.25em;
-    block-size: 1.25em;
-    margin-block-start: 0.125em;
+    inline-size: var(--gh-relativeSize-1_25);
+    block-size: var(--gh-relativeSize-1_25);
+    margin-block-start: var(--gh-relativeSize-0_125);
   }
 `;
 
@@ -87,7 +87,7 @@ const EmptyTitle = styled.h2`
 `;
 
 const EmptyDescription = styled.div`
-  margin-block-start: 2px;
+  margin-block-start: var(--gh-spacing-0_5);
   color: ${({ theme }) => theme.color.mutedText};
   ${media.desktop} { margin-block-start: ${({ theme }) => theme.space.sm}; }
 `;

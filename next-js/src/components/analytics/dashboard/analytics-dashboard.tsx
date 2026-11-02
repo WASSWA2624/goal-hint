@@ -435,11 +435,11 @@ function BreakdownSection({ section, report, busy, exportHref, onFilter }: {
 }
 
 function Count({ children }: { children: ReactNode }) {
-  return <span style={{ marginInlineStart: 4, opacity: 0.7, fontVariantNumeric: "tabular-nums" }}>{children}</span>;
+  return <span style={{ marginInlineStart: "var(--gh-spacing-1)", opacity: "var(--gh-opacity-70)", fontVariantNumeric: "tabular-nums" }}>{children}</span>;
 }
 
 function LoadingState() {
-  return <div aria-busy="true" aria-label="Loading analytics" style={{ display: "grid", gap: 16 }}>
+  return <div aria-busy="true" aria-label="Loading analytics" style={{ display: "grid", gap: "var(--gh-spacing-4)" }}>
     <Skeleton $height={92} /><Skeleton $height={300} />
     <Grid $columns={3}><Skeleton $height={180} /><Skeleton $height={180} /><Skeleton $height={180} /></Grid>
   </div>;
@@ -501,7 +501,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
             ? new Date(settings.retention.lastPurgedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "not yet run"}
         </Muted>
         <SettingsRow>
-          <Field style={{ maxInlineSize: "16rem" }} label={"Keep raw analytics for"}><select value={days ?? ""} onChange={(event) => setDays(Number(event.target.value))}>
+          <Field style={{ maxInlineSize: "var(--gh-size-64)" }} label={"Keep raw analytics for"}><select value={days ?? ""} onChange={(event) => setDays(Number(event.target.value))}>
               {choices.map((value) => <option key={value} value={value}>{value} days{value === 395 ? " (13 months, default)" : ""}</option>)}
             </select></Field>
           <ToolButton type="button" $variant="primary" disabled={saving || days === null || days === settings.retention.retentionDays} onClick={() => {

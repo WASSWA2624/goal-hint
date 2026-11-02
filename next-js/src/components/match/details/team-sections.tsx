@@ -36,10 +36,10 @@ const TeamsRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   font-size: ${size("secondary")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  > span { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; }
+  > span { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
   > span > span[data-name] { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   ${desktop} { font-size: ${size("body")}; }
 `;
@@ -49,19 +49,19 @@ const TeamsRow = styled.div`
  */
 const CompareRows = styled.div`
   display: grid;
-  gap: 5px;
+  gap: var(--gh-spacing-1_25);
   > div, > button {
     display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) 2rem;
+    grid-template-columns: var(--gh-size-8) minmax(0, 1fr) minmax(0, 1fr) var(--gh-size-8);
     grid-template-areas: "label label label label" "hv hb ab av";
     align-items: center;
-    gap: 1px 4px;
+    gap: var(--gh-spacing-0_25) var(--gh-spacing-1);
     font-size: ${size("caption")};
     font-variant-numeric: tabular-nums;
-    @container details-card (min-width: 24rem) {
-      grid-template-columns: 2.75rem minmax(0, 1fr) minmax(6rem, 1.2fr) minmax(0, 1fr) 2.75rem;
+    @container details-card (min-width: ${({ theme }) => theme.viewport[24]}) {
+      grid-template-columns: var(--gh-size-11) minmax(0, 1fr) minmax(var(--gh-size-24), 1.2fr) minmax(0, 1fr) var(--gh-size-11);
       grid-template-areas: "hv hb label ab av";
-      gap: 2px 6px;
+      gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
       font-size: ${size("secondary")};
     }
   }
@@ -90,7 +90,7 @@ export function RecordPanel({ record }: { record: InsightResult }) {
       <dt>{messages.text("details.status")}</dt><dd>{messages.text(`match.status.${record.status}`)}</dd>
     </Facts>
     <Note>{messages.text("details.regulationNote")}</Note>
-    <Link href={matchHref(record.fixtureId, record.slug, locale)} prefetch={false} style={{ fontSize: "0.8125rem", fontWeight: 700 }}>
+    <Link href={matchHref(record.fixtureId, record.slug, locale)} prefetch={false} style={{ fontSize: "var(--gh-font-body)", fontWeight: "var(--gh-weight-bold)" }}>
       {messages.text("details.openMatch")}
     </Link>
   </ItemPanel>;
@@ -98,29 +98,29 @@ export function RecordPanel({ record }: { record: InsightResult }) {
 
 /** A stored result: plain clicks open it in place, while the row stays a real link to its own match page. */
 const RecordRow = styled(RowButton)`
-  grid-template-columns: 4.25rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
-  gap: 6px; min-block-size: 44px; text-decoration: none; font-size: .75rem;
-  > time { color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  > span[data-team] { display: flex; align-items: center; gap: 4px; min-inline-size: 0; }
+  grid-template-columns: var(--gh-size-17) var(--gh-size-4_5) minmax(0, 1fr) auto minmax(0, 1fr) var(--gh-size-4_5);
+  gap: var(--gh-spacing-1_5); min-block-size: var(--gh-size-11); text-decoration: none; font-size: var(--gh-font-secondary);
+  > time { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  > span[data-team] { display: flex; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0; }
   > span[data-team="home"] { justify-content: end; text-align: end; }
   > span[data-team] > span { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-score] { display: flex; gap: 3px; align-items: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  [data-winner="true"] { font-weight: 800; color: ${({ theme }) => theme.color.text}; }
+  > span[data-score] { display: flex; gap: var(--gh-spacing-0_75); align-items: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  [data-winner="true"] { font-weight: var(--gh-weight-heavy); color: ${({ theme }) => theme.color.text}; }
   [data-winner="false"] { color: ${({ theme }) => theme.color.mutedText}; }
-  ${media.belowDesktop} { padding-inline: 0; gap: 4px; font-size: .6875rem;
-    grid-template-columns: 4.25rem 1.125rem minmax(0, 1fr) auto minmax(0, 1fr) 1.125rem;
+  ${media.belowDesktop} { padding-inline: 0; gap: var(--gh-spacing-1); font-size: var(--gh-font-caption);
+    grid-template-columns: var(--gh-size-17) var(--gh-size-4_5) minmax(0, 1fr) auto minmax(0, 1fr) var(--gh-size-4_5);
     > span[data-team] > :first-child:not(:last-child) { display: none; }
   }
 `;
 const MeetingBalance = styled.div`
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
-  padding: 20px; background: ${({ theme }) => theme.color.surfaceMuted}; text-align: center;
-  > div { display: grid; gap: 4px; }
-  strong { font-size: 1.75rem; line-height: 1.3; }
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gh-spacing-3);
+  padding: var(--gh-spacing-5); background: ${({ theme }) => theme.color.surfaceMuted}; text-align: center;
+  > div { display: grid; gap: var(--gh-spacing-1); }
+  strong { font-size: var(--gh-font-displaySmall); line-height: var(--gh-leading-label); }
   > div:first-child strong { color: ${({ theme }) => theme.color.accent.orange.text}; }
   > div:nth-child(3) strong { color: ${({ theme }) => theme.color.accent.blue.text}; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem; }
-  > span { grid-column: 1/-1; display: flex; gap: 3px; block-size: 6px; }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); }
+  > span { grid-column: 1/-1; display: flex; gap: var(--gh-spacing-0_75); block-size: var(--gh-size-1_5); }
   i:nth-child(1) { background: ${({ theme }) => theme.color.accent.orange.solid}; }
   i:nth-child(2) { background: ${({ theme }) => theme.color.mutedText}; }
   i:nth-child(3) { background: ${({ theme }) => theme.color.accent.blue.solid}; }
@@ -201,20 +201,20 @@ export const StatsSection = memo(function StatsSection() {
       <Note>{messages.text(`details.metricHelp.${metricKind(metric)}`)}</Note>
       {([["home", homeRecords, homeId, home], ["away", awayRecords, awayId, away]] as const).map(([side, records, teamId, name]) => <div key={side}>
         <Strong>{name} · {metricText(messages, metricKind(metric), teamComparison(records, [], teamId, "").rows.find((row) => row.metric === metric)?.home ?? null)}</Strong>
-        {records.length ? <RowList>{records.map((record) => <li key={record.fixtureId} style={{ display: "grid", gridTemplateColumns: "4.25rem minmax(0,1fr) auto", gap: 6, padding: "3px 4px", fontSize: "0.75rem" }}>
+        {records.length ? <RowList>{records.map((record) => <li key={record.fixtureId} style={{ display: "grid", gridTemplateColumns: "var(--gh-size-17) minmax(0,1fr) auto", gap: "var(--gh-spacing-1_5)", padding: "var(--gh-spacing-0_75) var(--gh-spacing-1)", fontSize: "var(--gh-font-secondary)" }}>
           <time dateTime={toUtcIsoString(at(record.kickoffAt))}>{messages.reportingDay(at(record.kickoffAt))}</time>
           <span>{record.home.name} {messages.number(record.homeGoals)}–{messages.number(record.awayGoals)} {record.away.name}</span>
           <b>{messages.number(perMatchValue(record, teamId, metric))}</b>
         </li>)}</RowList> : <Note>{messages.text("details.noStoredResults")}</Note>}
       </div>)}
-    </ItemPanel> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    </ItemPanel> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       <FormFilters />
       <Teams />
       <CompareRows>
         {teamComparison(homeRecords, awayRecords, homeId, awayId).rows.map((row) => {
           const scale = row.kind === "rate" ? 1 : Math.max(row.home ?? 0, row.away ?? 0, 0.0001);
           return <RowButton key={row.metric} type="button" data-item-key={row.metric} onClick={() => update((current) => ({ ...current, item: row.metric }))}
-            aria-label={messages.text("details.metricOpen", { metric: messages.text(`details.metric.${row.metric}`) })} style={{ padding: "3px 2px" }}>
+            aria-label={messages.text("details.metricOpen", { metric: messages.text(`details.metric.${row.metric}`) })} style={{ padding: "var(--gh-spacing-0_75) var(--gh-spacing-0_5)" }}>
             <b data-home>{metricText(messages, row.kind, row.home)}</b>
             <span data-home-bar><Bar value={(row.home ?? 0) / scale} $reverse aria-hidden="true" /></span>
             <span data-label>{messages.text(`details.metric.${row.metric}`)}</span>
@@ -255,7 +255,7 @@ export const FormSection = memo(function FormSection({ sharedFilters = false }: 
       : preview ? messages.text("details.summary.noResults") : null}
     itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={form.loading} error={form.error} onRetry={form.retry} />
-    {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       {!sharedFilters && <PanelBar>
         <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(value) => update((current) => ({ ...current, team: value, page: 1 }), "replace")}
           options={[{ value: "both", label: messages.text("details.bothTeams") }, { value: "home", label: home }, { value: "away", label: away }]} />
@@ -297,7 +297,7 @@ export const H2HSection = memo(function H2HSection({ filters = true }: { filters
     meta={total ? messages.plural("details.meetings", total) : preview ? messages.text("details.summary.noMeetings") : null}
     itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={h2h.loading} error={h2h.error} onRetry={h2h.retry} />
-    {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       {embedded && <MeetingBalance aria-label={messages.text("details.section.h2h")}><div><strong>{messages.number(totals.homeWins)}</strong><small>{messages.text("details.winsFor", { team: home })}</small></div>
         <div><strong>{messages.number(totals.draws)}</strong><small>{messages.text("details.draws")}</small></div><div><strong>{messages.number(totals.awayWins)}</strong><small>{messages.text("details.winsFor", { team: away })}</small></div>
         <span aria-hidden="true"><i style={{ flex: totals.homeWins }} /><i style={{ flex: totals.draws }} /><i style={{ flex: totals.awayWins }} /></span></MeetingBalance>}

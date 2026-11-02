@@ -3,41 +3,41 @@ import { controlBodyHeight } from "./control-layout";
 
 /** Shared outlined-field geometry; labels use the border margin only when active. */
 export const floatingLabel = css`
-  position: absolute; z-index: 1; inset-block-start: 50%; inset-inline-start: 10px;
-  transform: translateY(-50%); max-inline-size: calc(100% - 20px); margin: 0;
-  padding-inline: 3px; color: ${({ theme }) => theme.color.mutedText};
-  font-size: 1rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: 1.25;
+  position: absolute; z-index: var(--gh-layer-content); inset-block-start: 50%; inset-inline-start: var(--gh-spacing-2_5);
+  transform: translateY(-50%); max-inline-size: calc(100% - var(--gh-size-5)); margin: 0;
+  padding-inline: var(--gh-spacing-0_75); color: ${({ theme }) => theme.color.mutedText};
+  font-size: var(--gh-font-section); font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: var(--gh-leading-heading);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text;
-  transition: inset-block-start 160ms ease, font-size 160ms ease;
+  transition: inset-block-start var(--gh-duration-surface) ease, font-size var(--gh-duration-surface) ease;
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 
 export const floatingControl = css`
   box-sizing: border-box; inline-size: 100%; min-inline-size: 0; ${controlBodyHeight}
-  padding-block: 8px; font-size: 1rem; line-height: 1.25;
+  padding-block: var(--gh-spacing-2); font-size: var(--gh-font-section); line-height: var(--gh-leading-heading);
 `;
 
 export const raisedFloatingLabel = css`
-  inset-block-start: 0; inset-inline-start: 10px; transform: translateY(-50%); font-size: 0.6875rem;
+  inset-block-start: 0; inset-inline-start: var(--gh-spacing-2_5); transform: translateY(-50%); font-size: var(--gh-font-caption);
 `;
 
 /** A native fieldset/legend creates a real notch without painting behind the label. */
 export const floatingOutline = css`
-  position: absolute; inset: -7px 0 0; min-inline-size: 0; margin: 0; padding: 0 7px;
-  border: 1px solid ${({ theme }) => theme.textField.borderColor}; border-radius: ${({ theme }) => theme.radius.control};
+  position: absolute; inset: calc(-1 * var(--gh-spacing-1_75)) 0 0; min-inline-size: 0; margin: 0; padding: 0 var(--gh-spacing-1_75);
+  border: var(--gh-stroke-thin) solid ${({ theme }) => theme.textField.borderColor}; border-radius: ${({ theme }) => theme.radius.control};
   pointer-events: none;
   > legend {
-    display: block; inline-size: auto; max-inline-size: 0.01px; block-size: 14px;
+    display: block; inline-size: auto; max-inline-size: var(--gh-size-0_0025); block-size: var(--gh-size-3_5);
     margin: 0; padding: 0; overflow: hidden; visibility: hidden;
-    font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: 14px;
+    font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: var(--gh-size-3_5);
     white-space: nowrap;
-    > span { display: inline-block; padding-inline: 5px; }
+    > span { display: inline-block; padding-inline: var(--gh-spacing-1_25); }
   }
 `;
 
 /** Focus retains the same single thin outline, with a quiet palette accent. */
 export const floatingOutlineFocus = css`
-  border-width: 1px;
+  border-width: var(--gh-stroke-thin);
   border-color: ${({ theme }) => theme.textField.focusBorderColor};
 `;
 

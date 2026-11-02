@@ -15,40 +15,40 @@ export type SelectMenuProps = Readonly<{
   value: string; options: readonly SelectMenuOption[]; label: string; onValueChange: (value: string) => void;
 }> & Omit<ComponentPropsWithoutRef<"button">, "children" | "value" | "onChange" | "onClick" | "onKeyDown" | "onSelect" | "role">;
 const Root = styled.div.attrs<{ "data-control-field"?: string }>({ "data-control-field": "" })`
-  position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: var(--floating-label-space, 6px);
+  position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: var(--floating-label-space);
   > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
   &:focus-within > [data-floating-outline] { ${floatingOutlineFocus} }
 `;
 const Trigger = styled.button`
-  display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
-  inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 6px 10px;
+  display: inline-flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3);
+  inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
   color: ${({ theme }) => theme.color.text}; border: 0;
-  border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 0.75rem; text-align: start; cursor: pointer;
+  border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: var(--gh-font-secondary); text-align: start; cursor: pointer;
   ${selectSurface} ${focusRing}
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   > span > span:not([data-current]) { visibility: hidden; }
   > svg { flex: none; color: ${({ theme }) => theme.color.brand}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
-  border: 1px solid transparent;
+  border: var(--gh-stroke-thin) solid transparent;
   &:focus-visible { outline: none; }
-  position: relative; ${controlBodyHeight} padding-block: 8px;
-  > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 40px); }
+  position: relative; ${controlBodyHeight} padding-block: var(--gh-spacing-2);
+  > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - var(--gh-size-10)); }
   &:focus-within > [data-select-label] { color: ${({ theme }) => theme.color.link}; }
 `;
 const Options = styled.ul`
-  position: absolute; inset-inline-start: 0; inset-block-start: calc(100% + 6px); z-index: 50;
-  display: grid; gap: 2px; inline-size: max(100%, 11rem); max-inline-size: calc(100vw - 32px);
-  max-block-size: min(20rem, 50dvh); overflow-y: auto; overscroll-behavior: contain;
-  margin: 0; padding: 4px; list-style: none; box-sizing: border-box;
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.surface};
+  position: absolute; inset-inline-start: 0; inset-block-start: calc(100% + var(--gh-spacing-1_5)); z-index: var(--gh-layer-tooltip);
+  display: grid; gap: var(--gh-spacing-0_5); inline-size: max(100%, var(--gh-size-44)); max-inline-size: calc(100vw - var(--gh-size-8));
+  max-block-size: min(var(--gh-size-80), 50dvh); overflow-y: auto; overscroll-behavior: contain;
+  margin: 0; padding: var(--gh-spacing-1); list-style: none; box-sizing: border-box;
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover}; scrollbar-width: thin;
   > li {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    min-block-size: var(--form-control-height, 40px); padding: 7px 10px; border: 0; border-radius: ${({ theme }) => theme.radius.small};
-    font-size: 0.75rem; line-height: 1.35; cursor: pointer;
-    > svg { flex: none; inline-size: 14px; block-size: 14px; visibility: hidden; }
+    display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3);
+    min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_75) var(--gh-spacing-2_5); border: 0; border-radius: ${({ theme }) => theme.radius.small};
+    font-size: var(--gh-font-secondary); line-height: var(--gh-leading-caption); cursor: pointer;
+    > svg { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); visibility: hidden; }
     &[aria-selected="true"] {
       color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft};
       font-weight: ${({ theme }) => theme.typography.weight.bold};

@@ -9,27 +9,27 @@ export { alignedLedgerStyles } from "@/components/match/desktop-match-styles";
 
 /** Shared desktop geometry for production slips and the design review. */
 export const DesktopSlipBase = styled.div`
-  --slip-header-separator-offset: -7px;
-  --slip-header-gap: 14px;
-  --slip-header-end: 10px;
+  --slip-header-separator-offset: calc(-1 * var(--gh-size-1_75));
+  --slip-header-gap: var(--gh-spacing-3_5);
+  --slip-header-end: var(--gh-size-2_5);
   min-inline-size: 0; position: relative;
 
   &&& [data-slip-summary] {
-    grid-template-columns: minmax(0, 1fr) auto auto auto var(--review-status-width, 7rem);
+    grid-template-columns: minmax(0, 1fr) auto auto auto var(--review-status-width, var(--gh-size-28));
     grid-template-areas: "identity odds count average status"; grid-template-rows: auto;
-    min-block-size: var(--form-control-height, 40px); block-size: auto;
-    column-gap: var(--slip-header-gap); row-gap: 0; padding: 0 var(--slip-header-end) 0 12px;
-    white-space: nowrap; font-size: 0.75rem; line-height: 1.25;
+    min-block-size: var(--form-control-height); block-size: auto;
+    column-gap: var(--slip-header-gap); row-gap: 0; padding: 0 var(--slip-header-end) 0 var(--gh-spacing-3);
+    white-space: nowrap; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-heading);
     background: ${({ theme }) => theme.phoneCardFrame.header};
   }
-  &&& [data-summary-identity] { flex-wrap: wrap; align-items: center; gap: 3px 9px; padding-inline-start: 2px; white-space: nowrap; font-size: 0.875rem; }
+  &&& [data-summary-identity] { flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-0_75) var(--gh-spacing-2_25); padding-inline-start: var(--gh-spacing-0_5); white-space: nowrap; font-size: var(--gh-font-emphasis); }
   &&& [data-slip-publication-date] {
-    border-inline-start: 0; padding-inline-start: 8px;
+    border-inline-start: 0; padding-inline-start: var(--gh-spacing-2);
   }
-  &&& [data-rank] { font-size: 0.75rem; }
-  &&& [data-summary-fact] { flex-wrap: nowrap; flex-direction: row; align-items: baseline; gap: 6px; }
-  &&& [data-summary-fact] strong { font-size: 0.875rem; }
-  &&& [data-summary-odds] { justify-self: start; min-inline-size: 0; max-inline-size: 14rem; }
+  &&& [data-rank] { font-size: var(--gh-font-secondary); }
+  &&& [data-summary-fact] { flex-wrap: nowrap; flex-direction: row; align-items: baseline; gap: var(--gh-spacing-1_5); }
+  &&& [data-summary-fact] strong { font-size: var(--gh-font-emphasis); }
+  &&& [data-summary-odds] { justify-self: start; min-inline-size: 0; max-inline-size: var(--gh-size-56); }
   &&& [data-summary-odds] strong { min-inline-size: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
   &&& [data-summary-count], &&& [data-summary-average] { justify-self: end; }
   &&& [data-summary-average] [data-fact-label] { max-inline-size: none; }
@@ -37,27 +37,27 @@ export const DesktopSlipBase = styled.div`
   &&& [data-summary-status] {
     grid-area: status; justify-self: stretch; display: flex; align-items: center; justify-content: center;
     inline-size: 100%; box-sizing: border-box;
-    border-inline-start: 0; padding-inline-start: 6px;
+    border-inline-start: 0; padding-inline-start: var(--gh-spacing-1_5);
   }
-  &&& [data-summary-action-space] { grid-area: action; inline-size: 4.5rem; block-size: var(--form-control-height, 40px); }
-  &&& [data-toggle-chevron] { inset-inline-end: 4px; }
+  &&& [data-summary-action-space] { grid-area: action; inline-size: var(--gh-size-18); block-size: var(--form-control-height); }
+  &&& [data-toggle-chevron] { inset-inline-end: var(--gh-spacing-1); }
   &&&[data-shareable] [data-slip-summary] {
-    grid-template-columns: minmax(0, 1fr) auto auto auto 4.5rem var(--review-status-width, 7rem);
+    grid-template-columns: minmax(0, 1fr) auto auto auto var(--gh-size-18) var(--review-status-width, var(--gh-size-28));
     grid-template-areas: "identity odds count average action status";
   }
   [data-slip-header-action] {
     position: absolute;
-    inset-inline-end: calc(var(--slip-header-end) + var(--review-status-width, 7rem) + var(--slip-header-gap) + ${({ theme }) => theme.border.width});
-    inset-block-start: 0; z-index: 2;
+    inset-inline-end: calc(var(--slip-header-end) + var(--review-status-width, var(--gh-size-28)) + var(--slip-header-gap) + ${({ theme }) => theme.border.width});
+    inset-block-start: 0; z-index: var(--gh-layer-raised);
   }
 
   ${desktopMatchBaseStyles}
-  [data-desktop-row][data-numbered-date] { --review-date-width: 4.65rem; }
-  [data-numbered-date] [data-row-date] { display: flex; align-items: center; gap: 5px; }
-  @media (max-width: 79.99rem) {
-    --slip-header-separator-offset: -5px;
-    --slip-header-gap: 9px;
-    &&& [data-slip-summary] { padding-inline-start: 8px; }
+  [data-desktop-row][data-numbered-date] { --review-date-width: var(--gh-size-18_6); }
+  [data-numbered-date] [data-row-date] { display: flex; align-items: center; gap: var(--gh-spacing-1_25); }
+  @media (max-width: ${({ theme }) => theme.viewport[79.99]}) {
+    --slip-header-separator-offset: calc(-1 * var(--gh-size-1_25));
+    --slip-header-gap: var(--gh-spacing-2_25);
+    &&& [data-slip-summary] { padding-inline-start: var(--gh-spacing-2); }
   }
 `;
 
@@ -67,14 +67,14 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
   ${media.desktop} {
     /* Reserve the end gutter for the control and keep header/body status tracks aligned. */
     &:has([data-toggle-chevron]) {
-      --slip-header-end: 34px;
+      --slip-header-end: var(--gh-size-8_5);
       [data-desktop-row] { padding-inline-end: var(--slip-header-end); }
     }
     &&& [data-toggle-chevron] {
       ${slipDisclosureIndicator}
-      --slip-chevron-size: 7px;
-      inline-size: var(--form-control-height, 40px); block-size: var(--form-control-height, 40px);
-      inset-inline-end: calc((var(--slip-header-end) - var(--form-control-height, 40px)) / 2); inset-block-start: 0; transform: none;
+      --slip-chevron-size: var(--gh-size-1_75);
+      inline-size: var(--form-control-height); block-size: var(--form-control-height);
+      inset-inline-end: calc((var(--slip-header-end) - var(--form-control-height)) / 2); inset-block-start: 0; transform: none;
     }
     &&& [data-slip-disclosure][open] > [data-slip-summary] [data-toggle-chevron] { --slip-chevron-rotation: 45deg; }
     /* Draw on the outer frame so the rail spans matches without affecting their layout. */
@@ -82,7 +82,7 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       content: "";
       position: absolute;
       inset: 0;
-      z-index: 1;
+      z-index: var(--gh-layer-content);
       border-inline-start: 0;
       border-radius: ${({ theme }) => theme.frame.desktopCardRadius};
       pointer-events: none;
@@ -94,27 +94,27 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
     }
     &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
     &&& [data-compact-slip] > header[data-slip-summary] {
-      min-block-size: var(--form-control-height, 40px);
+      min-block-size: var(--form-control-height);
       color: ${({ theme }) => theme.color.text};
       background: ${({ theme }) => theme.phoneCardFrame.header};
-      [data-summary-identity] > span:first-child { font-size: .9375rem; font-weight: 700; }
+      [data-summary-identity] > span:first-child { font-size: var(--gh-font-reading); font-weight: var(--gh-weight-bold); }
       [data-summary-odds] strong, [data-summary-average] strong {
-        color: ${({ theme }) => theme.color.accent.blue.text}; font-size: .9375rem; font-weight: 700;
+        color: ${({ theme }) => theme.color.accent.blue.text}; font-size: var(--gh-font-reading); font-weight: var(--gh-weight-bold);
       }
-      [data-fact-label], [data-summary-count] { font-size: .8125rem; font-weight: 500; }
-      [data-slip-publication-date], [data-rank] { font-size: .75rem; font-weight: 500; line-height: 1.35; }
+      [data-fact-label], [data-summary-count] { font-size: var(--gh-font-body); font-weight: var(--gh-weight-medium); }
+      [data-slip-publication-date], [data-rank] { font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-medium); line-height: var(--gh-leading-caption); }
       [data-rank] { color: ${({ theme }) => theme.color.accent.blue.text}; }
-      [data-slip-status] { font-size: .8125rem; font-weight: 600; }
+      [data-slip-status] { font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold); }
       &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
       ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.phoneCardFrame.header} 94%, ${({ theme }) => theme.color.surface}); } }
     }
     &:not(:has([data-slip-disclosure][open])) {
-      [data-slip-header-action] { inset-block-start: 0; block-size: var(--form-control-height, 40px); display: flex; align-items: center; }
+      [data-slip-header-action] { inset-block-start: 0; block-size: var(--form-control-height); display: flex; align-items: center; }
       [data-share-slip] {
         color: ${({ theme }) => theme.color.accent.blue.text}; background: ${({ theme }) => theme.color.surface};
-        font-size: .8125rem; font-weight: 600;
+        font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold);
         &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
-        @media (pointer: coarse) { min-block-size: var(--form-control-height, 40px); }
+        @media (pointer: coarse) { min-block-size: var(--form-control-height); }
       }
     }
   }

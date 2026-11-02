@@ -4,8 +4,11 @@ import type { SharedSlip } from "@/domain/shared-slips";
 import { layoutSlipShareImages, slipShareImageFonts, slipShareImageRules, type SlipShareImageFont, type SlipShareImagePage } from "@/domain/slip-share-image";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
+import { lightTheme } from "@/styles/theme";
 
-const colors = Object.freeze({ paper: "#FFFFFF", ink: "#15243B", muted: "#53647C", brand: "#2457C5", line: "#D9E1ED" });
+// Portable exports use the shared light palette even when the sender uses dark mode.
+const colors = Object.freeze({ paper: lightTheme.color.surface, ink: lightTheme.color.text,
+  muted: lightTheme.color.mutedText, brand: lightTheme.color.brand, line: lightTheme.phoneCardFrame.border });
 
 function fontFamily(): string {
   return getComputedStyle(document.body).fontFamily || "Arial, sans-serif";

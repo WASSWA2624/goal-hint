@@ -2,6 +2,7 @@
 
 import { createGlobalStyle, css } from "styled-components";
 import { controlMetrics } from "@/components/ui/control-layout";
+import { themeCssVariables } from "./theme-css";
 
 export const GlobalStyle = createGlobalStyle`
   *,
@@ -11,6 +12,7 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   html {
+    ${({ theme }) => themeCssVariables(theme)}
     ${controlMetrics}
     color-scheme: ${({ theme }) => theme.mode};
     font-size: 100%;
@@ -35,7 +37,7 @@ export const GlobalStyle = createGlobalStyle`
     font-family: ${({ theme }) => theme.typography.family};
     font-size: ${({ theme }) => theme.typography.scale.body};
     font-weight: ${({ theme }) => theme.typography.weight.body};
-    line-height: 1.5;
+    line-height: var(--gh-leading-normal);
     overflow-wrap: anywhere;
   }
 
@@ -52,7 +54,7 @@ export const GlobalStyle = createGlobalStyle`
   /* Zero specificity, so any styled list still sets its own spacing. */
   :where(ul, ol) {
     margin-block: 0;
-    padding-inline-start: 1.25rem;
+    padding-inline-start: var(--gh-size-5);
   }
 
   :where(dl, dd) {
@@ -77,9 +79,9 @@ export const GlobalStyle = createGlobalStyle`
 
   @media (min-width: ${({ theme }) => theme.breakpoint.md}) {
     body { font-size: ${({ theme }) => theme.typography.size.small}; }
-    h1 { font-size: 1.375rem; }
-    h2 { font-size: 1.125rem; }
-    h3 { font-size: 1rem; }
+    h1 { font-size: var(--gh-font-page); }
+    h2 { font-size: var(--gh-font-title); }
+    h3 { font-size: var(--gh-font-section); }
   }
 
   @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
@@ -94,18 +96,18 @@ export const GlobalStyle = createGlobalStyle`
 
   /* iOS Safari zooms the page when a focused text field is under 16px. */
   @supports (-webkit-touch-callout: none) {
-    @media (max-width: 63.99rem) {
+    @media (max-width: ${({ theme }) => theme.viewport[63.99]}) {
       input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]),
       textarea {
-        font-size: 16px !important;
+        font-size: var(--gh-font-section) !important;
       }
     }
   }
 
   :where(a) {
     color: ${({ theme }) => theme.color.link};
-    text-decoration-thickness: 0.08em;
-    text-underline-offset: 0.2em;
+    text-decoration-thickness: var(--gh-relativeSize-0_08);
+    text-underline-offset: var(--gh-relativeSize-0_2);
   }
 
   @media (hover: hover) {
@@ -125,7 +127,7 @@ export const GlobalStyle = createGlobalStyle`
 
   /* Native controls also follow the contract; embedded actions can override this baseline. */
   :where(button, select, summary, input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"])) {
-    min-block-size: var(--form-control-height, 40px);
+    min-block-size: var(--form-control-height);
   }
   :where(summary) { align-content: center; cursor: pointer; }
 
@@ -133,8 +135,8 @@ export const GlobalStyle = createGlobalStyle`
     appearance: none;
     display: inline-block;
     flex: none;
-    inline-size: 1.125rem;
-    block-size: 1.125rem;
+    inline-size: var(--gh-size-4_5);
+    block-size: var(--gh-size-4_5);
     padding: 0;
     border: 0;
     background-color: ${({ theme }) => theme.color.controlBorder};
@@ -148,16 +150,16 @@ export const GlobalStyle = createGlobalStyle`
   input:is([type="checkbox"], [type="radio"]):checked,
   input[type="checkbox"]:indeterminate { background-color: ${({ theme }) => theme.gradient.action}; }
   input[type="checkbox"]:checked {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m4 10 4 4 8-8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: ${({ theme }) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path d='m4 10 4 4 8-8' fill='none' stroke='${theme.color.onAction}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>`)}")`};
   }
   input[type="checkbox"]:indeterminate {
-    background-image: linear-gradient(white, white);
-    background-size: 60% 2px;
+    background-image: linear-gradient(${({ theme }) => theme.color.onAction}, ${({ theme }) => theme.color.onAction});
+    background-size: 60% var(--gh-size-0_5);
   }
   input[type="radio"]:checked {
     background-image: radial-gradient(circle, ${({ theme }) => theme.color.onAction} 35%, transparent 40%);
   }
-  input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.5; cursor: not-allowed; }
+  input:is([type="checkbox"], [type="radio"]):disabled { opacity: var(--gh-opacity-50); cursor: not-allowed; }
   @media (forced-colors: active) {
     input[type="checkbox"], input[type="radio"] { appearance: auto; }
   }
@@ -185,7 +187,7 @@ export const GlobalStyle = createGlobalStyle`
 
   ${({ theme }) => theme.mode === "light" && css`
     input:autofill {
-      box-shadow: inset 0 0 0 1000px ${theme.textField.background};
+      box-shadow: inset 0 0 0 var(--gh-size-250) ${theme.textField.background};
       -webkit-text-fill-color: ${theme.color.text};
     }
   `}

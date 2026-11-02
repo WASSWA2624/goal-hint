@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
-import styled from "styled-components";
+import styled, { useTheme } from "styled-components";
 import { normalizePhone, phoneInputMaxLength } from "@/domain/phone";
 import { phoneInputIssue } from "@/domain/phone-mobile";
 import { composePhoneValue, formatNationalPhone, isInternationalPhoneInput, phoneCountry, searchPhoneCountries, splitPhoneValue, type PhoneCountry, type PhoneValueParts } from "@/domain/phone-countries";
@@ -33,11 +33,12 @@ type CountryMenuPosition = Readonly<{ left: number; top: number; width: number; 
 
 /** A fixed country prefix and a national field share the original canonical-value and native validation contract. */
 export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lookup = false, formatValue = false, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
+  const metrics = useTheme().ui.countryMenu;
   const [draft, setDraft] = useState<PhoneDraft>(() => ({ ...splitPhoneValue(value ?? defaultValue), value: value ?? defaultValue }));
   const [touched, setTouched] = useState(false), [pasteError, setPasteError] = useState<string | null>(null);
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
-  const [position, setPosition] = useState<CountryMenuPosition>({ left: 8, top: 8, width: 300, maxHeight: 360 });
+  const [position, setPosition] = useState<CountryMenuPosition>({ left: metrics.edge, top: metrics.edge, width: metrics.minWidth, maxHeight: metrics.maxHeight });
   const frame = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null), countrySearch = useRef<HTMLInputElement>(null);
   const control = useRef<HTMLInputElement>(null), messages = createMessages();
   useImperativeHandle(ref, () => control.current!, []);
@@ -61,17 +62,17 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
     setPasteError(null); setDraft({ ...next, value: nextValue });
     if (nextValue !== current) onValueChange?.(nextValue);
   }
-  function locateMenu() {
+  const locateMenu = useCallback(() => {
     const bounds = frame.current?.getBoundingClientRect();
     if (!bounds) return;
     const viewportWidth = document.documentElement.clientWidth;
-    const width = Math.min(Math.max(bounds.width, 300), viewportWidth - 16);
-    const below = window.innerHeight - bounds.bottom - 16, above = bounds.top - 16;
-    const useBelow = below >= 280 || below >= above;
-    const height = Math.min(360, Math.max(80, useBelow ? below : above));
-    setPosition({ width, left: Math.max(8, Math.min(bounds.left, viewportWidth - width - 8)),
-      top: useBelow ? bounds.bottom + 6 : Math.max(8, bounds.top - height - 6), maxHeight: height });
-  }
+    const width = Math.min(Math.max(bounds.width, metrics.minWidth), viewportWidth - metrics.edge * 2);
+    const below = window.innerHeight - bounds.bottom - metrics.edge * 2, above = bounds.top - metrics.edge * 2;
+    const useBelow = below >= metrics.preferredSpace || below >= above;
+    const height = Math.min(metrics.maxHeight, Math.max(metrics.minHeight, useBelow ? below : above));
+    setPosition({ width, left: Math.max(metrics.edge, Math.min(bounds.left, viewportWidth - width - metrics.edge)),
+      top: useBelow ? bounds.bottom + metrics.gap : Math.max(metrics.edge, bounds.top - height - metrics.gap), maxHeight: height });
+  }, [metrics]);
   function showCountries() {
     if (inactive) return;
     setPortalRoot(frame.current?.closest("dialog") ?? document.body);
@@ -94,7 +95,7 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
     document.addEventListener("pointerdown", outside);
     window.addEventListener("resize", move); window.addEventListener("scroll", move, true);
     return () => { document.removeEventListener("pointerdown", outside); window.removeEventListener("resize", move); window.removeEventListener("scroll", move, true); };
-  }, [open]);
+  }, [open, locateMenu]);
   function menuKey(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") { event.preventDefault(); closeCountries(true); return; }
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -182,55 +183,55 @@ function PhoneCountryFlag({ country }: { country: PhoneCountry }) {
     : <DialFlagFallback aria-hidden="true">{country.iso2}</DialFlagFallback>;
 }
 const PhoneControl = styled.div`
-  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; min-inline-size: 0;
-  > input[data-phone-input] { padding-inline-start: 10px; }
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--gh-spacing-2); min-inline-size: 0;
+  > input[data-phone-input] { padding-inline-start: var(--gh-spacing-2_5); }
   &[data-floating-label="true"] {
     align-items: end;
     > [data-floating-field] { margin-block-start: 0; }
   }
 `;
 const CountryTrigger = styled.button`
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5); padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
   ${controlHeight} block-size: var(--form-control-height); box-sizing: border-box;
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.brandSoft}; font: inherit; font-size: 0.875rem;
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.fieldAdornment.background}; font: inherit; font-size: var(--gh-font-emphasis);
   white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
-  > svg { inline-size: 14px; block-size: 14px; flex: none; }
-  &:hover { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : theme.color.surfaceMuted}; }
+  > svg { inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); flex: none; }
+  &:hover { background: ${({ theme }) => theme.fieldAdornment.hoverBackground}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   ${focusTreatment}
-  @media(max-width: 360px) { gap: 4px; padding-inline: 6px; }
+  @media(max-width: ${({ theme }) => theme.viewport[22.5]}) { gap: var(--gh-spacing-1); padding-inline: var(--gh-spacing-1_5); }
 `;
 const DialFlag = styled.img`display: block; object-fit: cover; flex: none;`;
 const DialFlagFallback = styled.span`
-  display: grid; place-items: center; inline-size: 22px; block-size: 16px; flex: none;
-  background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 0.625rem; line-height: 1; font-weight: 600;
+  display: grid; place-items: center; inline-size: var(--gh-size-5_5); block-size: var(--gh-size-4); flex: none;
+  background: ${({ theme }) => theme.color.surfaceMuted}; font-size: var(--gh-font-micro); line-height: var(--gh-leading-solid); font-weight: var(--gh-weight-semibold);
 `;
 const CountryMenu = styled.div`
-  position: fixed; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; box-sizing: border-box; padding: 10px;
+  position: fixed; z-index: var(--gh-layer-modal); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-2); box-sizing: border-box; padding: var(--gh-spacing-2_5);
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay}; overflow: hidden;
   color: ${({ theme }) => theme.color.text}; ${dialogSurface}
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const CountrySearch = styled.input`
-  box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: var(--form-control-height, 40px); padding: 8px 10px;
-  border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 1rem;
+  box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: var(--form-control-height); padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
+  border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: var(--gh-font-section);
   color: ${({ theme }) => theme.color.text}; ${textFieldSurface} ${focusTreatment}
 `;
 const CountrySearchLabel = styled.label`
-  position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden;
+  position: absolute; inline-size: var(--gh-size-0_25); block-size: var(--gh-size-0_25); padding: 0; margin: calc(-1 * var(--gh-spacing-0_25)); overflow: hidden;
   clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 `;
 const CountryResults = styled.div`display: grid; align-content: start; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain;`;
 const CountryOption = styled.button`
-  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 16px; align-items: center; gap: 8px;
-  inline-size: 100%; min-block-size: 48px; padding: 8px; text-align: start; border: 0; border-radius: ${({ theme }) => theme.radius.none}; cursor: pointer;
-  color: ${({ theme }) => theme.color.text}; background: transparent; font: inherit; font-size: 0.875rem;
+  display: grid; grid-template-columns: var(--gh-size-5_5) minmax(0, 1fr) auto var(--gh-size-4); align-items: center; gap: var(--gh-spacing-2);
+  inline-size: 100%; min-block-size: var(--gh-size-12); padding: var(--gh-spacing-2); text-align: start; border: 0; border-radius: ${({ theme }) => theme.radius.none}; cursor: pointer;
+  color: ${({ theme }) => theme.color.text}; background: transparent; font: inherit; font-size: var(--gh-font-emphasis);
   > span:nth-child(2) { overflow-wrap: anywhere; }
-  small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
   > span:nth-child(3) { font-variant-numeric: tabular-nums; }
-  > svg { inline-size: 16px; block-size: 16px; color: ${({ theme }) => theme.color.brand}; }
+  > svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); color: ${({ theme }) => theme.color.brand}; }
   &:hover, &[aria-pressed="true"] { background: ${({ theme }) => theme.color.surfaceMuted}; }
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
 `;
-const CountryEmpty = styled.p`margin: 0; padding: 14px 8px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem;`;
+const CountryEmpty = styled.p`margin: 0; padding: var(--gh-spacing-3_5) var(--gh-spacing-2); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-emphasis);`;

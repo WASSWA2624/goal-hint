@@ -45,12 +45,12 @@ export const desktop = media.desktop;
 /** One step of the compact type scale (theme.typography.scale). */
 export const size = (step: keyof DefaultTheme["typography"]["scale"]) => ({ theme }: { theme: DefaultTheme }) => theme.typography.scale[step];
 export const focusRing = css`
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
 `;
 /** Focus targets clear the sticky desktop header and the phone tab bar. */
 export const scrollClearance = css`
-  scroll-margin-block: 0.75rem 4.5rem;
-  ${media.desktop} { scroll-margin-block: 5rem 1rem; }
+  scroll-margin-block: var(--gh-size-3) var(--gh-size-18);
+  ${media.desktop} { scroll-margin-block: var(--gh-size-20) var(--gh-size-4); }
 `;
 
 /**
@@ -68,22 +68,22 @@ export const Card = styled.section`
   border-block-end: 0;
   container: details-card / inline-size;
   ${scrollClearance}
-  &[data-open] { padding-block-end: 12px; }
+  &[data-open] { padding-block-end: var(--gh-spacing-3); }
   /* Server-rendered open by the desktop default: phones show the row alone until they hydrate and close it. */
   ${media.belowDesktop} { &[data-open-by-default] { padding-block-end: 0; > div[id] { display: none; } } }
   ${desktop} {
-    &[data-open] { padding-block-end: 16px; }
+    &[data-open] { padding-block-end: var(--gh-spacing-4); }
   }
   ${desktopContentPadding(true)}
 `;
 
 /** A subscriber drawer keeps the established row height and rule, with one plain line. */
-export const SubscriberRow = styled(Card)`min-block-size: 2.875rem; align-content: center;`;
+export const SubscriberRow = styled(Card)`min-block-size: var(--gh-size-11_5); align-content: center;`;
 
 const HeadRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
   > h2 { flex: 1; min-inline-size: 0; margin: 0; font-size: inherit; }
 `;
@@ -94,9 +94,9 @@ const HeadRow = styled.div`
 const HeadButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   inline-size: 100%;
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: none;
@@ -105,23 +105,23 @@ const HeadButton = styled.button`
   text-align: start;
   cursor: pointer;
   ${focusRing}
-  > span[data-icon] { display: inline-grid; flex: none; place-items: center; inline-size: 1.25rem; block-size: 1.25rem; color: ${({ theme }) => theme.color.brand}; font-size: 1.125rem; }
-  > span[data-title] { flex: none; min-inline-size: 0; font-size: ${size("emphasis")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.15; white-space: nowrap; }
+  > span[data-icon] { display: inline-grid; flex: none; place-items: center; inline-size: var(--gh-size-5); block-size: var(--gh-size-5); color: ${({ theme }) => theme.color.brand}; font-size: var(--gh-font-title); }
+  > span[data-title] { flex: none; min-inline-size: 0; font-size: ${size("emphasis")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-snug); white-space: nowrap; }
   > small { min-inline-size: 0; margin-inline-start: auto; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; text-align: end; white-space: nowrap; text-overflow: ellipsis; }
-  @container details-card (max-width: 16rem) {
+  @container details-card (max-width: ${({ theme }) => theme.viewport[16]}) {
     > span[data-title] { flex-shrink: 1; white-space: normal; }
     > small { display: none; }
   }
-  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.9375rem; transform: rotate(90deg); transition: transform ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing}; }
+  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-reading); transform: rotate(90deg); transition: transform ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing}; }
   > small + svg:last-child { margin-inline-start: 0; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(-90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }
   ${media.hover} { &:hover > span[data-title] { color: ${({ theme }) => theme.color.accent.blue.text}; } }
   ${desktop} {
     display: grid;
-    grid-template-columns: 1.25rem minmax(10rem, 13.5rem) minmax(0, 1fr) 1rem;
-    gap: 12px;
-    min-block-size: var(--form-control-height, 40px);
-    > span[data-title] { font-size: 0.9375rem; }
+    grid-template-columns: var(--gh-size-5) minmax(var(--gh-size-40), var(--gh-size-54)) minmax(0, 1fr) var(--gh-size-4);
+    gap: var(--gh-spacing-3);
+    min-block-size: var(--form-control-height);
+    > span[data-title] { font-size: var(--gh-font-reading); }
     > small { grid-column: 3; margin: 0; font-size: ${size("body")}; text-align: start; }
     > svg:last-child { grid-column: 4; justify-self: end; }
   }
@@ -131,13 +131,13 @@ export const IconBadge = styled.span<{ $accent: AccentName }>`
   display: inline-grid;
   flex: none;
   place-items: center;
-  inline-size: 1.25rem;
-  block-size: 1.25rem;
+  inline-size: var(--gh-size-5);
+  block-size: var(--gh-size-5);
   color: ${({ theme, $accent }) => theme.color.accent[$accent].solid};
   background: ${({ theme, $accent }) => theme.color.accent[$accent].soft};
   border-radius: ${({ theme }) => theme.radius.small};
   font-size: ${size("secondary")};
-  ${desktop} { inline-size: 1.625rem; block-size: 1.625rem; font-size: 0.9375rem; }
+  ${desktop} { inline-size: var(--gh-size-6_5); block-size: var(--gh-size-6_5); font-size: var(--gh-font-reading); }
 `;
 
 /** The section heading is a disclosure button; extra header controls sit beside it, never inside. */
@@ -160,7 +160,7 @@ export const LinkButton = styled.button`
   display: inline;
   justify-self: start;
   text-align: start;
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   padding: 0;
   color: ${({ theme }) => theme.color.accent.blue.solid};
   background: none;
@@ -169,7 +169,7 @@ export const LinkButton = styled.button`
   font-size: ${size("secondary")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  > svg { margin-inline-start: 4px; font-size: ${size("emphasis")}; vertical-align: -0.15em; }
+  > svg { margin-inline-start: var(--gh-spacing-1); font-size: ${size("emphasis")}; vertical-align: calc(-1 * var(--gh-relativeSize-0_15)); }
   ${media.hover} { &:hover { text-decoration: underline; } }
   ${focusRing}
 `;
@@ -178,8 +178,8 @@ export const Breadcrumb = styled.nav`
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${size("caption")};
-  > ol { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 0; padding: 0; list-style: none; }
-  > ol > li { display: inline-flex; gap: 6px; min-inline-size: 0; }
+  > ol { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5); margin: 0; padding: 0; list-style: none; }
+  > ol > li { display: inline-flex; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
   > ol > li + li::before { content: "/"; color: ${({ theme }) => theme.color.border}; }
   button { padding: 0; color: ${({ theme }) => theme.color.accent.blue.solid}; background: none; border: 0; font: inherit; cursor: pointer; ${focusRing} }
   [aria-current] { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
@@ -200,17 +200,17 @@ export function Crumbs({ items, shallow = false }: { items: readonly { label: st
 export const PanelHeading = styled.h3`
   margin: 0;
   font-size: ${size("emphasis")};
-  line-height: 1.25;
+  line-height: var(--gh-leading-heading);
   outline: none;
   overflow-wrap: anywhere;
   ${scrollClearance}
-  ${desktop} { font-size: 1.0625rem; }
+  ${desktop} { font-size: var(--gh-font-subheading); }
 `;
 /** Focus target for an opened section whose visible title is already the card heading. */
 export const HiddenHeading = styled.h3`
   position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
+  inline-size: var(--gh-size-0_25);
+  block-size: var(--gh-size-0_25);
   margin: 0;
   overflow: hidden;
   clip-path: inset(50%);
@@ -220,9 +220,9 @@ export const HiddenHeading = styled.h3`
 export const Panel = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
-  padding-block-start: 8px;
+  padding-block-start: var(--gh-spacing-2);
   border-block-start: 0;
 `;
 export const PanelBar = styled.div`
@@ -230,24 +230,24 @@ export const PanelBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px 10px;
+  gap: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
   min-inline-size: 0;
 `;
 
 /** Filter choices: real buttons with pressed state, scrolling inside their own row when long. */
 export const Choices = styled.div`
   display: flex;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   max-inline-size: 100%;
-  padding: 2px;
+  padding: var(--gh-spacing-0_5);
   overflow-x: auto;
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
   > button {
     flex: none;
-    min-block-size: var(--form-control-height, 40px);
-    padding-inline: 9px;
+    min-block-size: var(--form-control-height);
+    padding-inline: var(--gh-spacing-2_25);
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surfaceMuted};
     border: 0;
@@ -276,7 +276,7 @@ export const Note = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${size("secondary")};
-  line-height: 1.45;
+  line-height: var(--gh-leading-reading);
   ${desktop} { font-size: ${size("body")}; }
 `;
 export const Strong = styled.strong`font-weight: ${({ theme }) => theme.typography.weight.bold};`;
@@ -294,8 +294,8 @@ const Track = styled.span<{ $accent?: AccentName; $reverse?: boolean }>`
   position: relative;
   display: block;
   flex: 1;
-  min-inline-size: 2rem;
-  block-size: 6px;
+  min-inline-size: var(--gh-size-8);
+  block-size: var(--gh-size-1_5);
   overflow: hidden;
   background: ${({ theme }) => theme.color.surfaceMuted};
   border-radius: ${({ theme }) => theme.radius.small};
@@ -309,7 +309,7 @@ const Track = styled.span<{ $accent?: AccentName; $reverse?: boolean }>`
     border-radius: ${({ theme }) => theme.radius.small};
   }
 `;
-/** A probability or comparison bar; `value` is clamped to 0â€“1. */
+/** A probability or comparison bar; `value` is clamped to 0–1. */
 export function Bar({ value, style, ...rest }: { value: number; $accent?: AccentName; $reverse?: boolean } & HTMLAttributes<HTMLSpanElement>) {
   return <Track {...rest} style={{ ...style, "--track": Math.max(0, Math.min(1, value)) } as CSSProperties} />;
 }
@@ -317,8 +317,8 @@ export function Bar({ value, style, ...rest }: { value: number; $accent?: Accent
 const LetterChip = styled.abbr<{ $letter: FormLetter }>`
   display: inline-grid;
   place-items: center;
-  inline-size: 1.125rem;
-  block-size: 1.125rem;
+  inline-size: var(--gh-size-4_5);
+  block-size: var(--gh-size-4_5);
   color: ${({ theme, $letter }) => $letter === "D" ? theme.color.text : theme.color.onBrand};
   background: ${({ theme, $letter }) => $letter === "W" ? theme.color.accent.emerald.solid : $letter === "L" ? theme.color.accent.red.solid : theme.color.border};
   border-radius: ${({ theme }) => theme.radius.circle};
@@ -327,7 +327,7 @@ const LetterChip = styled.abbr<{ $letter: FormLetter }>`
   text-decoration: none;
   cursor: default;
 `;
-const Letters = styled.span`display: inline-flex; flex-wrap: wrap; gap: 3px;`;
+const Letters = styled.span`display: inline-flex; flex-wrap: wrap; gap: var(--gh-spacing-0_75);`;
 /** W/D/L letters, oldest first, with full words for assistive technology. */
 export function FormLetters({ letters, label }: { letters: readonly FormLetter[]; label: string }) {
   const { messages } = useStableDetails();
@@ -339,9 +339,9 @@ export function FormLetters({ letters, label }: { letters: readonly FormLetter[]
 
 const MiniBars = styled.span`
   display: inline-flex;
-  gap: 2px;
-  vertical-align: -1px;
-  > i { inline-size: 6px; block-size: 11px; background: ${({ theme }) => theme.color.border}; }
+  gap: var(--gh-spacing-0_5);
+  vertical-align: calc(-1 * var(--gh-size-0_25));
+  > i { inline-size: var(--gh-size-1_5); block-size: var(--gh-size-2_75); background: ${({ theme }) => theme.color.border}; }
   > i[data-letter="W"] { background: ${({ theme }) => theme.color.accent.emerald.solid}; }
   > i[data-letter="L"] { background: ${({ theme }) => theme.color.accent.red.solid}; }
 `;
@@ -357,20 +357,20 @@ export function MiniForm({ letters, label }: { letters: readonly FormLetter[]; l
 const StandingMark = styled.span<{ $standing: LiveStanding }>`
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gh-spacing-0_75);
   color: ${({ theme, $standing }) => theme.color.outcome[$standing === "on-track" ? "correct" : "pending"].text};
   font-size: ${size("caption")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
-  > svg { flex: none; font-size: 0.875rem; }
+  > svg { flex: none; font-size: var(--gh-font-emphasis); }
   &[data-compact] {
     display: inline-grid;
     place-items: center;
-    inline-size: 1.125rem;
-    block-size: 1.125rem;
+    inline-size: var(--gh-size-4_5);
+    block-size: var(--gh-size-4_5);
     color: ${({ theme, $standing }) => $standing === "on-track" ? theme.color.onBrand : theme.color.outcome.pending.text};
     background: ${({ theme, $standing }) => $standing === "on-track" ? theme.color.outcome.correct.text : theme.color.outcome.pending.background};
-    > svg { font-size: 0.75rem; }
+    > svg { font-size: var(--gh-font-secondary); }
   }
 `;
 /** A live pick as it stands: a check when the current score satisfies it, a clock when it does not yet. */
@@ -414,10 +414,10 @@ export const RowList = styled.ul`
 export const RowButton = styled.button`
   display: grid;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   inline-size: 100%;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 4px 4px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1) var(--gh-spacing-1);
   color: ${({ theme }) => theme.color.text};
   background: none;
   border: 0;
@@ -438,14 +438,14 @@ export const Pill = styled.span<{ $accent?: AccentName; $solid?: boolean }>`
   align-items: center;
   justify-self: start;
   max-inline-size: 100%;
-  padding: 1px 7px;
+  padding: var(--gh-spacing-0_25) var(--gh-spacing-1_75);
   overflow: hidden;
   color: ${({ theme, $accent = "blue", $solid }) => $solid ? theme.color.onBrand : theme.color.accent[$accent].text};
   background: ${({ theme, $accent = "blue", $solid }) => $solid ? theme.color.accent[$accent].solid : theme.color.accent[$accent].soft};
   border-radius: ${({ theme }) => theme.radius.small};
   font-size: ${size("caption")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.5;
+  line-height: var(--gh-leading-normal);
   white-space: nowrap;
   text-overflow: ellipsis;
   ${desktop} { font-size: ${size("secondary")}; }
@@ -453,7 +453,7 @@ export const Pill = styled.span<{ $accent?: AccentName; $solid?: boolean }>`
 
 const factColumns = css`
   grid-template-columns: fit-content(40%) minmax(0, 1fr);
-  gap: 4px 12px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-3);
   > dt { font-size: inherit; }
   > dd { margin: 0; }
 `;
@@ -462,13 +462,13 @@ const factColumns = css`
 export const Facts = styled.dl`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0 12px;
+  gap: 0 var(--gh-spacing-3);
   margin: 0;
   font-size: ${size("secondary")};
   > dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
-  > dd { margin: 0 0 4px; min-inline-size: 0; overflow-wrap: anywhere; }
-  ${media.belowDesktop} { @container details-card (min-width: 18rem) { ${factColumns} } }
-  @container details-card (min-width: 20rem) { ${factColumns} }
+  > dd { margin: 0 0 var(--gh-spacing-1); min-inline-size: 0; overflow-wrap: anywhere; }
+  ${media.belowDesktop} { @container details-card (min-width: ${({ theme }) => theme.viewport[18]}) { ${factColumns} } }
+  @container details-card (min-width: ${({ theme }) => theme.viewport[20]}) { ${factColumns} }
   ${desktop} { font-size: ${size("body")}; }
 `;
 

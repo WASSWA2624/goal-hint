@@ -16,33 +16,33 @@ import { filledField } from "@/components/ui/filled-surfaces";
  */
 export const FormStack = styled.div`
   display: grid;
-  gap: 14px;
+  gap: var(--gh-spacing-3_5);
   min-inline-size: 0;
 `;
 export const FieldRow = styled.div`
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--gh-spacing-3_5);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--gh-size-48)), 1fr));
 
   ${controlRow}
 `;
 export const adminControl = css`
   inline-size: 100%;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 8px 10px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filledField}
-  font-size: 1rem;
-  ${media.desktop} { min-block-size: var(--form-control-height, 40px); padding-block: 6px; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  &:disabled { cursor: not-allowed; opacity: 0.6; }
+  font-size: var(--gh-font-section);
+  ${media.desktop} { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1_5); }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
+  &:disabled { cursor: not-allowed; opacity: var(--gh-opacity-60); }
 `;
 export const Hint = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  font-weight: normal;
+  font-weight: var(--gh-weight-body);
   overflow-wrap: anywhere;
 `;
 export const FieldError = styled.span`
@@ -52,8 +52,8 @@ export const FieldError = styled.span`
 `;
 /** The main action takes `$variant="primary"`; without a variant it is the secondary, link-coloured button. */
 export const ActionButton = styled(ToolButton)`
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 14px;
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-3_5);
   ${({ theme, $variant }) => !$variant && css`color: ${theme.color.link};`}
 `;
 export const DangerButton = styled(ActionButton)`
@@ -64,26 +64,26 @@ export const DangerButton = styled(ActionButton)`
 export const ButtonRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   > * { flex: 1 1 auto; }
 `;
 /** A confirmation checkbox with its sentence: the whole row is the target (44 px on phones, 36 px from desktop up). */
 export const CheckField = styled.label`
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  min-block-size: var(--form-control-height, 40px);
-  padding-block: 11px;
+  gap: var(--gh-spacing-2_5);
+  min-block-size: var(--form-control-height);
+  padding-block: var(--gh-spacing-2_75);
   font-size: ${({ theme }) => theme.typography.scale.body};
-  font-weight: normal;
-  line-height: 1.5;
+  font-weight: var(--gh-weight-body);
+  line-height: var(--gh-leading-normal);
   cursor: pointer;
-  input { flex: none; inline-size: 20px; block-size: 20px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
-  ${media.desktop} { min-block-size: var(--form-control-height, 40px); padding-block: 7px; input { inline-size: 18px; block-size: 18px; margin-block-start: 1px; } }
+  input { flex: none; inline-size: var(--gh-size-5); block-size: var(--gh-size-5); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
+  ${media.desktop} { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1_75); input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); margin-block-start: var(--gh-spacing-0_25); } }
 `;
 export const Badge = styled.span<{ $tone?: "good" | "muted" | "warning" }>`
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--gh-spacing-0_5) var(--gh-spacing-2);
   border-radius: ${({ theme }) => theme.radius.small};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -94,9 +94,9 @@ export const Badge = styled.span<{ $tone?: "good" | "muted" | "warning" }>`
 `;
 export const Requirements = styled.ul`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   margin: 0;
-  padding-inline-start: 20px;
+  padding-inline-start: var(--gh-spacing-5);
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;

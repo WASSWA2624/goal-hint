@@ -15,49 +15,49 @@ import { DeskHead, Panel, PanelBody, PanelHead, StatGrid } from "@/components/ad
 
 const Frame = styled.div`
   min-inline-size: 0;
-  ${media.desktop} { display: grid; grid-template-columns: 232px minmax(0, 1fr); align-items: stretch; }
+  ${media.desktop} { display: grid; grid-template-columns: var(--gh-size-58) minmax(0, 1fr); align-items: stretch; }
 `;
 const Sidebar = styled.aside`
   display: none;
   ${media.desktop} {
-    display: flex; flex-direction: column; gap: 6px; align-self: start; position: sticky;
-    inset-block-start: var(--app-header-height, 3rem); min-block-size: calc(100dvh - var(--app-header-height, 3rem));
-    max-block-size: calc(100dvh - var(--app-header-height, 3rem)); overflow-y: auto;
-    padding: 8px 10px; background: ${({ theme }) => theme.color.surface}; border-inline-end: 0;
+    display: flex; flex-direction: column; gap: var(--gh-spacing-1_5); align-self: start; position: sticky;
+    inset-block-start: var(--app-header-height, var(--gh-size-12)); min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)));
+    max-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); overflow-y: auto;
+    padding: var(--gh-spacing-2) var(--gh-spacing-2_5); background: ${({ theme }) => theme.color.surface}; border-inline-end: 0;
   }
-  > h2 { display: flex; align-items: center; min-block-size: 32px; margin: 0; padding-inline: 10px;
+  > h2 { display: flex; align-items: center; min-block-size: var(--gh-size-8); margin: 0; padding-inline: var(--gh-spacing-2_5);
     color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption};
-    font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: .08em; text-transform: uppercase; }
+    font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: var(--gh-tracking-uppercase); text-transform: uppercase; }
 `;
 const Links = styled.ul`
-  display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; min-inline-size: 0;
+  display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; min-inline-size: 0;
 `;
 const SidebarFoot = styled.div`
-  display: grid; gap: 8px; margin-block-start: auto; padding: 16px 10px 0;
+  display: grid; gap: var(--gh-spacing-2); margin-block-start: auto; padding: var(--gh-spacing-4) var(--gh-spacing-2_5) 0;
   border-block-start: 0;
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; overflow-wrap: anywhere; }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); overflow-wrap: anywhere; }
 `;
 const LogOut = styled(MemberSignOut)`
-  && { display: inline-flex; align-items: center; justify-content: start; gap: 10px; min-block-size: var(--form-control-height, 40px);
-    border: 0; padding: 0; background: none; color: ${({ theme }) => theme.color.text}; font-size: 0.875rem; }
+  && { display: inline-flex; align-items: center; justify-content: start; gap: var(--gh-spacing-2_5); min-block-size: var(--form-control-height);
+    border: 0; padding: 0; background: none; color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-emphasis); }
 `;
 const SectionMenu = styled.details`
-  position: relative; z-index: 15; background: ${({ theme }) => theme.color.surface};
+  position: relative; z-index: var(--gh-layer-toolbar); background: ${({ theme }) => theme.color.surface};
   border-block-end: 0;
   ${media.desktop} { display: none; }
-  > summary { display: flex; align-items: center; gap: 10px; min-block-size: var(--form-control-height, 40px); padding-inline: 16px; list-style: none; cursor: pointer;
+  > summary { display: flex; align-items: center; gap: var(--gh-spacing-2_5); min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-4); list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > svg:last-child { margin-inline-start: auto; }
   }
-  nav { position: absolute; inset: 100% 0 auto; padding: 10px; background: ${({ theme }) => theme.color.surface};
-    max-block-size: calc(100dvh - var(--app-header-height, 3rem) - 48px - var(--app-mobile-tab-height, 3rem) - 16px); overflow-y: auto;
+  nav { position: absolute; inset: 100% 0 auto; padding: var(--gh-spacing-2_5); background: ${({ theme }) => theme.color.surface};
+    max-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--gh-size-12) - var(--app-mobile-tab-height, var(--gh-size-12)) - var(--gh-size-4)); overflow-y: auto;
     border-block-end: 0; box-shadow: ${({ theme }) => theme.shadow.popover}; }
 `;
 const Content = styled.article`
   min-inline-size: 0; padding: ${({ theme }) => `${theme.space.md} ${theme.space.md} ${theme.space.lg}`}; display: grid; align-content: start; gap: ${({ theme }) => theme.space.md}; overflow-wrap: anywhere;
   font-family: ${({ theme }) => theme.typography.family}; font-size: ${({ theme }) => theme.typography.scale.body};
   line-height: ${({ theme }) => theme.typography.lineHeight.body};
-  ${media.desktop} { padding: ${({ theme }) => `${theme.space.lg} 0 ${theme.space.xl}`}; min-block-size: calc(100dvh - var(--app-header-height, 3rem)); }
+  ${media.desktop} { padding: ${({ theme }) => `${theme.space.lg} 0 ${theme.space.xl}`}; min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); }
   h1 { margin: 0; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   p { margin: 0; }
 `;
@@ -66,27 +66,27 @@ export const AccountPageHead = styled(DeskHead)`
 `;
 const Body = styled(PanelBody)`
   h2 { margin: 0; }
-  form { max-inline-size: 38rem; inline-size: 100%; }
+  form { max-inline-size: var(--gh-size-152); inline-size: 100%; }
   [data-account-notifications] { display: flex; border: 0; padding: 0; }
   [data-account-notifications] strong { font-size: ${({ theme }) => theme.typography.scale.body}; }
 `;
 export function AccountPanel({ title, actions, narrow = false, children, ...props }: Omit<ComponentProps<typeof Panel>, "title"> & { title: ReactNode; actions?: ReactNode; narrow?: boolean }) {
-  return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "42rem", ...props.style } } : {})}><PanelHead><h2>{title}</h2>{actions}</PanelHead><Body>{children}</Body></Panel>;
+  return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "var(--gh-size-168)", ...props.style } } : {})}><PanelHead><h2>{title}</h2>{actions}</PanelHead><Body>{children}</Body></Panel>;
 }
 export const AccountFacts = styled(StatGrid)`
-  > div { padding: 8px 12px; }
+  > div { padding: var(--gh-spacing-2) var(--gh-spacing-3); }
   ${media.belowDesktop} { > div:last-child:nth-child(odd) { grid-column: 1 / -1; } }
   dd { font-size: ${({ theme }) => theme.typography.scale.emphasis}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   ${media.desktop} { dd { font-size: ${({ theme }) => theme.typography.scale.emphasis}; } }
 `;
 export const AccountStatus = styled.span<{ $active: boolean }>`
-  padding: 2px 7px; border-radius: ${({ theme }) => theme.radius.small};
+  padding: var(--gh-spacing-0_5) var(--gh-spacing-1_75); border-radius: ${({ theme }) => theme.radius.small};
   font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.bold};
   color: ${({ theme, $active }) => $active ? theme.color.outcome.correct.text : theme.color.mutedText};
   background: ${({ theme, $active }) => $active ? theme.color.outcome.correct.background : theme.color.surfaceMuted};
 `;
 export const AccountSectionActions = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2) var(--gh-spacing-3);
   > button { width: auto; }
 `;
 

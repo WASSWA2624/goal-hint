@@ -34,9 +34,9 @@ const Frame = styled.div`
 `;
 const Body = styled.div`
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-block-size: 0;
-  padding: 8px 14px 10px;
+  padding: var(--gh-spacing-2) var(--gh-spacing-3_5) var(--gh-spacing-2_5);
   overflow-y: auto;
   overscroll-behavior: contain;
 `;
@@ -44,24 +44,24 @@ const MonthBar = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 4px;
-  > h3 { margin: 0; font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  gap: var(--gh-spacing-1);
+  > h3 { margin: 0; font-size: var(--gh-font-reading); font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
 `;
 const BarButton = styled.button`
   display: inline-grid;
   place-items: center;
-  min-inline-size: 2.5rem;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 8px;
+  min-inline-size: var(--gh-size-10);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  > svg { font-size: 1.125rem; }
+  > svg { font-size: var(--gh-font-title); }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   ${focusRing}
 `;
@@ -69,7 +69,7 @@ const Weekdays = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.6875rem;
+  font-size: var(--gh-font-caption);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-align: center;
 `;
@@ -77,18 +77,18 @@ const Weekdays = styled.div`
 const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  row-gap: 2px;
+  row-gap: var(--gh-spacing-0_5);
 `;
 const DayButton = styled.button`
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: transparent;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--gh-font-emphasis);
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -105,30 +105,30 @@ const DayButton = styled.button`
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     box-shadow: none;
   }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
 `;
 const Summary = styled.p`
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.4;
-  > small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  line-height: var(--gh-leading-compact);
+  > small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Footer = styled.div`
   display: flex;
   flex: none;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: var(--gh-spacing-2);
+  padding: var(--gh-spacing-2) var(--gh-spacing-3_5);
   border-block-start: 0;
   > button {
-    min-block-size: var(--form-control-height, 40px);
-    padding-inline: 12px;
+    min-block-size: var(--form-control-height);
+    padding-inline: var(--gh-spacing-3);
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     font: inherit;
-    font-size: 0.8125rem;
+    font-size: var(--gh-font-body);
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     cursor: pointer;
     ${focusRing}

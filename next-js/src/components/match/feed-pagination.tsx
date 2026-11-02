@@ -16,20 +16,20 @@ const Bar = styled.div`
   ${desktopContentPadding()}
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   margin-block-start: ${({ theme }) => theme.space.sm};
-  padding-block-start: 12px;
+  padding-block-start: var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.page};
-  border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+  border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
   ${desktop} {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px 16px;
+    gap: var(--gh-spacing-2) var(--gh-spacing-4);
   }
-  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; ${desktop} { font-size: 0.875rem; } }
-  > nav { inline-size: 100%; min-inline-size: 0; ${desktop} { flex: 1 1 16rem; inline-size: auto; max-inline-size: 100%; } }
+  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); ${desktop} { font-size: var(--gh-font-emphasis); } }
+  > nav { inline-size: 100%; min-inline-size: 0; ${desktop} { flex: 1 1 var(--gh-size-64); inline-size: auto; max-inline-size: 100%; } }
 `;
 
 /** Numbers navigate; the surrounding arrows only scroll through the sequential number rail. */

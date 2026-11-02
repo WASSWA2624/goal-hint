@@ -15,9 +15,9 @@ const Dialog = styled.dialog`
   position: fixed;
   inset: 0;
   box-sizing: border-box;
-  inline-size: min(30rem, calc(100vw - 24px));
-  max-inline-size: calc(100vw - 24px);
-  max-block-size: calc(100dvh - 24px);
+  inline-size: min(var(--gh-size-120), calc(100vw - var(--gh-size-6)));
+  max-inline-size: calc(100vw - var(--gh-size-6));
+  max-block-size: calc(100dvh - var(--gh-size-6));
   min-inline-size: 0;
   margin: auto;
   padding: 0;
@@ -51,27 +51,27 @@ const Header = styled.header`
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
-  padding: 10px 12px;
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   border-block-end: 0;
 
-  > h2 { margin: 0; font-size: 1rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  [data-enhanced="false"] > & { padding: 9px 12px; border: 0; }
+  > h2 { margin: 0; font-size: var(--gh-font-section); line-height: var(--gh-leading-label); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  [data-enhanced="false"] > & { padding: var(--gh-spacing-2_25) var(--gh-spacing-3); border: 0; }
 `;
 
 const CloseButton = styled(Button)`
   && {
     flex: none;
-    min-inline-size: 2.25rem;
-    min-block-size: var(--form-control-height, 40px);
+    min-inline-size: var(--gh-size-9);
+    min-block-size: var(--form-control-height);
     margin-inline-start: auto;
     padding: 0;
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.mutedText};
-    > svg { font-size: 1.125rem; }
-    @media (pointer: coarse) { min-inline-size: 44px; min-block-size: var(--form-control-height, 40px); }
+    > svg { font-size: var(--gh-font-title); }
+    @media (pointer: coarse) { min-inline-size: var(--gh-size-11); min-block-size: var(--form-control-height); }
   }
   [data-enhanced="false"] & { display: none; }
 `;
@@ -79,7 +79,7 @@ const CloseButton = styled(Button)`
 const Body = styled.div`
   min-inline-size: 0;
   min-block-size: 0;
-  padding: 12px;
+  padding: var(--gh-spacing-3);
   overflow-y: auto;
   overscroll-behavior: contain;
 
@@ -93,8 +93,8 @@ const Actions = styled.footer`
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--gh-spacing-2);
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   border-block-start: 0;
 
   > [data-dialog-reset] { margin-inline-end: auto; flex: none; }
@@ -103,11 +103,11 @@ const Actions = styled.footer`
 
 export const CriteriaDialogButton = styled(Button)`
   && {
-    min-block-size: var(--form-control-height, 40px);
-    padding: 6px 12px;
+    min-block-size: var(--form-control-height);
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-3);
     border-radius: ${({ theme }) => theme.radius.control};
-    font-size: 0.8125rem;
-    line-height: 1.3;
+    font-size: var(--gh-font-body);
+    line-height: var(--gh-leading-label);
   }
 `;
 

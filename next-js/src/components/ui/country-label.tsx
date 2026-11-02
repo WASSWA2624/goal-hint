@@ -6,9 +6,9 @@ import { knownCountryCode, countryShortName } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
 
 const Label = styled.span`
-  display: inline-flex; align-items: center; justify-content: inherit; gap: 4px;
+  display: inline-flex; align-items: center; justify-content: inherit; gap: var(--gh-spacing-1);
   max-inline-size: 100%; vertical-align: middle;
-  > img { flex: none; inline-size: 16px; block-size: 12px; object-fit: contain; }
+  > img { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-3); object-fit: contain; }
   > span { overflow-wrap: anywhere; }
 `;
 

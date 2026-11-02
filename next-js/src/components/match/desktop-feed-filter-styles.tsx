@@ -16,15 +16,15 @@ const fieldControl = css`
   box-sizing: border-box;
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 8px 11px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-2) var(--gh-spacing-2_75);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterControlColors}
   font: inherit;
-  font-size: 0.875rem;
-  line-height: 1.3;
+  font-size: var(--gh-font-emphasis);
+  line-height: var(--gh-leading-label);
   &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
   &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }
@@ -35,11 +35,11 @@ const fieldControl = css`
 /** Toolbar density is independent of the unchanged dialog fields below. */
 const toolbarFieldControl = css`
   ${fieldControl}
-  min-block-size: var(--form-control-height, 40px);
-  padding: 4px 8px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1) var(--gh-spacing-2);
   border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme }) => theme.color.field};
-  font-size: 0.75rem;
+  font-size: var(--gh-font-secondary);
 `;
 
 /** Desktop-only exports keep the existing phone filter components independent. */
@@ -47,10 +47,10 @@ export const Panel = styled.form`
   ${filterPanelColors}
   ${desktopStickyFilters}
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   inline-size: 100%;
   min-inline-size: 0;
-  padding: 8px;
+  padding: var(--gh-spacing-2);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text};
@@ -61,9 +61,9 @@ export const Panel = styled.form`
 
 export const SearchRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(14rem, 1fr) repeat(3, minmax(0, 12rem));
+  grid-template-columns: minmax(var(--gh-size-56), 1fr) repeat(3, minmax(0, var(--gh-size-48)));
   align-items: stretch;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   > * { min-inline-size: 0; }
 
@@ -83,7 +83,7 @@ export const OptionsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
 `;
 
@@ -91,22 +91,22 @@ export const SectionButton = styled.button`
   display: flex;
   align-items: center;
   flex: 0 1 auto;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   max-inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 4px 8px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1) var(--gh-spacing-2);
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filterButtonColors}
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--gh-font-secondary);
   font-weight: ${({ theme }) => theme.typography.weight.medium};
-  line-height: 1.3;
+  line-height: var(--gh-leading-label);
   text-align: start;
   cursor: pointer;
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; }
-  > svg:last-child { font-size: 0.75rem; }
+  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-emphasis); }
+  > svg:last-child { font-size: var(--gh-font-secondary); }
   > [data-section-label] { min-inline-size: 0; }
   &[data-active="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link};  background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover:enabled {  background: ${({ theme }) => theme.color.rowHover}; } }
@@ -119,15 +119,15 @@ export const Count = styled.span`
   flex: none;
   align-items: center;
   justify-content: center;
-  min-inline-size: 16px;
-  min-block-size: 16px;
-  padding: 1px 4px;
+  min-inline-size: var(--gh-size-4);
+  min-block-size: var(--gh-size-4);
+  padding: var(--gh-spacing-0_25) var(--gh-spacing-1);
   border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
-  font-size: 0.6875rem;
+  font-size: var(--gh-font-caption);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1;
+  line-height: var(--gh-leading-solid);
   font-variant-numeric: tabular-nums;
 `;
 
@@ -136,22 +136,22 @@ export const ActionRow = styled.div`
   flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   > [data-picks] {
     display: flex;
     flex: 0 1 auto;
     align-items: center;
-    gap: 6px;
+    gap: var(--gh-spacing-1_5);
     min-inline-size: 0;
-    min-block-size: var(--form-control-height, 40px);
-    font-size: 0.75rem;
+    min-block-size: var(--form-control-height);
+    font-size: var(--gh-font-secondary);
     cursor: pointer;
-    > label { gap: 6px; min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; line-height: 1.3; }
-    input { flex: none; inline-size: 14px; block-size: 14px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
-    @media (pointer: coarse) { &, > label { min-block-size: var(--form-control-height, 40px); } }
+    > label { gap: var(--gh-spacing-1_5); min-block-size: var(--form-control-height); font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); }
+    input { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
+    @media (pointer: coarse) { &, > label { min-block-size: var(--form-control-height); } }
   }
-  > [data-filter-submit-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-inline-start: auto; }
+  > [data-filter-submit-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1); margin-inline-start: auto; }
 `;
 
 export const SortField = styled(FloatingField)`
@@ -168,42 +168,42 @@ export const ActionButton = styled(Button)`
     border: 0;
     &[type="reset"] { background: ${({ theme }) => theme.color.surfaceMuted}; }
     flex: none;
-    gap: 6px;
+    gap: var(--gh-spacing-1_5);
     min-inline-size: 0;
     ${controlBodyHeight}
-    padding: 4px 8px;
+    padding: var(--gh-spacing-1) var(--gh-spacing-2);
     border-radius: ${({ theme }) => theme.radius.control};
-    font-size: 0.75rem;
-    line-height: 1.25;
+    font-size: var(--gh-font-secondary);
+    line-height: var(--gh-leading-heading);
     white-space: nowrap;
-    > svg { flex: none; font-size: 0.875rem; }
+    > svg { flex: none; font-size: var(--gh-font-emphasis); }
   }
 `;
 
 export const DialogContent = styled.div`
   min-inline-size: 0;
   fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
-  fieldset + fieldset { margin-block-start: 15px; padding-block-start: 13px; border-block-start: 0; }
-  legend { margin-block-end: 7px; padding: 0; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  fieldset + fieldset { margin-block-start: var(--gh-spacing-3_75); padding-block-start: var(--gh-spacing-3_25); border-block-start: 0; }
+  legend { margin-block-end: var(--gh-spacing-1_75); padding: 0; font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2_5); }
   [data-input][data-full] { grid-column: 1 / -1; }
-  input[data-option-search] { margin-block-end: 6px; }
-  label[data-choice] { display: flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; cursor: pointer; }
-  input[type="checkbox"] { flex: none; inline-size: 16px; block-size: 16px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
-  [data-options] { max-block-size: 180px; overflow-y: auto; overscroll-behavior: contain; }
-  [data-help] { margin-block-start: 7px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; }
+  input[data-option-search] { margin-block-end: var(--gh-spacing-1_5); }
+  label[data-choice] { display: flex; align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--form-control-height); font-size: var(--gh-font-body); cursor: pointer; }
+  input[type="checkbox"] { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
+  [data-options] { max-block-size: var(--gh-size-45); overflow-y: auto; overscroll-behavior: contain; }
+  [data-help] { margin-block-start: var(--gh-spacing-1_75); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); }
 `;
 
 export const Error = styled.p.attrs({ role: "alert" })`
   margin: 0;
   color: ${({ theme }) => theme.color.outcome.incorrect.text};
-  font-size: 0.8125rem;
-  line-height: 1.4;
+  font-size: var(--gh-font-body);
+  line-height: var(--gh-leading-compact);
 `;
 
 export const Muted = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-compact);
 `;

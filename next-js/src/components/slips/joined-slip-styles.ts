@@ -2,9 +2,9 @@ import { css } from "styled-components";
 
 /** One joined selection stack for compact and desktop slips, without clipping focus or tooltips. */
 export const joinedSlipSelections = css`
-  [data-slip-content] > [data-slip-selections] { gap: 0; padding: 6px; }
+  [data-slip-content] > [data-slip-selections] { gap: 0; padding: var(--gh-spacing-1_5); }
   [data-slip-selections] > [data-slip-selection] + [data-slip-selection] {
-    border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+    border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
   }
   [data-slip-selections] > [data-slip-selection] > [data-fixture-id] {
     border-radius: ${({ theme }) => theme.radius.none};

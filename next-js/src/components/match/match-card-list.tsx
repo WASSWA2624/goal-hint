@@ -16,7 +16,7 @@ export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & {
 const Board = styled.div<{ $indexLength: number }>`
   min-inline-size: 0;
   /* Root-relative tracks stay identical across bold header digits and regular row digits. */
-  ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(1.5rem, calc(${$indexLength} * 0.5rem + 2px));`}
+  ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(var(--gh-size-6), calc(${$indexLength} * var(--gh-size-2) + var(--gh-size-0_5)));`}
   ${media.desktop} {
     ${desktopMatchBaseStyles}
     ${alignedLedgerStyles}
@@ -37,15 +37,15 @@ const List = styled.ul`
 
   > li { display: grid; min-inline-size: 0; }
   > li:has(> article:only-child), > li:has(> [data-desktop-row]:only-child) {
-    border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+    border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
     border-block-start: 0;
     border-radius: ${({ theme }) => theme.radius.none};
     &:first-child {
-      border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+      border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
     }
     > article, > [data-desktop-row] {
       border-radius: inherit;
-      background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.surface};
+      background: ${({ theme }) => theme.color.surface};
       ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
     }
     > article > a, [data-match-analysis-link] { border-radius: inherit; }
@@ -53,7 +53,7 @@ const List = styled.ul`
   ${media.belowDesktop} {
     /* Keep every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
-    > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto 112px; }
+    > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto var(--gh-size-28); }
     > li:has(> article:only-child) { box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
@@ -65,16 +65,16 @@ const List = styled.ul`
 const Divider = styled.li`
   && {
     display: grid;
-    gap: 2px;
-    padding: 10px 2px 2px;
+    gap: var(--gh-spacing-0_5);
+    padding: var(--gh-spacing-2_5) var(--gh-spacing-0_5) var(--gh-spacing-0_5);
     content-visibility: visible;
     contain-intrinsic-block-size: none;
   }
   > h2 { color: ${({ theme }) => theme.color.text}; font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
   ${media.desktop} {
-    && { padding: 10px 16px; background: ${({ theme }) => theme.color.brandSoft}; }
-    > h2 { font-size: 0.9375rem; }
+    && { padding: var(--gh-spacing-2_5) var(--gh-spacing-4); background: ${({ theme }) => theme.color.brandSoft}; }
+    > h2 { font-size: var(--gh-font-reading); }
   }
 `;
 

@@ -44,11 +44,11 @@ export function SubscriberDirectory({ accounts, selectedId, query, plans, loadin
   </DirectoryRoot>;
 }
 
-const DirectoryError = styled.div`display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0; > span { flex: 1 1 12rem; }`;
+const DirectoryError = styled.div`display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; > span { flex: 1 1 var(--gh-size-48); }`;
 const AdminNumber = styled.p`
-  display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px;
+  display: flex; align-items: flex-start; gap: var(--gh-spacing-2); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
   border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
-  > svg { flex: none; margin-block-start: 1px; font-size: 1rem; }
+  > svg { flex: none; margin-block-start: var(--gh-spacing-0_25); font-size: var(--gh-font-section); }
   strong { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;

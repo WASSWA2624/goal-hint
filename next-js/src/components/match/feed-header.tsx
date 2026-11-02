@@ -19,7 +19,7 @@ import { FloatingField } from "@/components/ui/floating-field";
 const desktop = media.desktop;
 const HeaderContent = styled.div`
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   ${media.belowDesktop} { display: contents; }
 `;
@@ -32,12 +32,12 @@ const Row = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 24px;
+  gap: var(--gh-spacing-3) var(--gh-spacing-6);
   ${media.belowDesktop} { display: contents; }
 `;
 const DesktopActions = styled.div`
   display: none;
-  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
+  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2); margin-inline-start: auto; }
 `;
 
 
@@ -64,7 +64,7 @@ const Toolbar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px 8px;
+  gap: var(--gh-spacing-1_5) var(--gh-spacing-2);
   ${media.belowDesktop} {
     display: block;
   }
@@ -73,7 +73,7 @@ const Toolbar = styled.div`
 const FilterToolbar = styled(Toolbar)`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   ${media.belowDesktop} { &:has(> [data-quiet]) { display: none; } }
   ${desktop} {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -84,14 +84,14 @@ const FilterToolbar = styled(Toolbar)`
 const Count = styled.div`
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  > h2 { font-size: 0.75rem; ${desktop} { font-size: 1rem; } }
+  > h2 { font-size: var(--gh-font-secondary); ${desktop} { font-size: var(--gh-font-section); } }
   ${desktop} { flex: 1; justify-content: space-between; white-space: nowrap; }
   ${media.belowDesktop} { > h2 {
     position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
+    inline-size: var(--gh-size-0_25);
+    block-size: var(--gh-size-0_25);
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
@@ -102,23 +102,23 @@ const SortGroup = styled.div`
   flex-wrap: wrap;
   min-inline-size: 0;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   ${desktop} { margin-inline-start: auto; justify-content: flex-end; }
   ${media.belowDesktop} { display: none; }
 
   ${controlRow}
-  > [data-filter-actions] { margin-block-start: 6px; }
+  > [data-filter-actions] { margin-block-start: var(--gh-spacing-1_5); }
 `;
 const ResultCount = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.caption};
-  line-height: 1.2;
+  line-height: var(--gh-leading-control);
   text-align: end;
   font-variant-numeric: tabular-nums;
-  ${desktop} { font-size: 0.875rem; }
+  ${desktop} { font-size: var(--gh-font-emphasis); }
   > [data-phone-count] { display: none; }
   ${media.belowDesktop} {
-    font-size: 0.75rem;
+    font-size: var(--gh-font-secondary);
     > [data-desktop-count] { display: none; }
     > [data-phone-count] { display: inline; }
   }
@@ -157,13 +157,13 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
 /** The mobile count follows the filters and aligns with their right edge. */
 const ResultsBar = styled(Toolbar)`
   ${desktopContentPadding()}
-  ${desktop} { flex-wrap: nowrap; gap: 8px 16px; }
-  ${media.belowDesktop} { display: flex; justify-content: flex-end; padding-inline: 6px; }
+  ${desktop} { flex-wrap: nowrap; gap: var(--gh-spacing-2) var(--gh-spacing-4); }
+  ${media.belowDesktop} { display: flex; justify-content: flex-end; padding-inline: var(--gh-spacing-1_5); }
 `;
 const AvailabilityNote = styled(FeedNote)`
   min-inline-size: 0;
   margin-inline-start: auto;
-  ${desktop} { font-size: 0.8125rem; line-height: 1.3; text-align: end; white-space: nowrap; }
+  ${desktop} { font-size: var(--gh-font-body); line-height: var(--gh-leading-label); text-align: end; white-space: nowrap; }
   ${media.belowDesktop} { flex-basis: 100%; }
 `;
 

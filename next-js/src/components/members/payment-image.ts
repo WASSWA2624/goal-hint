@@ -1,3 +1,5 @@
+import { mediaTokens } from "../../styles/theme-tokens.ts";
+
 /** Browser-only re-encode strips metadata and bounds the upload without an image dependency. */
 export async function preparePaymentImage(file: File): Promise<Blob> {
   if (!file.size || file.size > 25_000_000 || !file.type.startsWith("image/")) throw new Error("Choose an image smaller than 25 MB.");
@@ -17,7 +19,7 @@ export async function preparePaymentImage(file: File): Promise<Blob> {
     canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Your browser cannot prepare this image. Try another browser, or call admin.");
-    const draw = () => { context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(source, 0, 0, canvas.width, canvas.height); };
+    const draw = () => { context.fillStyle = mediaTokens.paper; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(source, 0, 0, canvas.width, canvas.height); };
     const encode = (quality: number) => new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Choose a readable screenshot.")), "image/jpeg", quality));
     draw();
     let output = await encode(0.75);

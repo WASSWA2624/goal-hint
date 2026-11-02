@@ -15,10 +15,10 @@ import { NavigationProgress } from "./navigation-progress";
 const Group = styled.div`
   position: sticky;
   inset-block-start: 0;
-  z-index: 30;
+  z-index: var(--gh-layer-popover);
   display: grid;
   min-inline-size: 0;
-  margin-block-start: -8px;
+  margin-block-start: calc(-1 * var(--gh-spacing-2));
   margin-inline: calc(-1 * ${contentGutter});
   ${media.desktop} { display: none; }
 `;
@@ -35,7 +35,7 @@ const Home = styled(Link)`
   ${compactHeaderBrand}
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
-    outline-offset: 2px;
+    outline-offset: var(--gh-size-0_5);
   }
 `;
 

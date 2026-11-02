@@ -11,46 +11,46 @@ type Option = Readonly<{ value: string; label: string }>;
 const Root = styled.details`
   position: relative; min-inline-size: 0;
   > summary {
-    display: flex; align-items: center; justify-content: space-between; gap: 5px;
-    ${controlBodyHeight} padding: 4px 6px; list-style: none;
+    display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1_25);
+    ${controlBodyHeight} padding: var(--gh-spacing-1) var(--gh-spacing-1_5); list-style: none;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
-    font-size: 0.75rem; cursor: pointer;
+    font-size: var(--gh-font-secondary); cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > span { min-inline-size: 0; overflow-wrap: anywhere; }
     > svg { flex: none; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
   &[data-disabled="true"] > summary { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: default; }
   > fieldset {
-    position: absolute; inset-inline: 0; inset-block-start: calc(100% + 3px); z-index: 35;
-    margin: 0; padding: 4px; min-inline-size: 0; max-block-size: min(20rem, 60dvh); overflow-y: auto;
+    position: absolute; inset-inline: 0; inset-block-start: calc(100% + var(--gh-spacing-0_75)); z-index: var(--gh-layer-picker);
+    margin: 0; padding: var(--gh-spacing-1); min-inline-size: 0; max-block-size: min(var(--gh-size-80), 60dvh); overflow-y: auto;
     border: 0;
     border-radius: ${({ theme }) => theme.radius.overlay};
     background: ${({ theme }) => theme.color.surface}; box-shadow: ${({ theme }) => theme.shadow.popover};
-    > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: var(--form-control-height, 40px); padding: 4px; border-radius: ${({ theme }) => theme.radius.small}; font-size: 0.75rem; cursor: pointer; }
+    > label, > button { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-block-size: var(--form-control-height); padding: var(--gh-spacing-1); border-radius: ${({ theme }) => theme.radius.small}; font-size: var(--gh-font-secondary); cursor: pointer; }
     > button { inline-size: 100%; border: 0; background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text}; }
     > button[aria-pressed="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
-    > p { font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; padding: 4px; }
+    > p { font-size: var(--gh-font-caption); color: ${({ theme }) => theme.color.mutedText}; padding: var(--gh-spacing-1); }
     > label:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; }
-    input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
+    input { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); accent-color: ${({ theme }) => theme.color.brand}; }
   }
 `;
 const InlineChoices = styled.fieldset`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 14px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-0_75) var(--gh-spacing-3_5);
   min-inline-size: 0; margin: 0; padding: 0; border: 0;
   > label {
-    display: inline-flex; align-items: center; gap: 6px; min-block-size: var(--form-control-height, 40px);
-    color: ${({ theme }) => theme.color.text}; font-size: 0.75rem; cursor: pointer;
+    display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); min-block-size: var(--form-control-height);
+    color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-secondary); cursor: pointer;
   }
   input {
-    flex: none; inline-size: 1rem; block-size: 1rem; margin: 0;
+    flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0;
     accent-color: ${({ theme }) => theme.color.brand};
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
   &:disabled > label { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
-  @media (pointer: coarse) { > label { min-block-size: var(--form-control-height, 40px); } }
+  @media (pointer: coarse) { > label { min-block-size: var(--form-control-height); } }
 `;
 const subscribeNever = () => () => {};
 const clientReady = () => true;

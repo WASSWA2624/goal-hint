@@ -27,11 +27,11 @@ import { TouchlineTabs } from "./touchline-tabs";
 const Page = styled.article`
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
   overflow-wrap: anywhere;
   ${desktop} {
-    gap: 12px;
+    gap: var(--gh-spacing-3);
     inline-size: 100%;
     > ${Note} { padding-inline: ${({ theme }) => theme.space.md}; }
   }
@@ -43,13 +43,13 @@ const Page = styled.article`
 const PhoneBar = styled.div`
   position: relative;
   ${compactHeaderRow}
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  margin-block-start: -10px;
+  margin-block-start: calc(-1 * var(--gh-spacing-2_5));
   margin-inline: calc(-1 * ${contentGutter});
   padding-inline: ${contentGutter};
   ${compactHeaderSurface}
-  @media (max-width: 379px) {
+  @media (max-width: ${({ theme }) => theme.viewport[23.6875]}) {
     [data-header-auth="register"] { > svg { display: block; } > span { display: none; } }
   }
   ${desktop} { display: none; }
@@ -57,24 +57,24 @@ const PhoneBar = styled.div`
 const PhoneHome = styled(Link)`
   ${compactHeaderBrand}
   flex: 1 1 0;
-  min-inline-size: min(6rem, 100%);
+  min-inline-size: min(var(--gh-size-24), 100%);
   justify-self: start;
   max-inline-size: 100%;
   img { max-inline-size: 100%; block-size: auto; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: var(--gh-size-0_5); }
 `;
 /** The header accent keeps focus visible on the active bar surface. */
 const barFocus = css`
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: var(--gh-size-0_5); }
 `;
 const RoundLink = styled(Link)`
   display: grid;
   place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: var(--gh-size-11);
+  block-size: var(--gh-size-11);
   color: ${({ theme }) => theme.header.text};
   border-radius: ${({ theme }) => theme.radius.control};
-  font-size: 1.375rem;
+  font-size: var(--gh-font-page);
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}
 `;
@@ -83,7 +83,7 @@ const BackLink = styled(Link)`
   ${desktop} {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--gh-spacing-1);
     justify-self: start;
     padding-inline: ${({ theme }) => theme.space.md};
     color: ${({ theme }) => theme.color.mutedText};

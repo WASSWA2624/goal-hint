@@ -11,16 +11,16 @@ import { media } from "@/styles/theme";
 
 /** Secondary feed notes: 12px on phones and tablets so they never outrank cards and controls. */
 export const FeedNote = styled(MutedText)`
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-compact);
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
 const PicksLabel = styled.label`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  min-block-size: var(--form-control-height, 40px);
+  gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height);
   color: ${({ theme }) => theme.color.text};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   &:has(input:disabled) { color: ${({ theme }) => theme.color.mutedText}; }
@@ -40,8 +40,8 @@ const SummaryList = styled.ul`
   padding: 0;
   list-style: none;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-compact);
   > li {
     display: inline;
     max-inline-size: 100%;
@@ -51,15 +51,15 @@ const SummaryList = styled.ul`
   ${media.desktop} {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    font-size: 0.8125rem;
+    gap: var(--gh-spacing-1);
+    font-size: var(--gh-font-body);
     > li {
       display: block;
-      padding: 2px 6px;
+      padding: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
       border-radius: ${({ theme }) => theme.radius.small};
       background: ${({ theme }) => theme.color.brandSoft};
       border: 0;
-      line-height: 1.4;
+      line-height: var(--gh-leading-compact);
       &:not(:last-child)::after { content: none; }
     }
   }
@@ -67,22 +67,22 @@ const SummaryList = styled.ul`
 const AppliedSummary = styled.div`
   min-inline-size: 0;
   margin: 0;
-  padding-block-start: 6px;
+  padding-block-start: var(--gh-spacing-1_5);
   border-block-start: 0;
   ${media.desktop} { margin: 0; padding: 0; border: 0; }
 `;
 const SummaryLabel = styled.strong`
   display: block;
-  margin-block-end: 2px;
-  font-size: 0.75rem;
+  margin-block-end: var(--gh-spacing-0_5);
+  font-size: var(--gh-font-secondary);
   ${media.desktop} { display: none; }
 `;
 const PendingChanges = styled.p`
   flex: 1 0 100%;
   margin: 0;
   color: ${({ theme }) => theme.color.brand};
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-compact);
   ${media.desktop} { display: none; }
 `;
 

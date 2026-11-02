@@ -11,8 +11,8 @@ export type MarketGlyphKind = MarketFamily | "locked" | "none";
 const Svg = styled.svg<{ $kind: MarketGlyphKind }>`
   display: block;
   flex: none;
-  inline-size: var(--gh-glyph-size, 2rem);
-  block-size: var(--gh-glyph-size, 2rem);
+  inline-size: var(--gh-glyph-size, var(--gh-size-8));
+  block-size: var(--gh-glyph-size, var(--gh-size-8));
   [data-ground] {
     fill: ${({ theme, $kind }) => $kind === "locked" ? theme.color.mutedText : $kind === "none" ? theme.color.surface : theme.color.market[$kind].solid};
     stroke: ${({ theme, $kind }) => $kind === "none" ? theme.color.border : "none"};

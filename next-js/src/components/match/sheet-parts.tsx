@@ -9,12 +9,12 @@ import { dialogSurface } from "@/components/ui/dialog-surfaces";
 /** Phone bottom sheets: the filter editor and the date calendar. Desktop never shows them. */
 const phoneMedia = media.belowDesktop.replace("@media ", "");
 const focusable = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-const sheetIn = keyframes`from { transform: translateY(1.5rem); opacity: 0; }`;
+const sheetIn = keyframes`from { transform: translateY(var(--gh-size-6)); opacity: 0; }`;
 
 export const SheetScrim = styled.div`
   position: fixed;
   inset: 0;
-  z-index: 59;
+  z-index: var(--gh-layer-overlayUnderlay);
   background: ${({ theme }) => theme.color.scrim};
   ${media.desktop} { display: none; }
 `;
@@ -23,17 +23,17 @@ export const sheetFrame = css`
   position: fixed;
   inset-inline: 0;
   inset-block-end: 0;
-  z-index: 60;
+  z-index: var(--gh-layer-overlay);
   flex-direction: column;
-  max-block-size: calc(100dvh - 3rem);
-  max-inline-size: 40rem;
+  max-block-size: calc(100dvh - var(--gh-size-12));
+  max-inline-size: var(--gh-size-160);
   margin-inline: auto;
   padding-block-end: env(safe-area-inset-bottom);
   ${dialogSurface}
   border-block-start: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   outline: none;
-  animation: ${sheetIn} 180ms ease-out;
+  animation: ${sheetIn} var(--gh-duration-deliberate) ease-out;
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 export const SheetHeader = styled.div`
@@ -43,16 +43,16 @@ export const SheetHeader = styled.div`
     flex: none;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 2px 2px 2px 14px;
+    gap: var(--gh-spacing-2);
+    padding: var(--gh-spacing-0_5) var(--gh-spacing-0_5) var(--gh-spacing-0_5) var(--gh-spacing-3_5);
     border-block-end: 0;
-    > h2 { margin: 0; font-size: 1rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.3; }
+    > h2 { margin: 0; font-size: var(--gh-font-section); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-label); }
   }
 `;
 export const SheetClose = styled(IconButton)`
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-  font-size: 1.25rem;
+  inline-size: var(--gh-size-11);
+  block-size: var(--gh-size-11);
+  font-size: var(--gh-font-heading);
 `;
 
 /** Tab and Shift+Tab cycle within an open sheet. */

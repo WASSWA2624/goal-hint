@@ -9,11 +9,11 @@ import { RecordDetails, RecordHead, RecordList, RecordWorkspace, RecordDetailHea
 /** Out of sight but still read: the phone search label, and the h1 while a phone shows one account. */
 export const visuallyHidden = css`
   position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
+  inline-size: var(--gh-size-0_25);
+  block-size: var(--gh-size-0_25);
   min-inline-size: 0;
   min-block-size: 0;
-  margin: -1px;
+  margin: calc(-1 * var(--gh-spacing-0_25));
   padding: 0;
   border: 0;
   overflow: hidden;
@@ -25,14 +25,14 @@ export const visuallyHidden = css`
 export const formSurface = css`
   form, fieldset { min-inline-size: 0; }
   p { overflow-wrap: anywhere; }
-  textarea { min-block-size: 64px; }
+  textarea { min-block-size: var(--gh-size-16); }
   label:has(> input[type="checkbox"]) {
-    display: flex; align-items: flex-start; gap: 10px; min-block-size: var(--form-control-height, 40px); padding-block: 10px;
-    font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: normal; line-height: 1.45; cursor: pointer;
+    display: flex; align-items: flex-start; gap: var(--gh-spacing-2_5); min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-2_5);
+    font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: var(--gh-weight-body); line-height: var(--gh-leading-reading); cursor: pointer;
   }
-  input[type="checkbox"] { inline-size: 18px; block-size: 18px; flex: none; margin: 1px 0 0; accent-color: ${({ theme }) => theme.color.link}; }
+  input[type="checkbox"] { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); flex: none; margin: var(--gh-spacing-0_25) 0 0; accent-color: ${({ theme }) => theme.color.link}; }
   details:not([class]) > summary {
-    min-block-size: var(--form-control-height, 40px); padding-block: 11px; color: ${({ theme }) => theme.color.link};
+    min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-2_75); color: ${({ theme }) => theme.color.link};
     font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
   }
 `;
@@ -59,24 +59,24 @@ export const Workspace = styled(RecordWorkspace)<{ $selected: boolean }>`
 export const BackLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   justify-self: start;
-  min-block-size: var(--form-control-height, 40px);
-  margin-block: -6px -4px;
-  padding-inline-end: 8px;
+  min-block-size: var(--form-control-height);
+  margin-block: calc(-1 * var(--gh-spacing-1_5)) calc(-1 * var(--gh-spacing-1));
+  padding-inline-end: var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.link};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-decoration: none;
-  > svg { flex: none; font-size: 1.125rem; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  > svg { flex: none; font-size: var(--gh-font-title); }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   ${media.desktop} { display: none; }
 `;
 export const EmptyAccount = styled(Panel)`
   display: grid;
   align-content: center;
-  min-block-size: 20rem;
+  min-block-size: var(--gh-size-80);
 
-  h2 { color: ${({ theme }) => theme.color.text}; font-size: 0.9375rem; }
+  h2 { color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-reading); }
   ${media.belowDesktop} { display: none; }
 `;
 /** A drawer that sits in its own panel (Grant access / add subscriber, Delete or erase). */
@@ -88,13 +88,13 @@ export const DrawerPanel = styled(Panel)`
 export const AccountTop = styled(RecordDetailHead)`
   display: flex;
   flex-direction: column;
-  h2 { font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  ${media.belowDesktop} { gap: 8px; padding: 14px; align-items: stretch; h2 { font-size: 1.375rem; } }
+  h2 { font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-heading); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  ${media.belowDesktop} { gap: var(--gh-spacing-2); padding: var(--gh-spacing-3_5); align-items: stretch; h2 { font-size: var(--gh-font-page); } }
   ${media.desktop} { flex-direction: row; justify-content: space-between; }
 `;
-export const Badges = styled.p`display: flex; flex-wrap: wrap; gap: 6px;`;
+export const Badges = styled.p`display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1_5);`;
 export const BlockedNote = styled.p`
-  margin-block-start: 4px;
+  margin-block-start: var(--gh-spacing-1);
   color: ${({ theme }) => theme.color.outcome.pending.text};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -102,23 +102,23 @@ export const BlockedNote = styled.p`
 `;
 export const AccountStats = styled(StatGrid)`
   border-block: 0;
-  ${media.desktop} { > div { padding-inline: 18px; } }
-  @container (max-width: 34rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  ${media.desktop} { > div { padding-inline: var(--gh-spacing-4_5); } }
+  @container (max-width: ${({ theme }) => theme.viewport[34]}) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 /** Grant access first and full width on phones; equal buttons that wrap from desktop up. */
 export const QuickActions = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 14px;
-  > button { inline-size: 100%; min-inline-size: 0; padding-inline: 8px; line-height: 1.25; }
+  gap: var(--gh-spacing-2);
+  padding: var(--gh-spacing-3_5);
+  > button { inline-size: 100%; min-inline-size: 0; padding-inline: var(--gh-spacing-2); line-height: var(--gh-leading-heading); }
   > button:first-child { grid-column: 1 / -1; }
-  > button > svg { flex: none; font-size: 1rem; }
+  > button > svg { flex: none; font-size: var(--gh-font-section); }
   > button[aria-expanded="true"] { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.desktop} {
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-    padding: 14px 18px 16px;
-    > button { min-block-size: var(--form-control-height, 40px); }
+    grid-template-columns: repeat(auto-fill, minmax(var(--gh-size-44), 1fr));
+    padding: var(--gh-spacing-3_5) var(--gh-spacing-4_5) var(--gh-spacing-4);
+    > button { min-block-size: var(--form-control-height); }
     > button:first-child { grid-column: auto; }
   }
 `;
@@ -128,35 +128,35 @@ export const ActionPanel = styled(Panel)`
 `;
 export const ActionBody = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  padding: 14px;
+  padding: var(--gh-spacing-3_5);
   ${formSurface}
-  ${media.desktop} { padding: 14px 16px 16px; }
+  ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4) var(--gh-spacing-4); }
 `;
 export const DetailTabs = styled(Segmented)`
   ${media.desktop} { justify-self: start; }
-  @container (max-width: 30rem) { > button { padding-inline: 8px; } }
+  @container (max-width: ${({ theme }) => theme.viewport[30]}) { > button { padding-inline: var(--gh-spacing-2); } }
 `;
 export const TabBody = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  padding: 14px;
+  padding: var(--gh-spacing-3_5);
   ${formSurface}
-  ${media.desktop} { padding: 14px 16px 16px; }
+  ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4) var(--gh-spacing-4); }
 `;
 /** One record per row: details on the start side, its tools beside them from desktop up and below them on phones. */
 export const RecordRow = styled.li`
   ${rowLayout}
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px 16px;
-  padding-block: 10px;
+  gap: var(--gh-spacing-2) var(--gh-spacing-4);
+  padding-block: var(--gh-spacing-2_5);
   ${formSurface}
-  @container (min-width: 36rem) { grid-template-columns: minmax(0, 1fr) auto; [role="group"] { justify-content: flex-end; } }
+  @container (min-width: ${({ theme }) => theme.viewport[36]}) { grid-template-columns: minmax(0, 1fr) auto; [role="group"] { justify-content: flex-end; } }
   /* The payment reference is the row's only control: 44px to tap on phones without making the row taller. */
   a { color: ${({ theme }) => theme.color.link}; text-decoration: none; }
-  ${media.belowDesktop} { a { display: inline-flex; align-items: center; min-block-size: 44px; margin-block: -12px; } }
+  ${media.belowDesktop} { a { display: inline-flex; align-items: center; min-block-size: var(--gh-size-11); margin-block: calc(-1 * var(--gh-spacing-3)); } }
   ${media.hover} { a:hover { text-decoration: underline; } }
 `;
 export const SpreadRow = styled.div`
@@ -164,7 +164,7 @@ export const SpreadRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 12px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-3);
   min-inline-size: 0;
 `;
 export const History = styled.ul`
@@ -173,10 +173,10 @@ export const History = styled.ul`
   padding: 0;
   list-style: none;
   > li {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-block: 8px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--gh-spacing-3); padding-block: var(--gh-spacing-2);
     border-block-start: 0;
   }
-  > li > span:first-child { display: grid; gap: 2px; min-inline-size: 0; }
+  > li > span:first-child { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; }
   strong, li > span:last-child { font-variant-numeric: tabular-nums; }
   li > span:last-child { white-space: nowrap; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
@@ -184,41 +184,41 @@ export const History = styled.ul`
 export const PlainDrawer = styled.details`
   min-inline-size: 0;
   > summary {
-    display: flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px);
+    display: flex; align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--form-control-height);
     color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; margin-inline-start: auto; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    > svg { flex: none; margin-inline-start: auto; font-size: var(--gh-font-section); color: ${({ theme }) => theme.color.mutedText}; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
   &[open] > summary > svg { transform: rotate(180deg); }
-  > div { display: grid; gap: 12px; min-inline-size: 0; padding-block: 4px; }
+  > div { display: grid; gap: var(--gh-spacing-3); min-inline-size: 0; padding-block: var(--gh-spacing-1); }
   @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
-  ${media.desktop} { > summary { min-block-size: var(--form-control-height, 40px); } }
+  ${media.desktop} { > summary { min-block-size: var(--form-control-height); } }
 `;
 export const Mono = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
-  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  font-family: ${({ theme }) => theme.typography.monoFamily};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   overflow-wrap: anywhere;
 `;
-export const CompactForm = styled.form`display: grid; gap: 12px; min-inline-size: 0; > button { justify-self: start; }`;
+export const CompactForm = styled.form`display: grid; gap: var(--gh-spacing-3); min-inline-size: 0; > button { justify-self: start; }`;
 export const NoteFooter = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 export const MutedText = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.body};
-  line-height: 1.5;
+  line-height: var(--gh-leading-normal);
 `;
 export const SensitiveOptions = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  padding-block-start: 12px;
+  gap: var(--gh-spacing-2) var(--gh-spacing-3);
+  padding-block-start: var(--gh-spacing-3);
   border-block-start: 0;
-  > p { flex: 1 1 14rem; }
+  > p { flex: 1 1 var(--gh-size-56); }
 `;

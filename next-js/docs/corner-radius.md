@@ -64,8 +64,8 @@ Standalone Team stack mobile match cards use `theme.phoneCardFrame.radius`,
 mapped to `control` (4px). Slip selections use the same scale on mobile and
 desktop, with rounded top corners only on the first match and rounded bottom
 corners only on the last. Middle rows have square corners; a single match has
-all four corners rounded. Selection wrappers touch, with a 1px separator in the
-slip background color. The slip perimeter uses the same thin rule. Slip header
+all four corners rounded. Selection wrappers touch, with a 1px separator in
+`theme.phoneCardFrame.separator`. The slip perimeter uses the same thin rule. Slip header
 fills use the outer radius minus `theme.phoneCardFrame.ruleWidth`; analysis
 links inherit their match row's corners so keyboard focus follows the shape.
 Disclosure indicators are pinned 8px below the header's top edge in both states.

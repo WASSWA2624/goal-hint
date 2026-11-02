@@ -7,7 +7,7 @@ import { nativeSelectSurface, nativeTextFieldSurface, textFieldSelector } from "
 export const focusRing = css`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: 2px;
+    outline-offset: var(--gh-size-0_5);
   }
 `;
 
@@ -30,8 +30,8 @@ export const mobileFilterPanel = css`
 export const desktopStickyFilters = css`
   ${media.desktop} {
     position: sticky;
-    inset-block-start: var(--app-header-height, 3rem);
-    z-index: 15;
+    inset-block-start: var(--app-header-height, var(--gh-size-12));
+    z-index: var(--gh-layer-toolbar);
   }
 `;
 

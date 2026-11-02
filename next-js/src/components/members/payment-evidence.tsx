@@ -12,33 +12,33 @@ export type PaymentTarget = Readonly<{ priceUgx: number; durationDays: number | 
 export type ReadingState = ScreenshotProgress | Readonly<{ stage: "finding"; progress: number }>;
 const stages = ["preparing", "reading", "finding"] as const;
 const spin = keyframes`to { transform: rotate(360deg); }`;
-const smallText = css`font-size: 12px; line-height: 18px;`;
+const smallText = css`font-size: var(--gh-font-secondary); line-height: var(--gh-size-4_5);`;
 
 const Panel = styled.div`
-  display: grid; gap: 6px; min-inline-size: 0; padding: 8px 10px;
+  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0; padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
   border: 0; border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
-  progress { inline-size: 100%; block-size: 6px; accent-color: ${({ theme }) => theme.color.brand}; }
+  progress { inline-size: 100%; block-size: var(--gh-size-1_5); accent-color: ${({ theme }) => theme.color.brand}; }
 `;
-const Steps = styled.ol`display: grid; gap: 4px; margin: 0; padding: 0; list-style: none;`;
+const Steps = styled.ol`display: grid; gap: var(--gh-spacing-1); margin: 0; padding: 0; list-style: none;`;
 const Step = styled.li<{ $state: "done" | "active" | "waiting" }>`
-  display: flex; align-items: center; gap: 8px; min-inline-size: 0; ${smallText}
+  display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; ${smallText}
   color: ${({ theme, $state }) => $state === "waiting" ? theme.color.mutedText : theme.color.text};
   font-weight: ${({ theme, $state }) => $state === "active" ? theme.typography.weight.bold : "inherit"};
-  > svg, > i { flex: none; inline-size: 14px; block-size: 14px; }
+  > svg, > i { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); }
   > svg { color: ${({ theme }) => theme.color.brand}; }
 `;
 const Spinner = styled.i`
   border: 0;
-  border-radius: ${({ theme }) => theme.radius.circle}; animation: ${spin} 0.8s linear infinite;
+  border-radius: ${({ theme }) => theme.radius.circle}; animation: ${spin} var(--gh-duration-spin) var(--gh-easing-linear) infinite;
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 const Waiting = styled.i`border: 0; border-radius: ${({ theme }) => theme.radius.circle};`;
-const List = styled.ul`display: grid; gap: 4px; margin: 0; padding: 0; list-style: none;`;
+const List = styled.ul`display: grid; gap: var(--gh-spacing-1); margin: 0; padding: 0; list-style: none;`;
 const Item = styled.li<{ $ok: boolean }>`
-  display: flex; align-items: flex-start; gap: 6px; min-inline-size: 0; ${smallText} overflow-wrap: anywhere;
+  display: flex; align-items: flex-start; gap: var(--gh-spacing-1_5); min-inline-size: 0; ${smallText} overflow-wrap: anywhere;
   color: ${({ theme, $ok }) => $ok ? theme.color.text : theme.color.outcome.incorrect.text};
-  > svg { flex: none; inline-size: 14px; block-size: 14px; margin-block-start: 2px; color: ${({ theme, $ok }) => $ok ? theme.color.brand : "currentColor"}; }
+  > svg { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); margin-block-start: var(--gh-spacing-0_5); color: ${({ theme, $ok }) => $ok ? theme.color.brand : "currentColor"}; }
 `;
 
 /** The three steps of reading a screenshot, with a bar for the current one, so the member sees the work as it happens. */

@@ -64,8 +64,8 @@ export function ResetPasswordForm({ locale, phone, returnTo = null, contact }: {
 }
 
 const TaskForm = styled.div`
-  display: grid; gap: 12px; min-inline-size: 0;
-  input { font-size: 1rem; }
+  display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
+  input { font-size: var(--gh-font-section); }
 `;
 
 /**

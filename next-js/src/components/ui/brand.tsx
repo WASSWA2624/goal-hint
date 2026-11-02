@@ -10,13 +10,13 @@ type BrandVariant = "adaptive" | "primary" | "inverse" | "monochrome" | "monochr
 const LogoSpace = styled.span`
   display: inline-flex;
   flex: none;
-  padding: 12px;
+  padding: var(--gh-spacing-3);
   max-inline-size: 100%;
 `;
 
 const LogoImage = styled.img`
   display: block;
-  inline-size: 176px;
+  inline-size: var(--gh-size-44);
   block-size: auto;
   aspect-ratio: 553 / 128;
 `;
@@ -24,13 +24,13 @@ const LogoImage = styled.img`
 const MarkSpace = styled.span`
   display: inline-flex;
   flex: none;
-  padding: 8px;
+  padding: var(--gh-spacing-2);
 `;
 
 const MarkImage = styled.img`
   display: block;
-  inline-size: 32px;
-  block-size: 32px;
+  inline-size: var(--gh-size-8);
+  block-size: var(--gh-size-8);
 `;
 
 const HeaderImage = styled.img<{ $height: number | undefined }>`
@@ -40,7 +40,7 @@ const HeaderImage = styled.img<{ $height: number | undefined }>`
   inline-size: calc(var(--header-brand-height) * 10490 / 1500);
   block-size: var(--header-brand-height);
   aspect-ratio: 10490 / 1500;
-  @media (max-width: 359px) { --header-brand-height: ${({ $height }) => $height ?? 18}px; }
+  @media (max-width: ${({ theme }) => theme.viewport[22.4375]}) { --header-brand-height: ${({ $height }) => $height ?? 18}px; }
   ${media.desktop} { --header-brand-height: ${({ $height }) => $height ?? 24}px; }
 `;
 
@@ -73,7 +73,7 @@ export function HeaderBrand({ alt = "Goal Hint", height, className }: {
 
 export function BrandLogo({ alt = "Goal Hint", variant = "adaptive" }: BrandImageProps) {
   const theme = useTheme();
-  const resolvedVariant = variant === "adaptive" ? (theme.mode === "dark" ? "inverse" : "primary") : variant;
+  const resolvedVariant = variant === "adaptive" ? theme.brandVariant : variant;
   return (
     <LogoSpace>
       <LogoImage src={resolvedVariant === "inverse" ? inverseLogoSource : `/brand/goal-hint-logo-${resolvedVariant}.svg`}
@@ -85,7 +85,7 @@ export function BrandLogo({ alt = "Goal Hint", variant = "adaptive" }: BrandImag
 /** Lazy, so React does not hoist a preload for this below-the-fold footer mark. */
 export function BrandMark({ alt = "Goal Hint", variant = "adaptive" }: BrandImageProps) {
   const theme = useTheme();
-  const resolvedVariant = variant === "adaptive" ? (theme.mode === "dark" ? "inverse" : "primary") : variant;
+  const resolvedVariant = variant === "adaptive" ? theme.brandVariant : variant;
   return (
     <MarkSpace>
       <MarkImage src={`/brand/goal-hint-mark-${resolvedVariant}.svg`} alt={alt} width={160} height={160}

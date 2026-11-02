@@ -43,16 +43,16 @@ export function FloatingField({ label, children, action, leading, trailing, hint
   </Root>;
 }
 
-const Root = styled.div`display: grid; align-self: start; align-content: start; gap: 5px; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%;`;
+const Root = styled.div`display: grid; align-self: start; align-content: start; gap: var(--gh-spacing-1_25); inline-size: 100%; min-inline-size: 0; max-inline-size: 100%;`;
 const Frame = styled.div`
-  position: relative; min-inline-size: 0; margin-block-start: var(--floating-label-space, 6px);
+  position: relative; min-inline-size: 0; margin-block-start: var(--floating-label-space);
   && > label { ${floatingLabel} }
   &&& > input, &&& > select, &&& > textarea {
     ${floatingControl}
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.field};
-    border: 1px solid transparent;
-    display: block; padding-inline: 10px; border-radius: ${({ theme }) => theme.radius.control};
-    font-family: inherit; font-weight: normal;
+    border: var(--gh-stroke-thin) solid transparent;
+    display: block; padding-inline: var(--gh-spacing-2_5); border-radius: ${({ theme }) => theme.radius.control};
+    font-family: inherit; font-weight: var(--gh-weight-body);
     &:focus-visible { outline: none; }
     &:disabled { cursor: not-allowed; }
     &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
@@ -62,28 +62,28 @@ const Frame = styled.div`
     &, &[aria-invalid="true"] { border-color: transparent; }
   }
   &&& > select[data-feed-status] { border: 0; }
-  &&& > select { ${selectSurface} padding-inline-end: 24px; }
-  &&& > textarea { block-size: auto; min-block-size: 5.5rem; resize: vertical; }
-  &:has(> textarea) > label { inset-block-start: 12px; transform: none; }
+  &&& > select { ${selectSurface} padding-inline-end: var(--gh-spacing-6); }
+  &&& > textarea { block-size: auto; min-block-size: var(--gh-size-22); resize: vertical; }
+  &:has(> textarea) > label { inset-block-start: var(--gh-spacing-3); transform: none; }
   &&:not(:focus-within)[data-floating-filled="false"] > input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]) { color: transparent; }
   > select:has(option:checked[value=""]) { color: transparent; }
   > select option { color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.textField.background}; }
-  &&[data-field-leading="true"] > label { inset-inline-start: 38px; max-inline-size: calc(100% - 48px); }
-  &&[data-field-leading="true"] > input { padding-inline-start: 38px; }
-  &&[data-field-trailing="true"] > input { padding-inline-end: 92px; }
-  > [data-field-leading] { position: absolute; inset-inline-start: 12px; inset-block-start: 50%; transform: translateY(-50%); display: flex; pointer-events: none; color: ${({ theme }) => theme.color.mutedText}; }
-  > [data-field-leading] svg { inline-size: 18px; block-size: 18px; }
-  > [data-field-trailing] { position: absolute; inset-block: 4px; inset-inline-end: 4px; display: flex; align-items: stretch; }
+  &&[data-field-leading="true"] > label { inset-inline-start: var(--gh-spacing-9_5); max-inline-size: calc(100% - var(--gh-size-12)); }
+  &&[data-field-leading="true"] > input { padding-inline-start: var(--gh-spacing-9_5); }
+  &&[data-field-trailing="true"] > input { padding-inline-end: var(--gh-spacing-23); }
+  > [data-field-leading] { position: absolute; inset-inline-start: var(--gh-spacing-3); inset-block-start: 50%; transform: translateY(-50%); display: flex; pointer-events: none; color: ${({ theme }) => theme.color.mutedText}; }
+  > [data-field-leading] svg { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); }
+  > [data-field-trailing] { position: absolute; inset-block: var(--gh-spacing-1); inset-inline-end: var(--gh-spacing-1); display: flex; align-items: stretch; }
   > [data-field-trailing] > * { min-block-size: 0; }
-  &&[data-field-action="true"] > textarea { padding-block-start: 36px; }
-  &[data-field-action="true"] > label { max-inline-size: calc(100% - 110px); }
-  > [data-field-action] { position: absolute; inset-block-start: 3px; inset-inline-end: 3px; display: flex; align-items: center; gap: 4px; }
-  > [data-field-action] button { min-block-size: 30px; padding: 3px 8px; font-size: 13px; }
-  > [data-field-action] svg { inline-size: 16px; block-size: 16px; }
+  &&[data-field-action="true"] > textarea { padding-block-start: var(--gh-spacing-9); }
+  &[data-field-action="true"] > label { max-inline-size: calc(100% - var(--gh-size-27_5)); }
+  > [data-field-action] { position: absolute; inset-block-start: var(--gh-spacing-0_75); inset-inline-end: var(--gh-spacing-0_75); display: flex; align-items: center; gap: var(--gh-spacing-1); }
+  > [data-field-action] button { min-block-size: var(--gh-size-7_5); padding: var(--gh-spacing-0_75) var(--gh-spacing-2); font-size: var(--gh-font-body); }
+  > [data-field-action] svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
   > [data-floating-outline] { ${floatingOutline} }
   ${floatingFieldState}
 `;
 const Message = styled.div`
-  color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: 1.4; overflow-wrap: anywhere;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: var(--gh-leading-compact); overflow-wrap: anywhere;
   &[data-field-error] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
 `;

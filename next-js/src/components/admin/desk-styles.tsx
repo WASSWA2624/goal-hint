@@ -17,11 +17,11 @@ export const monoFont = 'ui-monospace, Consolas, "Courier New", monospace';
 /** Hides text visually but keeps it for screen readers; for styled rules (components can use ui/visually-hidden). */
 export const visuallyHidden = css`
   position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
+  inline-size: var(--gh-size-0_25);
+  block-size: var(--gh-size-0_25);
   min-inline-size: 0;
   min-block-size: 0;
-  margin: -1px;
+  margin: calc(-1 * var(--gh-spacing-0_25));
   padding: 0;
   border: 0;
   overflow: hidden;
@@ -34,17 +34,17 @@ export const DeskHead = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 20px;
+  gap: var(--gh-spacing-2_5) var(--gh-spacing-5);
   min-block-size: ${({ theme }) => theme.control.minHeight};
   min-inline-size: 0;
-  h1 { font-size: 1.375rem; line-height: 1.25; }
-  ${media.desktop} { h1 { font-size: 1.625rem; } }
+  h1 { font-size: var(--gh-font-page); line-height: var(--gh-leading-heading); }
+  ${media.desktop} { h1 { font-size: var(--gh-font-feature); } }
   ${desktopContentPadding()}
 `;
 /** The h1 and its one-line description. */
 export const DeskTitle = styled.div`
   display: grid;
-  gap: 2px;
+  gap: var(--gh-spacing-0_5);
   min-inline-size: 0;
   p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
 `;
@@ -53,7 +53,7 @@ export const DeskHeadEnd = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   margin-inline-start: auto;
 `;
 
@@ -63,22 +63,22 @@ export const DeskHeadEnd = styled.div`
  */
 export const DeskGrid = styled.div<{ $asideFirst?: boolean }>`
   display: grid;
-  gap: 16px;
+  gap: var(--gh-spacing-4);
   align-items: start;
   min-inline-size: 0;
   > * { min-inline-size: 0; }
   ${({ $asideFirst }) => $asideFirst && css`
     ${media.belowDesktop} { > :last-child { order: -1; } }
   `}
-  ${media.desktop} { grid-template-columns: minmax(0, 1fr) min(22rem, max(18rem, 36%)); gap: 20px; }
+  ${media.desktop} { grid-template-columns: minmax(0, 1fr) min(var(--gh-size-88), max(var(--gh-size-72), 36%)); gap: var(--gh-spacing-5); }
 `;
 /** A stack of panels inside one column. */
 export const DeskColumn = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   align-content: start;
   min-inline-size: 0;
-  ${media.desktop} { gap: 16px; }
+  ${media.desktop} { gap: var(--gh-spacing-4); }
 `;
 
 export const Panel = styled.section`
@@ -91,10 +91,10 @@ export const Panel = styled.section`
 /** Panel padding for content that is not a list or a drawer. */
 export const PanelBody = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  padding: 14px;
-  ${media.desktop} { padding: 14px 16px; }
+  padding: var(--gh-spacing-3_5);
+  ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4); }
   ${desktopContentPadding(true)}
 `;
 /** Panel heading row: an h2 (15px) on the start side, a link or a quiet count on the end side. */
@@ -104,11 +104,11 @@ export const PanelHead = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 12px;
-  min-block-size: 48px;
-  padding: 8px 14px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-3);
+  min-block-size: var(--gh-size-12);
+  padding: var(--gh-spacing-2) var(--gh-spacing-3_5);
   border-block-end: 0;
-  h2, h3 { font-size: 0.9375rem; line-height: 1.35; }
+  h2, h3 { font-size: var(--gh-font-reading); line-height: var(--gh-leading-caption); }
   ${desktopContentPadding(true)}
 `;
 /** Small uppercase zone name above a desk zone: PROOF, EXPECTED PAYMENT, DECISION. */
@@ -116,7 +116,7 @@ export const ZoneLabel = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  letter-spacing: 0.08em;
+  letter-spacing: var(--gh-tracking-uppercase);
   text-transform: uppercase;
 `;
 /** One quiet line of facts under a heading (reference · time · status). */
@@ -124,7 +124,7 @@ export const MetaLine = styled.p`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 8px;
+  gap: var(--gh-spacing-0_5) var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
@@ -139,9 +139,9 @@ export const FactList = styled.dl`
     flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
-    gap: 2px 12px;
-    min-block-size: 40px;
-    padding-block: 9px;
+    gap: var(--gh-spacing-0_5) var(--gh-spacing-3);
+    min-block-size: var(--gh-size-10);
+    padding-block: var(--gh-spacing-2_25);
     border-block-end: 0;
   }
   > div:nth-child(even) { background: ${({ theme }) => theme.color.surfaceMuted}; }
@@ -154,13 +154,13 @@ export const FactList = styled.dl`
 export const StatGrid = styled.dl<{ $columns?: 2 | 3 | 4 }>`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   margin: 0;
   background: ${({ theme }) => theme.color.page};
-  > div { display: grid; gap: 2px; align-content: start; min-inline-size: 0; padding: 10px 14px; background: ${({ theme }) => theme.color.surface}; }
+  > div { display: grid; gap: var(--gh-spacing-0_5); align-content: start; min-inline-size: 0; padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5); background: ${({ theme }) => theme.color.surface}; }
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-  dd { margin: 0; font-size: 1.125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  ${media.desktop} { grid-template-columns: repeat(${({ $columns = 2 }) => $columns}, minmax(0, 1fr)); dd { font-size: 1.25rem; } }
+  dd { margin: 0; font-size: var(--gh-font-title); font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  ${media.desktop} { grid-template-columns: repeat(${({ $columns = 2 }) => $columns}, minmax(0, 1fr)); dd { font-size: var(--gh-font-heading); } }
 `;
 
 const segmentSelected = css`
@@ -174,7 +174,7 @@ const segmentSelected = css`
  */
 export const Segmented = styled.div`
   display: flex;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   max-inline-size: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -187,9 +187,9 @@ export const Segmented = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-block-size: var(--form-control-height, 40px);
-    padding: 0 12px;
+    gap: var(--gh-spacing-1_5);
+    min-block-size: var(--form-control-height);
+    padding: 0 var(--gh-spacing-3);
     border: 0;
     border-inline-end: 0;
     border-radius: ${({ theme }) => theme.radius.none};
@@ -201,13 +201,13 @@ export const Segmented = styled.div`
     text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
-    > svg { flex: none; font-size: 1rem; }
+    > svg { flex: none; font-size: var(--gh-font-section); }
   }
   > :last-child { border-inline-end: 0; }
   > [aria-current="page"], > [aria-selected="true"], > [aria-pressed="true"] { ${segmentSelected} }
-  > a:focus-visible, > button:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  > a:focus-visible, > button:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
   ${media.hover} { > a:hover, > button:hover { color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.rowHover}; } }
-  ${media.desktop} { > a, > button { flex: 0 0 auto; min-block-size: var(--form-control-height, 40px); } }
+  ${media.desktop} { > a, > button { flex: 0 0 auto; min-block-size: var(--form-control-height); } }
 `;
 
 /**
@@ -222,35 +222,35 @@ export const Drawer = styled.details<{ $tone?: "danger"; $plain?: boolean }>`
   > summary {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-block-size: var(--form-control-height, 40px);
-    padding: 6px 14px;
+    gap: var(--gh-spacing-2);
+    min-block-size: var(--form-control-height);
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-3_5);
     color: ${({ theme, $tone }) => $tone === "danger" ? theme.color.outcome.incorrect.text : theme.color.link};
     font-size: ${({ theme }) => theme.typography.scale.emphasis};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none;
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; font-size: 1rem; }
+    > svg { flex: none; font-size: var(--gh-font-section); }
     > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
   }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
-  > div { display: grid; gap: 12px; min-inline-size: 0; padding: 2px 14px 14px; }
+  > div { display: grid; gap: var(--gh-spacing-3); min-inline-size: 0; padding: var(--gh-spacing-0_5) var(--gh-spacing-3_5) var(--gh-spacing-3_5); }
   @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
-  ${media.desktop} { > summary { padding-inline: 16px; } > div { padding-inline: 16px; } }
+  ${media.desktop} { > summary { padding-inline: var(--gh-spacing-4); } > div { padding-inline: var(--gh-spacing-4); } }
   ${({ $plain }) => $plain && css`
     &&, &&:last-child { border-block-end: 0; }
     && > summary { padding-inline: 0; }
-    && > div { padding: 4px 0 0; }
-    ${media.desktop} { && > summary { min-block-size: var(--form-control-height, 40px); } }
+    && > div { padding: var(--gh-spacing-1) 0 0; }
+    ${media.desktop} { && > summary { min-block-size: var(--form-control-height); } }
   `}
 `;
 /** A muted note inside a drawer summary ("all 5 clear"). */
 export const DrawerNote = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  font-weight: normal;
+  font-weight: var(--gh-weight-body);
 `;
 
 /** Rows inside a panel, each two lines with an optional end column; links and buttons fill the row. */
@@ -267,10 +267,10 @@ export const rowLayout = css`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 2px 12px;
-  min-block-size: 56px;
-  padding: 8px 14px;
-  ${media.desktop} { padding-inline: 16px; }
+  gap: var(--gh-spacing-0_5) var(--gh-spacing-3);
+  min-block-size: var(--gh-size-14);
+  padding: var(--gh-spacing-2) var(--gh-spacing-3_5);
+  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
 `;
 /** A whole-row link or button: selected rows use the brand tint, never a side stripe. */
 export const rowAction = css`
@@ -285,14 +285,14 @@ export const rowAction = css`
   cursor: pointer;
   &[aria-current="true"], &[aria-current="page"], &[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
 `;
 /** First line of a row: bold title, then inline badges. */
 export const RowTitle = styled.span`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-2);
   min-inline-size: 0;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   font-variant-numeric: tabular-nums;
@@ -309,7 +309,7 @@ export const RowMeta = styled.span`
 export const RowEnd = styled.span`
   display: grid;
   justify-items: end;
-  gap: 2px;
+  gap: var(--gh-spacing-0_5);
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   font-variant-numeric: tabular-nums;
   text-align: end;
@@ -321,22 +321,22 @@ export const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 16px;
+  gap: var(--gh-spacing-2_5) var(--gh-spacing-4);
   min-inline-size: 0;
-  padding: 10px 12px;
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   border-block-end: 0;
-  > :first-child { flex: 1 1 14rem; max-inline-size: 28rem; }
+  > :first-child { flex: 1 1 var(--gh-size-56); max-inline-size: var(--gh-size-112); }
 `;
 
 /** Centred placeholder for an empty side of the desk ("Select an account"). */
 export const EmptyPanel = styled.div`
   display: grid;
   justify-items: center;
-  gap: 6px;
-  padding: 40px 20px;
+  gap: var(--gh-spacing-1_5);
+  padding: var(--gh-spacing-10) var(--gh-spacing-5);
   color: ${({ theme }) => theme.color.mutedText};
   text-align: center;
-  > svg { font-size: 1.5rem; color: ${({ theme }) => theme.color.text}; }
+  > svg { font-size: var(--gh-font-headline); color: ${({ theme }) => theme.color.text}; }
   strong { color: ${({ theme }) => theme.color.text}; }
   p { font-size: ${({ theme }) => theme.typography.scale.secondary}; }
 `;
@@ -348,11 +348,11 @@ export const EmptyPanel = styled.div`
 export const StickyActions = styled.div`
   position: sticky;
   inset-block-end: 0;
-  z-index: 4;
+  z-index: var(--gh-layer-selected);
   display: flex;
-  gap: 8px;
-  margin-inline: -16px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  gap: var(--gh-spacing-2);
+  margin-inline: calc(-1 * var(--gh-spacing-4));
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-4) calc(var(--gh-spacing-2_5) + env(safe-area-inset-bottom));
   background: ${({ theme }) => theme.color.page};
   border-block-start: 0;
   > * { flex: 1 1 0; }
@@ -363,9 +363,9 @@ export const StickyActions = styled.div`
 export const TextAction = styled.button<{ $tone?: "danger" }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 0 4px;
+  gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height);
+  padding: 0 var(--gh-spacing-1);
   border: 0;
   color: ${({ theme, $tone }) => $tone === "danger" ? theme.color.outcome.incorrect.text : theme.color.link};
   background: none;
@@ -374,9 +374,9 @@ export const TextAction = styled.button<{ $tone?: "danger" }>`
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  > svg { flex: none; font-size: 1rem; }
-  &:disabled { cursor: not-allowed; opacity: 0.55; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
+  &:disabled { cursor: not-allowed; opacity: var(--gh-opacity-55); }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   ${media.hover} { &:hover:not(:disabled) { text-decoration: underline; } }
 `;
 
@@ -403,20 +403,20 @@ const ResponsiveTitle = styled.h2`
   ${media.desktop} {
     display: flex;
     align-items: center;
-    min-block-size: 48px;
-    padding: 8px 16px;
+    min-block-size: var(--gh-size-12);
+    padding: var(--gh-spacing-2) var(--gh-spacing-4);
     border-block-end: 0;
-    font-size: 0.9375rem;
-    line-height: 1.35;
+    font-size: var(--gh-font-reading);
+    line-height: var(--gh-leading-caption);
   }
 `;
 const ResponsiveToggle = styled.button`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   inline-size: 100%;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 0 14px;
+  min-block-size: var(--form-control-height);
+  padding: 0 var(--gh-spacing-3_5);
   border: 0;
   color: ${({ theme }) => theme.color.link};
   background: none;
@@ -425,21 +425,21 @@ const ResponsiveToggle = styled.button`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-align: start;
   cursor: pointer;
-  > svg { flex: none; font-size: 1rem; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
   > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
   ${media.desktop} { display: none; }
 `;
 const ResponsiveBody = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  padding: 14px;
+  padding: var(--gh-spacing-3_5);
   ${media.belowDesktop} {
     border-block-start: 0;
     &[data-open="false"] { display: none; }
   }
-  ${media.desktop} { padding: 14px 16px 16px; }
+  ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4) var(--gh-spacing-4); }
 `;

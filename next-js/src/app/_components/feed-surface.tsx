@@ -38,12 +38,12 @@ const noLeagues: MatchFeedResponse["leagues"] = [];
 /** Compact spacing still separates controls and match cards clearly on phones. */
 const FeedStack = styled(Stack)`
   ${joinedDesktopSections}
-  ${media.belowDesktop} { gap: 8px; }
+  ${media.belowDesktop} { gap: var(--gh-spacing-2); }
 `;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
 const Results = styled(FeedStack)`
-  transition: opacity 150ms ease;
-  &[aria-busy="true"] { opacity: 0.6; }
+  transition: opacity var(--gh-duration-disclosure) var(--gh-easing);
+  &[aria-busy="true"] { opacity: var(--gh-opacity-60); }
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 /** The retained-result label keeps body colour on desktop. */

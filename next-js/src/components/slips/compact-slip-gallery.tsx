@@ -10,66 +10,66 @@ import { compactSlipDesigns, type CompactSlipVariant } from "./compact-slip/desi
 import { compactSlipPreview, compactSlipScenarios, type CompactSlipScenario } from "./compact-slip-preview-data";
 
 const Review = styled.main`
-  min-block-size: 100vh; padding: 28px clamp(12px, 3vw, 48px) 48px;
+  min-block-size: 100vh; padding: var(--gh-spacing-7) clamp(var(--gh-spacing-3), 3vw, var(--gh-spacing-12)) var(--gh-spacing-12);
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.page};
-  font-size: 0.875rem;
-  h1 { font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.2; letter-spacing: -0.04em; }
+  font-size: var(--gh-font-emphasis);
+  h1 { font-size: clamp(var(--gh-font-headline), 4vw, var(--gh-font-displayLarge)); line-height: var(--gh-leading-control); letter-spacing: var(--gh-tracking-tightest); }
   button, select { font: inherit; }
-  button, select, a { outline-offset: 3px; }
-  button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; }
+  button, select, a { outline-offset: var(--gh-size-0_75); }
+  button:focus-visible, select:focus-visible, a:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; }
 `;
 const Intro = styled.header`
-  display: grid; gap: 10px; max-inline-size: 78rem; margin-inline: auto;
-  > p { color: ${({ theme }) => theme.color.mutedText}; max-inline-size: 48rem; line-height: 1.6; }
-  > [data-eyebrow] { font-size: 0.6875rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: ${({ theme }) => theme.color.link}; }
+  display: grid; gap: var(--gh-spacing-2_5); max-inline-size: var(--gh-size-312); margin-inline: auto;
+  > p { color: ${({ theme }) => theme.color.mutedText}; max-inline-size: var(--gh-size-192); line-height: var(--gh-leading-body); }
+  > [data-eyebrow] { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-heavy); letter-spacing: var(--gh-tracking-display); text-transform: uppercase; color: ${({ theme }) => theme.color.link}; }
 `;
 const Toolbar = styled.div`
-  display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 18px 0;
-  > label, > fieldset { display: grid; gap: 5px; min-inline-size: 0; }
-  > label > span, legend { font-size: 0.6875rem; font-weight: 700; color: ${({ theme }) => theme.color.mutedText}; }
+  display: flex; flex-wrap: wrap; align-items: end; gap: var(--gh-spacing-3); padding: var(--gh-spacing-4_5) 0;
+  > label, > fieldset { display: grid; gap: var(--gh-spacing-1_25); min-inline-size: 0; }
+  > label > span, legend { font-size: var(--gh-font-caption); font-weight: var(--gh-weight-bold); color: ${({ theme }) => theme.color.mutedText}; }
   fieldset { border: 0; padding: 0; margin: 0; }
-  legend { margin-block-end: 5px; }
+  legend { margin-block-end: var(--gh-spacing-1_25); }
   fieldset > div { display: flex; }
   button, select {
-    min-block-size: 44px; padding: 8px 10px; border: 1px solid ${({ theme }) => theme.color.border};
+    min-block-size: var(--gh-size-11); padding: var(--gh-spacing-2) var(--gh-spacing-2_5); border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; cursor: pointer;
   }
   button + button { border-inline-start: 0; }
   button[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border-color: ${({ theme }) => theme.color.brand}; }
-  @media (max-width: 28rem) { > label { flex: 1 1 42%; } select { inline-size: 100%; } }
+  @media (max-width: ${({ theme }) => theme.viewport[28]}) { > label { flex: 1 1 42%; } select { inline-size: 100%; } }
 `;
 const Gallery = styled.div<{ $focused: boolean }>`
-  display: grid; grid-template-columns: ${({ $focused }) => $focused ? "minmax(0, 1fr)" : "repeat(auto-fit, minmax(min(100%, 23rem), 1fr))"};
-  gap: 24px; max-inline-size: ${({ $focused }) => $focused ? "40rem" : "100rem"}; margin: 14px auto 0; align-items: start;
+  display: grid; grid-template-columns: ${({ $focused }) => $focused ? "minmax(0, 1fr)" : "repeat(auto-fit, minmax(min(100%, var(--gh-size-92)), 1fr))"};
+  gap: var(--gh-spacing-6); max-inline-size: ${({ $focused }) => $focused ? "var(--gh-size-160)" : "var(--gh-size-400)"}; margin: var(--gh-spacing-3_5) auto 0; align-items: start;
 `;
 const Option = styled.section`
-  min-inline-size: 0; scroll-margin-block-start: 12px;
-  > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; margin-block-end: 12px; }
-  h2 { font-size: 1rem; line-height: 1.4; font-weight: 800; }
-  header p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.5; margin-block-start: 3px; }
-  [data-option-number] { font-size: 1.125rem; color: ${({ theme }) => theme.color.link}; font-weight: 800; line-height: 1.3; }
-  header button { min-inline-size: 44px; min-block-size: 44px; border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.link}; padding: 6px 9px; font-size: 0.75rem; cursor: pointer; }
+  min-inline-size: 0; scroll-margin-block-start: var(--gh-spacing-3);
+  > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--gh-spacing-2_5); align-items: start; margin-block-end: var(--gh-spacing-3); }
+  h2 { font-size: var(--gh-font-section); line-height: var(--gh-leading-compact); font-weight: var(--gh-weight-heavy); }
+  header p { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-normal); margin-block-start: var(--gh-spacing-0_75); }
+  [data-option-number] { font-size: var(--gh-font-title); color: ${({ theme }) => theme.color.link}; font-weight: var(--gh-weight-heavy); line-height: var(--gh-leading-label); }
+  header button { min-inline-size: var(--gh-size-11); min-block-size: var(--gh-size-11); border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.link}; padding: var(--gh-spacing-1_5) var(--gh-spacing-2_25); font-size: var(--gh-font-secondary); cursor: pointer; }
 `;
 const Phone = styled.div<{ $width: number }>`
   inline-size: 100%; max-inline-size: ${({ $width }) => $width}px; margin-inline: auto;
-  border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surfaceMuted};
+  border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surfaceMuted};
   container-type: inline-size;
 `;
 const Context = styled.div`
-  padding: 10px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: var(--gh-spacing-2_5); border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2);
   background: ${({ theme }) => theme.color.surface};
-  > strong { font-size: 0.8125rem; }
-  > span { font-size: 0.625rem; color: ${({ theme }) => theme.color.mutedText}; text-transform: uppercase; letter-spacing: 0.04em; }
+  > strong { font-size: var(--gh-font-body); }
+  > span { font-size: var(--gh-font-micro); color: ${({ theme }) => theme.color.mutedText}; text-transform: uppercase; letter-spacing: var(--gh-tracking-wider); }
 `;
 const Samples = styled.div`
-  display: grid; gap: 8px; padding: 8px;
-  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
-  > p:not(:first-child) { margin-block-start: 6px; }
+  display: grid; gap: var(--gh-spacing-2); padding: var(--gh-spacing-2);
+  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); font-weight: var(--gh-weight-bold); text-transform: uppercase; letter-spacing: var(--gh-tracking-uppercase); }
+  > p:not(:first-child) { margin-block-start: var(--gh-spacing-1_5); }
 `;
 const Footer = styled.p`
-  max-inline-size: 78rem; margin: 28px auto 0; padding-block-start: 16px; border-block-start: 1px solid ${({ theme }) => theme.color.border};
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.7;
+  max-inline-size: var(--gh-size-312); margin: var(--gh-spacing-7) auto 0; padding-block-start: var(--gh-spacing-4); border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-prose);
   a { color: ${({ theme }) => theme.color.link}; }
 `;
 

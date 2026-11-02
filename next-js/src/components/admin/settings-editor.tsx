@@ -1,5 +1,7 @@
 "use client";
 
+import { media } from "@/styles/theme";
+
 import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -157,7 +159,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   }, [section, armed, busy]);
 
   useEffect(() => {
-    const desktop = window.matchMedia("(min-width: 64rem)");
+    const desktop = window.matchMedia(media.desktop.replace("@media ", ""));
     const updateViewport = (event: MediaQueryListEvent) => {
       if (!event.matches) setSection(current => current === "messages" ? "payments" : current);
     };

@@ -14,8 +14,8 @@ import { formatSlipPublicationDate } from "./slip-format";
 export type SlipHeaderPublication = { publicationDay?: ReportingDate; publishedAt?: number };
 
 const PublicationTime = styled.time`
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body};
-  line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.body};
+  line-height: var(--gh-leading-label); white-space: nowrap; font-variant-numeric: tabular-nums;
   [data-slip-date-layout="desktop"] { display: none; }
   ${media.desktop} {
     [data-slip-date-layout="mobile"] { display: none; }
@@ -45,7 +45,7 @@ export function SlipHeaderDate({ publicationDay, publishedAt, locale }: SlipHead
 }
 
 const ProgressDot = styled(LiveDot)`
-  margin-inline-end: 5px;
+  margin-inline-end: var(--gh-spacing-1_25);
 `;
 
 const StatusBadge = styled(BaseStatusBadge)`

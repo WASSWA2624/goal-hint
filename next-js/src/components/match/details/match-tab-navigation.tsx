@@ -17,7 +17,7 @@ const tones = { stats: "blue", markets: "orange", lineups: "emerald", form: "vio
   standings: "blue", players: "violet", news: "teal", venue: "emerald", referee: "amber", history: "blue" } as const;
 const Bar = styled.div`
   position: sticky; inset-block-start: calc(var(--review-height, 0px) + var(--app-header-height, ${({ theme }) => theme.header.desktopHeight}));
-  z-index: 10; display: flex; align-items: stretch; min-inline-size: 0;
+  z-index: var(--gh-layer-sticky); display: flex; align-items: stretch; min-inline-size: 0;
   background: ${({ theme }) => theme.color.surface}; border-block-end: 0;
   ${media.belowDesktop} { inset-block-start: var(--review-height, 0px); }
 `;
@@ -27,34 +27,34 @@ const Strip = styled.div`
   ${media.desktop} { overflow: hidden; }
 `;
 const Tab = styled.button`
-  display: inline-flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: 6px;
-  min-block-size: var(--form-control-height, 40px); padding: 9px 10px; white-space: nowrap;
+  display: inline-flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height); padding: var(--gh-spacing-2_25) var(--gh-spacing-2_5); white-space: nowrap;
   background: transparent; color: ${({ theme }) => theme.color.mutedText}; border: 0; border-block-end: 0;
-  border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: .75rem; line-height: 1.4; cursor: pointer;
-  > svg { flex: none; inline-size: 16px; block-size: 16px; }
-  > svg[data-lock] { inline-size: 11px; block-size: 11px; }
-  > [data-tab-icon] { flex: none; inline-size: 22px; block-size: 22px; font-size: 14px; }
-  &[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.brand};  font-weight: 800; }
+  border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); cursor: pointer;
+  > svg { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
+  > svg[data-lock] { inline-size: var(--gh-size-2_75); block-size: var(--gh-size-2_75); }
+  > [data-tab-icon] { flex: none; inline-size: var(--gh-size-5_5); block-size: var(--gh-size-5_5); font-size: var(--gh-font-emphasis); }
+  &[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.brand};  font-weight: var(--gh-weight-heavy); }
   &:hover { background: ${({ theme }) => theme.color.brandSoft}; }
   ${focusRing}
-  ${media.desktop} { font-size: .8125rem; font-weight: 600; padding-inline: 7px; gap: 5px; }
+  ${media.desktop} { font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold); padding-inline: var(--gh-spacing-1_75); gap: var(--gh-spacing-1_25); }
 `;
 const ScrollButton = styled.button`
-  display: grid; flex: none; place-items: center; inline-size: 30px; min-block-size: var(--form-control-height, 40px); padding: 0;
+  display: grid; flex: none; place-items: center; inline-size: var(--gh-size-7_5); min-block-size: var(--form-control-height); padding: 0;
   background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text}; border: 0; cursor: pointer;
-  > svg { inline-size: 16px; block-size: 16px; }
-  &:disabled { opacity: .3; cursor: default; }
+  > svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
+  &:disabled { opacity: var(--gh-opacity-30); cursor: default; }
   ${focusRing}
   ${media.desktop} { display: none; }
 `;
 const Overflow = styled.div`
   flex: none;
-  > details > summary { min-block-size: var(--form-control-height, 40px); padding: 9px 7px; gap: 5px; font-size: .8125rem; font-weight: 600; color: ${({ theme }) => theme.color.mutedText}; }
-  > details > summary > svg { inline-size: 16px; block-size: 16px; }
+  > details > summary { min-block-size: var(--form-control-height); padding: var(--gh-spacing-2_25) var(--gh-spacing-1_75); gap: var(--gh-spacing-1_25); font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold); color: ${({ theme }) => theme.color.mutedText}; }
+  > details > summary > svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
   > details > summary[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; }
   > details[open] > summary { color: ${({ theme }) => theme.color.text}; }
 `;
-const MenuTab = styled(Tab)`inline-size: 100%; justify-content: start; min-block-size: var(--form-control-height, 40px); padding: 8px 12px; border-block-end: 0;`;
+const MenuTab = styled(Tab)`inline-size: 100%; justify-content: start; min-block-size: var(--form-control-height); padding: var(--gh-spacing-2) var(--gh-spacing-3); border-block-end: 0;`;
 const Measurements = styled.div`
   position: absolute; inline-size: 0; block-size: 0; overflow: hidden; visibility: hidden; pointer-events: none;
   > div { display: flex; inline-size: max-content; }

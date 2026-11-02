@@ -27,7 +27,7 @@ const Outcome = styled(OutcomeBadge)`
     padding: 0;
     border: 0;
     background: none;
-    font-size: 0.8125rem;
+    font-size: var(--gh-font-body);
   }
 `;
 
@@ -50,20 +50,20 @@ const Box = styled.section<{ $touchline: boolean }>`
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   grid-template-areas: "ctx ctx ctx" "home vs away";
   align-items: start;
-  gap: 10px 8px;
+  gap: var(--gh-spacing-2_5) var(--gh-spacing-2);
   margin-inline: calc(-1 * ${contentGutter});
-  padding: 12px ${({ theme }) => theme.layout.gutter} 14px;
-  background: linear-gradient(90deg, ${({ theme }) => theme.color.accent.orange.solid} 0 50%, ${({ theme }) => theme.color.accent.blue.solid} 50% 100%) top / 100% 3px no-repeat,
+  padding: var(--gh-spacing-3) ${({ theme }) => theme.layout.gutter} var(--gh-size-3_5);
+  background: linear-gradient(90deg, ${({ theme }) => theme.color.accent.orange.solid} 0 50%, ${({ theme }) => theme.color.accent.blue.solid} 50% 100%) top / 100% var(--gh-size-0_75) no-repeat,
     ${({ theme }) => theme.color.surface};
   ${scrollClearance}
   ${desktop} {
     align-items: center;
-    gap: 8px 28px;
+    gap: var(--gh-spacing-2) var(--gh-spacing-7);
     margin-inline: 0;
-    padding: 15px 24px 18px;
+    padding: var(--gh-spacing-3_75) var(--gh-spacing-6) var(--gh-spacing-4_5);
     border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
-    min-block-size: ${({ $touchline }) => $touchline ? "128px" : "auto"};
+    min-block-size: ${({ $touchline }) => $touchline ? "var(--gh-size-32)" : "auto"};
   }
   ${desktopContentPadding(true)}
 `;
@@ -77,15 +77,15 @@ const Context = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${size("secondary")};
   font-variant-numeric: tabular-nums;
-  line-height: 1.4;
+  line-height: var(--gh-leading-compact);
   text-align: center;
   text-wrap: balance;
-  > img { display: inline-block; inline-size: 16px; block-size: 16px; margin-inline-end: 6px; object-fit: contain; vertical-align: -3px; }
+  > img { display: inline-block; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin-inline-end: var(--gh-spacing-1_5); object-fit: contain; vertical-align: calc(-1 * var(--gh-size-0_75)); }
   > span { white-space: nowrap; }
   /* Desktop clips the one line; the padding, taken back by the margin, keeps the day link's focus ring inside the clip. */
   ${desktop} {
-    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-block: 6px; margin-block: -6px;
-    font-size: ${size("body")}; > img { inline-size: 18px; block-size: 18px; vertical-align: -4px; }
+    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-block: var(--gh-spacing-1_5); margin-block: calc(-1 * var(--gh-spacing-1_5));
+    font-size: ${size("body")}; > img { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); vertical-align: calc(-1 * var(--gh-size-1)); }
   }
 `;
 const CompetitionLogo = styled.img``;
@@ -101,61 +101,61 @@ const Team = styled.div<{ $side: "home" | "away" }>`
   grid-area: ${({ $side }) => $side};
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   text-align: center;
-  > :first-child { --gh-logo-size: 44px; --gh-logo-font: 16px; }
+  > :first-child { --gh-logo-size: var(--gh-size-11); --gh-logo-font: var(--gh-size-4); }
   /* Desktop: both crests sit beside the score, with the name centred on the crest and the home name aligned towards it. */
   ${desktop} {
     display: flex;
     flex-direction: ${({ $side }) => $side === "home" ? "row-reverse" : "row"};
     align-items: center;
-    gap: 14px;
+    gap: var(--gh-spacing-3_5);
     text-align: ${({ $side }) => $side === "home" ? "end" : "start"};
-    > :first-child { --gh-logo-size: 56px; --gh-logo-font: 20px; flex: none; }
+    > :first-child { --gh-logo-size: var(--gh-size-14); --gh-logo-font: var(--gh-size-5); flex: none; }
   }
 `;
 /** Name over recent form; phones keep both as direct items of the centred team stack. */
 const TeamText = styled.div<{ $side: "home" | "away"; $touchline: boolean }>`
   display: contents;
-  > strong { font-size: ${size("emphasis")}; line-height: 1.2; overflow-wrap: anywhere; }
+  > strong { font-size: ${size("emphasis")}; line-height: var(--gh-leading-control); overflow-wrap: anywhere; }
   ${desktop} {
     display: grid;
     flex: 1;
     justify-items: ${({ $side }) => $side === "home" ? "end" : "start"};
-    gap: 5px;
-    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; }
+    gap: var(--gh-spacing-1_25);
+    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); letter-spacing: var(--gh-tracking-heading); text-transform: uppercase; }
     min-inline-size: 0;
-    > strong { min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: ${({ $touchline }) => $touchline ? "1.625rem" : "1.375rem"}; }
+    > strong { min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: ${({ $touchline }) => $touchline ? "var(--gh-font-feature)" : "var(--gh-font-page)"}; }
   }
 `;
 const Versus = styled.div`
   grid-area: vs;
   display: grid;
   justify-items: center;
-  gap: 2px;
-  padding-block-start: 2px;
+  gap: var(--gh-spacing-0_5);
+  padding-block-start: var(--gh-spacing-0_5);
   > b {
     display: grid;
     place-items: center;
-    min-inline-size: 2.25rem;
-    block-size: 2.25rem;
-    padding-inline: 6px;
+    min-inline-size: var(--gh-size-9);
+    block-size: var(--gh-size-9);
+    padding-inline: var(--gh-spacing-1_5);
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: ${size("body")};
     font-variant-numeric: tabular-nums;
   }
-  > b[data-score] { block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: 2rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.05; white-space: nowrap; }
+  > b[data-score] { block-size: auto; color: ${({ theme }) => theme.color.text}; background: none; font-size: var(--gh-font-displayLarge); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-dense); white-space: nowrap; }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > span[data-live] { display: inline-flex; align-items: center; gap: 5px; color: ${({ theme }) => theme.color.live.text}; }
-  > span[data-live]::before { content: ""; inline-size: 7px; block-size: 7px; background: ${({ theme }) => theme.color.live.solid}; border-radius: ${({ theme }) => theme.radius.circle}; }
+  > span[data-live] { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_25); color: ${({ theme }) => theme.color.live.text}; }
+  > span[data-live]::before { content: ""; inline-size: var(--gh-size-1_75); block-size: var(--gh-size-1_75); background: ${({ theme }) => theme.color.live.solid}; border-radius: ${({ theme }) => theme.radius.circle}; }
   ${desktop} {
-    gap: 4px;
+    gap: var(--gh-spacing-1);
     padding-block-start: 0;
-    > b { min-inline-size: 3rem; block-size: 3rem; font-size: 0.9375rem; }
-    > b[data-score] { block-size: auto; font-size: 2.5rem; }
+    > b { min-inline-size: var(--gh-size-12); block-size: var(--gh-size-12); font-size: var(--gh-font-reading); }
+    > b[data-score] { block-size: auto; font-size: var(--gh-font-hero); }
     > span { font-size: ${size("body")}; }
   }
 `;
@@ -184,7 +184,7 @@ export const MatchBanner = memo(function MatchBanner({ touchline = false }: { to
         <time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time></DayLink>
         {"\u00a0· "}{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}
     </Context>
-    <h1 id="match-banner-title" style={{ position: "absolute", inlineSize: 1, blockSize: 1, overflow: "hidden", clipPath: "inset(50%)" }}>
+    <h1 id="match-banner-title" style={{ position: "absolute", inlineSize: "var(--gh-size-0_25)", blockSize: "var(--gh-size-0_25)", overflow: "hidden", clipPath: "inset(50%)" }}>
       {messages.text("match.title", { home, away })}
     </h1>
     <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager />

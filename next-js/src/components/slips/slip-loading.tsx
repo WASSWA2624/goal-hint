@@ -10,25 +10,25 @@ const shimmer = keyframes`
   to { background-position: -200% 0; }
 `;
 const Loading = styled.div`
-  display: grid; gap: 6px; min-inline-size: 0;
+  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
   ${desktopContentPadding()}
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; }
+  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); }
 `;
 const Placeholder = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr) 5.75rem; align-items: center;
-  gap: 12px; min-block-size: 38px; padding: 10px 12px;
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--gh-size-23); align-items: center;
+  gap: var(--gh-spacing-3); min-block-size: var(--gh-size-9_5); padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.surface}; border: 0; border-radius: ${({ theme }) => theme.radius.surface};
   > span {
-    display: block; block-size: 10px; border-radius: ${({ theme }) => theme.radius.small};
+    display: block; block-size: var(--gh-size-2_5); border-radius: ${({ theme }) => theme.radius.small};
     background: linear-gradient(90deg, ${({ theme }) => theme.color.surfaceMuted} 25%,
       ${({ theme }) => theme.color.border} 50%, ${({ theme }) => theme.color.surfaceMuted} 75%);
-    background-size: 200% 100%; animation: ${shimmer} 2s linear infinite;
+    background-size: 200% 100%; animation: ${shimmer} var(--gh-duration-pulse) var(--gh-easing-linear) infinite;
   }
-  > span:first-child { inline-size: min(70%, 18rem); }
+  > span:first-child { inline-size: min(70%, var(--gh-size-72)); }
   > span[data-loading-fact] { display: none; }
-  > span:last-child { block-size: 16px; }
+  > span:last-child { block-size: var(--gh-size-4); }
   ${media.desktop} {
-    grid-template-columns: minmax(0, 1fr) 5rem 4rem 7rem 5.75rem;
+    grid-template-columns: minmax(0, 1fr) var(--gh-size-20) var(--gh-size-16) var(--gh-size-28) var(--gh-size-23);
     > span[data-loading-fact] { display: block; }
   }
   @media (prefers-reduced-motion: reduce) { > span { animation: none; } }

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import styled, { css } from "styled-components";
+import styled, { css, useTheme } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 
 const textControlStyles = css`
@@ -20,25 +20,27 @@ const TextLink = styled(Link)`
 `;
 
 const Tooltip = styled.span`
-  position: fixed; z-index: 100; inline-size: max-content; max-inline-size: min(35rem, calc(100vw - 16px));
-  padding: 6px 8px; border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
+  position: fixed; z-index: var(--gh-layer-notification); inline-size: max-content; max-inline-size: min(var(--gh-size-140), calc(100vw - var(--gh-size-4)));
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2); border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
   color: ${({ theme }) => theme.color.surface}; background: ${({ theme }) => theme.color.text};
-  font-size: 0.75rem; line-height: 1.5; white-space: normal; overflow-wrap: anywhere;
+  font-size: var(--gh-font-secondary); line-height: var(--gh-leading-normal); white-space: normal; overflow-wrap: anywhere;
 `;
 
 function FullTextTooltip({ id, text, anchor, onEnter, onLeave }: {
   id: string; text: string; anchor: RefObject<HTMLElement | null>; onEnter: () => void; onLeave: () => void;
 }) {
+  const metrics = useTheme().ui.tooltip;
   const tip = useRef<HTMLSpanElement>(null);
-  const [position, setPosition] = useState({ left: 8, top: 8 });
+  const [position, setPosition] = useState({ left: metrics.edge, top: metrics.edge });
   useLayoutEffect(() => {
     const trigger = anchor.current?.getBoundingClientRect(), bubble = tip.current?.getBoundingClientRect();
     if (!trigger || !bubble) return;
     setPosition({
-      left: Math.max(8, Math.min(trigger.left, window.innerWidth - bubble.width - 8)),
-      top: trigger.bottom + bubble.height + 14 <= window.innerHeight ? trigger.bottom + 6 : Math.max(8, trigger.top - bubble.height - 6),
+      left: Math.max(metrics.edge, Math.min(trigger.left, window.innerWidth - bubble.width - metrics.edge)),
+      top: trigger.bottom + bubble.height + metrics.clearance <= window.innerHeight ? trigger.bottom + metrics.gap
+        : Math.max(metrics.edge, trigger.top - bubble.height - metrics.gap),
     });
-  }, [anchor, text]);
+  }, [anchor, text, metrics]);
   return createPortal(<Tooltip ref={tip} id={id} role="tooltip" style={position} onMouseEnter={onEnter} onMouseLeave={onLeave}>{text}</Tooltip>, document.body);
 }
 

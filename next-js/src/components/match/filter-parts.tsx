@@ -34,27 +34,27 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 5px;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 9px;
+  gap: var(--gh-spacing-1_25);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2_25);
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  font-size: 0.6875rem;
-  ${media.desktop} { min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; }
+  font-size: var(--gh-font-caption);
+  ${media.desktop} { min-block-size: var(--form-control-height); font-size: var(--gh-font-secondary); }
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
-  line-height: 1.2;
+  line-height: var(--gh-leading-control);
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
-  > svg { flex: none; font-size: 0.8125rem; }
-  > img { flex: none; inline-size: 14px; block-size: 14px; object-fit: contain; }
+  > svg { flex: none; font-size: var(--gh-font-body); }
+  > img { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); object-fit: contain; }
   > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
   ${media.hover} {
     &:hover { background: ${({ theme }) => theme.color.fieldHover}; }
   }
-  &[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
+  &[aria-disabled="true"] { cursor: not-allowed; opacity: var(--gh-opacity-60); }
   ${focusRing}
 `;
 const ChipAnchor = styled(Link)<{ $selected?: boolean; $accent?: AccentName }>`${chipStyles}`;
@@ -62,8 +62,8 @@ export const ChipText = styled.span<{ $selected?: boolean; $accent?: AccentName 
 
 const LogoImage = styled.img`
   flex: none;
-  inline-size: 18px;
-  block-size: 18px;
+  inline-size: var(--gh-size-4_5);
+  block-size: var(--gh-size-4_5);
   object-fit: contain;
 `;
 /** Approved catalog logos and bundled country flags load directly; failures simply disappear. */
@@ -95,9 +95,9 @@ export const IconButton = styled.button`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   /* 16px glyphs sit with the 11px phone controls; desktop keeps 20px. */
-  font-size: 1rem;
+  font-size: var(--gh-font-section);
   cursor: pointer;
-  ${media.desktop} { font-size: 1.25rem; }
+  ${media.desktop} { font-size: var(--gh-font-heading); }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; } }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   ${focusRing}
@@ -114,21 +114,21 @@ const SelectFace = styled.div`
   display: inline-flex;
   align-items: center;
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 8px 22px;
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2) var(--gh-spacing-5_5);
   color: ${({ theme }) => theme.color.text};
   border: 0;
   ${selectSurface}
   border-radius: ${({ theme }) => theme.radius.control};
-  font-size: 0.6875rem;
+  font-size: var(--gh-font-caption);
   font-weight: ${({ theme }) => theme.typography.weight.body};
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > span > span:not([data-current]) { visibility: hidden; }
-  border: 1px solid transparent;
-  ${controlBodyHeight} margin-block-start: var(--floating-label-space, 6px); padding-block: 8px;
+  border: var(--gh-stroke-thin) solid transparent;
+  ${controlBodyHeight} margin-block-start: var(--floating-label-space); padding-block: var(--gh-spacing-2);
   > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
-  > label { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 30px); }
+  > label { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - var(--gh-size-7_5)); }
   &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
   > select {
     position: absolute;
@@ -136,12 +136,12 @@ const SelectFace = styled.div`
     inline-size: 100%;
     block-size: 100%;
     opacity: 0;
-    font-size: 16px;
+    font-size: var(--gh-font-section);
     appearance: none;
     cursor: pointer;
     &:disabled { cursor: not-allowed; }
   }
-  > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); color: ${({ theme }) => theme.color.brand}; pointer-events: none; }
+  > svg { position: absolute; inset-inline-end: var(--gh-spacing-2); inset-block-start: 50%; transform: translateY(-50%); color: ${({ theme }) => theme.color.brand}; pointer-events: none; }
   &:has(select:focus-visible) > [data-floating-outline] { ${floatingOutlineFocus} }
   &:has(select:disabled) { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; }
 `;
@@ -167,24 +167,24 @@ const PickerRoot = styled.div`
 const PickerSummary = styled.button`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 4px 8px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1) var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
   border: 0;
   ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.75rem;
-  line-height: 1.25;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-heading);
   text-align: start;
   cursor: pointer;
   ${controlFeedback}
   > [data-picker-label] { flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > [data-picker-value] { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; text-align: end; }
-  > svg { flex: none; font-size: 1rem; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
   &[aria-expanded="true"] {  background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   ${focusRing}
@@ -192,13 +192,13 @@ const PickerSummary = styled.button`
 `;
 const PickerPanel = styled.div`
   position: absolute;
-  inset-block-start: calc(100% + 6px);
+  inset-block-start: calc(100% + var(--gh-spacing-1_5));
   inset-inline-end: 0;
-  z-index: 15;
+  z-index: var(--gh-layer-toolbar);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: ${({ theme }) => theme.space.sm};
-  inline-size: min(20rem, var(--picker-max-width, calc(100vw - 32px)));
+  inline-size: min(var(--gh-size-80), var(--picker-max-width, calc(100vw - var(--gh-size-8))));
   padding: ${({ theme }) => theme.space.sm};
   background: var(--filter-panel-background, ${({ theme }) => theme.color.surface});
   border: 0;
@@ -211,27 +211,27 @@ const PickerPanel = styled.div`
     overscroll-behavior: contain;
     transform: translateX(var(--picker-offset-x, 0px));
   }
-  &[data-picker-placement="above"] { inset-block-start: auto; inset-block-end: calc(100% + 6px); }
+  &[data-picker-placement="above"] { inset-block-start: auto; inset-block-end: calc(100% + var(--gh-spacing-1_5)); }
 `;
 /** Phones list compact 36px rows at 13px; desktop keeps its 40px rows at 15px. */
 const PickerSearch = styled.input`
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
   border: 0;
   ${filterControlColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   ${controlFeedback}
   ${focusRing}
-  ${media.desktop} { min-block-size: var(--form-control-height, 40px); font-size: 0.9375rem; }
+  ${media.desktop} { min-block-size: var(--form-control-height); font-size: var(--gh-font-reading); }
 `;
 const PickerList = styled.ul`
   min-inline-size: 0;
   min-block-size: 0;
-  max-block-size: 16rem;
+  max-block-size: var(--gh-size-64);
   margin: 0;
   padding: 0;
   overflow-y: auto;
@@ -239,24 +239,24 @@ const PickerList = styled.ul`
   > li > label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-block-size: var(--form-control-height, 40px);
+    gap: var(--gh-spacing-1_5);
+    min-block-size: var(--form-control-height);
     padding-inline: ${({ theme }) => theme.space.sm};
     border-radius: ${({ theme }) => theme.radius.small};
-    font-size: 0.8125rem;
+    font-size: var(--gh-font-body);
     cursor: pointer;
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
     &:has(input:checked) { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
-    > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
-    > img { flex: none; inline-size: 16px; block-size: 16px; object-fit: contain; }
+    > input { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); accent-color: ${({ theme }) => theme.color.brand}; }
+    > img { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); object-fit: contain; }
     > span { min-inline-size: 0; flex: 1; overflow-wrap: anywhere; }
-    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; }
     ${media.desktop} {
       gap: ${({ theme }) => theme.space.sm};
-      min-block-size: var(--form-control-height, 40px);
-      font-size: 0.9375rem;
-      > input { inline-size: 1.125rem; block-size: 1.125rem; }
-      > img { inline-size: 20px; block-size: 20px; }
+      min-block-size: var(--form-control-height);
+      font-size: var(--gh-font-reading);
+      > input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); }
+      > img { inline-size: var(--gh-size-5); block-size: var(--gh-size-5); }
       > small { font-size: smaller; }
     }
   }
@@ -264,13 +264,13 @@ const PickerList = styled.ul`
 const PickerEmpty = styled.p`
   padding: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  ${media.desktop} { font-size: 0.875rem; }
+  font-size: var(--gh-font-secondary);
+  ${media.desktop} { font-size: var(--gh-font-emphasis); }
 `;
 const PickerHeading = styled.li`
-  padding: 8px 4px 2px;
+  padding: var(--gh-spacing-2) var(--gh-spacing-1) var(--gh-spacing-0_5);
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
+  font-size: var(--gh-font-secondary);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
 

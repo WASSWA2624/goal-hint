@@ -22,102 +22,102 @@ function dateDraft(query: FeedQuery, today: ReportingDate): DateDraft {
 const Trigger = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 6px 8px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.medium};
-  line-height: 1.3;
+  line-height: var(--gh-leading-label);
   text-align: start;
   cursor: pointer;
   > span { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  > svg { flex: none; font-size: 0.875rem; }
-  > svg:last-child { font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
+  > svg { flex: none; font-size: var(--gh-font-emphasis); }
+  > svg:last-child { font-size: var(--gh-font-secondary); color: ${({ theme }) => theme.color.mutedText}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   ${controlFeedback}
   ${focusRing}
-  ${media.belowDesktop} { min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font-size: 0.75rem; }
+  ${media.belowDesktop} { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); }
 `;
 
 const Frame = styled.div`
   ${sheetFrame}
   display: flex;
-  > ${SheetHeader} { padding-inline-start: 10px; }
+  > ${SheetHeader} { padding-inline-start: var(--gh-spacing-2_5); }
   ${media.belowDesktop} {
-    && ${SheetHeader} > h2 { font-size: 0.875rem; }
-    && ${SheetHeader} > button { inline-size: 36px; block-size: 36px; }
+    && ${SheetHeader} > h2 { font-size: var(--gh-font-emphasis); }
+    && ${SheetHeader} > button { inline-size: var(--gh-size-9); block-size: var(--gh-size-9); }
   }
   ${media.desktop} { display: none; }
 `;
 const Body = styled.div`
   display: grid;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   min-block-size: 0;
-  padding: 10px;
+  padding: var(--gh-spacing-2_5);
   overflow-y: auto;
   overscroll-behavior: contain;
-  [data-range="dates"] input { min-block-size: var(--form-control-height, 40px); }
+  [data-range="dates"] input { min-block-size: var(--form-control-height); }
   ${media.belowDesktop} {
-    gap: 8px; padding: 8px 10px;
-    [data-range="dates"] input { min-block-size: var(--form-control-height, 40px); padding-block: 2px; }
+    gap: var(--gh-spacing-2); padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
+    [data-range="dates"] input { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); }
   }
 `;
 const Presets = styled.fieldset`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
-  > legend { margin-block-end: 8px; padding: 0; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > legend { margin-block-end: var(--gh-spacing-2); padding: 0; font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 const Preset = styled.button`
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 6px 8px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${filterButtonColors}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.medium};
-  line-height: 1.3;
+  line-height: var(--gh-leading-label);
   overflow-wrap: anywhere;
   cursor: pointer;
   &[aria-pressed="true"] { color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft};  }
   ${controlFeedback}
   ${focusRing}
-  ${media.belowDesktop} { min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font-size: 0.75rem; }
+  ${media.belowDesktop} { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); }
 `;
 const Footer = styled.div`
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   flex: none;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: var(--gh-spacing-1_5);
+  padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
   border-block-start: 0;
   > button {
-    min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 6px 12px;
+    min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_5) var(--gh-spacing-3);
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     border: 0; border-radius: ${({ theme }) => theme.radius.control};
-    font: inherit; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
+    font: inherit; font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
     ${focusRing}
   }
   > button:last-child { color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action};  }
   > button:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  cursor: not-allowed; }
   ${media.belowDesktop} {
-    padding: 6px 10px;
-    > button { min-block-size: var(--form-control-height, 40px); padding: 4px 8px; font-size: 0.75rem; }
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
+    > button { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2); font-size: var(--gh-font-secondary); }
   }
 `;
 

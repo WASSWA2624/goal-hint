@@ -9,6 +9,7 @@ export const darkTheme: GoalHintTheme = cobaltNightTheme;
 
 /** A complete theme is required at a streamed or standalone style boundary. */
 export function isGoalHintTheme(value: unknown): value is GoalHintTheme {
+  if (value === lightTheme || value === darkTheme) return true;
   function matches(candidate: unknown, template: unknown): boolean {
     if (template === null || typeof template !== "object") return typeof candidate === typeof template;
     if (candidate === null || typeof candidate !== "object") return false;
@@ -24,7 +25,7 @@ export function isGoalHintTheme(value: unknown): value is GoalHintTheme {
  */
 export const media = {
   /** Phones and tablets: the compact tile layouts below the desktop table. */
-  belowDesktop: "@media (max-width: 63.99rem)",
+  belowDesktop: `@media (max-width: ${lightTheme.viewport[63.99]})`,
   tablet: `@media (min-width: ${lightTheme.breakpoint.md})`,
   desktop: `@media (min-width: ${lightTheme.breakpoint.lg})`,
   wide: `@media (min-width: ${lightTheme.breakpoint.xl})`,

@@ -68,9 +68,9 @@ export function CopyTextButton({ value, label = "Copy ID", ariaLabel = "Copy tra
 const CopyAction = styled(TextAction)<{ $compact: boolean }>`
   flex: none;
   justify-content: center;
-  min-inline-size: 44px;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 8px;
+  min-inline-size: var(--gh-size-11);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2);
   border-radius: ${({ theme }) => theme.radius.control};
   ${({ $compact }) => $compact && css`padding-inline: 0; > span { ${visuallyHidden} }`}
 `;

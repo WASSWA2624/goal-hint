@@ -13,8 +13,8 @@ const plain = css`
 /** Below desktop the summary's own padding frames a closed panel, so it stays one compact row. */
 const framed = css`
   ${media.belowDesktop} {
-    padding-block: 2px;
-    &[open] { padding-block-end: 12px; }
+    padding-block: var(--gh-spacing-0_5);
+    &[open] { padding-block-end: var(--gh-spacing-3); }
   }
 `;
 
@@ -22,14 +22,14 @@ const framed = css`
 export const Disclosure = styled(Surface).attrs({ as: "details" })<{ $plain?: boolean }>`
   ${({ $plain }) => $plain ? plain : framed}
   > summary {
-    min-block-size: var(--form-control-height, 40px);
-    padding-block: 9px;
+    min-block-size: var(--form-control-height);
+    padding-block: var(--gh-spacing-2_25);
     cursor: pointer;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
-    line-height: 1.35;
+    line-height: var(--gh-leading-caption);
     overflow-wrap: anywhere;
     ${media.desktop} {
-      min-block-size: var(--form-control-height, 40px);
+      min-block-size: var(--form-control-height);
       padding-block: ${({ theme }) => theme.space.sm};
       line-height: inherit;
     }
@@ -39,7 +39,7 @@ export const Disclosure = styled(Surface).attrs({ as: "details" })<{ $plain?: bo
     outline-offset: ${({ theme }) => theme.border.focusOffset};
   }
   > summary + * {
-    margin-block-start: 8px;
+    margin-block-start: var(--gh-spacing-2);
     ${media.desktop} { margin-block-start: ${({ theme }) => theme.space.md}; }
   }
 `;

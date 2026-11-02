@@ -22,15 +22,15 @@ import { marketName, percent } from "./labels";
 const Box = styled.section`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   margin-inline: calc(-1 * ${contentGutter});
-  padding: 10px ${({ theme }) => theme.layout.gutter};
+  padding: var(--gh-spacing-2_5) ${({ theme }) => theme.layout.gutter};
   background: ${({ theme }) => theme.color.surface};
   ${desktop} {
-    gap: 11px;
+    gap: var(--gh-spacing-2_75);
     margin-inline: 0;
-    padding: 14px 18px 16px;
+    padding: var(--gh-spacing-3_5) var(--gh-spacing-4_5) var(--gh-spacing-4);
     border: 0;
     border-radius: ${({ theme }) => theme.radius.none};
   }
@@ -40,16 +40,16 @@ const Eyebrow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  > h2 { margin: 0; color: ${({ theme }) => theme.color.link}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: 0.07em; text-transform: uppercase; }
+  gap: var(--gh-spacing-2);
+  > h2 { margin: 0; color: ${({ theme }) => theme.color.link}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: var(--gh-tracking-uppercase); text-transform: uppercase; }
 `;
 const Pick = styled.button<{ $family: MarketFamily }>`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   padding: 0;
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   color: ${({ theme }) => theme.color.text};
   background: none;
   border: 0;
@@ -57,20 +57,20 @@ const Pick = styled.button<{ $family: MarketFamily }>`
   text-align: start;
   cursor: pointer;
   ${focusRing}
-  > span[data-pick] { display: grid; gap: 2px; min-inline-size: 0; }
-  > span[data-pick] > strong { font-size: 1.375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.15; overflow-wrap: anywhere; ${desktop} { font-size: 1.5rem; } }
+  > span[data-pick] { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; }
+  > span[data-pick] > strong { font-size: var(--gh-font-page); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-snug); overflow-wrap: anywhere; ${desktop} { font-size: var(--gh-font-headline); } }
   > span[data-pick] > small { color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-chance] { display: grid; justify-items: end; }
-  > span[data-chance] > b { font-size: 2rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1; font-variant-numeric: tabular-nums; ${desktop} { font-size: 2.5rem; } }
+  > span[data-chance] > b { font-size: var(--gh-font-displayLarge); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-solid); font-variant-numeric: tabular-nums; ${desktop} { font-size: var(--gh-font-hero); } }
   > span[data-chance] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
   ${media.hover} { &:hover > span[data-pick] > strong { color: ${({ theme }) => theme.color.link}; } }
 `;
 const Publication = styled(Note)`
   display: flex;
   flex-wrap: wrap;
-  gap: 0 4px;
+  gap: 0 var(--gh-spacing-1);
   font-size: ${size("caption")};
-  line-height: 1.45;
+  line-height: var(--gh-leading-reading);
   > time { white-space: nowrap; }
 `;
 

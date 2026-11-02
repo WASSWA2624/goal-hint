@@ -12,13 +12,13 @@ export type PaymentStep = 0 | 1 | 2 | 3;
 
 const Card = styled.section`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   inline-size: 100%;
-  max-inline-size: 40rem;
+  max-inline-size: var(--gh-size-160);
   min-inline-size: 0;
   margin-inline: auto;
-  scroll-margin-block-start: 6rem;
-  padding: 16px;
+  scroll-margin-block-start: var(--gh-size-24);
+  padding: var(--gh-spacing-4);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: 0;
@@ -26,32 +26,32 @@ const Card = styled.section`
 
   > h2 {
     margin: 0;
-    scroll-margin-block-start: 6rem;
-    font-size: 24px;
-    line-height: 1.25;
+    scroll-margin-block-start: var(--gh-size-24);
+    font-size: var(--gh-font-headline);
+    line-height: var(--gh-leading-heading);
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    letter-spacing: -0.02em;
+    letter-spacing: var(--gh-tracking-tight);
   }
   > h2:focus { outline: none; }
   > form { min-inline-size: 0; }
-  > form label, > form legend { font-size: 15px; line-height: 21px; }
+  > form label, > form legend { font-size: var(--gh-font-reading); line-height: var(--gh-size-5_25); }
   > form input:not([type="checkbox"], [type="radio"], [type="file"]), > form select {
-    font-size: 16px;
-    line-height: 22px;
+    font-size: var(--gh-font-section);
+    line-height: var(--gh-size-5_5);
   }
-  [data-phone-country-trigger] { font-size: 14px; min-block-size: var(--form-control-height, 40px); }
-  ${FileField} { gap: 6px; }
-  ${FileField} legend { margin-block-end: 4px; }
-  ${FileChoices} { gap: 8px; }
-  ${FileBox} { min-block-size: var(--form-control-height, 40px); padding: 8px; font-size: 15px; line-height: 21px; }
-  ${Preview}, ${ConfirmPreview} { max-block-size: 96px; }
-  [data-payment-review] ${ConfirmPreview} { max-block-size: 72px; }
-  ${Note} { font-size: 14px; line-height: 20px; }
-  ${FieldMessage}, [data-evidence-findings] li, [data-reading-progress] li { font-size: 14px; line-height: 20px; }
-  ${RowButton} { min-block-size: var(--form-control-height, 40px); font-size: 14px; }
-  ${Assent} { align-items: flex-start; padding-block: 4px; font-size: 15px; line-height: 21px; }
-  ${Assent} input { inline-size: 18px; block-size: 18px; min-block-size: 18px; margin-block-start: 1px; }
-  @media (max-width: 400px) { padding: 14px 12px; }
+  [data-phone-country-trigger] { font-size: var(--gh-font-emphasis); min-block-size: var(--form-control-height); }
+  ${FileField} { gap: var(--gh-spacing-1_5); }
+  ${FileField} legend { margin-block-end: var(--gh-spacing-1); }
+  ${FileChoices} { gap: var(--gh-spacing-2); }
+  ${FileBox} { min-block-size: var(--form-control-height); padding: var(--gh-spacing-2); font-size: var(--gh-font-reading); line-height: var(--gh-size-5_25); }
+  ${Preview}, ${ConfirmPreview} { max-block-size: var(--gh-size-24); }
+  [data-payment-review] ${ConfirmPreview} { max-block-size: var(--gh-size-18); }
+  ${Note} { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
+  ${FieldMessage}, [data-evidence-findings] li, [data-reading-progress] li { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
+  ${RowButton} { min-block-size: var(--form-control-height); font-size: var(--gh-font-emphasis); }
+  ${Assent} { align-items: flex-start; padding-block: var(--gh-spacing-1); font-size: var(--gh-font-reading); line-height: var(--gh-size-5_25); }
+  ${Assent} input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); min-block-size: var(--gh-size-4_5); margin-block-start: var(--gh-spacing-0_25); }
+  @media (max-width: ${({ theme }) => theme.viewport[25]}) { padding: var(--gh-spacing-3_5) var(--gh-spacing-3); }
 `;
 
 const Progress = styled.nav`
@@ -59,7 +59,7 @@ const Progress = styled.nav`
   ol {
     display: grid;
     grid-template-columns: repeat(var(--payment-steps, 4), minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--gh-spacing-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -67,29 +67,29 @@ const Progress = styled.nav`
   li {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--gh-spacing-1_5);
     min-inline-size: 0;
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: 13px;
-    line-height: 18px;
+    font-size: var(--gh-font-body);
+    line-height: var(--gh-size-4_5);
   }
   li > span:first-child {
     display: grid;
     place-items: center;
     flex: none;
-    inline-size: 23px;
-    block-size: 23px;
+    inline-size: var(--gh-size-5_75);
+    block-size: var(--gh-size-5_75);
     border: 0;
-    font-size: 12px;
-    line-height: 1;
+    font-size: var(--gh-font-secondary);
+    line-height: var(--gh-leading-solid);
   }
   li > span:last-child { overflow-wrap: anywhere; }
-  li svg { inline-size: 13px; block-size: 13px; }
+  li svg { inline-size: var(--gh-size-3_25); block-size: var(--gh-size-3_25); }
   &[data-inline-labels="true"] {
     ol { align-items: center; grid-template-columns: repeat(var(--payment-steps, 4), max-content); justify-content: space-between; }
-    li { flex-direction: row; align-items: center; min-block-size: 24px; }
-    li > span:first-child { box-sizing: border-box; inline-size: 24px; block-size: 24px; }
-    li > span:last-child { display: block; line-height: 24px; white-space: nowrap; }
+    li { flex-direction: row; align-items: center; min-block-size: var(--gh-size-6); }
+    li > span:first-child { box-sizing: border-box; inline-size: var(--gh-size-6); block-size: var(--gh-size-6); }
+    li > span:last-child { display: block; line-height: var(--gh-size-6); white-space: nowrap; }
     li svg { display: block; }
     li:first-child { justify-content: flex-start; }
     li:not(:first-child):not(:last-child) { justify-content: center; }
@@ -109,9 +109,9 @@ const Progress = styled.nav`
     background: ${({ theme }) => theme.color.brand};
 
   }
-  @media (max-width: 480px) {
-    ol { gap: 4px; }
-    li { flex-direction: column; align-items: center; gap: 4px; font-size: 12px; }
+  @media (max-width: ${({ theme }) => theme.viewport[30]}) {
+    ol { gap: var(--gh-spacing-1); }
+    li { flex-direction: column; align-items: center; gap: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
     &[data-inline-labels="true"] li { flex-direction: row; align-items: center; }
   }
 `;
@@ -147,18 +147,18 @@ export const WizardActions = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
-  margin-block-start: 4px;
-  padding-block-start: 10px;
+  margin-block-start: var(--gh-spacing-1);
+  padding-block-start: var(--gh-spacing-2_5);
   border-block-start: 0;
   > button {
     inline-size: 100%;
-    min-block-size: var(--form-control-height, 40px);
-    padding: 8px 12px;
+    min-block-size: var(--form-control-height);
+    padding: var(--gh-spacing-2) var(--gh-spacing-3);
     border-radius: ${({ theme }) => theme.radius.control};
-    font-size: 16px;
-    line-height: 22px;
+    font-size: var(--gh-font-section);
+    line-height: var(--gh-size-5_5);
   }
   > button:not(:last-child):not(:disabled) {
     color: ${({ theme }) => theme.color.text};
@@ -166,26 +166,26 @@ export const WizardActions = styled.div`
 
   }
   > button:only-child { grid-column: 1 / -1; }
-  svg { inline-size: 18px; block-size: 18px; flex: none; }
+  svg { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); flex: none; }
 `;
 
 export const WizardPlans = styled(Plans)`
-  && { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  && { grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2); }
   > ${Plan} {
-    grid-template-columns: 18px minmax(0, 1fr) auto;
+    grid-template-columns: var(--gh-size-4_5) minmax(0, 1fr) auto;
     align-items: center;
     align-content: center;
-    gap: 8px;
-    min-block-size: 58px;
-    padding: 10px 12px;
+    gap: var(--gh-spacing-2);
+    min-block-size: var(--gh-size-14_5);
+    padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
     border-radius: ${({ theme }) => theme.radius.surface};
   }
-  > ${Plan} input { inline-size: 18px; block-size: 18px; margin: 0; }
-  ${PlanName} { font-size: 16px; line-height: 22px; }
-  ${PlanPrice} { grid-column: 3; font-size: 18px; line-height: 24px; white-space: nowrap; }
-  ${PlanPrice} small { font-size: 14px; }
-  @media (max-width: 400px) {
-    > ${Plan} { padding-inline: 10px; }
+  > ${Plan} input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); margin: 0; }
+  ${PlanName} { font-size: var(--gh-font-section); line-height: var(--gh-size-5_5); }
+  ${PlanPrice} { grid-column: 3; font-size: var(--gh-font-title); line-height: var(--gh-size-6); white-space: nowrap; }
+  ${PlanPrice} small { font-size: var(--gh-font-emphasis); }
+  @media (max-width: ${({ theme }) => theme.viewport[25]}) {
+    > ${Plan} { padding-inline: var(--gh-spacing-2_5); }
   }
 `;
 
@@ -196,64 +196,64 @@ export const WizardReview = styled.dl`
   margin: 0;
   > div {
     display: grid;
-    grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(var(--gh-size-24), 0.8fr) minmax(0, 1.2fr);
     align-items: center;
-    gap: 8px;
+    gap: var(--gh-spacing-2);
     min-inline-size: 0;
-    padding-block: 2px;
+    padding-block: var(--gh-spacing-0_5);
     border-block-end: 0;
   }
   > div:last-child { border-block-end: 0; }
-  dt { color: ${({ theme }) => theme.color.mutedText}; font-size: 14px; line-height: 20px; }
+  dt { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
   dd {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 8px;
+    gap: var(--gh-spacing-1) var(--gh-spacing-2);
     min-inline-size: 0;
     margin: 0;
-    font-size: 15px;
-    line-height: 22px;
+    font-size: var(--gh-font-reading);
+    line-height: var(--gh-size-5_5);
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
   }
   dd > button { margin-inline-start: auto; }
-  dd > img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: 96px; object-fit: contain; }
+  dd > img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: var(--gh-size-24); object-fit: contain; }
   dd > a { display: inline-flex; max-inline-size: 100%; cursor: zoom-in; ${focusTreatment} }
-  dd > a img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: 72px; object-fit: contain; }
-  @media (max-width: 400px) {
-    > div { grid-template-columns: minmax(4.5rem, 0.7fr) minmax(0, 1.3fr); gap: 8px; }
+  dd > a img { display: block; inline-size: auto; max-inline-size: 100%; max-block-size: var(--gh-size-18); object-fit: contain; }
+  @media (max-width: ${({ theme }) => theme.viewport[25]}) {
+    > div { grid-template-columns: minmax(var(--gh-size-18), 0.7fr) minmax(0, 1.3fr); gap: var(--gh-spacing-2); }
   }
 `;
 
 export const WizardConfirm = styled.label`
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding-block: 4px;
-  font-size: 15px;
-  line-height: 21px;
+  min-block-size: var(--form-control-height);
+  padding-block: var(--gh-spacing-1);
+  font-size: var(--gh-font-reading);
+  line-height: var(--gh-size-5_25);
   cursor: pointer;
-  input { flex: none; inline-size: 18px; block-size: 18px; margin: 1px 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
+  input { flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); margin: var(--gh-spacing-0_25) 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
 
 export const WizardNotice = styled.p`
   margin: 0;
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--gh-font-emphasis);
+  line-height: var(--gh-size-5);
   overflow-wrap: anywhere;
 `;
 
 export const WizardFooter = styled.div`
   inline-size: 100%;
-  max-inline-size: 40rem;
+  max-inline-size: var(--gh-size-160);
   min-inline-size: 0;
   margin-inline: auto;
-  button, a, summary, p, li { font-size: 14px; line-height: 20px; }
+  button, a, summary, p, li { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
 `;
 
 export const WizardReceipt = styled.div`
@@ -261,61 +261,61 @@ export const WizardReceipt = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 8px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-2);
   min-inline-size: 0;
-  padding: 10px 12px;
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.brandSoft};
-  font-size: 15px;
-  line-height: 22px;
-  > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-inline-size: 0; }
-  > strong { font-size: 22px; line-height: 28px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  font-size: var(--gh-font-reading);
+  line-height: var(--gh-size-5_5);
+  > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0; }
+  > strong { font-size: var(--gh-font-page); line-height: var(--gh-size-7); white-space: nowrap; font-variant-numeric: tabular-nums; }
 `;
 
 export const WizardEdit = styled(Button)`
-  && { min-block-size: var(--form-control-height, 40px); min-inline-size: 44px; padding: 4px 6px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 14px; line-height: 20px; }
+  && { min-block-size: var(--form-control-height); min-inline-size: var(--gh-size-11); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
 `;
 
 export const WizardScreenshot = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
   > a {
     display: inline-flex;
     flex: none;
-    max-inline-size: 96px;
+    max-inline-size: var(--gh-size-24);
     cursor: zoom-in;
     ${focusTreatment}
   }
-  > a img { display: block; inline-size: auto; max-inline-size: 96px; max-block-size: 72px; object-fit: contain; }
-  > button { min-block-size: var(--form-control-height, 40px); font-size: 14px; }
+  > a img { display: block; inline-size: auto; max-inline-size: var(--gh-size-24); max-block-size: var(--gh-size-18); object-fit: contain; }
+  > button { min-block-size: var(--form-control-height); font-size: var(--gh-font-emphasis); }
 `;
 
 export const WizardPayee = styled.div`
   display: grid;
-  gap: 2px;
+  gap: var(--gh-spacing-0_5);
   min-inline-size: 0;
-  > strong { font-size: 15px; line-height: 21px; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > span { font-size: 16px; line-height: 22px; font-variant-numeric: tabular-nums; }
-  > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 14px; line-height: 20px; }
+  > strong { font-size: var(--gh-font-reading); line-height: var(--gh-size-5_25); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > span { font-size: var(--gh-font-section); line-height: var(--gh-size-5_5); font-variant-numeric: tabular-nums; }
+  > small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
 `;
 
 export const WizardMethod = styled.div`
   display: grid;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
-  > ${PaymentTransfer} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  ${WalletChoices} { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  > ${PaymentTransfer} { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2_5); }
+  ${WalletChoices} { grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2); }
   ${WalletChoice}, ${Wallet} { border-radius: ${({ theme }) => theme.radius.control}; }
-  ${WalletChoice} > span { justify-content: flex-start; gap: 10px; min-block-size: var(--form-control-height, 40px); padding: 8px 10px; font-size: 16px; line-height: 22px; }
+  ${WalletChoice} > span { justify-content: flex-start; gap: var(--gh-spacing-2_5); min-block-size: var(--form-control-height); padding: var(--gh-spacing-2) var(--gh-spacing-2_5); font-size: var(--gh-font-section); line-height: var(--gh-size-5_5); }
   ${WalletChoice} > span > svg:last-child { margin-inline-start: auto; }
-  ${Wallet} { inline-size: 100%; gap: 6px 10px; padding: 12px; }
-  ${WalletMeta} { font-size: 14px; line-height: 20px; }
-  ${WalletNumber} { font-size: 24px; line-height: 30px; }
-  ${WalletNumber} > ${WalletMeta} { display: block; margin-block-end: 4px; }
-  ${CopyButton} { min-block-size: var(--form-control-height, 40px); font-size: 15px; }
-  @media (max-width: 480px) {
+  ${Wallet} { inline-size: 100%; gap: var(--gh-spacing-1_5) var(--gh-spacing-2_5); padding: var(--gh-spacing-3); }
+  ${WalletMeta} { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
+  ${WalletNumber} { font-size: var(--gh-font-headline); line-height: var(--gh-size-7_5); }
+  ${WalletNumber} > ${WalletMeta} { display: block; margin-block-end: var(--gh-spacing-1); }
+  ${CopyButton} { min-block-size: var(--form-control-height); font-size: var(--gh-font-reading); }
+  @media (max-width: ${({ theme }) => theme.viewport[30]}) {
     ${Wallet} { grid-template-columns: minmax(0, 1fr); }
     ${CopyButton} { grid-column: 1; grid-row: auto; inline-size: 100%; }
   }

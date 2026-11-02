@@ -8,64 +8,64 @@ import { slipHeaderActionFrame } from "../slip-disclosure-styles";
 import { dialogSurface } from "@/components/ui/dialog-surfaces";
 
 export const ShareTrigger = styled(Button)`
-  && { min-block-size: var(--form-control-height, 40px); min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: ${({ theme }) => theme.radius.control};
-    font-size: .75rem; line-height: 1.25; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  svg { inline-size: 14px; block-size: 14px; }
-  @media (pointer: coarse) { && { min-block-size: var(--form-control-height, 40px); } }
+  && { min-block-size: var(--form-control-height); min-inline-size: 0; padding: var(--gh-spacing-0_75) var(--gh-spacing-1_75); gap: var(--gh-spacing-1_25); border-radius: ${({ theme }) => theme.radius.control};
+    font-size: var(--gh-font-secondary); line-height: var(--gh-leading-heading); font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  svg { inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); }
+  @media (pointer: coarse) { && { min-block-size: var(--form-control-height); } }
   &&[data-share-icon-only] {
     ${slipHeaderActionFrame}
-    inline-size: var(--slip-header-action-size, var(--form-control-height, 40px)); min-inline-size: var(--slip-header-action-size, var(--form-control-height, 40px));
-    block-size: var(--slip-header-action-size, var(--form-control-height, 40px)); min-block-size: var(--slip-header-action-size, var(--form-control-height, 40px)); padding: 0;
+    inline-size: var(--slip-header-action-size, var(--form-control-height)); min-inline-size: var(--slip-header-action-size, var(--form-control-height));
+    block-size: var(--slip-header-action-size, var(--form-control-height)); min-block-size: var(--slip-header-action-size, var(--form-control-height)); padding: 0;
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  }
   }
-  &[data-share-icon-only] svg { inline-size: 16px; block-size: 16px; }
+  &[data-share-icon-only] svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
 `;
 
 export const Drawer = styled.dialog`
   position: fixed; inset-block: 0; inset-inline: auto 0;
-  inline-size: min(22rem, 100vw); max-inline-size: 100vw; block-size: 100dvh; max-block-size: 100dvh;
+  inline-size: min(var(--gh-size-88), 100vw); max-inline-size: 100vw; block-size: 100dvh; max-block-size: 100dvh;
   margin: 0 0 0 auto; padding: 0; border: 0; border-inline-start: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   border-start-start-radius: ${({ theme }) => theme.radius.overlay}; border-end-start-radius: ${({ theme }) => theme.radius.overlay};
   ${dialogSurface} color: ${({ theme }) => theme.color.text};
-  @media (max-width: 22rem) { border-radius: ${({ theme }) => theme.radius.none}; }
-  font: inherit; font-size: .8125rem; text-align: start; overflow: hidden;
+  @media (max-width: ${({ theme }) => theme.viewport[22]}) { border-radius: ${({ theme }) => theme.radius.none}; }
+  font: inherit; font-size: var(--gh-font-body); text-align: start; overflow: hidden;
   &[open] { display: flex; flex-direction: column; }
   &::backdrop { background: ${({ theme }) => theme.color.scrim}; }
 `;
 
 export const DrawerHeader = styled.header`
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none;
-  padding: 12px 16px; border-block-end: 0;
-  h2 { font-size: .9375rem; line-height: 1.3; margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); flex: none;
+  padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-end: 0;
+  h2 { font-size: var(--gh-font-reading); line-height: var(--gh-leading-label); margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 
 export const DrawerButton = styled(Button)`
-  && { min-block-size: var(--form-control-height, 40px); min-inline-size: 34px; padding: 6px 8px; font-size: .75rem; line-height: 1.3; border-radius: ${({ theme }) => theme.radius.control}; }
-  svg { inline-size: 15px; block-size: 15px; }
-  ${media.belowDesktop} { && { min-block-size: var(--form-control-height, 40px); min-inline-size: 44px; } }
-  @media (pointer: coarse) { && { min-block-size: var(--form-control-height, 40px); min-inline-size: 44px; } }
+  && { min-block-size: var(--form-control-height); min-inline-size: var(--gh-size-8_5); padding: var(--gh-spacing-1_5) var(--gh-spacing-2); font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); border-radius: ${({ theme }) => theme.radius.control}; }
+  svg { inline-size: var(--gh-size-3_75); block-size: var(--gh-size-3_75); }
+  ${media.belowDesktop} { && { min-block-size: var(--form-control-height); min-inline-size: var(--gh-size-11); } }
+  @media (pointer: coarse) { && { min-block-size: var(--form-control-height); min-inline-size: var(--gh-size-11); } }
 `;
 
 export const DrawerBody = styled.div`
-  padding: 16px; flex: 1; min-block-size: 0; min-inline-size: 0; overflow-y: auto; overscroll-behavior: contain;
-  figure { margin: 0 0 16px; padding: 10px; background: ${({ theme }) => theme.color.surfaceMuted}; }
+  padding: var(--gh-spacing-4); flex: 1; min-block-size: 0; min-inline-size: 0; overflow-y: auto; overscroll-behavior: contain;
+  figure { margin: 0 0 var(--gh-spacing-4); padding: var(--gh-spacing-2_5); background: ${({ theme }) => theme.color.surfaceMuted}; }
   [data-share-image] { display: block; inline-size: 100%; block-size: auto; }
-  [data-image-pagination] { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block-start: 8px; }
-  [data-image-pagination] span { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; }
-  [data-share-summary] { font-weight: ${({ theme }) => theme.typography.weight.bold}; margin: 0 0 8px; }
-  [data-share-caption] { display: grid; gap: 5px; font-size: .75rem; }
+  [data-image-pagination] { display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2); margin-block-start: var(--gh-spacing-2); }
+  [data-image-pagination] span { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
+  [data-share-summary] { font-weight: ${({ theme }) => theme.typography.weight.bold}; margin: 0 0 var(--gh-spacing-2); }
+  [data-share-caption] { display: grid; gap: var(--gh-spacing-1_25); font-size: var(--gh-font-secondary); }
   [data-share-caption] p { margin: 0; }
-  [data-share-caption] a { overflow-wrap: anywhere; font-size: .6875rem; }
-  [data-share-public-note] { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; margin: 12px 0 0; }
+  [data-share-caption] a { overflow-wrap: anywhere; font-size: var(--gh-font-caption); }
+  [data-share-public-note] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); margin: var(--gh-spacing-3) 0 0; }
   [data-share-error] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
-  textarea { inline-size: 100%; min-block-size: 150px; resize: vertical; background: ${({ theme }) => theme.color.field};
-    color: inherit; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: 8px; ${textFieldSurface} }
+  textarea { inline-size: 100%; min-block-size: var(--gh-size-37_5); resize: vertical; background: ${({ theme }) => theme.color.field};
+    color: inherit; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; padding: var(--gh-spacing-2); ${textFieldSurface} }
 `;
 
 export const DrawerFooter = styled.footer`
-  flex: none; padding: 12px 16px; border-block-start: 0;
-  [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-block-end: 9px; }
+  flex: none; padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-start: 0;
+  [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--gh-spacing-1_5); margin-block-end: var(--gh-spacing-2_25); }
   [data-share-primary] { inline-size: 100%; }
-  [data-share-feedback] { font-size: .6875rem; margin: 10px 0 0; color: ${({ theme }) => theme.color.mutedText}; }
+  [data-share-feedback] { font-size: var(--gh-font-caption); margin: var(--gh-spacing-2_5) 0 0; color: ${({ theme }) => theme.color.mutedText}; }
 `;

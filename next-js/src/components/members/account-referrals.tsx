@@ -17,30 +17,30 @@ import { media } from "@/styles/theme";
 import { invitationShareAvailable, serverInvitationShareAvailable, shareInvitation, subscribeInvitationShare } from "./invitation-share";
 
 const LinkRow = styled.div`
-  display: flex; align-items: end; gap: 8px; max-inline-size: 48rem;
+  display: flex; align-items: end; gap: var(--gh-spacing-2); max-inline-size: var(--gh-size-192);
   > :first-child { flex: 1; min-inline-size: 0; }
   input { min-inline-size: 0; }
   > button { flex: none; inline-size: auto; }
   ${inlineControlRow}
 `;
 const ShareActions = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-inline-size: 48rem;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); max-inline-size: var(--gh-size-192);
   > button { grid-column: 1 / -1; }
-  > a, > button { min-block-size: var(--form-control-height, 40px); }
+  > a, > button { min-block-size: var(--form-control-height); }
   ${media.tablet} { display: flex; flex-wrap: wrap; > a, > button { inline-size: auto; } }
 `;
 const InviteContent = styled.div`
-  display: grid; gap: 16px;
+  display: grid; gap: var(--gh-spacing-4);
   > p { color: ${({ theme }) => theme.color.text}; }
 `;
 const InviteTitle = styled.span`
-  display: inline-flex; align-items: center; gap: 8px;
-  > svg { color: ${({ theme }) => theme.color.brand}; font-size: 1.25rem; }
+  display: inline-flex; align-items: center; gap: var(--gh-spacing-2);
+  > svg { color: ${({ theme }) => theme.color.brand}; font-size: var(--gh-font-heading); }
 `;
 const History = styled.table`
   ${filledTableRows}
   border-collapse: collapse; inline-size: 100%; font-size: ${({ theme }) => theme.typography.scale.secondary};
-  th, td { text-align: start; padding: 10px 8px; border-block-end: 0; }
+  th, td { text-align: start; padding: var(--gh-spacing-2_5) var(--gh-spacing-2); border-block-end: 0; }
   th { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   td:last-child, th:last-child { text-align: end; white-space: nowrap; }
   tr:last-child td { border-block-end: 0; }
@@ -105,7 +105,7 @@ export function AccountReferrals({ locale, summary }: { locale: string; summary:
         <div><dt>{m.text("referrals.earned")}</dt><dd>{m.number(summary.earnedDays)}</dd></div>
         <div><dt>{m.text("referrals.remaining")}</dt><dd>{rewardTime(locale, summary.remainingMs)}</dd></div>
       </AccountFacts>
-      <AccountFine style={{ marginBlockStart: 12 }}>{m.text("referrals.useHint")}</AccountFine>
+      <AccountFine style={{ marginBlockStart: "var(--gh-spacing-3)" }}>{m.text("referrals.useHint")}</AccountFine>
     </AccountPanel>
     <AccountPanel title={m.text("referrals.history")} data-referral-history>
       {!summary.history.length ? <AccountFine>{m.text("referrals.empty")}</AccountFine> : <History>

@@ -26,10 +26,10 @@ const Surface = styled(TouchlineSurface)`
   ${media.belowDesktop} { margin-inline: calc(-1 * ${contentGutter}); border-inline: 0; }
 `;
 const Panel = styled.div`
-  padding: 16px ${({ theme }) => theme.layout.gutter}; min-inline-size: 0;
-  min-block-size: min(280px, 40dvh);
-  scroll-margin-block-start: calc(var(--review-height, 0px) + var(--app-header-height, 3rem) + 64px);
-  ${media.belowDesktop} { padding: 12px; scroll-margin-block-start: calc(var(--review-height, 0px) + 50px);
+  padding: var(--gh-spacing-4) ${({ theme }) => theme.layout.gutter}; min-inline-size: 0;
+  min-block-size: min(var(--gh-size-70), 40dvh);
+  scroll-margin-block-start: calc(var(--review-height, 0px) + var(--app-header-height, var(--gh-size-12)) + var(--gh-spacing-16));
+  ${media.belowDesktop} { padding: var(--gh-spacing-3); scroll-margin-block-start: calc(var(--review-height, 0px) + var(--gh-spacing-12_5));
   }
   ${focusRing}
 `;

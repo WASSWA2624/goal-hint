@@ -23,6 +23,8 @@ fallback, and native appearance metadata all consume the same active exports.
 | Header surfaces, navigation, logo polarity, and height | `header` |
 | Body and heading families, sizes, weights, and line heights | `typography` |
 | Spacing, content rails, gutters, reading width, and control sizes | `space`, `layout`, `control` |
+| Primitive spacing and dimensions, reading measures and local responsive thresholds | `spacing`, `size`, `measure`, `relativeSize`, `viewport` |
+| Layering, transparency and physical football-symbol colors | `layer`, `opacity`, `illustration` |
 | Shared corner geometry and desktop card frames | `radius`, `frame` |
 | Zero decorative border widths and visible keyboard focus outlines | `border` |
 | Mobile match borders, corners, and slip body/header separation | `phoneCardFrame` |
@@ -36,6 +38,25 @@ semantic token to the contract and defaults, then consume it in the reusable
 component. A screen must not branch on a theme name or define its own palette,
 font override, radius, or interaction timing. Keep structural component markup
 and behavior separate from these visual decisions.
+
+`theme-tokens.ts` owns the primitive scales. Spacing steps use a 4px unit; size
+steps use a quarter-rem unit. Fractional steps support compact icons and tables.
+`theme-css.ts` publishes these values once on `html`, along with typography,
+stroke, opacity, stacking and motion variables. Reuse `var(--gh-spacing-2)` for
+an 8px gap and `var(--gh-size-8)` for a 2rem dimension. Semantic roles such as
+`theme.layout.gutter`, `theme.radius.control` and `theme.color.surface` remain
+the preferred interface when a component already has an appropriate role.
+
+Light-mode content and slip bodies use the white surface. Headers, footers,
+dialog chrome, selected sections and semantic status fills can use other theme
+surfaces. Exported slips and flattened screenshot uploads use the shared light
+palette for portable, readable images regardless of the sender's appearance.
+
+Run `npm run test:theme:contract` to audit styled CSS and inline style values.
+The unit suite also checks that every geometry variable has a definition.
+Structural zeroes, proportions, grid fractions, intrinsic sizing, SVG paths and
+data-driven chart/pitch coordinates stay local. Fixed output-image constraints
+and historical design catalogs are deliberate exceptions, not screen palettes.
 
 Small layout refinements belong in shared spacing, layout, and control tokens.
 Use `desktopContentPadding` and `theme.layout.gutter` for shared section rails,

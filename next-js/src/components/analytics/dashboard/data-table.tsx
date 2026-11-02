@@ -84,7 +84,7 @@ export function DataTable({ id, dataset, rows, exportHref, onFilter, pageSize = 
 
 const TableBlock = styled.div`
   display: grid;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
 `;
 const TableTools = styled.div`
@@ -92,10 +92,10 @@ const TableTools = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 16px;
+  gap: var(--gh-spacing-2) var(--gh-spacing-4);
 `;
 const Description = styled.p`
-  flex: 1 1 16rem;
+  flex: 1 1 var(--gh-size-64);
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
@@ -103,8 +103,8 @@ const ExportLink = styled.a`
   border-radius: ${({ theme }) => theme.radius.control};
   display: inline-flex;
   align-items: center;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 10px;
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2_5);
   border: 0;
   color: ${({ theme }) => theme.color.text};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
@@ -122,20 +122,20 @@ const Table = styled.table`
   inline-size: 100%;
   border-collapse: collapse;
   font-size: ${({ theme }) => theme.typography.scale.body};
-  caption { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  caption { position: absolute; inline-size: var(--gh-size-0_25); block-size: var(--gh-size-0_25); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   th, td {
-    padding: 7px 10px;
+    padding: var(--gh-spacing-1_75) var(--gh-spacing-2_5);
     border-block-end: 0;
     text-align: start;
     vertical-align: middle;
   }
-  td { max-inline-size: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td { max-inline-size: var(--gh-size-88); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   [data-numeric] { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
   thead th { padding: 0; color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; white-space: nowrap; }
   thead th[data-numeric] button { justify-content: flex-end; }
   tbody th {
-    min-inline-size: 12rem;
-    max-inline-size: 28rem;
+    min-inline-size: var(--gh-size-48);
+    max-inline-size: var(--gh-size-112);
     font-weight: ${({ theme }) => theme.typography.weight.body};
     background: linear-gradient(90deg, ${({ theme }) => theme.color.brandSoft} var(--share), transparent var(--share));
     overflow-wrap: anywhere;
@@ -145,20 +145,20 @@ const Table = styled.table`
 const SortButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   inline-size: 100%;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 6px 10px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
 `;
 const SortMark = styled.span`
-  font-size: 0.75em;
-  opacity: 0.7;
+  font-size: var(--gh-font-relative);
+  opacity: var(--gh-opacity-70);
 `;
 const RowFilter = styled.button`
   padding: 0;
@@ -169,14 +169,14 @@ const RowFilter = styled.button`
   text-align: start;
   text-decoration: underline;
   text-decoration-color: transparent;
-  text-underline-offset: 0.2em;
+  text-underline-offset: var(--gh-relativeSize-0_2);
   cursor: pointer;
   @media (hover: hover) { &:hover { text-decoration-color: currentColor; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
 `;
 const MoreButton = styled.button`
   justify-self: start;
-  padding: 6px 0;
+  padding: var(--gh-spacing-1_5) 0;
   border: 0;
   background: none;
   color: ${({ theme }) => theme.color.link};
@@ -185,7 +185,7 @@ const MoreButton = styled.button`
   cursor: pointer;
 `;
 const Empty = styled.p`
-  padding: 24px 12px;
+  padding: var(--gh-spacing-6) var(--gh-spacing-3);
   color: ${({ theme }) => theme.color.mutedText};
   text-align: center;
   background: ${({ theme }) => theme.color.surfaceMuted};

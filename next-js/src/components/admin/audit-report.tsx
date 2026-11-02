@@ -1,5 +1,7 @@
 "use client";
 
+import { media } from "@/styles/theme";
+
 import { Fragment, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
@@ -96,7 +98,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     requestAnimationFrame(() => {
       const feed = document.getElementById("audit-results");
       feed?.focus({ preventScroll: true });
-      if (window.matchMedia("(min-width: 64rem)").matches) { if (feed) feed.scrollTop = 0; }
+      if (window.matchMedia(media.desktop.replace("@media ", "")).matches) { if (feed) feed.scrollTop = 0; }
       else feed?.scrollIntoView({ block: "start" });
     });
   }
@@ -154,7 +156,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
               return <AuditEvent key={row.id} data-audit-event={row.id}>
                 <summary aria-current={selected?.id === row.id ? "true" : undefined} onClick={event => {
                   setSelectedId(row.id);
-                  if (window.matchMedia("(min-width: 64rem)").matches) event.preventDefault();
+                  if (window.matchMedia(media.desktop.replace("@media ", "")).matches) event.preventDefault();
                 }}>
                   <EventIcon $category={kind}><Icon /></EventIcon>
                   <EventText><strong>{auditActionLabel(row.action)}</strong><span>{auditActorLabel(row.actor)} · {auditTargetLabel(row.targetType)}</span></EventText>

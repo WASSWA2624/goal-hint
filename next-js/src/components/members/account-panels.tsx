@@ -46,7 +46,7 @@ export function AccountDevices({ locale, devices }: { locale: string; devices: r
   return <AccountPanel narrow title={m.text("account.unlockedDevices")} data-account-devices>
     {devices === null ? <AccountFine role="status">{m.text("account.devicesUnavailable")}</AccountFine>
       : devices.length ? <>
-        {devices.map((device, index) => <AccountFacts key={`${device.at}:${index}`} style={{ marginBlockEnd: 20 }}>
+        {devices.map((device, index) => <AccountFacts key={`${device.at}:${index}`} style={{ marginBlockEnd: "var(--gh-spacing-5)" }}>
           <div><dt>{m.text("account.deviceColumn")}</dt><dd>{m.text(device.current ? "account.currentDevice" : "account.deviceLabel", { number: m.number(index + 1) })}</dd></div>
           <div><dt>{m.text("account.lastUsed")}</dt><dd><time dateTime={device.at}>{formatSubscriptionExpiry(new Date(device.at))}</time></dd></div>
         </AccountFacts>)}
@@ -57,7 +57,7 @@ export function AccountDevices({ locale, devices }: { locale: string; devices: r
 
 export function AccountQuickActions({ locale, returnTo }: { locale: string; returnTo: string | null }) {
   const m = createMessages(locale);
-  return <AccountSectionActions style={{ paddingInline: 16 }}>
+  return <AccountSectionActions style={{ paddingInline: "var(--gh-spacing-4)" }}>
     <ButtonLink href={accountSectionHref(locale, "phone", returnTo)} prefetch={false} variant="secondary">{m.text("account.changePhone")}</ButtonLink>
     <ButtonLink href={accountSectionHref(locale, "password", returnTo)} prefetch={false} variant="secondary">{m.text("account.changePassword")}</ButtonLink>
     <AccountActionLink href={accountSectionHref(locale, "activity", returnTo)} prefetch={false}>{m.text("account.section.activity")}</AccountActionLink>

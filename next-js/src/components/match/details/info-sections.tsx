@@ -28,18 +28,18 @@ const at = (value: number) => utcInstantFromEpochMilliseconds(value);
 const NewsRow = styled(RowButton)`
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  @container details-card (min-width: 16rem) { grid-template-columns: auto minmax(0, 1fr); }
-  > span[data-text] { display: grid; gap: 1px; min-inline-size: 0; }
+  @container details-card (min-width: ${({ theme }) => theme.viewport[16]}) { grid-template-columns: auto minmax(0, 1fr); }
+  > span[data-text] { display: grid; gap: var(--gh-spacing-0_25); min-inline-size: 0; }
   > span[data-text] > b { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > span[data-text] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
 `;
 /** A team's last result: plain clicks open it in place, while the row stays a real link to its own match page. */
 const LastResultRow = styled(RowButton)`grid-template-columns: auto minmax(0, 1fr) auto; text-decoration: none;`;
-const SmallLogo = styled.img`flex: none; inline-size: 18px; block-size: 18px; object-fit: contain;`;
+const SmallLogo = styled.img`flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); object-fit: contain;`;
 const ExternalLink = styled.a`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   justify-self: start;
   color: ${({ theme }) => theme.color.accent.blue.solid};
   font-size: ${size("body")};
@@ -53,17 +53,17 @@ const ExternalLink = styled.a`
 const HistoryBody = styled.div`
   min-inline-size: 0;
   font-size: ${size("body")};
-  line-height: 1.45;
+  line-height: var(--gh-leading-reading);
   > #revision-history { padding: 0; background: none; border: 0; }
   > #revision-history > summary { display: none; }
-  > #revision-history > div { gap: 12px; }
-  & :is(h2, h3) { font-size: ${size("emphasis")}; line-height: 1.25; }
-  & section { padding: 10px; }
-  & ol { gap: 10px; }
-  & li > div { gap: 4px; }
+  > #revision-history > div { gap: var(--gh-spacing-3); }
+  & :is(h2, h3) { font-size: ${size("emphasis")}; line-height: var(--gh-leading-heading); }
+  & section { padding: var(--gh-spacing-2_5); }
+  & ol { gap: var(--gh-spacing-2_5); }
+  & li > div { gap: var(--gh-spacing-1); }
   /* Text links (not the Retry and Older buttons) keep a 28px target. */
-  & li a, > #revision-history > div > a { min-block-size: 1.75rem; }
-  ${desktop} { & :is(h2, h3) { font-size: 0.9375rem; } }
+  & li a, > #revision-history > div > a { min-block-size: var(--gh-size-7); }
+  ${desktop} { & :is(h2, h3) { font-size: var(--gh-font-reading); } }
 `;
 
 function NewsRows({ items }: { items: readonly NewsItem[] }) {
@@ -103,12 +103,12 @@ export const NewsSection = memo(function NewsSection({ omitPredictionAnalysis = 
         {selected.retrievedAt !== null && <><dt>{messages.text("detail.retrieved")}</dt><dd>
           <time dateTime={toUtcIsoString(at(selected.retrievedAt))}>{messages.reportingInstant(at(selected.retrievedAt))}</time></dd></>}
       </Facts>
-      {selected.details.length > 0 && <ul style={{ margin: 0, paddingInlineStart: "1.1rem", fontSize: "0.8125rem", display: "grid", gap: 4 }}>
+      {selected.details.length > 0 && <ul style={{ margin: 0, paddingInlineStart: "var(--gh-size-4_4)", fontSize: "var(--gh-font-body)", display: "grid", gap: "var(--gh-spacing-1)" }}>
         {selected.details.map((detail, index) => <li key={index}>{detail}</li>)}</ul>}
       <Note>{messages.text(selected.kind === "analysis" ? "details.analysisNote" : "details.reportNote")}</Note>
       {selected.url && <ExternalLink href={selected.url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">
         {messages.text("details.readOriginal")}<ExternalIcon /></ExternalLink>}
-    </ItemPanel> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    </ItemPanel> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       <PanelBar>
         <ChoiceGroup label={messages.text("details.newsType")} value={kind ?? "all"} onChange={(value: string) => update((current) => ({ ...current, tab: value === "all" ? null : value, page: 1 }), "replace")}
           options={[{ value: "all", label: messages.text("details.allItems") }, { value: "report", label: messages.text("details.newsKind.report") },
@@ -142,9 +142,9 @@ export const ContextSection = memo(function ContextSection() {
   return <SectionCard section="context" icon={<ContextIcon />} title={messages.text("details.section.context")}
     meta={value?.competition.round ?? null} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={context.loading} error={context.error} onRetry={context.retry} />
-    {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       <Facts>
-        <dt>{messages.text("details.competition")}</dt><dd style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <dt>{messages.text("details.competition")}</dt><dd style={{ display: "flex", alignItems: "center", gap: "var(--gh-spacing-1_5)" }}>
           {fixture.competition.logoUrl && <SmallLogo src={providerImageSource(fixture.competition.logoUrl, 18)} alt="" width={18} height={18} referrerPolicy="no-referrer" />}
           {fixture.competition.name ?? messages.text("match.competitionUnknown")}</dd>
         <dt>{messages.text("details.country")}</dt><dd>{value?.competition.country ?? fixture.competition.country ? <CountryLabel country={value?.competition.country ?? fixture.competition.country} /> : messages.text("details.notAvailable")}</dd>
@@ -165,7 +165,7 @@ export const ContextSection = memo(function ContextSection() {
       <RowList>
         {(["home", "away"] as const).map((side) => {
           const last = value?.lastResults[side] ?? null, next = value?.nextFixtures[side] ?? null, name = side === "home" ? home : away;
-          return <li key={side} style={{ display: "grid", gap: 4, padding: "6px 4px", fontSize: "0.75rem" }}>
+          return <li key={side} style={{ display: "grid", gap: "var(--gh-spacing-1)", padding: "var(--gh-spacing-1_5) var(--gh-spacing-1)", fontSize: "var(--gh-font-secondary)" }}>
             <Strong>{name}</Strong>
             {last ? <LastResultRow as={Link} href={matchHref(last.fixtureId, last.slug, locale)} prefetch={false} data-item-key={last.fixtureId}
               onClick={(event) => plainClick(event, () => update((current) => ({ ...current, item: last.fixtureId })))}>
@@ -173,7 +173,7 @@ export const ContextSection = memo(function ContextSection() {
               <span>{last.home.name} {messages.number(last.homeGoals)}–{messages.number(last.awayGoals)} {last.away.name}</span>
               <time dateTime={toUtcIsoString(at(last.kickoffAt))}>{messages.reportingDay(at(last.kickoffAt))}</time>
             </LastResultRow> : <Note>{messages.text("details.noLastResult")}</Note>}
-            {next ? <Link href={matchHref(next.fixtureId, next.slug, locale)} prefetch={false} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {next ? <Link href={matchHref(next.fixtureId, next.slug, locale)} prefetch={false} style={{ display: "flex", alignItems: "center", gap: "var(--gh-spacing-1_5)" }}>
               <Pill $accent="violet">{messages.text("details.nextFixture")}</Pill>
               <Crest name={next.home.name} url={next.home.logoUrl} size={16} />{next.home.name} – {next.away.name}
               <span style={{ marginInlineStart: "auto" }}>{messages.reportingDay(at(next.kickoffAt))}</span>

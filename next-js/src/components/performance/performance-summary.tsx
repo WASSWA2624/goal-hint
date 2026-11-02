@@ -1,6 +1,6 @@
 "use client";
 
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
@@ -8,46 +8,46 @@ import { predictedPerformanceSummary, type PerformanceSummaryCounts } from "@/do
 import { createMessages } from "@/i18n/messages";
 import { media, type OutcomeTone } from "@/styles/theme";
 
-const wide = "@container performance-summary (min-width: 56rem)";
+const wide = css`@container performance-summary (min-width: ${({ theme }) => theme.size[224]})`;
 
 const Panel = styled.div`
   container: performance-summary / inline-size;
-  position: relative; min-inline-size: 0; block-size: max(44px, 2.75rem); box-sizing: border-box;
+  position: relative; min-inline-size: 0; block-size: max(var(--gh-size-11), var(--gh-size-11)); box-sizing: border-box;
   border: 0;
-  background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.surface}; line-height: 1.35;
-  ${media.desktop} { block-size: 2.25rem; }
+  background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.surface}; line-height: var(--gh-leading-caption);
+  ${media.desktop} { block-size: var(--gh-size-9); }
   ${desktopSectionFrame}
-  @media (pointer: coarse) { block-size: max(44px, 2.75rem); ${media.desktop} { block-size: max(44px, 2.25rem); } }
+  @media (pointer: coarse) { block-size: max(var(--gh-size-11), var(--gh-size-11)); ${media.desktop} { block-size: max(var(--gh-size-11), var(--gh-size-9)); } }
 `;
 const Content = styled.div`
-  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 1px;
-  block-size: 100%; min-inline-size: 0; padding: 3px 8px 5px; box-sizing: border-box;
-  ${media.desktop} { display: flex; align-items: center; gap: 12px; padding: 3px 12px 5px; }
+  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-0_25);
+  block-size: 100%; min-inline-size: 0; padding: var(--gh-spacing-0_75) var(--gh-spacing-2) var(--gh-spacing-1_25); box-sizing: border-box;
+  ${media.desktop} { display: flex; align-items: center; gap: var(--gh-spacing-3); padding: var(--gh-spacing-0_75) var(--gh-spacing-3) var(--gh-spacing-1_25); }
   ${desktopContentPadding(true)}
 `;
 const Header = styled.header`
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--gh-spacing-2);
   min-inline-size: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
-  > h2, > h3 { flex: none; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.2; }
-  > p { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
+  > h2, > h3 { flex: none; font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-control); }
+  > p { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); line-height: var(--gh-leading-control); font-variant-numeric: tabular-nums; }
   ${media.desktop} {
-    display: grid; flex: none; gap: 1px; max-inline-size: 40%;
-    padding-inline-end: 12px; border-inline-end: 0;
+    display: grid; flex: none; gap: var(--gh-spacing-0_25); max-inline-size: 40%;
+    padding-inline-end: var(--gh-spacing-3); border-inline-end: 0;
   }
 `;
 /** One focusable strip preserves every figure at phone widths without increasing the summary height. */
 const Figures = styled.div`
-  display: flex; align-items: center; gap: 8px; min-inline-size: 0;
+  display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0;
   overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
   scrollbar-width: thin; scrollbar-color: ${({ theme }) => theme.color.border} transparent;
-  &::-webkit-scrollbar { block-size: 3px; }
+  &::-webkit-scrollbar { block-size: var(--gh-size-0_75); }
   &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   ${media.desktop} { flex: 1; align-self: stretch; }
 `;
 const Counts = styled.dl`
-  display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 6px;
+  display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: var(--gh-spacing-1_5);
   inline-size: max-content; margin: 0;
 `;
 const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean }>`
@@ -56,38 +56,38 @@ const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean }>`
   display: flex; align-items: baseline; min-inline-size: 0; white-space: nowrap;
   &::before {
     content: ${({ $tone }) => $tone ? '""' : "none"}; order: 0; flex: none;
-    inline-size: 6px; block-size: 6px; margin-inline-end: 4px;
+    inline-size: var(--gh-size-1_5); block-size: var(--gh-size-1_5); margin-inline-end: var(--gh-spacing-1);
     background: ${({ $zero }) => $zero ? "transparent" : "var(--summary-tone)"}; border: 0;
   }
   dd {
-    order: 1; margin: 0; font-size: 0.75rem; line-height: 1.25;
+    order: 1; margin: 0; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-heading);
     font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
     color: ${({ theme, $tone, $zero }) => $zero ? theme.color.mutedText
       : $tone === "unavailable" ? theme.color.text : "var(--summary-tone)"};
   }
-  dt { order: 2; margin-inline-start: 4px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; line-height: 1.25; }
+  dt { order: 2; margin-inline-start: var(--gh-spacing-1); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); line-height: var(--gh-leading-heading); }
 `;
 const OutcomeCount = styled(OutcomeBadge)<{ $outcome: "correct" | "incorrect" | "pending" }>`
-  flex: none; min-inline-size: max-content; min-block-size: 16px; padding: 0 4px;
+  flex: none; min-inline-size: max-content; min-block-size: var(--gh-size-4); padding: 0 var(--gh-spacing-1);
   border: 0; border-radius: ${({ theme }) => theme.radius.small}; white-space: nowrap;
   color: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].background};
-  font-size: 0.6875rem; line-height: 1.25; font-variant-numeric: tabular-nums;
+  font-size: var(--gh-font-caption); line-height: var(--gh-leading-heading); font-variant-numeric: tabular-nums;
   dt, dd { margin: 0; color: inherit; font: inherit; }
   dt { order: 2; }
-  dd { display: inline-flex; align-items: center; gap: 4px; order: 1; }
+  dd { display: inline-flex; align-items: center; gap: var(--gh-spacing-1); order: 1; }
   dd { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  dd > svg { flex: none; font-size: 0.625rem; }
+  dd > svg { flex: none; font-size: var(--gh-font-micro); }
 `;
 const PredictedCount = styled(Count)`
   flex: none;
 `;
 const OutcomePercentage = styled.span`
   display: none;
-  ${wide} { display: inline; margin-inline-start: 4px; font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  ${wide} { display: inline; margin-inline-start: var(--gh-spacing-1); font-size: var(--gh-font-micro); font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Extras = styled.dl`
-  display: flex; flex: none; gap: 8px; margin: 0; padding-inline-start: 8px;
+  display: flex; flex: none; gap: var(--gh-spacing-2); margin: 0; padding-inline-start: var(--gh-spacing-2);
   border-inline-start: 0;
 `;
 /** One compact, accessible presentation for full-period match and slip outcomes. */

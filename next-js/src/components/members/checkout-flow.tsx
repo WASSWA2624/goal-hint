@@ -342,7 +342,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         <PaymentDestination selection={selection()} settings={settings} plans={plans} onError={setError} />
         <WizardActions><Button variant="secondary" onClick={() => update({ step: 0 })}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
       </>}
-      {draft.step === 2 && <form onSubmit={review} noValidate style={{ display: "grid", gap: 12 }}>
+      {draft.step === 2 && <form onSubmit={review} noValidate style={{ display: "grid", gap: "var(--gh-spacing-3)" }}>
         {external && <>
           <WizardNotice id={`${evidenceId}-requirement`}>Message or screenshot required.</WizardNotice>
           <FloatingField label={`Transaction message${screenshotReady ? " (optional)" : ""}`}
@@ -371,7 +371,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         <WizardActions><Button variant="secondary" disabled={busy || readingActive} onClick={() => { if (attaching) update({ attachingId: null, step: 0 }); else update({ step: 1 }); }}>Back</Button>
           <Button type="submit" disabled={busy || readingActive}>Next</Button></WizardActions>
       </form>}
-      {draft.step === 3 && <form onSubmit={submit} noValidate style={{ display: "grid", gap: 12 }}>
+      {draft.step === 3 && <form onSubmit={submit} noValidate style={{ display: "grid", gap: "var(--gh-spacing-3)" }}>
         {summary}
         {external && <div data-payment-review>
           <WizardReview><div><dt>Payment method</dt><dd>{methodNames[receiptProvider]}</dd></div><div><dt>Transaction ID</dt><dd>{draft.transactionId}</dd></div>

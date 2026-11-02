@@ -51,18 +51,18 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   ${controlHeight}
   min-inline-size: ${({ theme }) => theme.control.compactHeight};
   max-inline-size: 100%;
   padding-block: ${({ theme }) => theme.space.xs};
-  padding-inline: 12px;
+  padding-inline: var(--gh-spacing-3);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.25;
+  line-height: var(--gh-leading-heading);
   text-align: center;
   text-decoration: none;
   white-space: normal;
@@ -84,12 +84,12 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
       case "quiet":
         return css`
           color: ${theme.color.link};
-          background: ${theme.mode === "light" ? theme.color.field : theme.color.surfaceMuted};
+          background: ${theme.action.quietBackground};
 
           ${media.hover} {
             &:hover {
               color: ${theme.color.brandHover};
-              background: ${theme.mode === "light" ? theme.color.fieldHover : theme.color.brandSoft};
+              background: ${theme.action.quietHoverBackground};
             }
           }
         `;
@@ -108,7 +108,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   }}
 
   ${({ $large, theme }) => $large && css`
-    min-inline-size: 3rem;
+    min-inline-size: var(--gh-size-12);
     border-radius: ${theme.radius.surface};
     font-size: ${theme.typography.scale.body};
     ${media.desktop} { font-size: ${theme.typography.scale.body}; }
@@ -138,7 +138,7 @@ const TextAnchor = styled(Link)`
   color: ${({ theme }) => theme.color.link};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: underline;
-  text-underline-offset: 0.2em;
+  text-underline-offset: var(--gh-relativeSize-0_2);
   overflow-wrap: anywhere;
 
   ${media.hover} {
@@ -161,7 +161,7 @@ export const FieldLabel = styled.label`
   color: ${({ theme }) => theme.color.text};
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
-  line-height: 1.3;
+  line-height: var(--gh-leading-label);
   overflow-wrap: anywhere;
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
@@ -173,7 +173,7 @@ const inputTreatment = css<{ $invalid: boolean }>`
   inline-size: 100%;
   min-inline-size: 0;
   ${controlHeight}
-  padding-block: 6px;
+  padding-block: var(--gh-spacing-1_5);
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
   ${filledField}
@@ -184,7 +184,7 @@ const inputTreatment = css<{ $invalid: boolean }>`
   `}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  line-height: 1.25;
+  line-height: var(--gh-leading-heading);
   ${media.desktop} {
     padding-block: ${({ theme }) => theme.space.sm};
     line-height: ${({ theme }) => theme.typography.lineHeight.body};
@@ -200,9 +200,9 @@ const inputTreatment = css<{ $invalid: boolean }>`
 
 export const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean; $trailing?: boolean }>`
   ${inputTreatment}
-  ${({ $leading }) => $leading && css`padding-inline-start: 38px;`}
-  ${({ $trailing }) => $trailing && css`padding-inline-end: 92px;`}
-  &[data-phone-input] { font-size: 1rem; letter-spacing: 0.02em; }
+  ${({ $leading }) => $leading && css`padding-inline-start: var(--gh-spacing-9_5);`}
+  ${({ $trailing }) => $trailing && css`padding-inline-end: var(--gh-spacing-23);`}
+  &[data-phone-input] { font-size: var(--gh-font-section); letter-spacing: var(--gh-tracking-relaxed); }
 
   &::placeholder {
     color: ${({ theme }) => theme.color.mutedText};
@@ -213,8 +213,8 @@ export const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean
 const PasswordToggle = styled(Button)`
   && {
     position: relative;
-    inline-size: 44px; min-inline-size: 44px; min-block-size: 0; padding: 0;
-    border: 0; border-radius: calc(${({ theme }) => theme.radius.control} - 1px); background: transparent;
+    inline-size: var(--gh-size-11); min-inline-size: var(--gh-size-11); min-block-size: 0; padding: 0;
+    border: 0; border-radius: calc(${({ theme }) => theme.radius.control} - var(--gh-size-0_25)); background: transparent;
     color: ${({ theme }) => theme.color.link};
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; }
   }
@@ -224,14 +224,14 @@ const SelectControl = styled.select<{ $invalid: boolean }>`
   ${inputTreatment}
   padding-inline-end: ${({ theme }) => theme.space.lg};
   /* The global iOS rule covers text fields only; selects under 16px also zoom on focus. */
-  @supports (-webkit-touch-callout: none) { ${media.belowDesktop} { font-size: 16px; } }
+  @supports (-webkit-touch-callout: none) { ${media.belowDesktop} { font-size: var(--gh-font-section); } }
 `;
 
 export const FieldMessage = styled.div<{ $error?: boolean }>`
   color: ${({ theme, $error }) =>
     $error ? theme.color.outcome.incorrect.text : theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  line-height: 1.4;
+  line-height: var(--gh-leading-compact);
   overflow-wrap: anywhere;
   ${media.desktop} {
     font-size: ${({ theme }) => theme.typography.size.small};
@@ -345,23 +345,23 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
 const Segments = styled.fieldset`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
-  > legend { margin-block-end: 6px; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  > legend { margin-block-end: var(--gh-spacing-1_5); font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > label { position: relative; min-inline-size: 0; }
   > label:first-of-type > span { border-start-start-radius: ${({ theme }) => theme.radius.control}; border-end-start-radius: ${({ theme }) => theme.radius.control}; }
   > label:last-of-type > span { border-start-end-radius: ${({ theme }) => theme.radius.control}; border-end-end-radius: ${({ theme }) => theme.radius.control}; }
-  input { position: absolute; opacity: 0; inline-size: 1px; block-size: 1px; }
+  input { position: absolute; opacity: 0; inline-size: var(--gh-size-0_25); block-size: var(--gh-size-0_25); }
   span {
     display: flex;
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
     ${controlHeight}
-    padding: 8px;
+    padding: var(--gh-spacing-2);
     border: 0;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.brandSoft};
@@ -370,8 +370,8 @@ const Segments = styled.fieldset`
   }
   label + label > span { border-inline-start: 0; }
   input:checked + span { color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; }
-  input:focus-visible + span { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
-  &:disabled span { cursor: not-allowed; opacity: 0.6; }
+  input:focus-visible + span { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
+  &:disabled span { cursor: not-allowed; opacity: var(--gh-opacity-60); }
 `;
 
 /** Two full-size choices, with native radio keyboard and form behavior. */

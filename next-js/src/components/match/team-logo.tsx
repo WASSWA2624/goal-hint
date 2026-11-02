@@ -13,15 +13,15 @@ const LogoBox = styled.span<{ $loaded: boolean }>`
   flex-shrink: 0;
   place-items: center;
   position: relative;
-  inline-size: var(--gh-logo-size, 32px);
-  block-size: var(--gh-logo-size, 32px);
+  inline-size: var(--gh-logo-size, var(--gh-size-8));
+  block-size: var(--gh-logo-size, var(--gh-size-8));
   border-radius: var(--gh-logo-radius, 0);
   color: var(--gh-logo-ink, ${({ theme }) => theme.color.mutedText});
   background: ${({ theme, $loaded }) => $loaded ? "transparent" : `var(--gh-logo-fill, ${theme.color.surfaceMuted})`};
   box-shadow: ${({ $loaded }) => $loaded ? "none" : "var(--gh-logo-ring, none)"};
   font-size: var(--gh-logo-font, ${({ theme }) => theme.typography.size.small});
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1;
+  line-height: var(--gh-leading-solid);
 `;
 const LogoImage = styled.img<{ $loaded: boolean }>`
   position: absolute;

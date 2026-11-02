@@ -6,22 +6,22 @@ import { media } from "@/styles/theme";
 
 /** Related filters stack on phones and share a labelled, divided row on desktop. */
 export const RadioGroups = styled.div`
-  display: grid; gap: 8px; min-inline-size: 0;
+  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
   > * { min-inline-size: 0; }
   ${media.desktop} {
-    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 20px;
-    > * + * { padding-inline-start: 20px; border-inline-start: 0; }
+    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--gh-spacing-5);
+    > * + * { padding-inline-start: var(--gh-spacing-5); border-inline-start: 0; }
   }
 `;
 
 const Group = styled.fieldset`
-  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-3);
   min-inline-size: 0; margin: 0; padding: 0; border: 0;
-  > legend { padding: 0; margin-block-end: 2px; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
-  > label { display: flex; align-items: center; gap: 5px; min-inline-size: 0; min-block-size: var(--form-control-height, 40px);
-    font-size: .75rem; line-height: 1.3; cursor: pointer; }
-  input { flex: none; inline-size: 14px; block-size: 14px; margin: 0; accent-color: ${({ theme }) => theme.color.accent.blue.solid}; cursor: inherit; }
-  input:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  > legend { padding: 0; margin-block-end: var(--gh-spacing-0_5); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); }
+  > label { display: flex; align-items: center; gap: var(--gh-spacing-1_25); min-inline-size: 0; min-block-size: var(--form-control-height);
+    font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); cursor: pointer; }
+  input { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); margin: 0; accent-color: ${({ theme }) => theme.color.accent.blue.solid}; cursor: inherit; }
+  input:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   span { min-inline-size: 0; overflow-wrap: anywhere; }
   input:checked + span { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;

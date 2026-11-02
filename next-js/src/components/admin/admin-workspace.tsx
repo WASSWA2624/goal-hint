@@ -141,7 +141,7 @@ export const AdminMark = styled.span`
   color: ${({ theme }) => theme.header.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  letter-spacing: 0.08em;
+  letter-spacing: var(--gh-tracking-uppercase);
   text-transform: uppercase;
 `;
 
@@ -152,98 +152,98 @@ const Frame = styled.div<{ $fixed: boolean }>`
   align-content: start;
   min-inline-size: 0;
   ${media.desktop} {
-    grid-template-columns: var(--admin-sidebar-width, 232px) var(--admin-sidebar-handle-width, 6px) minmax(0, 1fr);
+    grid-template-columns: var(--admin-sidebar-width, var(--gh-size-58)) var(--admin-sidebar-handle-width, var(--gh-size-1_5)) minmax(0, 1fr);
     align-content: stretch;
     &[data-sidebar-resizing="true"], &[data-sidebar-resizing="true"] * { cursor: col-resize !important; user-select: none; }
   }
-  ${({ $fixed }) => $fixed && css`${media.desktop} { block-size: calc(100dvh - var(--app-header-height, 3rem)); flex: none; min-block-size: 0; overflow: hidden; }`}
+  ${({ $fixed }) => $fixed && css`${media.desktop} { block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); flex: none; min-block-size: 0; overflow: hidden; }`}
 `;
 const Sidebar = styled.nav<{ $fixed: boolean }>`
   display: none;
   ${media.desktop} {
     display: block;
     position: sticky;
-    inset-block-start: var(--app-header-height, 4rem);
+    inset-block-start: var(--app-header-height, var(--gh-size-16));
     align-self: start;
-    max-block-size: calc(100dvh - var(--app-header-height, 4rem));
+    max-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
     overflow-y: auto;
-    padding: 8px 10px;
+    padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
     background: ${({ theme }) => theme.color.surface};
-    min-block-size: calc(100dvh - var(--app-header-height, 4rem));
+    min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
   }
-  ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-  li[data-separated] { margin-block-start: 10px; padding-block-start: 10px; border-block-start: 0; }
+  ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
+  li[data-separated] { margin-block-start: var(--gh-spacing-2_5); padding-block-start: var(--gh-spacing-2_5); border-block-start: 0; }
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; max-block-size: 100%; min-block-size: 0; overflow-x: hidden; }`}
   ${media.desktop} {
     overflow-x: hidden;
     &[data-collapsed="true"] {
-      padding-inline: 6px;
+      padding-inline: var(--gh-spacing-1_5);
       [data-sidebar-label], [data-sidebar-caption] { display: none; }
       a { position: relative; justify-content: center; padding-inline: 0; }
     }
   }
 `;
 const SidebarHead = styled.div`
-  display: flex; align-items: center; justify-content: space-between; min-block-size: 32px; gap: 4px; margin-block-end: 6px;
+  display: flex; align-items: center; justify-content: space-between; min-block-size: var(--gh-size-8); gap: var(--gh-spacing-1); margin-block-end: var(--gh-spacing-1_5);
 `;
 const SidebarControls = styled.div`
-  display: flex; align-items: center; gap: 2px; margin-inline-start: auto;
+  display: flex; align-items: center; gap: var(--gh-spacing-0_5); margin-inline-start: auto;
 `;
 const SidebarButton = styled.button`
-  display: grid; place-items: center; inline-size: var(--form-control-height, 40px); block-size: var(--form-control-height, 40px); padding: 0;
+  display: grid; place-items: center; inline-size: var(--form-control-height); block-size: var(--form-control-height); padding: 0;
   border: 0; border-radius: ${({ theme }) => theme.radius.control}; color: ${({ theme }) => theme.color.mutedText}; background: none; cursor: pointer;
-  > svg { font-size: 1rem; }
+  > svg { font-size: var(--gh-font-section); }
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
 `;
 const SidebarResize = styled.div<{ $fixed: boolean }>`
   display: none;
   ${media.desktop} {
-    display: block; position: sticky; inset-block-start: var(--app-header-height, 3rem); align-self: start;
-    block-size: calc(100dvh - var(--app-header-height, 3rem)); min-inline-size: 0;
+    display: block; position: sticky; inset-block-start: var(--app-header-height, var(--gh-size-12)); align-self: start;
+    block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); min-inline-size: 0;
     background: ${({ theme }) => theme.color.surface}; border-inline: 0;
     cursor: col-resize; touch-action: none;
     &:hover, &:focus-visible { background: ${({ theme }) => theme.color.brandSoft};  }
-    &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+    &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
     &[hidden] { display: none; }
   }
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; }`}
 `;
 const Caption = styled.p`
-  padding-inline-start: 10px;
+  padding-inline-start: var(--gh-spacing-2_5);
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  letter-spacing: 0.08em;
+  letter-spacing: var(--gh-tracking-uppercase);
   text-transform: uppercase;
 `;
 const SectionLink = WorkspaceNavigationLink;
 const MenuBar = styled.details`
   position: relative;
-  z-index: 15;
+  z-index: var(--gh-layer-toolbar);
   background: ${({ theme }) => theme.color.surface};
   border-block-end: 0;
   ${media.desktop} { display: none; }
   > summary {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-block-size: 48px;
-    padding: 0 16px;
+    gap: var(--gh-spacing-2);
+    min-block-size: var(--gh-size-12);
+    padding: 0 var(--gh-spacing-4);
     list-style: none;
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; font-size: 1.125rem; color: ${({ theme }) => theme.color.mutedText}; }
+    > svg { flex: none; font-size: var(--gh-font-title); color: ${({ theme }) => theme.color.mutedText}; }
     > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
     small {
       color: ${({ theme }) => theme.color.mutedText};
       font-size: ${({ theme }) => theme.typography.scale.caption};
       font-weight: ${({ theme }) => theme.typography.weight.heavy};
-      letter-spacing: 0.08em;
+      letter-spacing: var(--gh-tracking-uppercase);
       text-transform: uppercase;
     }
-    strong { font-size: 0.9375rem; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+    strong { font-size: var(--gh-font-reading); }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
   }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
   @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
@@ -252,18 +252,18 @@ const MenuPopup = styled.nav`
   position: absolute;
   inset-inline: 0;
   inset-block-start: 100%;
-  max-block-size: calc(100dvh - 7rem);
+  max-block-size: calc(100dvh - var(--gh-size-28));
   overflow-y: auto;
-  padding: 6px 8px 10px;
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2) var(--gh-spacing-2_5);
   background: ${({ theme }) => theme.color.surface};
   border-block-end: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
-  ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-  li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: 0; }
+  ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
+  li[data-separated] { margin-block-start: var(--gh-spacing-1_5); padding-block-start: var(--gh-spacing-1_5); border-block-start: 0; }
 `;
 const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
   min-inline-size: 0;
-  padding: 20px 16px calc(40px + 3.5rem + 1px + env(safe-area-inset-bottom));
+  padding: var(--gh-spacing-5) var(--gh-spacing-4) calc(var(--gh-spacing-10) + var(--gh-size-14) + var(--gh-spacing-0_25) + env(safe-area-inset-bottom));
   &:focus { outline: none; }
   ${media.desktop} { grid-column: 3; padding: ${({ theme }) => `${theme.space.lg} 0 calc(${theme.space.lg} * 2)`}; }
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
@@ -271,16 +271,16 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
 `;
 const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>`
   display: grid;
-  gap: 16px;
+  gap: var(--gh-spacing-4);
   align-content: start;
   min-inline-size: 0;
-  max-inline-size: ${({ $wide }) => $wide ? "100%" : "76rem"};
+  max-inline-size: ${({ $wide }) => $wide ? "100%" : "var(--gh-size-304)"};
   margin-inline: auto;
   ${media.desktop} { inline-size: 100%; max-inline-size: none; }
-  ${({ $wide }) => !$wide && css`${media.desktop} { gap: 20px; }`}
+  ${({ $wide }) => !$wide && css`${media.desktop} { gap: var(--gh-spacing-5); }`}
   ${({ $joined }) => $joined && joinedDesktopSections}
   ${({ $fixed }) => $fixed && css`${media.desktop} {
     inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0;
-    &:not(:has(> [data-record-workspace])) { display: block; padding: 20px; overflow-y: auto; }
+    &:not(:has(> [data-record-workspace])) { display: block; padding: var(--gh-spacing-5); overflow-y: auto; }
   }`}
 `;

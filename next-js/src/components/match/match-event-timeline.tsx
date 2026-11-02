@@ -11,61 +11,61 @@ import { MatchPeriodSymbol } from "./match-period-symbol";
 import { Icon } from "@/components/ui/icons";
 
 const Timeline = styled.div`
-  --event-time-width: 4.5rem;
-  inline-size: 100%; max-inline-size: 1440px; margin-inline: auto; min-inline-size: 0;
+  --event-time-width: var(--gh-size-18);
+  inline-size: 100%; max-inline-size: var(--gh-size-360); margin-inline: auto; min-inline-size: 0;
   [data-team="home"] { grid-column: 1; }
   [data-team="away"] { grid-column: 3; }
-  ${media.belowDesktop} { --event-time-width: 3.5rem; }
+  ${media.belowDesktop} { --event-time-width: var(--gh-size-14); }
 `;
 const Teams = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr) var(--event-time-width) minmax(0, 1fr); gap: 8px;
-  align-items: center; padding-block: 4px 8px; border-block-end: 0;
-  > svg { grid-column: 2; grid-row: 1; justify-self: center; inline-size: 16px; block-size: 16px; color: ${({ theme }) => theme.color.mutedText}; }
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--event-time-width) minmax(0, 1fr); gap: var(--gh-spacing-2);
+  align-items: center; padding-block: var(--gh-spacing-1) var(--gh-spacing-2); border-block-end: 0;
+  > svg { grid-column: 2; grid-row: 1; justify-self: center; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const Team = styled.div`
-  display: flex; align-items: center; gap: 8px; min-inline-size: 0;
-  --gh-logo-size: 24px; --gh-logo-font: 10px;
+  display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0;
+  --gh-logo-size: var(--gh-size-6); --gh-logo-font: var(--gh-size-2_5);
   &[data-team="home"] { flex-direction: row-reverse; text-align: end; }
-  > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 6px; min-inline-size: 0; }
+  > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--gh-spacing-0_75) var(--gh-spacing-1_5); min-inline-size: 0; }
   &[data-team="home"] > div { justify-content: end; }
-  strong { font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; }
-  ${media.belowDesktop} { gap: 5px; --gh-logo-size: 24px; strong { font-size: .75rem; } }
+  strong { font-size: var(--gh-font-emphasis); line-height: var(--gh-leading-compact); overflow-wrap: anywhere; }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
+  ${media.belowDesktop} { gap: var(--gh-spacing-1_25); --gh-logo-size: var(--gh-size-6); strong { font-size: var(--gh-font-secondary); } }
 `;
 const List = styled.ol`
-  position: relative; list-style: none; padding: 4px 0; margin: 0;
-  &::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 50%; inline-size: 1px; background: ${({ theme }) => theme.color.border}; }
+  position: relative; list-style: none; padding: var(--gh-spacing-1) 0; margin: 0;
+  &::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 50%; inline-size: var(--gh-size-0_25); background: ${({ theme }) => theme.color.border}; }
 `;
 const Row = styled.li`
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--event-time-width) minmax(0, 1fr);
-  column-gap: 8px; align-items: center; min-inline-size: 0; padding-block: 1px;
+  column-gap: var(--gh-spacing-2); align-items: center; min-inline-size: 0; padding-block: var(--gh-spacing-0_25);
 `;
 const TeamEvents = styled.div`
-  display: flex; flex-direction: column; gap: 2px; grid-row: 1; align-self: start; min-inline-size: 0;
+  display: flex; flex-direction: column; gap: var(--gh-spacing-0_5); grid-row: 1; align-self: start; min-inline-size: 0;
 `;
 const Minute = styled.span`
-  grid-column: 2; grid-row: 1; justify-self: center; z-index: 1;
-  padding: 4px 5px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  font-size: .8125rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.3;
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; }
-  ${media.belowDesktop} { padding-inline: 2px; font-size: .6875rem; > span { font-size: .625rem; } }
+  grid-column: 2; grid-row: 1; justify-self: center; z-index: var(--gh-layer-content);
+  padding: var(--gh-spacing-1) var(--gh-spacing-1_25); color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+  font-size: var(--gh-font-body); font-weight: var(--gh-weight-heavy); font-variant-numeric: tabular-nums; white-space: nowrap; line-height: var(--gh-leading-label);
+  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
+  ${media.belowDesktop} { padding-inline: var(--gh-spacing-0_5); font-size: var(--gh-font-caption); > span { font-size: var(--gh-font-micro); } }
 `;
 const Incident = styled.div`
-  display: flex; align-items: center; gap: 7px; min-inline-size: 0; grid-row: 1; padding: 6px 8px;
+  display: flex; align-items: center; gap: var(--gh-spacing-1_75); min-inline-size: 0; grid-row: 1; padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
   border-inline: 0;
   &[data-team="home"] { flex-direction: row-reverse; text-align: end; }
   > [data-symbol] { display: flex; flex: none; color: ${({ theme }) => theme.color.accent.violet.text}; }
-  > [data-symbol] > svg { inline-size: 24px; block-size: 24px; }
-  > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-inline-size: 0; overflow-wrap: anywhere; }
+  > [data-symbol] > svg { inline-size: var(--gh-size-6); block-size: var(--gh-size-6); }
+  > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-2); min-inline-size: 0; overflow-wrap: anywhere; }
   &[data-team="home"] > div { justify-content: end; }
-  [data-event-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; font-weight: 600; line-height: 1.3; }
-  strong { font-size: .8125rem; font-weight: 700; line-height: 1.4; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem; line-height: 1.4; }
-  [data-player-on], [data-player-off] { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 3px 5px; }
+  [data-event-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-weight: var(--gh-weight-semibold); line-height: var(--gh-leading-label); }
+  strong { font-size: var(--gh-font-body); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-compact); }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); }
+  [data-player-on], [data-player-off] { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: var(--gh-spacing-0_75) var(--gh-spacing-1_25); }
   &[data-team="home"] [data-player-on], &[data-team="home"] [data-player-off] { justify-content: end; }
-  [data-player-on] > small { color: ${({ theme }) => theme.color.accent.emerald.text}; font-weight: 700; }
-  [data-player-off] > small { color: ${({ theme }) => theme.color.accent.red.text}; font-weight: 700; }
-  [data-player-off] > span { color: ${({ theme }) => theme.color.mutedText}; font-size: .8125rem; }
+  [data-player-on] > small { color: ${({ theme }) => theme.color.accent.emerald.text}; font-weight: var(--gh-weight-bold); }
+  [data-player-off] > small { color: ${({ theme }) => theme.color.accent.red.text}; font-weight: var(--gh-weight-bold); }
+  [data-player-off] > span { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-body); }
   [data-arrow="on"] { stroke: ${({ theme }) => theme.color.accent.emerald.solid}; }
   [data-arrow="off"] { stroke: ${({ theme }) => theme.color.accent.red.solid}; }
   &[data-kind="goal"], &[data-kind="penalty-goal"] {
@@ -75,19 +75,19 @@ const Incident = styled.div`
   &[data-kind="own-goal"] > [data-symbol] { color: ${({ theme }) => theme.color.accent.orange.solid}; }
   &[data-kind="red-card"], &[data-kind="second-yellow"] { background: color-mix(in srgb, ${({ theme }) => theme.color.accent.red.soft} 40%, ${({ theme }) => theme.color.surface}); }
   ${media.belowDesktop} {
-    padding: 6px 2px; gap: 5px; border: 0;
-    > [data-symbol] > svg { inline-size: 21px; block-size: 21px; }
-    strong { font-size: .75rem; } small { font-size: .6875rem; }
-    [data-event-label] { font-size: .625rem; } [data-player-off] > span { font-size: .6875rem; }
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-0_5); gap: var(--gh-spacing-1_25); border: 0;
+    > [data-symbol] > svg { inline-size: var(--gh-size-5_25); block-size: var(--gh-size-5_25); }
+    strong { font-size: var(--gh-font-secondary); } small { font-size: var(--gh-font-caption); }
+    [data-event-label] { font-size: var(--gh-font-micro); } [data-player-off] > span { font-size: var(--gh-font-caption); }
   }
 `;
 const Period = styled.li`
-  position: relative; display: flex; align-items: center; gap: 12px; padding-block: 6px;
-  color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem;
-  &::before, &::after { content: ""; flex: 1; block-size: 1px; background: ${({ theme }) => theme.color.border}; }
-  > span { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; background: ${({ theme }) => theme.color.surface}; }
-  svg { inline-size: 15px; block-size: 15px; }
-  b { color: ${({ theme }) => theme.color.text}; font-weight: 700; }
+  position: relative; display: flex; align-items: center; gap: var(--gh-spacing-3); padding-block: var(--gh-spacing-1_5);
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption);
+  &::before, &::after { content: ""; flex: 1; block-size: var(--gh-size-0_25); background: ${({ theme }) => theme.color.border}; }
+  > span { position: relative; z-index: var(--gh-layer-content); display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); padding: var(--gh-spacing-0_75) var(--gh-spacing-2); background: ${({ theme }) => theme.color.surface}; }
+  svg { inline-size: var(--gh-size-3_75); block-size: var(--gh-size-3_75); }
+  b { color: ${({ theme }) => theme.color.text}; font-weight: var(--gh-weight-bold); }
   small { font-size: inherit; }
 `;
 

@@ -21,16 +21,16 @@ export function NetworkChip({ network, labelled = false }: { network: string; la
 const NetworkMark = styled.span`
   display: inline-flex;
   flex: none;
-  [data-payment-logo] { inline-size: 40px; block-size: 18px; border-radius: ${({ theme }) => theme.radius.small}; overflow: hidden; }
-  [data-payment-logo="airtel"] { inline-size: 18px; }
+  [data-payment-logo] { inline-size: var(--gh-size-10); block-size: var(--gh-size-4_5); border-radius: ${({ theme }) => theme.radius.small}; overflow: hidden; }
+  [data-payment-logo="airtel"] { inline-size: var(--gh-size-4_5); }
 `;
 const NetworkText = styled.span`
   display: inline-flex;
-  padding: 0 5px;
+  padding: 0 var(--gh-spacing-1_25);
   border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.scale.micro};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: 18px;
+  line-height: var(--gh-size-4_5);
 `;

@@ -37,7 +37,7 @@ export const porcelainBlueDirection: ThemeDirection = {
     border: "#DCE3EF", control: "#77859C", fieldHover: "#D2D8E2", input: "#FFFFFF",
     accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF",
     header: "#FFFFFF", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
-    cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#FFFFFF",
+    cardBorder: "#D3DDEA", cardInset: "#FFFFFF", cardHeader: "#FFFFFF",
     mobileSlipHeader: "#FFFFFF", slipSelection: "#FFFFFF",
   },
 };
@@ -53,6 +53,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
   const input = direction.mode === "light" ? "#FFFFFF" : p.input;
   return {
     ...base,
+    brandVariant: direction.mode === "dark" ? "inverse" : "primary",
     color: { ...base.color, page: p.page, surface: p.surface, surfaceMuted: p.muted, text: p.text,
       field, fieldHover,
       mutedText: blend(p.secondary, p.text, 0.2), border: decorativeBorder, controlBorder: p.control, buttonBorder: decorativeBorder,
@@ -83,8 +84,13 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
       : { ...base.radius, surface: base.radius.overlay },
     border: { ...base.border, width: "0px", accentWidth: "0px", focusWidth: "2px" },
     frame: { ...base.frame, desktopCardRadius: direction.shape === "crisp" ? base.radius.control : base.radius.overlay },
-    textField: { background: input ?? field, hoverBackground: input ?? fieldHover, borderWidth: input ? "1px" : "0px",
+    textField: { background: input ?? field, hoverBackground: input ?? fieldHover,
+      invalidBackground: input ?? base.color.outcome.incorrect.background, disabledBackground: input ?? p.muted, borderWidth: input ? "1px" : "0px",
       borderColor: blend(input ?? field, p.control, 0.24), focusBorderColor: blend(input ?? field, link, 0.42) },
+    select: { background: input ?? `var(--select-surface, ${field})`, hoverBackground: input ?? `var(--select-hover-surface, ${fieldHover})`,
+      expandedBackground: input ?? p.soft, invalidBackground: input ?? base.color.outcome.incorrect.background, disabledBackground: input ?? p.muted },
+    action: { quietBackground: input ? field : p.muted, quietHoverBackground: input ? fieldHover : p.soft, headerBackground: input ? field : p.soft },
+    fieldAdornment: { background: input ?? p.soft, hoverBackground: input ?? p.muted },
     space: { ...base.space, md: "14px", lg: "20px", xl: "24px" },
     gradient: { action: p.accent, actionHover: p.hover, tableHeader: p.muted, page: p.page },
     shadow: { ...base.shadow, cardHover: direction.shape === "crisp" ? "none" : `0 3px 12px ${p.text}0A` },
@@ -94,6 +100,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
     interaction: { ...base.interaction, pressedFilter: "brightness(0.94)" },
     scrollbarColor: `${p.control} ${p.page}`,
     phoneCardFrame: { ...base.phoneCardFrame, border: p.cardBorder ?? decorativeBorder,
+      separator: direction.mode === "light" ? p.cardBorder ?? decorativeBorder : p.cardInset ?? p.muted,
       inset: p.cardInset ?? p.muted, header: p.cardHeader ?? p.muted,
       mobileHeader: p.mobileSlipHeader ?? p.surface, selection: p.slipSelection ?? p.surface },
   };

@@ -1,5 +1,6 @@
 import brandTokens from "../../assets/brand/brand-tokens.json";
 import type { MarketFamily } from "../domain/markets";
+import { durationScale, geometryTokens, lineHeights, mediaTokens, tracking, typeScale, uiGeometry } from "./theme-tokens.ts";
 
 export type OutcomeTone = "correct" | "incorrect" | "pending" | "void" | "unavailable";
 export type VerdictTone = "upcoming" | "pending" | "correct" | "incorrect" | "void";
@@ -35,8 +36,16 @@ export type MarketColors = Readonly<{
 export type AccentName = "teal" | "blue" | "violet" | "orange" | "pink" | "amber" | "emerald" | "red";
 
 /** Semantic fields can support another theme without changing component contracts. */
-export interface GoalHintTheme {
+export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
   readonly mode: "light" | "dark";
+  readonly brandVariant: "primary" | "inverse";
+  readonly ui: typeof uiGeometry;
+  readonly media: Readonly<Record<keyof typeof mediaTokens, string>>;
+  /** Physical football symbols retain their identity across appearance modes. */
+  readonly illustration: Readonly<{
+    yellowCard: string; yellowCardOutline: string; redCard: string; redCardOutline: string;
+    ball: string; ballInk: string; missedPenalty: string; shirtOutline: string;
+  }>;
   readonly color: {
     readonly text: string;
     readonly mutedText: string;
@@ -121,6 +130,7 @@ export interface GoalHintTheme {
   };
   readonly typography: {
     readonly family: string;
+    readonly monoFamily: string;
     readonly headingFamily: string;
     /** Desktop (lg and up) sizes. */
     readonly size: {
@@ -131,7 +141,7 @@ export interface GoalHintTheme {
       readonly h3: string;
     };
     /** Compact phone-first scale; base styles use it and widen at `breakpoint.md`/`lg`. */
-    readonly scale: {
+    readonly scale: Readonly<Record<keyof typeof typeScale, string>> & {
       /** 10px: badges, chips and counters; the floor for meaningful text. */
       readonly micro: string;
       /** 11px: captions, meta lines and field labels in dense rows. */
@@ -150,13 +160,12 @@ export interface GoalHintTheme {
     readonly weight: {
       readonly body: number;
       readonly medium: number;
+      readonly semibold: number;
       readonly bold: number;
       readonly heavy: number;
     };
-    readonly lineHeight: {
-      readonly body: number;
-      readonly heading: number;
-    };
+    readonly lineHeight: Readonly<Record<keyof typeof lineHeights, number>>;
+    readonly tracking: Readonly<Record<keyof typeof tracking, string>>;
   };
   readonly space: {
     readonly xs: string;
@@ -173,6 +182,10 @@ export interface GoalHintTheme {
   /** Shared corner scale: compact items, controls, surfaces and overlays. */
   readonly radius: Readonly<typeof brandTokens.shape.radius>;
   readonly border: {
+    readonly thin: string;
+    readonly strong: string;
+    readonly focus: string;
+    readonly accent: string;
     readonly width: string;
     readonly accentWidth: string;
     readonly focusWidth: string;
@@ -185,10 +198,16 @@ export interface GoalHintTheme {
     readonly readingMaxWidth: string;
   };
   readonly frame: Readonly<{ desktopCardRadius: string }>;
-  readonly textField: Readonly<{ background: string; hoverBackground: string; borderWidth: string; borderColor: string; focusBorderColor: string }>;
+  readonly textField: Readonly<{ background: string; hoverBackground: string; invalidBackground: string; disabledBackground: string; borderWidth: string; borderColor: string; focusBorderColor: string }>;
+  readonly select: Readonly<{ background: string; hoverBackground: string; expandedBackground: string; invalidBackground: string; disabledBackground: string }>;
+  readonly action: Readonly<{ quietBackground: string; quietHoverBackground: string; headerBackground: string }>;
+  readonly fieldAdornment: Readonly<{ background: string; hoverBackground: string }>;
   readonly motion: Readonly<{
     fast: string; feedback: string; disclosure: string; surface: string; easing: string;
     reducedDuration: string;
+    duration: Readonly<Record<keyof typeof durationScale, string>>;
+    easingInOut: string;
+    easingLinear: string;
   }>;
   readonly interaction: Readonly<{
     pressedFilter: string; headerHoverBrightness: number; filterHoverBrightness: number; toolHoverBrightness: number;
@@ -196,6 +215,10 @@ export interface GoalHintTheme {
   /** `auto` preserves native scrollbars; review directions can supply thumb and track colors. */
   readonly scrollbarColor: string;
   readonly control: {
+    /** Shared body heights depend on pointer precision, never viewport width. */
+    readonly height: string;
+    readonly touchHeight: string;
+    readonly labelSpace: string;
     /** Desktop (lg and up) control height. */
     readonly minHeight: string;
     /** Phone and tablet control height; still above the 24px WCAG 2.5.8 target. */
@@ -207,7 +230,7 @@ export interface GoalHintTheme {
   };
   /** Shared compact match frames and the contrasting slip body/header around them. */
   readonly phoneCardFrame: Readonly<{
-    border: string; radius: string; shadow: string; inset: string;
+    border: string; radius: string; shadow: string; inset: string; separator: string;
     /** Thin slip perimeter and selection separators, independent of other component borders. */
     ruleWidth: string;
     /** Desktop slip header, independent of the compact header and selection fills. */
@@ -221,7 +244,15 @@ export interface GoalHintTheme {
 
 /** Semantic foundation; approved presets choose the active application appearance. */
 export const foundationLightTheme: GoalHintTheme = {
+  ...geometryTokens,
   mode: "light",
+  brandVariant: "primary",
+  ui: uiGeometry,
+  media: mediaTokens,
+  illustration: {
+    yellowCard: "#FACC15", yellowCardOutline: "#805A00", redCard: "#E53935", redCardOutline: "#A51E22",
+    ball: "#FFFFFF", ballInk: "#344054", missedPenalty: "#DC2626", shirtOutline: "#FFFFFF",
+  },
   color: {
     text: "#15243B",
     mutedText: "#53647C",
@@ -290,29 +321,25 @@ export const foundationLightTheme: GoalHintTheme = {
   },
   typography: {
     family: "var(--font-manrope), Arial, sans-serif",
+    monoFamily: 'ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace',
     headingFamily: "inherit",
     size: { body: "1rem", small: "0.875rem", h1: "2rem", h2: "1.5rem", h3: "1.125rem" },
-    scale: {
-      micro: "0.625rem",
-      caption: "0.6875rem",
-      secondary: "0.75rem",
-      body: "0.8125rem",
-      emphasis: "0.875rem",
-      section: "1rem",
-      title: "1.125rem",
-    },
+    scale: typeScale,
     weight: {
       body: brandTokens.typography.bodyWeight,
       medium: 600,
+      semibold: 600,
       bold: brandTokens.typography.headingWeight,
       heavy: 800,
     },
-    lineHeight: { body: 1.6, heading: 1.25 },
+    lineHeight: lineHeights,
+    tracking,
   },
   space: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px" },
   breakpoint: { md: "48rem", lg: "64rem", xl: "80rem" },
   radius: brandTokens.shape.radius,
   border: {
+    thin: "1px", strong: "2px", focus: "3px", accent: "4px",
     width: "0px",
     accentWidth: "0px",
     focusWidth: "3px",
@@ -320,11 +347,14 @@ export const foundationLightTheme: GoalHintTheme = {
   },
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px", readingMaxWidth: "65ch" },
   frame: { desktopCardRadius: brandTokens.shape.radius.none },
-  textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", borderWidth: "1px", borderColor: "#DFE4EC", focusBorderColor: "#A8C0E2" },
-  motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms" },
+  textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF", borderWidth: "1px", borderColor: "#DFE4EC", focusBorderColor: "#A8C0E2" },
+  select: { background: "#FFFFFF", hoverBackground: "#FFFFFF", expandedBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF" },
+  action: { quietBackground: "#E0E5ED", quietHoverBackground: "#D6DFEC", headerBackground: "#E0E5ED" },
+  fieldAdornment: { background: "#FFFFFF", hoverBackground: "#FFFFFF" },
+  motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms", duration: durationScale, easingInOut: "ease-in-out", easingLinear: "linear" },
   interaction: { pressedFilter: "none", headerHoverBrightness: 1.1, filterHoverBrightness: 0.95, toolHoverBrightness: 0.96 },
   scrollbarColor: "auto",
-  control: { minHeight: "2.75rem", compactHeight: "2.25rem" },
+  control: { height: "40px", touchHeight: "44px", labelSpace: "6px", minHeight: "2.75rem", compactHeight: "2.25rem" },
   gradient: {
     action: "#2457C5",
     actionHover: "#19449F",
@@ -360,14 +390,18 @@ export const foundationLightTheme: GoalHintTheme = {
     cardHover: "none",
     popover: "0 8px 24px rgb(7 23 71 / 16%)",
   },
-  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#E8EDF5", ruleWidth: "1px", header: "#F1F4FA", mobileHeader: brandTokens.colors.white, selection: brandTokens.colors.white },
+  phoneCardFrame: { border: "#D9E1ED", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#E8EDF5", separator: "#D9E1ED", ruleWidth: "1px", header: "#F1F4FA", mobileHeader: brandTokens.colors.white, selection: brandTokens.colors.white },
 };
 
 /** The same semantic contract keeps every native control and detail panel readable in dark mode. */
 export const foundationDarkTheme: GoalHintTheme = {
   ...foundationLightTheme,
   mode: "dark",
-  textField: { background: "#1A2E41", hoverBackground: "#24405B", borderWidth: "0px", borderColor: "#344A60", focusBorderColor: "#476B8F" },
+  brandVariant: "inverse",
+  textField: { background: "#1A2E41", hoverBackground: "#24405B", invalidBackground: "#3B252C", disabledBackground: "#0D253B", borderWidth: "0px", borderColor: "#344A60", focusBorderColor: "#476B8F" },
+  select: { background: "var(--select-surface, #1A2E41)", hoverBackground: "var(--select-hover-surface, #24405B)", expandedBackground: "#073052", invalidBackground: "#3B252C", disabledBackground: "#0D253B" },
+  action: { quietBackground: "#0D253B", quietHoverBackground: "#073052", headerBackground: "#073052" },
+  fieldAdornment: { background: "#073052", hoverBackground: "#0D253B" },
   color: {
     ...foundationLightTheme.color,
     text: "#F4F7FF",
@@ -458,5 +492,5 @@ export const foundationDarkTheme: GoalHintTheme = {
     },
   },
   shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
-  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", ruleWidth: "1px", header: "#0D253B", mobileHeader: "#081B2C", selection: "#081B2C" },
+  phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", separator: "#0D253B", ruleWidth: "1px", header: "#0D253B", mobileHeader: "#081B2C", selection: "#081B2C" },
 };

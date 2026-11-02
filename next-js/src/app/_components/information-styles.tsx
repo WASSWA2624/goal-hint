@@ -8,16 +8,16 @@ export const ContentsNav = styled.nav`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-3);
   min-inline-size: 0;
 
   > * { min-inline-size: 0; }
 
   ${media.belowDesktop} {
     > a {
-      min-block-size: 2rem;
+      min-block-size: var(--gh-size-8);
       font-size: ${({ theme }) => theme.typography.scale.body};
-      line-height: 1.3;
+      line-height: var(--gh-leading-label);
     }
   }
 
@@ -28,14 +28,14 @@ export const ContentsNav = styled.nav`
 export const HelpGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  ${media.desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  gap: var(--gh-spacing-2);
+  ${media.desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-3); align-items: start; }
 `;
 export const HelpSection = styled.section`
   display: grid;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
-  padding: 12px;
+  padding: var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.surface};
   border: 0;
   border-block-start: 0;
@@ -43,11 +43,11 @@ export const HelpSection = styled.section`
 `;
 export const HelpList = styled.dl`
   display: grid;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   margin: 0;
   font-size: ${({ theme }) => theme.typography.scale.body};
-  line-height: 1.5;
+  line-height: var(--gh-leading-normal);
   dt { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  dd { margin: 2px 0 0; color: ${({ theme }) => theme.color.mutedText}; }
+  dd { margin: var(--gh-spacing-0_5) 0 0; color: ${({ theme }) => theme.color.mutedText}; }
 `;
 

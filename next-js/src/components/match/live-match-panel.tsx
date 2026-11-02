@@ -26,38 +26,38 @@ const Stats = styled.table`
   table-layout: fixed;
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
-  th, td { padding: 8px 4px; border-block-end: 0; }
+  th, td { padding: var(--gh-spacing-2) var(--gh-spacing-1); border-block-end: 0; }
   th { text-align: start; }
   td, thead th:not(:first-child) { text-align: end; }
   th:first-child { inline-size: 44%; }
-  caption { text-align: start; font-weight: 600; padding-block-end: 8px; }
+  caption { text-align: start; font-weight: var(--gh-weight-semibold); padding-block-end: var(--gh-spacing-2); }
 `;
 const EventToolbar = styled.div`
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-block-size: 32px;
-  color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem;
-  h2 { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: ${({ theme }) => theme.color.text}; font-size: 1rem; line-height: 1.4; }
-  h2 > svg { inline-size: 18px; block-size: 18px; color: ${({ theme }) => theme.color.brand}; }
-  [data-legend], [data-meta], [data-sort] { display: inline-flex; align-items: center; gap: 10px; }
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--gh-spacing-2) var(--gh-spacing-4); min-block-size: var(--gh-size-8);
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary);
+  h2 { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_75); margin: 0; color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-section); line-height: var(--gh-leading-compact); }
+  h2 > svg { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); color: ${({ theme }) => theme.color.brand}; }
+  [data-legend], [data-meta], [data-sort] { display: inline-flex; align-items: center; gap: var(--gh-spacing-2_5); }
   [data-legend] > span { display: inline-flex; }
-  [data-legend] svg { inline-size: 19px; block-size: 19px; }
+  [data-legend] svg { inline-size: var(--gh-size-4_75); block-size: var(--gh-size-4_75); }
   [data-legend] [data-arrow="on"] { stroke: ${({ theme }) => theme.color.accent.emerald.solid}; }
   [data-legend] [data-arrow="off"] { stroke: ${({ theme }) => theme.color.accent.red.solid}; }
   [data-meta] { margin-inline-start: auto; flex-wrap: wrap; }
-  [data-sort] { gap: 4px; font-size: .6875rem; }
-  [data-sort] svg { inline-size: 13px; block-size: 13px; }
-  [data-current-live] { display: inline-flex; align-items: center; gap: 6px; color: ${({ theme }) => theme.color.live.text}; }
-  [data-current-live]::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: ${({ theme }) => theme.radius.circle}; background: currentColor; }
+  [data-sort] { gap: var(--gh-spacing-1); font-size: var(--gh-font-caption); }
+  [data-sort] svg { inline-size: var(--gh-size-3_25); block-size: var(--gh-size-3_25); }
+  [data-current-live] { display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); color: ${({ theme }) => theme.color.live.text}; }
+  [data-current-live]::before { content: ""; inline-size: var(--gh-size-1_5); block-size: var(--gh-size-1_5); border-radius: ${({ theme }) => theme.radius.circle}; background: currentColor; }
 `;
 const EventSource = styled.details`
-  margin-block-start: 12px; border-block-start: 0;
-  color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem;
-  > summary { padding-block: 12px; cursor: pointer; }
-  > div { display: grid; gap: 6px; padding-block-end: 8px; }
+  margin-block-start: var(--gh-spacing-3); border-block-start: 0;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary);
+  > summary { padding-block: var(--gh-spacing-3); cursor: pointer; }
+  > div { display: grid; gap: var(--gh-spacing-1_5); padding-block-end: var(--gh-spacing-2); }
 `;
 const EventsEmpty = styled.div`
-  display: flex; gap: 12px; align-items: center; padding: 20px;
+  display: flex; gap: var(--gh-spacing-3); align-items: center; padding: var(--gh-spacing-5);
   background: ${({ theme }) => theme.color.surfaceMuted};
-  > svg { flex: none; inline-size: 30px; block-size: 30px; color: ${({ theme }) => theme.color.mutedText}; }
+  > svg { flex: none; inline-size: var(--gh-size-7_5); block-size: var(--gh-size-7_5); color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const instant = (at: number, m: Messages) => m.reportingInstant(utcInstantFromEpochMilliseconds(at));
 

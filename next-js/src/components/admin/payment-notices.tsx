@@ -48,16 +48,16 @@ export function PaymentNotices({ notices, now }: { notices: readonly OwnerNotice
 
 const NoticeRow = styled.li`
   display: grid;
-  gap: 4px 12px;
-  padding: 8px 14px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-3);
+  padding: var(--gh-spacing-2) var(--gh-spacing-3_5);
   container-type: inline-size;
-  > span:first-child { display: grid; gap: 2px; min-inline-size: 0; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; font-weight: normal; }
-  ${media.desktop} { padding-inline: 16px 10px; }
+  > span:first-child { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; font-weight: var(--gh-weight-body); }
+  ${media.desktop} { padding-inline: var(--gh-spacing-4) var(--gh-spacing-2_5); }
 `;
 const Actions = styled.p`
   display: flex;
   flex-wrap: wrap;
-  gap: 0 16px;
-  margin-inline-start: -4px;
+  gap: 0 var(--gh-spacing-4);
+  margin-inline-start: calc(-1 * var(--gh-spacing-1));
 `;

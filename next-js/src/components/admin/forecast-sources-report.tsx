@@ -100,9 +100,9 @@ export function ForecastSourcesReport({ value }: { value: ForecastSourcesReport 
 
 const Report = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  ${media.desktop} { gap: 16px; }
+  ${media.desktop} { gap: var(--gh-spacing-4); }
 `;
 const Quiet = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
@@ -110,8 +110,8 @@ const Quiet = styled.span`
 `;
 const Pair = styled.li`
   display: grid;
-  gap: 2px;
-  padding: 10px 14px;
+  gap: var(--gh-spacing-0_5);
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
   a { color: ${({ theme }) => theme.color.link}; }
-  ${media.desktop} { padding-inline: 16px; }
+  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
 `;

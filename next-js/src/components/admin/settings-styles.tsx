@@ -20,20 +20,20 @@ export const MobileOnly = styled.div`
 /** Desktop owns its scroll area, leaving both navigation and the save footer in view. */
 export const SettingsForm = styled.form`
   ${media.desktop} {
-    display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px;
-    block-size: calc(100dvh - var(--app-header-height, 3rem) - 28px);
-    min-block-size: 0; margin-block: -12px -32px;
+    display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-3);
+    block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--gh-size-7));
+    min-block-size: 0; margin-block: calc(-1 * var(--gh-spacing-3)) calc(-1 * var(--gh-spacing-8));
   }
 `;
 export const SettingsHeading = styled(DeskHead)`
   display: none;
-  ${media.desktop} { display: flex; flex-wrap: nowrap; gap: 24px; min-block-size: 44px; > h1 { flex: none; } }
+  ${media.desktop} { display: flex; flex-wrap: nowrap; gap: var(--gh-spacing-6); min-block-size: var(--gh-size-11); > h1 { flex: none; } }
 `;
 export const SettingsGrid = styled(DeskGrid)`
   ${media.desktop} { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 0; min-block-size: 0; overflow: hidden; }
 `;
 export const SettingsColumn = styled(DeskColumn)`
-  ${media.desktop} { display: flex; flex-direction: column; gap: 12px; min-block-size: 0; overflow: auto; padding-block-end: 16px; scrollbar-gutter: stable; > * { flex: none; } }
+  ${media.desktop} { display: flex; flex-direction: column; gap: var(--gh-spacing-3); min-block-size: 0; overflow: auto; padding-block-end: var(--gh-spacing-4); scrollbar-gutter: stable; > * { flex: none; } }
 `;
 export const DesktopSettingsTabs = styled(Segmented)`
   min-inline-size: 0; overflow-x: auto; border-radius: ${({ theme }) => theme.radius.control};
@@ -43,7 +43,7 @@ export const DesktopSettingsTabs = styled(Segmented)`
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-  outline-offset: 2px;
+  outline-offset: var(--gh-size-0_5);
 `;
 
 /** Section switches: four equal icon-over-label cells on phones, one row sized to its labels from desktop up. */
@@ -55,16 +55,16 @@ export const SectionTabs = styled(Segmented)`
     overflow: hidden;
     > button {
       flex-direction: column;
-      gap: 4px;
+      gap: var(--gh-spacing-1);
       min-inline-size: 0;
-      min-block-size: 58px;
-      padding: 6px 4px;
+      min-block-size: var(--gh-size-14_5);
+      padding: var(--gh-spacing-1_5) var(--gh-spacing-1);
       font-size: ${({ theme }) => theme.typography.scale.secondary};
-      line-height: 1.2;
+      line-height: var(--gh-leading-control);
       white-space: normal;
       overflow-wrap: anywhere;
     }
-    > button > svg { font-size: 1.125rem; }
+    > button > svg { font-size: var(--gh-font-title); }
   }
   ${media.desktop} { display: none; }
 `;
@@ -85,21 +85,21 @@ export const SectionPanel = styled(Panel)`
 /** Two fields side by side once the panel is wide enough; stacked on phones and beside the 1024px side panel. */
 export const TwoUp = styled.div`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   align-items: start;
   min-inline-size: 0;
   > * { min-inline-size: 0; }
-  @container (min-width: 32rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container (min-width: ${({ theme }) => theme.viewport[32]}) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 
 /** The two payment networks: stacked with a hairline on phones, side by side with a vertical hairline when wide. */
 export const NetworkGrid = styled.div`
   display: grid;
   min-inline-size: 0;
-  > section { display: grid; align-content: start; gap: 12px; min-inline-size: 0; padding: 14px; }
+  > section { display: grid; align-content: start; gap: var(--gh-spacing-3); min-inline-size: 0; padding: var(--gh-spacing-3_5); }
   > section + section { border-block-start: 0; }
-  ${media.desktop} { > section { padding: 16px; } }
-  @container (min-width: 36rem) {
+  ${media.desktop} { > section { padding: var(--gh-spacing-4); } }
+  @container (min-width: ${({ theme }) => theme.viewport[36]}) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     > section + section {
       border-block-start: 0;
@@ -111,21 +111,21 @@ export const NetworkGrid = styled.div`
 export const ManagedBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   flex: none;
-  padding: 2px 6px;
+  padding: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
   border-radius: ${({ theme }) => theme.radius.small};
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.3;
-  > svg { flex: none; font-size: 0.75rem; }
+  line-height: var(--gh-leading-label);
+  > svg { flex: none; font-size: var(--gh-font-secondary); }
 `;
 export const ManagedNote = styled.p`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   > svg { flex: none; }
@@ -134,23 +134,23 @@ export const ManagedNote = styled.p`
 export const NetworkTitle = styled.h3`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
   font-size: ${({ theme }) => theme.typography.scale.emphasis};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   /* The members' network artwork, shrunk to a chip beside the name. */
-  [data-payment-logo] { inline-size: 36px; block-size: 20px; }
+  [data-payment-logo] { inline-size: var(--gh-size-9); block-size: var(--gh-size-5); }
   > ${ManagedBadge} { margin-inline-start: auto; }
 `;
 
 export const DialField = styled.div`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
 `;
 export const DialRow = styled.div`
   display: flex;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   align-items: start;
   min-inline-size: 0;
   > [data-floating-field] { flex: 1 1 auto; }
@@ -163,22 +163,22 @@ export const DialRow = styled.div`
 /** Device limit sits in a narrow column; a full-width select for five numbers reads as noise. */
 export const NarrowField = styled.div`
   display: grid;
-  gap: 8px;
-  max-inline-size: 20rem;
+  gap: var(--gh-spacing-2);
+  max-inline-size: var(--gh-size-80);
   min-inline-size: 0;
 `;
 
 export const ManagedFact = styled.dl`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   margin: 0;
-  > div { display: grid; gap: 4px; min-inline-size: 0; }
+  > div { display: grid; gap: var(--gh-spacing-1); min-inline-size: 0; }
   dt {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: var(--gh-spacing-1_5);
     font-size: ${({ theme }) => theme.typography.scale.body};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
@@ -195,9 +195,9 @@ export const ModeTiles = styled.fieldset`
   margin: 0;
   padding: 0;
   border: 0;
-  > legend { padding: 0; margin-block-end: 8px; }
-  > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-inline-size: 0; }
-  ${media.desktop} { > div { gap: 10px; } }
+  > legend { padding: 0; margin-block-end: var(--gh-spacing-2); }
+  > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gh-spacing-2); min-inline-size: 0; }
+  ${media.desktop} { > div { gap: var(--gh-spacing-2_5); } }
 `;
 /** A whole-tile radio: the native input covers the tile, so clicks, arrows and focus stay native. */
 export const ModeTile = styled.label<{ $unavailable: boolean }>`
@@ -209,28 +209,28 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
   > span {
     display: grid;
     align-content: start;
-    gap: 2px;
+    gap: var(--gh-spacing-0_5);
     min-inline-size: 0;
-    min-block-size: 68px;
-    padding: 9px 10px;
+    min-block-size: var(--gh-size-17);
+    padding: var(--gh-spacing-2_25) var(--gh-spacing-2_5);
     border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
     font-weight: ${({ theme }) => theme.typography.weight.body};
-    line-height: 1.35;
+    line-height: var(--gh-leading-caption);
     overflow-wrap: anywhere;
-    ${({ $unavailable }) => $unavailable && css`opacity: 0.55;`}
+    ${({ $unavailable }) => $unavailable && css`opacity: var(--gh-opacity-55);`}
   }
-  strong { color: ${({ theme }) => theme.color.text}; font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  strong { color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-reading); font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   em {
-    margin-block-start: 2px;
+    margin-block-start: var(--gh-spacing-0_5);
     color: ${({ theme }) => theme.color.outcome.correct.text};
     font-size: ${({ theme }) => theme.typography.scale.micro};
     font-style: normal;
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    letter-spacing: 0.06em;
+    letter-spacing: var(--gh-tracking-caption);
     text-transform: uppercase;
   }
   > input:checked + span {
@@ -240,15 +240,15 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
   }
   > input:focus-visible + span { ${focusRing} }
   ${media.hover} { &:hover > input:not(:checked, :disabled) + span { background: ${({ theme }) => theme.color.rowHover}; } }
-  ${media.desktop} { > span { padding: 10px 12px; } }
+  ${media.desktop} { > span { padding: var(--gh-spacing-2_5) var(--gh-spacing-3); } }
 `;
 
 /** The second step of a mode switch: a warning box, buttons beside the text when the panel is wide. */
 export const ConfirmBox = styled.div`
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
-  padding: 12px 14px;
+  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.text};
@@ -258,13 +258,13 @@ export const ConfirmBox = styled.div`
     font-size: ${({ theme }) => theme.typography.scale.emphasis};
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
   }
-  > p { font-size: ${({ theme }) => theme.typography.scale.body}; line-height: 1.45; }
-  > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-block-start: 4px; }
+  > p { font-size: ${({ theme }) => theme.typography.scale.body}; line-height: var(--gh-leading-reading); }
+  > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--gh-spacing-2); margin-block-start: var(--gh-spacing-1); }
   > div > button { white-space: nowrap; }
-  @container (min-width: 34rem) {
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 4px 16px;
+    gap: var(--gh-spacing-1) var(--gh-spacing-4);
     > div { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
   }
 `;
@@ -272,14 +272,14 @@ export const ConfirmBox = styled.div`
 export const SettingsHint = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  line-height: 1.5;
+  line-height: var(--gh-leading-normal);
 `;
 
 export const RequirementBox = styled.div`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
-  padding: 10px 12px 6px;
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3) var(--gh-spacing-1_5);
   border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
@@ -289,15 +289,15 @@ export const RequirementList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
-  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); font-size: ${({ theme }) => theme.typography.scale.body}; }
-  li > svg { flex: none; font-size: 0.9375rem; color: ${({ theme }) => theme.color.mutedText}; }
+  li { display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; min-block-size: var(--form-control-height); font-size: ${({ theme }) => theme.typography.scale.body}; }
+  li > svg { flex: none; font-size: var(--gh-font-reading); color: ${({ theme }) => theme.color.mutedText}; }
   li > span { min-inline-size: 0; overflow-wrap: anywhere; }
   li > a, li > button {
     display: flex;
     flex: 1;
     align-items: center;
     min-inline-size: 0;
-    min-block-size: var(--form-control-height, 40px);
+    min-block-size: var(--form-control-height);
     margin: 0;
     padding: 0;
     border: 0;
@@ -307,11 +307,11 @@ export const RequirementList = styled.ul`
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     text-align: start;
     text-decoration: underline;
-    text-underline-offset: 3px;
+    text-underline-offset: var(--gh-size-0_75);
     cursor: pointer;
     &:focus-visible { ${focusRing} }
   }
-  ${media.desktop} { li > a, li > button { min-block-size: var(--form-control-height, 40px); } }
+  ${media.desktop} { li > a, li > button { min-block-size: var(--form-control-height); } }
 `;
 
 /**
@@ -321,32 +321,32 @@ export const RequirementList = styled.ul`
 export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
   container-type: inline-size;
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--gh-spacing-3);
+  padding: var(--gh-spacing-3_5);
   label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   ${media.belowDesktop} {
     > [data-save-wide] { display: none; }
     ${({ $phoneHidden }) => $phoneHidden && css`display: none;`}
   }
   ${media.desktop} {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px;
-    border-radius: ${({ theme }) => theme.radius.none}; padding: 12px 16px; border-block-start: 0;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--gh-spacing-3) var(--gh-spacing-5);
+    border-radius: ${({ theme }) => theme.radius.none}; padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-start: 0;
     > [data-save-wide]:first-child { align-self: center; }
     > [data-save-wide]:last-child { grid-column: 2; grid-row: 1 / span 2; }
-    > [data-setting-password] { max-inline-size: 30rem; grid-column: 1; }
+    > [data-setting-password] { max-inline-size: var(--gh-size-120); grid-column: 1; }
   }
 `;
 export const SaveButtons = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
   > button { white-space: nowrap; }
-  @container (max-width: 18rem) { grid-template-columns: auto minmax(0, 1fr); }
+  @container (max-width: ${({ theme }) => theme.viewport[18]}) { grid-template-columns: auto minmax(0, 1fr); }
 `;
 /** Phones: unsaved count, Undo and Save stay in reach at the bottom of the screen while the form scrolls. */
 export const SaveDock = styled(StickyActions)`
   align-items: center;
-  margin-block-start: 12px;
+  margin-block-start: var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.surface};
   > * { flex: none; }
   > span {
@@ -354,9 +354,9 @@ export const SaveDock = styled(StickyActions)`
     min-inline-size: 0;
     color: ${({ theme }) => theme.color.mutedText};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
-    line-height: 1.35;
+    line-height: var(--gh-leading-caption);
     overflow-wrap: anywhere;
   }
-  > button { padding-inline: 12px; white-space: nowrap; }
+  > button { padding-inline: var(--gh-spacing-3); white-space: nowrap; }
   ${media.desktop} { display: none; }
 `;

@@ -9,11 +9,11 @@ import { pitchCanvas } from "@/domain/football-pitch";
 
 export { TouchlineStandings } from "./competition-panel";
 const Ground = styled.div`
-  padding: 24px; border: 0;
-  > svg { display: block; inline-size: min(100%, 360px); aspect-ratio: ${pitchCanvas.length} / ${pitchCanvas.width}; block-size: auto; margin: 0 auto 20px;
+  padding: var(--gh-spacing-6); border: 0;
+  > svg { display: block; inline-size: min(100%, var(--gh-size-90)); aspect-ratio: ${pitchCanvas.length} / ${pitchCanvas.width}; block-size: auto; margin: 0 auto var(--gh-spacing-5);
     color: ${({ theme }) => theme.color.accent.emerald.solid}; background: ${({ theme }) => theme.color.accent.emerald.soft}; }
   [data-stripe] { fill: ${({ theme }) => theme.color.accent.emerald.soft}; }
-  h3 { margin: 0 0 18px; font-size: 1.25rem; }
+  h3 { margin: 0 0 var(--gh-spacing-4_5); font-size: var(--gh-font-heading); }
 `;
 function useContextFacts() {
   const { fixtureId, preview } = useStableDetails();

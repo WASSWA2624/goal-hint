@@ -8,7 +8,7 @@ export { PredictionOutcome } from "./prediction-outcome";
 
 const OddsValue = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
+  font-size: var(--gh-font-secondary);
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -24,8 +24,8 @@ export function PredictionOdds({ odds, ...props }: PredictionOddsProps) {
 export const ProbabilityBar = styled.span<{ $family: MarketFamily }>`
   display: block;
   flex: 1;
-  min-inline-size: 12px;
-  block-size: 6px;
+  min-inline-size: var(--gh-size-3);
+  block-size: var(--gh-size-1_5);
   background: ${({ theme }) => theme.color.surfaceMuted};
   border-radius: ${({ theme }) => theme.radius.small};
   overflow: hidden;
@@ -37,14 +37,14 @@ export const OutcomeBadge = styled.span<{ $outcome: OutcomeTone }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 3px 6px;
+  gap: var(--gh-spacing-1);
+  padding: var(--gh-spacing-0_75) var(--gh-spacing-1_5);
   color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.small};
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: 1.2;
-  > svg { display: block; flex: none; font-size: 0.8125rem; }
+  line-height: var(--gh-leading-control);
+  > svg { display: block; flex: none; font-size: var(--gh-font-body); }
 `;

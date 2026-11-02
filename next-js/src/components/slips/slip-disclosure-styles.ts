@@ -15,8 +15,8 @@ export const slipDisclosureIndicator = css`
   border-radius: ${({ theme }) => theme.radius.circle};
   &::after {
     content: ""; display: block;
-    inline-size: var(--slip-chevron-size, 6px); block-size: var(--slip-chevron-size, 6px);
-    border-inline-end: 3px solid currentColor; border-block-end: 3px solid currentColor;
+    inline-size: var(--slip-chevron-size, var(--gh-size-1_5)); block-size: var(--slip-chevron-size, var(--gh-size-1_5));
+    border-inline-end: var(--gh-stroke-focus) solid currentColor; border-block-end: var(--gh-stroke-focus) solid currentColor;
     transform: rotate(var(--slip-chevron-rotation, -45deg));
   }
 `;

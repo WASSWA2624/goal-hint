@@ -241,7 +241,7 @@ export function Heatmap({ grid, format }: { grid: readonly (readonly number[])[]
           const label = `${weekdays[day]} ${String(hour).padStart(2, "0")}:00 – ${format(value)} visits`;
           return <HeatCell key={key} role="cell" tabIndex={-1} aria-label={label} title={label} $active={active === key}
             onPointerEnter={() => setActive(key)} onPointerLeave={() => setActive(null)}
-            style={{ background: value === 0 ? theme.color.surfaceMuted : colors.series[0], opacity: value === 0 ? 1 : 0.18 + 0.82 * (value / maximum) }} />;
+            style={{ background: value === 0 ? theme.color.surfaceMuted : colors.series[0], opacity: value === 0 ? 1 : theme.opacity[18]! + (1 - theme.opacity[18]!) * (value / maximum) }} />;
         })}
       </div>)}
     </HeatGrid>
@@ -257,24 +257,24 @@ export const ChartFrame = styled.div`
 const ChartFocus = styled.rect`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: 2px;
+    outline-offset: var(--gh-size-0_5);
   }
 `;
 const Legend = styled.div<{ $stacked?: boolean }>`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 0 0 8px;
+  gap: var(--gh-spacing-1_5) var(--gh-spacing-4);
+  margin: 0 0 var(--gh-spacing-2);
   padding: 0;
   list-style: none;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  ${({ $stacked }) => $stacked && "flex-direction: column; margin: 12px 0 0;"}
+  ${({ $stacked }) => $stacked && "flex-direction: column; margin: var(--gh-spacing-3) 0 0;"}
 `;
 const LegendItem = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
 `;
 const LegendValue = styled.span`
   margin-inline-start: auto;
@@ -284,26 +284,26 @@ const LegendValue = styled.span`
 `;
 const LineKey = styled.span<{ $color: string }>`
   display: inline-block;
-  inline-size: 14px;
-  block-size: 2px;
+  inline-size: var(--gh-size-3_5);
+  block-size: var(--gh-size-0_5);
   border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ $color }) => $color};
 `;
 const SwatchKey = styled.span<{ $color: string }>`
   display: inline-block;
-  inline-size: 10px;
-  block-size: 10px;
+  inline-size: var(--gh-size-2_5);
+  block-size: var(--gh-size-2_5);
   border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ $color }) => $color};
 `;
 const Tooltip = styled.div`
   position: absolute;
-  z-index: 2;
+  z-index: var(--gh-layer-raised);
   transform: translate(-50%, -100%);
   display: grid;
-  gap: 4px;
-  min-inline-size: 150px;
-  padding: 8px 10px;
+  gap: var(--gh-spacing-1);
+  min-inline-size: var(--gh-size-37_5);
+  padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
   pointer-events: none;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
@@ -318,19 +318,19 @@ const TooltipLabel = styled.span`
 const TooltipRow = styled.span`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   strong { font-variant-numeric: tabular-nums; }
   span:last-child { color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const SplitTrack = styled.div`
   display: flex;
-  gap: 2px;
-  block-size: 16px;
+  gap: var(--gh-spacing-0_5);
+  block-size: var(--gh-size-4);
 `;
 const SplitSegment = styled.span<{ $active: boolean }>`
-  min-inline-size: 4px;
+  min-inline-size: var(--gh-size-1);
   border-radius: ${({ theme }) => theme.radius.small};
-  opacity: ${({ $active }) => ($active ? 0.85 : 1)};
+  opacity: ${({ theme, $active }) => ($active ? theme.opacity[85] : 1)};
 `;
 const SplitEmpty = styled.span`
   flex: 1;
@@ -339,7 +339,7 @@ const SplitEmpty = styled.span`
 `;
 const BarRows = styled.ol`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -358,20 +358,20 @@ const BarButton = styled.button`
   border-radius: ${({ theme }) => theme.radius.control};
   cursor: pointer;
   @media (hover: hover) { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
 `;
 const BarStatic = styled.div`${barRow}`;
 const BarHead = styled.span`
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   font-size: ${({ theme }) => theme.typography.scale.body};
   span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   strong { font-variant-numeric: tabular-nums; }
 `;
 const BarTrack = styled.span`
   display: block;
-  block-size: 8px;
+  block-size: var(--gh-size-2);
   border-radius: ${({ theme }) => theme.radius.small};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
@@ -383,28 +383,28 @@ const BarFill = styled.span`
 export const EmptyChart = styled.p`
   display: grid;
   place-items: center;
-  min-block-size: 120px;
-  padding: 16px;
+  min-block-size: var(--gh-size-30);
+  padding: var(--gh-spacing-4);
   color: ${({ theme }) => theme.color.mutedText};
   text-align: center;
 `;
 const HeatGrid = styled.div`
   display: grid;
-  gap: 2px;
+  gap: var(--gh-spacing-0_5);
   font-size: ${({ theme }) => theme.typography.scale.micro};
   color: ${({ theme }) => theme.color.mutedText};
   font-variant-numeric: tabular-nums;
   [role="row"] {
     display: grid;
-    grid-template-columns: 32px repeat(24, minmax(0, 1fr));
-    gap: 2px;
+    grid-template-columns: var(--gh-size-8) repeat(24, minmax(0, 1fr));
+    gap: var(--gh-spacing-0_5);
     align-items: center;
   }
   .hours span { overflow: visible; white-space: nowrap; text-align: start; }
 `;
 const HeatCell = styled.span<{ $active: boolean }>`
   display: block;
-  block-size: 18px;
+  block-size: var(--gh-size-4_5);
   border-radius: ${({ theme }) => theme.radius.small};
   outline: ${({ $active, theme }) => ($active ? `2px solid ${theme.color.text}` : "none")};
 `;

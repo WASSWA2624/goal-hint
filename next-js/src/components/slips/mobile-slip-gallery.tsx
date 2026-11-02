@@ -12,48 +12,48 @@ import { mobileSlipPreview } from "./mobile-slip-review/preview-data";
 
 const Review = styled.main`
   min-block-size: 100vh;
-  padding: 24px clamp(10px, 3vw, 40px) 40px;
+  padding: var(--gh-spacing-6) clamp(var(--gh-spacing-2_5), 3vw, var(--gh-spacing-10)) var(--gh-spacing-10);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.page};
-  font-size: 0.875rem;
+  font-size: var(--gh-font-emphasis);
   button, select { font: inherit; }
-  button, select, a { outline-offset: 3px; }
+  button, select, a { outline-offset: var(--gh-size-0_75); }
   button:focus-visible, select:focus-visible, a:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.color.focus};
+    outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus};
   }
 `;
 
 const Intro = styled.header`
   display: grid;
-  gap: 8px;
-  max-inline-size: 100rem;
+  gap: var(--gh-spacing-2);
+  max-inline-size: var(--gh-size-400);
   margin-inline: auto;
   > [data-eyebrow] {
     color: ${({ theme }) => theme.color.link};
-    font-size: 0.6875rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
+    font-size: var(--gh-font-caption);
+    font-weight: var(--gh-weight-heavy);
+    letter-spacing: var(--gh-tracking-display);
     text-transform: uppercase;
   }
-  h1 { font-size: clamp(1.5rem, 4vw, 2.25rem); line-height: 1.2; letter-spacing: -0.04em; }
-  > p { max-inline-size: 48rem; color: ${({ theme }) => theme.color.mutedText}; line-height: 1.6; }
+  h1 { font-size: clamp(var(--gh-font-headline), 4vw, var(--gh-font-displayLarge)); line-height: var(--gh-leading-control); letter-spacing: var(--gh-tracking-tightest); }
+  > p { max-inline-size: var(--gh-size-192); color: ${({ theme }) => theme.color.mutedText}; line-height: var(--gh-leading-body); }
 `;
 
 const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 12px;
-  padding-block: 14px;
-  > label, > fieldset { display: grid; gap: 5px; min-inline-size: 0; }
-  > label > span, legend { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: 700; }
+  gap: var(--gh-spacing-3);
+  padding-block: var(--gh-spacing-3_5);
+  > label, > fieldset { display: grid; gap: var(--gh-spacing-1_25); min-inline-size: 0; }
+  > label > span, legend { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-weight: var(--gh-weight-bold); }
   fieldset { margin: 0; padding: 0; border: 0; }
-  legend { margin-block-end: 5px; }
+  legend { margin-block-end: var(--gh-spacing-1_25); }
   fieldset > div { display: flex; }
   button, select {
-    min-block-size: 44px;
-    padding: 8px 10px;
-    border: 1px solid ${({ theme }) => theme.color.controlBorder};
+    min-block-size: var(--gh-size-11);
+    padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
+    border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.controlBorder};
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     cursor: pointer;
@@ -64,7 +64,7 @@ const Toolbar = styled.div`
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme }) => theme.color.brand};
   }
-  @media (max-width: 30rem) {
+  @media (max-width: ${({ theme }) => theme.viewport[30]}) {
     > label { flex: 1 1 43%; }
     select { inline-size: 100%; max-inline-size: 100%; }
   }
@@ -76,26 +76,26 @@ const Gallery = styled.div<{ $focused: boolean; $width: number }>`
     ? "minmax(0, 1fr)"
     : `repeat(auto-fit, minmax(min(100%, ${$width}px), 1fr))`};
   align-items: start;
-  gap: 28px 24px;
-  max-inline-size: ${({ $focused, $width }) => $focused ? `${Math.max($width, 375)}px` : "100rem"};
-  margin: 16px auto 0;
+  gap: var(--gh-spacing-7) var(--gh-spacing-6);
+  max-inline-size: ${({ $focused, $width }) => $focused ? `${Math.max($width, 375)}px` : "var(--gh-size-400)"};
+  margin: var(--gh-spacing-4) auto 0;
 `;
 
 const Option = styled.section`
   min-inline-size: 0;
-  scroll-margin-block-start: 12px;
-  > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 9px; margin-block-end: 10px; }
-  [data-option-number] { color: ${({ theme }) => theme.color.link}; font-size: 1.125rem; font-weight: 800; line-height: 1.3; }
-  h2 { font-size: 1rem; font-weight: 800; line-height: 1.4; }
-  header p { margin-block-start: 3px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.5; }
+  scroll-margin-block-start: var(--gh-spacing-3);
+  > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--gh-spacing-2_25); margin-block-end: var(--gh-spacing-2_5); }
+  [data-option-number] { color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-title); font-weight: var(--gh-weight-heavy); line-height: var(--gh-leading-label); }
+  h2 { font-size: var(--gh-font-section); font-weight: var(--gh-weight-heavy); line-height: var(--gh-leading-compact); }
+  header p { margin-block-start: var(--gh-spacing-0_75); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-normal); }
   header button {
-    min-inline-size: 44px;
-    min-block-size: 44px;
-    padding: 6px 9px;
-    border: 1px solid ${({ theme }) => theme.color.border};
+    min-inline-size: var(--gh-size-11);
+    min-block-size: var(--gh-size-11);
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-2_25);
+    border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     color: ${({ theme }) => theme.color.link};
     background: ${({ theme }) => theme.color.surface};
-    font-size: 0.75rem;
+    font-size: var(--gh-font-secondary);
     cursor: pointer;
   }
 `;
@@ -104,7 +104,7 @@ const Phone = styled.div<{ $width: number }>`
   inline-size: 100%;
   max-inline-size: ${({ $width }) => $width}px;
   margin-inline: auto;
-  border: 1px solid ${({ theme }) => theme.color.border};
+  border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surfaceMuted};
   container-type: inline-size;
 `;
@@ -114,30 +114,30 @@ const Context = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 8px;
-  padding: 8px;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  gap: var(--gh-spacing-1) var(--gh-spacing-2);
+  padding: var(--gh-spacing-2);
+  border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface};
-  > strong { font-size: 0.8125rem; }
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; }
+  > strong { font-size: var(--gh-font-body); }
+  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); }
 `;
 
 const Samples = styled.div`
   display: grid;
-  gap: 10px;
-  padding: 6px;
-  > div { min-inline-size: 0; display: grid; gap: 5px; }
-  p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  gap: var(--gh-spacing-2_5);
+  padding: var(--gh-spacing-1_5);
+  > div { min-inline-size: 0; display: grid; gap: var(--gh-spacing-1_25); }
+  p { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); font-weight: var(--gh-weight-bold); letter-spacing: var(--gh-tracking-uppercase); text-transform: uppercase; }
 `;
 
 const Footer = styled.p`
-  max-inline-size: 100rem;
-  margin: 28px auto 0;
-  padding-block-start: 16px;
-  border-block-start: 1px solid ${({ theme }) => theme.color.border};
+  max-inline-size: var(--gh-size-400);
+  margin: var(--gh-spacing-7) auto 0;
+  padding-block-start: var(--gh-spacing-4);
+  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  line-height: 1.7;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-prose);
   a { color: ${({ theme }) => theme.color.link}; }
 `;
 

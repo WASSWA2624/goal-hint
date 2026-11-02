@@ -19,9 +19,9 @@ export function PaymentEvidenceWarning({ warnings, onCancel, onContinue, onChang
 }
 const WarningDialog = styled(CheckoutDialog)`
   > footer { flex-wrap: nowrap; }
-  && > footer > button { flex: 1; min-inline-size: 0; padding-inline: 8px; white-space: nowrap; }
-  ul { margin: 0 0 12px; padding-inline-start: 20px; }
-  li + li { margin-block-start: 8px; }
+  && > footer > button { flex: 1; min-inline-size: 0; padding-inline: var(--gh-spacing-2); white-space: nowrap; }
+  ul { margin: 0 0 var(--gh-spacing-3); padding-inline-start: var(--gh-spacing-5); }
+  li + li { margin-block-start: var(--gh-spacing-2); }
   p { margin: 0; }
-  p + p { margin-block-start: 12px; }
+  p + p { margin-block-start: var(--gh-spacing-3); }
 `;

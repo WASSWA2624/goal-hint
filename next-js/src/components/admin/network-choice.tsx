@@ -39,54 +39,54 @@ export function NetworkChoice({ name = "network", label = "Payment provider", va
 
 const Group = styled.fieldset`
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   border: 0;
   > legend {
-    margin-block-end: 6px;
+    margin-block-end: var(--gh-spacing-1_5);
     padding: 0;
     color: ${({ theme }) => theme.color.text};
     font-size: ${({ theme }) => theme.typography.scale.body};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
-  &:disabled { opacity: 0.6; }
+  &:disabled { opacity: var(--gh-opacity-60); }
   &:disabled label { cursor: not-allowed; }
 `;
 
 const Choices = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
 `;
 
 const Choice = styled.label`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 6px 8px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme }) => theme.color.surfaceMuted};
   color: ${({ theme }) => theme.color.text};
-  font-size: 0.75rem;
-  line-height: 1.25;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-heading);
   cursor: pointer;
   > input {
     flex: none;
-    inline-size: 14px;
-    block-size: 14px;
+    inline-size: var(--gh-size-3_5);
+    block-size: var(--gh-size-3_5);
     margin: 0;
     accent-color: ${({ theme }) => theme.color.link};
   }
-  > input:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-inline-size: 0; }
+  > input:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
+  > span { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-1_5); min-inline-size: 0; }
   > span > span:last-child { overflow-wrap: anywhere; }
-  [data-payment-logo] { inline-size: 30px; block-size: 22px; }
+  [data-payment-logo] { inline-size: var(--gh-size-7_5); block-size: var(--gh-size-5_5); }
   &:has(> input:checked) {  background: ${({ theme }) => theme.color.brandSoft}; }
   &:hover:has(> input:not(:disabled)) { background: ${({ theme }) => theme.color.rowHover}; }
 `;

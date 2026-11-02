@@ -30,13 +30,13 @@ const Actions = styled.div`
   justify-content: flex-end;
   margin-inline-start: auto;
   margin-inline-end: ${({ theme }) => theme.space.sm};
-  gap: 4px;
-  ${media.desktop} { gap: 6px; }
+  gap: var(--gh-spacing-1);
+  ${media.desktop} { gap: var(--gh-spacing-1_5); }
 `;
 const AuthLink = styled(Link)<{ $primary?: boolean }>`
   ${compactHeaderControl}
   color: ${({ theme, $primary }) => $primary ? theme.header.onAccent : theme.header.accent};
-  background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.mode === "light" ? theme.color.field : theme.color.brandSoft};
+  background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.action.headerBackground};
 
   text-decoration: none;
   > svg { display: none; }
@@ -46,7 +46,7 @@ const AuthLink = styled(Link)<{ $primary?: boolean }>`
     > span { display: none; }
     ${media.desktop} { > svg { display: none; } > span { display: inline; } }
   }
-  @media (max-width: 359px) {
+  @media (max-width: ${({ theme }) => theme.viewport[22.4375]}) {
     &[data-header-auth="register"] { > svg { display: block; } > span { display: none; } }
   }
   ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.headerHoverBrightness}); background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.header.controlHover}; } }
@@ -58,19 +58,19 @@ const Disclosure = styled.details`
     ${compactHeaderIconControl}
     position: relative;
     list-style: none;
-    > svg { font-size: 1.125rem; }
+    > svg { font-size: var(--gh-font-title); }
     &::-webkit-details-marker { display: none; }
   }
   &[open] > summary { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; }
 `;
 const Popup = styled.div`
   position: absolute;
-  inset-block-start: calc(100% + 6px);
+  inset-block-start: calc(100% + var(--gh-spacing-1_5));
   inset-inline-end: 0;
-  z-index: 40;
+  z-index: var(--gh-layer-sheet);
   /* Leave room for page gutters/scrollbars and two wrapped rows of header controls. */
-  inline-size: min(15rem, calc(100vw - 32px));
-  max-block-size: calc(100dvh - 5.5rem - 24px);
+  inline-size: min(var(--gh-size-60), calc(100vw - var(--gh-size-8)));
+  max-block-size: calc(100dvh - var(--gh-size-22) - var(--gh-size-6));
   overflow-y: auto;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
@@ -81,46 +81,46 @@ const Popup = styled.div`
 const Identity = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--gh-spacing-2_5);
+  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
   border-block-end: 0;
-  > svg { flex: none; font-size: 1.5rem; color: ${({ theme }) => theme.color.link}; }
-  small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-  strong { display: block; font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; }
+  > svg { flex: none; font-size: var(--gh-font-headline); color: ${({ theme }) => theme.color.link}; }
+  small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); }
+  strong { display: block; font-size: var(--gh-font-emphasis); font-weight: ${({ theme }) => theme.typography.weight.medium}; font-variant-numeric: tabular-nums; }
 `;
 const Destination = styled(Link)`
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 6px 14px;
+  gap: var(--gh-spacing-2);
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-3_5);
   color: ${({ theme }) => theme.color.text};
-  font-size: 0.875rem;
+  font-size: var(--gh-font-emphasis);
   text-decoration: none;
-  > svg { flex: none; font-size: 1.125rem; }
-  > svg:last-of-type { margin-inline-start: auto; font-size: 0.875rem; }
+  > svg { flex: none; font-size: var(--gh-font-title); }
+  > svg:last-of-type { margin-inline-start: auto; font-size: var(--gh-font-emphasis); }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
 `;
 const SignOut = styled(MemberSignOut)`
   && {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 8px;
+    gap: var(--gh-spacing-2);
     inline-size: 100%;
-    min-block-size: var(--form-control-height, 40px);
-    padding: 6px 14px;
+    min-block-size: var(--form-control-height);
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-3_5);
     color: ${({ theme }) => theme.color.mutedText};
     background: transparent;
     border: 0;
     border-block-start: 0;
     border-radius: ${({ theme }) => theme.radius.none};
-    font-size: 0.875rem;
+    font-size: var(--gh-font-emphasis);
     font-weight: ${({ theme }) => theme.typography.weight.medium};
-    > svg { flex: none; font-size: 1.125rem; }
+    > svg { flex: none; font-size: var(--gh-font-title); }
     ${media.hover} { &:hover { color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.rowHover}; } }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   }
 `;
 

@@ -85,66 +85,66 @@ function usePlayerLookup(open: boolean) {
 }
 
 const PlayerRow = styled(RowButton)`
-  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  grid-template-columns: var(--gh-size-7) minmax(0, 1fr) auto;
   > span[data-number] { color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; text-align: end; }
   > span[data-name] { overflow-wrap: anywhere; }
-  > span[data-player-detail] { display: flex; justify-content: end; text-align: end; max-inline-size: 7rem; }
+  > span[data-player-detail] { display: flex; justify-content: end; text-align: end; max-inline-size: var(--gh-size-28); }
 `;
 const LineupGrid = styled.div<{ $besidePitch?: boolean; $single: boolean }>`
   display: grid;
-  gap: 12px;
-  @container details-card (min-width: 40rem) {
+  gap: var(--gh-spacing-3);
+  @container details-card (min-width: ${({ theme }) => theme.viewport[40]}) {
     grid-template-columns: ${({ $single }) => $single ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))"};
     > section[data-side="away"] { grid-column: ${({ $single }) => $single ? "1" : "2"}; }
   }
-  > section { display: grid; gap: 6px; align-content: start; min-inline-size: 0; }
-  @container details-card (min-width: 72rem) {
+  > section { display: grid; gap: var(--gh-spacing-1_5); align-content: start; min-inline-size: 0; }
+  @container details-card (min-width: ${({ theme }) => theme.viewport[72]}) {
     grid-template-columns: ${({ $besidePitch, $single }) => $besidePitch || $single ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))"};
     > section[data-side="away"] { grid-column: ${({ $besidePitch, $single }) => $besidePitch || $single ? "1" : "2"}; }
   }
 `;
 const LineupWorkspace = styled.div<{ $pitch: boolean }>`
-  display: grid; gap: 16px; min-inline-size: 0;
-  > [data-field-column] { min-inline-size: 0; inline-size: 100%; max-inline-size: 840px; margin-inline: auto; display: grid; gap: 10px; }
-  ${media.belowDesktop} { > [data-field-column] { max-inline-size: 440px;
+  display: grid; gap: var(--gh-spacing-4); min-inline-size: 0;
+  > [data-field-column] { min-inline-size: 0; inline-size: 100%; max-inline-size: var(--gh-size-210); margin-inline: auto; display: grid; gap: var(--gh-spacing-2_5); }
+  ${media.belowDesktop} { > [data-field-column] { max-inline-size: var(--gh-size-110);
     > [data-pitch-teams] { display: contents; }
     > [data-pitch-teams] > [data-side="home"] { grid-row: 1; grid-column: 1; }
     > [data-touchline-pitch] { grid-row: 2; }
     > [data-pitch-teams] > [data-side="away"] { grid-row: 3; grid-column: 1; justify-content: start; }
     [data-formation] { margin-inline-start: auto; }
   } }
-  @container details-card (min-width: 72rem) {
-    grid-template-columns: ${({ $pitch }) => $pitch ? "minmax(0, 840px) minmax(240px, 280px)" : "minmax(0, 1fr)"};
-    ${({ $pitch }) => $pitch ? "max-inline-size: 1140px; inline-size: 100%; margin-inline: auto; align-items: start; gap: 20px;" : ""}
+  @container details-card (min-width: ${({ theme }) => theme.viewport[72]}) {
+    grid-template-columns: ${({ $pitch }) => $pitch ? "minmax(0, var(--gh-size-210)) minmax(var(--gh-size-60), var(--gh-size-70))" : "minmax(0, 1fr)"};
+    ${({ $pitch }) => $pitch ? "max-inline-size: var(--gh-size-285); inline-size: 100%; margin-inline: auto; align-items: start; gap: var(--gh-spacing-5);" : ""}
   }
 `;
 const PitchTeams = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
-  > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-inline-size: 0; }
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-4);
+  > div { display: flex; align-items: center; flex-wrap: wrap; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
   > [data-side="home"] { grid-column: 1; }
   > [data-side="away"] { grid-column: 2; justify-content: end; }
-  strong { font-size: .875rem; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: .6875rem; }
-  [data-formation] { padding: 4px 7px; background: ${({ theme }) => theme.color.surfaceMuted};
-    color: ${({ theme }) => theme.color.text}; font-size: .75rem; white-space: nowrap; }
+  strong { font-size: var(--gh-font-emphasis); }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
+  [data-formation] { padding: var(--gh-spacing-1) var(--gh-spacing-1_75); background: ${({ theme }) => theme.color.surfaceMuted};
+    color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-secondary); white-space: nowrap; }
 `;
 const TeamSheetDetails = styled.details`
-  color: ${({ theme }) => theme.color.mutedText}; font-size: .75rem;
-  > summary { padding-block: 6px; cursor: pointer; }
-  > div { display: grid; gap: 6px; padding-block: 8px; }
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary);
+  > summary { padding-block: var(--gh-spacing-1_5); cursor: pointer; }
+  > div { display: grid; gap: var(--gh-spacing-1_5); padding-block: var(--gh-spacing-2); }
 `;
 const TeamTabs = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block-end: 12px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block-end: var(--gh-spacing-3);
   border-block-end: 0;
-  button { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px 7px;
-    min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 8px 4px; border: 0; border-block-end: 0;
-    color: ${({ theme }) => theme.color.mutedText}; background: transparent; font: inherit; font-size: .8125rem; cursor: pointer; }
-  button[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text};  font-weight: 700; }
+  button { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--gh-spacing-1_25) var(--gh-spacing-1_75);
+    min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-2) var(--gh-spacing-1); border: 0; border-block-end: 0;
+    color: ${({ theme }) => theme.color.mutedText}; background: transparent; font: inherit; font-size: var(--gh-font-body); cursor: pointer; }
+  button[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text};  font-weight: var(--gh-weight-bold); }
   button { ${focusRing} }
-  small { font-size: .625rem; font-weight: 500; }
+  small { font-size: var(--gh-font-micro); font-weight: var(--gh-weight-medium); }
 `;
 const Availability = styled.div`
-  display: grid; gap: 6px; margin-block-start: 6px; padding-block-start: 10px;
+  display: grid; gap: var(--gh-spacing-1_5); margin-block-start: var(--gh-spacing-1_5); padding-block-start: var(--gh-spacing-2_5);
   border-block-start: 0;
 `;
 const allSides = ["home", "away"] as const;
@@ -193,7 +193,7 @@ function LineupRosters({ lineups, sides, hasPitch, injuries, players }: { lineup
       const lineup = lineups[side];
       const team = side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
       return <section key={side} data-side={side} data-team-roster={side} aria-label={side === "home" ? home : away}>
-        {embedded && !hasPitch && <Strong style={{ display: "flex", alignItems: "center", gap: 6 }}><Crest name={team.name} url={team.logoUrl} />
+        {embedded && !hasPitch && <Strong style={{ display: "flex", alignItems: "center", gap: "var(--gh-spacing-1_5)" }}><Crest name={team.name} url={team.logoUrl} />
           {side === "home" ? home : away}{lineup?.formation ? ` · ${lineup.formation}` : ""}</Strong>}
         {lineup ? <>
           {(!embedded || !hasPitch) && <><Strong>{messages.text("details.starters")}</Strong><LineupPlayerList players={lineup.starters} side={side} kind="starters" /></>}
@@ -230,7 +230,7 @@ export const LineupsSection = memo(function LineupsSection() {
       : messages.text(any ? "details.confirmed" : "details.lineupNotPublished")}
     itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
-    {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       <PanelBar>{embedded && <TeamChoice />}<RadioGroup label={messages.text("touchline.profileDetails")} value={display} onChange={field => {
         const tab = field === "number" ? null : `lineup-${field}`;
         update(current => ({ ...current, tab }), "replace");
@@ -265,16 +265,16 @@ export const LineupsSection = memo(function LineupsSection() {
 const Avatar = styled.span`
   display: grid;
   place-items: center;
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
+  inline-size: var(--gh-size-6);
+  block-size: var(--gh-size-6);
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
   border-radius: ${({ theme }) => theme.radius.circle};
-  font-size: 0.5625rem;
+  font-size: var(--gh-font-micro);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
 const SquadRow = styled(RowButton)`
-  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  grid-template-columns: var(--gh-size-6) minmax(0, 1fr) auto;
   > span[data-name] { display: grid; min-inline-size: 0; }
   > span[data-name] > b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > span[data-name] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
@@ -305,7 +305,7 @@ export const PlayersSection = memo(function PlayersSection() {
     meta={total ? messages.plural("details.playerCount", total) : preview ? messages.text("details.summary.noPlayers") : null}
     itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
-    {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
+    {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: "var(--gh-spacing-2_5)" }}>
       <PanelBar>
         <TeamChoice />
         <ChoiceGroup label={messages.text("details.position")} value={group ?? "all"} onChange={(value: string) => update((current) => ({ ...current, tab: value === "all" ? null : value, page: 1 }), "replace")}
@@ -320,7 +320,7 @@ export const PlayersSection = memo(function PlayersSection() {
 });
 
 const InjuryRow = styled(RowButton)<{ $country: boolean }>`
-  grid-template-columns: ${({ $country }) => $country ? "1rem minmax(0, 1fr) auto auto" : "1rem minmax(0, 1fr) auto"};
+  grid-template-columns: ${({ $country }) => $country ? "var(--gh-size-4) minmax(0, 1fr) auto auto" : "var(--gh-size-4) minmax(0, 1fr) auto"};
   > svg { color: ${({ theme }) => theme.color.accent.red.solid}; }
   > span[data-name] { display: grid; min-inline-size: 0; }
   > span[data-name] > b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

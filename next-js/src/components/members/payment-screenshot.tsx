@@ -147,9 +147,9 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
           <CriteriaDialogButton onClick={() => { close(); input.current?.click(); }}>Try another screenshot</CriteriaDialogButton></>
         : <CriteriaDialogButton onClick={close}>OK</CriteriaDialogButton>}>
       <p>{dialog.message}</p>
-      {dialog.kind === "pick" && dialog.files?.map((picked, index) => <label key={picked.url} style={{ display: "flex", alignItems: "center", gap: 8, marginBlock: 8 }}>
+      {dialog.kind === "pick" && dialog.files?.map((picked, index) => <label key={picked.url} style={{ display: "flex", alignItems: "center", gap: "var(--gh-spacing-2)", marginBlock: "var(--gh-spacing-2)" }}>
         <input type="radio" name={`${id}-choice`} checked={selected === index} onChange={() => setSelected(index)} />
-        <Preview src={picked.url} alt={`Screenshot ${index + 1}`} style={{ maxWidth: 80, maxHeight: 80 }} />Screenshot {index + 1}
+        <Preview src={picked.url} alt={`Screenshot ${index + 1}`} style={{ maxWidth: "var(--gh-size-20)", maxHeight: "var(--gh-size-20)" }} />Screenshot {index + 1}
       </label>)}
     </CheckoutDialog>}
   </CheckoutEvidenceField>;

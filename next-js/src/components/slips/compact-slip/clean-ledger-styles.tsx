@@ -13,10 +13,10 @@ export const CleanLedgerRow = styled.div`
   background: var(--match-surface);
   text-decoration: none;
   ${media.belowDesktop} {
-    padding-block: 5px; row-gap: 2px;
-    [data-ledger-teams] { row-gap: 1px; }
-    [data-ledger-facts] { row-gap: 2px; }
+    padding-block: var(--gh-spacing-1_25); row-gap: var(--gh-spacing-0_5);
+    [data-ledger-teams] { row-gap: var(--gh-spacing-0_25); }
+    [data-ledger-facts] { row-gap: var(--gh-spacing-0_5); }
   }
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   @media (hover: hover) { &[href]:hover { background: ${({ theme }) => theme.color.rowHover}; } }
 `;

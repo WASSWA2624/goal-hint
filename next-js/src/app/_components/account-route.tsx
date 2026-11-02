@@ -128,7 +128,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           <AccountQuickActions locale={locale} returnTo={returnTo} />
         </>}
         {section === "subscription" && queued.length > 0 && <AccountPanel title={messages.text("account.nextPackages")}>
-          {queued.map(code => <AccountFacts key={code.id} style={{ marginBlockEnd: 20 }} $columns={3}>
+          {queued.map(code => <AccountFacts key={code.id} style={{ marginBlockEnd: "var(--gh-spacing-5)" }} $columns={3}>
             <div><dt>{messages.text("account.packageLabel")}</dt><dd>{code.planName}</dd></div>
             <div><dt>{messages.text("account.startsLabel")}</dt><dd>{formatSubscriptionExpiry(code.startsAt)}</dd></div>
             <div><dt>{messages.text("account.expiryLabel")}</dt><dd>{formatSubscriptionExpiry(code.endsAt)}</dd></div>
@@ -141,7 +141,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           <AccountPaymentHistory locale={locale} dashboard={dashboard} />
         </>}
         {(section === "phone" || section === "password") && <AccountPanel narrow title={messages.text(section === "phone" ? "account.phonePanel" : "account.passwordPanel")}>
-          {section === "phone" && <AccountFine style={{ marginBlockEnd: 16 }}>+{formatPhone(member.phone)}</AccountFine>}
+          {section === "phone" && <AccountFine style={{ marginBlockEnd: "var(--gh-spacing-4)" }}>+{formatPhone(member.phone)}</AccountFine>}
           <AccountSecurityForm key={section} task={section} locale={locale} contact={contact} cancelHref={accountSectionHref(locale, "overview", returnTo)} />
         </AccountPanel>}
         {section === "devices" && <AccountDevices locale={locale} devices={view?.devices.map(device => ({ at: device.lastSeenAt.toISOString(), current: device.tokenHash === member.tokenHash })) ?? null} />}

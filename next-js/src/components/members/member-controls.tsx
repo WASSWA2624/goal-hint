@@ -11,13 +11,13 @@ import { getSubscriptionSnapshot, subscribeMemberSession } from "./member-sessio
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
 export const MemberPanel = styled(Surface)`
   inline-size: 100%;
-  max-inline-size: 36rem;
-  button, a { min-block-size: var(--form-control-height, 40px); }
-  input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"]) { min-block-size: var(--form-control-height, 40px); font-size: 16px; }
+  max-inline-size: var(--gh-size-144);
+  button, a { min-block-size: var(--form-control-height); }
+  input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"]) { min-block-size: var(--form-control-height); font-size: var(--gh-font-section); }
 `;
 export const MemberForm = styled.form`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
 `;
 

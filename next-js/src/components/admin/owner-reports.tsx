@@ -51,7 +51,7 @@ export function OverviewReport({ value: v, payments, notices = null, now = 0 }: 
 // column beside the rest.
 const Overview = styled(DeskGrid)<{ $notices: boolean }>`
   ${media.desktop} {
-    row-gap: 12px;
+    row-gap: var(--gh-spacing-3);
     > :nth-child(2) { grid-column: 2; grid-row: 1 / span ${({ $notices }) => $notices ? 3 : 2}; }
     > :nth-child(3) { grid-column: 1; grid-row: 2; }
     > :nth-child(4) { grid-column: 1; grid-row: 3; }
@@ -61,10 +61,10 @@ const Metrics = styled.div`
   overflow: hidden;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
-  > dl > div { min-block-size: 64px; }
+  > dl > div { min-block-size: var(--gh-size-16); }
   /* An odd count would leave a bare hairline cell; the last tile takes the full row instead. */
   > dl > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  ${media.desktop} { > dl > div { min-block-size: 72px; padding: 12px 16px; } }
+  ${media.desktop} { > dl > div { min-block-size: var(--gh-size-18); padding: var(--gh-spacing-3) var(--gh-spacing-4); } }
 `;
 const Tile = styled.div<{ $pending: boolean }>`
   dd { color: ${({ theme, $pending }) => $pending ? theme.color.outcome.pending.text : theme.color.text}; }
@@ -72,29 +72,29 @@ const Tile = styled.div<{ $pending: boolean }>`
 const ViewAll = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-block-size: var(--form-control-height, 40px);
-  margin-inline-end: -6px;
-  padding-inline: 6px;
+  gap: var(--gh-spacing-1);
+  min-block-size: var(--form-control-height);
+  margin-inline-end: calc(-1 * var(--gh-spacing-1_5));
+  padding-inline: var(--gh-spacing-1_5);
   color: ${({ theme }) => theme.color.link};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-decoration: none;
-  > svg { flex: none; font-size: 1rem; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   ${media.hover} { &:hover { text-decoration: underline; } }
 `;
 const QueueRow = styled.li`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
-  min-block-size: 60px;
-  padding: 8px 14px;
-  > span:first-child { display: grid; gap: 2px; min-inline-size: 0; }
-  strong { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  gap: var(--gh-spacing-3);
+  min-block-size: var(--gh-size-15);
+  padding: var(--gh-spacing-2) var(--gh-spacing-3_5);
+  > span:first-child { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; }
+  strong { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-1_5); font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-  @media (max-width: 359px) { grid-template-columns: minmax(0, 1fr) auto; > span:first-child { grid-column: 1 / -1; } }
-  ${media.desktop} { padding-inline: 16px 10px; }
+  @media (max-width: ${({ theme }) => theme.viewport[22.4375]}) { grid-template-columns: minmax(0, 1fr) auto; > span:first-child { grid-column: 1 / -1; } }
+  ${media.desktop} { padding-inline: var(--gh-spacing-4) var(--gh-spacing-2_5); }
 `;
 const Amount = styled.span`
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
@@ -106,8 +106,8 @@ const Review = styled(Link)`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 14px;
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-3_5);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   color: ${({ theme }) => theme.color.link};
@@ -115,15 +115,15 @@ const Review = styled(Link)`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-decoration: none;
   white-space: nowrap;
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   ${media.hover} { &:hover { text-decoration: underline; } }
-  ${media.desktop} { min-block-size: var(--form-control-height, 40px); padding-inline: 6px;  background: ${({ theme }) => theme.color.brandSoft}; }
+  ${media.desktop} { min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-1_5);  background: ${({ theme }) => theme.color.brandSoft}; }
 `;
 const QueueMessage = styled.p`
-  padding: 14px;
+  padding: var(--gh-spacing-3_5);
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  ${media.desktop} { padding-inline: 16px; }
+  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
 `;
 // One row only where the metrics column is wide; beside the side panel at 1024px it stacks as on phones.
 const Footnote = styled.div`
@@ -131,9 +131,9 @@ const Footnote = styled.div`
   min-inline-size: 0;
   > div { display: grid; min-inline-size: 0; }
   > div > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-  @container (min-width: 34rem) {
-    > div { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 16px; }
-    > div > p { padding-block: 9px; }
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) {
+    > div { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 var(--gh-spacing-4); }
+    > div > p { padding-block: var(--gh-spacing-2_25); }
   }
 `;
 /** A plain drawer: full width with the chevron at the end when stacked; at the end of the footnote row when there is one. */
@@ -142,22 +142,22 @@ const Totals = styled.details`
   > summary {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-block-size: var(--form-control-height, 40px);
+    gap: var(--gh-spacing-2);
+    min-block-size: var(--form-control-height);
     color: ${({ theme }) => theme.color.link};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none;
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    > svg { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-section); transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
   &[open] > summary > svg { transform: rotate(180deg); }
-  > p { max-inline-size: 34rem; padding-block-end: 4px; color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
+  > p { max-inline-size: var(--gh-size-136); padding-block-end: var(--gh-spacing-1); color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
   @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
-  ${media.desktop} { > summary { min-block-size: var(--form-control-height, 40px); } }
-  @container (min-width: 34rem) {
-    flex: 1 1 16rem;
+  ${media.desktop} { > summary { min-block-size: var(--form-control-height); } }
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) {
+    flex: 1 1 var(--gh-size-64);
     > summary { justify-content: flex-end; > svg { margin-inline-start: 0; } }
     > p { margin-inline-start: auto; }
   }

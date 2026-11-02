@@ -6,8 +6,8 @@ const travel = keyframes`from { transform: translateX(-100%); } to { transform: 
 const Track = styled.div`
   position: absolute;
   inset-inline: 0;
-  inset-block-end: -2px;
-  block-size: 3px;
+  inset-block-end: calc(-1 * var(--gh-spacing-0_5));
+  block-size: var(--gh-size-0_75);
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
@@ -20,7 +20,7 @@ const Track = styled.div`
   }
   body:has([data-navigation-pending], main [aria-busy="true"]) & {
     opacity: 1;
-    > span { display: block; animation: ${travel} 1.1s linear infinite; }
+    > span { display: block; animation: ${travel} var(--gh-duration-shimmer) var(--gh-easing-linear) infinite; }
   }
   @media (prefers-reduced-motion: reduce) {
     body:has([data-navigation-pending], main [aria-busy="true"]) & > span {

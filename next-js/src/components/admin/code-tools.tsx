@@ -119,13 +119,13 @@ export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "
     {!externalActions && <GrantButton type="submit" $variant="primary" $inline={fixedPhone} disabled={action.busy}>Grant access manually</GrantButton>}</FormStack></form>;
 }
 const NoWrap = styled.span`white-space: nowrap;`;
-const GrantSection = styled.div`display: grid; gap: 12px; min-inline-size: 0;`;
+const GrantSection = styled.div`display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;`;
 /** Two fields side by side at every width; inputs line up when one label wraps. */
 const FieldPair = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
-  gap: 10px;
+  gap: var(--gh-spacing-2_5);
 
   ${controlRow}
 `;
@@ -134,19 +134,19 @@ const PlainDrawer = styled.details`
   > summary {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-block-size: var(--form-control-height, 40px);
+    gap: var(--gh-spacing-2);
+    min-block-size: var(--form-control-height);
     color: ${({ theme }) => theme.color.link};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none;
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    > svg { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-section); transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
-  &[open] > summary { margin-block-end: 8px; > svg { transform: rotate(180deg); } }
+  &[open] > summary { margin-block-end: var(--gh-spacing-2); > svg { transform: rotate(180deg); } }
   @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
-  ${media.desktop} { > summary { min-block-size: var(--form-control-height, 40px); } }
+  ${media.desktop} { > summary { min-block-size: var(--form-control-height); } }
 `;
 const GrantButton = styled(ActionButton)<{ $inline: boolean }>`
   inline-size: 100%;
@@ -181,15 +181,15 @@ const CodeTools = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: var(--gh-spacing-2) var(--gh-spacing-3);
   min-inline-size: 0;
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
 `;
 const ExtendForm = styled.form`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
 
   ${controlRow}
@@ -200,13 +200,13 @@ const RevokeConfirmation = styled.div`
   flex: 1 1 100%;
   display: grid;
   justify-items: start;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--gh-spacing-2);
+  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.outcome.pending.background};
   p { color: ${({ theme }) => theme.color.outcome.pending.text}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > div { display: flex; flex-wrap: wrap; gap: 8px; }
+  > div { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-2); }
 `;
 
 const codeTone = (status: OwnerCode["status"]) => status === "active" ? "good" : status === "queued" ? "warning" : "muted";
@@ -305,32 +305,32 @@ const HeaderEnd = styled.div`margin-inline-start: auto; ${media.belowDesktop} { 
 const CodeList = styled(RecordList)`${media.belowDesktop} { order: 2; }`;
 const CodeDetails = styled(RecordDetails)`${media.belowDesktop} { order: 1; }`;
 const GrantPanel = styled.div`min-inline-size: 0; &[hidden] { display: none; } ${media.belowDesktop} { background: ${({ theme }) => theme.color.surface}; border: 0; border-radius: ${({ theme }) => theme.radius.surface}; }`;
-const Facts = styled(FactList)`padding: 12px;`;
+const Facts = styled(FactList)`padding: var(--gh-spacing-3);`;
 const MobileCodeDetails = styled(PlainDrawer)`
-  > summary { min-block-size: var(--form-control-height, 40px); }
-  > [data-record-actions] { margin-block-start: 12px; }
+  > summary { min-block-size: var(--form-control-height); }
+  > [data-record-actions] { margin-block-start: var(--gh-spacing-3); }
 `;
 const SearchForm = styled.form`
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; min-inline-size: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--gh-spacing-2); min-inline-size: 0;
   > :first-child { grid-column: 1 / -1; }
-  > button > svg { flex: none; font-size: 1rem; }
-  ${media.desktop} { input, select { min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; } > button { min-block-size: var(--form-control-height, 40px); } }
+  > button > svg { flex: none; font-size: var(--gh-font-section); }
+  ${media.desktop} { input, select { min-block-size: var(--form-control-height); font-size: var(--gh-font-body); } > button { min-block-size: var(--form-control-height); } }
 
   ${controlRow}
 `;
 const CodeRow = styled.li`
   display: grid;
-  gap: 2px;
-  padding: 12px 14px;
-  > ${CodeTools} { margin-block-start: 8px; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
-  ${media.desktop} { padding-inline: 16px; }
-  @container (min-width: 36rem) {
+  gap: var(--gh-spacing-0_5);
+  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
+  > ${CodeTools} { margin-block-start: var(--gh-spacing-2); }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
+  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
+  @container (min-width: ${({ theme }) => theme.viewport[36]}) {
     grid-template-columns: minmax(0, 1fr) auto;
     /* The spare last row takes the height an open confirmation adds, so the three text lines stay together. */
     grid-template-rows: auto auto auto minmax(0, 1fr);
     align-items: center;
-    column-gap: 16px;
+    column-gap: var(--gh-spacing-4);
     > :not(${CodeTools}) { grid-column: 1; }
     /* A wrapping flex row would size this column to the sum of its parts, confirmation included; a grid does not. */
     > ${CodeTools} { display: grid; grid-template-columns: auto auto; justify-content: end; grid-column: 2; grid-row: 1 / -1; margin-block-start: 0; }
@@ -348,11 +348,11 @@ const CodeLine = styled.p`
     font-variant-numeric: tabular-nums;
     text-decoration: none;
     ${media.hover} { &:hover { text-decoration: underline; } }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
     ${media.belowDesktop} { display: inline-flex; align-items: center; min-block-size: ${({ theme }) => theme.control.minHeight}; vertical-align: middle; }
   }
 `;
 const GrantDrawer = styled(Drawer)`
-  ${media.desktop} { &[data-grant-desktop="true"] > summary { display: none; } > div { padding: 12px; } }
-  > div { padding-block-start: 14px; border-block-start: 0; }
+  ${media.desktop} { &[data-grant-desktop="true"] > summary { display: none; } > div { padding: var(--gh-spacing-3); } }
+  > div { padding-block-start: var(--gh-spacing-3_5); border-block-start: 0; }
 `;

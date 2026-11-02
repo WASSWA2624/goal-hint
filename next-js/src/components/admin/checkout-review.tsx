@@ -24,10 +24,10 @@ type Detail = { revision: number; status: string; walletUgx: number; referralDay
     evidence: { id: string; createdAt: string }[] }[];
   events: { id: string; action: string; actor: string; reason: string | null; createdAt: string }[] };
 const Review = styled.article`
-  display: grid; gap: 14px; padding: 16px; min-inline-size: 0; overflow-y: auto; align-content: start;
-  h2, h3, p { margin: 0; } form { display: grid; gap: 10px; min-inline-size: 0; }
-  fieldset { min-inline-size: 0; margin: 0; padding: 12px; border: 0; }
-  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+  display: grid; gap: var(--gh-spacing-3_5); padding: var(--gh-spacing-4); min-inline-size: 0; overflow-y: auto; align-content: start;
+  h2, h3, p { margin: 0; } form { display: grid; gap: var(--gh-spacing-2_5); min-inline-size: 0; }
+  fieldset { min-inline-size: 0; margin: 0; padding: var(--gh-spacing-3); border: 0; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--gh-font-body); }
   textarea { inline-size: 100%; resize: vertical; } label { overflow-wrap: anywhere; }
 `;
 const localDate = (value: string) => new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);

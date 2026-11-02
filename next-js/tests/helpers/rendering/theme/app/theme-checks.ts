@@ -63,7 +63,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     assert(!!indicator && visible(indicator), "Collapsible slips retain a visible disclosure indicator");
     if (!indicator) continue;
     const rect = indicator.getBoundingClientRect(), header = summary.getBoundingClientRect();
-    assert(Math.abs(rect.top - header.top - 8) < 0.1, "Disclosure indicator stays in its fixed header slot");
+    const offset = phone ? Number.parseFloat(theme.spacing[2]) : 0;
+    assert(Math.abs(rect.top - header.top - offset) < 0.1, "Disclosure indicator stays in its themed header slot");
     const rotation = new DOMMatrix(getComputedStyle(indicator, "::after").transform);
     assert(summary.parentElement?.hasAttribute("open") ? rotation.b > 0 : rotation.b < 0,
       "Disclosure indicator faces right when collapsed and down when expanded");
@@ -133,8 +134,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   if (phone) {
     check("#theme-matches [data-fixture-id]", theme.color.surface);
     check("#theme-slips [data-slip-summary]", theme.phoneCardFrame.mobileHeader);
-    checkRadius("#theme-matches [data-fixture-id]", theme.phoneCardFrame.radius);
-    checkRadius("#theme-matches [data-fixture-id] > a", `${Math.max(0, Number.parseFloat(theme.phoneCardFrame.radius) - Number.parseFloat(theme.border.width))}px`);
+    checkRadius("#theme-matches [data-fixture-id]", theme.radius.none);
+    checkRadius("#theme-matches [data-fixture-id] > a", theme.radius.none);
     if (document.querySelector("#theme-slips [data-slip-disclosure][open]")) {
       check("#theme-slips [data-slip-selection] > [data-fixture-id]", theme.phoneCardFrame.selection);
     }
@@ -143,7 +144,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     // Matches and slips use the same aligned match-row treatment, without the former table header or stripes.
     check("#theme-matches [data-match-board]", theme.color.page);
     const list = document.querySelector("#theme-matches [data-match-list]");
-    assert(!!list && getComputedStyle(list).rowGap === theme.space.xs, "Desktop matches retain a small gap");
+    assert(!!list && getComputedStyle(list).rowGap === "0px", "Desktop matches retain their joined rows");
     const matchRows = [...document.querySelectorAll("#theme-matches [data-desktop-row]")].filter(visible);
     const fixtures = [...document.querySelectorAll("#theme-matches [data-fixture-id]")].filter(visible);
     assert(matchRows.length > 0 && matchRows.length === fixtures.length, "Each desktop fixture uses the shared match row");
@@ -179,7 +180,7 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
       }
       assert(separator.borderTopWidth === (index ? ruleWidth : "0px"), "Selection separators stay thin");
       if (index) {
-        assert(separator.borderTopColor === normalize(theme.phoneCardFrame.inset), "Separators use the slip background");
+        assert(separator.borderTopColor === normalize(theme.phoneCardFrame.separator), "Separators retain their semantic theme color");
         const previous = items[index - 1]!.getBoundingClientRect(), current = item.getBoundingClientRect();
         assert(Math.abs(current.top - previous.bottom) < 0.1, "Selection wrappers touch without gaps");
       }
@@ -192,13 +193,15 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     const target = element.id || element.tagName.toLowerCase();
     for (const edge of ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const) {
       const frame = element.matches("[data-compact-slip]");
+      const matchFrame = element.matches("[data-match-list] > li:has(> article:only-child), [data-match-list] > li:has(> [data-desktop-row]:only-child)");
+      const matchFrameEdge = matchFrame && (edge !== "borderTopWidth" || element.matches(":first-child"));
       const separator = (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection], [data-feed-pagination]")
-        || !phone && element.matches("[data-match-list] > li + li")) && edge === "borderTopWidth";
+        ) && edge === "borderTopWidth";
       const floating = element.matches("[data-floating-outline], [data-floating-control], [data-select-trigger]") || !!element.closest("[data-floating-control]");
       const field = element.matches(textFieldSelector + ", select, [data-text-field-frame]");
-      const expected = frame || separator ? ruleWidth : field ? fieldBorderWidth : "0px";
+      const expected = frame || matchFrameEdge || separator ? ruleWidth : field ? fieldBorderWidth : "0px";
       assert(floating ? Number.parseFloat(style[edge]) <= 2 : style[edge] === expected || field && style[edge] === "0px", `${target}: unexpected ${edge}`);
-      if (frame) assert(style.borderTopColor === normalize(theme.phoneCardFrame.inset), "Slip frames use the slip background");
+      if (frame) assert(style.borderTopColor === normalize(theme.phoneCardFrame.separator), "Slip frames retain their semantic theme color");
     }
   }
   for (const button of document.querySelectorAll<HTMLElement>("[data-feed-search-submit]")) {

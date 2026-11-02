@@ -16,23 +16,23 @@ const clientSnapshot = () => true;
 const serverSnapshot = () => false;
 
 const NumericField = styled(Field)`
-  position: relative; margin-block-start: 6px;
+  position: relative; margin-block-start: var(--gh-spacing-1_5);
   &&[data-slip-floating-field="true"] {
     gap: 0;
     > label { ${floatingLabel} }
-    > input:not([type="hidden"]) { ${floatingControl} border: 1px solid transparent; &:focus-visible { outline: none; } }
+    > input:not([type="hidden"]) { ${floatingControl} border: var(--gh-stroke-thin) solid transparent; &:focus-visible { outline: none; } }
     > [data-floating-outline] { ${floatingOutline} }
     ${floatingFieldState}
   }
 `;
 const NumericControl = styled(InputControl)`
   text-align: center;
-  @media (pointer: fine) { &&[data-slip-number-enhanced="true"] { padding-inline: 8px 20px; } }
-  ${media.belowDesktop} { &&[data-slip-number-enhanced="true"] { padding-inline: 3px; } }
+  @media (pointer: fine) { &&[data-slip-number-enhanced="true"] { padding-inline: var(--gh-spacing-2) var(--gh-spacing-5); } }
+  ${media.belowDesktop} { &&[data-slip-number-enhanced="true"] { padding-inline: var(--gh-spacing-0_75); } }
 `;
 const Stepper = styled.span`
-  display: none; position: absolute; inset-inline-end: 1px; inset-block-end: 1px;
-  inline-size: 18px; block-size: calc(var(--form-control-height, 40px) - 2px); opacity: 0;
+  display: none; position: absolute; inset-inline-end: var(--gh-spacing-0_25); inset-block-end: var(--gh-spacing-0_25);
+  inline-size: var(--gh-size-4_5); block-size: calc(var(--form-control-height) - var(--gh-size-0_5)); opacity: 0;
   @media (pointer: fine) {
     display: flex; flex-direction: column;
     ${NumericField}:hover > &, ${NumericField}:focus-within > & { opacity: 1; }
@@ -40,27 +40,27 @@ const Stepper = styled.span`
   &&& > button {
     flex: 1 1 50%; inline-size: 100%; min-inline-size: 0; block-size: 50%; min-block-size: 0;
     max-block-size: 50%; margin: 0; padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none};
-    font-size: 0.625rem; line-height: 1;
+    font-size: var(--gh-font-micro); line-height: var(--gh-leading-solid);
   }
-  &&& > button > svg { inline-size: 10px; block-size: 10px; }
+  &&& > button > svg { inline-size: var(--gh-size-2_5); block-size: var(--gh-size-2_5); }
   &&& > button[data-step-up] > svg { transform: rotate(180deg); }
   ${media.belowDesktop} { display: none; }
 `;
 const StepButton = styled.button`
   display: flex; align-items: center; justify-content: center; flex: 1; min-block-size: 0;
   padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 0.5rem; line-height: 1; cursor: pointer;
+  background: ${({ theme }) => theme.color.surfaceMuted}; font-size: var(--gh-font-micro); line-height: var(--gh-leading-solid); cursor: pointer;
   &:hover, &:focus-visible { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
-  &:focus-visible { outline: 1px solid ${({ theme }) => theme.color.focus}; outline-offset: -1px; }
+  &:focus-visible { outline: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_25)); }
   &:disabled { cursor: not-allowed; }
 `;
 const Warning = styled.span`
-  position: fixed; inset: auto; z-index: 1000; margin: 0; padding: 6px 8px;
-  inline-size: max-content; max-inline-size: min(20rem, calc(100vw - 16px));
+  position: fixed; inset: auto; z-index: var(--gh-layer-modal); margin: 0; padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
+  inline-size: max-content; max-inline-size: min(var(--gh-size-80), calc(100vw - var(--gh-size-4)));
   color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background};
   box-shadow: ${({ theme }) => theme.shadow.popover};
   border: 0;
-  border-radius: ${({ theme }) => theme.radius.surface}; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere;
+  border-radius: ${({ theme }) => theme.radius.surface}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); overflow-wrap: anywhere;
   pointer-events: none;
 `;
 

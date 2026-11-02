@@ -24,20 +24,20 @@ import {
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
 
-const Search = styled(FloatingField)`min-inline-size: min(100%, 12rem);`;
+const Search = styled(FloatingField)`min-inline-size: min(100%, var(--gh-size-48));`;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
-const columns = "minmax(0, 1.4fr) minmax(0, 1.1fr) 4rem 0.75rem";
-const wideColumns = "minmax(0, 1.35fr) minmax(0, 1.2fr) minmax(0, 1.1fr) 0.875rem";
+const columns = "minmax(0, 1.4fr) minmax(0, 1.1fr) var(--gh-size-16) var(--gh-size-3)";
+const wideColumns = "minmax(0, 1.35fr) minmax(0, 1.2fr) minmax(0, 1.1fr) var(--gh-size-3_5)";
 const Head = styled.div`
   display: none;
-  @container details-card (min-width: 20rem) {
+  @container details-card (min-width: ${({ theme }) => theme.viewport[20]}) {
     display: grid;
     grid-template-columns: ${columns};
   }
-  @container details-card (min-width: 27rem) { grid-template-columns: ${wideColumns}; }
-  @container details-card (min-width: 20rem) {
-    column-gap: 8px;
-    padding: 4px 4px;
+  @container details-card (min-width: ${({ theme }) => theme.viewport[27]}) { grid-template-columns: ${wideColumns}; }
+  @container details-card (min-width: ${({ theme }) => theme.viewport[20]}) {
+    column-gap: var(--gh-spacing-2);
+    padding: var(--gh-spacing-1) var(--gh-spacing-1);
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.cardHeader};
     font-size: ${size("caption")};
@@ -48,70 +48,70 @@ const Head = styled.div`
 /** One table row per market from 320px; the narrowest phones use two lines. Below desktop a row reads like
  * the verdict: market name, pick with its live standing, and the chance. */
 const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.1fr) 4rem .75rem;
-  align-items: center; gap: 8px; min-block-size: 44px;
-  > span[data-name] { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
-  > span[data-name] > span:first-child { flex: none; inline-size: 1.25rem; block-size: 1.25rem; font-size: .8125rem; }
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.1fr) var(--gh-size-16) var(--gh-size-3);
+  align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--gh-size-11);
+  > span[data-name] { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
+  > span[data-name] > span:first-child { flex: none; inline-size: var(--gh-size-5); block-size: var(--gh-size-5); font-size: var(--gh-font-body); }
   > span[data-name] > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-pick] { display: flex; align-items: center; gap: 5px; min-inline-size: 0; font-weight: 700; }
-  > span[data-pick] > span:first-child { display: inline-flex; align-items: center; gap: 4px; min-inline-size: 0; white-space: nowrap; }
+  > span[data-pick] { display: flex; align-items: center; gap: var(--gh-spacing-1_25); min-inline-size: 0; font-weight: var(--gh-weight-bold); }
+  > span[data-pick] > span:first-child { display: inline-flex; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0; white-space: nowrap; }
   > span[data-pick] > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
   > span[data-pick] [data-selected-odds] { flex: none; }
   > span[data-bar] { font-variant-numeric: tabular-nums; text-align: end; }
   > svg { color: ${({ theme }) => theme.color.mutedText}; }
   &[aria-expanded="true"] > svg { transform: rotate(90deg); }
   ${media.belowDesktop} {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto .625rem;
-    gap: 6px; padding: 7px 0; font-size: .75rem;
-    > span[data-name] { font-size: .6875rem; gap: 4px; }
-    > span[data-name] > span:first-child { inline-size: 1rem; block-size: 1rem; font-size: .6875rem; }
-    > span[data-bar] > b { font-size: .875rem; }
-    > span[data-pick] > :is([data-standing], [data-outcome]) { font-size: .625rem; }
-    [data-selected-odds] { font-size: .625rem; }
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto var(--gh-size-2_5);
+    gap: var(--gh-spacing-1_5); padding: var(--gh-spacing-1_75) 0; font-size: var(--gh-font-secondary);
+    > span[data-name] { font-size: var(--gh-font-caption); gap: var(--gh-spacing-1); }
+    > span[data-name] > span:first-child { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); font-size: var(--gh-font-caption); }
+    > span[data-bar] > b { font-size: var(--gh-font-emphasis); }
+    > span[data-pick] > :is([data-standing], [data-outcome]) { font-size: var(--gh-font-micro); }
+    [data-selected-odds] { font-size: var(--gh-font-micro); }
   }
 `;
 const Tools = styled.div`
   display: grid;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
   ${media.belowDesktop} { display: none; }
 `;
 const Outcomes = styled.ul`
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   margin: 0;
   padding: 0;
   list-style: none;
-  > li { display: grid; grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1.4fr) 3rem; align-items: center; gap: 8px; font-size: ${size("secondary")}; line-height: 1.3; ${desktop} { font-size: ${size("body")}; line-height: inherit; } }
+  > li { display: grid; grid-template-columns: minmax(var(--gh-size-28), 0.9fr) minmax(0, 1.4fr) var(--gh-size-12); align-items: center; gap: var(--gh-spacing-2); font-size: ${size("secondary")}; line-height: var(--gh-leading-label); ${desktop} { font-size: ${size("body")}; line-height: inherit; } }
   > li[data-selected] > span:first-child { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > li > b { text-align: end; font-variant-numeric: tabular-nums; }
 `;
 const Reasons = styled.ol`
   display: grid;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   margin: 0;
-  padding-inline-start: 1.1rem;
+  padding-inline-start: var(--gh-size-4_4);
   font-size: ${size("secondary")};
-  line-height: 1.45;
+  line-height: var(--gh-leading-reading);
   ${desktop} { font-size: ${size("body")}; }
   a { color: ${({ theme }) => theme.color.accent.blue.solid}; ${focusRing} }
 `;
 const SubHeading = styled.h5`
-  margin: 4px 0 0;
+  margin: var(--gh-spacing-1) 0 0;
   font-size: ${size("secondary")};
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--gh-tracking-wider);
   color: ${({ theme }) => theme.color.mutedText};
 `;
 const Body = styled.div`
   display: grid;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
 `;
 const Footer = styled.div`
   display: grid;
-  gap: 2px;
-  padding-block-start: 6px;
+  gap: var(--gh-spacing-0_5);
+  padding-block-start: var(--gh-spacing-1_5);
   border-block-start: 0;
 `;
 

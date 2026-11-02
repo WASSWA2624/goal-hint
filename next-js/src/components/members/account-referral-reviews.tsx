@@ -21,15 +21,15 @@ import { media } from "@/styles/theme";
 
 const Cases = styled.ul`
   display: grid; margin: 0; padding: 0; list-style: none;
-  > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding-block: 12px;
+  > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--gh-spacing-2) var(--gh-spacing-3); padding-block: var(--gh-spacing-3);
     border-block-end: 0; }
   > li:last-child { border: 0; }
   h3 { margin: 0; font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  p { margin: 4px 0 0; }
-  button { min-block-size: 44px; align-self: center; }
+  p { margin: var(--gh-spacing-1) 0 0; }
+  button { min-block-size: var(--gh-size-11); align-self: center; }
   ${media.belowDesktop} { > li { grid-template-columns: minmax(0, 1fr); } button { justify-self: start; } }
 `;
-const AppealField = styled(FloatingField)`textarea { min-block-size: 7rem; }`;
+const AppealField = styled(FloatingField)`textarea { min-block-size: var(--gh-size-28); }`;
 
 export function AccountReferralReviews({ initial, locale = "en", older = false }: { initial: readonly MemberReferralReview[] | null; locale?: string; older?: boolean }) {
   const router = useRouter(), id = useId(), lock = useRef(false);

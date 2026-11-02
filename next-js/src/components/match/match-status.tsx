@@ -13,7 +13,7 @@ import { MatchClockText } from "./score-presentation";
 const Label = styled(StatusBadge)`
   --status-ink: ${({ theme }) => theme.color.mutedText};
   --status-fill: ${({ theme }) => theme.color.surfaceMuted};
-  gap: 6px; font-size: 0.8125rem;
+  gap: var(--gh-spacing-1_5); font-size: var(--gh-font-body);
   &[data-match-status="live"] { --status-ink: ${({ theme }) => theme.color.live.text}; --status-fill: ${({ theme }) => theme.color.live.soft}; }
   &[data-match-status="correct"] { --status-ink: ${({ theme }) => theme.color.outcome.correct.text}; --status-fill: ${({ theme }) => theme.color.outcome.correct.background}; }
   &[data-match-status="incorrect"] { --status-ink: ${({ theme }) => theme.color.outcome.incorrect.text}; --status-fill: ${({ theme }) => theme.color.outcome.incorrect.background}; }

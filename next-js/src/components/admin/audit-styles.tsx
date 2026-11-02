@@ -18,12 +18,12 @@ export const HeadActions = styled.div`margin-inline-start: auto;`;
 /** Export always covers the matching loaded activity, including rows beyond the current page. */
 export const ExportButton = styled(ActionButton)`
   color: ${({ theme }) => theme.color.link};
-  > svg { flex: none; font-size: 1rem; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
 `;
 
 /** Search and filters: loose on phones (search, then a Filters drawer), one open side panel from desktop up. */
 export const AuditTools = styled(RecordListTools)`
-  ${media.belowDesktop} { input, select { font-size: 16px; } }
+  ${media.belowDesktop} { input, select { font-size: var(--gh-font-section); } }
   [data-floating-field] select { border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
@@ -41,30 +41,30 @@ export const FilterDrawer = styled.div`
 `;
 
 export const FilterToggle = styled.button`
-  display: flex; align-items: center; gap: 8px; inline-size: 100%; min-block-size: var(--form-control-height, 40px); padding: 0 14px;
+  display: flex; align-items: center; gap: var(--gh-spacing-2); inline-size: 100%; min-block-size: var(--form-control-height); padding: 0 var(--gh-spacing-3_5);
   border: 0; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
   font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: start; cursor: pointer;
-  > svg { flex: none; font-size: 1.125rem; }
-  > span { margin-inline-start: 4px; }
-  > svg:last-child { margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
+  > svg { flex: none; font-size: var(--gh-font-title); }
+  > span { margin-inline-start: var(--gh-spacing-1); }
+  > svg:last-child { margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-section); transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
   ${media.desktop} { display: none; }
 `;
 
 export const FilterBody = styled.div<{ $open: boolean }>`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 8px; min-inline-size: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-3) var(--gh-spacing-2); min-inline-size: 0;
   > * { min-inline-size: 0; }
   > :nth-child(n + 3) { grid-column: 1 / -1; }
   ${({ $open }) => css`${media.belowDesktop} {
-    padding: 12px 0 14px; border-block-start: 0;
+    padding: var(--gh-spacing-3) 0 var(--gh-spacing-3_5); border-block-start: 0;
     ${!$open && css`display: none;`}
   }`}
 `;
 
 export const AuditRangeSummary = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1) var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 
@@ -74,50 +74,50 @@ export const AuditRangeDialog = styled(CriteriaDialog)`
 `;
 
 export const AuditRangeFields = styled.div`
-  display: grid; gap: 14px;
+  display: grid; gap: var(--gh-spacing-3_5);
   > p { margin: 0; }
 `;
 
 /** "n events · 1–20 shown" on the start side, the window and time zone on the end side. */
 export const AuditSummary = styled.div`
   inline-size: 100%;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 10px; min-inline-size: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-0_5) var(--gh-spacing-2_5); min-inline-size: 0;
   font-size: ${({ theme }) => theme.typography.scale.body};
   p { margin: 0; }
   b { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-inline-size: 0; }
+  > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--gh-spacing-2_5); min-inline-size: 0; }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${media.desktop} { font-size: 0.75rem; button { min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; } }
+  ${media.desktop} { font-size: var(--gh-font-secondary); button { min-block-size: var(--form-control-height); font-size: var(--gh-font-secondary); } }
 `;
 
 export const AuditFeed = styled(RecordListScroll)`
-  scroll-margin-block-start: calc(var(--app-header-height, 4rem) + 16px);
+  scroll-margin-block-start: calc(var(--app-header-height, var(--gh-size-16)) + var(--gh-spacing-4));
   > * + * { border-block-start: 0; }
   &:focus { outline: none; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
 `;
 
 export const AuditDay = styled.h2`
-  margin: 0; padding: 6px 14px; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted};
+  margin: 0; padding: var(--gh-spacing-1_5) var(--gh-spacing-3_5); color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: 18px; letter-spacing: 0.04em;
-  ${media.desktop} { padding-inline: 16px; }
+  line-height: var(--gh-size-4_5); letter-spacing: var(--gh-tracking-wider);
+  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
 `;
 
 export const AuditEvent = styled.details`
   min-inline-size: 0;
   > summary {
-    display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 16px; align-items: center; gap: 0 10px;
-    min-block-size: 64px; padding: 8px 12px 8px 14px; list-style: none; cursor: pointer;
+    display: grid; grid-template-columns: var(--gh-size-8) minmax(0, 1fr) auto var(--gh-size-4); align-items: center; gap: 0 var(--gh-spacing-2_5);
+    min-block-size: var(--gh-size-16); padding: var(--gh-spacing-2) var(--gh-spacing-3) var(--gh-spacing-2) var(--gh-spacing-3_5); list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
-    > svg:last-child { font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
+    > svg:last-child { font-size: var(--gh-font-section); color: ${({ theme }) => theme.color.mutedText}; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
   }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
   ${media.hover} { > summary:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
   ${media.desktop} {
-    > summary { grid-template-columns: 28px minmax(0, 1fr) auto; min-block-size: 54px; gap: 0 8px; padding: 8px 10px; }
+    > summary { grid-template-columns: var(--gh-size-7) minmax(0, 1fr) auto; min-block-size: var(--gh-size-13_5); gap: 0 var(--gh-spacing-2); padding: var(--gh-spacing-2) var(--gh-spacing-2_5); }
     > summary > svg:last-child { display: none; }
     > summary[aria-current="true"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
     > [data-audit-inline-details] { display: none; }
@@ -126,19 +126,19 @@ export const AuditEvent = styled.details`
 
 /** Small tinted tile per category: payments green, sign-in and security amber, everything else brand blue. */
 export const EventIcon = styled.span<{ $category: string }>`
-  display: grid; place-items: center; inline-size: 32px; block-size: 32px; border-radius: ${({ theme }) => theme.radius.control};
+  display: grid; place-items: center; inline-size: var(--gh-size-8); block-size: var(--gh-size-8); border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.soft
     : $category === "security" ? theme.color.accent.amber.soft : theme.color.brandSoft};
   color: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.text
     : $category === "security" ? theme.color.accent.amber.text : theme.color.link};
-  svg { font-size: 1rem; }
-  ${media.desktop} { inline-size: 28px; block-size: 28px; border-radius: ${({ theme }) => theme.radius.control}; }
+  svg { font-size: var(--gh-font-section); }
+  ${media.desktop} { inline-size: var(--gh-size-7); block-size: var(--gh-size-7); border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
 export const EventText = styled.span`
   display: grid; min-inline-size: 0;
-  > strong { font-size: ${({ theme }) => theme.typography.scale.emphasis}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.4; overflow-wrap: anywhere; }
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: 18px; overflow-wrap: anywhere; }
+  > strong { font-size: ${({ theme }) => theme.typography.scale.emphasis}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-compact); overflow-wrap: anywhere; }
+  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: var(--gh-size-4_5); overflow-wrap: anywhere; }
 `;
 
 export const EventTime = styled.time`
@@ -148,34 +148,34 @@ export const EventTime = styled.time`
 
 /** Facts start under the event title; the related link sits at the end on desktop and fills the row on phones. */
 export const EventDetails = styled.div`
-  display: grid; gap: 8px; min-inline-size: 0; padding: 0 12px 12px 56px;
+  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; padding: 0 var(--gh-spacing-3) var(--gh-spacing-3) var(--gh-spacing-14);
   ${media.desktop} {
-    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; padding: 0 16px 14px 60px;
-    > dl { flex: 0 1 22rem; }
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--gh-spacing-3) var(--gh-spacing-5); padding: 0 var(--gh-spacing-4) var(--gh-spacing-3_5) var(--gh-spacing-15);
+    > dl { flex: 0 1 var(--gh-size-88); }
   }
 `;
 
 export const EventFacts = styled.dl`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; min-inline-size: 0; margin: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2) var(--gh-spacing-3); min-inline-size: 0; margin: 0;
   > div { display: grid; align-content: start; min-inline-size: 0; }
   > [data-wide] { grid-column: 1 / -1; }
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
   dd { min-inline-size: 0; margin: 0; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold};
     overflow-wrap: anywhere; }
-  dd[data-code] { font-family: ui-monospace, Consolas, "Courier New", monospace; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${media.desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+  dd[data-code] { font-family: ${({ theme }) => theme.typography.monoFamily}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${media.desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-3) var(--gh-spacing-6); }
 `;
 
 export const EventLink = styled(ButtonLink)`
-  && { color: ${({ theme }) => theme.color.link}; min-block-size: var(--form-control-height, 40px); font-size: ${({ theme }) => theme.typography.scale.body}; }
-  ${media.desktop} { && { flex: none; min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; } }
+  && { color: ${({ theme }) => theme.color.link}; min-block-size: var(--form-control-height); font-size: ${({ theme }) => theme.typography.scale.body}; }
+  ${media.desktop} { && { flex: none; min-block-size: var(--form-control-height); font-size: var(--gh-font-body); } }
 `;
 
 export const AuditPager = styled.nav`
   inline-size: 100%;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; min-inline-size: 0; padding: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1); min-inline-size: 0; padding: 0;
   border-block-start: 0;
-  > button { gap: 2px; padding-inline: 2px; font-size: 0.75rem; }
+  > button { gap: var(--gh-spacing-0_5); padding-inline: var(--gh-spacing-0_5); font-size: var(--gh-font-secondary); }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; white-space: nowrap; }
-  ${media.desktop} { padding-block: 4px; }
+  ${media.desktop} { padding-block: var(--gh-spacing-1); }
 `;

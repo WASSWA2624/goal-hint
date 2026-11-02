@@ -18,19 +18,19 @@ import { refreshNotificationUnread } from "./notification-state";
 
 const List = styled.ul`
   list-style: none; margin: 0; padding: 0; display: grid;
-  > li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px 12px; padding: 12px;
+  > li { display: grid; grid-template-columns: var(--gh-size-5) minmax(0, 1fr); gap: var(--gh-spacing-2) var(--gh-spacing-3); padding: var(--gh-spacing-3);
     border-block-end: 0; }
   > li:last-child { border-block-end: 0; }
   > li[data-unread] { background: ${({ theme }) => theme.color.brandSoft}; }
-  > li > svg { color: ${({ theme }) => theme.color.brand}; margin-block-start: 3px; }
+  > li > svg { color: ${({ theme }) => theme.color.brand}; margin-block-start: var(--gh-spacing-0_75); }
   h3 { margin: 0; font-size: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   time { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.caption}; }
-  [data-notice-body] { display: grid; gap: 4px; }
-  [data-notice-actions] { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 2; }
-  ${media.desktop} { > li { grid-template-columns: 20px minmax(0, 1fr) auto; } [data-notice-actions] { grid-column: 3; grid-row: 1; align-self: center; } }
+  [data-notice-body] { display: grid; gap: var(--gh-spacing-1); }
+  [data-notice-actions] { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1); grid-column: 2; }
+  ${media.desktop} { > li { grid-template-columns: var(--gh-size-5) minmax(0, 1fr) auto; } [data-notice-actions] { grid-column: 3; grid-row: 1; align-self: center; } }
 `;
-const Pages = styled.nav`display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-block-start: 12px;`;
-const NotificationButton = styled(Button)`min-block-size: var(--form-control-height, 40px);`;
+const Pages = styled.nav`display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--gh-spacing-3); padding-block-start: var(--gh-spacing-3);`;
+const NotificationButton = styled(Button)`min-block-size: var(--form-control-height);`;
 
 export function AccountNotifications({ locale, page, older = false }: { locale: string; page: AccountNotificationPage | null; older?: boolean }) {
   const m = createMessages(locale), router = useRouter(), inFlight = useRef(false);

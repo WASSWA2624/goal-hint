@@ -15,10 +15,10 @@ const Preferences = styled(AccountBlock)`
   ${media.desktop} { display: flex; }
 `;
 export const AccountWhatsAppConsentLabel = styled.label`
-  display: flex; align-items: start; gap: 10px; min-block-size: 44px; cursor: pointer;
-  input { flex: none; inline-size: 18px; block-size: 18px; margin: 3px 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
-  span { display: grid; gap: 3px; }
-  strong { font-size: 0.9375rem; }
+  display: flex; align-items: start; gap: var(--gh-spacing-2_5); min-block-size: var(--gh-size-11); cursor: pointer;
+  input { flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); margin: var(--gh-spacing-0_75) 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
+  span { display: grid; gap: var(--gh-spacing-0_75); }
+  strong { font-size: var(--gh-font-reading); }
 `;
 
 /** An explicit recipient choice controls future account updates; withdrawing it takes effect without sending a message. */

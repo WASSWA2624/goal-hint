@@ -95,7 +95,7 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
         {before && <ActionButton type="button" disabled={busy} onClick={() => void reload(status, "")}>Latest</ActionButton>}
         {cases.length === referralReviewRules.pageSize && <ActionButton type="button" disabled={busy} onClick={() => { const last = cases.at(-1)!; void reload(status, `${last.updatedAt}_${last.id}`); }}>Older</ActionButton>}
       </RecordListFooter></RecordList>
-    <RecordDetails ref={details} style={{ scrollMarginBlockStart: 112 }}>{selected ? <RecordCard><RecordScroll><RecordDetailHead><h2>{selected.reference}</h2><MetaLine>{referralReviewStatusLabel[selected.status]}</MetaLine></RecordDetailHead>
+    <RecordDetails ref={details} style={{ scrollMarginBlockStart: "var(--gh-spacing-28)" }}>{selected ? <RecordCard><RecordScroll><RecordDetailHead><h2>{selected.reference}</h2><MetaLine>{referralReviewStatusLabel[selected.status]}</MetaLine></RecordDetailHead>
       <RecordBody><ReviewFacts><div><dt>Affected account</dt><dd>{selected.holderPhone ? `+${formatPhone(selected.holderPhone)}` : "Erased account"}</dd></div>
         {selected.holderAccountId !== selected.accountId && <div><dt>Original account</dt><dd>{selected.phone ? `+${formatPhone(selected.phone)}` : "Erased account"}</dd></div>}
         <div><dt>Reason for review</dt><dd>{referralReviewReasonLabel[selected.reason]}</dd></div><div><dt>Opened</dt><dd>{at(selected.openedAt)}</dd></div>

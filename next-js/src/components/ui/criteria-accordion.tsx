@@ -13,20 +13,20 @@ const Disclosure = styled.details`
   border-radius: ${({ theme }) => theme.radius.surface};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > summary {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    min-block-size: var(--form-control-height, 40px); padding: 7px 9px; list-style: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2);
+    min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_75) var(--gh-spacing-2_25); list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > span { display: grid; gap: 3px; min-inline-size: 0; }
-    strong { font-size: 0.875rem; }
-    small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; overflow-wrap: anywhere; }
-    > svg { flex: none; font-size: 1rem; transition: transform ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing}; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+    > span { display: grid; gap: var(--gh-spacing-0_75); min-inline-size: 0; }
+    strong { font-size: var(--gh-font-emphasis); }
+    small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); overflow-wrap: anywhere; }
+    > svg { flex: none; font-size: var(--gh-font-section); transition: transform ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing}; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   }
   &[open] > summary > svg { transform: rotate(180deg); }
-  > div { padding: 2px 9px 9px; }
+  > div { padding: var(--gh-spacing-0_5) var(--gh-spacing-2_25) var(--gh-spacing-2_25); }
   ${media.belowDesktop} {
     > summary, > div { padding-inline: 0; }
-    > div > fieldset > legend { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    > div > fieldset > legend { position: absolute; inline-size: var(--gh-size-0_25); block-size: var(--gh-size-0_25); padding: 0; margin: calc(-1 * var(--gh-spacing-0_25)); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   }
   ${media.desktop} {
     border: 0; background: transparent;

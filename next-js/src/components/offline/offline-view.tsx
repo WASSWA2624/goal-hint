@@ -13,8 +13,8 @@ import { offlineFixture, offlineRules, offlineSnapshotSchema, type OfflineSnapsh
 import { OfflineUpdateNotice } from "./offline-update-notice";
 
 const Notice = Surface;
-const Heading = styled(HeaderContent)`justify-content: space-between; gap: 12px;`;
-const Link = styled.a`color: inherit; text-underline-offset: 3px;`;
+const Heading = styled(HeaderContent)`justify-content: space-between; gap: var(--gh-spacing-3);`;
+const Link = styled.a`color: inherit; text-underline-offset: var(--gh-size-0_75);`;
 
 /** A shared, read-only web view: no account state, forecasts, remote media, or queued actions. */
 export function OfflineView() {

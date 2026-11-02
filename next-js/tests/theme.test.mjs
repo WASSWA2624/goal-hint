@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
+import { sourceFiles } from "../scripts/lib/theme-audit.mjs";
+import { themeCssVariables } from "../src/styles/theme-css.ts";
 import {
   getServerThemeSnapshot, getThemeSnapshot, resolveThemeMode, setThemePreference,
   storedThemeMode, subscribeThemePreference, themeStorageKey,
@@ -16,6 +20,33 @@ registerHooks({
 });
 const { darkTheme, lightTheme } = await import("../src/styles/theme.ts");
 const { porcelainBlueDirection, cobaltNightDirection } = await import("../src/styles/theme-presets.ts");
+
+test("every component geometry variable is published by both active themes", () => {
+  for (const theme of [lightTheme, darkTheme]) {
+    const defined = new Set([...themeCssVariables(theme).matchAll(/(--gh-[\w-]+):/gu)].map(match => match[1]));
+    const missing = [];
+    for (const file of ["app", "components", "styles"].flatMap(directory => sourceFiles(path.resolve("src", directory)))) {
+      const source = fs.readFileSync(file, "utf8");
+      for (const match of source.matchAll(/var\((--gh-[\w-]+)/gu)) {
+        // Component extension points may supply an optional, already-themed fallback.
+        if (source[match.index + match[0].length] !== "," && !defined.has(match[1])) missing.push(`${file}: ${match[1]}`);
+      }
+    }
+    assert.deepEqual(missing, []);
+  }
+});
+
+test("custom geometry, typography and feedback reach CSS variables without component overrides", () => {
+  for (const theme of [lightTheme, darkTheme]) {
+    const custom = { ...theme, spacing: { ...theme.spacing, 2: "13px" }, size: { ...theme.size, 8: "3rem" },
+      typography: { ...theme.typography, scale: { ...theme.typography.scale, body: "1.25rem" } },
+      motion: { ...theme.motion, feedback: "500ms" } };
+    const variables = themeCssVariables(custom);
+    for (const expected of ["--gh-spacing-2: 13px;", "--gh-size-8: 3rem;", "--gh-font-body: 1.25rem;", "--gh-duration-feedback: 500ms;"]) {
+      assert.ok(variables.includes(expected), expected);
+    }
+  }
+});
 
 const channels = (color, backdrop = "#FFFFFF") => {
   const mix = /^color-mix\(in srgb, (#[0-9a-f]{6}) ([\d.]+)%, (#[0-9a-f]{6})\)$/iu.exec(color);
@@ -153,7 +184,7 @@ test("Porcelain Blue keeps app surfaces and inputs white with visible card separ
     assert.equal(fill, "#FFFFFF", "Light surfaces share the white page canvas");
   }
   assert.equal(lightTheme.phoneCardFrame.mobileHeader, "#FFFFFF", "Mobile headers share the white canvas");
-  assert.equal(lightTheme.phoneCardFrame.inset, "#E9EEF6", "Mobile slip bodies keep their original inset");
+  assert.equal(lightTheme.phoneCardFrame.inset, lightTheme.color.surface, "Slip bodies share the white content canvas");
   assert.equal(lightTheme.phoneCardFrame.selection, "#FFFFFF", "Selections keep their original white fill");
   assert.equal(lightTheme.phoneCardFrame.header, lightTheme.phoneCardFrame.mobileHeader, "Both slip layouts use white headers");
   assert.equal(lightTheme.phoneCardFrame.ruleWidth, "1px", "Slips use thin separators and an outer frame");

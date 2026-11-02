@@ -47,8 +47,8 @@ export function SubscriberReviewDialog({ open, title, onClose, children, footer,
 }
 
 const Dialog = styled.dialog`
-  position: fixed; inset: 0; inline-size: min(40rem, calc(100vw - 24px)); max-inline-size: calc(100vw - 24px);
-  max-block-size: calc(100dvh - 24px); min-inline-size: 0; margin: auto; padding: 0; overflow: hidden;
+  position: fixed; inset: 0; inline-size: min(var(--gh-size-160), calc(100vw - var(--gh-size-6))); max-inline-size: calc(100vw - var(--gh-size-6));
+  max-block-size: calc(100dvh - var(--gh-size-6)); min-inline-size: 0; margin: auto; padding: 0; overflow: hidden;
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay};
   color: ${({ theme }) => theme.color.text}; ${dialogSurface} font: inherit;
   &[open] { display: flex; flex-direction: column; }
@@ -56,22 +56,22 @@ const Dialog = styled.dialog`
   *, *::before, *::after { box-sizing: border-box; }
 `;
 const Header = styled.header`
-  display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
+  display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
   border-block-end: 0;
-  h2 { margin: 0; min-inline-size: 0; font-size: 1rem; overflow-wrap: anywhere; }
+  h2 { margin: 0; min-inline-size: 0; font-size: var(--gh-font-section); overflow-wrap: anywhere; }
 `;
 const CloseButton = styled(ActionButton)`
-  flex: none; min-inline-size: 36px; min-block-size: var(--form-control-height, 40px); padding: 0;
-  @media (pointer: coarse) { min-inline-size: 44px; min-block-size: var(--form-control-height, 40px); }
+  flex: none; min-inline-size: var(--gh-size-9); min-block-size: var(--form-control-height); padding: 0;
+  @media (pointer: coarse) { min-inline-size: var(--gh-size-11); min-block-size: var(--form-control-height); }
 `;
 const Body = styled.div`
   ${formSurface}
-  min-inline-size: 0; min-block-size: 0; padding: 14px; overflow-y: auto; overscroll-behavior: contain;
-  [data-subscriber-action-dialog] { display: grid; gap: 12px; min-inline-size: 0; }
+  min-inline-size: 0; min-block-size: 0; padding: var(--gh-spacing-3_5); overflow-y: auto; overscroll-behavior: contain;
+  [data-subscriber-action-dialog] { display: grid; gap: var(--gh-spacing-3); min-inline-size: 0; }
 `;
 const Footer = styled.footer`
-  display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 14px;
+  display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
   border-block-start: 0;
-  > button { min-block-size: var(--form-control-height, 40px); }
-  @media (pointer: coarse) { > button { min-block-size: var(--form-control-height, 40px); } }
+  > button { min-block-size: var(--form-control-height); }
+  @media (pointer: coarse) { > button { min-block-size: var(--form-control-height); } }
 `;

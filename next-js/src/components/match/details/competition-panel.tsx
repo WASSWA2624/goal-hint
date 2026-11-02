@@ -17,19 +17,19 @@ import { CompetitionTable, FormDot } from "./competition-table";
 import { KnockoutBracketView } from "./knockout-bracket";
 
 const Toolbar = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; min-inline-size: 0;
-  > label { display: grid; gap: 2px; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
-  select { min-block-size: var(--form-control-height, 40px); max-inline-size: 100%; padding: 3px 6px; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    border: 0; font: inherit; font-size: .75rem; ${focusRing} }
-  > small { margin-inline-start: auto; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2_5) var(--gh-spacing-6); min-inline-size: 0;
+  > label { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); }
+  select { min-block-size: var(--form-control-height); max-inline-size: 100%; padding: var(--gh-spacing-0_75) var(--gh-spacing-1_5); color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
+    border: 0; font: inherit; font-size: var(--gh-font-secondary); ${focusRing} }
+  > small { margin-inline-start: auto; font-size: var(--gh-font-caption); color: ${({ theme }) => theme.color.mutedText}; }
   ${inlineControlRow}
   &:has(> [data-floating-field]) > fieldset > label { ${controlBodyHeight} }
 `;
 const Footnote = styled.div`
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
-  > span { display: inline-flex; align-items: center; gap: 10px; }
-  > span > small { display: inline-flex; align-items: center; gap: 4px; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
-  p { font-size: .625rem; }
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--gh-spacing-2) var(--gh-spacing-4);
+  > span { display: inline-flex; align-items: center; gap: var(--gh-spacing-2_5); }
+  > span > small { display: inline-flex; align-items: center; gap: var(--gh-spacing-1); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); }
+  p { font-size: var(--gh-font-micro); }
 `;
 
 export function TouchlineStandings({ view }: { view: MatchView }) {

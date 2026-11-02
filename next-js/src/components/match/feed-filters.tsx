@@ -64,38 +64,38 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
  */
 const Panel = styled.form`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   ${media.belowDesktop} {
-    gap: 6px; padding-inline: 6px;
-    &[data-mobile-compact-filters] { gap: 4px; padding-inline: 0; }
+    gap: var(--gh-spacing-1_5); padding-inline: var(--gh-spacing-1_5);
+    &[data-mobile-compact-filters] { gap: var(--gh-spacing-1); padding-inline: 0; }
   }
   ${mobileFilterPanel}
 `;
 const QueryChoices = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-1_5); min-inline-size: 0;
   > select {
-    inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 8px;
+    inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-2);
     border: 0; border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    font: inherit; font-size: 0.8125rem;
+    font: inherit; font-size: var(--gh-font-body);
     ${focusRing}
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   }
-  ${media.belowDesktop} { > select { min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font-size: 0.75rem; } }
+  ${media.belowDesktop} { > select { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); } }
 `;
 /** The approved Compact stack: one search row, then date/status and a single filter action. */
 const CompactToolbar = styled(QueryChoices)`
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--gh-size-11);
   align-items: stretch;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   > select {
-    padding-inline: 8px 4px;
+    padding-inline: var(--gh-spacing-2) var(--gh-spacing-1);
     border-radius: ${({ theme }) => theme.radius.control};
-    font-size: 0.75rem;
+    font-size: var(--gh-font-secondary);
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
-  ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; }
+  ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--gh-size-9); }
   ${inlineControlRow}
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
@@ -104,7 +104,7 @@ const PhoneToolbar = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   ${desktop} { display: none; }
   ${inlineControlRow}
@@ -116,26 +116,26 @@ const SortField = styled.span`
   min-inline-size: 0;
   > svg {
     position: absolute;
-    z-index: 1;
-    inset-inline-start: 8px;
+    z-index: var(--gh-layer-content);
+    inset-inline-start: var(--gh-spacing-2);
     inset-block-start: 50%;
     transform: translateY(-50%);
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: 0.9375rem;
+    font-size: var(--gh-font-reading);
     pointer-events: none;
   }
-  @container (max-width: 18rem) { > svg { display: none; } }
+  @container (max-width: ${({ theme }) => theme.viewport[18]}) { > svg { display: none; } }
 `;
 const PhoneSort = styled(CompactSelect)`
   flex: 1;
   ${controlBodyHeight}
-  padding-inline: 28px 24px;
+  padding-inline: var(--gh-spacing-7) var(--gh-spacing-6);
 
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  > svg { inset-inline-end: 7px; }
-  @container (max-width: 18rem) { padding-inline-start: 8px; }
-  ${media.belowDesktop} { min-block-size: var(--form-control-height, 40px); padding-block: 2px; font-size: 0.75rem; }
+  > svg { inset-inline-end: var(--gh-spacing-1_75); }
+  @container (max-width: ${({ theme }) => theme.viewport[18]}) { padding-inline-start: var(--gh-spacing-2); }
+  ${media.belowDesktop} { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); font-size: var(--gh-font-secondary); }
 `;
 /** Opens the filter sheet; the badge counts applied filters. */
 const FilterToggle = styled.button<{ $compact?: boolean }>`
@@ -143,25 +143,25 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 8px;
+  gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
   ${buttonBorder}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  > svg { flex: none; font-size: 1rem; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
   > b {
-    min-inline-size: 1.25rem;
-    padding: 1px 5px;
+    min-inline-size: var(--gh-size-5);
+    padding: var(--gh-spacing-0_25) var(--gh-spacing-1_25);
     color: ${({ theme }) => theme.color.onAction};
     background: ${({ theme }) => theme.gradient.action};
-    font-size: 0.6875rem;
-    line-height: 1.4;
+    font-size: var(--gh-font-caption);
+    line-height: var(--gh-leading-compact);
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
@@ -172,32 +172,32 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
   }
   ${controlFeedback}
   ${focusRing}
-  @container (max-width: 14rem) {
-    min-inline-size: 2.75rem;
-    padding-inline: 6px;
+  @container (max-width: ${({ theme }) => theme.viewport[14]}) {
+    min-inline-size: var(--gh-size-11);
+    padding-inline: var(--gh-spacing-1_5);
   }
   ${({ $compact }) => $compact && css`
     position: relative;
-    inline-size: 44px;
-    min-inline-size: 44px;
-    min-block-size: var(--form-control-height, 40px);
+    inline-size: var(--gh-size-11);
+    min-inline-size: var(--gh-size-11);
+    min-block-size: var(--form-control-height);
     padding: 0;
 
     border-radius: ${({ theme }) => theme.radius.overlay};
-    > svg { font-size: 1rem; }
+    > svg { font-size: var(--gh-font-section); }
     > b {
       position: absolute;
-      inset-block-start: 2px;
-      inset-inline-end: 2px;
-      min-inline-size: 14px;
-      padding: 0 2px;
-      font-size: 0.5625rem;
-      line-height: 14px;
+      inset-block-start: var(--gh-spacing-0_5);
+      inset-inline-end: var(--gh-spacing-0_5);
+      min-inline-size: var(--gh-size-3_5);
+      padding: 0 var(--gh-spacing-0_5);
+      font-size: var(--gh-font-micro);
+      line-height: var(--gh-size-3_5);
     }
   `}
   ${media.belowDesktop} {
-    min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem;
-    ${({ $compact }) => $compact && css`inline-size: 36px; min-inline-size: 36px; padding: 0;`}
+    min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); font-size: var(--gh-font-secondary);
+    ${({ $compact }) => $compact && css`inline-size: var(--gh-size-9); min-inline-size: var(--gh-size-9); padding: 0;`}
   }
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
@@ -213,22 +213,22 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
   ${media.belowDesktop} {
     ${sheetFrame}
     display: ${({ $open }) => $open ? "flex" : "none"};
-    && ${SheetHeader} { padding: 2px 2px 2px 10px; }
-    && ${SheetHeader} > h2 { font-size: 0.875rem; }
-    && ${SheetHeader} > button { inline-size: 36px; block-size: 36px; padding: 0; }
-    && button { min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem; }
-    && select { min-block-size: var(--form-control-height, 40px); padding-block: 4px; }
-    && input:not([type="checkbox"]) { min-block-size: var(--form-control-height, 40px); padding-block: 2px; }
+    && ${SheetHeader} { padding: var(--gh-spacing-0_5) var(--gh-spacing-0_5) var(--gh-spacing-0_5) var(--gh-spacing-2_5); }
+    && ${SheetHeader} > h2 { font-size: var(--gh-font-emphasis); }
+    && ${SheetHeader} > button { inline-size: var(--gh-size-9); block-size: var(--gh-size-9); padding: 0; }
+    && button { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
+    && select { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); }
+    && input:not([type="checkbox"]) { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); }
     && input[inputmode="decimal"] { text-align: center; }
-    && [role="group"] li > label { min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; }
+    && [role="group"] li > label { min-block-size: var(--form-control-height); font-size: var(--gh-font-secondary); }
     && [data-filter-actions] br { display: none; }
   }
   ${desktop} {
     position: relative;
     /* Open pickers must cover the sticky table column header (10) but stay under the app header (20). */
-    z-index: 11;
+    z-index: var(--gh-layer-stickyControl);
     display: grid;
-    padding: 4px 8px;
+    padding: var(--gh-spacing-1) var(--gh-spacing-2);
     border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
   }
@@ -238,16 +238,16 @@ const SheetBody = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 2px 10px;
+  gap: var(--gh-spacing-0_5) var(--gh-spacing-2_5);
   min-inline-size: 0;
   ${media.belowDesktop} {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: var(--gh-spacing-2);
     min-block-size: 0;
-    padding: 8px 10px;
+    padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -257,15 +257,15 @@ const SheetFooter = styled.div`
   ${media.belowDesktop} {
     display: grid;
     flex: none;
-    gap: 4px;
-    padding: 6px 10px;
+    gap: var(--gh-spacing-1);
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
     background: ${({ theme }) => theme.color.surface};
     border-block-start: 0;
   }
 `;
 const PhoneSection = styled.div`
   display: grid;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   ${desktop} { display: none; }
 `;
@@ -273,45 +273,45 @@ const SectionLabel = styled.div`
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  font-size: 0.8125rem;
+  gap: var(--gh-spacing-2);
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: 1.3;
-  > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  line-height: var(--gh-leading-label);
+  > small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 /** Market toggles carry each family's card colour, so a choice matches the picks it produces. */
 const MarketToggles = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  @container feed-filter-fields (max-width: 18rem) { grid-template-columns: minmax(0, 1fr); }
+  gap: var(--gh-spacing-1_5);
+  @container feed-filter-fields (max-width: ${({ theme }) => theme.viewport[18]}) { grid-template-columns: minmax(0, 1fr); }
 `;
 const MarketToggle = styled.button<{ $family: MarketFamily }>`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 6px 10px;
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
   ${buttonBorder}
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.25;
+  line-height: var(--gh-leading-heading);
   text-align: start;
   cursor: pointer;
   &::before {
     content: "";
     flex: none;
-    inline-size: 0.75rem;
-    block-size: 0.75rem;
+    inline-size: var(--gh-size-3);
+    block-size: var(--gh-size-3);
     border: 0;
   }
   > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; }
-  > svg { flex: none; font-size: 1rem; }
+  > svg { flex: none; font-size: var(--gh-font-section); }
   &[aria-pressed="true"] {
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
@@ -324,11 +324,11 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
 /** One labelled trigger per list; its checklist opens in place inside the sheet. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { ${controlBodyHeight} padding: 6px 10px; font-size: 0.8125rem; }
+  > button { ${controlBodyHeight} padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5); font-size: var(--gh-font-body); }
   [data-picker-label] { flex: 0 1 auto; min-inline-size: 0; overflow-wrap: anywhere; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; overflow-wrap: anywhere; }
-  @container feed-filter-fields (max-width: 14rem) {
-    > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; }
+  [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: var(--gh-spacing-1_25); overflow-wrap: anywhere; }
+  @container feed-filter-fields (max-width: ${({ theme }) => theme.viewport[14]}) {
+    > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5); }
     [data-picker-label] { grid-column: 1; grid-row: 1; }
     [data-picker-value] { grid-column: 1; grid-row: 2; justify-content: flex-start; text-align: start; }
     > button > svg { grid-column: 2; grid-row: 1 / span 2; }
@@ -338,13 +338,13 @@ const PhonePicker = styled(OptionPicker)`
     grid-template-columns: minmax(0, 1fr);
     max-inline-size: 100%;
     inline-size: 100%;
-    margin-block-start: 6px;
+    margin-block-start: var(--gh-spacing-1_5);
     border-radius: ${({ theme }) => theme.radius.overlay};
     box-shadow: none;
-    padding: 8px;
-    gap: 8px;
-    > input { min-inline-size: 0; min-block-size: var(--form-control-height, 40px); border-radius: ${({ theme }) => theme.radius.control}; font-size: 16px; }
-    label:not([for]) { min-block-size: var(--form-control-height, 40px); border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.875rem; }
+    padding: var(--gh-spacing-2);
+    gap: var(--gh-spacing-2);
+    > input { min-inline-size: 0; min-block-size: var(--form-control-height); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-section); }
+    label:not([for]) { min-block-size: var(--form-control-height); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-emphasis); }
     label > span { overflow-wrap: anywhere; }
   }
 `;
@@ -353,60 +353,60 @@ const ProbabilityGroup = styled.div`
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   > span { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
 `;
 const ProbabilityInputs = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--gh-spacing-1_5);
   align-items: start; min-inline-size: 0;
-  > [data-range-separator] { align-self: start; margin-block-start: 18px; }
+  > [data-range-separator] { align-self: start; margin-block-start: var(--gh-spacing-4_5); }
   input { font-variant-numeric: tabular-nums; text-align: center; }
 `;
 
 const ProbabilityError = styled.p`
   color: ${({ theme }) => theme.color.accent.red.text};
-  font-size: 0.75rem;
+  font-size: var(--gh-font-secondary);
   ${desktop} { grid-column: 1 / -1; order: 2; }
 `;
 const QuietButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 10px;
+  gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2_5);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
-  font-size: 0.6875rem;
+  font-size: var(--gh-font-caption);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
   font: inherit;
   cursor: pointer;
-  > svg { font-size: 1rem; }
+  > svg { font-size: var(--gh-font-section); }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   ${focusRing}
 `;
 const OddsNote = styled.p`
   display: flex;
   align-items: start;
-  gap: 7px;
+  gap: var(--gh-spacing-1_75);
   margin-block-start: 0;
-  padding-block-start: 8px;
+  padding-block-start: var(--gh-spacing-2);
   border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  line-height: 1.5;
-  > svg { flex: none; margin-block-start: 2px; font-size: 0.875rem; }
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-normal);
+  > svg { flex: none; margin-block-start: var(--gh-spacing-0_5); font-size: var(--gh-font-emphasis); }
 `;
 const ProbabilityHelp = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  line-height: 1.5;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-normal);
 `;
 
 /** Five compact desktop fields share one row; numeric bounds need no sliders. */
@@ -414,17 +414,17 @@ const DesktopGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
   align-items: center;
-  gap: 8px 10px;
+  gap: var(--gh-spacing-2) var(--gh-spacing-2_5);
 
   ${inlineControlRow}
 `;
 const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
   min-inline-size: 0;
   ${controlBodyHeight}
-  padding-inline: 10px 4px;
+  padding-inline: var(--gh-spacing-2_5) var(--gh-spacing-1);
   background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.field};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -435,28 +435,28 @@ const FieldName = styled.span<{ $accent: AccentName }>`
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 5px;
+  gap: var(--gh-spacing-1_25);
   color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.75rem;
+  font-size: var(--gh-font-secondary);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
-  &::before { content: ""; inline-size: 7px; block-size: 7px; border-radius: ${({ theme }) => theme.radius.circle}; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
+  &::before { content: ""; inline-size: var(--gh-size-1_75); block-size: var(--gh-size-1_75); border-radius: ${({ theme }) => theme.radius.circle}; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
 `;
 /** Selected values on one line: chips shrink with an ellipsis and the remainder becomes "+N". */
 const ChipLine = styled.div`
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   overflow: hidden;
   > a, > span { flex: 0 1 auto; min-inline-size: 0; }
   > [data-more] { flex: none; }
-  > span[data-placeholder] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  > span[data-placeholder] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
 /** One shared action label uses two lines on phones and one line on desktop. */
 const ActionLabel = styled.span`
-  line-height: 1.2;
+  line-height: var(--gh-leading-control);
   text-align: center;
   white-space: nowrap;
   > br { display: none; }
@@ -470,28 +470,28 @@ const ApplyButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 10px;
+  gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-2_5);
   color: ${({ theme }) => theme.color.onAction};
   background: ${({ theme }) => theme.gradient.action};
   border: 0;
   ${media.belowDesktop} { ${buttonBorder} }
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
   cursor: pointer;
-  &:disabled { opacity: 0.5; cursor: default; }
-  > svg { flex: none; font-size: 0.875rem; }
+  &:disabled { opacity: var(--gh-opacity-50); cursor: default; }
+  > svg { flex: none; font-size: var(--gh-font-emphasis); }
   ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.filterHoverBrightness}); } }
   ${focusRing}
 `;
 const OutlineButton = styled(QuietButton)`
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   border-radius: ${({ theme }) => theme.radius.control};
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
 
   background: ${({ theme }) => theme.color.surfaceMuted};
   ${media.belowDesktop} {
@@ -501,16 +501,16 @@ const OutlineButton = styled(QuietButton)`
 `;
 const PhoneClear = styled(OutlineButton)`
   flex: none;
-  min-inline-size: 2.75rem;
-  min-block-size: var(--form-control-height, 40px);
-  padding-inline: 6px;
-  ${media.belowDesktop} { min-inline-size: 36px; min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem; }
+  min-inline-size: var(--gh-size-11);
+  min-block-size: var(--form-control-height);
+  padding-inline: var(--gh-spacing-1_5);
+  ${media.belowDesktop} { min-inline-size: var(--gh-size-9); min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
 `;
 const FilterActions = styled.div`
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   [data-desktop-icon] { display: inline-flex; }
   ${media.belowDesktop} {
     flex-wrap: wrap;
@@ -518,10 +518,10 @@ const FilterActions = styled.div`
     max-inline-size: 100%;
     min-inline-size: 0;
     flex: 1 1 auto;
-    gap: 6px;
-    > button { padding-inline: 8px; font-size: 0.8125rem; white-space: normal; }
-    > button[type="submit"] { flex: 1; min-inline-size: min(100%, 5rem); }
-    > button > svg { font-size: 0.875rem; }
+    gap: var(--gh-spacing-1_5);
+    > button { padding-inline: var(--gh-spacing-2); font-size: var(--gh-font-body); white-space: normal; }
+    > button[type="submit"] { flex: 1; min-inline-size: min(100%, var(--gh-size-20)); }
+    > button > svg { font-size: var(--gh-font-emphasis); }
     [data-desktop-icon] { display: none; }
   }
 

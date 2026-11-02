@@ -1,5 +1,7 @@
 "use client";
 
+import { media } from "@/styles/theme";
+
 import { FloatingField } from "@/components/ui/floating-field";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
@@ -22,7 +24,7 @@ import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEm
 const tabLabels = { pending: "Pending", remaining: "Part-paid", disputed: "Disputed", approved: "Approved", rejected: "Rejected", cancelled: "Cancelled", reconciliation: "Unallocated funds" };
 const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
 const searchText = (value: string) => value.toLowerCase().replace(/[\s()+.-]/gu, "");
-const desktopQuery = "(min-width: 64rem)";
+const desktopQuery = media.desktop.replace("@media ", "");
 const desktopSnapshot = () => window.matchMedia(desktopQuery).matches;
 const serverDesktopSnapshot = () => false;
 function subscribeDesktop(listener: () => void) {

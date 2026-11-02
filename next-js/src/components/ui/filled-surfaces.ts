@@ -18,11 +18,11 @@ export const textFieldSurface = css`
   &[aria-invalid="true"], &:has(> input[aria-invalid="true"]) {
     border-color: ${({ theme }) => theme.color.outcome.incorrect.text};
     color: ${({ theme }) => theme.color.outcome.incorrect.text};
-    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.outcome.incorrect.background};
+    background: ${({ theme }) => theme.textField.invalidBackground};
   }
   &:disabled {
     color: ${({ theme }) => theme.color.disabledText};
-    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.disabledSurface};
+    background: ${({ theme }) => theme.textField.disabledBackground};
   }
 `;
 
@@ -31,18 +31,18 @@ export const nativeTextFieldSurface = css`&:is(${textFieldSelector}) { ${textFie
 
 /** Selects share the text-entry fill; their native or floating frame owns the border. */
 export const selectSurface = css`
-  background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : `var(--select-surface, ${theme.color.field})`};
+  background: ${({ theme }) => theme.select.background};
   transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
-  ${media.hover} { &:hover:not(:disabled):not([aria-invalid="true"]) { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : `var(--select-hover-surface, ${theme.color.fieldHover})`}; } }
+  ${media.hover} { &:hover:not(:disabled):not([aria-invalid="true"]) { background: ${({ theme }) => theme.select.hoverBackground}; } }
   &:focus-within:not([aria-invalid="true"]) { background: ${({ theme }) => theme.textField.hoverBackground}; }
-  &[aria-expanded="true"] { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : theme.color.brandSoft}; }
+  &[aria-expanded="true"] { background: ${({ theme }) => theme.select.expandedBackground}; }
   &[aria-invalid="true"] {
     color: ${({ theme }) => theme.color.outcome.incorrect.text};
-    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.outcome.incorrect.background};
+    background: ${({ theme }) => theme.select.invalidBackground};
   }
   &:disabled, &:has(> select:disabled) {
     color: ${({ theme }) => theme.color.disabledText};
-    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.disabledSurface};
+    background: ${({ theme }) => theme.select.disabledBackground};
   }
 `;
 export const nativeSelectSurface = css`&:is(select) { ${selectSurface} }`;

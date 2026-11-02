@@ -9,12 +9,12 @@ export const teamStackStyles = css`
   grid-template-columns: minmax(0, 1fr) ${mobileStatusWidth};
   grid-template-areas: "meta status" "teams facts";
   align-items: start;
-  gap: 4px 6px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-1_5);
   min-inline-size: 0;
-  padding: 8px;
+  padding: var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
-  font-size: 0.8125rem;
-  line-height: 1.3;
+  font-size: var(--gh-font-body);
+  line-height: var(--gh-leading-label);
   overflow-wrap: anywhere;
   [data-desktop-only] { display: none; }
 
@@ -24,70 +24,70 @@ export const teamStackStyles = css`
     grid-template-columns: max-content max-content max-content minmax(0, 1fr);
     grid-template-areas: "number date clock league";
     align-items: center;
-    gap: 5px;
+    gap: var(--gh-spacing-1_25);
     min-inline-size: 0;
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: 0.6875rem;
-    line-height: 1.3;
+    font-size: var(--gh-font-caption);
+    line-height: var(--gh-leading-label);
   }
   &:not([data-numbered]) [data-ledger-meta] { grid-template-columns: max-content max-content minmax(0, 1fr); grid-template-areas: "date clock league"; }
   [data-match-number] {
     grid-area: number; display: grid; place-items: center; align-self: center;
-    inline-size: 18px; block-size: 18px; padding: 0;
-    color: ${({ theme }) => theme.color.link}; font-size: min(16px, calc(28px / var(--match-number-digits, 1)));
+    inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); padding: 0;
+    color: ${({ theme }) => theme.color.link}; font-size: min(var(--gh-font-section), calc(var(--gh-font-displaySmall) / var(--match-number-digits, 1)));
     background: color-mix(in srgb, var(--match-surface, ${({ theme }) => theme.color.surface}) 96%, ${({ theme }) => theme.color.accent.blue.text});
-    font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1;
+    font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-solid);
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }
   [data-ledger-competition], [data-ledger-league] {
-    display: flex; align-items: center; gap: 4px; min-inline-size: 0;
+    display: flex; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0;
   }
   [data-ledger-kickoff], [data-ledger-kickoff] > time,
   [data-ledger-kickoff] > span:not([data-match-number]) { display: contents; }
   [data-kickoff-date], [data-mobile-date] { grid-area: date; min-inline-size: 0; white-space: nowrap; }
   [data-kickoff-time], [data-mobile-clock] { grid-area: clock; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  [data-ledger-competition] { grid-area: league; justify-content: start; gap: 5px; }
+  [data-ledger-competition] { grid-area: league; justify-content: start; gap: var(--gh-spacing-1_25); }
   [data-ledger-league] { flex: 1; overflow: hidden; }
   [data-ledger-competition] [data-ledger-name] { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   [data-ledger-country] { display: none; }
-  [data-country-flag] { flex: none; inline-size: 15px; block-size: 10px; object-fit: contain; }
-  [data-ledger-league] { --gh-logo-size: 11px; --gh-logo-font: 8px; }
+  [data-country-flag] { flex: none; inline-size: var(--gh-size-3_75); block-size: var(--gh-size-2_5); object-fit: contain; }
+  [data-ledger-league] { --gh-logo-size: var(--gh-size-2_75); --gh-logo-font: var(--gh-size-2); }
 
   [data-ledger-teams] {
     grid-area: teams;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(2, minmax(1.125rem, auto));
+    grid-template-rows: repeat(2, minmax(var(--gh-size-4_5), auto));
     align-self: stretch;
     align-items: center;
-    gap: 3px;
+    gap: var(--gh-spacing-0_75);
     min-inline-size: 0;
     margin: 0;
-    padding-inline-end: 12px;
-    --gh-logo-size: 18px;
-    --gh-logo-font: 9px;
+    padding-inline-end: var(--gh-spacing-3);
+    --gh-logo-size: var(--gh-size-4_5);
+    --gh-logo-font: var(--gh-size-2_25);
   }
   [data-ledger-teams]:has([data-score]) {
     grid-template-columns: minmax(0, 1fr) max-content;
-    column-gap: 8px;
+    column-gap: var(--gh-spacing-2);
   }
   [data-ledger-teams] > [data-ledger-home],
   [data-ledger-teams] > [data-ledger-away] {
     display: flex; grid-column: 1; align-items: center; flex-direction: row;
-    justify-content: start; gap: 5px; min-inline-size: 0; min-block-size: 1.125rem; align-self: stretch; text-align: start;
+    justify-content: start; gap: var(--gh-spacing-1_25); min-inline-size: 0; min-block-size: var(--gh-size-4_5); align-self: stretch; text-align: start;
   }
   [data-ledger-home] { grid-row: 1; }
   [data-ledger-away] { grid-row: 2; }
   [data-ledger-teams] [data-team-name], [data-ledger-teams] [data-ledger-name] {
     flex: 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.3;
+    font-size: var(--gh-font-emphasis); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-label);
   }
   [data-ledger-versus] { display: none; }
   [data-ledger-teams] > [data-match-state], [data-ledger-teams] [data-score] { display: contents; }
   [data-stack-progress]:empty { display: none; }
   [data-ledger-teams] [data-score-home], [data-ledger-teams] [data-score-away] {
     grid-column: 2; align-self: center; justify-self: end;
-    font-size: 1rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.2;
+    font-size: var(--gh-font-section); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-control);
     font-variant-numeric: tabular-nums;
   }
   [data-ledger-teams] [data-score-home] { grid-row: 1; }
@@ -103,12 +103,12 @@ export const teamStackStyles = css`
     grid-area: facts; display: grid; grid-template-columns: minmax(0, 1fr) max-content;
     grid-template-areas: "metrics metrics" "market pick";
     align-self: stretch; align-content: space-between;
-    gap: 3px 6px; min-inline-size: 0; white-space: normal;
+    gap: var(--gh-spacing-0_75) var(--gh-spacing-1_5); min-inline-size: 0; white-space: normal;
     font-variant-numeric: tabular-nums;
   }
   [data-ledger-facts] [data-match-metrics] {
     grid-area: metrics; display: grid; grid-template-columns: max-content minmax(0, 1fr);
-    align-items: baseline; gap: 4px; min-inline-size: 0;
+    align-items: baseline; gap: var(--gh-spacing-1); min-inline-size: 0;
   }
   [data-ledger-field] { min-inline-size: 0; }
   [data-ledger-field="market"] { grid-area: market; display: block; align-self: end; overflow: visible; }
@@ -117,42 +117,42 @@ export const teamStackStyles = css`
   [data-ledger-field="market"]::before, [data-ledger-field="prediction"]::before { content: none; }
   [data-ledger-field="market"] [data-pick-value], [data-ledger-field="market"] [data-field-value] {
     display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: 400; line-height: 1.3;
+    color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body); line-height: var(--gh-leading-label);
   }
   [data-ledger-field="prediction"] [data-pick-value], [data-ledger-field="prediction"] [data-field-value] {
     display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.3;
+    color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-label);
   }
   [data-ledger-field="market"] [data-field-label], [data-ledger-field="prediction"] [data-field-label] { display: none; }
   [data-ledger-field="odds"], [data-ledger-field="probability"] {
-    display: inline-flex; flex-direction: row; align-items: baseline; gap: 3px; padding: 0;
+    display: inline-flex; flex-direction: row; align-items: baseline; gap: var(--gh-spacing-0_75); padding: 0;
     flex: none;
-    font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.3; white-space: nowrap;
+    font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-label); white-space: nowrap;
   }
   [data-ledger-field="odds"] { grid-column: 1; }
   [data-ledger-field="probability"] { grid-column: 2; justify-content: space-between; }
   [data-ledger-field="odds"][data-stack-label]::before, [data-ledger-field="probability"][data-stack-label]::before {
-    content: attr(data-stack-label); color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400;
+    content: attr(data-stack-label); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); font-weight: var(--gh-weight-body);
   }
-  [data-ledger-field] [data-field-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; font-weight: 400; }
+  [data-ledger-field] [data-field-label] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); font-weight: var(--gh-weight-body); }
   [data-ledger-field="odds"] [data-field-value], [data-ledger-field="probability"] [data-pick-value],
-  [data-ledger-field="probability"] [data-field-value], [data-ledger-field="probability"] [data-public-probability] { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  [data-ledger-field="probability"] [data-field-value], [data-ledger-field="probability"] [data-public-probability] { font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-stack-result][data-result], [data-stack-result][data-result-badge] {
     grid-area: status; display: flex; align-items: center; justify-content: end;
     justify-self: end; align-self: start; inline-size: min(100%, ${mobileStatusWidth}); min-inline-size: 0;
   }
-  [data-stack-result] [data-match-status] { inline-size: 100%; min-block-size: 1.25rem; font-size: 0.6875rem; }
+  [data-stack-result] [data-match-status] { inline-size: 100%; min-block-size: var(--gh-size-5); font-size: var(--gh-font-caption); }
   [data-stack-result] [data-status-clock] { white-space: normal; }
   [data-pick-state="subscriber"] [data-ledger-field="odds"] { display: none; }
   [data-pick-state="subscriber"] [data-ledger-field="market"] { display: none; }
-  [data-pick-state="subscriber"] [data-ledger-field="prediction"] { grid-column: 1 / -1; justify-self: end; font-size: 0.6875rem; }
+  [data-pick-state="subscriber"] [data-ledger-field="prediction"] { grid-column: 1 / -1; justify-self: end; font-size: var(--gh-font-caption); }
   [data-pick-state="none"] [data-ledger-field="prediction"] { grid-column: 1 / -1; }
-  [data-pick-state="none"] [data-ledger-field="prediction"] [data-pick-value] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  [data-pick-state="none"] [data-ledger-field="prediction"] [data-pick-value] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
   [data-pick-state="none"] [data-ledger-field="prediction"][data-no-pick] > [data-pick-value] { display: none; }
-  [data-pick-state="none"] [data-ledger-field="prediction"] > b { display: block; font-size: 0.6875rem; white-space: nowrap; }
+  [data-pick-state="none"] [data-ledger-field="prediction"] > b { display: block; font-size: var(--gh-font-caption); white-space: nowrap; }
   [data-ledger-facts] [data-desktop-only] { display: none; }
 
-  @container (max-width: 16rem) {
+  @container (max-width: ${({ theme }) => theme.viewport[16]}) {
     grid-template-columns: minmax(0, 1fr) minmax(0, min(${mobileStatusWidth}, 65%));
     grid-template-areas: "status status" "meta meta" "teams facts";
     [data-ledger-facts] [data-match-metrics] { display: flex; flex-direction: column; }

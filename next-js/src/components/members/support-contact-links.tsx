@@ -21,23 +21,23 @@ export const DesktopSupportContent = styled.div`
 
 const ContactList = styled.div`
   display: none;
-  ${media.desktop} { display: grid; gap: 8px; min-inline-size: 0; inline-size: 100%; }
+  ${media.desktop} { display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; inline-size: 100%; }
 `;
 const ContactRow = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; min-inline-size: 0;
-  & + & { padding-block-start: 8px; border-block-start: 0; }
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1) var(--gh-spacing-4); min-inline-size: 0;
+  & + & { padding-block-start: var(--gh-spacing-2); border-block-start: 0; }
 `;
 const ContactIdentity = styled.div`
-  display: grid; gap: 1px; min-inline-size: 0; font-size: 0.8125rem; line-height: 1.4;
-  strong { font-weight: 700; overflow-wrap: anywhere; }
+  display: grid; gap: var(--gh-spacing-0_25); min-inline-size: 0; font-size: var(--gh-font-body); line-height: var(--gh-leading-compact);
+  strong { font-weight: var(--gh-weight-bold); overflow-wrap: anywhere; }
   span { color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; }
 `;
 const ContactActions = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;
-  a { min-block-size: var(--form-control-height, 40px); border-radius: ${({ theme }) => theme.radius.control}; }
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-3);
+  a { min-block-size: var(--form-control-height); border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 const ContactTextLink = styled(TextLink)`
-  display: inline-flex; align-items: center; gap: 6px; font-size: 0.875rem;
+  display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5); font-size: var(--gh-font-emphasis);
 `;
 
 /** All enabled contacts share one presentation across payment, account, and recovery screens. */

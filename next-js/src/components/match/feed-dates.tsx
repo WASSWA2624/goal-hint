@@ -55,13 +55,13 @@ const PresetList = styled.div`
   > a {
     display: inline-grid;
     place-items: center;
-    min-block-size: var(--form-control-height, 40px);
-    padding-inline: 12px;
+    min-block-size: var(--form-control-height);
+    padding-inline: var(--gh-spacing-3);
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
-    font-size: 0.8125rem;
+    font-size: var(--gh-font-body);
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
     text-decoration: none;
@@ -86,7 +86,7 @@ export function DatePresets({ query, today, onApply, kinds = ["today", "next-3-d
 /** Phones pick a day in one tap from an endless strip; the arrows scroll it and Calendar picks a date or a range. */
 const Strip = styled.nav`
   display: flex;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   ${media.desktop} { display: none; }
 `;
@@ -96,7 +96,7 @@ const Days = styled.ul`
   container-type: inline-size;
   display: flex;
   flex: 1;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   min-inline-size: 0;
   margin: 0;
   padding: 0;
@@ -107,22 +107,22 @@ const Days = styled.ul`
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
   > li { flex: none; inline-size: 100cqi; scroll-snap-align: center; }
-  @container (min-width: 152px) { > li { inline-size: calc((100cqi - 8px) / 3); } }
-  @container (min-width: 256px) { > li { inline-size: calc((100cqi - 16px) / 5); } }
-  @container (min-width: 360px) { > li { inline-size: calc((100cqi - 24px) / 7); } }
+  @container (min-width: ${({ theme }) => theme.viewport[9.5]}) { > li { inline-size: calc((100cqi - var(--gh-size-2)) / 3); } }
+  @container (min-width: ${({ theme }) => theme.viewport[16]}) { > li { inline-size: calc((100cqi - var(--gh-size-4)) / 5); } }
+  @container (min-width: ${({ theme }) => theme.viewport[22.5]}) { > li { inline-size: calc((100cqi - var(--gh-size-6)) / 7); } }
 `;
 const dayCell = css`
   display: grid;
   place-content: center;
   justify-items: center;
   gap: 0;
-  min-block-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height);
   border-radius: ${({ theme }) => theme.radius.control};
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: var(--gh-leading-tight);
   text-decoration: none;
   cursor: pointer;
-  > small { font-size: 0.625rem; font-weight: 600; white-space: nowrap; }
+  > small { font-size: var(--gh-font-micro); font-weight: var(--gh-weight-semibold); white-space: nowrap; }
 `;
 const Day = styled(Link)`
   ${dayCell}
@@ -133,7 +133,7 @@ const Day = styled(Link)`
   > small { color: ${({ theme }) => theme.color.mutedText}; }
   /* Every day names its weekday and month; today's label is teal. */
   > small[data-today] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > b { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  > b { font-size: var(--gh-font-reading); font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   &[data-selected] {
     color: ${({ theme }) => theme.color.onAction};
@@ -142,34 +142,34 @@ const Day = styled(Link)`
     > small { color: inherit; }
   }
   /* Drawn inside, so the scrolling strip never clips the ring. */
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -4px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-1)); }
   &[data-selected]:focus-visible { outline-color: ${({ theme }) => theme.color.onAction}; }
 `;
 const Scroll = styled.button`
   ${dayCell}
   flex: none;
-  inline-size: 2rem;
+  inline-size: var(--gh-size-8);
   padding: 0;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   font: inherit;
-  > svg { font-size: 1.125rem; }
+  > svg { font-size: var(--gh-font-title); }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   ${focusRing}
 `;
 const CalendarButton = styled.button`
   ${dayCell}
   flex: none;
-  min-inline-size: 3.5rem;
-  max-inline-size: 7.5rem;
-  padding: 2px 6px;
+  min-inline-size: var(--gh-size-14);
+  max-inline-size: var(--gh-size-30);
+  padding: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
   ${filterButtonColors}
   font: inherit;
-  > svg { font-size: 1rem; }
-  > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; text-align: center; }
+  > svg { font-size: var(--gh-font-section); }
+  > b { font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.heavy}; text-align: center; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   /* The selected custom range uses a filled surface rather than an outline. */
   &[data-current] {

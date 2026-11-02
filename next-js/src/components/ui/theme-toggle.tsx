@@ -9,35 +9,35 @@ import { compactHeaderIconControl } from "./header-controls";
 
 const Appearance = styled.div`
   display: grid;
-  gap: 6px;
-  padding: 10px;
-  font-size: 0.75rem;
+  gap: var(--gh-spacing-1_5);
+  padding: var(--gh-spacing-2_5);
+  font-size: var(--gh-font-secondary);
   > span { color: ${({ theme }) => theme.color.mutedText}; }
-  > div { display: flex; gap: 4px; }
+  > div { display: flex; gap: var(--gh-spacing-1); }
 `;
 const Option = styled.button`
   display: inline-flex;
   flex: 1;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-block-size: var(--form-control-height, 40px);
-  padding: 4px 8px;
+  gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height);
+  padding: var(--gh-spacing-1) var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.brandSoft};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--gh-font-body);
   cursor: pointer;
   &[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand};  }
   ${media.hover} { &:hover:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
 `;
 
 const Toggle = styled.button`
   ${compactHeaderIconControl}
-  > svg { font-size: 1rem; }
+  > svg { font-size: var(--gh-font-section); }
 `;
 
 /** One visible, named header action uses the same persisted theme preference on every screen. */

@@ -250,12 +250,12 @@ const PlanRecordMeta = styled(RecordItemMeta)`grid-column: 1 / -1;`;
 const ListPanel = styled(Panel)<{ $busy: boolean }>`
   container-type: inline-size;
   transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
-  opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
+  opacity: ${({ theme, $busy }) => ($busy ? theme.opacity[55] : 1)};
 `;
 const ListNotice = styled.div`
-  padding: 12px 14px;
+  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
   border-block-end: 0;
-  ${media.desktop} { padding-inline: 16px; }
+  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
 `;
 const PlanList = styled.ol`
   display: grid;
@@ -264,14 +264,14 @@ const PlanList = styled.ol`
   list-style: none;
   > li {
     display: grid;
-    gap: 4px;
+    gap: var(--gh-spacing-1);
     min-inline-size: 0;
-    padding: 10px 14px 12px;
+    padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5) var(--gh-spacing-3);
     border-block-end: 0;
   }
   > li:last-child { border-block-end: 0; }
-  ${media.desktop} { > li { padding-inline: 16px; } }
-  @container (min-width: 34rem) { > li { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; padding-block: 12px; } }
+  ${media.desktop} { > li { padding-inline: var(--gh-spacing-4); } }
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) { > li { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-4); padding-block: var(--gh-spacing-3); } }
 `;
 /** Name and badge, then length and price: one line in a narrow list, two beside the actions in a wide one. */
 const PlanSummary = styled.div`
@@ -279,17 +279,17 @@ const PlanSummary = styled.div`
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 2px 10px;
+  gap: var(--gh-spacing-0_5) var(--gh-spacing-2_5);
   min-inline-size: 0;
-  @container (min-width: 34rem) { display: grid; justify-content: start; }
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) { display: grid; justify-content: start; }
 `;
 const PlanName = styled.span`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: var(--gh-spacing-1) var(--gh-spacing-2);
   min-inline-size: 0;
-  strong { font-size: 0.9375rem; overflow-wrap: anywhere; }
+  strong { font-size: var(--gh-font-reading); overflow-wrap: anywhere; }
 `;
 const PlanMeta = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
@@ -300,77 +300,77 @@ const PlanActions = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--gh-spacing-2);
 `;
 /** Square arrows share the control metric with adjacent plan actions. */
 const Square = styled.button`
   display: grid;
   place-items: center;
-  inline-size: var(--form-control-height, 40px);
-  block-size: var(--form-control-height, 40px);
+  inline-size: var(--form-control-height);
+  block-size: var(--form-control-height);
   padding: 0;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
   cursor: pointer;
-  > svg { font-size: 1.125rem; }
-  &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; opacity: 0.6; }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  > svg { font-size: var(--gh-font-title); }
+  &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; opacity: var(--gh-opacity-60); }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
   ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
-  ${media.desktop} { > svg { font-size: 1rem; } }
+  ${media.desktop} { > svg { font-size: var(--gh-font-section); } }
 `;
 /** Activate and Deactivate differ in width; a fixed end column keeps the rows aligned in a wide list. */
 const ToggleAction = styled(TextAction)`
-  @container (min-width: 34rem) { min-inline-size: 6rem; justify-content: flex-end; }
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) { min-inline-size: var(--gh-size-24); justify-content: flex-end; }
 `;
 const EditForm = styled.form`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  margin-block-start: 6px;
-  padding: 12px;
+  margin-block-start: var(--gh-spacing-1_5);
+  padding: var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.page};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
-  ${media.desktop} { padding: 14px; }
-  @container (min-width: 34rem) { grid-column: 1 / -1; }
+  ${media.desktop} { padding: var(--gh-spacing-3_5); }
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) { grid-column: 1 / -1; }
 `;
 const EditFoot = styled.div`
   display: grid;
-  gap: 12px;
-  @container (min-width: 34rem) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  gap: var(--gh-spacing-3);
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 `;
 const EditButtons = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  @container (min-width: 34rem) { display: flex; flex-direction: row-reverse; margin-inline-start: auto; }
+  gap: var(--gh-spacing-2);
+  @container (min-width: ${({ theme }) => theme.viewport[34]}) { display: flex; flex-direction: row-reverse; margin-inline-start: auto; }
 `;
 /** Two columns with the name across both; the edit form puts all three side by side in a wide list. */
 const Fields = styled.div<{ $edit: boolean }>`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 10px;
+  gap: var(--gh-spacing-3) var(--gh-spacing-2_5);
   min-inline-size: 0;
   > :first-child, > [role="alert"] { grid-column: 1 / -1; }
   ${({ $edit }) => $edit && `@container (min-width: 34rem) { grid-template-columns: repeat(3, minmax(0, 1fr)); > :first-child { grid-column: auto; } }`}
 `;
 const Footnote = styled.p`
-  padding: 12px 14px;
+  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
   border-block-start: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  ${media.desktop} { padding: 14px 16px; }
+  ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4); }
 `;
 const AddForm = styled.form`
   display: grid;
-  gap: 12px;
+  gap: var(--gh-spacing-3);
   min-inline-size: 0;
 `;
 const Presets = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  > button { padding-inline: 6px; }
+  gap: var(--gh-spacing-2);
+  > button { padding-inline: var(--gh-spacing-1_5); }
 `;

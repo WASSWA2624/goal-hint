@@ -74,8 +74,8 @@ const Card = styled.article`
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  font-size: 0.75rem;
-  line-height: 1.3;
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-label);
   overflow-wrap: anywhere;
   transition: background-color ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing}, box-shadow ${({ theme }) => theme.motion.surface} ${({ theme }) => theme.motion.easing};
   &:focus-visible {
@@ -99,11 +99,11 @@ const Card = styled.article`
     grid-template-columns: ${matchTableColumns.compact};
     grid-template-rows: auto auto;
     column-gap: ${matchTableGap};
-    row-gap: 2px;
+    row-gap: var(--gh-spacing-0_5);
     align-items: center;
-    padding: 6px 16px;
+    padding: var(--gh-spacing-1_5) var(--gh-spacing-4);
     background: transparent;
-    font-size: 0.8125rem;
+    font-size: var(--gh-font-body);
   }
   ${wideTable} { grid-template-columns: ${matchTableColumns.full}; }
   /* Touch taps would otherwise leave a stuck tint after returning to the list. */
@@ -132,44 +132,44 @@ const League = styled.p`
   display: flex;
   color: ${({ theme }) => theme.color.link};
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   min-inline-size: 0;
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
   > span { ${ellipsis} }
   /* Tile: league crest and short name, then country flag and code, at the extreme right. */
   ${tile} {
     justify-content: flex-end;
-    gap: 4px;
+    gap: var(--gh-spacing-1);
     color: inherit;
-    > img, > svg { order: 1; inline-size: 0.625rem; block-size: 0.625rem; }
-    > [data-country] { order: 3; margin-inline-start: 3px; }
+    > img, > svg { order: 1; inline-size: var(--gh-size-2_5); block-size: var(--gh-size-2_5); }
+    > [data-country] { order: 3; margin-inline-start: var(--gh-spacing-0_75); }
   }
   /* Table: the crest leads the league name the way the flag leads the country, in a column as wide as the flag. */
   ${table} {
     display: grid;
     grid-column: 3;
     grid-row: 1 / span 2;
-    grid-template-columns: 16px minmax(0, 1fr);
+    grid-template-columns: var(--gh-size-4) minmax(0, 1fr);
     grid-template-rows: subgrid;
     align-self: stretch;
-    gap: 2px 4px;
+    gap: var(--gh-spacing-0_5) var(--gh-spacing-1);
     > [data-country] { grid-column: 1 / -1; grid-row: 1; }
     > img, > svg { grid-column: 1; grid-row: 2; }
-    > svg { font-size: 1rem; }
+    > svg { font-size: var(--gh-font-section); }
     > span { white-space: nowrap; }
   }
 `;
 const LeagueLogo = styled.img`
   flex: none;
-  inline-size: 12px;
-  block-size: 12px;
+  inline-size: var(--gh-size-3);
+  block-size: var(--gh-size-3);
   object-fit: contain;
-  ${table} { inline-size: 16px; block-size: 16px; }
+  ${table} { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }
 `;
 const When = styled.time`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gh-spacing-1_5);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   ${tile} { flex: none; }
@@ -192,13 +192,13 @@ const KickoffTime = styled.span`
 `;
 const KickoffZone = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
-  font-weight: 400;
+  font-weight: var(--gh-weight-body);
   ${tile} { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   ${table} { overflow-wrap: anywhere; }
 `;
 const KickoffDetails = styled.span`
   display: contents;
-  ${tile} { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+  ${tile} { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
 `;
 const CountryDetails = styled.span`
   display: flex;
@@ -206,9 +206,9 @@ const CountryDetails = styled.span`
   align-items: center;
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 0.875rem;
+  font-size: var(--gh-font-secondary);
+  font-weight: var(--gh-weight-body);
+  line-height: var(--gh-size-3_5);
   white-space: nowrap;
   > span { flex: none; }
   /* One line: a long recognized country uses its short form; anything still too wide ends in an ellipsis. */
@@ -218,36 +218,36 @@ const CountryDetails = styled.span`
 const CountryName = styled.span``;
 const FlagImage = styled.img`
   flex: none;
-  inline-size: 16px;
-  block-size: 11px;
-  margin-inline-end: 4px;
+  inline-size: var(--gh-size-4);
+  block-size: var(--gh-size-2_75);
+  margin-inline-end: var(--gh-spacing-1);
   object-fit: cover;
   border-radius: ${({ theme }) => theme.radius.small};
   box-shadow: none;
-  ${tile} { inline-size: 0.9375rem; block-size: 0.625rem; margin-inline-end: 3px; border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
+  ${tile} { inline-size: var(--gh-size-3_75); block-size: var(--gh-size-2_5); margin-inline-end: var(--gh-spacing-0_75); border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
 `;
 const FlagFallback = styled.span`
   display: grid;
   flex: none;
   place-items: center;
-  inline-size: 16px;
-  block-size: 11px;
-  margin-inline-end: 4px;
-  font-size: 11px;
-  ${tile} { inline-size: 0.9375rem; block-size: 0.625rem; margin-inline-end: 3px; font-size: 0.625rem; }
+  inline-size: var(--gh-size-4);
+  block-size: var(--gh-size-2_75);
+  margin-inline-end: var(--gh-spacing-1);
+  font-size: var(--gh-font-caption);
+  ${tile} { inline-size: var(--gh-size-3_75); block-size: var(--gh-size-2_5); margin-inline-end: var(--gh-spacing-0_75); font-size: var(--gh-font-micro); }
 `;
 
 const Teams = styled.div`
-  --gh-logo-size: 16px;
+  --gh-logo-size: var(--gh-size-4);
   --gh-logo-radius: 0;
-  --gh-logo-font: 0.5rem;
-  ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: contents; }
+  --gh-logo-font: var(--gh-size-2);
+  ${table} { --gh-logo-size: var(--gh-size-5_5); --gh-logo-font: var(--gh-size-2_5); display: contents; }
 `;
 const Team = styled.div`
-  display: flex; align-items: center; gap: 6px; min-inline-size: 0;
+  display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0;
   ${tile} { &[data-result="loss"] { color: ${({ theme }) => theme.color.mutedText}; } }
   ${table} {
-    grid-column: 6; grid-row: 2; gap: 8px;
+    grid-column: 6; grid-row: 2; gap: var(--gh-spacing-2);
     &[data-team-side="home"] { grid-column: 4; flex-direction: row-reverse; text-align: end; }
   }
 `;
@@ -262,7 +262,7 @@ const TeamName = styled.span`
   }
 `;
 const Center = styled.div`
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--gh-spacing-0_5);
   ${table} { display: contents; }
 `;
 const Versus = styled.span`
@@ -273,9 +273,9 @@ const Versus = styled.span`
     color: ${({ theme }) => theme.color.mutedText};
     background: none;
     border: 0;
-    font-size: 0.625rem;
-    font-weight: 600;
-    line-height: 1.3;
+    font-size: var(--gh-font-micro);
+    font-weight: var(--gh-weight-semibold);
+    line-height: var(--gh-leading-label);
   }
   ${table} { grid-column: 5; grid-row: 2; justify-self: center; }
 `;
@@ -291,11 +291,11 @@ const Score = styled(Scoreline)`
 const StateChip = styled.span<{ $tone: StateTone }>`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-  font-size: 0.5625rem;
+  gap: var(--gh-spacing-1);
+  padding: 0 var(--gh-spacing-1);
+  font-size: var(--gh-font-micro);
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.6;
+  line-height: var(--gh-leading-body);
   white-space: nowrap;
   ${({ $tone, theme }) => $tone === "final"
     ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
@@ -306,12 +306,12 @@ const StateChip = styled.span<{ $tone: StateTone }>`
   ${tile} {
     padding: 0;
     background: none;
-    font-size: 0.625rem;
+    font-size: var(--gh-font-micro);
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    letter-spacing: 0.02em;
-    line-height: 1.1;
+    letter-spacing: var(--gh-tracking-relaxed);
+    line-height: var(--gh-leading-tight);
     color: ${({ theme, $tone }) => $tone === "live" ? theme.color.live.text : $tone === "final" ? theme.color.mutedText : theme.color.outcome.void.text};
-    ${({ $tone }) => $tone !== "halted" && css`transform: translateY(-2px);`}
+    ${({ $tone }) => $tone !== "halted" && css`transform: translateY(calc(-1 * var(--gh-size-0_5)));`}
   }
 `;
 
@@ -328,7 +328,7 @@ const PickCell = styled.span`
     display: flex;
     align-items: center;
     min-inline-size: 0;
-    line-height: 1rem;
+    line-height: var(--gh-size-4);
     > [data-mobile-only] { display: block; }
     > [data-desktop-only] { display: none; }
   }
@@ -336,30 +336,30 @@ const PickCell = styled.span`
 const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
   grid-column: 1;
   ${table} {
-    justify-self: start; padding: 2px 8px;
+    justify-self: start; padding: var(--gh-spacing-0_5) var(--gh-spacing-2);
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
     border-inline-start: 0;
-    font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
+    font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
 `;
 const GatedPick = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gh-spacing-1);
   grid-column: 2;
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
-  line-height: 1rem;
+  line-height: var(--gh-size-4);
   > svg { flex: none; }
   > [data-mobile-only] { display: none; }
   ${tile} {
     grid-area: pick;
     color: ${({ theme }) => theme.color.text};
-    font-size: 0.6875rem;
+    font-size: var(--gh-font-caption);
     font-weight: ${({ theme }) => theme.typography.weight.medium};
-    line-height: 1.25;
+    line-height: var(--gh-leading-heading);
     > svg { display: none; }
     > [data-mobile-only] { display: block; white-space: normal; }
     > [data-desktop-only] { display: none; }
@@ -372,17 +372,17 @@ const Prediction = styled.span<{ $available: boolean }>`
 const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean }>`
   grid-column: 2;
   color: ${({ theme, $available }) => $available ? theme.color.text : theme.color.mutedText};
-  > [data-pick-value] { max-inline-size: 100%; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.25; }
+  > [data-pick-value] { max-inline-size: 100%; font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-heading); }
   ${tile} {
     [data-pick-state="none"] & {
-      > b { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+      > b { font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
       > b + [data-pick-value]::before { content: "· "; }
     }
   }
   ${table} {
     display: flex; align-items: flex-start; min-inline-size: 0;
     > [data-pick-value] {
-      max-inline-size: 100%; padding: 4px 7px;
+      max-inline-size: 100%; padding: var(--gh-spacing-1) var(--gh-spacing-1_75);
       background: ${({ theme }) => theme.color.surface};
       border: 0;
       border-inline-start: 0;
@@ -396,11 +396,11 @@ const Odds = styled(PickCell)`
   font-variant-numeric: tabular-nums; white-space: nowrap;
 `;
 const Probability = styled(PickCell)`
-  grid-column: 4; display: inline-flex; align-items: center; gap: 6px;
+  grid-column: 4; display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5);
   ${tile} { [data-probability-meter] { display: none; } }
 `;
 const Percent = styled.span`
-  font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold};
+  font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.bold};
   font-variant-numeric: tabular-nums; white-space: nowrap;
 `;
 /** The shared phone layout places progress/outcome below the teams. */
@@ -416,7 +416,7 @@ const Result = styled.span`
 const Open = styled(Link)`
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: var(--gh-layer-content);
   color: ${({ theme }) => theme.color.mutedText};
   > svg { display: none; }
   &:focus-visible {
@@ -436,8 +436,8 @@ const Open = styled(Link)`
     grid-column: 12;
     grid-row: 2;
     place-items: center;
-    > svg { display: block; font-size: 1rem; }
-    &::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+    > svg { display: block; font-size: var(--gh-font-section); }
+    &::after { content: ""; position: absolute; inset: 0; z-index: var(--gh-layer-content); }
     ${media.hover} { &:hover { color: ${({ theme }) => theme.color.brand}; } }
     &:focus-visible { outline: none; }
     &:focus-visible::after {

@@ -1,5 +1,7 @@
+import { uiGeometry } from "../../styles/theme-tokens.ts";
+
 /** Browser-local workspace geometry; no account or payment data is persisted. */
-export const adminSidebarSize = { default: 232, min: 192, max: 320, collapsed: 56, handle: 6, contentMin: 720 } as const;
+export const adminSidebarSize = uiGeometry.sidebar;
 export const adminSidebarStorageKey = "goal-hint-admin-sidebar-v1";
 type SidebarPreference = Readonly<{ collapsed: boolean; width: number }>;
 const defaults: SidebarPreference = { collapsed: false, width: adminSidebarSize.default };
@@ -26,7 +28,7 @@ function preference(): SidebarPreference {
 }
 
 /** Stable primitives let the server and hydration agree before loading the saved preference. */
-export const getServerSidebarSnapshot = () => "0:232:320";
+export const getServerSidebarSnapshot = () => `0:${adminSidebarSize.default}:${adminSidebarSize.max}`;
 export function getSidebarSnapshot(): string {
   if (typeof window === "undefined") return getServerSidebarSnapshot();
   const setting = preference();

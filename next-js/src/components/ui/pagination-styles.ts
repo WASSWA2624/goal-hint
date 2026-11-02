@@ -12,13 +12,13 @@ export const paginationControlStyles = css`
   border-radius: ${({ theme }) => theme.radius.control};
   font: inherit;
   font-variant-numeric: tabular-nums;
-  line-height: 1.25;
+  line-height: var(--gh-leading-heading);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
-    outline-offset: -3px;
+    outline-offset: calc(-1 * var(--gh-size-0_75));
   }
   @media (hover: hover) {
     &:hover:not(:disabled):not([aria-current="page"]) {
@@ -35,5 +35,5 @@ export const paginationControlStyles = css`
   }
   &:disabled { cursor: not-allowed; }
   &:disabled:not([aria-current="page"]) { color: ${({ theme }) => theme.color.disabledText}; }
-  svg { font-size: 1.125rem; }
+  svg { font-size: var(--gh-font-title); }
 `;
