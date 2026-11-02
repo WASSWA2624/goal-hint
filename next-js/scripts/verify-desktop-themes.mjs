@@ -149,13 +149,14 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         const distributionBars = canvas.querySelectorAll("[data-performance-summary] > [aria-hidden=true]").length;
         const subscriptionBanners = canvas.querySelectorAll("[data-subscription-status-bar], [data-desktop-subscription-status], [data-mobile-subscription-status]").length;
         const textFieldErrors = [], selectErrors = [];
-        if (document.querySelector('[data-preview-theme="porcelain-blue"]')) {
+        if (document.querySelector('[data-preview-theme="porcelain-blue"], [data-preview-theme="cobalt-night"]')) {
+          const contentSurface = roleColor("content");
           for (const select of canvas.querySelectorAll("select, [data-select-trigger]")) {
             const bounds = select.getBoundingClientRect();
             if (!bounds.width || !bounds.height || select.matches(":disabled")) continue;
             const face = getComputedStyle(select).opacity === "0" ? select.closest("[data-floating-control]") : select;
-            if (face && select.getAttribute("aria-invalid") !== "true" && getComputedStyle(face).backgroundColor !== "rgb(255, 255, 255)") {
-              selectErrors.push(`${select.id || select.name || select.getAttribute("aria-label")}: select is not white`);
+            if (face && select.getAttribute("aria-invalid") !== "true" && getComputedStyle(face).backgroundColor !== contentSurface) {
+              selectErrors.push(`${select.id || select.name || select.getAttribute("aria-label")}: select differs from its content surface`);
             }
           }
           for (const input of canvas.querySelectorAll('input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"], [type="button"], [type="submit"]), textarea')) {
@@ -166,8 +167,8 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
             const style = frame && getComputedStyle(frame);
             if (!style || style.borderTopWidth !== ruleWidth || style.borderRightWidth !== ruleWidth) {
               textFieldErrors.push(`${input.id || input.name || input.type}: missing field boundary`);
-            } else if (input.getAttribute("aria-invalid") !== "true" && style.backgroundColor !== "rgb(255, 255, 255)") {
-              textFieldErrors.push(`${input.id || input.name || input.type}: text field is not white`);
+            } else if (input.getAttribute("aria-invalid") !== "true" && style.backgroundColor !== contentSurface) {
+              textFieldErrors.push(`${input.id || input.name || input.type}: text field differs from its content surface`);
             }
           }
         }
@@ -347,4 +348,58 @@ export async function verifyFilterScrolling(page, { origin = "http://127.0.0.1:3
     }
   }
   return { passed: true, checks };
+}
+
+/** Appearance changes may recolor components, but must preserve the approved composition. */
+export async function verifyAppearanceParity(page, { origin = "http://127.0.0.1:3110",
+  widths = [320, 390, 768, 1024, 1440, 1920],
+  screenIds = ["best-slips", "matches", "slip-builder", "dashboard", "admin", "analytics"] } = {}) {
+  const checks = [], errors = [];
+  for (const width of widths) for (const screen of screenIds) {
+    await page.setViewportSize({ width, height: 1000 });
+    const appearances = [];
+    for (const theme of ["porcelain-blue", "cobalt-night"]) {
+      await page.goto(`${origin}/themes/${theme}/${screen}`, { waitUntil: "domcontentloaded" });
+      await page.locator('[data-preview-ready="true"]').waitFor();
+      const marker = screen === "slip-builder" ? 'form[action="/en/slips"]'
+        : screen === "analytics" ? '[aria-label="Analytics date range"], [data-analytics-dashboard], main h1' : markers[screen];
+      await page.locator(marker).first().waitFor();
+      if (screen === "analytics") await page.getByText("2,846", { exact: true }).waitFor();
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        document.querySelector("[data-theme-studio]").style.display = "none";
+        document.querySelector("[data-theme-studio]").nextElementSibling.style.display = "none";
+        document.documentElement.style.setProperty("--review-height", "0px", "important");
+        scrollTo({ top: 0, behavior: "instant" });
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
+      appearances.push(await page.locator("[data-preview-canvas]").evaluate(canvas => {
+        const origin = canvas.getBoundingClientRect();
+        const selector = '[data-app-header], [data-mobile-app-header], [data-app-footer], main, [data-best-slips-filters], [data-slip-builder-toolbar], [data-slip-id], [data-slip-summary], [data-fixture-id], [data-performance-summary], button, a, input, select, textarea, summary, [data-floating-control]';
+        return [...canvas.querySelectorAll(selector)].filter(element => element.checkVisibility({ visibilityProperty: true })
+          && element.getBoundingClientRect().width && element.getBoundingClientRect().height).map(element => {
+          const box = element.getBoundingClientRect(), style = getComputedStyle(element);
+          const dimensions = { x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height };
+          for (const property of ["paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth",
+            "borderBottomWidth", "borderLeftWidth", "borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius", "fontSize"]) {
+            dimensions[property] = Number.parseFloat(style[property]);
+          }
+          return { tag: element.tagName, id: element.getAttribute("name") || element.getAttribute("data-nav-key") || element.id, dimensions };
+        });
+      }));
+    }
+    const [light, dark] = appearances;
+    if (light.length !== dark.length) errors.push(`${screen}/${width}: visible component count differs (${light.length}/${dark.length})`);
+    for (let index = 0; index < Math.min(light.length, dark.length); index += 1) {
+      const source = light[index], equivalent = dark[index];
+      if (source.tag !== equivalent.tag) { errors.push(`${screen}/${width}/${index}: component order differs`); continue; }
+      for (const [dimension, value] of Object.entries(source.dimensions)) {
+        if (Math.abs(value - equivalent.dimensions[dimension]) > .5) {
+          errors.push(`${screen}/${width}/${source.tag}[${source.id || index}]: ${dimension} differs (${value}/${equivalent.dimensions[dimension]})`);
+        }
+      }
+    }
+    checks.push({ width, screen, components: light.length });
+  }
+  return { passed: !errors.length, checks, errors };
 }

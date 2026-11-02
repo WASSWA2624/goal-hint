@@ -208,7 +208,10 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
   readonly frame: Readonly<{ desktopCardRadius: string }>;
   readonly textField: Readonly<{ background: string; hoverBackground: string; invalidBackground: string; disabledBackground: string; borderWidth: string; borderColor: string; focusBorderColor: string }>;
   readonly select: Readonly<{ background: string; hoverBackground: string; expandedBackground: string; invalidBackground: string; disabledBackground: string }>;
-  readonly action: Readonly<{ quietBackground: string; quietHoverBackground: string; headerBackground: string }>;
+  readonly action: Readonly<{
+    quietBackground: string; quietHoverBackground: string; headerBackground: string;
+    headerPrimaryBackground: string; headerPrimaryText: string;
+  }>;
   readonly fieldAdornment: Readonly<{ background: string; hoverBackground: string }>;
   readonly motion: Readonly<{
     fast: string; feedback: string; disclosure: string; surface: string; easing: string;
@@ -359,7 +362,8 @@ export const foundationLightTheme: GoalHintTheme = {
   frame: { desktopCardRadius: brandTokens.shape.radius.none },
   textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF", borderWidth: "1px", borderColor: "#DFE4EC", focusBorderColor: "#A8C0E2" },
   select: { background: "#FFFFFF", hoverBackground: "#FFFFFF", expandedBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF" },
-  action: { quietBackground: "#E0E5ED", quietHoverBackground: "#D6DFEC", headerBackground: "#E0E5ED" },
+  action: { quietBackground: "#E0E5ED", quietHoverBackground: "#D6DFEC", headerBackground: "#E0E5ED",
+    headerPrimaryBackground: "#2457C5", headerPrimaryText: "#FFFFFF" },
   fieldAdornment: { background: "#FFFFFF", hoverBackground: "#FFFFFF" },
   motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms", duration: durationScale, easingInOut: "ease-in-out", easingOut: "ease-out", easingLinear: "linear" },
   interaction: { pressedFilter: "none", headerHoverBrightness: 1.1, filterHoverBrightness: 0.95, toolHoverBrightness: 0.96 },
@@ -413,7 +417,8 @@ export const foundationDarkTheme: GoalHintTheme = {
   brandVariant: "inverse",
   textField: { background: "#1A2E41", hoverBackground: "#24405B", invalidBackground: "#3B252C", disabledBackground: "#0D253B", borderWidth: "0px", borderColor: "#344A60", focusBorderColor: "#476B8F" },
   select: { background: "var(--select-surface, #1A2E41)", hoverBackground: "var(--select-hover-surface, #24405B)", expandedBackground: "#073052", invalidBackground: "#3B252C", disabledBackground: "#0D253B" },
-  action: { quietBackground: "#0D253B", quietHoverBackground: "#073052", headerBackground: "#073052" },
+  action: { quietBackground: "#0D253B", quietHoverBackground: "#073052", headerBackground: "#073052",
+    headerPrimaryBackground: "#0066F5", headerPrimaryText: "#FFFFFF" },
   fieldAdornment: { background: "#073052", hoverBackground: "#0D253B" },
   color: {
     ...foundationLightTheme.color,

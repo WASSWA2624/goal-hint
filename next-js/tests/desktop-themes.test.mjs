@@ -65,6 +65,7 @@ test("all palettes retain readable filled controls, primary actions, and header 
     readable(theme.color.brand, theme.color.brandSoft, 4.5, "selected control");
     readable(theme.header.mutedText, theme.header.desktopBackground, 4.5, "header navigation");
     readable(theme.header.onAccent, theme.header.accent, 4.5, "header action");
+    readable(theme.action.headerPrimaryText, theme.action.headerPrimaryBackground, 4.5, "primary header action");
     readable(theme.color.selection.text, theme.color.selection.background, 4.5, "selected text");
   }
 });

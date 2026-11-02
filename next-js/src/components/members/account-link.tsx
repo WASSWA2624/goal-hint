@@ -35,8 +35,8 @@ const Actions = styled.div`
 `;
 const AuthLink = styled(Link)<{ $primary?: boolean }>`
   ${compactHeaderControl}
-  color: ${({ theme, $primary }) => $primary ? theme.header.onAccent : theme.header.accent};
-  background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.action.headerBackground};
+  color: ${({ theme, $primary }) => $primary ? theme.action.headerPrimaryText : theme.header.accent};
+  background: ${({ theme, $primary }) => $primary ? theme.action.headerPrimaryBackground : theme.action.headerBackground};
 
   text-decoration: none;
   > svg { display: none; }
@@ -49,7 +49,7 @@ const AuthLink = styled(Link)<{ $primary?: boolean }>`
   @media (max-width: ${({ theme }) => theme.viewport[22.4375]}) {
     &[data-header-auth="register"] { > svg { display: block; } > span { display: none; } }
   }
-  ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.headerHoverBrightness}); background: ${({ theme, $primary }) => $primary ? theme.header.accent : theme.header.controlHover}; } }
+  ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.headerHoverBrightness}); background: ${({ theme, $primary }) => $primary ? theme.action.headerPrimaryBackground : theme.header.controlHover}; } }
 `;
 const Disclosure = styled.details`
   position: relative;

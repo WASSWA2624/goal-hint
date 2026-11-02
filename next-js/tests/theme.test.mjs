@@ -109,6 +109,10 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(theme.header.accent, composite(background, theme.header.background), `${theme.mode} current navigation`);
     }
     readable(theme.header.onAccent, theme.header.accent, `${theme.mode} selected header controls`);
+    readable(theme.action.headerPrimaryText, theme.action.headerPrimaryBackground, `${theme.mode} primary header action`);
+    const hoveredHeader = "#" + channels(theme.action.headerPrimaryBackground).map(channel =>
+      Math.min(255, Math.round(channel * theme.interaction.headerHoverBrightness)).toString(16).padStart(2, "0")).join("");
+    readable(theme.action.headerPrimaryText, hoveredHeader, `${theme.mode} hovered primary header action`);
     for (const background of [theme.header.fieldFill, theme.header.fieldFillActive]) {
       readable(theme.header.text, background, `${theme.mode} header input`);
       readable(theme.header.placeholder, background, `${theme.mode} header placeholder`);
@@ -192,15 +196,39 @@ test("Porcelain Blue keeps app surfaces and inputs white with visible card separ
   assert.equal(lightTheme.border.accentWidth, "0px");
 });
 
-test("Cobalt Night uses distinct filled controls and no decorative frames", () => {
-  assert.equal(darkTheme.textField.borderWidth, "0px");
-  assert.equal(darkTheme.color.page, "#0B1220");
+test("Cobalt Night mirrors the light content hierarchy and outlined fields", () => {
+  assert.equal(darkTheme.textField.borderWidth, lightTheme.textField.borderWidth);
+  for (const theme of [lightTheme, darkTheme]) {
+    for (const fill of [theme.color.page, theme.color.surfaceMuted, theme.phoneCardFrame.inset,
+      theme.phoneCardFrame.selection, theme.textField.background, theme.textField.hoverBackground,
+      theme.select.background, theme.select.hoverBackground, theme.select.expandedBackground,
+      theme.fieldAdornment.background]) assert.equal(fill, theme.color.surface, `${theme.mode}: shared content canvas`);
+    for (const fill of [theme.footer.background, theme.dialog.headerBackground, theme.dialog.footerBackground,
+      theme.phoneCardFrame.header, theme.phoneCardFrame.mobileHeader, theme.color.cardHeader]) {
+      assert.equal(fill, theme.header.background, `${theme.mode}: shared chrome layer`);
+    }
+    assert.notEqual(theme.phoneCardFrame.separator, theme.phoneCardFrame.inset, `${theme.mode}: visible separators`);
+    assert.ok(contrast(theme.phoneCardFrame.separator, theme.phoneCardFrame.inset) >= 1.2, `${theme.mode}: thin row separators`);
+    assert.equal(theme.action.headerPrimaryBackground, theme.gradient.action, `${theme.mode}: primary actions share their emphasis`);
+    assert.equal(theme.action.headerPrimaryText, theme.color.onAction);
+  }
   assert.equal(darkTheme.phoneCardFrame.mobileHeader, darkTheme.dialog.headerBackground);
   assert.equal(darkTheme.phoneCardFrame.selection, darkTheme.color.surface);
   assert.ok(contrast(darkTheme.color.field, darkTheme.color.surface) >= 1.2, "Dark fields are distinct from cards");
   assert.equal(darkTheme.border.width, "0px");
   assert.equal(darkTheme.border.accentWidth, "0px");
   assert.ok(Number.parseFloat(darkTheme.border.focusWidth) >= 2, "Keyboard focus remains visible");
+});
+
+test("dark appearance preserves the light theme's layout, typography and control geometry", () => {
+  for (const group of ["spacing", "size", "measure", "relativeSize", "viewport", "layer", "opacity", "typography",
+    "space", "breakpoint", "radius", "border", "layout", "frame", "control", "motion", "interaction", "ui"]) {
+    assert.deepEqual(darkTheme[group], lightTheme[group], `${group}: appearance must not change the composition`);
+  }
+  for (const role of ["desktopHeight", "phoneHeight", "controlBlockInset"]) assert.equal(darkTheme.header[role], lightTheme.header[role]);
+  for (const role of ["radius", "ruleWidth"]) assert.equal(darkTheme.phoneCardFrame[role], lightTheme.phoneCardFrame[role]);
+  assert.equal(darkTheme.gradient.action, lightTheme.gradient.action, "Both appearances share the approved brand action blue");
+  assert.equal(darkTheme.gradient.actionHover, lightTheme.gradient.actionHover);
 });
 
 test("headers, footers, dialog chrome, selected sections and slip headers stay distinct and readable", () => {

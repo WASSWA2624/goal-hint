@@ -32,8 +32,11 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
   const desktop = useDesktopLayout();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [query, setQuery] = useState(defaultBestSlipsQuery(false));
-  const [result, setResult] = useState<{ mode: string; width: number; errors: string[] } | null>(null);
-  const runChecks = useCallback(() => setResult({ mode: theme.mode, width: window.innerWidth, errors: checkRenderedTheme(theme) }), [theme]);
+  const [result, setResult] = useState<{ mode: string; width: number; errors: string[]; revision: number } | null>(null);
+  const runChecks = useCallback(() => {
+    const errors = checkRenderedTheme(theme), width = window.innerWidth;
+    setResult(previous => ({ mode: theme.mode, width, errors, revision: (previous?.revision ?? 0) + 1 }));
+  }, [theme]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>, frame = 0;
     // Inspect the settled card styles after their 160ms theme transition.
@@ -51,7 +54,7 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
       <p>Use the shared header theme toggle, then resize between phone and desktop.</p>
       <Inline><Button variant="secondary" onClick={runChecks} data-run-theme-checks>Run rendered checks</Button>
         <output data-theme-check-result={result ? result.errors.length ? "failed" : "passed" : "waiting"}
-          data-checked-mode={result?.mode} data-checked-width={result?.width} aria-live="polite">
+          data-checked-mode={result?.mode} data-checked-width={result?.width} data-check-revision={result?.revision} aria-live="polite">
           {result ? `${result.mode}, ${result.width}px: ${result.errors.length ? result.errors.join("; ") : "passed"}` : "Waiting for hydration"}
         </output></Inline>
     </Stack></Surface>

@@ -52,8 +52,23 @@ export const porcelainBlueDirection: ThemeDirection = {
     mobileSlipHeader: porcelainChrome, slipSelection: "#FFFFFF",
   },
 };
-export const cobaltNightDirection: ThemeDirection = { id: "cobalt-night", name: "Cobalt Night", description: "Midnight navy, layered blue surfaces, and electric cobalt actions.", mode: "dark", font: manrope, fontLabel: "Manrope", shape: "subtle",
-    palette: { page: "#0B1220", surface: "#131E30", muted: "#19263B", text: "#ECF2FF", secondary: "#A9B9D3", border: "#2C3B53", control: "#657995", accent: "#3268D9", hover: "#2858BD", soft: "#21385A", header: "#101929", headerText: "#ECF2FF", headerMuted: "#A9B9D3", headerAccent: "#9DC0FF", cardBorder: "#34465F", cardInset: "#19263B", cardHeader: "#1B2C45" } };
+const cobaltContent = "#131E30", cobaltChrome = "#1B2C45";
+
+/** The approved light composition is the source of truth; dark mode replaces its palette. */
+export const cobaltNightDirection: ThemeDirection = {
+  ...porcelainBlueDirection,
+  id: "cobalt-night", name: "Cobalt Night", mode: "dark",
+  description: "The Porcelain Blue composition in deep navy, with quiet layered chrome and clear blue actions.",
+  palette: {
+    page: cobaltContent, surface: cobaltContent, muted: cobaltContent, input: cobaltContent,
+    text: "#ECF2FF", secondary: "#A9B9D3", border: "#2C3B53", control: "#657995",
+    accent: porcelainBlueDirection.palette.accent, hover: porcelainBlueDirection.palette.hover, soft: "#21385A",
+    header: cobaltChrome, headerText: "#ECF2FF", headerMuted: "#A9B9D3", headerAccent: "#9DC0FF",
+    chrome: cobaltChrome, section: "#19263B",
+    cardBorder: "#34465F", cardInset: cobaltContent, cardHeader: cobaltChrome,
+    mobileSlipHeader: cobaltChrome, slipSelection: cobaltContent,
+  },
+};
 
 export function createTheme(direction: ThemeDirection): GoalHintTheme {
   const base = direction.mode === "dark" ? darkTheme : lightTheme, p = direction.palette;
@@ -104,18 +119,19 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
       borderColor: blend(input ?? field, p.control, 0.24), focusBorderColor: blend(input ?? field, link, 0.42) },
     select: { background: input ?? `var(--select-surface, ${field})`, hoverBackground: input ?? `var(--select-hover-surface, ${fieldHover})`,
       expandedBackground: input ?? p.soft, invalidBackground: input ?? base.color.outcome.incorrect.background, disabledBackground: input ?? p.muted },
-    action: { quietBackground: input ? field : p.muted, quietHoverBackground: input ? fieldHover : p.soft, headerBackground: input ? field : p.soft },
+    action: { quietBackground: input ? field : p.muted, quietHoverBackground: input ? fieldHover : p.soft,
+      headerBackground: input ? field : p.soft, headerPrimaryBackground: p.accent, headerPrimaryText: base.color.onAction },
     fieldAdornment: { background: input ?? p.soft, hoverBackground: input ?? p.muted },
     space: { ...base.space, md: "14px", lg: "20px", xl: "24px" },
     gradient: { action: p.accent, actionHover: p.hover, tableHeader: chrome, page: p.page },
-    shadow: { ...base.shadow, cardHover: direction.shape === "crisp" ? "none" : `0 3px 12px ${p.text}0A` },
+    shadow: { ...base.shadow, cardHover: direction.shape === "crisp" ? "none" : `0 3px 12px ${direction.mode === "dark" ? "#000000" : p.text}0A` },
     motion: { ...base.motion,
       fast: direction.shape === "crisp" ? "100ms" : "140ms", feedback: direction.shape === "crisp" ? "120ms" : "160ms",
       disclosure: direction.shape === "crisp" ? "120ms" : "160ms", surface: direction.shape === "crisp" ? "120ms" : "160ms" },
     interaction: { ...base.interaction, pressedFilter: "brightness(0.94)" },
     scrollbarColor: `${p.control} ${p.page}`,
     phoneCardFrame: { ...base.phoneCardFrame, border: p.cardBorder ?? decorativeBorder,
-      separator: direction.mode === "light" ? p.cardBorder ?? decorativeBorder : p.cardInset ?? p.muted,
+      separator: p.cardBorder ?? decorativeBorder,
       inset: p.cardInset ?? p.muted, header: p.cardHeader ?? chrome,
       mobileHeader: p.mobileSlipHeader ?? p.cardHeader ?? chrome, selection: p.slipSelection ?? p.surface },
   };

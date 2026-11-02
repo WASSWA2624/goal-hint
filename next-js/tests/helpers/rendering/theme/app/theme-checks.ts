@@ -11,12 +11,16 @@ const lightness = (color: string) => {
 /** Browser-only acceptance assertions against the real production components and resolved provider. */
 export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   const errors: string[] = [];
+  const normalizedColors = new Map<string, string>();
   const normalize = (color: string) => {
+    const cached = normalizedColors.get(color);
+    if (cached) return cached;
     const probe = document.createElement("span");
     probe.style.color = color;
     document.body.append(probe);
     const normalized = getComputedStyle(probe).color;
     probe.remove();
+    normalizedColors.set(color, normalized);
     return normalized;
   };
   const assert = (condition: boolean, message: string) => { if (!condition) errors.push(message); };
@@ -91,8 +95,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   check("#theme-controls [data-surface-control]", theme.color.brandSoft);
   check("#theme-control-input, #theme-admin-input, #theme-payment-input", theme.textField.background);
   check("#theme-search [data-text-field-frame], #theme-textarea", theme.textField.background);
-  check("#theme-invalid-input", dark ? theme.color.outcome.incorrect.background : theme.textField.background);
-  check("#theme-disabled-input", dark ? theme.color.disabledSurface : theme.textField.background);
+  check("#theme-invalid-input", theme.textField.invalidBackground);
+  check("#theme-disabled-input", theme.textField.disabledBackground);
   check("#theme-control-select", theme.textField.background);
   check("#theme-slips [data-slip-id]", theme.phoneCardFrame.inset);
   check("#theme-slips [data-slip-summary]", phone ? theme.phoneCardFrame.mobileHeader : theme.phoneCardFrame.header);
@@ -117,6 +121,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
   check(headerSelector, phone ? theme.header.background : theme.header.desktopBackground);
+  check('[data-header-auth="register"]', theme.action.headerPrimaryBackground);
+  check('[data-header-auth="register"]', theme.action.headerPrimaryText, "color");
   const header = document.querySelector(headerSelector);
   if (header) {
     const amount = lightness(getComputedStyle(header).backgroundColor);

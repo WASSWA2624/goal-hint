@@ -6,6 +6,17 @@ screens, slips, matches, account workspaces, and owner dashboards:
 - Light mode uses **01 · Porcelain Blue**.
 - Dark mode uses **08 · Cobalt Night**.
 
+The approved light theme is the composition reference for its dark equivalent.
+The dark direction inherits its font and shape choices from Porcelain Blue;
+spacing, dimensions, radii, control heights and responsive rules remain identical.
+Both modes use one main content canvas, distinct shared app/dialog/slip chrome,
+a quieter selected-section layer, outlined input bodies and thin row separators.
+Cobalt Night replaces white with a deep navy canvas and uses lighter blue links,
+soft selected fills and the same approved primary blue with white labels,
+including a readable header hover state. Header primary
+actions consume `action.headerPrimaryBackground` and `headerPrimaryText`, keeping
+their emphasis independent of the lighter link and focus colors.
+
 `theme-presets.ts` owns the approved definitions and shared construction logic.
 `theme-foundation.ts` defines `GoalHintTheme` and the semantic foundations. The
 desktop review catalog reuses the exact approved production objects and builds
@@ -83,7 +94,9 @@ frame and selection separators, both using `phoneCardFrame.separator`.
 text inputs and textareas use `textField.background`, `textField.hoverBackground`,
 and `textField.borderWidth`, with `color.controlBorder` for their boundary.
 Porcelain Blue keeps these fields white at rest, on hover, and while focused,
-with a 1px border. Composite search and range controls frame the whole field
+with a 1px border. Cobalt Night uses its deep navy content fill in the same
+states, with the same outline geometry and a quiet blue focus tint.
+Composite search and range controls frame the whole field
 once and leave their inner input transparent. Disabled and invalid states keep
 their semantic fills. Other controls use `color.field` and `color.fieldHover`; secondary
 actions use `color.brandSoft`. Captions are adjusted toward the palette's text
