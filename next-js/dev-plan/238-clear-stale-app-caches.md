@@ -24,6 +24,8 @@
 - Chrome confirms `goalhint.com` has no usage data. Computer Use stopped when it
   could not confidently verify the current browser URL during the localhost
   check; localhost browser storage remains unverified.
+- The owned demo cleanup helper failed before reaching its initial cache census;
+  no demo cache changes were made and no demo MySQL process remains running.
 - The full Python suite ran 155 tests with eight failures in existing migration
   snapshot/trigger checks and dependency-dependent development/backup checks.
   Root dependency restoration is owned by the coordinated dependency-repair chat.
