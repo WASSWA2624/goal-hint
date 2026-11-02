@@ -16,7 +16,7 @@ export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & {
 const Board = styled.div<{ $indexLength: number }>`
   min-inline-size: 0;
   /* Root-relative tracks stay identical across bold header digits and regular row digits. */
-  ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(var(--gh-size-6), calc(${$indexLength} * var(--gh-size-2) + var(--gh-size-0_5)));`}
+  ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(1.5rem, calc(${$indexLength} * 0.5rem + 2px));`}
   ${media.desktop} {
     ${desktopMatchBaseStyles}
     ${alignedLedgerStyles}
@@ -53,7 +53,7 @@ const List = styled.ul`
   ${media.belowDesktop} {
     /* Keep every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
-    > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto var(--gh-size-28); }
+    > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto 112px; }
     > li:has(> article:only-child) { box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
@@ -65,16 +65,16 @@ const List = styled.ul`
 const Divider = styled.li`
   && {
     display: grid;
-    gap: var(--gh-spacing-0_5);
-    padding: var(--gh-spacing-2_5) var(--gh-spacing-0_5) var(--gh-spacing-0_5);
+    gap: 2px;
+    padding: 10px 2px 2px;
     content-visibility: visible;
     contain-intrinsic-block-size: none;
   }
   > h2 { color: ${({ theme }) => theme.color.text}; font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
   ${media.desktop} {
-    && { padding: var(--gh-spacing-2_5) var(--gh-spacing-4); background: ${({ theme }) => theme.color.brandSoft}; }
-    > h2 { font-size: var(--gh-font-reading); }
+    && { padding: 10px 16px; background: ${({ theme }) => theme.color.brandSoft}; }
+    > h2 { font-size: 0.9375rem; }
   }
 `;
 
