@@ -3,12 +3,15 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 
+/** The app shell owns its outer gutter; standalone containers retain their own inset. */
+export const contentGutter = css`var(--app-content-gutter, ${({ theme }) => theme.layout.gutter})`;
+
 /** `$wide` suits dense tables such as the desktop match feed. */
 export const Container = styled.div<{ $wide?: boolean }>`
   inline-size: 100%;
   max-inline-size: ${({ theme, $wide }) => $wide ? theme.layout.wideMaxWidth : theme.layout.maxWidth};
   margin-inline: auto;
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  padding-inline: ${contentGutter};
   min-inline-size: 0;
   ${media.desktop} { max-inline-size: none; }
 `;
@@ -26,11 +29,11 @@ export const desktopSectionFrame = css`
   ${media.desktop} { border-radius: ${({ theme }) => theme.radius.none}; }
 `;
 
-/** One content rail inside full-width desktop sections; account for a panel's own border. */
+/** Section rails use the shell's single outer gutter instead of adding nested insets. */
 export const desktopContentPadding = (bordered = false) => css`
   ${media.desktop} {
-    padding-inline: ${({ theme }) => bordered
-      ? `calc(${theme.layout.gutter} - ${theme.border.width})` : theme.layout.gutter};
+    padding-inline: ${bordered
+      ? css`max(0px, calc(${contentGutter} - ${({ theme }) => theme.border.width}))` : contentGutter};
   }
 `;
 
@@ -92,7 +95,6 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
     ${media.belowDesktop} {
       padding-block: 8px 12px;
       background: ${({ theme }) => theme.color.page};
-      > ${Container} { padding-inline: ${({ theme }) => theme.layout.gutter}; }
     }
   `}
   ${media.desktop} {

@@ -4,7 +4,7 @@ import Link from "@/components/navigation/navigation-link";
 import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
-import { Container, desktopContentPadding } from "@/components/ui/layout";
+import { Container, contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
@@ -25,7 +25,8 @@ const headerFocus = css`
   }
 `;
 
-export const ShellFrame = styled.div`
+export const ShellFrame = styled.div.attrs({ "data-app-shell": "" })`
+  --app-content-gutter: 0px;
   --app-mobile-tab-height: ${mobileTabHeight};
   --app-header-height: ${({ theme }) => theme.header.phoneHeight};
   --app-header-border-width: ${({ theme }) => theme.border.width};
@@ -33,6 +34,8 @@ export const ShellFrame = styled.div`
   display: flex;
   flex-direction: column;
   min-block-size: 100dvh;
+  min-inline-size: 0;
+  padding-inline: ${({ theme }) => theme.layout.gutter};
 
   > main { flex: 1; }
   ${media.desktop} { --app-header-height: ${({ theme }) => theme.header.desktopHeight}; }
@@ -87,7 +90,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
 export const HeaderContent = styled(Container)`
   ${compactHeaderRow}
   min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  padding-inline: ${contentGutter};
   ${desktop} { flex-wrap: nowrap; gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
   ${desktopContentPadding()}
@@ -362,15 +365,15 @@ export const FooterNote = styled.p`
   ${media.tablet} { justify-self: end; text-align: end; }
 `;
 
-/** The same full-width header rail for admin and member workspaces. */
+/** Admin and member workspaces use the same header rail as the app. */
 export const WorkspaceHeaderContent = styled(HeaderContent)`
   inline-size: 100%; max-inline-size: none;
   min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
-  padding-inline: 12px 8px;
+  padding-inline: ${contentGutter};
   ${media.belowDesktop} {
     > ${HomeLink} { flex: 1 1 0; min-inline-size: min(6rem, 100%);
       img { max-inline-size: 100%; block-size: auto; }
     }
   }
-  ${media.desktop} { gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); padding-inline: 24px 20px; }
+  ${media.desktop} { gap: 16px; min-block-size: var(--app-header-content-height, calc(3rem - 1px)); }
 `;

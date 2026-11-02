@@ -13,6 +13,7 @@ import type { InsightsPreview } from "@/domain/match-insights";
 import { feedReturnStorageKey, homeHref, matchesHref } from "@/domain/navigation";
 import { useMessages } from "@/i18n/use-messages";
 import { media } from "@/styles/theme";
+import { contentGutter } from "@/components/ui/layout";
 import { BackIcon } from "./details-icons";
 import { DetailsProvider, Note, desktop, focusRing, size, useStableDetails } from "./details-ui";
 import { MatchBanner } from "./match-banner";
@@ -36,8 +37,8 @@ const Page = styled.article`
   }
 `;
 /**
- * The phone top bar matches the feed's branded bar and quiet separator, full bleed
- * past the page gutter and up through the app page's 10px top padding, with themed text and icons.
+ * The phone top bar shares the feed's branded surface and horizontal rails,
+ * and reaches up through the app page's 10px top padding.
  */
 const PhoneBar = styled.div`
   position: relative;
@@ -45,8 +46,8 @@ const PhoneBar = styled.div`
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: -10px;
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  margin-inline: calc(-1 * ${contentGutter});
+  padding-inline: ${contentGutter};
   ${compactHeaderSurface}
   @media (max-width: 379px) {
     [data-header-auth="register"] { > svg { display: block; } > span { display: none; } }

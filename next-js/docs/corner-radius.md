@@ -23,15 +23,16 @@ the primitive `--gh-radius-*` CSS variables.
 On desktop (64rem and wider), viewport-aligned page sections use `none`:
 filter panels, performance summaries, match boards, loading placeholders and
 owner/analytics panels. Reuse `desktopSectionFrame` from the shared layout.
-The desktop app container has no outer gutter or width cap; sections own their
-content padding. Reading pages and compact forms retain local content insets.
-Phone and tablet content and headers use the same shared 16px outer gutter.
+The app shell owns the shared 16px outer gutter at every width. Headers, main
+section backgrounds and card collections follow those same left/right rails.
+The desktop app container has no width cap. Reading pages and compact forms
+retain local content insets.
 
-Desktop content uses the shared `theme.layout.gutter` (16px) inside those
-full-width frames. Reuse `desktopContentPadding` for section content and
-`DesktopContent` around card collections or standalone shared slips. Bordered
-panels account for their border width when aligning their content. Keep the
-page gutter outside individual cards to avoid doubling nested card padding.
+Reuse `contentGutter`, `desktopContentPadding` and `DesktopContent` for section
+rails. Within the app shell, `--app-content-gutter` prevents a second gutter;
+standalone components fall back to `theme.layout.gutter`. Bordered standalone
+panels account for their border width. Keep the page gutter outside individual
+cards to avoid doubling nested card padding.
 Standalone desktop match cards use the shared extra-small gap between rows;
 match selections inside slips retain their joined edges.
 

@@ -141,7 +141,9 @@ try {
     'database-storage': 'Database storage measurement unavailable. Check private configuration, MySQL version and approved access.',
     'database-compaction-report': 'History compaction report unavailable. Check private configuration, schema visibility and approved SELECT access.',
     'football-trial': 'Provider trial unavailable; private input and storage diagnostics are withheld.',
-    'cache-reconcile': 'Cache maintenance unavailable; check approved database access and the 031 migration. Private diagnostics are withheld.',
+    'cache-reconcile': ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND'].includes(error?.code)
+      ? 'Cache maintenance runtime is incomplete. Run npm ci from next-js/, then retry.'
+      : 'Cache maintenance unavailable; check approved database access and the 031 migration. Private diagnostics are withheld.',
     backup: 'Backup operation failed; private diagnostics are withheld.',
   }[action] ?? 'Application service unavailable; private diagnostics are withheld.';
   process.stdout.write('\x1e' + JSON.stringify({ ok: false, error: safe ? error.message : fallback }));

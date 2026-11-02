@@ -11,7 +11,7 @@ import { toUtcIsoString } from "@/domain/calendar";
 import { matchArchiveHref } from "@/domain/navigation";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { ShieldIcon } from "@/components/ui/icons";
-import { desktopContentPadding } from "@/components/ui/layout";
+import { contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { BothTeamsIcon, GoalsIcon, ResultIcon } from "./details-icons";
 import { Crest, FormLetters, desktop, focusRing, scrollClearance, size, useStableDetails, type Messages } from "./details-ui";
 
@@ -43,7 +43,7 @@ export function DetailOutcome({ status, ...props }: Omit<ComponentPropsWithoutRe
 
 /**
  * A scoreboard under a home/away colour band, with competition, date and time on one line above the teams.
- * Phones run it full bleed with the crests above the names; desktop frames it and sets each crest beside its name.
+ * Phones place crests above the names; desktop sets each crest beside its name. Both follow the shared page rails.
  */
 const Box = styled.section<{ $touchline: boolean }>`
   display: grid;
@@ -51,7 +51,7 @@ const Box = styled.section<{ $touchline: boolean }>`
   grid-template-areas: "ctx ctx ctx" "home vs away";
   align-items: start;
   gap: 10px 8px;
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+  margin-inline: calc(-1 * ${contentGutter});
   padding: 12px ${({ theme }) => theme.layout.gutter} 14px;
   background: linear-gradient(90deg, ${({ theme }) => theme.color.accent.orange.solid} 0 50%, ${({ theme }) => theme.color.accent.blue.solid} 50% 100%) top / 100% 3px no-repeat,
     ${({ theme }) => theme.color.surface};

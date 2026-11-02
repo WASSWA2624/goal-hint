@@ -13,18 +13,18 @@ import { toUtcIsoString } from "@/domain/calendar";
 import { openDetailTab } from "@/domain/match-detail-tabs";
 import type { MarketFamily } from "@/domain/markets";
 import { media } from "@/styles/theme";
-import { desktopContentPadding } from "@/components/ui/layout";
+import { contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { DetailOutcome } from "./match-banner";
 import { Note, Standing, desktop, focusRing, size, useStableDetails } from "./details-ui";
 import { marketName, percent } from "./labels";
 
-/** Between the scoreboard and the market rows: full bleed on phones, a framed card on desktop. */
+/** Between the scoreboard and market rows, following the same page rails at every width. */
 const Box = styled.section`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   min-inline-size: 0;
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+  margin-inline: calc(-1 * ${contentGutter});
   padding: 10px ${({ theme }) => theme.layout.gutter};
   background: ${({ theme }) => theme.color.surface};
   ${desktop} {

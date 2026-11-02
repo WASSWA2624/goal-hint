@@ -8,9 +8,10 @@ import { AccountLinks } from "@/components/members/account-link";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
+import { contentGutter } from "@/components/ui/layout";
 import { NavigationProgress } from "./navigation-progress";
 
-/** Compact app pages share the same full-bleed phone brand bar beneath the desktop-only shell. */
+/** Compact app pages share the same phone brand bar within the app's outer rails. */
 const Group = styled.div`
   position: sticky;
   inset-block-start: 0;
@@ -18,7 +19,7 @@ const Group = styled.div`
   display: grid;
   min-inline-size: 0;
   margin-block-start: -8px;
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+  margin-inline: calc(-1 * ${contentGutter});
   ${media.desktop} { display: none; }
 `;
 const Bar = styled.div`
@@ -26,7 +27,7 @@ const Bar = styled.div`
   ${compactHeaderRow}
   justify-content: space-between;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  padding-inline: ${contentGutter};
   ${compactHeaderSurface}
   ${media.desktop} { display: none; }
 `;

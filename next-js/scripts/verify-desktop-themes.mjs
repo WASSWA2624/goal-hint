@@ -62,6 +62,17 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           const child = element.getBoundingClientRect(), parent = element.parentElement.getBoundingClientRect();
           return child.width > 0 && parent.width > 0 && (child.left < parent.left - 2 || child.right > parent.right + 2);
         }).length;
+        const outerRailErrors = [];
+        for (const shell of canvas.querySelectorAll("[data-app-shell]")) {
+          const frame = shell.getBoundingClientRect(), gutter = Number.parseFloat(getComputedStyle(shell).paddingLeft);
+          for (const section of shell.querySelectorAll(":scope > header, :scope > main, :scope > footer, [data-mobile-app-header]")) {
+            const bounds = section.getBoundingClientRect();
+            if (!bounds.width || !bounds.height) continue;
+            if (Math.abs(bounds.left - frame.left - gutter) > .2 || Math.abs(frame.right - bounds.right - gutter) > .2) {
+              outerRailErrors.push(section.tagName.toLowerCase());
+            }
+          }
+        }
         const bordered = [...canvas.querySelectorAll("*")].filter(element => {
           const bounds = element.getBoundingClientRect();
           if (!bounds.width || !bounds.height) return false;
@@ -124,12 +135,13 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           themes: document.querySelectorAll('nav[aria-label="Desktop themes"] a').length,
           screens: document.querySelectorAll('nav[aria-label="Preview screens"] a').length,
           overlap: header.width > 0 && header.height > 0 && header.top < studio.bottom - 1,
-          outsideParent, bordered, idleProgressVisible, textFieldErrors, selectErrors,
+          outsideParent, outerRailErrors, bordered, idleProgressVisible, textFieldErrors, selectErrors,
           footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, statusCorners, distributionBars, subscriptionBanners, content: canvas.textContent.trim().length };
       });
       const ratio = contrast(result.foreground, result.background);
       if (result.overflow) errors.push(`${theme}/${screen}: horizontal overflow at ${width}px`);
       if (result.outsideParent) errors.push(`${theme}/${screen}: a panel or form exceeds its parent`);
+      if (result.outerRailErrors.length) errors.push(`${theme}/${screen}: inconsistent outer margins on ${result.outerRailErrors.join(", ")}`);
       if (result.bordered.length) errors.push(`${theme}/${screen}: decorative borders on ${[...new Set(result.bordered)].join(", ")}`);
       if (result.idleProgressVisible) errors.push(`${theme}/${screen}: idle loading track must not form a header border`);
       if (result.footerBackground && result.footerBackground !== result.background) errors.push(`${theme}/${screen}: footer must share the page background`);

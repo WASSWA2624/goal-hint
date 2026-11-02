@@ -5,6 +5,7 @@ import styled from "styled-components";
 import { detailTabForView, hasMatchPredictionAccess, openDetailTab, type MatchDetailTab } from "@/domain/match-detail-tabs";
 import { formWindows, openSection, type FormWindow, type TeamFocus, type VenueFocus, type MatchSection, type MatchView } from "@/domain/match-view";
 import { media } from "@/styles/theme";
+import { contentGutter } from "@/components/ui/layout";
 import { LockIcon } from "@/components/ui/icons";
 import { RadioGroup, RadioGroups } from "@/components/ui/radio-group";
 import { LiveMatchPanel } from "../live-match-panel";
@@ -22,7 +23,7 @@ const embeddedDisclosure = { open: true, byDefault: false, reveal: 0, embedded: 
 const untitledDisclosure = { ...embeddedDisclosure, hideHeading: true };
 const Surface = styled(TouchlineSurface)`
   align-self: start; overflow-anchor: none;
-  ${media.belowDesktop} { margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter}); border-inline: 0; }
+  ${media.belowDesktop} { margin-inline: calc(-1 * ${contentGutter}); border-inline: 0; }
 `;
 const Panel = styled.div`
   padding: 16px ${({ theme }) => theme.layout.gutter}; min-inline-size: 0;

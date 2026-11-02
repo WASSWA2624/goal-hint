@@ -90,7 +90,11 @@ the timer is cleared when either branch settles.
 the optional batch is 1–1,000. It locks pending journal rows with `SKIP LOCKED`,
 verifies each generation is already applied, then acknowledges in the same
 transaction. It also removes a bounded batch of expired disposable responses.
-Repeat until `acknowledged` and `removed` are zero to drain a backlog. Multiple
+Use `npm run cache:reconcile -- 1000 --all` to repeat bounded passes until both
+counts are zero and print the total acknowledged/removed. The command stops after
+1,000 passes; rerun it to continue a larger backlog. An incomplete local runtime
+reports the recovery command, `npm ci`, without exposing private diagnostics.
+Multiple
 replicas can consume safely. No timestamp or maximum-ID cursor is used, so a
 transaction that commits late remains discoverable. Failed acknowledgment rolls
 back, and duplicate passes are harmless. Invalidation works immediately even if
