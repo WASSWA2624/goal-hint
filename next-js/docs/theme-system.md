@@ -19,7 +19,9 @@ fallback, and native appearance metadata all consume the same active exports.
 | --- | --- |
 | Page, card, field, text, selection, market, and result colors | `color` |
 | Action fills and table surfaces | `gradient` |
-| Text input and textarea fills and border width | `textField` |
+| Text entry, selects, field adornments and validation fills | `textField`, `select`, `fieldAdornment` |
+| Quiet and header action surfaces | `action` |
+| Measured popover/workspace geometry and portable image paper | `ui`, `media` |
 | Header surfaces, navigation, logo polarity, and height | `header` |
 | Body and heading families, sizes, weights, and line heights | `typography` |
 | Spacing, content rails, gutters, reading width, and control sizes | `space`, `layout`, `control` |
@@ -71,7 +73,8 @@ unrelated layouts retain their established geometry.
 Production components use filled surfaces without accent rails or inset-shadow
 frames. `border.width` and `border.accentWidth` are zero in every theme. Slips
 have a deliberate exception: `phoneCardFrame.ruleWidth` provides a 1px outer
-frame and selection separators, both using `phoneCardFrame.inset`. Editable
+frame and selection separators, both using `phoneCardFrame.separator`.
+`phoneCardFrame.inset` controls the slip body independently. Editable
 text inputs and textareas use `textField.background`, `textField.hoverBackground`,
 and `textField.borderWidth`, with `color.controlBorder` for their boundary.
 Porcelain Blue keeps these fields white at rest, on hover, and while focused,
@@ -93,42 +96,34 @@ the real app headers and sidebars; it is not part of the selected app theme.
 No review-only appearance overrides are required for headings, logos, header
 fills, text selection, scrollbar colors, or interaction treatment.
 
-Porcelain Blue uses a white page (`#FFFFFF`) at every viewport width. Shared
-cards, panels, menus, navigation, and header surfaces use cool porcelain
-(`#EDF1F7`) so their fills remain visible against the page. Filter sections share
-`color.page`; their fields, buttons, and selected states retain contrasting fills.
-The palette can override `fieldHover` to keep blue labels readable on hover.
-Mobile slip headers reuse the former page color (`#EDF1F7`) through
-`phoneCardFrame.mobileHeader`. Their inset body (`#E9EEF6`) and white selections
-(`phoneCardFrame.selection`) keep their original colors, including selection
-number fills. Desktop slip headers also use pale gray (`#EDF1F7`). These independent
-settings prevent app-wide surface adjustments from recoloring slip selections.
-Cobalt Night and the review palettes derive compact headers and selections from
-their existing surfaces through the same contract.
-Match tiles share 4px corners and slip frames use 8px corners. Below 64rem,
-standalone matches have 8px gaps, and Best slips and Slip Builder both have 14px
-between slips. Selections inside slips use one shared joined stack on mobile
-and desktop: no row gap, 6px inset padding, white light-mode rows, and 1px pale
-gray separators. Only the first row has rounded top corners, and only the last
-has rounded bottom corners; a single row keeps all four corners. The shared
-rules live in `components/slips/joined-slip-styles.ts`. Standalone desktop
-matches retain alternating tonal fills; desktop slips retain 4.5px between slips.
-Filter actions use filled surfaces without borders; status badges retain their
-semantic fill/text colors without outlines. Header account/theme actions keep
-28px minimum height, no vertical padding, and clearly visible filled backgrounds
-inside the unchanged header rails. Slip header fills use an explicit inner
-radius because native disclosure slots do not reliably inherit corner properties.
-Expanded slips use the same thin frame as collapsed slips; header and
-selection-tray fills keep them visually joined. Disclosure controls retain their
-fixed positions. Match chips also use filled backgrounds without borders.
+Porcelain Blue uses white for page, content, menus, fields and slip bodies at
+all viewport widths. Selected controls and semantic result fills remain distinct.
+Headers and footers consume their own appropriate theme roles. Slip body,
+header, selection and separator colors are independent, so a white canvas does
+not erase the thin boundaries between matches. Cobalt Night and the review
+palettes derive the same roles from their own surfaces.
 
-The app footer shares `color.page` on every screen size. Desktop match rows and
-the match pagination boundary use the same thin inset-colored rule as slips.
-Pagination has its own top spacing and white light-mode background. Shared
-search submission is the trailing action on phones and desktops, with square
-leading corners and inset trailing corners that fit its field frame. Status
-and period dropdowns use the shared control radius without borders. Performance
-summaries retain their figures and labels without a decorative distribution bar.
+Match lists use joined square rows and thin themed separators. Standalone
+Team stack cards use `phoneCardFrame.radius`; slip frames use the shared surface
+or desktop frame radius. Selections inside slips use a shared joined stack on
+mobile and desktop: no row gap, themed inset padding, and thin separators. Only
+the first selection has rounded top corners and only the last has rounded
+bottom corners. The rules live in `components/slips/joined-slip-styles.ts`.
+
+Header actions, form fields, buttons, tabs and pagination share the inherited
+control metric: 40px for fine pointers and 44px for coarse pointers. The root
+theme owns both values and the floating-label reserve; see `control-uniformity.md`.
+Slip header fills follow the outer frame with an inset radius. Disclosure and
+Share keep independent hit targets, aligned to their existing header slots.
+Status badges and match chips retain readable semantic fills without decorative
+outlines.
+
+The app footer consumes `color.page`. Match rows, slip selections and pagination
+boundaries use `phoneCardFrame.separator`. Shared search submission remains the
+trailing action, with square leading corners and inset trailing corners that fit
+its field frame. Status and period dropdowns use the shared control radius.
+Performance summaries retain their figures and labels without a decorative
+distribution bar.
 
 Readability tests validate all ten complete definitions. Browser acceptance
 checks the actual shared screens. Business rules, data services, form actions,

@@ -33,8 +33,8 @@ rails. Within the app shell, `--app-content-gutter` prevents a second gutter;
 standalone components fall back to `theme.layout.gutter`. Bordered standalone
 panels account for their border width. Keep the page gutter outside individual
 cards to avoid doubling nested card padding.
-Standalone desktop match cards use the shared extra-small gap between rows;
-match selections inside slips retain their joined edges.
+Match lists and selections inside slips retain their joined edges; spacing
+between separate cards comes from the shared theme scales.
 
 Use a semantic token directly, for example:
 
@@ -70,8 +70,8 @@ fills use the outer radius minus `theme.phoneCardFrame.ruleWidth`; analysis
 links inherit their match row's corners so keyboard focus follows the shape.
 Disclosure indicators are pinned 8px below the header's top edge in both states.
 Only the inner chevron rotates: right when collapsed, down when expanded. On
-mobile, Share and disclosure use matching 28px frames with `control` corners,
-aligned tops and a 10px gap; the metrics occupy their own clear row below.
+mobile, Share and disclosure use the shared control height with `control`
+corners, aligned tops and a themed gap; the metrics occupy their own clear row below.
 Desktop retains its circular disclosure frame. A mobile match card's covering
 analysis link uses the outer radius minus the frame width, so its pressed tint
 and focus outline cannot square off the visible corners.
