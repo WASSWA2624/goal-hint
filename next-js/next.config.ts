@@ -56,10 +56,17 @@ const nextConfig: NextConfig = {
   async rewrites() {
     // Root-level sitemap URLs cover the entire site without directory-scope
     // restrictions. Keep native metadata handlers as the single XML authority.
-    return [
-      { source: "/sitemap-matches-:id.xml", destination: "/matches/sitemap/:id.xml" },
-      { source: "/sitemap-archive-:id.xml", destination: "/archive/sitemap/:id.xml" },
-    ];
+    return {
+      // Retire production workers left on the development origin before the
+      // public worker file is considered. A cached page may never run new app JS.
+      beforeFiles: process.env.NODE_ENV === "development" ? [
+        { source: "/offline-worker.js", destination: "/api/development/offline-worker" },
+      ] : [],
+      afterFiles: [
+        { source: "/sitemap-matches-:id.xml", destination: "/matches/sitemap/:id.xml" },
+        { source: "/sitemap-archive-:id.xml", destination: "/archive/sitemap/:id.xml" },
+      ],
+    };
   },
 };
 

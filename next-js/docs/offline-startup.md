@@ -149,6 +149,15 @@ LAN HTTP still renders online but cannot prepare this cache. `next dev` skips
 registration because its changing assets are not a coherent post-build bundle.
 [Registration requirements](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/register).
 
+It also serves a retirement worker at the existing `/offline-worker.js` URL,
+before public-file resolution, so workers left by a production-like session
+cannot replace slow development requests with a saved page or old assets.
+The replacement activates immediately, unregisters itself, removes only
+`goal-hint-offline-` caches and reloads affected app tabs once. Cookies, local
+storage, saved slips and unrelated caches remain intact. Loaded development
+pages also request an update of an existing Goal Hint worker; new workers are
+never registered in development. Production keeps the normal offline worker.
+
 From `next-js/`, a normal production-like workflow is:
 
 ```sh

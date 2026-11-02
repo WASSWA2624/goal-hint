@@ -5,11 +5,15 @@ import { startOfflineRefresh } from "@/domain/offline-refresh";
 import { createOfflineTransport } from "./offline-transport";
 import { publishOfflineUpdate } from "./offline-update-store";
 import { scheduleOfflineStartup } from "./schedule-offline-startup";
+import { updateDevelopmentOfflineWorker } from "./update-development-offline-worker";
 
 /** One shared controller; product data/authentication keep their existing refresh rules. */
 export function OfflineBootstrap() {
   useEffect(() => {
     const root = document.documentElement;
+    if (process.env.NODE_ENV === "development" && window.isSecureContext && "serviceWorker" in navigator) {
+      void updateDevelopmentOfflineWorker().catch(() => {});
+    }
     if (process.env.NODE_ENV !== "production" || !window.isSecureContext || !("serviceWorker" in navigator)) {
       root.dataset.offlineCache = "unavailable";
       return;
