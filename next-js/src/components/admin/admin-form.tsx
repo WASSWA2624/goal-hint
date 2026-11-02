@@ -28,14 +28,14 @@ export const FieldRow = styled.div`
 `;
 export const adminControl = css`
   inline-size: 100%;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   padding: 8px 10px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
   ${filledField}
   font-size: 1rem;
-  ${media.desktop} { min-block-size: 40px; padding-block: 6px; }
+  ${media.desktop} { min-block-size: var(--form-control-height, 40px); padding-block: 6px; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
 `;
@@ -52,10 +52,9 @@ export const FieldError = styled.span`
 `;
 /** The main action takes `$variant="primary"`; without a variant it is the secondary, link-coloured button. */
 export const ActionButton = styled(ToolButton)`
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 14px;
   ${({ theme, $variant }) => !$variant && css`color: ${theme.color.link};`}
-  ${media.desktop} { min-block-size: 40px; }
 `;
 export const DangerButton = styled(ActionButton)`
   color: ${({ theme }) => theme.color.outcome.incorrect.text};
@@ -73,14 +72,14 @@ export const CheckField = styled.label`
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   padding-block: 11px;
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: normal;
   line-height: 1.5;
   cursor: pointer;
   input { flex: none; inline-size: 20px; block-size: 20px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
-  ${media.desktop} { min-block-size: 36px; padding-block: 7px; input { inline-size: 18px; block-size: 18px; margin-block-start: 1px; } }
+  ${media.desktop} { min-block-size: var(--form-control-height, 40px); padding-block: 7px; input { inline-size: 18px; block-size: 18px; margin-block-start: 1px; } }
 `;
 export const Badge = styled.span<{ $tone?: "good" | "muted" | "warning" }>`
   display: inline-block;

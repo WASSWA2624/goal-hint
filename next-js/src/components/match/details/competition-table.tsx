@@ -37,7 +37,7 @@ export const FormDot = styled.span<{ $result: "W" | "D" | "L" }>`
     : $result === "L" ? theme.color.accent.red.solid : theme.color.mutedText};
 `;
 const FormButton = styled.button`
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-block-size: 24px; min-inline-size: 60px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-block-size: var(--form-control-height, 40px); min-inline-size: 60px;
   padding: 4px; background: none; border: 0; color: inherit; cursor: pointer; ${focusRing}
 `;
 const FormList = styled.ol`

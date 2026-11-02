@@ -12,8 +12,8 @@ import { getSubscriptionSnapshot, subscribeMemberSession } from "./member-sessio
 export const MemberPanel = styled(Surface)`
   inline-size: 100%;
   max-inline-size: 36rem;
-  button, a { min-block-size: 44px; }
-  input { min-block-size: 44px; font-size: 16px; }
+  button, a { min-block-size: var(--form-control-height, 40px); }
+  input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"]) { min-block-size: var(--form-control-height, 40px); font-size: 16px; }
 `;
 export const MemberForm = styled.form`
   display: grid;

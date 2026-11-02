@@ -22,14 +22,14 @@ const framed = css`
 export const Disclosure = styled(Surface).attrs({ as: "details" })<{ $plain?: boolean }>`
   ${({ $plain }) => $plain ? plain : framed}
   > summary {
-    min-block-size: ${({ theme }) => theme.control.compactHeight};
+    min-block-size: var(--form-control-height, 40px);
     padding-block: 9px;
     cursor: pointer;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     line-height: 1.35;
     overflow-wrap: anywhere;
     ${media.desktop} {
-      min-block-size: ${({ theme }) => theme.control.minHeight};
+      min-block-size: var(--form-control-height, 40px);
       padding-block: ${({ theme }) => theme.space.sm};
       line-height: inherit;
     }

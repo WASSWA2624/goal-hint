@@ -61,8 +61,8 @@ const Header = styled.header`
   h2 { margin: 0; min-inline-size: 0; font-size: 1rem; overflow-wrap: anywhere; }
 `;
 const CloseButton = styled(ActionButton)`
-  flex: none; min-inline-size: 36px; min-block-size: 36px; padding: 0;
-  @media (pointer: coarse) { min-inline-size: 44px; min-block-size: 44px; }
+  flex: none; min-inline-size: 36px; min-block-size: var(--form-control-height, 40px); padding: 0;
+  @media (pointer: coarse) { min-inline-size: 44px; min-block-size: var(--form-control-height, 40px); }
 `;
 const Body = styled.div`
   ${formSurface}
@@ -72,6 +72,6 @@ const Body = styled.div`
 const Footer = styled.footer`
   display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 14px;
   border-block-start: 0;
-  > button { min-block-size: 36px; }
-  @media (pointer: coarse) { > button { min-block-size: 44px; } }
+  > button { min-block-size: var(--form-control-height, 40px); }
+  @media (pointer: coarse) { > button { min-block-size: var(--form-control-height, 40px); } }
 `;

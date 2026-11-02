@@ -29,7 +29,7 @@ const Root = styled.details`
     border: 0;
     border-radius: ${({ theme }) => theme.radius.overlay};
     background: ${({ theme }) => theme.color.surface}; box-shadow: ${({ theme }) => theme.shadow.popover};
-    > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: 2rem; padding: 4px; border-radius: ${({ theme }) => theme.radius.small}; font-size: 0.75rem; cursor: pointer; }
+    > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: var(--form-control-height, 40px); padding: 4px; border-radius: ${({ theme }) => theme.radius.small}; font-size: 0.75rem; cursor: pointer; }
     > button { inline-size: 100%; border: 0; background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text}; }
     > button[aria-pressed="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
     > p { font-size: 0.6875rem; color: ${({ theme }) => theme.color.mutedText}; padding: 4px; }
@@ -41,7 +41,7 @@ const InlineChoices = styled.fieldset`
   display: flex; flex-wrap: wrap; align-items: center; gap: 3px 14px;
   min-inline-size: 0; margin: 0; padding: 0; border: 0;
   > label {
-    display: inline-flex; align-items: center; gap: 6px; min-block-size: 2rem;
+    display: inline-flex; align-items: center; gap: 6px; min-block-size: var(--form-control-height, 40px);
     color: ${({ theme }) => theme.color.text}; font-size: 0.75rem; cursor: pointer;
   }
   input {
@@ -50,7 +50,7 @@ const InlineChoices = styled.fieldset`
     &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   }
   &:disabled > label { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
-  @media (pointer: coarse) { > label { min-block-size: 2.75rem; } }
+  @media (pointer: coarse) { > label { min-block-size: var(--form-control-height, 40px); } }
 `;
 const subscribeNever = () => () => {};
 const clientReady = () => true;

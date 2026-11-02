@@ -92,7 +92,7 @@ const Destination = styled(Link)`
   display: flex;
   align-items: center;
   gap: 8px;
-  min-block-size: 2.75rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 14px;
   color: ${({ theme }) => theme.color.text};
   font-size: 0.875rem;
@@ -109,7 +109,7 @@ const SignOut = styled(MemberSignOut)`
     justify-content: flex-start;
     gap: 8px;
     inline-size: 100%;
-    min-block-size: 2.75rem;
+    min-block-size: var(--form-control-height, 40px);
     padding: 6px 14px;
     color: ${({ theme }) => theme.color.mutedText};
     background: transparent;

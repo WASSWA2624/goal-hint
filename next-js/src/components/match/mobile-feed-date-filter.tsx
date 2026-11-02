@@ -25,7 +25,7 @@ const Trigger = styled.button`
   gap: 6px;
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: 44px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
@@ -44,7 +44,7 @@ const Trigger = styled.button`
   &[aria-expanded="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
   ${controlFeedback}
   ${focusRing}
-  ${media.belowDesktop} { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; }
+  ${media.belowDesktop} { min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font-size: 0.75rem; }
 `;
 
 const Frame = styled.div`
@@ -64,10 +64,10 @@ const Body = styled.div`
   padding: 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  [data-range="dates"] input { min-block-size: 44px; }
+  [data-range="dates"] input { min-block-size: var(--form-control-height, 40px); }
   ${media.belowDesktop} {
     gap: 8px; padding: 8px 10px;
-    [data-range="dates"] input { min-block-size: 36px; padding-block: 2px; }
+    [data-range="dates"] input { min-block-size: var(--form-control-height, 40px); padding-block: 2px; }
   }
 `;
 const Presets = styled.fieldset`
@@ -82,7 +82,7 @@ const Presets = styled.fieldset`
 `;
 const Preset = styled.button`
   min-inline-size: 0;
-  min-block-size: 44px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
@@ -97,7 +97,7 @@ const Preset = styled.button`
   &[aria-pressed="true"] { color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft};  }
   ${controlFeedback}
   ${focusRing}
-  ${media.belowDesktop} { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; }
+  ${media.belowDesktop} { min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font-size: 0.75rem; }
 `;
 const Footer = styled.div`
   display: grid;
@@ -107,7 +107,7 @@ const Footer = styled.div`
   padding: 8px 10px;
   border-block-start: 0;
   > button {
-    min-inline-size: 0; min-block-size: 44px; padding: 6px 12px;
+    min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 6px 12px;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     border: 0; border-radius: ${({ theme }) => theme.radius.control};
     font: inherit; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
@@ -117,7 +117,7 @@ const Footer = styled.div`
   > button:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  cursor: not-allowed; }
   ${media.belowDesktop} {
     padding: 6px 10px;
-    > button { min-block-size: 36px; padding: 4px 8px; font-size: 0.75rem; }
+    > button { min-block-size: var(--form-control-height, 40px); padding: 4px 8px; font-size: 0.75rem; }
   }
 `;
 

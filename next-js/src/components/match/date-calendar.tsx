@@ -51,7 +51,7 @@ const BarButton = styled.button`
   display: inline-grid;
   place-items: center;
   min-inline-size: 2.5rem;
-  min-block-size: 2.5rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
@@ -81,7 +81,7 @@ const Grid = styled.div`
 `;
 const DayButton = styled.button`
   min-inline-size: 0;
-  min-block-size: 2.5rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: transparent;
@@ -121,7 +121,7 @@ const Footer = styled.div`
   padding: 8px 14px;
   border-block-start: 0;
   > button {
-    min-block-size: 2.75rem;
+    min-block-size: var(--form-control-height, 40px);
     padding-inline: 12px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};

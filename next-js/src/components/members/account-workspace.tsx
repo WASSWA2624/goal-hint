@@ -38,14 +38,14 @@ const SidebarFoot = styled.div`
   small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; overflow-wrap: anywhere; }
 `;
 const LogOut = styled(MemberSignOut)`
-  && { display: inline-flex; align-items: center; justify-content: start; gap: 10px; min-block-size: 44px;
+  && { display: inline-flex; align-items: center; justify-content: start; gap: 10px; min-block-size: var(--form-control-height, 40px);
     border: 0; padding: 0; background: none; color: ${({ theme }) => theme.color.text}; font-size: 0.875rem; }
 `;
 const SectionMenu = styled.details`
   position: relative; z-index: 15; background: ${({ theme }) => theme.color.surface};
   border-block-end: 0;
   ${media.desktop} { display: none; }
-  > summary { display: flex; align-items: center; gap: 10px; min-block-size: 48px; padding-inline: 16px; list-style: none; cursor: pointer;
+  > summary { display: flex; align-items: center; gap: 10px; min-block-size: var(--form-control-height, 40px); padding-inline: 16px; list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > svg:last-child { margin-inline-start: auto; }
   }

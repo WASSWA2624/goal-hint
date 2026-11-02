@@ -49,7 +49,7 @@ const Pick = styled.button<{ $family: MarketFamily }>`
   align-items: center;
   gap: 10px;
   padding: 0;
-  min-block-size: 44px;
+  min-block-size: var(--form-control-height, 40px);
   color: ${({ theme }) => theme.color.text};
   background: none;
   border: 0;

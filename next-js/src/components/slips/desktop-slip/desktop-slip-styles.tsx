@@ -17,8 +17,8 @@ export const DesktopSlipBase = styled.div`
   &&& [data-slip-summary] {
     grid-template-columns: minmax(0, 1fr) auto auto auto var(--review-status-width, 7rem);
     grid-template-areas: "identity odds count average status"; grid-template-rows: auto;
-    min-block-size: 2.25rem; block-size: auto;
-    column-gap: var(--slip-header-gap); row-gap: 0; padding: 4px var(--slip-header-end) 4px 12px;
+    min-block-size: var(--form-control-height, 40px); block-size: auto;
+    column-gap: var(--slip-header-gap); row-gap: 0; padding: 0 var(--slip-header-end) 0 12px;
     white-space: nowrap; font-size: 0.75rem; line-height: 1.25;
     background: ${({ theme }) => theme.phoneCardFrame.header};
   }
@@ -39,7 +39,7 @@ export const DesktopSlipBase = styled.div`
     inline-size: 100%; box-sizing: border-box;
     border-inline-start: 0; padding-inline-start: 6px;
   }
-  &&& [data-summary-action-space] { grid-area: action; inline-size: 4.5rem; block-size: 1.5rem; }
+  &&& [data-summary-action-space] { grid-area: action; inline-size: 4.5rem; block-size: var(--form-control-height, 40px); }
   &&& [data-toggle-chevron] { inset-inline-end: 4px; }
   &&&[data-shareable] [data-slip-summary] {
     grid-template-columns: minmax(0, 1fr) auto auto auto 4.5rem var(--review-status-width, 7rem);
@@ -48,15 +48,12 @@ export const DesktopSlipBase = styled.div`
   [data-slip-header-action] {
     position: absolute;
     inset-inline-end: calc(var(--slip-header-end) + var(--review-status-width, 7rem) + var(--slip-header-gap) + ${({ theme }) => theme.border.width});
-    inset-block-start: 4px; z-index: 2;
+    inset-block-start: 0; z-index: 2;
   }
 
   ${desktopMatchBaseStyles}
   [data-desktop-row][data-numbered-date] { --review-date-width: 4.65rem; }
   [data-numbered-date] [data-row-date] { display: flex; align-items: center; gap: 5px; }
-  @media (pointer: coarse) {
-    &&& [data-slip-summary] { min-block-size: 44px; }
-  }
   @media (max-width: 79.99rem) {
     --slip-header-separator-offset: -5px;
     --slip-header-gap: 9px;
@@ -76,8 +73,8 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
     &&& [data-toggle-chevron] {
       ${slipDisclosureIndicator}
       --slip-chevron-size: 7px;
-      inline-size: 1.75rem; block-size: 1.75rem;
-      inset-inline-end: calc((var(--slip-header-end) - 1.75rem) / 2); inset-block-start: 8px; transform: none;
+      inline-size: var(--form-control-height, 40px); block-size: var(--form-control-height, 40px);
+      inset-inline-end: calc((var(--slip-header-end) - var(--form-control-height, 40px)) / 2); inset-block-start: 0; transform: none;
     }
     &&& [data-slip-disclosure][open] > [data-slip-summary] [data-toggle-chevron] { --slip-chevron-rotation: 45deg; }
     /* Draw on the outer frame so the rail spans matches without affecting their layout. */
@@ -97,7 +94,7 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
     }
     &&& [data-slip-disclosure]:not([open]) > [data-slip-summary],
     &&& [data-compact-slip] > header[data-slip-summary] {
-      min-block-size: 44px;
+      min-block-size: var(--form-control-height, 40px);
       color: ${({ theme }) => theme.color.text};
       background: ${({ theme }) => theme.phoneCardFrame.header};
       [data-summary-identity] > span:first-child { font-size: .9375rem; font-weight: 700; }
@@ -112,12 +109,12 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.phoneCardFrame.header} 94%, ${({ theme }) => theme.color.surface}); } }
     }
     &:not(:has([data-slip-disclosure][open])) {
-      [data-slip-header-action] { inset-block-start: 0; block-size: 44px; display: flex; align-items: center; }
+      [data-slip-header-action] { inset-block-start: 0; block-size: var(--form-control-height, 40px); display: flex; align-items: center; }
       [data-share-slip] {
         color: ${({ theme }) => theme.color.accent.blue.text}; background: ${({ theme }) => theme.color.surface};
         font-size: .8125rem; font-weight: 600;
         &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
-        @media (pointer: coarse) { min-block-size: 44px; }
+        @media (pointer: coarse) { min-block-size: var(--form-control-height, 40px); }
       }
     }
   }

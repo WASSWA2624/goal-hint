@@ -45,7 +45,7 @@ export const AccountActivityList = styled.ol`
   time { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
 `;
 const actionText = css`
-  min-block-size: 44px; padding: 0; border: 0; background: none;
+  min-block-size: var(--form-control-height, 40px); padding: 0; border: 0; background: none;
   color: ${({ theme }) => theme.color.link}; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-decoration: none;
 `;
 // The doubled class outranks Button's own colours, so the disabled look is restated at the same strength.

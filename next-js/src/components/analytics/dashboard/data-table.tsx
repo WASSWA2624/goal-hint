@@ -103,7 +103,7 @@ const ExportLink = styled.a`
   border-radius: ${({ theme }) => theme.radius.control};
   display: inline-flex;
   align-items: center;
-  min-block-size: 32px;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 10px;
   border: 0;
   color: ${({ theme }) => theme.color.text};
@@ -147,7 +147,7 @@ const SortButton = styled.button`
   align-items: center;
   gap: 4px;
   inline-size: 100%;
-  min-block-size: 36px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 10px;
   border: 0;
   background: transparent;

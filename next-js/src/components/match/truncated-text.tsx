@@ -6,7 +6,7 @@ import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 
 const textControlStyles = css`
-  display: block; min-inline-size: 0; max-inline-size: 100%; padding: 0; margin: 0;
+  display: block; min-inline-size: 0; min-block-size: 0; max-inline-size: 100%; padding: 0; margin: 0;
   border: 0; background: none; color: inherit; font: inherit; line-height: inherit; text-align: start;
   cursor: default;
   &[tabindex="0"] { cursor: help; }

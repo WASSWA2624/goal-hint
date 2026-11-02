@@ -137,7 +137,7 @@ const TeamTabs = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block-end: 12px;
   border-block-end: 0;
   button { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 5px 7px;
-    min-inline-size: 0; min-block-size: 48px; padding: 8px 4px; border: 0; border-block-end: 0;
+    min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 8px 4px; border: 0; border-block-end: 0;
     color: ${({ theme }) => theme.color.mutedText}; background: transparent; font: inherit; font-size: .8125rem; cursor: pointer; }
   button[aria-selected="true"] { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text};  font-weight: 700; }
   button { ${focusRing} }

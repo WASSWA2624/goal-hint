@@ -54,7 +54,7 @@ export const RecordListTools = styled.div`
   ${media.desktop} {
     gap: 4px; padding: 6px 10px 4px;
     border-block-end: 0;
-    input:not([type="checkbox"]):not([type="radio"]), select { min-block-size: 34px; font-size: 0.8125rem; }
+    input:not([type="checkbox"]):not([type="radio"]), select { min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; }
     input, select, button { border-radius: ${({ theme }) => theme.radius.control}; }
   }
 
@@ -89,7 +89,7 @@ export const RecordCard = styled.article`
   ${media.desktop} {
     grid-template-rows: minmax(0, 1fr) auto; gap: 0; block-size: 100%; min-block-size: 0;
     overflow: hidden; border: 0; background: ${({ theme }) => theme.color.surfaceMuted};
-    input:not([type="checkbox"]):not([type="radio"]), select { min-block-size: 38px; font-size: 0.8125rem; }
+    input:not([type="checkbox"]):not([type="radio"]), select { min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; }
     textarea { font-size: 0.8125rem; }
   }
 `;
@@ -109,7 +109,7 @@ export const RecordDetailHead = styled.header`
     min-block-size: 44px; padding: 6px 12px;
     border-block-end: 0;
     background: ${({ theme }) => theme.color.surface};
-    a, button { min-block-size: 28px; }
+    a, button { min-block-size: var(--form-control-height, 40px); }
   }
 `;
 export const RecordBody = styled.div`
@@ -123,8 +123,8 @@ export const RecordFooter = styled(StickyActions).attrs<{ "data-record-footer"?:
     border: 0; border-block-start: 0;
     background: ${({ theme }) => theme.color.surface};
     > * { flex: 0 1 auto; }
-    > button, > a, [data-record-actions] button, [data-record-actions] a { min-inline-size: 0; min-block-size: 32px; padding: 4px 10px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.8125rem; }
-    [data-record-actions] input { min-block-size: 32px; padding-block: 4px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.8125rem; }
+    > button, > a, [data-record-actions] button, [data-record-actions] a { min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 4px 10px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.8125rem; }
+    [data-record-actions] input { min-block-size: var(--form-control-height, 40px); padding-block: 4px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.8125rem; }
     [data-record-actions] { display: flex; flex-wrap: wrap; gap: 8px; }
     [data-record-icon] { flex: none; inline-size: 32px; block-size: 32px; padding: 0; }
     [data-record-summary] { min-inline-size: 0; margin-inline-end: auto; overflow-wrap: anywhere; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }

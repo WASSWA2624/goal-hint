@@ -38,7 +38,7 @@ export const TouchlineEmpty = styled.div`
 `;
 export const TouchlineLinkButton = styled.button`
   display: inline-flex; align-items: center; justify-content: start; gap: 7px;
-  min-block-size: 2.25rem; padding: 4px 0; border: 0; background: none;
+  min-block-size: var(--form-control-height, 40px); padding: 4px 0; border: 0; background: none;
   color: ${({ theme }) => theme.color.link}; font: inherit; font-weight: 700; cursor: pointer;
   ${focusRing}
 `;

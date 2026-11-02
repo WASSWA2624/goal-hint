@@ -75,14 +75,14 @@ const Panel = styled.form`
 const QueryChoices = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-inline-size: 0;
   > select {
-    inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 8px;
+    inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 8px;
     border: 0; border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     font: inherit; font-size: 0.8125rem;
     ${focusRing}
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   }
-  ${media.belowDesktop} { > select { min-block-size: 36px; padding: 4px 6px; font-size: 0.75rem; } }
+  ${media.belowDesktop} { > select { min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font-size: 0.75rem; } }
 `;
 /** The approved Compact stack: one search row, then date/status and a single filter action. */
 const CompactToolbar = styled(QueryChoices)`
@@ -135,7 +135,7 @@ const PhoneSort = styled(CompactSelect)`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > svg { inset-inline-end: 7px; }
   @container (max-width: 18rem) { padding-inline-start: 8px; }
-  ${media.belowDesktop} { min-block-size: 36px; padding-block: 2px; font-size: 0.75rem; }
+  ${media.belowDesktop} { min-block-size: var(--form-control-height, 40px); padding-block: 2px; font-size: 0.75rem; }
 `;
 /** Opens the filter sheet; the badge counts applied filters. */
 const FilterToggle = styled.button<{ $compact?: boolean }>`
@@ -144,7 +144,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 2.75rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
@@ -180,7 +180,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
     position: relative;
     inline-size: 44px;
     min-inline-size: 44px;
-    min-block-size: 44px;
+    min-block-size: var(--form-control-height, 40px);
     padding: 0;
 
     border-radius: ${({ theme }) => theme.radius.overlay};
@@ -196,7 +196,7 @@ const FilterToggle = styled.button<{ $compact?: boolean }>`
     }
   `}
   ${media.belowDesktop} {
-    min-block-size: 36px; padding-block: 4px; font-size: 0.75rem;
+    min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem;
     ${({ $compact }) => $compact && css`inline-size: 36px; min-inline-size: 36px; padding: 0;`}
   }
 `;
@@ -216,11 +216,11 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
     && ${SheetHeader} { padding: 2px 2px 2px 10px; }
     && ${SheetHeader} > h2 { font-size: 0.875rem; }
     && ${SheetHeader} > button { inline-size: 36px; block-size: 36px; padding: 0; }
-    && button { min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
-    && select { min-block-size: 36px; padding-block: 4px; }
-    && input:not([type="checkbox"]) { min-block-size: 36px; padding-block: 2px; }
+    && button { min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem; }
+    && select { min-block-size: var(--form-control-height, 40px); padding-block: 4px; }
+    && input:not([type="checkbox"]) { min-block-size: var(--form-control-height, 40px); padding-block: 2px; }
     && input[inputmode="decimal"] { text-align: center; }
-    && [role="group"] li > label { min-block-size: 36px; font-size: 0.75rem; }
+    && [role="group"] li > label { min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; }
     && [data-filter-actions] br { display: none; }
   }
   ${desktop} {
@@ -291,7 +291,7 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
   align-items: center;
   gap: 8px;
   min-inline-size: 0;
-  min-block-size: 2.75rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 10px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
@@ -343,8 +343,8 @@ const PhonePicker = styled(OptionPicker)`
     box-shadow: none;
     padding: 8px;
     gap: 8px;
-    > input { min-inline-size: 0; min-block-size: 2.75rem; border-radius: ${({ theme }) => theme.radius.control}; font-size: 16px; }
-    label:not([for]) { min-block-size: 2.75rem; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.875rem; }
+    > input { min-inline-size: 0; min-block-size: var(--form-control-height, 40px); border-radius: ${({ theme }) => theme.radius.control}; font-size: 16px; }
+    label:not([for]) { min-block-size: var(--form-control-height, 40px); border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.875rem; }
     label > span { overflow-wrap: anywhere; }
   }
 `;
@@ -375,7 +375,7 @@ const QuietButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 1.875rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 10px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
@@ -471,7 +471,7 @@ const ApplyButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 2rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 10px;
   color: ${({ theme }) => theme.color.onAction};
   background: ${({ theme }) => theme.gradient.action};
@@ -489,7 +489,7 @@ const ApplyButton = styled.button`
   ${focusRing}
 `;
 const OutlineButton = styled(QuietButton)`
-  min-block-size: 2rem;
+  min-block-size: var(--form-control-height, 40px);
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.8125rem;
 
@@ -502,9 +502,9 @@ const OutlineButton = styled(QuietButton)`
 const PhoneClear = styled(OutlineButton)`
   flex: none;
   min-inline-size: 2.75rem;
-  min-block-size: 2.75rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 6px;
-  ${media.belowDesktop} { min-inline-size: 36px; min-block-size: 36px; padding-block: 4px; font-size: 0.75rem; }
+  ${media.belowDesktop} { min-inline-size: 36px; min-block-size: var(--form-control-height, 40px); padding-block: 4px; font-size: 0.75rem; }
 `;
 const FilterActions = styled.div`
   display: flex;

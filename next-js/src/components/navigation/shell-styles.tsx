@@ -4,13 +4,14 @@ import Link from "@/components/navigation/navigation-link";
 import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
+import { controlBodyHeight } from "@/components/ui/control-layout";
 import { Container, contentGutter, desktopContentPadding } from "@/components/ui/layout";
 import { compactHeaderBrand, compactHeaderRow, compactHeaderSurface } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
 const desktop = media.desktop;
-const mobileTabHeight = "3rem";
+const mobileTabHeight = "var(--form-control-height, 40px)";
 const focusRing = css`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -130,7 +131,7 @@ export const DesktopNav = styled.nav`
 export const TopNavList = styled.ul`
   display: flex;
   flex-wrap: nowrap;
-  align-items: stretch;
+  align-items: center;
   gap: ${({ theme }) => theme.space.xs};
   margin: 0;
   padding: 0;
@@ -144,6 +145,7 @@ export const TopNavList = styled.ul`
  * page uses a filled selection; pointer and keyboard feedback share the palette.
  */
 const topLink = css<{ $tone?: AccentName }>`
+  ${controlBodyHeight}
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -180,7 +182,7 @@ const tabLink = css`
   justify-content: center;
   gap: 2px;
   min-block-size: ${mobileTabHeight};
-  padding: 4px 6px;
+  padding: 2px 6px;
   color: ${({ theme }) => theme.header.mutedText};
   font-size: 0.6875rem;
   line-height: 1.25;
@@ -262,7 +264,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   a {
     display: flex;
     min-inline-size: 0;
-    min-block-size: 2.5rem;
+    min-block-size: var(--form-control-height, 40px);
     align-items: center;
     gap: 8px;
     padding-inline: ${({ theme }) => theme.space.md};
@@ -278,7 +280,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   }
   ${({ $mobile }) => $mobile && css`
     a {
-      min-block-size: 2.75rem;
+      min-block-size: var(--form-control-height, 40px);
       font-size: 0.875rem;
       > svg { inline-size: 1.375rem; block-size: 1.375rem; }
     }
@@ -350,7 +352,7 @@ export const FooterLinks = styled.ul`
 export const FooterLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  min-block-size: 1.75rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.mutedText};
   border-radius: ${({ theme }) => theme.radius.control};

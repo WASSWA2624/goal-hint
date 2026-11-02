@@ -35,14 +35,14 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   flex: none;
   align-items: center;
   gap: 5px;
-  min-block-size: 1.625rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 9px;
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: 0.6875rem;
-  ${media.desktop} { min-block-size: 1.75rem; font-size: 0.75rem; }
+  ${media.desktop} { min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; }
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
   line-height: 1.2;
   white-space: nowrap;
@@ -114,7 +114,7 @@ const SelectFace = styled.div`
   display: inline-flex;
   align-items: center;
   min-inline-size: 0;
-  min-block-size: 1.875rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 8px 22px;
   color: ${({ theme }) => theme.color.text};
   border: 0;
@@ -126,8 +126,7 @@ const SelectFace = styled.div`
   > span > span { grid-area: 1 / 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > span > span:not([data-current]) { visibility: hidden; }
   border: 1px solid transparent;
-  @media (pointer: coarse) { min-block-size: 44px; }
-  ${controlBodyHeight} margin-block-start: 6px; padding-block: 8px;
+  ${controlBodyHeight} margin-block-start: var(--floating-label-space, 6px); padding-block: 8px;
   > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
   > label { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 30px); }
   &:focus-within > label { color: ${({ theme }) => theme.color.link}; }
@@ -171,7 +170,7 @@ const PickerSummary = styled.button`
   gap: 8px;
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: 2rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
   border: 0;
@@ -217,7 +216,7 @@ const PickerPanel = styled.div`
 /** Phones list compact 36px rows at 13px; desktop keeps its 40px rows at 15px. */
 const PickerSearch = styled.input`
   min-inline-size: 0;
-  min-block-size: 2.25rem;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
   border: 0;
@@ -227,7 +226,7 @@ const PickerSearch = styled.input`
   font-size: 0.8125rem;
   ${controlFeedback}
   ${focusRing}
-  ${media.desktop} { min-block-size: 2.5rem; font-size: 0.9375rem; }
+  ${media.desktop} { min-block-size: var(--form-control-height, 40px); font-size: 0.9375rem; }
 `;
 const PickerList = styled.ul`
   min-inline-size: 0;
@@ -241,7 +240,7 @@ const PickerList = styled.ul`
     display: flex;
     align-items: center;
     gap: 6px;
-    min-block-size: 2.25rem;
+    min-block-size: var(--form-control-height, 40px);
     padding-inline: ${({ theme }) => theme.space.sm};
     border-radius: ${({ theme }) => theme.radius.small};
     font-size: 0.8125rem;
@@ -254,7 +253,7 @@ const PickerList = styled.ul`
     > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
     ${media.desktop} {
       gap: ${({ theme }) => theme.space.sm};
-      min-block-size: 2.5rem;
+      min-block-size: var(--form-control-height, 40px);
       font-size: 0.9375rem;
       > input { inline-size: 1.125rem; block-size: 1.125rem; }
       > img { inline-size: 20px; block-size: 20px; }

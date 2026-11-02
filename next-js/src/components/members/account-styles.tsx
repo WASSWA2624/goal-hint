@@ -10,8 +10,8 @@ export const AccountCard = styled.section`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   font-size: 0.875rem; line-height: 1.45;
-  button, a { min-block-size: 44px; }
-  input { min-block-size: 48px; font-size: 16px; }
+  button, a { min-block-size: var(--form-control-height, 40px); }
+  input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"]) { min-block-size: var(--form-control-height, 40px); font-size: 16px; }
   button { font-size: 0.875rem; }
   h2 { font-size: 1rem; font-weight: 500; margin: 0 0 12px; }
 `;
@@ -39,7 +39,7 @@ export const AccountActions = styled.div`
 `;
 export const AccountSessionInfo = styled.details`
   position: relative; color: ${({ theme }) => theme.color.link};
-  > summary { display: grid; place-items: center; inline-size: 44px; min-block-size: 44px; cursor: pointer; list-style: none; }
+  > summary { display: grid; place-items: center; inline-size: 44px; min-block-size: var(--form-control-height, 40px); cursor: pointer; list-style: none; }
   > summary::-webkit-details-marker { display: none; }
   > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   > summary svg { inline-size: 18px; block-size: 18px; }
@@ -53,7 +53,7 @@ export const AccountSupport = styled.nav`
   border-block-start: 0; padding-block-start: 8px;
   > * { min-inline-size: 0; }
   form { margin: 0; }
-  a, button { display: flex; align-items: center; min-block-size: 44px; padding: 4px 0; border: 0; background: transparent;
+  a, button { display: flex; align-items: center; min-block-size: var(--form-control-height, 40px); padding: 4px 0; border: 0; background: transparent;
     border-radius: ${({ theme }) => theme.radius.none};
     color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; font-weight: 400; text-decoration: underline;
     text-underline-offset: 3px; white-space: normal; }
@@ -61,7 +61,7 @@ export const AccountSupport = styled.nav`
   > :last-child button { inline-size: 100%; }
 `;
 export const AccountCodeField = styled.div`
-  input { text-align: center; font-size: 1.375rem; letter-spacing: 0.28em; min-block-size: 60px; }
+  input { text-align: center; font-size: 1.375rem; letter-spacing: 0.28em; min-block-size: var(--form-control-height, 40px); }
 `;
 export const AccountSteps = styled.ol`
   display: flex; flex-wrap: wrap; gap: 10px;

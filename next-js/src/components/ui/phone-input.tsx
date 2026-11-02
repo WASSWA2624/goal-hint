@@ -213,7 +213,7 @@ const CountryMenu = styled.div`
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const CountrySearch = styled.input`
-  box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: 44px; padding: 8px 10px;
+  box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: var(--form-control-height, 40px); padding: 8px 10px;
   border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 1rem;
   color: ${({ theme }) => theme.color.text}; ${textFieldSurface} ${focusTreatment}
 `;

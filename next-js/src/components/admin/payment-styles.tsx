@@ -57,7 +57,7 @@ export const StatusTabs = styled(Segmented)`
   ${media.belowDesktop} {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    && > a { min-block-size: 48px; padding: 4px; font-size: 0.78125rem; line-height: 1.2; text-align: center; white-space: normal; }
+    && > a { min-block-size: var(--form-control-height, 40px); padding: 4px; font-size: 0.78125rem; line-height: 1.2; text-align: center; white-space: normal; }
   }
 `;
 
@@ -68,8 +68,8 @@ export const PaymentFeedback = styled(RecordFeedback)`
 export const RefreshSquare = styled.button<{ $changed: boolean }>`
   display: grid;
   place-items: center;
-  inline-size: ${({ theme }) => theme.control.minHeight};
-  block-size: ${({ theme }) => theme.control.minHeight};
+  inline-size: var(--form-control-height, 40px);
+  block-size: var(--form-control-height, 40px);
   padding: 0;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -99,7 +99,7 @@ export const QueueFilters = styled.div`
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     label { min-inline-size: 0; }
     label > span { ${visuallyHidden} }
-    select { ${adminControl} min-block-size: 28px; padding: 2px 18px 2px 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
+    select { ${adminControl} min-block-size: var(--form-control-height, 40px); padding: 2px 18px 2px 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; }
   }
 `;
 export const SearchField = styled(FloatingField)`min-inline-size: 0;`;
@@ -247,8 +247,8 @@ export const Stepper = styled.div`
   > button {
     display: grid;
     place-items: center;
-    inline-size: 44px;
-    block-size: 44px;
+    inline-size: var(--form-control-height, 40px);
+    block-size: var(--form-control-height, 40px);
     padding: 0;
     border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
@@ -261,7 +261,7 @@ export const Stepper = styled.div`
     ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
   }
   > span { padding: 0 2px; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  ${media.desktop} { border-radius: ${({ theme }) => theme.radius.control}; > button { inline-size: 28px; block-size: 28px; border-radius: ${({ theme }) => theme.radius.control}; } > span { padding-inline: 4px; font-size: 0.75rem; } }
+  ${media.desktop} { border-radius: ${({ theme }) => theme.radius.control}; > button { border-radius: ${({ theme }) => theme.radius.control}; } > span { padding-inline: 4px; font-size: 0.75rem; } }
 `;
 export const ReviewMeta = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
@@ -406,7 +406,7 @@ export const ZoneDrawer = styled(Drawer)`
   border-block-end: 0;
   border-block-start: 0;
   &:last-child { border-block-end: 0; }
-  > summary { min-block-size: 44px; padding: 0 ${zonePadding}; }
+  > summary { min-block-size: var(--form-control-height, 40px); padding: 0 ${zonePadding}; }
   > summary > svg:last-child { color: ${({ theme }) => theme.color.mutedText}; }
   > div { padding: 2px ${zonePadding} 14px; }
   ${media.belowDesktop} {

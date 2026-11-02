@@ -188,7 +188,7 @@ export const Segmented = styled.div`
     align-items: center;
     justify-content: center;
     gap: 6px;
-    min-block-size: ${({ theme }) => theme.control.minHeight};
+    min-block-size: var(--form-control-height, 40px);
     padding: 0 12px;
     border: 0;
     border-inline-end: 0;
@@ -207,7 +207,7 @@ export const Segmented = styled.div`
   > [aria-current="page"], > [aria-selected="true"], > [aria-pressed="true"] { ${segmentSelected} }
   > a:focus-visible, > button:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
   ${media.hover} { > a:hover, > button:hover { color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.rowHover}; } }
-  ${media.desktop} { > a, > button { flex: 0 0 auto; min-block-size: 40px; } }
+  ${media.desktop} { > a, > button { flex: 0 0 auto; min-block-size: var(--form-control-height, 40px); } }
 `;
 
 /**
@@ -223,7 +223,7 @@ export const Drawer = styled.details<{ $tone?: "danger"; $plain?: boolean }>`
     display: flex;
     align-items: center;
     gap: 8px;
-    min-block-size: ${({ theme }) => theme.control.minHeight};
+    min-block-size: var(--form-control-height, 40px);
     padding: 6px 14px;
     color: ${({ theme, $tone }) => $tone === "danger" ? theme.color.outcome.incorrect.text : theme.color.link};
     font-size: ${({ theme }) => theme.typography.scale.emphasis};
@@ -243,7 +243,7 @@ export const Drawer = styled.details<{ $tone?: "danger"; $plain?: boolean }>`
     &&, &&:last-child { border-block-end: 0; }
     && > summary { padding-inline: 0; }
     && > div { padding: 4px 0 0; }
-    ${media.desktop} { && > summary { min-block-size: 36px; } }
+    ${media.desktop} { && > summary { min-block-size: var(--form-control-height, 40px); } }
   `}
 `;
 /** A muted note inside a drawer summary ("all 5 clear"). */
@@ -364,7 +364,7 @@ export const TextAction = styled.button<{ $tone?: "danger" }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   padding: 0 4px;
   border: 0;
   color: ${({ theme, $tone }) => $tone === "danger" ? theme.color.outcome.incorrect.text : theme.color.link};
@@ -378,7 +378,6 @@ export const TextAction = styled.button<{ $tone?: "danger" }>`
   &:disabled { cursor: not-allowed; opacity: 0.55; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   ${media.hover} { &:hover:not(:disabled) { text-decoration: underline; } }
-  ${media.desktop} { min-block-size: 36px; }
 `;
 
 /**
@@ -416,7 +415,7 @@ const ResponsiveToggle = styled.button`
   align-items: center;
   gap: 8px;
   inline-size: 100%;
-  min-block-size: 48px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 0 14px;
   border: 0;
   color: ${({ theme }) => theme.color.link};

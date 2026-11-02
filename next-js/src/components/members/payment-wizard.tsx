@@ -39,16 +39,16 @@ const Card = styled.section`
     font-size: 16px;
     line-height: 22px;
   }
-  [data-phone-country-trigger] { font-size: 14px; min-block-size: 44px; }
+  [data-phone-country-trigger] { font-size: 14px; min-block-size: var(--form-control-height, 40px); }
   ${FileField} { gap: 6px; }
   ${FileField} legend { margin-block-end: 4px; }
   ${FileChoices} { gap: 8px; }
-  ${FileBox} { min-block-size: 44px; padding: 8px; font-size: 15px; line-height: 21px; }
+  ${FileBox} { min-block-size: var(--form-control-height, 40px); padding: 8px; font-size: 15px; line-height: 21px; }
   ${Preview}, ${ConfirmPreview} { max-block-size: 96px; }
   [data-payment-review] ${ConfirmPreview} { max-block-size: 72px; }
   ${Note} { font-size: 14px; line-height: 20px; }
   ${FieldMessage}, [data-evidence-findings] li, [data-reading-progress] li { font-size: 14px; line-height: 20px; }
-  ${RowButton} { min-block-size: 44px; font-size: 14px; }
+  ${RowButton} { min-block-size: var(--form-control-height, 40px); font-size: 14px; }
   ${Assent} { align-items: flex-start; padding-block: 4px; font-size: 15px; line-height: 21px; }
   ${Assent} input { inline-size: 18px; block-size: 18px; min-block-size: 18px; margin-block-start: 1px; }
   @media (max-width: 400px) { padding: 14px 12px; }
@@ -154,7 +154,7 @@ export const WizardActions = styled.div`
   border-block-start: 0;
   > button {
     inline-size: 100%;
-    min-block-size: 46px;
+    min-block-size: var(--form-control-height, 40px);
     padding: 8px 12px;
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: 16px;
@@ -231,7 +231,7 @@ export const WizardConfirm = styled.label`
   align-items: flex-start;
   gap: 8px;
   min-inline-size: 0;
-  min-block-size: 44px;
+  min-block-size: var(--form-control-height, 40px);
   padding-block: 4px;
   font-size: 15px;
   line-height: 21px;
@@ -273,7 +273,7 @@ export const WizardReceipt = styled.div`
 `;
 
 export const WizardEdit = styled(Button)`
-  && { min-block-size: 44px; min-inline-size: 44px; padding: 4px 6px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 14px; line-height: 20px; }
+  && { min-block-size: var(--form-control-height, 40px); min-inline-size: 44px; padding: 4px 6px; border-radius: ${({ theme }) => theme.radius.control}; font-size: 14px; line-height: 20px; }
 `;
 
 export const WizardScreenshot = styled.div`
@@ -289,7 +289,7 @@ export const WizardScreenshot = styled.div`
     ${focusTreatment}
   }
   > a img { display: block; inline-size: auto; max-inline-size: 96px; max-block-size: 72px; object-fit: contain; }
-  > button { min-block-size: 44px; font-size: 14px; }
+  > button { min-block-size: var(--form-control-height, 40px); font-size: 14px; }
 `;
 
 export const WizardPayee = styled.div`
@@ -308,13 +308,13 @@ export const WizardMethod = styled.div`
   > ${PaymentTransfer} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
   ${WalletChoices} { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   ${WalletChoice}, ${Wallet} { border-radius: ${({ theme }) => theme.radius.control}; }
-  ${WalletChoice} > span { justify-content: flex-start; gap: 10px; min-block-size: 54px; padding: 8px 10px; font-size: 16px; line-height: 22px; }
+  ${WalletChoice} > span { justify-content: flex-start; gap: 10px; min-block-size: var(--form-control-height, 40px); padding: 8px 10px; font-size: 16px; line-height: 22px; }
   ${WalletChoice} > span > svg:last-child { margin-inline-start: auto; }
   ${Wallet} { inline-size: 100%; gap: 6px 10px; padding: 12px; }
   ${WalletMeta} { font-size: 14px; line-height: 20px; }
   ${WalletNumber} { font-size: 24px; line-height: 30px; }
   ${WalletNumber} > ${WalletMeta} { display: block; margin-block-end: 4px; }
-  ${CopyButton} { min-block-size: 44px; font-size: 15px; }
+  ${CopyButton} { min-block-size: var(--form-control-height, 40px); font-size: 15px; }
   @media (max-width: 480px) {
     ${Wallet} { grid-template-columns: minmax(0, 1fr); }
     ${CopyButton} { grid-column: 1; grid-row: auto; inline-size: 100%; }

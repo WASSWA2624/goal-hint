@@ -8,6 +8,8 @@
 - Keep web screens and business logic in `next-js/`; the Flutter app is a minimal
   host for that shared web application.
 - Keep each application's numbered implementation plans in its own `dev-plan/`.
+- Reuse the shared control height and row layout across screens. Do not add
+  viewport-specific control heights; see `next-js/docs/control-uniformity.md`.
 
 ## Git workflow
 

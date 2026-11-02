@@ -190,7 +190,7 @@ const SidebarControls = styled.div`
   display: flex; align-items: center; gap: 2px; margin-inline-start: auto;
 `;
 const SidebarButton = styled.button`
-  display: grid; place-items: center; inline-size: 28px; block-size: 28px; padding: 0;
+  display: grid; place-items: center; inline-size: var(--form-control-height, 40px); block-size: var(--form-control-height, 40px); padding: 0;
   border: 0; border-radius: ${({ theme }) => theme.radius.control}; color: ${({ theme }) => theme.color.mutedText}; background: none; cursor: pointer;
   > svg { font-size: 1rem; }
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.rowHover}; } }

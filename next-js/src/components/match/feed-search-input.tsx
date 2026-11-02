@@ -71,7 +71,7 @@ const Field = styled.div.attrs<{ "data-text-field-frame"?: string }>({ "data-tex
       > button > svg { font-size: 0.9375rem; }
     }
   `}
-  position: relative; margin-block-start: 6px;
+  position: relative; margin-block-start: var(--floating-label-space, 6px);
   ${controlHeight} box-sizing: border-box;
   && > input, && > button { min-block-size: calc(var(--form-control-height) - 2px); block-size: calc(var(--form-control-height) - 2px); }
   && > label { ${floatingLabel} max-inline-size: calc(100% - 100px); }

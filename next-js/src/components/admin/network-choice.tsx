@@ -67,7 +67,7 @@ const Choice = styled.label`
   align-items: center;
   gap: 6px;
   min-inline-size: 0;
-  min-block-size: 44px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 8px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};

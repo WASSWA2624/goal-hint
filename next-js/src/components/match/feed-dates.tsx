@@ -55,7 +55,7 @@ const PresetList = styled.div`
   > a {
     display: inline-grid;
     place-items: center;
-    min-block-size: 2.125rem;
+    min-block-size: var(--form-control-height, 40px);
     padding-inline: 12px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
@@ -116,7 +116,7 @@ const dayCell = css`
   place-content: center;
   justify-items: center;
   gap: 0;
-  min-block-size: 2.75rem;
+  min-block-size: var(--form-control-height, 40px);
   border-radius: ${({ theme }) => theme.radius.control};
   font-variant-numeric: tabular-nums;
   line-height: 1.1;

@@ -135,7 +135,7 @@ const PlainDrawer = styled.details`
     display: flex;
     align-items: center;
     gap: 8px;
-    min-block-size: ${({ theme }) => theme.control.minHeight};
+    min-block-size: var(--form-control-height, 40px);
     color: ${({ theme }) => theme.color.link};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none;
@@ -146,7 +146,7 @@ const PlainDrawer = styled.details`
   }
   &[open] > summary { margin-block-end: 8px; > svg { transform: rotate(180deg); } }
   @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
-  ${media.desktop} { > summary { min-block-size: 36px; } }
+  ${media.desktop} { > summary { min-block-size: var(--form-control-height, 40px); } }
 `;
 const GrantButton = styled(ActionButton)<{ $inline: boolean }>`
   inline-size: 100%;
@@ -307,14 +307,14 @@ const CodeDetails = styled(RecordDetails)`${media.belowDesktop} { order: 1; }`;
 const GrantPanel = styled.div`min-inline-size: 0; &[hidden] { display: none; } ${media.belowDesktop} { background: ${({ theme }) => theme.color.surface}; border: 0; border-radius: ${({ theme }) => theme.radius.surface}; }`;
 const Facts = styled(FactList)`padding: 12px;`;
 const MobileCodeDetails = styled(PlainDrawer)`
-  > summary { min-block-size: 44px; }
+  > summary { min-block-size: var(--form-control-height, 40px); }
   > [data-record-actions] { margin-block-start: 12px; }
 `;
 const SearchForm = styled.form`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; min-inline-size: 0;
   > :first-child { grid-column: 1 / -1; }
   > button > svg { flex: none; font-size: 1rem; }
-  ${media.desktop} { input, select { min-block-size: 34px; font-size: 0.8125rem; } > button { min-block-size: 32px; } }
+  ${media.desktop} { input, select { min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; } > button { min-block-size: var(--form-control-height, 40px); } }
 
   ${controlRow}
 `;

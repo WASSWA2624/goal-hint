@@ -73,7 +73,7 @@ const ViewAll = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   margin-inline-end: -6px;
   padding-inline: 6px;
   color: ${({ theme }) => theme.color.link};
@@ -82,7 +82,6 @@ const ViewAll = styled(Link)`
   > svg { flex: none; font-size: 1rem; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
   ${media.hover} { &:hover { text-decoration: underline; } }
-  ${media.desktop} { min-block-size: 36px; }
 `;
 const QueueRow = styled.li`
   display: grid;
@@ -107,7 +106,7 @@ const Review = styled(Link)`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 14px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
@@ -118,7 +117,7 @@ const Review = styled(Link)`
   white-space: nowrap;
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   ${media.hover} { &:hover { text-decoration: underline; } }
-  ${media.desktop} { min-block-size: 36px; padding-inline: 6px;  background: ${({ theme }) => theme.color.brandSoft}; }
+  ${media.desktop} { min-block-size: var(--form-control-height, 40px); padding-inline: 6px;  background: ${({ theme }) => theme.color.brandSoft}; }
 `;
 const QueueMessage = styled.p`
   padding: 14px;
@@ -144,7 +143,7 @@ const Totals = styled.details`
     display: flex;
     align-items: center;
     gap: 8px;
-    min-block-size: ${({ theme }) => theme.control.minHeight};
+    min-block-size: var(--form-control-height, 40px);
     color: ${({ theme }) => theme.color.link};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none;
@@ -156,7 +155,7 @@ const Totals = styled.details`
   &[open] > summary > svg { transform: rotate(180deg); }
   > p { max-inline-size: 34rem; padding-block-end: 4px; color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
   @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
-  ${media.desktop} { > summary { min-block-size: 36px; } }
+  ${media.desktop} { > summary { min-block-size: var(--form-control-height, 40px); } }
   @container (min-width: 34rem) {
     flex: 1 1 16rem;
     > summary { justify-content: flex-end; > svg { margin-inline-start: 0; } }

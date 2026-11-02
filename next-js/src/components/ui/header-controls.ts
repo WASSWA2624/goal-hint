@@ -24,8 +24,8 @@ export const compactHeaderControl = css`
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-inline-size: 2.75rem;
-  min-block-size: 1.75rem;
+  min-inline-size: var(--form-control-height, 40px);
+  min-block-size: var(--form-control-height, 40px);
   padding: 0 6px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -38,8 +38,6 @@ export const compactHeaderControl = css`
   > svg { flex: none; font-size: 1rem; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
   ${media.desktop} {
-    min-inline-size: 2rem;
-    min-block-size: 1.75rem;
     padding-inline: 9px;
     font-size: 0.8125rem;
   }
@@ -48,13 +46,12 @@ export const compactHeaderControl = css`
 /** Borderless app-bar actions share a quiet fill and clear pointer/keyboard feedback. */
 export const compactHeaderIconControl = css`
   ${compactHeaderControl}
-  inline-size: 2.75rem;
+  inline-size: var(--form-control-height, 40px);
   padding: 0 4px;
   border: 0;
   color: ${({ theme }) => theme.header.accent};
   background: ${({ theme }) => theme.mode === "light" ? theme.color.field : theme.color.brandSoft};
   transition: background-color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing}, color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing};
-  ${media.desktop} { inline-size: 2rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; } }
   &:active, &:focus-visible { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; }
   &:focus-visible { outline-offset: -3px; }
@@ -67,7 +64,7 @@ export const compactHeaderBrand = css`
   flex: none;
   align-items: center;
   min-inline-size: 0;
-  min-block-size: 2.75rem;
+  min-block-size: var(--form-control-height, 40px);
   margin-inline-start: ${({ theme }) => theme.space.sm};
   padding: 0;
   text-decoration: none;

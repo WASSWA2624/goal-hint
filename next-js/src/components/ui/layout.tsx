@@ -2,6 +2,7 @@
 
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
+import { controlRow } from "./control-layout";
 
 /** The app shell owns its outer gutter; standalone containers retain their own inset. */
 export const contentGutter = css`var(--app-content-gutter, ${({ theme }) => theme.layout.gutter})`;
@@ -67,6 +68,7 @@ export const Inline = styled.div`
   ${media.desktop} { gap: ${({ theme }) => theme.space.md}; }
 
   > * { min-inline-size: 0; }
+  ${controlRow}
 `;
 
 export const Surface = styled.section`

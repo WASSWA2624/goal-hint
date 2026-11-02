@@ -27,12 +27,12 @@ export const formSurface = css`
   p { overflow-wrap: anywhere; }
   textarea { min-block-size: 64px; }
   label:has(> input[type="checkbox"]) {
-    display: flex; align-items: flex-start; gap: 10px; min-block-size: 44px; padding-block: 10px;
+    display: flex; align-items: flex-start; gap: 10px; min-block-size: var(--form-control-height, 40px); padding-block: 10px;
     font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: normal; line-height: 1.45; cursor: pointer;
   }
   input[type="checkbox"] { inline-size: 18px; block-size: 18px; flex: none; margin: 1px 0 0; accent-color: ${({ theme }) => theme.color.link}; }
   details:not([class]) > summary {
-    min-block-size: 44px; padding-block: 11px; color: ${({ theme }) => theme.color.link};
+    min-block-size: var(--form-control-height, 40px); padding-block: 11px; color: ${({ theme }) => theme.color.link};
     font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
   }
 `;
@@ -61,7 +61,7 @@ export const BackLink = styled(Link)`
   align-items: center;
   gap: 4px;
   justify-self: start;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
+  min-block-size: var(--form-control-height, 40px);
   margin-block: -6px -4px;
   padding-inline-end: 8px;
   color: ${({ theme }) => theme.color.link};
@@ -118,7 +118,7 @@ export const QuickActions = styled.div`
   ${media.desktop} {
     grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     padding: 14px 18px 16px;
-    > button { min-block-size: 40px; }
+    > button { min-block-size: var(--form-control-height, 40px); }
     > button:first-child { grid-column: auto; }
   }
 `;
@@ -184,7 +184,7 @@ export const History = styled.ul`
 export const PlainDrawer = styled.details`
   min-inline-size: 0;
   > summary {
-    display: flex; align-items: center; gap: 8px; min-block-size: 44px;
+    display: flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px);
     color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold};
     list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
@@ -194,7 +194,7 @@ export const PlainDrawer = styled.details`
   &[open] > summary > svg { transform: rotate(180deg); }
   > div { display: grid; gap: 12px; min-inline-size: 0; padding-block: 4px; }
   @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
-  ${media.desktop} { > summary { min-block-size: 36px; } }
+  ${media.desktop} { > summary { min-block-size: var(--form-control-height, 40px); } }
 `;
 export const Mono = styled.p`
   color: ${({ theme }) => theme.color.mutedText};

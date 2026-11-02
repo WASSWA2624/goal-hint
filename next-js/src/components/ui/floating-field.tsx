@@ -45,7 +45,7 @@ export function FloatingField({ label, children, action, leading, trailing, hint
 
 const Root = styled.div`display: grid; align-self: start; align-content: start; gap: 5px; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%;`;
 const Frame = styled.div`
-  position: relative; min-inline-size: 0; margin-block-start: 6px;
+  position: relative; min-inline-size: 0; margin-block-start: var(--floating-label-space, 6px);
   && > label { ${floatingLabel} }
   &&& > input, &&& > select, &&& > textarea {
     ${floatingControl}

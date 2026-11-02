@@ -14,14 +14,14 @@ export type SelectMenuOption = Readonly<{ value: string; label: string; disabled
 export type SelectMenuProps = Readonly<{
   value: string; options: readonly SelectMenuOption[]; label: string; onValueChange: (value: string) => void;
 }> & Omit<ComponentPropsWithoutRef<"button">, "children" | "value" | "onChange" | "onClick" | "onKeyDown" | "onSelect" | "role">;
-const Root = styled.div`
-  position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: 6px;
+const Root = styled.div.attrs<{ "data-control-field"?: string }>({ "data-control-field": "" })`
+  position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: var(--floating-label-space, 6px);
   > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
   &:focus-within > [data-floating-outline] { ${floatingOutlineFocus} }
 `;
 const Trigger = styled.button`
   display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
-  inline-size: 100%; min-inline-size: 0; min-block-size: 34px; padding: 6px 10px;
+  inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 6px 10px;
   color: ${({ theme }) => theme.color.text}; border: 0;
   border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: 0.75rem; text-align: start; cursor: pointer;
   ${selectSurface} ${focusRing}
@@ -31,7 +31,6 @@ const Trigger = styled.button`
   > svg { flex: none; color: ${({ theme }) => theme.color.brand}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
   border: 1px solid transparent;
-  @media (pointer: coarse) { min-block-size: 44px; }
   &:focus-visible { outline: none; }
   position: relative; ${controlBodyHeight} padding-block: 8px;
   > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - 40px); }
@@ -47,7 +46,7 @@ const Options = styled.ul`
   box-shadow: ${({ theme }) => theme.shadow.popover}; scrollbar-width: thin;
   > li {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    min-block-size: 34px; padding: 7px 10px; border: 0; border-radius: ${({ theme }) => theme.radius.small};
+    min-block-size: var(--form-control-height, 40px); padding: 7px 10px; border: 0; border-radius: ${({ theme }) => theme.radius.small};
     font-size: 0.75rem; line-height: 1.35; cursor: pointer;
     > svg { flex: none; inline-size: 14px; block-size: 14px; visibility: hidden; }
     &[aria-selected="true"] {
@@ -58,7 +57,6 @@ const Options = styled.ul`
     &[data-active="true"] { background: ${({ theme }) => theme.color.brandSoft}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     &[data-active="true"]:not([aria-selected="true"]) { background: ${({ theme }) => theme.color.rowHover}; }
     &[aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
-    @media (pointer: coarse) { min-block-size: 44px; }
   }
 `;
 

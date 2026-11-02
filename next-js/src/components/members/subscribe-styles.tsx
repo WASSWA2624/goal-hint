@@ -20,10 +20,10 @@ export const SubscribeLayout = styled.div`
 `;
 export const Note = styled.p`${smallText}`;
 export const SubmitNote = styled(Note)<{ $warning?: boolean }>`${({ theme, $warning }) => $warning && `color: ${theme.color.outcome.incorrect.text};`}`;
-export const PlanSwitch = styled(Button)`&& { min-block-size: 32px; padding: 2px 6px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }`;
+export const PlanSwitch = styled(Button)`&& { min-block-size: var(--form-control-height, 40px); padding: 2px 6px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }`;
 export const Row = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
-  min-block-size: 44px; min-inline-size: 0; font-size: 12px; line-height: 18px;
+  min-block-size: var(--form-control-height, 40px); min-inline-size: 0; font-size: 12px; line-height: 18px;
   ${icons}
 `;
 export const RowButton = styled(Button)`
@@ -37,7 +37,7 @@ export const FieldWithAction = styled.div`
   > div:first-child > label { grid-column: 1 / -1; }
   > div:first-child > :not(label) { grid-column: 1; }
   > div:first-child > [id$="-hint"], > div:first-child > [id$="-error"] { grid-column: 1 / -1; }
-  > button { grid-column: 2; grid-row: 2; min-block-size: 44px; }
+  > button { grid-column: 2; grid-row: 2; min-block-size: var(--form-control-height, 40px); }
   ${icons}
 `;
 
@@ -107,7 +107,7 @@ export const WalletChoice = styled.label`
   border-radius: ${({ theme }) => theme.radius.control};
   &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; }
   input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
-  > span { display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
+  > span { display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: var(--form-control-height, 40px); padding: 6px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
   [data-payment-logo] { inline-size: 40px; block-size: 24px; }
   > span > svg { flex-shrink: 0; inline-size: 12px; block-size: 12px; visibility: hidden; }
   input:checked + span { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; box-shadow: none; }
@@ -130,8 +130,8 @@ export const PaymentTransfer = styled.div`
   > ${Wallet} { flex: 2 1 15rem; align-content: center; }
   > ${Note} { align-self: center; }
 `;
-export const Action = styled(Button)`font-size: 12px; gap: 6px; min-block-size: 44px; ${icons}`;
-export const ActionLink = styled(ButtonLink)`font-size: 12px; gap: 6px; min-block-size: 44px; ${icons}`;
+export const Action = styled(Button)`font-size: 12px; gap: 6px; min-block-size: var(--form-control-height, 40px); ${icons}`;
+export const ActionLink = styled(ButtonLink)`font-size: 12px; gap: 6px; min-block-size: var(--form-control-height, 40px); ${icons}`;
 export const CopyButton = styled(Action)`grid-column: 2; grid-row: 1 / 3; padding-inline: 8px;`;
 export const MenuLink = styled(ActionLink)`justify-self: start; padding-inline: 0;`;
 export const Locked = styled.p`display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: ${({ theme }) => theme.radius.surface}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText} ${icons}`;
@@ -139,7 +139,7 @@ export const StatusBox = styled.div`
   display: grid; gap: 8px; min-inline-size: 0; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 13px; line-height: 20px;
   border-radius: ${({ theme }) => theme.radius.surface};
   p { margin: 0; }
-  ${RowButton} { justify-self: start; min-block-size: 44px; }
+  ${RowButton} { justify-self: start; min-block-size: var(--form-control-height, 40px); }
 `;
 /** Doubled specificity: the account card styles its own headings. */
 export const StatusTitle = styled.h3`
@@ -163,7 +163,7 @@ export const StatusFacts = styled.dl`
 export const ReportForm = styled.form<{ $paired?: boolean }>`
   display: grid; gap: 10px; min-inline-size: 0;
   label { font-size: 12px; line-height: 18px; }
-  input:not([type="checkbox"], [type="radio"]) { min-block-size: 44px; }
+  input:not([type="checkbox"], [type="radio"]) { min-block-size: var(--form-control-height, 40px); }
   > div { min-inline-size: 0; }
   ${({ $paired }) => $paired && css`${media.desktop} {
     grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px;
@@ -184,7 +184,7 @@ export const ConfirmPreview = styled.img`display: block; max-inline-size: 7rem; 
 export const PasteButton = styled(Button)`&& { gap: 6px; padding-inline: 10px; font-size: 13px; } ${icons}`;
 export const FileChoices = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0;`;
 export const FileBox = styled.label`
-  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: var(--form-control-height, 40px); padding: 8px; cursor: pointer;
   border: 0; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;
   border-radius: ${({ theme }) => theme.radius.control};
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
@@ -194,18 +194,18 @@ export const FileBox = styled.label`
 `;
 export const Preview = styled.img`max-inline-size: 100%; max-block-size: 12rem; object-fit: contain; justify-self: start;`;
 export const Assent = styled.label`
-  display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 12px; line-height: 18px;
+  display: flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px); font-size: 12px; line-height: 18px;
   input { inline-size: 16px; block-size: 16px; min-block-size: 16px; margin: 0; flex-shrink: 0; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
 // aria-disabled keeps a blocked Submit focusable so its reason is read, while looking and acting disabled.
 export const Submit = styled(Button)`
-  inline-size: 100%; min-block-size: 44px; font-size: 13px; ${icons}
+  inline-size: 100%; min-block-size: var(--form-control-height, 40px); font-size: 13px; ${icons}
   &[aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};
      cursor: not-allowed; }
 `;
 export const Disclosure = styled.details`
   min-inline-size: 0;
-  > summary { display: flex; align-items: center; gap: 6px; min-block-size: 44px; list-style: none; cursor: pointer; color: ${({ theme }) => theme.color.link}; font-size: 12px; line-height: 18px; ${icons}
+  > summary { display: flex; align-items: center; gap: 6px; min-block-size: var(--form-control-height, 40px); list-style: none; cursor: pointer; color: ${({ theme }) => theme.color.link}; font-size: 12px; line-height: 18px; ${icons}
     &::-webkit-details-marker { display: none; }
     &:focus-visible { ${focusRing} }
   }

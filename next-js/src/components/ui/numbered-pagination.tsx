@@ -29,7 +29,7 @@ export function numberedPaginationLabels(messages: Pick<Messages, "text" | "numb
 
 const Frame = styled.nav<{ $compact: boolean }>`
   --pagination-min-cell: 2rem;
-  --pagination-cell-height: 2rem;
+  --pagination-cell-height: var(--form-control-height, 40px);
   --pagination-gap: 4px;
   --pagination-cell-width: max(var(--pagination-min-cell), calc(var(--pagination-digits) * 1ch + 12px));
   --pagination-step: calc(var(--pagination-cell-width) + var(--pagination-gap));
@@ -45,7 +45,6 @@ const Frame = styled.nav<{ $compact: boolean }>`
   > noscript { display: none; }
   ${media.desktop} {
     --pagination-min-cell: ${({ $compact }) => $compact ? "1.75rem" : "2.25rem"};
-    --pagination-cell-height: var(--pagination-min-cell);
     --pagination-gap: ${({ $compact }) => $compact ? "4px" : "6px"};
     font-size: ${({ $compact }) => $compact ? "0.75rem" : "0.875rem"};
   }

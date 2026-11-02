@@ -137,11 +137,11 @@ export const BuilderPanel = styled(CriteriaPanel)`
     && [data-slip-criteria-summary] { font-size: clamp(0.625rem, 3.125vw, 0.6875rem); line-height: 0.84375rem; }
     && [data-criteria-dialog] > header, && [data-criteria-dialog] > footer { padding: 8px 10px; }
     && [data-criteria-dialog] > header > h2 { font-size: 0.875rem; }
-    && [data-criteria-dialog] > header button { min-block-size: 36px; min-inline-size: 36px; }
+    && [data-criteria-dialog] > header button { min-block-size: var(--form-control-height, 40px); min-inline-size: 36px; }
     && [data-criteria-dialog] > div { padding: 10px; }
     && [data-criteria-dialog] label[for] { font-size: 0.6875rem; line-height: 1.25; }
     && [data-criteria-dialog] input:not([type="checkbox"]):not([type="hidden"]) {
-      min-block-size: 40px; padding-block: 8px; font-size: 1rem;
+      min-block-size: var(--form-control-height, 40px); padding-block: 8px; font-size: 1rem;
     }
     &&& [data-criteria-dialog] input[data-slip-numeric-field] { font-size: 0.875rem; }
     && [data-criteria-dialog] fieldset:not([data-floating-outline]) > legend { margin-block-end: 8px; }
@@ -223,7 +223,7 @@ export const CriteriaTitle = styled.span`
 export const CriteriaTrigger = styled(Button)`
   && {
     ${slipToolbarControl}
-    inline-size: 100%; min-block-size: 36px; padding-inline: 6px;
+    inline-size: 100%; min-block-size: var(--form-control-height, 40px); padding-inline: 6px;
     flex-direction: row; gap: 4px; font-weight: ${({ theme }) => theme.typography.weight.medium};
     ${filterButtonColors}
     > [data-criteria-label] { min-inline-size: 0; white-space: normal; }
@@ -239,7 +239,7 @@ export const CriteriaTrigger = styled(Button)`
     ${controlFeedback}
   }
   ${media.desktop} { && { inline-size: 100%; min-block-size: ${compactControlHeight}; padding-inline: 8px; } }
-  @media (pointer: coarse) { && { min-block-size: 44px; } }
+  @media (pointer: coarse) { && { min-block-size: var(--form-control-height, 40px); } }
 `;
 export const CriteriaSummary = styled.p`
   margin: 0; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText};
@@ -298,11 +298,10 @@ export const MarketChoices = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr);
 `;
 export const MarketChoice = styled.label`
-  display: flex; align-items: center; gap: 6px; min-inline-size: 0; min-block-size: 1.75rem;
+  display: flex; align-items: center; gap: 6px; min-inline-size: 0; min-block-size: var(--form-control-height, 40px);
   padding: 4px 0; color: ${({ theme }) => theme.color.text};
   font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; cursor: pointer;
   > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
-  @media (pointer: coarse) { min-block-size: 44px; }
 `;
 export const MarketField = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-items: start; min-inline-size: 0; padding-block: 9px;
@@ -330,7 +329,7 @@ export const ActionControls = styled.div`
 `;
 export const SavedFiltersButton = styled(Button)`
   && { ${slipToolbarControl} ${filterButtonColors} flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${media.belowDesktop} { && { flex: 1 0 100%; min-block-size: 36px; } }
+  ${media.belowDesktop} { && { flex: 1 0 100%; min-block-size: var(--form-control-height, 40px); } }
 `;
 export const BuildButton = styled(Button)`
   && { ${slipToolbarControl} }

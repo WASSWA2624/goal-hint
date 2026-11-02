@@ -18,7 +18,7 @@ const Group = styled.fieldset`
   display: flex; flex-wrap: wrap; gap: 4px 12px;
   min-inline-size: 0; margin: 0; padding: 0; border: 0;
   > legend { padding: 0; margin-block-end: 2px; color: ${({ theme }) => theme.color.mutedText}; font-size: .625rem; }
-  > label { display: flex; align-items: center; gap: 5px; min-inline-size: 0; min-block-size: 24px;
+  > label { display: flex; align-items: center; gap: 5px; min-inline-size: 0; min-block-size: var(--form-control-height, 40px);
     font-size: .75rem; line-height: 1.3; cursor: pointer; }
   input { flex: none; inline-size: 14px; block-size: 14px; margin: 0; accent-color: ${({ theme }) => theme.color.accent.blue.solid}; cursor: inherit; }
   input:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }

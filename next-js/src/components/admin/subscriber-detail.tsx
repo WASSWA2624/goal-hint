@@ -272,15 +272,15 @@ const DetailCard = styled(RecordCard)<{ $compact: boolean }>`
     }
     ${QuickActions} {
       display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px;
-      > button { flex: 0 1 auto; inline-size: auto; min-block-size: 32px; padding: 4px 8px; font-size: 0.75rem; }
+      > button { flex: 0 1 auto; inline-size: auto; min-block-size: var(--form-control-height, 40px); padding: 4px 8px; font-size: 0.75rem; }
       > button:first-child { grid-column: auto; }
       > button > svg { font-size: 0.875rem; }
-      @media (pointer: coarse) { > button { min-block-size: 44px; } }
+      @media (pointer: coarse) { > button { min-block-size: var(--form-control-height, 40px); } }
     }
     ${DetailTabs} {
       display: flex; flex-wrap: nowrap; max-inline-size: 100%; overflow-x: auto; justify-self: stretch;
-      > button { flex: none; min-block-size: 32px; padding: 4px 10px; font-size: 0.75rem; }
-      @media (pointer: coarse) { > button { min-block-size: 44px; } }
+      > button { flex: none; min-block-size: var(--form-control-height, 40px); padding: 4px 10px; font-size: 0.75rem; }
+      @media (pointer: coarse) { > button { min-block-size: var(--form-control-height, 40px); } }
     }
     ${TabBody} { gap: 10px; padding: 10px; }
     ${media.belowDesktop} { ${AccountTop} { align-items: stretch; } }

@@ -26,7 +26,7 @@ const LinkRow = styled.div`
 const ShareActions = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-inline-size: 48rem;
   > button { grid-column: 1 / -1; }
-  > a, > button { min-block-size: ${({ theme }) => theme.control.minHeight}; }
+  > a, > button { min-block-size: var(--form-control-height, 40px); }
   ${media.tablet} { display: flex; flex-wrap: wrap; > a, > button { inline-size: auto; } }
 `;
 const InviteContent = styled.div`

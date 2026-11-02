@@ -1,6 +1,7 @@
 "use client";
 
 import { createGlobalStyle, css } from "styled-components";
+import { controlMetrics } from "@/components/ui/control-layout";
 
 export const GlobalStyle = createGlobalStyle`
   *,
@@ -10,6 +11,7 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   html {
+    ${controlMetrics}
     color-scheme: ${({ theme }) => theme.mode};
     font-size: 100%;
     -webkit-text-size-adjust: 100%;
@@ -120,6 +122,12 @@ export const GlobalStyle = createGlobalStyle`
     color: inherit;
     font: inherit;
   }
+
+  /* Native controls also follow the contract; embedded actions can override this baseline. */
+  :where(button, select, summary, input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"])) {
+    min-block-size: var(--form-control-height, 40px);
+  }
+  :where(summary) { align-content: center; cursor: pointer; }
 
   input[type="checkbox"], input[type="radio"] {
     appearance: none;

@@ -36,7 +36,7 @@ export const MatchRow = styled.div`
 `;
 
 export const CompactCard = styled.article`
-  --slip-header-action-size: 28px;
+  --slip-header-action-size: var(--form-control-height, 40px);
   --slip-header-action-gap: 10px;
   --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.phoneCardFrame.ruleWidth}))`};
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.inset};

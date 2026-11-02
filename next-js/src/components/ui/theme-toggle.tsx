@@ -21,7 +21,7 @@ const Option = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 2.5rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.brandSoft};

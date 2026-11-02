@@ -24,7 +24,6 @@ const compactControl = css`
   line-height: 1.3;
   ${controlFeedback}
   ${focusRing}
-  @media (pointer: coarse) { min-block-size: 44px; }
 `;
 
 export const FiltersPanel = styled.section`
@@ -159,7 +158,6 @@ export const CustomRangeButton = styled(FilterButton)`
   white-space: nowrap;
   > svg { color: ${({ theme }) => theme.color.brand}; }
   > svg { flex: none; font-size: 0.875rem; }
-  @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; font-weight: 600;  }
   ${media.belowDesktop} { padding: 2px 6px; }
 `;
@@ -243,7 +241,6 @@ export const ResetButton = styled(FilterButton)`
   background: ${({ theme }) => theme.color.surface};
   > svg { flex: none; font-size: 0.875rem; }
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};  } }
-  @media (pointer: coarse) { min-block-size: 44px; }
   ${media.desktop} { font-size: .8125rem; }
   ${media.belowDesktop} { padding: 2px 6px; }
 `;
@@ -252,14 +249,13 @@ export const RangeButton = styled(FilterButton)`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  block-size: auto; min-block-size: 24px;
+  block-size: auto; min-block-size: var(--form-control-height, 40px);
   padding: 1px 4px;
   border: 0;
   background: transparent;
   color: ${({ theme }) => theme.color.link};
   font-size: 0.6875rem;
   > svg { flex: none; font-size: 0.875rem; }
-  @media (pointer: coarse) { min-block-size: 44px; }
 `;
 
 export const AppliedSummary = styled.div`
@@ -318,7 +314,7 @@ export const DateFields = styled.div`
     ${compactControl}
     ${filterControlColors}
     inline-size: 100%;
-    min-block-size: 40px;
+    min-block-size: var(--form-control-height, 40px);
     padding: 7px 9px;
     font-size: 0.875rem;
     &[aria-invalid="true"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; background: ${({ theme }) => theme.color.outcome.incorrect.background}; }

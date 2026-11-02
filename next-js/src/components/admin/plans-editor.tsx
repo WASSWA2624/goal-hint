@@ -129,7 +129,7 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
 
   return (
     <RecordWorkspace data-plans-workspace data-analytics-ignore>
-      <RecordHead><h1>Plans</h1><Hint>{plans.filter(({ active }) => active).length} active · first active plan is preselected on Get access</Hint>
+      <RecordHead><h1>Plans</h1><Hint>{plans.filter(({ active }) => active).length} active Â· first active plan is preselected on Get access</Hint>
         {desktop && <HeaderEnd><ActionButton id="add-plan-open" type="button" disabled={busy} onClick={() => { setAdding(true); setStatus(null); }}><PlusIcon />Add plan</ActionButton></HeaderEnd>}
       </RecordHead>
       {desktop && status && <RecordFeedback><Notice $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice></RecordFeedback>}
@@ -140,10 +140,10 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
             <RecordItem id={controlId(`${plan.id}:edit`)} data-plan-row={plan.id} aria-current={!adding && selected?.id === plan.id ? "true" : undefined} aria-controls="plan-record-detail" disabled={busy}
               onClick={() => { setSelectedId(plan.id); setAdding(false); setStatus(null); setEditing({ id: plan.id, draft: draftOf(plan), errors: {} }); }}>
               <RecordItemTitle>{plan.name}</RecordItemTitle><Badge $tone={plan.active ? "good" : "muted"}>{plan.active ? "Active" : "Inactive"}</Badge>
-              <PlanRecordMeta>{formatPlanLength(plan.durationDays)} · {formatUgx(plan.priceUgx)}</PlanRecordMeta>
+              <PlanRecordMeta>{formatPlanLength(plan.durationDays)} Â· {formatUgx(plan.priceUgx)}</PlanRecordMeta>
             </RecordItem>
           </li>) : <li><RecordEmpty><LayersIcon /><strong>{search ? "No matching plans" : "No plans yet"}</strong></RecordEmpty></li>}</RecordListScroll>
-          <RecordListFooter>{listedPlans.length} plan{listedPlans.length === 1 ? "" : "s"} · {plans.filter(plan => plan.active).length} active</RecordListFooter>
+          <RecordListFooter>{listedPlans.length} plan{listedPlans.length === 1 ? "" : "s"} Â· {plans.filter(plan => plan.active).length} active</RecordListFooter>
         </RecordList>
         <RecordDetails id="plan-record-detail" aria-label="Plan details">
           <RecordCard><RecordScroll tabIndex={0} data-plans-detail-scroll>
@@ -174,7 +174,7 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
                 return <li key={plan.id} aria-label={plan.name}>
                   <PlanSummary>
                     <PlanName><strong>{plan.name}</strong><Badge $tone={plan.active ? "good" : "muted"}>{plan.active ? "Active" : "Inactive"}</Badge></PlanName>
-                    <PlanMeta>{formatPlanLength(plan.durationDays)} · {formatUgx(plan.priceUgx)}</PlanMeta>
+                    <PlanMeta>{formatPlanLength(plan.durationDays)} Â· {formatUgx(plan.priceUgx)}</PlanMeta>
                   </PlanSummary>
                   <PlanActions>
                     <Square id={controlId(`${plan.id}:up`)} type="button" disabled={busy || index === 0} onClick={() => move(index, -1)} aria-label={`Move ${plan.name} up`}><ArrowUpIcon /></Square>
@@ -224,7 +224,7 @@ function PlanFields({ draft, errors, onChange, idPrefix, disabled, hints = false
   nameRef?: RefObject<HTMLInputElement | null>;
 }) {
   const hintText: Partial<Record<keyof Draft, string>> = hints ? {
-    durationDays: `${planRules.durationDays.min}–${planRules.durationDays.max}; 1 is 24 hours`,
+    durationDays: `${planRules.durationDays.min}â€“${planRules.durationDays.max}; 1 is 24 hours`,
     priceUgx: `${formatUgx(planRules.priceUgx.min)} to ${formatUgx(planRules.priceUgx.max).replace(/^UGX /u, "")}`,
   } : {};
   const field = (key: keyof Draft) => {
@@ -302,12 +302,12 @@ const PlanActions = styled.div`
   align-items: center;
   gap: 8px;
 `;
-/** Square arrow button: 44px on phones, 36px from desktop up. */
+/** Square arrows share the control metric with adjacent plan actions. */
 const Square = styled.button`
   display: grid;
   place-items: center;
-  inline-size: ${({ theme }) => theme.control.minHeight};
-  block-size: ${({ theme }) => theme.control.minHeight};
+  inline-size: var(--form-control-height, 40px);
+  block-size: var(--form-control-height, 40px);
   padding: 0;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -318,7 +318,7 @@ const Square = styled.button`
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; opacity: 0.6; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
-  ${media.desktop} { inline-size: 36px; block-size: 36px; > svg { font-size: 1rem; } }
+  ${media.desktop} { > svg { font-size: 1rem; } }
 `;
 /** Activate and Deactivate differ in width; a fixed end column keeps the rows aligned in a wide list. */
 const ToggleAction = styled(TextAction)`

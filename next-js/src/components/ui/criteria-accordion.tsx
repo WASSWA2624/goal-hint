@@ -14,7 +14,7 @@ const Disclosure = styled.details`
   background: ${({ theme }) => theme.color.surfaceMuted};
   > summary {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    min-block-size: 3rem; padding: 7px 9px; list-style: none; cursor: pointer;
+    min-block-size: var(--form-control-height, 40px); padding: 7px 9px; list-style: none; cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > span { display: grid; gap: 3px; min-inline-size: 0; }
     strong { font-size: 0.875rem; }

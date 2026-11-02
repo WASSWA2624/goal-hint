@@ -25,7 +25,7 @@ export const CheckoutPanel = styled.section`
 `;
 export const CheckoutChoices = styled.fieldset`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
-  > label, > a { position: relative; display: flex; align-items: center; justify-content: start; gap: 6px; padding: 8px; min-block-size: 44px; min-inline-size: 0;
+  > label, > a { position: relative; display: flex; align-items: center; justify-content: start; gap: 6px; padding: 8px; min-block-size: var(--form-control-height, 40px); min-inline-size: 0;
     border: 0; cursor: pointer; }
   > a { text-align: start; font-weight: inherit; border-radius: ${({ theme }) => theme.radius.none}; }
   > label:has(input:checked) {  background: ${({ theme }) => theme.color.brandSoft}; }
@@ -65,18 +65,18 @@ export const CheckoutPayee = styled.div`
   > div { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
   strong { font-size: 20px; line-height: 28px; font-variant-numeric: tabular-nums; }
   small { color: ${({ theme }) => theme.color.mutedText}; overflow-wrap: anywhere; font-size: 13px; line-height: 18px; }
-  button { flex: none; min-inline-size: 36px; min-block-size: 36px; padding: 6px; }
+  button { flex: none; min-inline-size: 36px; min-block-size: var(--form-control-height, 40px); padding: 6px; }
   button svg { inline-size: 18px; block-size: 18px; }
 `;
 export const CheckoutActions = styled.div`
   display: flex; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
-  > button, > a { min-block-size: 44px; }
+  > button, > a { min-block-size: var(--form-control-height, 40px); }
 `;
 export const CheckoutEvidenceField = styled.div`
   display: grid; gap: 6px; min-inline-size: 0; inline-size: 100%;
   > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   > header label { font-size: 14px; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > header button { min-block-size: 36px; padding: 4px 8px; font-size: 13px; }
+  > header button { min-block-size: var(--form-control-height, 40px); padding: 4px 8px; font-size: 13px; }
   > header button svg { inline-size: 16px; block-size: 16px; }
 `;
 export const CheckoutMessage = styled.textarea`
@@ -91,11 +91,11 @@ export const CheckoutScreenshot = styled.div`
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme }) => theme.color.surfaceMuted};
   > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  button { min-block-size: 38px; padding: 6px 10px; font-size: 13px; }
+  button { min-block-size: var(--form-control-height, 40px); padding: 6px 10px; font-size: 13px; }
   svg { inline-size: 18px; block-size: 18px; }
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 13px; line-height: 18px; }
   [data-screenshot-preview] { display: flex; flex-wrap: nowrap; justify-content: space-between; }
-  [data-screenshot-preview] > button:last-child { flex: none; min-block-size: 36px; padding: 4px 8px; }
+  [data-screenshot-preview] > button:last-child { flex: none; min-block-size: var(--form-control-height, 40px); padding: 4px 8px; }
   ${focusTreatment}
 `;
 const PayLine = styled.div`

@@ -16,7 +16,7 @@ const fieldControl = css`
   box-sizing: border-box;
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: 40px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 8px 11px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -35,12 +35,11 @@ const fieldControl = css`
 /** Toolbar density is independent of the unchanged dialog fields below. */
 const toolbarFieldControl = css`
   ${fieldControl}
-  min-block-size: 2rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control};
   background: ${({ theme }) => theme.color.field};
   font-size: 0.75rem;
-  @media (pointer: coarse) { min-block-size: 44px; }
 `;
 
 /** Desktop-only exports keep the existing phone filter components independent. */
@@ -95,7 +94,7 @@ export const SectionButton = styled.button`
   gap: 6px;
   max-inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: 2rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 8px;
   border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text};
@@ -109,7 +108,6 @@ export const SectionButton = styled.button`
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; }
   > svg:last-child { font-size: 0.75rem; }
   > [data-section-label] { min-inline-size: 0; }
-  @media (pointer: coarse) { min-block-size: 44px; }
   &[data-active="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link};  background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover:enabled {  background: ${({ theme }) => theme.color.rowHover}; } }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
@@ -146,12 +144,12 @@ export const ActionRow = styled.div`
     align-items: center;
     gap: 6px;
     min-inline-size: 0;
-    min-block-size: 2rem;
+    min-block-size: var(--form-control-height, 40px);
     font-size: 0.75rem;
     cursor: pointer;
-    > label { gap: 6px; min-block-size: 2rem; font-size: 0.75rem; line-height: 1.3; }
+    > label { gap: 6px; min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; line-height: 1.3; }
     input { flex: none; inline-size: 14px; block-size: 14px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
-    @media (pointer: coarse) { &, > label { min-block-size: 44px; } }
+    @media (pointer: coarse) { &, > label { min-block-size: var(--form-control-height, 40px); } }
   }
   > [data-filter-submit-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-inline-start: auto; }
 `;
@@ -179,7 +177,6 @@ export const ActionButton = styled(Button)`
     line-height: 1.25;
     white-space: nowrap;
     > svg { flex: none; font-size: 0.875rem; }
-    @media (pointer: coarse) { min-block-size: 44px; }
   }
 `;
 
@@ -191,7 +188,7 @@ export const DialogContent = styled.div`
   [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   [data-input][data-full] { grid-column: 1 / -1; }
   input[data-option-search] { margin-block-end: 6px; }
-  label[data-choice] { display: flex; align-items: center; gap: 8px; min-block-size: 36px; font-size: 0.8125rem; cursor: pointer; }
+  label[data-choice] { display: flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; cursor: pointer; }
   input[type="checkbox"] { flex: none; inline-size: 16px; block-size: 16px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
   [data-options] { max-block-size: 180px; overflow-y: auto; overscroll-behavior: contain; }
   [data-help] { margin-block-start: 7px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.4; }

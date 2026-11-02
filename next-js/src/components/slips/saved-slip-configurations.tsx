@@ -33,7 +33,7 @@ const Row = styled.div`
   button { font-size: .8125rem; }
 `;
 const Check = styled.label`
-  display: inline-flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: .8125rem;
+  display: inline-flex; align-items: center; gap: 8px; min-block-size: var(--form-control-height, 40px); font-size: .8125rem;
   input { inline-size: 18px; block-size: 18px; accent-color: ${({ theme }) => theme.color.link}; }
 `;
 const EditorPanel = styled.section`

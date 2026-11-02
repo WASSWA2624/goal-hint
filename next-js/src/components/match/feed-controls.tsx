@@ -20,7 +20,7 @@ const PicksLabel = styled.label`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  min-block-size: 2.25rem;
+  min-block-size: var(--form-control-height, 40px);
   color: ${({ theme }) => theme.color.text};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   &:has(input:disabled) { color: ${({ theme }) => theme.color.mutedText}; }

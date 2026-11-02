@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled, { css } from "styled-components";
 import { CheckIcon, CopyIcon } from "@/components/ui/icons";
-import { media } from "@/styles/theme";
 import { TextAction, visuallyHidden } from "./desk-styles";
 
 type CopyTextButtonProps = {
@@ -70,9 +69,8 @@ const CopyAction = styled(TextAction)<{ $compact: boolean }>`
   flex: none;
   justify-content: center;
   min-inline-size: 44px;
-  min-block-size: 44px;
+  min-block-size: var(--form-control-height, 40px);
   padding-inline: 8px;
   border-radius: ${({ theme }) => theme.radius.control};
   ${({ $compact }) => $compact && css`padding-inline: 0; > span { ${visuallyHidden} }`}
-  ${media.desktop} { min-block-size: 38px; }
 `;

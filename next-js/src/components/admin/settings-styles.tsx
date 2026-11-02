@@ -289,7 +289,7 @@ export const RequirementList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
-  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; min-block-size: 36px; font-size: ${({ theme }) => theme.typography.scale.body}; }
+  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); font-size: ${({ theme }) => theme.typography.scale.body}; }
   li > svg { flex: none; font-size: 0.9375rem; color: ${({ theme }) => theme.color.mutedText}; }
   li > span { min-inline-size: 0; overflow-wrap: anywhere; }
   li > a, li > button {
@@ -297,7 +297,7 @@ export const RequirementList = styled.ul`
     flex: 1;
     align-items: center;
     min-inline-size: 0;
-    min-block-size: ${({ theme }) => theme.control.minHeight};
+    min-block-size: var(--form-control-height, 40px);
     margin: 0;
     padding: 0;
     border: 0;
@@ -311,7 +311,7 @@ export const RequirementList = styled.ul`
     cursor: pointer;
     &:focus-visible { ${focusRing} }
   }
-  ${media.desktop} { li > a, li > button { min-block-size: 36px; } }
+  ${media.desktop} { li > a, li > button { min-block-size: var(--form-control-height, 40px); } }
 `;
 
 /**

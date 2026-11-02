@@ -32,10 +32,10 @@ export const ContactFields = styled.div`
 `;
 export const ContactOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; min-inline-size: 0;
-  label { display: inline-flex; align-items: center; gap: 6px; min-block-size: 32px; font-size: ${({ theme }) => theme.typography.scale.secondary} !important; font-weight: normal !important; }
+  label { display: inline-flex; align-items: center; gap: 6px; min-block-size: var(--form-control-height, 40px); font-size: ${({ theme }) => theme.typography.scale.secondary} !important; font-weight: normal !important; }
   input { inline-size: 16px; block-size: 16px; accent-color: ${({ theme }) => theme.color.brand}; }
   > div { display: flex; gap: 6px; margin-inline-start: auto; }
-  button { min-block-size: 32px; padding-inline: 10px; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
+  button { min-block-size: var(--form-control-height, 40px); padding-inline: 10px; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
 `;
 export const MessageLayout = styled.div`
   display: grid; grid-template-columns: minmax(10rem, .8fr) minmax(0, 2.5fr); min-inline-size: 0;
@@ -52,7 +52,7 @@ export const EventList = styled.nav`
 `;
 export const MessageOptions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
-  label { display: inline-flex; gap: 7px; align-items: center; min-block-size: 32px; font-weight: normal !important; }
+  label { display: inline-flex; gap: 7px; align-items: center; min-block-size: var(--form-control-height, 40px); font-weight: normal !important; }
   input { inline-size: 16px; block-size: 16px; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
 export const MessageTabs = styled.div`

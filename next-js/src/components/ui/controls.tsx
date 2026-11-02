@@ -45,14 +45,14 @@ export const focusTreatment = css`
   }
 `;
 
-/** Compact 36px controls on phones and tablets; the 44px desktop treatment from `lg`. */
+/** Actions and fields share one height on every screen. */
 const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   display: inline-flex;
   box-sizing: border-box;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: ${({ theme }) => theme.control.compactHeight};
+  ${controlHeight}
   min-inline-size: ${({ theme }) => theme.control.compactHeight};
   max-inline-size: 100%;
   padding-block: ${({ theme }) => theme.space.xs};
@@ -70,11 +70,9 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   cursor: pointer;
   ${media.desktop} {
     gap: ${({ theme }) => theme.space.sm};
-    min-block-size: ${({ theme }) => theme.control.minHeight};
     min-inline-size: ${({ theme }) => theme.control.minHeight};
     padding-inline: ${({ theme }) => theme.space.md};
     font-size: inherit;
-    line-height: ${({ theme }) => theme.typography.lineHeight.body};
   }
 
   ${({ theme, $variant }) => {
@@ -109,13 +107,11 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
     }
   }}
 
-  ${controlHeight}
   ${({ $large, theme }) => $large && css`
-    min-block-size: 3rem;
     min-inline-size: 3rem;
     border-radius: ${theme.radius.surface};
     font-size: ${theme.typography.scale.body};
-    ${media.desktop} { min-block-size: 3rem; font-size: ${theme.typography.scale.body}; }
+    ${media.desktop} { font-size: ${theme.typography.scale.body}; }
   `}
   ${focusTreatment}
 `;
@@ -137,14 +133,13 @@ const ButtonAnchor = styled(Link)<{ $variant: ButtonVariant; $large?: boolean }>
 const TextAnchor = styled(Link)`
   display: inline-flex;
   align-items: center;
-  min-block-size: 2rem;
+  ${controlHeight}
   max-inline-size: 100%;
   color: ${({ theme }) => theme.color.link};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: underline;
   text-underline-offset: 0.2em;
   overflow-wrap: anywhere;
-  ${media.desktop} { min-block-size: ${({ theme }) => theme.control.minHeight}; }
 
   ${media.hover} {
     &:hover { color: ${({ theme }) => theme.color.brandHover}; }
@@ -153,7 +148,7 @@ const TextAnchor = styled(Link)`
   ${focusTreatment}
 `;
 
-export const Field = styled.div`
+export const Field = styled.div.attrs<{ "data-control-field"?: string }>({ "data-control-field": "" })`
   align-self: start;
   display: flex;
   flex-direction: column;
@@ -177,7 +172,7 @@ const inputTreatment = css<{ $invalid: boolean }>`
   box-sizing: border-box;
   inline-size: 100%;
   min-inline-size: 0;
-  min-block-size: ${({ theme }) => theme.control.compactHeight};
+  ${controlHeight}
   padding-block: 6px;
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
@@ -191,7 +186,6 @@ const inputTreatment = css<{ $invalid: boolean }>`
   font: inherit;
   line-height: 1.25;
   ${media.desktop} {
-    min-block-size: ${({ theme }) => theme.control.minHeight};
     padding-block: ${({ theme }) => theme.space.sm};
     line-height: ${({ theme }) => theme.typography.lineHeight.body};
   }
@@ -208,7 +202,7 @@ export const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean
   ${inputTreatment}
   ${({ $leading }) => $leading && css`padding-inline-start: 38px;`}
   ${({ $trailing }) => $trailing && css`padding-inline-end: 92px;`}
-  &[data-phone-input] { min-block-size: 44px; font-size: 1rem; letter-spacing: 0.02em; }
+  &[data-phone-input] { font-size: 1rem; letter-spacing: 0.02em; }
 
   &::placeholder {
     color: ${({ theme }) => theme.color.mutedText};
@@ -366,7 +360,7 @@ const Segments = styled.fieldset`
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    min-block-size: 3rem;
+    ${controlHeight}
     padding: 8px;
     border: 0;
     color: ${({ theme }) => theme.color.text};

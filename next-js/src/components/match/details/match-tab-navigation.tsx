@@ -28,7 +28,7 @@ const Strip = styled.div`
 `;
 const Tab = styled.button`
   display: inline-flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: 6px;
-  min-block-size: 46px; padding: 9px 10px; white-space: nowrap;
+  min-block-size: var(--form-control-height, 40px); padding: 9px 10px; white-space: nowrap;
   background: transparent; color: ${({ theme }) => theme.color.mutedText}; border: 0; border-block-end: 0;
   border-radius: ${({ theme }) => theme.radius.none}; font: inherit; font-size: .75rem; line-height: 1.4; cursor: pointer;
   > svg { flex: none; inline-size: 16px; block-size: 16px; }
@@ -40,7 +40,7 @@ const Tab = styled.button`
   ${media.desktop} { font-size: .8125rem; font-weight: 600; padding-inline: 7px; gap: 5px; }
 `;
 const ScrollButton = styled.button`
-  display: grid; flex: none; place-items: center; inline-size: 30px; min-block-size: 46px; padding: 0;
+  display: grid; flex: none; place-items: center; inline-size: 30px; min-block-size: var(--form-control-height, 40px); padding: 0;
   background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.text}; border: 0; cursor: pointer;
   > svg { inline-size: 16px; block-size: 16px; }
   &:disabled { opacity: .3; cursor: default; }
@@ -49,12 +49,12 @@ const ScrollButton = styled.button`
 `;
 const Overflow = styled.div`
   flex: none;
-  > details > summary { min-block-size: 46px; padding: 9px 7px; gap: 5px; font-size: .8125rem; font-weight: 600; color: ${({ theme }) => theme.color.mutedText}; }
+  > details > summary { min-block-size: var(--form-control-height, 40px); padding: 9px 7px; gap: 5px; font-size: .8125rem; font-weight: 600; color: ${({ theme }) => theme.color.mutedText}; }
   > details > summary > svg { inline-size: 16px; block-size: 16px; }
   > details > summary[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; }
   > details[open] > summary { color: ${({ theme }) => theme.color.text}; }
 `;
-const MenuTab = styled(Tab)`inline-size: 100%; justify-content: start; min-block-size: 40px; padding: 8px 12px; border-block-end: 0;`;
+const MenuTab = styled(Tab)`inline-size: 100%; justify-content: start; min-block-size: var(--form-control-height, 40px); padding: 8px 12px; border-block-end: 0;`;
 const Measurements = styled.div`
   position: absolute; inline-size: 0; block-size: 0; overflow: hidden; visibility: hidden; pointer-events: none;
   > div { display: flex; inline-size: max-content; }

@@ -33,18 +33,18 @@ export const subscriberPresentation = css`
   [data-subscriber-stats] dt { font-size: 0.625rem; line-height: 1.4; color: ${({ theme }) => theme.color.mutedText}; }
   [data-subscriber-stats] dd { margin: 0; font-size: 0.875rem; line-height: 1.3; font-weight: 750; font-variant-numeric: tabular-nums; }
   [data-subscriber-actions] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; }
-  [data-subscriber-actions] > button { flex: 0 1 auto; inline-size: auto; min-inline-size: 0; min-block-size: 32px; padding: 4px 8px; font-size: 0.75rem; line-height: 1.25; }
+  [data-subscriber-actions] > button { flex: 0 1 auto; inline-size: auto; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 4px 8px; font-size: 0.75rem; line-height: 1.25; }
   [data-subscriber-actions] > button:first-child { grid-column: auto; }
   [data-subscriber-actions] > button > svg { inline-size: 14px; block-size: 14px; }
   [data-subscriber-tabs] { display: flex; flex-wrap: nowrap; align-items: stretch; justify-self: stretch; gap: 0; inline-size: 100%; padding: 0; border: 0; border-block-end: 0; background: ${({ theme }) => theme.color.surface}; overflow-x: auto; }
-  [data-subscriber-tabs] > button { flex: 0 0 auto; min-block-size: 34px; padding: 6px 12px; border: 0; border-block-end: 0; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font-size: 0.75rem; white-space: nowrap; }
+  [data-subscriber-tabs] > button { flex: 0 0 auto; min-block-size: var(--form-control-height, 40px); padding: 6px 12px; border: 0; border-block-end: 0; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font-size: 0.75rem; white-space: nowrap; }
   [data-subscriber-tabs] > button[aria-selected="true"] { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};  }
   [data-subscriber-tab] { min-inline-size: 0; }
   [data-subscriber-tab] > div { gap: 10px; padding: 12px; }
 
   ${media.desktop} {
     [data-review-subscriber-row] { min-block-size: 62px; padding: 9px 10px; }
-    [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: 36px; }
+    [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height, 40px); }
   }
   @container subscriber-detail (max-width: 30rem) {
     [data-subscriber-stats] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -53,16 +53,16 @@ export const subscriberPresentation = css`
     [data-record-list-scroll] { max-block-size: 24rem; overflow-y: auto; }
     [data-review-subscriber-row] { min-block-size: 68px; padding: 10px; }
     [data-subscriber-review-filters] { gap: 10px; }
-    [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: 44px; font-size: 1rem; }
+    [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height, 40px); font-size: 1rem; }
     [data-subscriber-detail] ${RecordBody} { padding: 0; gap: 10px; }
     [data-subscriber-summary] > header { padding: 10px; align-items: start; }
     [data-subscriber-stats] > div { padding: 7px 9px; }
     [data-subscriber-actions] { gap: 5px; padding: 8px; }
-    [data-subscriber-actions] > button { flex: 1 1 auto; min-block-size: 44px; padding: 7px; }
-    [data-subscriber-tabs] > button { min-block-size: 44px; padding-inline: 10px; }
+    [data-subscriber-actions] > button { flex: 1 1 auto; min-block-size: var(--form-control-height, 40px); padding: 7px; }
+    [data-subscriber-tabs] > button { min-block-size: var(--form-control-height, 40px); padding-inline: 10px; }
   }
   @media (pointer: coarse) {
     [data-subscriber-actions] > button, [data-subscriber-tabs] > button,
-    [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: 44px; }
+    [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height, 40px); }
   }
 `;

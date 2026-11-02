@@ -8,14 +8,14 @@ import { slipHeaderActionFrame } from "../slip-disclosure-styles";
 import { dialogSurface } from "@/components/ui/dialog-surfaces";
 
 export const ShareTrigger = styled(Button)`
-  && { min-block-size: 28px; min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: ${({ theme }) => theme.radius.control};
+  && { min-block-size: var(--form-control-height, 40px); min-inline-size: 0; padding: 3px 7px; gap: 5px; border-radius: ${({ theme }) => theme.radius.control};
     font-size: .75rem; line-height: 1.25; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   svg { inline-size: 14px; block-size: 14px; }
-  @media (pointer: coarse) { && { min-block-size: 36px; } }
+  @media (pointer: coarse) { && { min-block-size: var(--form-control-height, 40px); } }
   &&[data-share-icon-only] {
     ${slipHeaderActionFrame}
-    inline-size: var(--slip-header-action-size, 28px); min-inline-size: var(--slip-header-action-size, 28px);
-    block-size: var(--slip-header-action-size, 28px); min-block-size: var(--slip-header-action-size, 28px); padding: 0;
+    inline-size: var(--slip-header-action-size, var(--form-control-height, 40px)); min-inline-size: var(--slip-header-action-size, var(--form-control-height, 40px));
+    block-size: var(--slip-header-action-size, var(--form-control-height, 40px)); min-block-size: var(--slip-header-action-size, var(--form-control-height, 40px)); padding: 0;
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  }
   }
   &[data-share-icon-only] svg { inline-size: 16px; block-size: 16px; }
@@ -41,10 +41,10 @@ export const DrawerHeader = styled.header`
 `;
 
 export const DrawerButton = styled(Button)`
-  && { min-block-size: 34px; min-inline-size: 34px; padding: 6px 8px; font-size: .75rem; line-height: 1.3; border-radius: ${({ theme }) => theme.radius.control}; }
+  && { min-block-size: var(--form-control-height, 40px); min-inline-size: 34px; padding: 6px 8px; font-size: .75rem; line-height: 1.3; border-radius: ${({ theme }) => theme.radius.control}; }
   svg { inline-size: 15px; block-size: 15px; }
-  ${media.belowDesktop} { && { min-block-size: 44px; min-inline-size: 44px; } }
-  @media (pointer: coarse) { && { min-block-size: 44px; min-inline-size: 44px; } }
+  ${media.belowDesktop} { && { min-block-size: var(--form-control-height, 40px); min-inline-size: 44px; } }
+  @media (pointer: coarse) { && { min-block-size: var(--form-control-height, 40px); min-inline-size: 44px; } }
 `;
 
 export const DrawerBody = styled.div`

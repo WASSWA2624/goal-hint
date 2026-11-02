@@ -10,8 +10,8 @@ import { RecordFooter, RecordItem } from "./record-workspace";
 export const ReviewItem = styled(RecordItem)`grid-template-columns: minmax(0, 1fr);`;
 export const ReviewFooter = styled(RecordFooter)`
   align-items: center; flex-wrap: wrap; margin-inline: 0;
-  > button { min-block-size: 44px; flex: 1 1 8rem; }
-  ${media.desktop} { > button { min-block-size: 32px; flex: 0 1 auto; } }
+  > button { min-block-size: var(--form-control-height, 40px); flex: 1 1 8rem; }
+  ${media.desktop} { > button { min-block-size: var(--form-control-height, 40px); flex: 0 1 auto; } }
 `;
 export const ReviewTools = styled.div`
   display: flex; align-items: end; gap: 8px;

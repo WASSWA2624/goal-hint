@@ -41,7 +41,7 @@ export const FilterDrawer = styled.div`
 `;
 
 export const FilterToggle = styled.button`
-  display: flex; align-items: center; gap: 8px; inline-size: 100%; min-block-size: 48px; padding: 0 14px;
+  display: flex; align-items: center; gap: 8px; inline-size: 100%; min-block-size: var(--form-control-height, 40px); padding: 0 14px;
   border: 0; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
   font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: start; cursor: pointer;
   > svg { flex: none; font-size: 1.125rem; }
@@ -87,7 +87,7 @@ export const AuditSummary = styled.div`
   b { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-inline-size: 0; }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${media.desktop} { font-size: 0.75rem; button { min-block-size: 28px; font-size: 0.75rem; } }
+  ${media.desktop} { font-size: 0.75rem; button { min-block-size: var(--form-control-height, 40px); font-size: 0.75rem; } }
 `;
 
 export const AuditFeed = styled(RecordListScroll)`
@@ -167,8 +167,8 @@ export const EventFacts = styled.dl`
 `;
 
 export const EventLink = styled(ButtonLink)`
-  && { color: ${({ theme }) => theme.color.link}; min-block-size: 44px; font-size: ${({ theme }) => theme.typography.scale.body}; }
-  ${media.desktop} { && { flex: none; min-block-size: 32px; font-size: 0.8125rem; } }
+  && { color: ${({ theme }) => theme.color.link}; min-block-size: var(--form-control-height, 40px); font-size: ${({ theme }) => theme.typography.scale.body}; }
+  ${media.desktop} { && { flex: none; min-block-size: var(--form-control-height, 40px); font-size: 0.8125rem; } }
 `;
 
 export const AuditPager = styled.nav`

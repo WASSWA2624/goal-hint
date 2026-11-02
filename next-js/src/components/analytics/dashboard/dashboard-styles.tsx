@@ -82,7 +82,7 @@ export const LivePill = styled.span`
   @media (prefers-reduced-motion: reduce) { &::before { animation: none; } }
 `;
 const headerControl = css`
-  min-block-size: 32px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 12px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -158,7 +158,7 @@ export const ToolButton = styled.button<{ $variant?: "primary" | "secondary" | "
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 36px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 12px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -290,7 +290,7 @@ export const Tabs = styled.div`
 `;
 export const Tab = styled.button<{ $selected: boolean }>`
   flex: none;
-  min-block-size: 36px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 6px 12px;
   border: 0;
   border-block-end: 0;
@@ -307,7 +307,7 @@ export const Segmented = styled.div`
   gap: 4px;
 `;
 export const SegmentButton = styled.button<{ $selected: boolean }>`
-  min-block-size: 32px;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 10px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};

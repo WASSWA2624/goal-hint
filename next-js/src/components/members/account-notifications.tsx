@@ -30,7 +30,7 @@ const List = styled.ul`
   ${media.desktop} { > li { grid-template-columns: 20px minmax(0, 1fr) auto; } [data-notice-actions] { grid-column: 3; grid-row: 1; align-self: center; } }
 `;
 const Pages = styled.nav`display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-block-start: 12px;`;
-const NotificationButton = styled(Button)`min-block-size: 44px;`;
+const NotificationButton = styled(Button)`min-block-size: var(--form-control-height, 40px);`;
 
 export function AccountNotifications({ locale, page, older = false }: { locale: string; page: AccountNotificationPage | null; older?: boolean }) {
   const m = createMessages(locale), router = useRouter(), inFlight = useRef(false);

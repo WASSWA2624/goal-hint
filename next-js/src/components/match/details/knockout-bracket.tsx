@@ -16,12 +16,12 @@ import { Crest, Note, focusRing, useStableDetails } from "./details-ui";
 const Toolbar = styled.div`
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
   > label { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: .6875rem; color: ${({ theme }) => theme.color.mutedText}; }
-  select { max-inline-size: 100%; min-inline-size: 0; min-block-size: 30px; padding: 4px 6px; font: inherit;
+  select { max-inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height, 40px); padding: 4px 6px; font: inherit;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; border: 0; ${focusRing} }
   ${inlineControlRow}
 `;
 const Control = styled.button`
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-block-size: 30px; padding: 4px 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-block-size: var(--form-control-height, 40px); padding: 4px 8px;
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft}; font: inherit; font-size: .6875rem; cursor: pointer;
   > svg { inline-size: 14px; block-size: 14px; } &:disabled { opacity: .35; cursor: default; } ${focusRing}

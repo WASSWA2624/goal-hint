@@ -96,7 +96,7 @@ const HeadButton = styled.button`
   align-items: center;
   gap: 10px;
   inline-size: 100%;
-  min-block-size: 2.875rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: none;
@@ -120,7 +120,7 @@ const HeadButton = styled.button`
     display: grid;
     grid-template-columns: 1.25rem minmax(10rem, 13.5rem) minmax(0, 1fr) 1rem;
     gap: 12px;
-    min-block-size: 3rem;
+    min-block-size: var(--form-control-height, 40px);
     > span[data-title] { font-size: 0.9375rem; }
     > small { grid-column: 3; margin: 0; font-size: ${size("body")}; text-align: start; }
     > svg:last-child { grid-column: 4; justify-self: end; }
@@ -160,7 +160,7 @@ export const LinkButton = styled.button`
   display: inline;
   justify-self: start;
   text-align: start;
-  min-block-size: 1.5rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 0;
   color: ${({ theme }) => theme.color.accent.blue.solid};
   background: none;
@@ -246,7 +246,7 @@ export const Choices = styled.div`
   &::-webkit-scrollbar { display: none; }
   > button {
     flex: none;
-    min-block-size: 1.625rem;
+    min-block-size: var(--form-control-height, 40px);
     padding-inline: 9px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surfaceMuted};
@@ -309,7 +309,7 @@ const Track = styled.span<{ $accent?: AccentName; $reverse?: boolean }>`
     border-radius: ${({ theme }) => theme.radius.small};
   }
 `;
-/** A probability or comparison bar; `value` is clamped to 0–1. */
+/** A probability or comparison bar; `value` is clamped to 0â€“1. */
 export function Bar({ value, style, ...rest }: { value: number; $accent?: AccentName; $reverse?: boolean } & HTMLAttributes<HTMLSpanElement>) {
   return <Track {...rest} style={{ ...style, "--track": Math.max(0, Math.min(1, value)) } as CSSProperties} />;
 }
@@ -416,7 +416,7 @@ export const RowButton = styled.button`
   align-items: center;
   gap: 6px;
   inline-size: 100%;
-  min-block-size: 2.125rem;
+  min-block-size: var(--form-control-height, 40px);
   padding: 4px 4px;
   color: ${({ theme }) => theme.color.text};
   background: none;

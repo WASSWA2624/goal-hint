@@ -64,14 +64,14 @@ const CloseButton = styled(Button)`
   && {
     flex: none;
     min-inline-size: 2.25rem;
-    min-block-size: 2.25rem;
+    min-block-size: var(--form-control-height, 40px);
     margin-inline-start: auto;
     padding: 0;
     border: 0;
     border-radius: ${({ theme }) => theme.radius.control};
     color: ${({ theme }) => theme.color.mutedText};
     > svg { font-size: 1.125rem; }
-    @media (pointer: coarse) { min-inline-size: 44px; min-block-size: 44px; }
+    @media (pointer: coarse) { min-inline-size: 44px; min-block-size: var(--form-control-height, 40px); }
   }
   [data-enhanced="false"] & { display: none; }
 `;
@@ -103,12 +103,11 @@ const Actions = styled.footer`
 
 export const CriteriaDialogButton = styled(Button)`
   && {
-    min-block-size: 2.25rem;
+    min-block-size: var(--form-control-height, 40px);
     padding: 6px 12px;
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: 0.8125rem;
     line-height: 1.3;
-    @media (pointer: coarse) { min-block-size: 44px; }
   }
 `;
 
