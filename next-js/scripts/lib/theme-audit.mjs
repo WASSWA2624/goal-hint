@@ -38,6 +38,13 @@ export function visualValues(source, file = "sample.tsx") {
         template.templateSpans.forEach(span => record(span.literal, span.literal.text));
       }
     }
+    if (insideStyle(node) && !ts.isTaggedTemplateExpression(node.parent)) {
+      if (ts.isNoSubstitutionTemplateLiteral(node)) record(node, node.text);
+      else if (ts.isTemplateExpression(node)) {
+        record(node.head, node.head.text);
+        node.templateSpans.forEach(span => record(span.literal, span.literal.text));
+      }
+    }
     if (ts.isStringLiteral(node) && insideStyle(node)) record(node, node.text);
     else if (ts.isStringLiteral(node) && !insideInlineStyle(node) && /(?:\d(?:px|rem|em|ch)\b|#[\da-f]{3,8}\b)/iu.test(node.text)) {
       const attribute = ts.isJsxAttribute(node.parent) ? node.parent.name.getText(tree) : "";

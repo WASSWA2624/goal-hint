@@ -1,5 +1,6 @@
 "use client";
 
+import { sectionSurface } from "@/components/ui/filled-surfaces";
 import { controlRow } from "@/components/ui/control-layout";
 
 import styled from "styled-components";
@@ -21,14 +22,15 @@ export const RecordWorkspace = styled.div.attrs<{ "data-record-workspace"?: stri
   }
 `;
 export const RecordHead = styled.header`
+  ${sectionSurface}
   position: relative;
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2_5) var(--gh-spacing-4);
-  min-inline-size: 0;
+  min-inline-size: 0; padding-inline: ${({ theme }) => theme.layout.sectionPadding};
   h1 { font-size: var(--gh-font-page); }
   ${media.desktop} {
-    grid-column: 1 / -1; min-block-size: var(--gh-size-12); padding: var(--gh-spacing-1) var(--gh-spacing-3);
+    grid-column: 1 / -1; min-block-size: var(--gh-size-12); padding: var(--gh-spacing-1) ${({ theme }) => theme.layout.sectionPadding};
     border-block-end: 0;
-    background: ${({ theme }) => theme.color.surface};
+    ${sectionSurface}
     > h1 { ${visuallyHidden} }
     button, nav { border-radius: ${({ theme }) => theme.radius.control}; }
   }
@@ -74,9 +76,9 @@ export const RecordListFooter = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-2); min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
   ${media.desktop} {
-    grid-row: 3; padding: var(--gh-spacing-1_25) var(--gh-spacing-2_5); font-size: var(--gh-font-caption);
+    grid-row: 3; padding: var(--gh-spacing-1_25) ${({ theme }) => theme.layout.sectionPadding}; font-size: var(--gh-font-caption);
     border-block-start: 0;
-    background: ${({ theme }) => theme.color.surfaceMuted};
+    ${sectionSurface}
   }
 `;
 export const RecordDetails = styled.section`
@@ -103,25 +105,28 @@ export const RecordScroll = styled.div.attrs<{ "data-record-detail-scroll"?: str
   }
 `;
 export const RecordDetailHead = styled.header`
+  ${sectionSurface}
+  padding-inline: ${({ theme }) => theme.layout.sectionPadding};
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-2_5); min-inline-size: 0;
   h2 { min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--gh-font-subheading); }
   ${media.desktop} {
-    min-block-size: var(--gh-size-11); padding: var(--gh-spacing-1_5) var(--gh-spacing-3);
+    min-block-size: var(--gh-size-11); padding: var(--gh-spacing-1_5) ${({ theme }) => theme.layout.sectionPadding};
     border-block-end: 0;
-    background: ${({ theme }) => theme.color.surface};
+    ${sectionSurface}
     a, button { min-block-size: var(--form-control-height); }
   }
 `;
 export const RecordBody = styled.div`
   display: grid; align-content: start; gap: var(--gh-spacing-3); min-inline-size: 0;
-  ${media.desktop} { padding: var(--gh-spacing-3); }
+  ${media.desktop} { padding: var(--gh-spacing-3) ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 export const RecordFooter = styled(StickyActions).attrs<{ "data-record-footer"?: string }>({ "data-record-footer": "" })`
+  margin-inline: 0; padding-inline: ${({ theme }) => theme.layout.sectionPadding};
   ${media.desktop} {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2);
-    position: static; min-inline-size: 0; margin: 0; padding: var(--gh-spacing-1_5) var(--gh-spacing-3);
+    position: static; min-inline-size: 0; margin: 0; padding: var(--gh-spacing-1_5) ${({ theme }) => theme.layout.sectionPadding};
     border: 0; border-block-start: 0;
-    background: ${({ theme }) => theme.color.surface};
+    ${sectionSurface}
     > * { flex: 0 1 auto; }
     > button, > a, [data-record-actions] button, [data-record-actions] a { min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2_5); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-body); }
     [data-record-actions] input { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-body); }

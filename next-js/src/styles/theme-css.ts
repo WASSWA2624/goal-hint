@@ -11,6 +11,11 @@ export function themeCssVariables(theme: GoalHintTheme): string {
     duration: { ...theme.motion.duration, fast: theme.motion.fast, feedback: theme.motion.feedback,
       disclosure: theme.motion.disclosure, surface: theme.motion.surface, instant: theme.motion.reducedDuration },
     illustration: theme.illustration,
+    chrome: { content: theme.color.surface, header: theme.header.background, footer: theme.footer.background,
+      dialogHeader: theme.dialog.headerBackground, dialogFooter: theme.dialog.footerBackground,
+      section: theme.color.section, slipHeader: theme.phoneCardFrame.header, mobileSlipHeader: theme.phoneCardFrame.mobileHeader },
+    layout: { gutter: theme.layout.gutter, sectionPadding: theme.layout.sectionPadding, slipGap: theme.layout.slipGap },
+    headerControl: { blockInset: theme.header.controlBlockInset },
     stroke: { thin: theme.border.thin, strong: theme.border.strong, focus: theme.border.focus, accent: theme.border.accent },
   };
   return Object.entries(groups).flatMap(([group, tokens]) => Object.entries(tokens)

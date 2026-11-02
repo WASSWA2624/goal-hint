@@ -8,6 +8,7 @@ import styled, { css } from "styled-components";
 import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useClientReady } from "@/components/ui/use-client-ready";
+import { dialogFooterSurface } from "@/components/ui/dialog-surfaces";
 import { mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
@@ -259,7 +260,7 @@ const SheetFooter = styled.div`
     flex: none;
     gap: var(--gh-spacing-1);
     padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
-    background: ${({ theme }) => theme.color.surface};
+    ${dialogFooterSurface}
     border-block-start: 0;
   }
 `;

@@ -214,6 +214,7 @@ export const Disclosure = styled.details`
   ul { margin: 0; padding-inline-start: var(--gh-spacing-5); ${smallText} }
 `;
 export const PageFooter = styled.footer`
+  background: ${({ theme }) => theme.color.section};
   display: flex; flex-wrap: wrap; align-items: start; gap: var(--gh-spacing-1) var(--gh-spacing-4); border-block-start: 0;
   > ${Disclosure}[open] { flex-basis: 100%; order: 1; }
 `;

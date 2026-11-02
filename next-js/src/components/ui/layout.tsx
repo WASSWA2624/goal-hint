@@ -91,7 +91,7 @@ const anchorClearance = css`
 
 /** App screens (feeds) start close to the header; content pages keep generous spacing. */
 export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compactTop?: boolean; $dashboard?: boolean; $workspace?: boolean }>`
-  padding-block: ${({ theme, $app }) => $app ? `10px ${theme.space.lg}` : `${theme.space.md} ${theme.space.lg}`};
+  padding-block: ${({ theme, $app }) => $app ? `${theme.spacing[2.5]} ${theme.space.lg}` : `${theme.space.md} ${theme.space.lg}`};
   min-inline-size: 0;
   ${({ $compact }) => $compact && css`
     ${media.belowDesktop} {
@@ -100,7 +100,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $compa
     }
   `}
   ${media.desktop} {
-    padding-block: ${({ theme, $app }) => $app ? `14px ${theme.space.xl}` : theme.space.xl};
+    padding-block: ${({ theme, $app }) => $app ? `${theme.spacing[3.5]} ${theme.space.xl}` : theme.space.xl};
     ${({ $app, $compactTop }) => ($app || $compactTop) && css`padding-block-start: 0;`}
     ${({ $app }) => $app && css`> ${Container} { padding-inline: 0; }`}
   }

@@ -85,6 +85,8 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
     /** Decorative and selection hues; every soft/text pair passes 4.5:1. */
     readonly accent: Readonly<Record<AccentName, AccentColors>>;
     readonly cardHeader: string;
+    /** Selected sections remain distinct from ordinary content surfaces. */
+    readonly section: string;
     readonly rowHover: string;
     readonly selection: Readonly<{ background: string; text: string }>;
   };
@@ -116,6 +118,8 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
     /** Compact icon buttons; both fills keep header text readable. */
     readonly controlFill: string;
     readonly controlHover: string;
+    /** Embedded app-bar actions leave a little more space above and below their fill. */
+    readonly controlBlockInset: string;
     /** The search pill; `fieldFillActive` on hover and focus. */
     readonly fieldFill: string;
     readonly fieldFillActive: string;
@@ -128,6 +132,8 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
     readonly phoneHeight: string;
     readonly shadow: string;
   };
+  readonly footer: Readonly<{ background: string; text: string; mutedText: string; link: string; hoverBackground: string }>;
+  readonly dialog: Readonly<{ headerBackground: string; footerBackground: string }>;
   readonly typography: {
     readonly family: string;
     readonly monoFamily: string;
@@ -196,6 +202,8 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
     readonly wideMaxWidth: string;
     readonly gutter: string;
     readonly readingMaxWidth: string;
+    readonly slipGap: string;
+    readonly sectionPadding: string;
   };
   readonly frame: Readonly<{ desktopCardRadius: string }>;
   readonly textField: Readonly<{ background: string; hoverBackground: string; invalidBackground: string; disabledBackground: string; borderWidth: string; borderColor: string; focusBorderColor: string }>;
@@ -317,6 +325,7 @@ export const foundationLightTheme: GoalHintTheme = {
       red: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     },
     cardHeader: "#E8EDF5",
+    section: "#F5F7FC",
     rowHover: "#F0F4FC",
     selection: { background: "#2457C5", text: "#FFFFFF" },
   },
@@ -346,7 +355,7 @@ export const foundationLightTheme: GoalHintTheme = {
     focusWidth: "3px",
     focusOffset: "3px",
   },
-  layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px", readingMaxWidth: "65ch" },
+  layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: geometryTokens.spacing[2], readingMaxWidth: "65ch", slipGap: geometryTokens.spacing[5], sectionPadding: geometryTokens.spacing[2] },
   frame: { desktopCardRadius: brandTokens.shape.radius.none },
   textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF", borderWidth: "1px", borderColor: "#DFE4EC", focusBorderColor: "#A8C0E2" },
   select: { background: "#FFFFFF", hoverBackground: "#FFFFFF", expandedBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF" },
@@ -376,6 +385,7 @@ export const foundationLightTheme: GoalHintTheme = {
     onAccent: "#FFFFFF",
     controlFill: "#E8EDF5",
     controlHover: "#E3ECFF",
+    controlBlockInset: geometryTokens.spacing[1],
     fieldFill: "#E8EDF5",
     fieldFillActive: "#E3ECFF",
     border: "#D9E1ED",
@@ -387,6 +397,8 @@ export const foundationLightTheme: GoalHintTheme = {
     phoneHeight: "3rem",
     shadow: "none",
   },
+  footer: { background: "#EDF1F7", text: "#15243B", mutedText: "#53647C", link: "#2457C5", hoverBackground: "#E3ECFF" },
+  dialog: { headerBackground: "#EDF1F7", footerBackground: "#EDF1F7" },
   shadow: {
     cardHover: "none",
     popover: "0 8px 24px rgb(7 23 71 / 16%)",
@@ -460,6 +472,7 @@ export const foundationDarkTheme: GoalHintTheme = {
       red: { solid: "#FF9C9C", soft: "#3B252C", text: "#FF9C9C", gradient: "#FF9C9C" },
     },
     cardHeader: "#0B2238",
+    section: "#0D253B",
     rowHover: "#10304A",
     selection: { background: "#00B9F2", text: "#03111F" },
   },
@@ -492,6 +505,8 @@ export const foundationDarkTheme: GoalHintTheme = {
       pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
     },
   },
+  footer: { background: "#0D253B", text: "#F4F7FF", mutedText: "#A8CBEF", link: "#00B9F2", hoverBackground: "#073052" },
+  dialog: { headerBackground: "#0D253B", footerBackground: "#0D253B" },
   shadow: { cardHover: "none", popover: "0 8px 24px rgb(0 0 0 / 48%)" },
   phoneCardFrame: { border: "#172D40", radius: brandTokens.shape.radius.control, shadow: "none", inset: "#0D253B", separator: "#0D253B", ruleWidth: "1px", header: "#0D253B", mobileHeader: "#081B2C", selection: "#081B2C" },
 };

@@ -19,13 +19,15 @@ export const compactHeaderRow = css`
 
 /** Compact actions remain centered inside the existing header rail. */
 export const compactHeaderControl = css`
+  --header-control-height: calc(var(--form-control-height) - 2 * var(--gh-headerControl-blockInset));
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
   gap: var(--gh-spacing-1);
-  min-inline-size: var(--form-control-height);
-  min-block-size: var(--form-control-height);
+  min-inline-size: var(--header-control-height);
+  min-block-size: var(--header-control-height);
+  block-size: var(--header-control-height);
   padding: 0 var(--gh-spacing-1_5);
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -46,7 +48,7 @@ export const compactHeaderControl = css`
 /** Borderless app-bar actions share a quiet fill and clear pointer/keyboard feedback. */
 export const compactHeaderIconControl = css`
   ${compactHeaderControl}
-  inline-size: var(--form-control-height);
+  inline-size: var(--header-control-height);
   padding: 0 var(--gh-spacing-1);
   border: 0;
   color: ${({ theme }) => theme.header.accent};

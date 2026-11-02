@@ -10,7 +10,7 @@ const shimmer = keyframes`
   to { background-position: -200% 0; }
 `;
 const Loading = styled.div`
-  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
+  display: grid; gap: ${({ theme }) => theme.layout.slipGap}; min-inline-size: 0;
   ${desktopContentPadding()}
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); }
 `;

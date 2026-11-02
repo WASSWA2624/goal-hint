@@ -4,7 +4,7 @@ import { useEffect, useRef, useSyncExternalStore, type ReactNode, type Ref } fro
 import styled from "styled-components";
 import { Button } from "./controls";
 import { CloseIcon } from "./icons";
-import { dialogSurface } from "./dialog-surfaces";
+import { dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
 
 const subscribe = () => () => {};
 const serverSnapshot = () => false;
@@ -47,7 +47,7 @@ const Dialog = styled.dialog`
 `;
 
 const Header = styled.header`
-  background: ${({ theme }) => theme.color.surfaceMuted};
+  ${dialogHeaderSurface}
   display: flex;
   flex: none;
   align-items: center;
@@ -77,6 +77,7 @@ const CloseButton = styled(Button)`
 `;
 
 const Body = styled.div`
+  ${dialogSurface}
   min-inline-size: 0;
   min-block-size: 0;
   padding: var(--gh-spacing-3);
@@ -87,7 +88,7 @@ const Body = styled.div`
 `;
 
 const Actions = styled.footer`
-  background: ${({ theme }) => theme.color.surfaceMuted};
+  ${dialogFooterSurface}
   display: flex;
   flex: none;
   flex-wrap: nowrap;

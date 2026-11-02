@@ -54,7 +54,7 @@ const SectionMenu = styled.details`
     border-block-end: 0; box-shadow: ${({ theme }) => theme.shadow.popover}; }
 `;
 const Content = styled.article`
-  min-inline-size: 0; padding: ${({ theme }) => `${theme.space.md} ${theme.space.md} ${theme.space.lg}`}; display: grid; align-content: start; gap: ${({ theme }) => theme.space.md}; overflow-wrap: anywhere;
+  min-inline-size: 0; padding: ${({ theme }) => `${theme.space.md} 0 ${theme.space.lg}`}; display: grid; align-content: start; gap: ${({ theme }) => theme.space.md}; overflow-wrap: anywhere;
   font-family: ${({ theme }) => theme.typography.family}; font-size: ${({ theme }) => theme.typography.scale.body};
   line-height: ${({ theme }) => theme.typography.lineHeight.body};
   ${media.desktop} { padding: ${({ theme }) => `${theme.space.lg} 0 ${theme.space.xl}`}; min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); }

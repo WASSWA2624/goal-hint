@@ -7,6 +7,7 @@ import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { applyFeedDraft, selectFeedDates } from "@/domain/feed-controls";
 import { feedDatePresets, isFeedDatePreset, resolveFeedDates, type DateSelection, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
+import { dialogFooterSurface } from "@/components/ui/dialog-surfaces";
 import { media } from "@/styles/theme";
 import { DateRangePicker } from "./feed-dates";
 import { controlFeedback, filterButtonColors, focusRing } from "./filter-parts";
@@ -100,6 +101,7 @@ const Preset = styled.button`
   ${media.belowDesktop} { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); }
 `;
 const Footer = styled.div`
+  ${dialogFooterSurface}
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   flex: none;

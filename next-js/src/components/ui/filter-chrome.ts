@@ -2,7 +2,7 @@
 
 import { css } from "styled-components";
 import { media } from "@/styles/theme";
-import { nativeSelectSurface, nativeTextFieldSurface, textFieldSelector } from "./filled-surfaces";
+import { sectionSurface, nativeSelectSurface, nativeTextFieldSurface, textFieldSelector } from "./filled-surfaces";
 
 export const focusRing = css`
   &:focus-visible {
@@ -13,25 +13,17 @@ export const focusRing = css`
 
 /** Shared Matches and Slip Builder palette; filled fields remain distinct from their panel. */
 export const filterPanelColors = css`
-  background: ${({ theme }) => theme.color.page};
-  --filter-panel-background: ${({ theme }) => theme.color.surfaceMuted};
+  ${sectionSurface}
+  --filter-panel-background: ${({ theme }) => theme.color.section};
   --filter-field-background: ${({ theme }) => theme.color.field};
 `;
 
-/** Outer phone filter groups share the page edges; individual input boundaries remain visible. */
+/** Filter sections share one inset on every screen; the shell owns the outer gutter. */
 export const mobileFilterPanel = css`
-  background: ${({ theme }) => theme.color.page};
+  ${sectionSurface}
+  &&& { padding: ${({ theme }) => theme.layout.sectionPadding}; }
   ${media.belowDesktop} {
-    && { border: 0; border-radius: ${({ theme }) => theme.radius.none}; padding-inline: 0; box-shadow: none; }
-  }
-`;
-
-/** Desktop toolbars stay below the app header and above scrolling result cards. */
-export const desktopStickyFilters = css`
-  ${media.desktop} {
-    position: sticky;
-    inset-block-start: var(--app-header-height, var(--gh-size-12));
-    z-index: var(--gh-layer-toolbar);
+    && { border: 0; border-radius: ${({ theme }) => theme.radius.none}; box-shadow: none; }
   }
 `;
 

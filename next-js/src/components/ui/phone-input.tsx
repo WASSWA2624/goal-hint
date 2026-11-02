@@ -12,7 +12,7 @@ import { preserveDigitCaret } from "./formatted-input";
 import { controlHeight } from "./control-layout";
 import { FloatingField } from "./floating-field";
 import { textFieldSurface } from "./filled-surfaces";
-import { dialogSurface } from "./dialog-surfaces";
+import { dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
 import { createMessages } from "@/i18n/messages";
 import { Field, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
 import { CheckIcon, ChevronDownIcon, GlobeIcon } from "./icons";
@@ -210,7 +210,7 @@ const DialFlagFallback = styled.span`
 const CountryMenu = styled.div`
   position: fixed; z-index: var(--gh-layer-modal); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-2); box-sizing: border-box; padding: var(--gh-spacing-2_5);
   border: 0; border-radius: ${({ theme }) => theme.radius.overlay}; overflow: hidden;
-  color: ${({ theme }) => theme.color.text}; ${dialogSurface}
+  color: ${({ theme }) => theme.color.text}; ${dialogHeaderSurface}
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
 const CountrySearch = styled.input`
@@ -222,7 +222,7 @@ const CountrySearchLabel = styled.label`
   position: absolute; inline-size: var(--gh-size-0_25); block-size: var(--gh-size-0_25); padding: 0; margin: calc(-1 * var(--gh-spacing-0_25)); overflow: hidden;
   clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 `;
-const CountryResults = styled.div`display: grid; align-content: start; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain;`;
+const CountryResults = styled.div`${dialogSurface} display: grid; align-content: start; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain;`;
 const CountryOption = styled.button`
   display: grid; grid-template-columns: var(--gh-size-5_5) minmax(0, 1fr) auto var(--gh-size-4); align-items: center; gap: var(--gh-spacing-2);
   inline-size: 100%; min-block-size: var(--gh-size-12); padding: var(--gh-spacing-2); text-align: start; border: 0; border-radius: ${({ theme }) => theme.radius.none}; cursor: pointer;

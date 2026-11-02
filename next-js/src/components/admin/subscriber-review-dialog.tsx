@@ -5,7 +5,7 @@ import styled from "styled-components";
 import { CloseIcon } from "@/components/ui/icons";
 import { ActionButton } from "./admin-form";
 import { formSurface } from "./subscriber-styles";
-import { dialogSurface } from "@/components/ui/dialog-surfaces";
+import { dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "@/components/ui/dialog-surfaces";
 
 type SubscriberReviewDialogProps = {
   open: boolean;
@@ -56,6 +56,7 @@ const Dialog = styled.dialog`
   *, *::before, *::after { box-sizing: border-box; }
 `;
 const Header = styled.header`
+  ${dialogHeaderSurface}
   display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
   border-block-end: 0;
   h2 { margin: 0; min-inline-size: 0; font-size: var(--gh-font-section); overflow-wrap: anywhere; }
@@ -65,11 +66,13 @@ const CloseButton = styled(ActionButton)`
   @media (pointer: coarse) { min-inline-size: var(--gh-size-11); min-block-size: var(--form-control-height); }
 `;
 const Body = styled.div`
+  ${dialogSurface}
   ${formSurface}
   min-inline-size: 0; min-block-size: 0; padding: var(--gh-spacing-3_5); overflow-y: auto; overscroll-behavior: contain;
   [data-subscriber-action-dialog] { display: grid; gap: var(--gh-spacing-3); min-inline-size: 0; }
 `;
 const Footer = styled.footer`
+  ${dialogFooterSurface}
   display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
   border-block-start: 0;
   > button { min-block-size: var(--form-control-height); }

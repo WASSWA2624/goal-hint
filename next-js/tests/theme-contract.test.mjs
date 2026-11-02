@@ -11,5 +11,6 @@ test("the theme audit rejects local CSS and inline styling while preserving stru
   const sample = 'const Card = styled.div`padding: 12px; color: #fff; border-radius: 8px; font-weight: 700;`;'
     + 'const view = <div style={{ gap: "6px", width: "100%", display: "grid" }} />;';
   assert.deepEqual(hardcodedVisuals(sample).map(finding => finding.literal), ["12px", "#fff", "8px", "font-weight: 700", "6px"]);
+  assert.deepEqual(hardcodedVisuals('const Card = styled.div`padding: ${({ theme }) => `14px ${theme.space.sm}`};`;').map(finding => finding.literal), ["14px"]);
   assert.deepEqual(hardcodedVisuals('const Card = styled.div`padding: var(--gh-spacing-2); grid-template-columns: repeat(2,minmax(0,1fr)); opacity: 0;`;'), []);
 });

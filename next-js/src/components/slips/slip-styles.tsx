@@ -4,7 +4,7 @@ import { controlBodyHeight } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
-import { controlFeedback, desktopStickyFilters, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { desktopContentPadding, desktopSectionFrame, joinedDesktopSections, PageHeading, Stack, Surface } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
@@ -80,11 +80,10 @@ export const SlipStack = styled(Stack)`
     > p, > [data-best-slips-update-failed] { ${desktopContentPadding()} }
   }
 `;
-/** Preserve each phone surface's spacing while keeping adjacent desktop slips compact. */
-export const SlipList = styled.div`
-  display: grid; min-inline-size: 0; gap: var(--gh-spacing-3_5);
-  ${media.desktop} { gap: var(--gh-spacing-1_125); }
-  ${desktopContentPadding()}
+/** Slip collections share one generous gap at every viewport width. */
+export const SlipList = styled.div<{ $inset?: boolean }>`
+  display: grid; min-inline-size: 0; gap: ${({ theme }) => theme.layout.slipGap};
+  ${({ $inset = true }) => $inset && desktopContentPadding()}
 `;
 export const SlipHeading = styled(PageHeading)`font-size: var(--gh-font-heading); ${media.desktop} { font-size: var(--gh-font-headline); }`;
 export const HeadingRow = styled.div`
@@ -99,15 +98,15 @@ export const CriteriaPanel = styled(Surface)`
   && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
 `;
 export const BuilderPanel = styled(CriteriaPanel)`
+  && { background: ${({ theme }) => theme.color.surface}; }
   ${filterPanelColors}
-  ${desktopStickyFilters}
   && { padding: var(--gh-spacing-2); border-radius: ${({ theme }) => theme.radius.surface}; }
   [data-criteria-dialog] { ${filterDialogSurface} }
   ${mobileFilterPanel}
   && { ${desktopSectionFrame} ${desktopContentPadding(true)} }
   [data-slip-label="mobile"] { display: none; }
   ${media.belowDesktop} {
-    && { padding-block: var(--gh-spacing-1_5); }
+    && { padding-block: ${({ theme }) => theme.layout.sectionPadding}; }
     [data-slip-label="desktop"] { display: none; }
     [data-slip-label="mobile"] { display: inline; }
     && [data-slip-builder-essentials] { grid-template-columns: var(--gh-size-20) minmax(0, 1fr); gap: var(--gh-spacing-1_5); }

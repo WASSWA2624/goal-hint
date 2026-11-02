@@ -354,7 +354,7 @@ const Fields = styled.div<{ $edit: boolean }>`
   gap: var(--gh-spacing-3) var(--gh-spacing-2_5);
   min-inline-size: 0;
   > :first-child, > [role="alert"] { grid-column: 1 / -1; }
-  ${({ $edit }) => $edit && `@container (min-width: 34rem) { grid-template-columns: repeat(3, minmax(0, 1fr)); > :first-child { grid-column: auto; } }`}
+  ${({ theme, $edit }) => $edit && `@container (min-width: ${theme.viewport[34]}) { grid-template-columns: repeat(3, minmax(0, 1fr)); > :first-child { grid-column: auto; } }`}
 `;
 const Footnote = styled.p`
   padding: var(--gh-spacing-3) var(--gh-spacing-3_5);

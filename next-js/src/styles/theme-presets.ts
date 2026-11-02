@@ -8,6 +8,8 @@ type ThemePalette = Readonly<{
   mobileSlipHeader?: string; slipSelection?: string;
   fieldHover?: string;
   input?: string;
+  chrome?: string;
+  section?: string;
 }>;
 export type ThemeDirection = Readonly<{
   id: string; name: string; description: string; mode: "light" | "dark";
@@ -28,6 +30,14 @@ const blend = (surface: string, ink: string, amount: number) => "#" + [1, 3, 5].
   Math.round(Number.parseInt(surface.slice(offset, offset + 2), 16) * (1 - amount)
     + Number.parseInt(ink.slice(offset, offset + 2), 16) * amount).toString(16).padStart(2, "0")).join("");
 
+/** Inverse artwork belongs on dark bars, including branded light-mode directions. */
+const isDarkSurface = (color: string) => [1, 3, 5].map(offset => {
+  const channel = Number.parseInt(color.slice(offset, offset + 2), 16) / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0) < 0.18;
+
+const porcelainChrome = "#EDF1F7";
+
 /** Approved definitions are shared by the live app and the review gallery. */
 export const porcelainBlueDirection: ThemeDirection = {
   id: "porcelain-blue", name: "Porcelain Blue", description: "Airy porcelain, assured blue, and quietly precise details.",
@@ -36,9 +46,10 @@ export const porcelainBlueDirection: ThemeDirection = {
     page: "#FFFFFF", surface: "#FFFFFF", muted: "#FFFFFF", text: "#182640", secondary: "#53627A",
     border: "#DCE3EF", control: "#77859C", fieldHover: "#D2D8E2", input: "#FFFFFF",
     accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF",
-    header: "#FFFFFF", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
-    cardBorder: "#D3DDEA", cardInset: "#FFFFFF", cardHeader: "#FFFFFF",
-    mobileSlipHeader: "#FFFFFF", slipSelection: "#FFFFFF",
+    header: porcelainChrome, headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
+    chrome: porcelainChrome, section: "#F5F7FC",
+    cardBorder: "#D3DDEA", cardInset: "#FFFFFF", cardHeader: porcelainChrome,
+    mobileSlipHeader: porcelainChrome, slipSelection: "#FFFFFF",
   },
 };
 export const cobaltNightDirection: ThemeDirection = { id: "cobalt-night", name: "Cobalt Night", description: "Midnight navy, layered blue surfaces, and electric cobalt actions.", mode: "dark", font: manrope, fontLabel: "Manrope", shape: "subtle",
@@ -47,7 +58,9 @@ export const cobaltNightDirection: ThemeDirection = { id: "cobalt-night", name: 
 export function createTheme(direction: ThemeDirection): GoalHintTheme {
   const base = direction.mode === "dark" ? darkTheme : lightTheme, p = direction.palette;
   const link = direction.mode === "dark" ? p.headerAccent : p.accent;
-  const headerDark = p.header !== p.surface;
+  const headerDark = isDarkSurface(p.header);
+  const chrome = p.chrome ?? p.cardHeader ?? p.muted;
+  const section = p.section ?? p.muted;
   const decorativeBorder = `color-mix(in srgb, ${p.border} 55%, ${p.surface})`;
   const field = blend(p.surface, p.control, 0.22), fieldHover = p.fieldHover ?? blend(p.surface, p.control, 0.26);
   const input = direction.mode === "light" ? "#FFFFFF" : p.input;
@@ -59,7 +72,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
       mutedText: blend(p.secondary, p.text, 0.2), border: decorativeBorder, controlBorder: p.control, buttonBorder: decorativeBorder,
       brand: link, brandHover: direction.mode === "dark" ? p.text : p.hover, brandSoft: p.soft,
       link, focus: link, disabledText: p.secondary, disabledSurface: p.muted,
-      cardHeader: p.muted, rowHover: p.soft,
+      cardHeader: chrome, section, rowHover: p.soft,
       selection: { background: p.soft, text: p.text },
       accent: { ...base.color.accent, teal: { solid: link, soft: p.soft, text: link, gradient: link } },
       performanceOutcome: Object.fromEntries((["correct", "incorrect", "pending"] as const).map(tone => [tone,
@@ -74,6 +87,8 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
       fieldFillActive: p.header, controlBorder: headerDark ? p.headerMuted : p.control,
       tone: Object.fromEntries(Object.keys(base.header.tone).map(key => [key, p.headerAccent])) as GoalHintTheme["header"]["tone"],
     },
+    footer: { background: chrome, text: p.text, mutedText: blend(p.secondary, p.text, 0.2), link, hoverBackground: p.soft },
+    dialog: { headerBackground: chrome, footerBackground: chrome },
     typography: { ...base.typography, family: direction.font, headingFamily: direction.headingFont ?? "inherit",
       size: { ...base.typography.size, body: direction.font === editorial ? "1rem" : "0.9375rem",
         h1: direction.headingFont ? "1.875rem" : "1.625rem", h2: "1.125rem" },
@@ -92,7 +107,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
     action: { quietBackground: input ? field : p.muted, quietHoverBackground: input ? fieldHover : p.soft, headerBackground: input ? field : p.soft },
     fieldAdornment: { background: input ?? p.soft, hoverBackground: input ?? p.muted },
     space: { ...base.space, md: "14px", lg: "20px", xl: "24px" },
-    gradient: { action: p.accent, actionHover: p.hover, tableHeader: p.muted, page: p.page },
+    gradient: { action: p.accent, actionHover: p.hover, tableHeader: chrome, page: p.page },
     shadow: { ...base.shadow, cardHover: direction.shape === "crisp" ? "none" : `0 3px 12px ${p.text}0A` },
     motion: { ...base.motion,
       fast: direction.shape === "crisp" ? "100ms" : "140ms", feedback: direction.shape === "crisp" ? "120ms" : "160ms",
@@ -101,8 +116,8 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
     scrollbarColor: `${p.control} ${p.page}`,
     phoneCardFrame: { ...base.phoneCardFrame, border: p.cardBorder ?? decorativeBorder,
       separator: direction.mode === "light" ? p.cardBorder ?? decorativeBorder : p.cardInset ?? p.muted,
-      inset: p.cardInset ?? p.muted, header: p.cardHeader ?? p.muted,
-      mobileHeader: p.mobileSlipHeader ?? p.surface, selection: p.slipSelection ?? p.surface },
+      inset: p.cardInset ?? p.muted, header: p.cardHeader ?? chrome,
+      mobileHeader: p.mobileSlipHeader ?? p.cardHeader ?? chrome, selection: p.slipSelection ?? p.surface },
   };
 }
 

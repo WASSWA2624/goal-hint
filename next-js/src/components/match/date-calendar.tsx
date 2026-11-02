@@ -6,6 +6,7 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "@/components/ui/ic
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { feedQueryRules, type FeedQuery } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
+import { dialogFooterSurface, dialogHeaderSurface } from "@/components/ui/dialog-surfaces";
 import { media } from "@/styles/theme";
 import { focusRing } from "./filter-parts";
 import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
@@ -41,6 +42,7 @@ const Body = styled.div`
   overscroll-behavior: contain;
 `;
 const MonthBar = styled.div`
+  ${dialogHeaderSurface}
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
@@ -115,6 +117,7 @@ const Summary = styled.p`
   > small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Footer = styled.div`
+  ${dialogFooterSurface}
   display: flex;
   flex: none;
   gap: var(--gh-spacing-2);

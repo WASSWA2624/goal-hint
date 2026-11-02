@@ -7,7 +7,7 @@ import { FloatingField } from "@/components/ui/floating-field";
 import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
-import { desktopStickyFilters, mobileFilterPanel } from "@/components/ui/filter-chrome";
+import { mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
 
 export const Shell = styled.div`
@@ -134,7 +134,6 @@ export const Notice = styled.p<{ $tone?: "warning" | "error" | "info" }>`
 `;
 export const FilterBar = styled.section`
   ${mobileFilterPanel}
-  ${desktopStickyFilters}
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;

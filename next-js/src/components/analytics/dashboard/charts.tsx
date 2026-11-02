@@ -406,5 +406,5 @@ const HeatCell = styled.span<{ $active: boolean }>`
   display: block;
   block-size: var(--gh-size-4_5);
   border-radius: ${({ theme }) => theme.radius.small};
-  outline: ${({ $active, theme }) => ($active ? `2px solid ${theme.color.text}` : "none")};
+  outline: ${({ $active, theme }) => ($active ? `${theme.border.strong} solid ${theme.color.text}` : "none")};
 `;

@@ -39,7 +39,8 @@ test("all desktop directions provide the complete shared application theme contr
   assert.equal(previewScreens.length, 12);
   for (const direction of desktopThemes) {
     assert.ok(isGoalHintTheme(direction.theme), `${direction.id}: incomplete application theme`);
-    assert.equal(direction.theme.header.brandVariant, direction.palette.header === direction.palette.surface ? "primary" : "inverse");
+    const expectedInk = direction.theme.header.brandVariant === "inverse" ? "#FFFFFF" : "#15243B";
+    assert.ok(contrast(expectedInk, direction.theme.header.background) >= 4.5, `${direction.id}: readable brand artwork`);
   }
 });
 

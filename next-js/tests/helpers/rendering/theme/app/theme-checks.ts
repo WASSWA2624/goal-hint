@@ -81,8 +81,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     checkRadius(`#${CSS.escape(dialog.id)}`, theme.radius.overlay);
   }
   check("body", theme.color.page);
-  check("[data-app-footer]", theme.color.page);
-  check("#theme-filters [data-best-slips-filters]", theme.color.page);
+  check("[data-app-footer]", theme.footer.background);
+  check("#theme-filters [data-best-slips-filters]", theme.color.surface);
   if (!dark) {
     check("body", "#FFFFFF");
     assert(theme.color.surface === theme.color.page, "Light components share the white page canvas");
@@ -166,7 +166,12 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     }
   }
   const dialog = document.querySelector<HTMLDialogElement>("#theme-dialog");
-  if (dialog?.open && dialog.dataset.enhanced === "true") check("#theme-dialog", theme.mode === "light" ? theme.textField.background : theme.color.surface);
+  if (dialog?.open && dialog.dataset.enhanced === "true") {
+    check("#theme-dialog", theme.color.surface);
+    check("#theme-dialog > header", theme.dialog.headerBackground);
+    check("#theme-dialog > footer", theme.dialog.footerBackground);
+    check("#theme-dialog > div", theme.color.surface);
+  }
   for (const list of [...document.querySelectorAll("[data-theme-fixture] [data-slip-selections]")].filter(visible)) {
     const items = [...list.querySelectorAll(":scope > [data-slip-selection]")];
     assert(getComputedStyle(list).rowGap === "0px", "Slip matches join without gaps");

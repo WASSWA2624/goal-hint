@@ -162,8 +162,8 @@ test("active themes use the approved Porcelain Blue and Cobalt Night palettes", 
     assert.equal(theme.color.focus, link);
     assert.equal(theme.gradient.action, p.accent);
     assert.equal(theme.gradient.actionHover, p.hover);
-    assert.equal(theme.color.cardHeader, p.muted);
-    assert.equal(theme.gradient.tableHeader, p.muted);
+    assert.equal(theme.color.cardHeader, p.chrome ?? p.cardHeader ?? p.muted);
+    assert.equal(theme.gradient.tableHeader, p.chrome ?? p.cardHeader ?? p.muted);
     for (const [name, expected] of Object.entries({ background: p.header, gradient: p.header,
       navigationBackground: p.header, desktopBackground: p.header, text: p.headerText,
       mutedText: p.headerMuted, placeholder: p.headerMuted, accent: p.headerAccent })) {
@@ -179,14 +179,13 @@ test("Porcelain Blue keeps app surfaces and inputs white with visible card separ
   assert.equal(lightTheme.textField.hoverBackground, "#FFFFFF");
   assert.equal(lightTheme.textField.borderWidth, "1px");
   readable(lightTheme.color.controlBorder, lightTheme.textField.background, "White text field boundary", 3);
-  for (const fill of [lightTheme.color.surface, lightTheme.color.surfaceMuted, lightTheme.header.background,
-    lightTheme.phoneCardFrame.mobileHeader, lightTheme.phoneCardFrame.header]) {
+  for (const fill of [lightTheme.color.surface, lightTheme.color.surfaceMuted, lightTheme.phoneCardFrame.inset, lightTheme.phoneCardFrame.selection]) {
     assert.equal(fill, "#FFFFFF", "Light surfaces share the white page canvas");
   }
-  assert.equal(lightTheme.phoneCardFrame.mobileHeader, "#FFFFFF", "Mobile headers share the white canvas");
+  assert.equal(lightTheme.phoneCardFrame.mobileHeader, lightTheme.dialog.headerBackground, "Mobile slip headers share the chrome tint");
   assert.equal(lightTheme.phoneCardFrame.inset, lightTheme.color.surface, "Slip bodies share the white content canvas");
   assert.equal(lightTheme.phoneCardFrame.selection, "#FFFFFF", "Selections keep their original white fill");
-  assert.equal(lightTheme.phoneCardFrame.header, lightTheme.phoneCardFrame.mobileHeader, "Both slip layouts use white headers");
+  assert.equal(lightTheme.phoneCardFrame.header, lightTheme.phoneCardFrame.mobileHeader, "Both slip layouts share their themed headers");
   assert.equal(lightTheme.phoneCardFrame.ruleWidth, "1px", "Slips use thin separators and an outer frame");
   assert.ok(contrast(lightTheme.color.field, lightTheme.color.surface) >= 1.2, "Fields are distinct from cards");
   assert.equal(lightTheme.border.width, "0px");
@@ -196,12 +195,35 @@ test("Porcelain Blue keeps app surfaces and inputs white with visible card separ
 test("Cobalt Night uses distinct filled controls and no decorative frames", () => {
   assert.equal(darkTheme.textField.borderWidth, "0px");
   assert.equal(darkTheme.color.page, "#0B1220");
-  assert.equal(darkTheme.phoneCardFrame.mobileHeader, darkTheme.color.surface);
+  assert.equal(darkTheme.phoneCardFrame.mobileHeader, darkTheme.dialog.headerBackground);
   assert.equal(darkTheme.phoneCardFrame.selection, darkTheme.color.surface);
   assert.ok(contrast(darkTheme.color.field, darkTheme.color.surface) >= 1.2, "Dark fields are distinct from cards");
   assert.equal(darkTheme.border.width, "0px");
   assert.equal(darkTheme.border.accentWidth, "0px");
   assert.ok(Number.parseFloat(darkTheme.border.focusWidth) >= 2, "Keyboard focus remains visible");
+});
+
+test("headers, footers, dialog chrome, selected sections and slip headers stay distinct and readable", () => {
+  for (const theme of [lightTheme, darkTheme]) {
+    for (const [name, fill, body] of [
+      ["app header", theme.header.background, theme.color.page],
+      ["app footer", theme.footer.background, theme.color.page],
+      ["dialog header", theme.dialog.headerBackground, theme.color.surface],
+      ["dialog footer", theme.dialog.footerBackground, theme.color.surface],
+      ["selected section", theme.color.section, theme.color.surface],
+      ["desktop slip header", theme.phoneCardFrame.header, theme.phoneCardFrame.inset],
+      ["mobile slip header", theme.phoneCardFrame.mobileHeader, theme.phoneCardFrame.inset],
+    ]) assert.notEqual(fill, body, `${theme.mode}: ${name} is separate from content`);
+    for (const fill of [theme.dialog.headerBackground, theme.dialog.footerBackground, theme.color.section]) {
+      readable(theme.color.text, fill, `${theme.mode}: chrome title`);
+      readable(theme.color.mutedText, fill, `${theme.mode}: chrome caption`);
+      readable(theme.color.link, fill, `${theme.mode}: chrome link`);
+    }
+    for (const ink of [theme.footer.text, theme.footer.mutedText, theme.footer.link]) {
+      readable(ink, theme.footer.background, `${theme.mode}: footer text`);
+    }
+  }
+  assert.equal(lightTheme.header.brandVariant, "primary", "Pale app bars retain visible dark brand artwork");
 });
 
 test("performance outcomes keep the approved quiet semantic fills and readable labels", () => {

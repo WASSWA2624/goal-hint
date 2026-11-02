@@ -50,6 +50,20 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         const ruleWidth = getComputedStyle(ruleProbe).borderTopWidth;
         ruleProbe.remove();
         const body = getComputedStyle(document.body), canvas = document.querySelector("[data-preview-canvas]");
+        const rootStyle = getComputedStyle(document.documentElement);
+        const roleColor = name => {
+          const probe = document.createElement("span");
+          probe.style.color = `var(--gh-chrome-${name})`;
+          document.body.append(probe);
+          const color = getComputedStyle(probe).color;
+          probe.remove();
+          return color;
+        };
+        const expectedGutter = Number.parseFloat(rootStyle.getPropertyValue("--gh-layout-gutter"));
+        const expectedInset = Number.parseFloat(rootStyle.getPropertyValue("--gh-layout-sectionPadding"));
+        const expectedSlipGap = Number.parseFloat(rootStyle.getPropertyValue("--gh-layout-slipGap"));
+        const layoutErrors = [];
+        if (![expectedGutter, expectedInset, expectedSlipGap].every(Number.isFinite)) layoutErrors.push("missing layout tokens");
         const studioElement = document.querySelector("[data-theme-studio]");
         const headerElement = [...canvas.querySelectorAll("[data-app-header], [data-mobile-app-header] > div")]
           .find(element => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0)
@@ -65,11 +79,37 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
         const outerRailErrors = [];
         for (const shell of canvas.querySelectorAll("[data-app-shell]")) {
           const frame = shell.getBoundingClientRect(), gutter = Number.parseFloat(getComputedStyle(shell).paddingLeft);
+          if (Math.abs(gutter - expectedGutter) > .1) layoutErrors.push("app gutter differs from its theme");
           for (const section of shell.querySelectorAll(":scope > header, :scope > main, :scope > footer, [data-mobile-app-header]")) {
             const bounds = section.getBoundingClientRect();
             if (!bounds.width || !bounds.height) continue;
             if (Math.abs(bounds.left - frame.left - gutter) > .2 || Math.abs(frame.right - bounds.right - gutter) > .2) {
               outerRailErrors.push(section.tagName.toLowerCase());
+            }
+          }
+        }
+        const filterSections = new Set(canvas.querySelectorAll('[data-best-slips-filters], [data-slip-builder-toolbar], section[aria-label="Report filters"]'));
+        for (const marker of canvas.querySelectorAll("[data-desktop-filter-search], [data-phone-query-filters], [data-phone-filter-toolbar]")) {
+          const form = marker.closest("form");
+          if (form) filterSections.add(form);
+        }
+        for (const section of filterSections) {
+          if (!section.getBoundingClientRect().width) continue;
+          const style = getComputedStyle(section);
+          for (const edge of ["Left", "Right", "Top", "Bottom"]) {
+            if (Math.abs(Number.parseFloat(style[`padding${edge}`]) - expectedInset) > .1) layoutErrors.push(`filter ${edge.toLowerCase()} inset differs from its theme`);
+          }
+          if (section.matches("[data-best-slips-filters], [data-slip-builder-toolbar]") && style.backgroundColor !== roleColor("content")) {
+            layoutErrors.push("Best Slips/Slip Builder filters must use the content surface");
+          }
+        }
+        for (const list of canvas.querySelectorAll("[data-slip-list]")) {
+          if (!list.getBoundingClientRect().width) continue;
+          if (Math.abs(Number.parseFloat(getComputedStyle(list).rowGap) - expectedSlipGap) > .1) layoutErrors.push("slip gap differs from its theme");
+          const cards = [...list.children].filter(card => card.getBoundingClientRect().height);
+          for (let index = 1; index < cards.length; index += 1) {
+            if (Math.abs(cards[index].getBoundingClientRect().top - cards[index - 1].getBoundingClientRect().bottom - expectedSlipGap) > 1) {
+              layoutErrors.push("slip card bounds do not match the themed gap");
             }
           }
         }
@@ -140,7 +180,8 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           screens: document.querySelectorAll('nav[aria-label="Preview screens"] a').length,
           overlap: header.width > 0 && header.height > 0 && header.top < studio.bottom - 1,
           outsideParent, outerRailErrors, bordered, idleProgressVisible, textFieldErrors, selectErrors,
-          footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, statusCorners, distributionBars, subscriptionBanners, content: canvas.textContent.trim().length };
+          footerBackground: footer ? getComputedStyle(footer).backgroundColor : null, expectedFooterBackground: roleColor("footer"),
+          layoutErrors, statusCorners, distributionBars, subscriptionBanners, content: canvas.textContent.trim().length };
       });
       const ratio = contrast(result.foreground, result.background);
       if (result.overflow) errors.push(`${theme}/${screen}: horizontal overflow at ${width}px`);
@@ -148,7 +189,8 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
       if (result.outerRailErrors.length) errors.push(`${theme}/${screen}: inconsistent outer margins on ${result.outerRailErrors.join(", ")}`);
       if (result.bordered.length) errors.push(`${theme}/${screen}: decorative borders on ${[...new Set(result.bordered)].join(", ")}`);
       if (result.idleProgressVisible) errors.push(`${theme}/${screen}: idle loading track must not form a header border`);
-      if (result.footerBackground && result.footerBackground !== result.background) errors.push(`${theme}/${screen}: footer must share the page background`);
+      if (result.footerBackground && result.footerBackground !== result.expectedFooterBackground) errors.push(`${theme}/${screen}: footer must use its themed chrome background`);
+      for (const error of result.layoutErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
       for (const error of result.textFieldErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
       for (const error of result.selectErrors) errors.push(`${theme}/${screen}/${width}: ${error}`);
       if (!result.statusCorners) errors.push(`${theme}/${screen}: status selection needs subtle borderless corners`);
@@ -229,4 +271,80 @@ export async function verifyDesktopInteractions(page, origin = "http://127.0.0.1
   assert(duration === "0s" || duration === "1e-05s", "Reduced-motion preference removes the preview transitions");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   return { passed: true, count: checks.length, checks };
+}
+
+/** Filters belong to document flow; header actions and selection stay compact and readable. */
+export async function verifyFilterScrolling(page, { origin = "http://127.0.0.1:3110", widths = [320, 390, 768, 1024, 1440, 1920] } = {}) {
+  const checks = [];
+  for (const theme of ["porcelain-blue", "cobalt-night"]) for (const width of widths) {
+    await page.setViewportSize({ width, height: 600 });
+    for (const screen of ["best-slips", "matches", "slip-builder"]) {
+      await page.goto(`${origin}/themes/${theme}/${screen}`, { waitUntil: "domcontentloaded" });
+      await page.locator('[data-preview-ready="true"]').waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      const result = await page.evaluate(async () => {
+        const canvas = document.querySelector("[data-preview-canvas]");
+        const visible = element => element.checkVisibility({ visibilityProperty: true });
+        const filters = new Set(canvas.querySelectorAll("[data-best-slips-filters], [data-slip-builder-toolbar]"));
+        for (const marker of canvas.querySelectorAll("[data-desktop-filter-search], [data-phone-query-filters], [data-phone-filter-toolbar]")) {
+          const form = marker.closest("form");
+          if (form) filters.add(form);
+        }
+        const sections = [...filters].filter(visible), errors = [];
+        if (!sections.length) errors.push("No visible filter section");
+        // A short sample still needs enough document space to exercise scrolling.
+        const tail = document.createElement("div");
+        tail.style.height = `${innerHeight}px`;
+        document.body.append(tail);
+        const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        scrollTo({ top: 0, behavior: "instant" });
+        await frame();
+        const initial = sections.map(section => section.getBoundingClientRect().top);
+        scrollTo({ top: 250, behavior: "instant" });
+        await frame();
+        const movement = scrollY;
+        sections.forEach((section, index) => {
+          if (["sticky", "fixed"].includes(getComputedStyle(section).position)) errors.push("Filter remains pinned");
+          if (Math.abs(initial[index] - section.getBoundingClientRect().top - movement) > 1) errors.push("Filter does not scroll with its content");
+        });
+        scrollTo({ top: 0, behavior: "instant" });
+        tail.remove();
+        await frame();
+        const navigation = [...canvas.querySelectorAll('[data-responsive-navigation]')].filter(visible);
+        for (const root of navigation) {
+          const selected = [...root.querySelectorAll('[aria-current="page"]')].filter(visible);
+          if (!selected.length) errors.push("Current destination is not visible");
+          for (const item of selected) {
+            const style = getComputedStyle(item), marker = getComputedStyle(item, "::after");
+            if (marker.content === "none" || Number.parseFloat(marker.height) <= 0) errors.push("Missing current-page indicator");
+            if (style.color === style.backgroundColor || style.backgroundColor === "rgba(0, 0, 0, 0)") errors.push("Missing selected fill/text");
+          }
+        }
+        const actions = [...canvas.querySelectorAll('[data-account-actions] [data-header-auth], [data-account-actions] [data-theme-toggle], [data-account-actions] [data-account-menu] > summary')].filter(visible);
+        const metric = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--form-control-height"));
+        const inset = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gh-headerControl-blockInset"));
+        const expected = metric - 2 * inset;
+        if (![metric, inset, expected].every(Number.isFinite) || expected < 24) errors.push("Invalid header action metrics");
+        if (!actions.length) errors.push("Missing header actions");
+        for (const action of actions) {
+          const bounds = action.getBoundingClientRect();
+          if (Math.abs(bounds.height - expected) > 1) errors.push(`Header action height ${bounds.height} differs from ${expected}`);
+          if (getComputedStyle(action).paddingTop !== "0px" || getComputedStyle(action).paddingBottom !== "0px") errors.push("Extra header action vertical padding");
+        }
+        return { errors, movement, sections: sections.length, actions: actions.length, expected };
+      });
+      if (result.movement < 200 || result.errors.length) throw new Error(`${theme}/${width}/${screen}: ${JSON.stringify(result)}`);
+      // Check the selected item inside More as well as the disclosure itself.
+      const overflow = page.locator('[data-responsive-navigation]:visible details:has(a[aria-current="page"])');
+      for (const details of await overflow.all()) {
+        await details.locator("summary").click();
+        const selected = details.locator('a[aria-current="page"]');
+        const colors = await selected.evaluate(item => { const style = getComputedStyle(item); return { text: style.color, fill: style.backgroundColor }; });
+        if (!await selected.isVisible() || contrast(colors.text, colors.fill) < 4.5) throw new Error(`${theme}/${width}/${screen}: unreadable More selection`);
+        await details.locator("summary").click();
+      }
+      checks.push({ theme, width, screen, ...result });
+    }
+  }
+  return { passed: true, checks };
 }

@@ -90,7 +90,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
 
 export const HeaderContent = styled(Container)`
   ${compactHeaderRow}
-  min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
   padding-inline: ${contentGutter};
   ${desktop} { flex-wrap: nowrap; gap: var(--gh-spacing-4); min-block-size: var(--app-header-content-height, calc(var(--gh-size-12) - var(--gh-size-0_25))); }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
@@ -140,10 +140,25 @@ export const TopNavList = styled.ul`
   > li { display: flex; position: relative; }
 `;
 
-/**
- * Header links and section icons share the phone tab bar's theme colors. The current
- * page uses a filled selection; pointer and keyboard feedback share the palette.
- */
+/** One persistent selection treatment for primary, phone and overflow destinations. */
+const currentNavigationItem = css`
+  &[aria-current="page"] {
+    color: ${({ theme }) => theme.color.link};
+    background: ${({ theme }) => theme.color.brandSoft};
+    font-weight: ${({ theme }) => theme.typography.weight.semibold};
+    > svg:first-child { color: inherit; }
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: ${({ theme }) => theme.space.sm};
+      inset-block-end: 0;
+      block-size: ${({ theme }) => theme.border.strong};
+      background: currentColor;
+    }
+  }
+`;
+
+/** Header links and section icons share the phone tab bar's theme colors. */
 const topLink = css<{ $tone?: AccentName }>`
   ${controlBodyHeight}
   position: relative;
@@ -162,11 +177,7 @@ const topLink = css<{ $tone?: AccentName }>`
   ${media.hover} {
     &:hover { color: ${({ theme }) => theme.header.text}; background: ${({ theme }) => theme.header.controlHover}; }
   }
-  &[aria-current="page"] {
-    color: ${({ theme }) => theme.header.text};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    background: ${({ theme }) => theme.color.brandSoft};
-  }
+  ${currentNavigationItem}
   ${headerFocus}
 `;
 export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
@@ -191,11 +202,7 @@ const tabLink = css`
   text-decoration: none;
   > svg { flex: none; font-size: var(--gh-font-heading); }
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
-  &[aria-current="page"] {
-    color: ${({ theme }) => theme.header.accent};
-    background: ${({ theme }) => theme.color.brandSoft};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-  }
+  ${currentNavigationItem}
   ${focusRing}
   &:focus-visible { outline-color: ${({ theme }) => theme.header.accent}; outline-offset: calc(-1 * var(--gh-size-1)); }
 `;
@@ -216,7 +223,7 @@ const MoreMenuDetails = styled.details<{ $tone?: AccentName; $mobile?: boolean }
     list-style: none;
     &::-webkit-details-marker { display: none; }
   }
-  &[open] > summary { color: ${({ theme }) => theme.header.text}; }
+  &[open] > summary:not([aria-current="page"]) { color: ${({ theme }) => theme.header.text}; }
 `;
 
 /** Keep native summary toggling, with the same dismissal behavior as the filter popovers. */
@@ -251,7 +258,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   max-inline-size: calc(100vw - var(--gh-size-4));
   ${({ $mobile }) => $mobile && css`inline-size: min(var(--gh-size-64), calc(100vw - var(--gh-size-4)));`}
   max-block-size: ${({ $mobile }) => $mobile
-    ? `calc(100dvh - ${mobileTabHeight} - 9px - env(safe-area-inset-bottom))`
+    ? `calc(100dvh - ${mobileTabHeight} - var(--gh-spacing-2_25) - env(safe-area-inset-bottom))`
     : "calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--gh-size-1) - env(safe-area-inset-bottom))"};
   overflow-y: auto;
   margin: 0;
@@ -262,6 +269,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
   a {
+    position: relative;
     display: flex;
     min-inline-size: 0;
     min-block-size: var(--form-control-height);
@@ -275,7 +283,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
     > svg { flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); }
     > span { min-inline-size: 0; }
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-    &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+    ${currentNavigationItem}
     ${focusRing}
   }
   ${({ $mobile }) => $mobile && css`
@@ -313,14 +321,15 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
 /** Footer clearance matches the phone tab targets, border and safe area. */
 export const Footer = styled.footer.attrs<{ "data-app-footer"?: string }>({ "data-app-footer": "" })`
   padding-block: var(--gh-spacing-2_5) calc(var(--gh-spacing-2_5) + ${mobileTabHeight} + var(--gh-size-0_25) + env(safe-area-inset-bottom));
-  color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.page};
+  color: ${({ theme }) => theme.footer.mutedText};
+  background: ${({ theme }) => theme.footer.background};
   border-block-start: 0;
   font-size: var(--gh-font-secondary);
   line-height: var(--gh-leading-compact);
   ${desktop} { padding-block: var(--gh-spacing-3_5); font-size: var(--gh-font-body); }
 `;
 export const FooterContent = styled(Container)`
+  padding-inline: ${({ theme }) => theme.layout.sectionPadding};
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   justify-items: start;
@@ -335,7 +344,7 @@ export const FooterBrand = styled.div`
   display: inline-flex;
   align-items: center;
   gap: var(--gh-spacing-0_5);
-  color: ${({ theme }) => theme.color.text};
+  color: ${({ theme }) => theme.footer.text};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   white-space: nowrap;
   > span:first-child { padding: 0 var(--gh-spacing-1) 0 0; }
@@ -354,12 +363,12 @@ export const FooterLink = styled(Link)`
   align-items: center;
   min-block-size: var(--form-control-height);
   padding-inline: var(--gh-spacing-2);
-  color: ${({ theme }) => theme.color.mutedText};
+  color: ${({ theme }) => theme.footer.mutedText};
   border-radius: ${({ theme }) => theme.radius.control};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
-  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; background: ${({ theme }) => theme.color.surfaceMuted}; } }
-  &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${media.hover} { &:hover { color: ${({ theme }) => theme.footer.link}; background: ${({ theme }) => theme.footer.hoverBackground}; } }
+  &[aria-current="page"] { color: ${({ theme }) => theme.footer.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   ${focusRing}
 `;
 export const FooterNote = styled.p`
@@ -370,7 +379,7 @@ export const FooterNote = styled.p`
 /** Admin and member workspaces use the same header rail as the app. */
 export const WorkspaceHeaderContent = styled(HeaderContent)`
   inline-size: 100%; max-inline-size: none;
-  min-block-size: ${({ theme }) => `calc(${theme.header.phoneHeight} - 1px)`};
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
   padding-inline: ${contentGutter};
   ${media.belowDesktop} {
     > ${HomeLink} { flex: 1 1 0; min-inline-size: min(var(--gh-size-24), 100%);

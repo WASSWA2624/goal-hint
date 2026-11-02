@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, DesktopInset, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SlipCard } from "@/components/slips/slip-card";
+import { SlipList } from "@/components/slips/slip-styles";
 import { PerformanceSummary } from "./performance-summary";
 import { EvidenceList, MarketGrid, MetricList, PerformanceFilterPanel, PerformanceFilters, PerformanceSections, PerformanceTable, TableFrame } from "./performance-styles";
 
@@ -168,10 +169,10 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
       {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
-      {history?.records.length ? history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
+      {history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
-      </article>) : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
+      </article>)}</SlipList> : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
     </Stack></DesktopInset>

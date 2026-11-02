@@ -23,6 +23,12 @@ they fit inside their enclosing field or header. Checkbox/radio glyphs, decorati
 multiline textareas, record cards and image previews keep their own dimensions.
 Their surrounding actionable labels and ordinary buttons use the shared height.
 
+App-header actions are also embedded: Login, Register, appearance and account
+controls subtract twice `theme.header.controlBlockInset` from the inherited
+control height, with no extra vertical padding. The 4px inset gives them a
+32px fine-pointer body and a 36px coarse-pointer body, at every viewport width.
+Navigation targets and ordinary page controls retain the full shared metric.
+
 Slip-header Share and disclosure frames share a smaller height derived from the
 control metric, with equal vertical inset. Keep their full bounds inside the
 header; the disclosure's end gutter must include its frame and side clearance.

@@ -1,6 +1,11 @@
 import { css } from "styled-components";
 import { media } from "@/styles/theme";
 
+/** A quiet tint separates selected filter/workspace sections from white content. */
+export const sectionSurface = css`
+  background: ${({ theme }) => theme.color.section};
+`;
+
 /** Text entry keeps a visible boundary on a white canvas; composite fields frame their input once. */
 export const textFieldSurface = css`
   transition: background-color ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing},

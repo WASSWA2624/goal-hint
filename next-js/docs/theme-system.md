@@ -23,6 +23,7 @@ fallback, and native appearance metadata all consume the same active exports.
 | Quiet and header action surfaces | `action` |
 | Measured popover/workspace geometry and portable image paper | `ui`, `media` |
 | Header surfaces, navigation, logo polarity, and height | `header` |
+| App footer and dialog header/footer surfaces | `footer`, `dialog` |
 | Body and heading families, sizes, weights, and line heights | `typography` |
 | Spacing, content rails, gutters, reading width, and control sizes | `space`, `layout`, `control` |
 | Primitive spacing and dimensions, reading measures and local responsive thresholds | `spacing`, `size`, `measure`, `relativeSize`, `viewport` |
@@ -53,6 +54,10 @@ Light-mode content and slip bodies use the white surface. Headers, footers,
 dialog chrome, selected sections and semantic status fills can use other theme
 surfaces. Exported slips and flattened screenshot uploads use the shared light
 palette for portable, readable images regardless of the sender's appearance.
+Best Slips and Slip Builder filters use `color.surface` as well. Their controls
+scroll in normal document flow, along with Matches and analytics filters.
+Use `layout.sectionPadding` for filter insets and `layout.slipGap` between
+separate slip cards; joined selections inside a slip keep their own separators.
 
 Run `npm run test:theme:contract` to audit styled CSS and inline style values.
 The unit suite also checks that every geometry variable has a definition.
@@ -110,15 +115,21 @@ mobile and desktop: no row gap, themed inset padding, and thin separators. Only
 the first selection has rounded top corners and only the last has rounded
 bottom corners. The rules live in `components/slips/joined-slip-styles.ts`.
 
-Header actions, form fields, buttons, tabs and pagination share the inherited
+Form fields, buttons, tabs and pagination share the inherited
 control metric: 40px for fine pointers and 44px for coarse pointers. The root
 theme owns both values and the floating-label reserve; see `control-uniformity.md`.
+Embedded app-header actions derive their smaller bodies using
+`header.controlBlockInset`. Current primary, phone and overflow-menu destinations
+share a soft `color.brandSoft` fill, readable `color.link` text and a thin
+indicator, with no added border or exaggerated solid fill.
 Slip header fills follow the outer frame with an inset radius. Disclosure and
 Share keep independent hit targets, aligned to their existing header slots.
 Status badges and match chips retain readable semantic fills without decorative
 outlines.
 
-The app footer consumes `color.page`. Match rows, slip selections and pagination
+The app footer consumes `footer.background`; app and dialog chrome use a quiet
+porcelain tint in light mode and corresponding layered dark surfaces. Dialog
+bodies retain `color.surface`. Match rows, slip selections and pagination
 boundaries use `phoneCardFrame.separator`. Shared search submission remains the
 trailing action, with square leading corners and inset trailing corners that fit
 its field frame. Status and period dropdowns use the shared control radius.

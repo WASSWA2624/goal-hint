@@ -106,7 +106,9 @@ export async function inspectControlHeights(page, scope = "body") {
       const height = element.closest("[data-feed-search]")?.getBoundingClientRect().height ?? bounds.height;
       const name = element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 45) || element.id;
       controls.push({ name, height });
-      if (height < expected - 1) failures.push({ name, height, expected, tag: element.tagName, html: element.outerHTML.slice(0, 200) });
+      const headerAction = element.matches('[data-theme-toggle], [data-account-menu] > summary');
+      const minimum = headerAction ? expected - 2 * Number.parseFloat(style.getPropertyValue('--gh-headerControl-blockInset')) : expected;
+      if (height < minimum - 1) failures.push({ name, height, expected: minimum, tag: element.tagName, html: element.outerHTML.slice(0, 200) });
     }
     return { controls: controls.length, failures };
   });

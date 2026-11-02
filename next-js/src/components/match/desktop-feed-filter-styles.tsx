@@ -8,8 +8,6 @@ import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
 import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
-import { desktopStickyFilters } from "@/components/ui/filter-chrome";
-import { desktopContentPadding } from "@/components/ui/layout";
 import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
@@ -45,18 +43,16 @@ const toolbarFieldControl = css`
 /** Desktop-only exports keep the existing phone filter components independent. */
 export const Panel = styled.form`
   ${filterPanelColors}
-  ${desktopStickyFilters}
   display: grid;
   gap: var(--gh-spacing-1_5);
   inline-size: 100%;
   min-inline-size: 0;
-  padding: var(--gh-spacing-2);
+  padding: ${({ theme }) => theme.layout.sectionPadding};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.page};
   [data-criteria-dialog] { ${filterDialogSurface} }
-  ${desktopContentPadding(true)}
 `;
 
 export const SearchRow = styled.div`

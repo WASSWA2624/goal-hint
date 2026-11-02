@@ -3,6 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon } from "@/components/ui/icons";
+import { sectionSurface } from "@/components/ui/filled-surfaces";
 import { media } from "@/styles/theme";
 import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
 
@@ -12,7 +13,7 @@ import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layo
  * pieces stay in that screen's own styles file. Owner copy is English only.
  */
 /** Codes, references and one-time passwords. */
-export const monoFont = 'ui-monospace, Consolas, "Courier New", monospace';
+export const monoFont = css`${({ theme }) => theme.typography.monoFamily}`;
 
 /** Hides text visually but keeps it for screen readers; for styled rules (components can use ui/visually-hidden). */
 export const visuallyHidden = css`
@@ -31,6 +32,7 @@ export const visuallyHidden = css`
 
 /** Title row: the page h1, then anything that belongs beside it (status tabs, the main action). */
 export const DeskHead = styled.div`
+  ${sectionSurface}
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -40,6 +42,7 @@ export const DeskHead = styled.div`
   h1 { font-size: var(--gh-font-page); line-height: var(--gh-leading-heading); }
   ${media.desktop} { h1 { font-size: var(--gh-font-feature); } }
   ${desktopContentPadding()}
+  && { padding-inline: ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 /** The h1 and its one-line description. */
 export const DeskTitle = styled.div`
@@ -96,10 +99,11 @@ export const PanelBody = styled.div`
   padding: var(--gh-spacing-3_5);
   ${media.desktop} { padding: var(--gh-spacing-3_5) var(--gh-spacing-4); }
   ${desktopContentPadding(true)}
+  && { padding-inline: ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 /** Panel heading row: an h2 (15px) on the start side, a link or a quiet count on the end side. */
 export const PanelHead = styled.div`
-  background: ${({ theme }) => theme.color.surfaceMuted};
+  ${sectionSurface}
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -110,6 +114,7 @@ export const PanelHead = styled.div`
   border-block-end: 0;
   h2, h3 { font-size: var(--gh-font-reading); line-height: var(--gh-leading-caption); }
   ${desktopContentPadding(true)}
+  && { padding-inline: ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 /** Small uppercase zone name above a desk zone: PROOF, EXPECTED PAYMENT, DECISION. */
 export const ZoneLabel = styled.p`
@@ -351,9 +356,9 @@ export const StickyActions = styled.div`
   z-index: var(--gh-layer-selected);
   display: flex;
   gap: var(--gh-spacing-2);
-  margin-inline: calc(-1 * var(--gh-spacing-4));
-  padding: var(--gh-spacing-2_5) var(--gh-spacing-4) calc(var(--gh-spacing-2_5) + env(safe-area-inset-bottom));
-  background: ${({ theme }) => theme.color.page};
+  margin-inline: calc(-1 * ${({ theme }) => theme.layout.sectionPadding});
+  padding: var(--gh-spacing-2_5) ${({ theme }) => theme.layout.sectionPadding} calc(var(--gh-spacing-2_5) + env(safe-area-inset-bottom));
+  ${sectionSurface}
   border-block-start: 0;
   > * { flex: 1 1 0; }
   ${media.desktop} { position: static; margin: 0; padding: 0; background: none; border: 0; }
