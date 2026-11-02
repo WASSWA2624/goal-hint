@@ -3,6 +3,9 @@
 ## Code and interface
 
 - Write efficient, professional, standard code and prefer reusable implementations.
+- Use shared theme tokens instead of hardcoded UI styling values. Implement and
+  verify every UI change in both light and dark themes, keeping corresponding
+  styles and reusable components consistent across screens.
 - Keep UI components uniform and reusable. Use the shared `theme.radius` scale
   for subtle corners appropriate to each component; see `next-js/docs/corner-radius.md`.
 - Keep web screens and business logic in `next-js/`; the Flutter app is a minimal
