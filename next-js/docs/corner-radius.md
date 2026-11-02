@@ -68,11 +68,12 @@ all four corners rounded. Selection wrappers touch, with a 1px separator in
 `theme.phoneCardFrame.separator`. The slip perimeter uses the same thin rule. Slip header
 fills use the outer radius minus `theme.phoneCardFrame.ruleWidth`; analysis
 links inherit their match row's corners so keyboard focus follows the shape.
-Disclosure indicators are pinned 8px below the header's top edge in both states.
-Only the inner chevron rotates: right when collapsed, down when expanded. On
-mobile, Share and disclosure use the shared control height with `control`
-corners, aligned tops and a themed gap; the metrics occupy their own clear row below.
-Desktop retains its circular disclosure frame. A mobile match card's covering
+Only the inner chevron rotates: right when collapsed, down when expanded.
+Share and disclosure use matching embedded frames derived from the shared control
+height, leaving a themed vertical inset inside the header in both states. On
+mobile, their `control` corners, aligned tops and themed gap sit above a clear
+metrics row. Desktop retains its circular disclosure frame and reserves enough
+end gutter to contain it. A mobile match card's covering
 analysis link uses the outer radius minus the frame width, so its pressed tint
 and focus outline cannot square off the visible corners.
 Headers and edge rows with their own fills must follow the parent's exposed

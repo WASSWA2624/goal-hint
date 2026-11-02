@@ -18,10 +18,14 @@ the floating label's 6px space for adjacent actions and action groups when
 fields are present. Helper text and errors stay below the control body.
 Use `data-control-field` on a new field wrapper so the row can recognize it.
 
-Password toggles, search submit icons and number steppers are embedded controls:
-they fit inside the enclosing field. Checkbox/radio glyphs, decorative icons,
+Password toggles, search submit icons, number steppers and slip-header actions are embedded controls:
+they fit inside their enclosing field or header. Checkbox/radio glyphs, decorative icons,
 multiline textareas, record cards and image previews keep their own dimensions.
 Their surrounding actionable labels and ordinary buttons use the shared height.
+
+Slip-header Share and disclosure frames share a smaller height derived from the
+control metric, with equal vertical inset. Keep their full bounds inside the
+header; the disclosure's end gutter must include its frame and side clearance.
 
 `tests/helpers/rendering/floating-labels` renders real mixed controls, account
 validation, checkout/payment actions, owner tabs and header actions. Build it

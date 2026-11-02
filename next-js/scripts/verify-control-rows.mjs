@@ -101,7 +101,7 @@ export async function inspectControlHeights(page, scope = "body") {
       const bounds = element.getBoundingClientRect(), style = getComputedStyle(element);
       if (!bounds.width || !bounds.height || style.visibility === "hidden" || style.opacity === "0") continue;
       if (!element.checkVisibility({ visibilityProperty: true, opacityProperty: true }) || element.closest("[data-fixture-controls]")) continue;
-      if (element.closest('[data-field-trailing], [data-field-action], [data-slip-number-stepper], [data-truncation]')) continue;
+      if (element.closest('[data-field-trailing], [data-field-action], [data-slip-number-stepper], [data-truncation], [data-slip-header-action], [data-phone-share-action]')) continue;
       if (element.tagName === "BUTTON" && element.closest("[data-floating-control], [data-feed-search]")) continue;
       const height = element.closest("[data-feed-search]")?.getBoundingClientRect().height ?? bounds.height;
       const name = element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 45) || element.id;

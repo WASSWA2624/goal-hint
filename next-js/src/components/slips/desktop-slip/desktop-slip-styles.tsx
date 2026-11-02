@@ -3,12 +3,13 @@
 import styled from "styled-components";
 import { alignedLedgerStyles, desktopMatchBaseStyles } from "@/components/match/desktop-match-styles";
 import { media } from "@/styles/theme";
-import { slipDisclosureIndicator } from "../slip-disclosure-styles";
+import { slipDisclosureIndicator, slipHeaderActionMetrics } from "../slip-disclosure-styles";
 
 export { alignedLedgerStyles } from "@/components/match/desktop-match-styles";
 
 /** Shared desktop geometry for production slips and the design review. */
 export const DesktopSlipBase = styled.div`
+  ${slipHeaderActionMetrics}
   --slip-header-separator-offset: calc(-1 * var(--gh-size-1_75));
   --slip-header-gap: var(--gh-spacing-3_5);
   --slip-header-end: var(--gh-size-2_5);
@@ -48,7 +49,9 @@ export const DesktopSlipBase = styled.div`
   [data-slip-header-action] {
     position: absolute;
     inset-inline-end: calc(var(--slip-header-end) + var(--review-status-width, var(--gh-size-28)) + var(--slip-header-gap) + ${({ theme }) => theme.border.width});
-    inset-block-start: 0; z-index: var(--gh-layer-raised);
+    inset-block-start: calc(var(--slip-header-action-inset) + ${({ theme }) => theme.phoneCardFrame.ruleWidth});
+    block-size: var(--slip-header-action-size); display: flex; align-items: center;
+    z-index: var(--gh-layer-raised);
   }
 
   ${desktopMatchBaseStyles}
@@ -67,14 +70,15 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
   ${media.desktop} {
     /* Reserve the end gutter for the control and keep header/body status tracks aligned. */
     &:has([data-toggle-chevron]) {
-      --slip-header-end: var(--gh-size-8_5);
+      --slip-header-end: calc(var(--slip-header-action-size) + var(--gh-spacing-1_5));
       [data-desktop-row] { padding-inline-end: var(--slip-header-end); }
     }
     &&& [data-toggle-chevron] {
       ${slipDisclosureIndicator}
       --slip-chevron-size: var(--gh-size-1_75);
-      inline-size: var(--form-control-height); block-size: var(--form-control-height);
-      inset-inline-end: calc((var(--slip-header-end) - var(--form-control-height)) / 2); inset-block-start: 0; transform: none;
+      inline-size: var(--slip-header-action-size); block-size: var(--slip-header-action-size);
+      inset-inline-end: calc((var(--slip-header-end) - var(--slip-header-action-size)) / 2);
+      inset-block-start: var(--slip-header-action-inset); transform: none;
     }
     &&& [data-slip-disclosure][open] > [data-slip-summary] [data-toggle-chevron] { --slip-chevron-rotation: 45deg; }
     /* Draw on the outer frame so the rail spans matches without affecting their layout. */
@@ -109,12 +113,10 @@ export const DesktopSlipLayout = styled(DesktopSlipBase)`
       ${media.hover} { &:hover { background: color-mix(in srgb, ${({ theme }) => theme.phoneCardFrame.header} 94%, ${({ theme }) => theme.color.surface}); } }
     }
     &:not(:has([data-slip-disclosure][open])) {
-      [data-slip-header-action] { inset-block-start: 0; block-size: var(--form-control-height); display: flex; align-items: center; }
       [data-share-slip] {
         color: ${({ theme }) => theme.color.accent.blue.text}; background: ${({ theme }) => theme.color.surface};
         font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold);
         &:focus-visible { outline-color: ${({ theme }) => theme.color.accent.blue.text}; }
-        @media (pointer: coarse) { min-block-size: var(--form-control-height); }
       }
     }
   }

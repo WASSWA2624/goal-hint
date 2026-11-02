@@ -8,14 +8,13 @@ import { slipHeaderActionFrame } from "../slip-disclosure-styles";
 import { dialogSurface } from "@/components/ui/dialog-surfaces";
 
 export const ShareTrigger = styled(Button)`
-  && { min-block-size: var(--form-control-height); min-inline-size: 0; padding: var(--gh-spacing-0_75) var(--gh-spacing-1_75); gap: var(--gh-spacing-1_25); border-radius: ${({ theme }) => theme.radius.control};
+  && { min-block-size: var(--slip-header-action-size, var(--gh-size-7)); block-size: var(--slip-header-action-size, var(--gh-size-7)); min-inline-size: 0; padding: var(--gh-spacing-0_75) var(--gh-spacing-1_75); gap: var(--gh-spacing-1_25); border-radius: ${({ theme }) => theme.radius.control};
     font-size: var(--gh-font-secondary); line-height: var(--gh-leading-heading); font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   svg { inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); }
-  @media (pointer: coarse) { && { min-block-size: var(--form-control-height); } }
   &&[data-share-icon-only] {
     ${slipHeaderActionFrame}
-    inline-size: var(--slip-header-action-size, var(--form-control-height)); min-inline-size: var(--slip-header-action-size, var(--form-control-height));
-    block-size: var(--slip-header-action-size, var(--form-control-height)); min-block-size: var(--slip-header-action-size, var(--form-control-height)); padding: 0;
+    inline-size: var(--slip-header-action-size, var(--gh-size-7)); min-inline-size: var(--slip-header-action-size, var(--gh-size-7));
+    padding: 0;
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};  }
   }
   &[data-share-icon-only] svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); }

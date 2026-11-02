@@ -1,7 +1,7 @@
 "use client";
 
 import styled from "styled-components";
-import { slipDisclosureIndicator } from "../slip-disclosure-styles";
+import { slipDisclosureIndicator, slipHeaderActionMetrics } from "../slip-disclosure-styles";
 import { joinedSlipSelections } from "../joined-slip-styles";
 
 /** A full-row link leaves the compact content with one generous, predictable analysis target. */
@@ -36,7 +36,7 @@ export const MatchRow = styled.div`
 `;
 
 export const CompactCard = styled.article`
-  --slip-header-action-size: var(--form-control-height);
+  ${slipHeaderActionMetrics}
   --slip-header-action-gap: var(--gh-spacing-2_5);
   --slip-inner-radius: ${({ theme }) => `max(0px, calc(${theme.radius.surface} - ${theme.phoneCardFrame.ruleWidth}))`};
   min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.phoneCardFrame.inset};

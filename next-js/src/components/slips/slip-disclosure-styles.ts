@@ -1,5 +1,11 @@
 import { css } from "styled-components";
 
+/** Embedded header actions share a smaller frame, with room above and below it. */
+export const slipHeaderActionMetrics = css`
+  --slip-header-action-inset: var(--gh-spacing-1_5);
+  --slip-header-action-size: calc(var(--form-control-height) - 2 * var(--slip-header-action-inset));
+`;
+
 /** Matching compact frames for disclosure and Share, with independent hit targets. */
 export const slipHeaderActionFrame = css`
   display: grid; place-items: center; box-sizing: border-box;
