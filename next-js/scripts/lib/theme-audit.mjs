@@ -65,6 +65,7 @@ export function hardcodedVisuals(source, file) {
     const css = value.replaceAll(/\/\*[\s\S]*?\*\//gu, "");
     const literals = css.match(/#[\da-f]{3,8}\b|\b(?:rgba?|hsla?)\(\s*\d|(?<![\w.-])-?(?:\d*\.)?\d+(?:px|rem|em|ch|ms|s)\b|(?:font-weight|line-height|z-index|opacity)\s*:\s*(?![01](?:\s*[;}!]|$))-?(?:\d*\.)?\d+(?![\w.])/giu) ?? [];
     literals.push(...(css.match(/font-weight:\s*(?:normal|bold|bolder|lighter)\b|font-family:\s*(?:ui-monospace|Arial|sans-serif|serif|monospace)\b/gu) ?? []));
+    literals.push(...(css.match(/(?<![\w-])(?:ease(?:-in(?:-out)?|-out)?|linear)(?=\s*[,;]|\s+(?:infinite|forwards|alternate))/gu) ?? []));
     if (kind === "inline") {
       const dimensions = css.match(/(?:gap|padding[\w-]*|margin[\w-]*|(?:min-|max-)?(?:width|height|inline-size|block-size)|font-size)\s*:\s*(?!0\s*;)(?:\d*\.)?\d+\s*;/gu) ?? [];
       literals.push(...dimensions);

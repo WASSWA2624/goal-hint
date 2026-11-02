@@ -33,7 +33,7 @@ export const sheetFrame = css`
   border-block-start: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   outline: none;
-  animation: ${sheetIn} var(--gh-duration-deliberate) ease-out;
+  animation: ${sheetIn} var(--gh-duration-deliberate) var(--gh-easing-out);
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 export const SheetHeader = styled.div`

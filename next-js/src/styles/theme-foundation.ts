@@ -207,6 +207,7 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
     reducedDuration: string;
     duration: Readonly<Record<keyof typeof durationScale, string>>;
     easingInOut: string;
+    easingOut: string;
     easingLinear: string;
   }>;
   readonly interaction: Readonly<{
@@ -351,7 +352,7 @@ export const foundationLightTheme: GoalHintTheme = {
   select: { background: "#FFFFFF", hoverBackground: "#FFFFFF", expandedBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF" },
   action: { quietBackground: "#E0E5ED", quietHoverBackground: "#D6DFEC", headerBackground: "#E0E5ED" },
   fieldAdornment: { background: "#FFFFFF", hoverBackground: "#FFFFFF" },
-  motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms", duration: durationScale, easingInOut: "ease-in-out", easingLinear: "linear" },
+  motion: { fast: "120ms", feedback: "140ms", disclosure: "150ms", surface: "160ms", easing: "ease", reducedDuration: "0.01ms", duration: durationScale, easingInOut: "ease-in-out", easingOut: "ease-out", easingLinear: "linear" },
   interaction: { pressedFilter: "none", headerHoverBrightness: 1.1, filterHoverBrightness: 0.95, toolHoverBrightness: 0.96 },
   scrollbarColor: "auto",
   control: { height: "40px", touchHeight: "44px", labelSpace: "6px", minHeight: "2.75rem", compactHeight: "2.25rem" },

@@ -18,3 +18,22 @@ SVG coordinate systems and data-driven chart/pitch geometry remain local. Image
 export/upload dimensions are output-format and processing constraints. Historical
 design catalogs retain their authored comparison directions; production components
 consume the shared theme.
+
+## Verification · 2026-11-02
+
+- Source contract audit, lint, type checking and production compilation passed.
+- All 39 targeted theme, boundary, palette, sidebar, payment and image-export
+  regressions passed.
+- Browser acceptance passed 648 checks: 480 uniform-control row checks, 24 mixed
+  row checks, 72 real-screen row checks, 24 page/dialog theme checks and 48 gallery
+  screen checks. Coverage includes both active themes, fine/coarse pointers and
+  320/390/768/1024/1440/1920px viewports. Gallery checks also verify contrast,
+  white text fields, outer rails, overflow and browser errors.
+- Reviewed screenshots of light slips, mobile matches, the owner workspace and
+  dark matches. Generated captures and logs stay outside commits.
+- The broad unit run reported 2,711 passes, 14 failures and one skip. A payment
+  utility import regression was fixed and its tests passed; the database CLI
+  timeout passed when rerun alone. The other 12 failures reproduced against an
+  untouched baseline: existing admin navigation/exclusions, demo context, stream
+  loader, settings/offline projections, published-slip and SEO expectations.
+  These business and test-fixture issues remain outside the visual changes.

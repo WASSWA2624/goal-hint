@@ -80,11 +80,15 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           if (element.matches("[data-floating-outline]")) return ["Top", "Right", "Bottom", "Left"].some(edge => Number.parseFloat(style[`border${edge}Width`]) > 2);
           const edges = ["Top", "Right", "Bottom", "Left"];
           if (element.matches("[data-compact-slip]")) {
-            return edges.some(edge => style[`border${edge}Width`] !== ruleWidth || style[`border${edge}Color`] !== style.backgroundColor);
+            // White slip bodies keep a distinct semantic separator rather than hiding the frame in their fill.
+            return edges.some(edge => style[`border${edge}Width`] !== ruleWidth || style[`border${edge}Color`] !== style.borderTopColor);
           }
           if (element.matches("[data-slip-selections] > [data-slip-selection] + [data-slip-selection]")) {
-            const backdrop = getComputedStyle(element.closest("[data-compact-slip]")).backgroundColor;
-            return edges.some(edge => style[`border${edge}Width`] !== (edge === "Top" ? ruleWidth : "0px")) || style.borderTopColor !== backdrop;
+            const separator = getComputedStyle(element.closest("[data-compact-slip]")).borderTopColor;
+            return edges.some(edge => style[`border${edge}Width`] !== (edge === "Top" ? ruleWidth : "0px")) || style.borderTopColor !== separator;
+          }
+          if (element.matches("[data-match-list] > li:has(> article:only-child), [data-match-list] > li:has(> [data-desktop-row]:only-child)")) {
+            return edges.some(edge => style[`border${edge}Width`] !== (edge === "Top" && !element.matches(":first-child") ? "0px" : ruleWidth));
           }
           if (element.matches("[data-match-list] > li + li, [data-feed-pagination]")) {
             return edges.some(edge => !["0px", edge === "Top" ? ruleWidth : "0px"].includes(style[`border${edge}Width`]));

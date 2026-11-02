@@ -71,7 +71,7 @@ export const durationScale = {
 } as const;
 
 /** Flattened uploads and portable exports need an opaque paper surface in either appearance. */
-export const mediaTokens = { paper: "#FFFFFF" } as const;
+export const mediaTokens = { paper: "#FFFFFF", fallbackFamily: "Arial, sans-serif" } as const;
 
 /** Pixel geometry used by browser measurements and persisted workspace preferences. */
 export const uiGeometry: Readonly<{

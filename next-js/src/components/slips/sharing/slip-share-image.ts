@@ -11,11 +11,11 @@ const colors = Object.freeze({ paper: lightTheme.color.surface, ink: lightTheme.
   muted: lightTheme.color.mutedText, brand: lightTheme.color.brand, line: lightTheme.phoneCardFrame.border });
 
 function fontFamily(): string {
-  return getComputedStyle(document.body).fontFamily || "Arial, sans-serif";
+  return getComputedStyle(document.body).fontFamily || lightTheme.media.fallbackFamily;
 }
 
 async function loadedFontFamily(): Promise<string> {
-  if (!document.fonts) return "Arial, sans-serif";
+  if (!document.fonts) return lightTheme.media.fallbackFamily;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const loaded = await Promise.race([
@@ -23,7 +23,7 @@ async function loadedFontFamily(): Promise<string> {
       new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), 2500); }),
     ]);
     // A late webfont cannot change the widths of pages measured in the fallback.
-    return loaded ? fontFamily() : "Arial, sans-serif";
+    return loaded ? fontFamily() : lightTheme.media.fallbackFamily;
   } finally { if (timer !== undefined) clearTimeout(timer); }
 }
 

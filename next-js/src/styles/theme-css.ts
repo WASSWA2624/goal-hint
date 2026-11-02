@@ -16,5 +16,5 @@ export function themeCssVariables(theme: GoalHintTheme): string {
   return Object.entries(groups).flatMap(([group, tokens]) => Object.entries(tokens)
     .map(([step, value]) => `--gh-${group}-${stepName(step)}: ${value};`))
     .concat(`--gh-easing: ${theme.motion.easing};`, `--gh-easing-in-out: ${theme.motion.easingInOut};`,
-      `--gh-easing-linear: ${theme.motion.easingLinear};`).join("\n");
+      `--gh-easing-out: ${theme.motion.easingOut};`, `--gh-easing-linear: ${theme.motion.easingLinear};`).join("\n");
 }

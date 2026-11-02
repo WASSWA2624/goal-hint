@@ -8,7 +8,7 @@ export const floatingLabel = css`
   padding-inline: var(--gh-spacing-0_75); color: ${({ theme }) => theme.color.mutedText};
   font-size: var(--gh-font-section); font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: var(--gh-leading-heading);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text;
-  transition: inset-block-start var(--gh-duration-surface) ease, font-size var(--gh-duration-surface) ease;
+  transition: inset-block-start var(--gh-duration-surface) var(--gh-easing), font-size var(--gh-duration-surface) var(--gh-easing);
   @media (prefers-reduced-motion: reduce) { transition: none; }
 `;
 

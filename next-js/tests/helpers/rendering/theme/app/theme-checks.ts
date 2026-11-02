@@ -63,8 +63,10 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
     assert(!!indicator && visible(indicator), "Collapsible slips retain a visible disclosure indicator");
     if (!indicator) continue;
     const rect = indicator.getBoundingClientRect(), header = summary.getBoundingClientRect();
-    const offset = phone ? Number.parseFloat(theme.spacing[2]) : 0;
+    const offset = phone ? Number.parseFloat(theme.spacing[2])
+      : Number.parseFloat(getComputedStyle(indicator).getPropertyValue("--slip-header-action-inset")) || 0;
     assert(Math.abs(rect.top - header.top - offset) < 0.1, "Disclosure indicator stays in its themed header slot");
+    assert(rect.top >= header.top && rect.bottom <= header.bottom + 1, "Disclosure indicator fits inside its header");
     const rotation = new DOMMatrix(getComputedStyle(indicator, "::after").transform);
     assert(summary.parentElement?.hasAttribute("open") ? rotation.b > 0 : rotation.b < 0,
       "Disclosure indicator faces right when collapsed and down when expanded");
