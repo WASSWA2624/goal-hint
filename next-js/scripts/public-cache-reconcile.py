@@ -20,15 +20,11 @@ def main(argv=None):
     parser.add_argument("limit", nargs="?", type=batch_size, default=100)
     parser.add_argument("--all", action="store_true", help="Repeat bounded transactions until a pass reports no work.")
     args = parser.parse_args(argv)
-    totals = {"acknowledged": 0, "removed": 0}
-    for _ in range(1000 if args.all else 1):
-        result = service("cache-reconcile", {"limit": args.limit})
-        for key in totals:
-            totals[key] += result[key]
-        if not args.all or not any(result[key] for key in totals):
-            print(json.dumps(totals, separators=(",", ":")))
-            return
-    raise CommandError(f"Cache maintenance reached 1000 passes ({totals['acknowledged']} acknowledged, {totals['removed']} removed). Run again to continue the backlog.")
+    payload = {"limit": args.limit}
+    if args.all:
+        payload["all"] = True
+    result = service("cache-reconcile", payload, timeout=600) if args.all else service("cache-reconcile", payload)
+    print(json.dumps(result, separators=(",", ":")))
 
 
 if __name__ == "__main__":

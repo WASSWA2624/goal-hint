@@ -92,8 +92,10 @@ verifies each generation is already applied, then acknowledges in the same
 transaction. It also removes a bounded batch of expired disposable responses.
 Use `npm run cache:reconcile -- 1000 --all` to repeat bounded passes until both
 counts are zero and print the total acknowledged/removed. The command stops after
-1,000 passes; rerun it to continue a larger backlog. An incomplete local runtime
-reports the recovery command, `npm ci`, without exposing private diagnostics.
+1,000 passes, with a ten-minute command timeout; rerun it to continue a larger
+backlog. All passes reuse one Node process and connection pool; each transaction
+retains the existing batch bound. An incomplete local runtime reports the recovery
+command, `npm ci`, without exposing private diagnostics.
 Multiple replicas can consume safely. No timestamp or maximum-ID cursor is used, so a
 transaction that commits late remains discoverable. Failed acknowledgment rolls
 back, and duplicate passes are harmless. Invalidation works immediately even if

@@ -95,7 +95,8 @@ async function dispatch(action, payload) {
     case 'cache-reconcile': {
       const { getDatabase, disconnectDatabase } = await import('../database/client.ts');
       const { createMysqlPublicCacheStore } = await import('../cache/mysql-public-cache.ts');
-      try { return await createMysqlPublicCacheStore(getDatabase()).reconcile(payload.limit); }
+      const { reconcilePublicCache } = await import('../cache/public-cache-maintenance.ts');
+      try { return await reconcilePublicCache(createMysqlPublicCacheStore(getDatabase()), { limit: payload.limit, all: payload.all === true }); }
       finally { await disconnectDatabase(); }
     }
     case 'competition-access': {
@@ -134,7 +135,7 @@ try {
   const { payload } = request;
   process.stdout.write('\x1e' + JSON.stringify({ ok: true, value: await dispatch(action, payload) }));
 } catch (error) {
-  const safe = error instanceof RuntimePolicyError || ['BackupError', 'TrialCommandError', 'OwnerApprovalError'].includes(error?.name)
+  const safe = error instanceof RuntimePolicyError || ['BackupError', 'TrialCommandError', 'OwnerApprovalError', 'CacheMaintenanceLimitError'].includes(error?.name)
     || error?.message === 'MIGRATION_DATABASE_URL is required; application credentials are never substituted.';
   const fallback = {
     'database-health': 'Database readiness: unavailable. Check private configuration and approved access.',

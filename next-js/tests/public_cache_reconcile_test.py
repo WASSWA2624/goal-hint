@@ -27,15 +27,10 @@ class CacheReconcileTests(unittest.TestCase):
         self.assertEqual(result, {"acknowledged": 100, "removed": 3})
         service.assert_called_once_with("cache-reconcile", {"limit": 100})
 
-    def test_all_continues_when_only_one_kind_of_work_remains(self):
-        result, service = self.run_command(["1000", "--all"], [
-            {"acknowledged": 1000, "removed": 0},
-            {"acknowledged": 0, "removed": 2},
-            {"acknowledged": 0, "removed": 0},
-        ])
+    def test_all_uses_one_service_process_for_the_whole_backlog(self):
+        result, service = self.run_command(["1000", "--all"], [{"acknowledged": 1000, "removed": 2}])
         self.assertEqual(result, {"acknowledged": 1000, "removed": 2})
-        self.assertEqual(service.call_count, 3)
-        self.assertTrue(all(call.args == ("cache-reconcile", {"limit": 1000}) for call in service.call_args_list))
+        service.assert_called_once_with("cache-reconcile", {"limit": 1000, "all": True}, timeout=600)
 
     def test_invalid_batch_never_reaches_database(self):
         for value in ["0", "1001", "9999", "-1", "1.5", "secret", "\u0661"]:
@@ -58,13 +53,6 @@ class CacheReconcileTests(unittest.TestCase):
                 cache.main(["--all"])
         service.assert_called_once()
         self.assertEqual(output.getvalue(), "")
-
-    def test_continuous_writes_have_a_finite_pass_limit(self):
-        with patch.object(cache, "service", return_value={"acknowledged": 1, "removed": 0}) as service:
-            with self.assertRaisesRegex(cache.CommandError, "1000 passes"):
-                cache.main(["--all"])
-        self.assertEqual(service.call_count, 1000)
-
 
 if __name__ == "__main__":
     unittest.main()
