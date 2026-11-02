@@ -17,6 +17,75 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
+class DevelopmentDependencyTests(unittest.TestCase):
+    def write_dependencies(self, root, *, config="", nodemon=False):
+        files = {"next/package.json": '{"name":"next","version":"0.0.0"}',
+                 "next/dist/bin/next.js": "", "prisma/build/index.js": "", "prisma/config.js": config}
+        if nodemon:
+            files["nodemon/bin/nodemon.js"] = ""
+        for name, content in files.items():
+            path = root / "node_modules" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+
+    def test_loadable_dependencies_pass_without_starting_a_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_dependencies(root)
+            (root / "node_modules/prisma/build/index.js").write_text("throw Error('CLI must not run');", encoding="utf-8")
+            with patch.object(MODULE, "ROOT", root):
+                MODULE.check_development_dependencies()
+
+    def test_missing_prisma_transitive_dependency_reports_locked_install_repair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_dependencies(root, config="require('effect');")
+            with patch.object(MODULE, "ROOT", root), self.assertRaisesRegex(MODULE.CommandError, "npm ci --include=dev"):
+                MODULE.check_development_dependencies()
+
+    def test_incomplete_next_package_reports_locked_install_repair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_dependencies(root)
+            (root / "node_modules/next/package.json").unlink()
+            with patch.object(MODULE, "ROOT", root), self.assertRaisesRegex(MODULE.CommandError, "npm ci --include=dev"):
+                MODULE.check_development_dependencies()
+
+    def test_live_mode_requires_nodemon_without_loading_unused_prisma(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_dependencies(root, config="throw Error('Prisma must not load in live mode');", nodemon=True)
+            with patch.object(MODULE, "ROOT", root):
+                MODULE.check_development_dependencies(live=True)
+                (root / "node_modules/nodemon/bin/nodemon.js").unlink()
+                with self.assertRaisesRegex(MODULE.CommandError, "npm ci --include=dev"):
+                    MODULE.check_development_dependencies(live=True)
+
+    def test_dependency_failure_precedes_server_cleanup_and_mysql_startup(self):
+        for args in [[], ["--live"], ["--prepare-only"], ["--verify-only"]]:
+            with self.subTest(args=args), patch.object(MODULE.sys, "argv", ["development.py", *args]), \
+                    patch.dict(MODULE.os.environ, {"GOAL_HINT_DEMO": "true"}), \
+                    patch.object(MODULE, "check_development_dependencies", side_effect=MODULE.CommandError("repair dependencies")), \
+                    patch.object(MODULE, "release_development_web") as cleanup, \
+                    patch.object(MODULE, "DevelopmentMysql") as database:
+                with self.assertRaisesRegex(MODULE.CommandError, "repair dependencies"):
+                    MODULE.main()
+                cleanup.assert_not_called()
+                database.assert_not_called()
+
+    def test_failed_or_timed_out_check_does_not_expose_child_output(self):
+        for result in [subprocess.CompletedProcess([], 1, "private-sentinel", "private-sentinel"),
+                       subprocess.TimeoutExpired([], 30), OSError("private-sentinel")]:
+            with self.subTest(result=result), patch.object(MODULE.subprocess, "run") as run:
+                if isinstance(result, Exception):
+                    run.side_effect = result
+                else:
+                    run.return_value = result
+                with self.assertRaisesRegex(MODULE.CommandError, "npm ci --include=dev") as failure:
+                    MODULE.check_development_dependencies()
+                self.assertNotIn("private-sentinel", str(failure.exception))
+
+
 class DemoEnvironmentTests(unittest.TestCase):
     def test_private_targets_and_paid_provider_settings_are_replaced(self):
         source = {"DATABASE_URL": "mysql://private@remote.invalid/real", "API_FOOTBALL_KEY": "private-football-key",

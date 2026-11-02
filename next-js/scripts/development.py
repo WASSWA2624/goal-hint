@@ -20,6 +20,24 @@ def development_node_binary():
     return os.environ.get("npm_node_execpath") or node_binary()
 
 
+def check_development_dependencies(*, live=False):
+    """Check the selected runtime's dependencies before starting local services."""
+    script = ("require('next/package.json'); require.resolve('next/dist/bin/next'); " +
+              ("require.resolve('nodemon/bin/nodemon.js');" if live else
+               "require.resolve('prisma/build/index.js'); require('prisma/config');"))
+    try:
+        result = subprocess.run([development_node_binary(), "--input-type=commonjs", "-e", script],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=30, creationflags=hidden_process())
+        if result.returncode == 0:
+            return
+    except (OSError, subprocess.SubprocessError):
+        pass
+    raise CommandError("Development dependencies could not be loaded. "
+                       "Run `npm ci --include=dev` in next-js/ to restore the locked dependencies, "
+                       "then retry the development command.")
+
+
 ADMINISTRATOR_KEYS = ("GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD_HASH", "GOAL_HINT_ADMIN_PASSWORD")
 
 
@@ -217,6 +235,7 @@ def main():
         raise CommandError("Preparation and verification flags apply only to the development demo.")
     if prepare_only and verify_only:
         raise CommandError("Choose either --prepare-only or --verify-only.")
+    check_development_dependencies(live=live)
     if "--help" in args or "-h" in args:
         return subprocess.call([development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--help"], cwd=ROOT)
     if not prepare_only and not verify_only:

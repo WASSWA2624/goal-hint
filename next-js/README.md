@@ -50,6 +50,12 @@ or provider credentials are needed for the foundation. Install from
 `package-lock.json` with `npm ci`; use `npm install` only for intentional,
 reviewed dependency updates and commit the resulting lockfile.
 
+If startup reports missing packages such as Prisma's `effect` dependency, run
+`npm ci --include=dev` here to restore the complete locked installation, then
+retry `npm run dev`. The launcher checks its dependencies before starting MySQL
+or replacing an existing development server. Do not add Prisma's transitive
+dependencies to this application's `package.json` to repair a partial install.
+
 To run the production build locally with the configured MySQL database, stop the
 development server, then run:
 

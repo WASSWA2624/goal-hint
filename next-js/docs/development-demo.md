@@ -12,6 +12,12 @@ npm ci
 npm run dev -- --hostname 0.0.0.0 --port 3000
 ```
 
+The launcher checks Next.js and loads Prisma's configuration dependencies before
+starting or replacing any development services. If an interrupted or incomplete
+install leaves packages such as `effect` missing, restore the lockfile's full
+dependency tree with `npm ci --include=dev` and retry. This also runs the normal
+postinstall client generation; no dependency version changes are needed.
+
 The launcher applies the ordinary migrations and prepares the football catalog,
 all fixture dates, and rich records for the default pages: today through the next
 30 days for the slip builder, plus the preceding 29 days for performance/history.
