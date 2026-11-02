@@ -25,7 +25,7 @@ const headerFocus = css`
   }
 `;
 
-export const ShellFrame = styled.div.attrs({ "data-app-shell": "" })`
+export const ShellFrame = styled.div.attrs<{ "data-app-shell"?: string }>({ "data-app-shell": "" })`
   --app-content-gutter: 0px;
   --app-mobile-tab-height: ${mobileTabHeight};
   --app-header-height: ${({ theme }) => theme.header.phoneHeight};
