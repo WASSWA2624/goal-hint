@@ -43,7 +43,7 @@ export function FloatingField({ label, children, action, leading, trailing, hint
   </Root>;
 }
 
-const Root = styled.div`display: grid; align-self: start; align-content: start; gap: 5px; min-inline-size: 0; max-inline-size: 100%;`;
+const Root = styled.div`display: grid; align-self: start; align-content: start; gap: 5px; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%;`;
 const Frame = styled.div`
   position: relative; min-inline-size: 0; margin-block-start: 6px;
   && > label { ${floatingLabel} }
@@ -54,7 +54,7 @@ const Frame = styled.div`
     display: block; padding-inline: 10px; border-radius: ${({ theme }) => theme.radius.control};
     font-family: inherit; font-weight: normal;
     &:focus-visible { outline: none; }
-    &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
+    &:disabled { cursor: not-allowed; }
     &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   }
   &&& > input, &&& > textarea {

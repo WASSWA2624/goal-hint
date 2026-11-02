@@ -13,6 +13,7 @@ import { resolveBestSlipsDates } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
 import { SlipCard, SlipCardSummary } from "./slip-card";
+import { SlipShareAction } from "./slip-share-action";
 import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
@@ -87,7 +88,9 @@ export function BestSlips({ result, locale }: { result: BestSlipsResult; locale:
           totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}
           {...(view.publicationDay ? { publicationDay: view.publicationDay } : {})}
           {...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {})} {...(view.outcome ? { outcome: view.outcome } : {})}
-          {...(view.status ? { status: view.status } : {})} collapsible={false}>
+          {...(view.status ? { status: view.status } : {})} collapsible={false}
+          headerAction={<SlipShareAction locale={locale} iconOnly={!desktop}
+            {...(view.id ? { source: { source: "best", day: view.publicationDay ?? content.day, slipId: view.id } } : {})} />}>
         {null}
       </SlipCardSummary>}</div>)}</SlipList>
       </SlipMatchRefreshProvider>

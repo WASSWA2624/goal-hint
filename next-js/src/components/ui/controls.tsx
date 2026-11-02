@@ -87,12 +87,12 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
       case "quiet":
         return css`
           color: ${theme.color.link};
-          background: ${theme.color.surfaceMuted};
+          background: ${theme.mode === "light" ? theme.color.field : theme.color.surfaceMuted};
 
           ${media.hover} {
             &:hover {
               color: ${theme.color.brandHover};
-              background: ${theme.color.brandSoft};
+              background: ${theme.mode === "light" ? theme.color.fieldHover : theme.color.brandSoft};
             }
           }
         `;
@@ -186,7 +186,6 @@ const inputTreatment = css<{ $invalid: boolean }>`
   ${({ theme, $invalid }) => $invalid && css`
     &, &:hover, &:focus-within {
       color: ${theme.color.outcome.incorrect.text};
-      background: ${theme.color.outcome.incorrect.background};
     }
   `}
   border-radius: ${({ theme }) => theme.radius.control};
@@ -200,7 +199,6 @@ const inputTreatment = css<{ $invalid: boolean }>`
 
   &:disabled {
     color: ${({ theme }) => theme.color.disabledText};
-    background: ${({ theme }) => theme.color.disabledSurface};
     cursor: not-allowed;
   }
 

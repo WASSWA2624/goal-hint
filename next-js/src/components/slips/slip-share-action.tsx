@@ -13,7 +13,7 @@ const serverCanShare = () => false;
 
 export function SlipShareAction({ source, sharedSlip, locale, iconOnly = false }: { source?: ShareSlipSource; sharedSlip?: SharedSlip; locale: string; iconOnly?: boolean }) {
   const [open, setOpen] = useState(false), [cached, setCached] = useState(sharedSlip);
-  const canShare = useSyncExternalStore(subscribeMemberSession, getSlipSharingSnapshot, serverCanShare);
+  const canShare = useSyncExternalStore(subscribeMemberSession, getSlipSharingSnapshot, serverCanShare) && !!(source || sharedSlip);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId(), m = createMessages(locale);
   if (open && !canShare) setOpen(false);

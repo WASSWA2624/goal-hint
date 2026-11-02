@@ -1,6 +1,6 @@
 "use client";
 
-import { createGlobalStyle } from "styled-components";
+import { createGlobalStyle, css } from "styled-components";
 
 export const GlobalStyle = createGlobalStyle`
   *,
@@ -174,6 +174,13 @@ export const GlobalStyle = createGlobalStyle`
     color: ${({ theme }) => theme.color.mutedText};
     opacity: 1;
   }
+
+  ${({ theme }) => theme.mode === "light" && css`
+    input:autofill {
+      box-shadow: inset 0 0 0 1000px ${theme.textField.background};
+      -webkit-text-fill-color: ${theme.color.text};
+    }
+  `}
 
   img,
   video {

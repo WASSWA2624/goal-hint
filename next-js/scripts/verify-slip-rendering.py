@@ -119,8 +119,8 @@ def verify_clean_ledger_selection(card, path):
     assert positions == sorted(positions), f"{path}: prediction facts preserve the requested reading order"
 
 
-def verify_collapsed_disclosure(disclosure, path):
-    assert "open" not in disclosure.attrs, f"{path}: slip starts collapsed before hydration"
+def verify_expanded_disclosure(disclosure, path):
+    assert "open" in disclosure.attrs, f"{path}: slip starts expanded before hydration"
     toggles = disclosure.nodes("summary")
     assert len(toggles) == 1 and "data-slip-toggle" in toggles[0].attrs, f"{path}: one native summary toggles the entire header"
     toggle = toggles[0]
@@ -207,7 +207,7 @@ def criteria_groups(document, path, error_group=None):
     assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "limits", "kickoff", "markets", "actions"], f"{path}: controls retain their titled category order"
     for group in toolbar_groups:
         name = group.attrs["data-toolbar-group"]
-        titles = group.nodes("label") if name == "slips" else group.nodes("legend") if name in {"total", "matches"} else group.nodes(attr="data-criteria-title")
+        titles = [child for child in group.children if isinstance(child, Element) and child.tag == "legend"] if name in {"slips", "total", "matches"} else group.nodes(attr="data-criteria-title")
         assert len(titles) == 1 and titles[0].text.strip(), f"{path}: {name} has a category title"
     for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
@@ -264,7 +264,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             disclosures = slip.nodes("details", "data-slip-disclosure")
             assert len(disclosures) == 1, f"{path}: every generated slip has one native disclosure"
             assert not slip.nodes("header", "data-slip-summary"), f"{path}: no static fallback slip header"
-            header, content = verify_collapsed_disclosure(disclosures[0], path)
+            header, content = verify_expanded_disclosure(disclosures[0], path)
             verify_mobile_header(header, path, selections_per_slip)
             assert content.nodes("li", "data-slip-selection") == slip.nodes("li", "data-slip-selection"), f"{path}: every original selection belongs to the expandable content"
             assert len(content.nodes("li", "data-slip-selection")) == selections_per_slip, f"{path}: expandable content retains every original selection"
@@ -328,7 +328,7 @@ def verify_defaults(document):
     for name, value in NUMERIC_RANGE_DEFAULTS.items():
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and fields[name] == value, f"Default {name}: expected {value!r}, found {fields.get(name)!r}"
-        assert controls[0].attrs.get("placeholder") == "Any", f"Default {name}: blank numeric range displays Any"
+        assert not controls[0].attrs.get("placeholder", "").strip(), f"Default {name}: floating labels replace visible placeholders"
         if name in ("totalMin", "totalMax", "oddsMin", "oddsMax"):
             assert controls[0].attrs.get("min") == "0.01" and controls[0].attrs.get("step") == "0.01", f"{name}: hundredth odds steps and valid minimum"
             assert controls[0].attrs.get("max") == "90071992547409.91", f"{name}: only the shared exact-number ceiling limits entry"
@@ -436,6 +436,7 @@ def verify_best_slips(origin, directory):
         disclosures = document.nodes("details", "data-slip-disclosure")
         headers = document.nodes(attr="data-mobile-slip-header")
         assert len(headers) == count, f"Best Slips {scenario}: renders all {count} shared headers"
+        assert len(document.nodes("button", "data-share-slip")) == count, f"Best Slips {scenario}: Share remains visible for every access tier"
         assert len(disclosures) == (0 if locked else count), f"Best Slips {scenario}: only full slips expose match disclosures"
         assert all(node.attrs["data-compact-slip"] == "clean-ledger" for node in document.nodes(attr="data-compact-slip")), f"Best Slips {scenario}: selected Clean ledger disclosure serves every viewer"
         if locked:
@@ -446,7 +447,7 @@ def verify_best_slips(origin, directory):
         averages = []
         for index, toggle in enumerate(headers):
             if not locked:
-                verified, content = verify_collapsed_disclosure(disclosures[index], f"Best Slips {scenario}, slip {index + 1}")
+                verified, content = verify_expanded_disclosure(disclosures[index], f"Best Slips {scenario}, slip {index + 1}")
                 assert verified is toggle, "Full slips reuse the shared header"
             assert f"Slip {index + 1}" in toggle.text, "Each collapsed header retains its rank"
             fields = verify_mobile_header(toggle, f"Best Slips {scenario}, slip {index + 1}", 2)
@@ -464,7 +465,7 @@ def verify_best_slips(origin, directory):
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
         assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"
         assert "The matches and selections in this slip are for subscribers." not in document.text, "Locked slips omit the removed explanatory sentence"
-        print(f"PASS Best Slips SSR: {scenario} ({count} collapsed slips)", flush=True)
+        print(f"PASS Best Slips SSR: {scenario} ({count} slips with visible Share controls)", flush=True)
 
 
 def verify(origin, directory):

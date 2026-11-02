@@ -3,9 +3,9 @@
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 
-/** The same compact account surface on phones and desktop. */
+/** Authentication surfaces follow the app shell's full-width content rails. */
 export const AccountCard = styled.section`
-  inline-size: 100%; max-inline-size: 26rem; min-inline-size: 0; margin-inline: auto;
+  inline-size: 100%; min-inline-size: 0;
   background: ${({ theme }) => theme.color.surface};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};

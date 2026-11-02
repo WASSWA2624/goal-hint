@@ -9,21 +9,17 @@ import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
 import { SlipShareAction } from "./slip-share-action";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import styled from "styled-components";
-import { media } from "@/styles/theme";
 import { CompactSlip, CompactSlipDisclosure } from "./compact-slip/compact-slip";
 import { DesktopSlip, DesktopSlipDisclosure, type DesktopSlipDisclosureProps } from "./desktop-slip/desktop-slip";
 import type { SlipHeaderPublication } from "./slip-header-meta";
 
-/** Keep desktop content visually collapsed until hydration selects its native disclosure. */
+/** Phone markup remains visible while hydration selects the desktop presentation. */
 const PhoneSlipFallback = styled.div`
   position: relative; min-inline-size: 0;
   [data-phone-shareable] { position: relative; }
   [data-phone-share-action] {
     position: absolute; inset-block-start: 8px;
     inset-inline-end: calc(6px + var(--slip-header-action-size) + var(--slip-header-action-gap));
-  }
-  ${media.desktop} {
-    @media (scripting: enabled) { [data-slip-content] { display: none; } }
   }
 `;
 
@@ -33,7 +29,7 @@ export type SlipCardProps = {
 } & SlipHeaderPublication;
 
 /** The shared production slip card for Best Slips, the builder, history and shared snapshots. */
-export const SlipCard = memo(function SlipCard({ slip, index, locale, results, matchStates, shareSource, sharedSlip, initiallyOpen = false,
+export const SlipCard = memo(function SlipCard({ slip, index, locale, results, matchStates, shareSource, sharedSlip, initiallyOpen = true,
   publicationDay, publishedAt, outcome, status }: SlipCardProps) {
   const desktop = useDesktopLayout();
   const publication = { ...(publicationDay ? { publicationDay } : {}), ...(publishedAt !== undefined ? { publishedAt } : {}),
@@ -51,8 +47,8 @@ export const SlipCard = memo(function SlipCard({ slip, index, locale, results, m
 });
 
 /** Aggregate-only previews use the same responsive header and disclosure as complete slip cards. */
-export function SlipCardSummary({ children, collapsible = false, ...props }: Omit<DesktopSlipDisclosureProps, "headerAction">) {
+export function SlipCardSummary({ children, collapsible = false, headerAction, ...props }: DesktopSlipDisclosureProps) {
   const desktop = useDesktopLayout();
-  if (desktop) return <DesktopSlipDisclosure {...props} collapsible={collapsible}>{children}</DesktopSlipDisclosure>;
-  return <PhoneSlipFallback><CompactSlipDisclosure {...props} collapsible={collapsible}>{children}</CompactSlipDisclosure></PhoneSlipFallback>;
+  if (desktop) return <DesktopSlipDisclosure {...props} collapsible={collapsible} headerAction={headerAction}>{children}</DesktopSlipDisclosure>;
+  return <PhoneSlipFallback><CompactSlipDisclosure {...props} collapsible={collapsible} action={headerAction}>{children}</CompactSlipDisclosure></PhoneSlipFallback>;
 }

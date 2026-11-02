@@ -61,12 +61,12 @@ export const Panel = styled.form`
 `;
 
 export const SearchRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) repeat(3, minmax(0, 12rem));
   align-items: stretch;
   gap: 6px;
   min-inline-size: 0;
-  > [data-feed-search] { flex: 1 1 14rem; }
+  > * { min-inline-size: 0; }
 
   ${controlRow}
 `;
@@ -157,8 +157,6 @@ export const ActionRow = styled.div`
 `;
 
 export const SortField = styled(FloatingField)`
-  display: flex;
-  flex: 0 1 auto;
   max-inline-size: 100%;
   min-inline-size: 0;
   > select {

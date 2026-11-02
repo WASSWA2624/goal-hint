@@ -190,6 +190,9 @@ export async function verifyDesktopInteractions(page, origin = "http://127.0.0.1
   const observation = page.waitForResponse(response => response.url().endsWith("/api/slips/match-states") && response.request().method() === "POST");
   await visit("/themes/forest-night");
   assert((await observation).status() === 200, "Synthetic slip observation reads succeed");
+  assert(await page.locator("[data-slip-id]").first().locator("details").getAttribute("open") !== null, "Slips start expanded");
+  await page.locator("[data-slip-id]").first().locator("summary").click();
+  assert(await page.locator("[data-slip-id]").first().locator("details").getAttribute("open") === null, "Native slip disclosure collapses");
   await page.locator("[data-slip-id]").first().locator("summary").click();
   assert(await page.locator("[data-slip-id]").first().locator("details").getAttribute("open") !== null, "Native slip disclosure expands");
   assert(!(await page.locator("[data-slip-id]").first().innerText()).includes("Unknown"), "Observation refresh preserves the sample result labels");

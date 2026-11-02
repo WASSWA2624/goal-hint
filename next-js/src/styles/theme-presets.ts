@@ -33,12 +33,12 @@ export const porcelainBlueDirection: ThemeDirection = {
   id: "porcelain-blue", name: "Porcelain Blue", description: "Airy porcelain, assured blue, and quietly precise details.",
   mode: "light", font: manrope, fontLabel: "Manrope", shape: "subtle",
   palette: {
-    page: "#FFFFFF", surface: "#EDF1F7", muted: "#F1F4FA", text: "#182640", secondary: "#53627A",
+    page: "#FFFFFF", surface: "#FFFFFF", muted: "#FFFFFF", text: "#182640", secondary: "#53627A",
     border: "#DCE3EF", control: "#77859C", fieldHover: "#D2D8E2", input: "#FFFFFF",
     accent: "#2457C5", hover: "#19449F", soft: "#E8EFFF",
-    header: "#EDF1F7", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
-    cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#EDF1F7",
-    mobileSlipHeader: "#EDF1F7", slipSelection: "#FFFFFF",
+    header: "#FFFFFF", headerText: "#182640", headerMuted: "#53627A", headerAccent: "#2457C5",
+    cardBorder: "#D3DDEA", cardInset: "#E9EEF6", cardHeader: "#FFFFFF",
+    mobileSlipHeader: "#FFFFFF", slipSelection: "#FFFFFF",
   },
 };
 export const cobaltNightDirection: ThemeDirection = { id: "cobalt-night", name: "Cobalt Night", description: "Midnight navy, layered blue surfaces, and electric cobalt actions.", mode: "dark", font: manrope, fontLabel: "Manrope", shape: "subtle",
@@ -50,6 +50,7 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
   const headerDark = p.header !== p.surface;
   const decorativeBorder = `color-mix(in srgb, ${p.border} 55%, ${p.surface})`;
   const field = blend(p.surface, p.control, 0.22), fieldHover = p.fieldHover ?? blend(p.surface, p.control, 0.26);
+  const input = direction.mode === "light" ? "#FFFFFF" : p.input;
   return {
     ...base,
     color: { ...base.color, page: p.page, surface: p.surface, surfaceMuted: p.muted, text: p.text,
@@ -82,8 +83,8 @@ export function createTheme(direction: ThemeDirection): GoalHintTheme {
       : { ...base.radius, surface: base.radius.overlay },
     border: { ...base.border, width: "0px", accentWidth: "0px", focusWidth: "2px" },
     frame: { ...base.frame, desktopCardRadius: direction.shape === "crisp" ? base.radius.control : base.radius.overlay },
-    textField: { background: p.input ?? field, hoverBackground: p.input ?? fieldHover, borderWidth: p.input ? "1px" : "0px",
-      borderColor: blend(p.input ?? field, p.control, 0.24), focusBorderColor: blend(p.input ?? field, link, 0.42) },
+    textField: { background: input ?? field, hoverBackground: input ?? fieldHover, borderWidth: input ? "1px" : "0px",
+      borderColor: blend(input ?? field, p.control, 0.24), focusBorderColor: blend(input ?? field, link, 0.42) },
     space: { ...base.space, md: "14px", lg: "20px", xl: "24px" },
     gradient: { action: p.accent, actionHover: p.hover, tableHeader: p.muted, page: p.page },
     shadow: { ...base.shadow, cardHover: direction.shape === "crisp" ? "none" : `0 3px 12px ${p.text}0A` },

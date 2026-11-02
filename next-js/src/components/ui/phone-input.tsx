@@ -193,11 +193,11 @@ const CountryTrigger = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px;
   ${controlHeight} block-size: var(--form-control-height); box-sizing: border-box;
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.brandSoft}; font: inherit; font-size: 0.875rem;
+  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.brandSoft}; font: inherit; font-size: 0.875rem;
   white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
   > svg { inline-size: 14px; block-size: 14px; flex: none; }
-  &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
+  &:hover { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : theme.color.surfaceMuted}; }
+  &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   ${focusTreatment}
   @media(max-width: 360px) { gap: 4px; padding-inline: 6px; }
 `;

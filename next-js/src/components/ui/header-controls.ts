@@ -52,7 +52,7 @@ export const compactHeaderIconControl = css`
   padding: 0 4px;
   border: 0;
   color: ${({ theme }) => theme.header.accent};
-  background: ${({ theme }) => theme.color.brandSoft};
+  background: ${({ theme }) => theme.mode === "light" ? theme.color.field : theme.color.brandSoft};
   transition: background-color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing}, color ${({ theme }) => theme.motion.feedback} ${({ theme }) => theme.motion.easing};
   ${media.desktop} { inline-size: 2rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; color: ${({ theme }) => theme.header.accent}; } }

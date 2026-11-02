@@ -29,26 +29,43 @@ const Board = styled.div<{ $indexLength: number }>`
 const List = styled.ul`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  gap: 0;
   padding: 0;
   margin: 0;
   list-style: none;
   min-inline-size: 0;
 
   > li { display: grid; min-inline-size: 0; }
+  > li:has(> article:only-child), > li:has(> [data-desktop-row]:only-child) {
+    border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+    border-block-start: 0;
+    border-radius: ${({ theme }) => theme.radius.none};
+    &:first-child {
+      border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset};
+      border-start-start-radius: ${({ theme }) => theme.radius.surface};
+      border-start-end-radius: ${({ theme }) => theme.radius.surface};
+    }
+    &:last-child {
+      border-end-start-radius: ${({ theme }) => theme.radius.surface};
+      border-end-end-radius: ${({ theme }) => theme.radius.surface};
+    }
+    > article, > [data-desktop-row] {
+      border-radius: inherit;
+      background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.surface};
+      ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+    }
+    > article > a, [data-match-analysis-link] { border-radius: inherit; }
+  }
   ${media.belowDesktop} {
-    /* Keep framed cards separate and every match searchable and accessible while deferring offscreen layout.
+    /* Keep every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
-    gap: 8px;
     > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto 112px; }
-    > li:has(> article:only-child) { border-radius: ${({ theme }) => theme.phoneCardFrame.radius}; box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
+    > li:has(> article:only-child) { box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
   ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);
-    gap: ${({ theme }) => theme.space.xs};
     > li { background: ${({ theme }) => theme.color.surface}; }
-    > li + li { border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.inset}; }
   }
 `;
 const Divider = styled.li`

@@ -82,14 +82,14 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   check("#theme-filters [data-best-slips-filters]", theme.color.page);
   if (!dark) {
     check("body", "#FFFFFF");
-    assert(theme.color.surface !== theme.color.page, "Light components retain a distinct fill on the white page");
+    assert(theme.color.surface === theme.color.page, "Light components share the white page canvas");
   }
   check("#theme-controls", theme.color.surface);
   check("#theme-controls [data-surface-control]", theme.color.brandSoft);
   check("#theme-control-input, #theme-admin-input, #theme-payment-input", theme.textField.background);
   check("#theme-search [data-text-field-frame], #theme-textarea", theme.textField.background);
-  check("#theme-invalid-input", theme.color.outcome.incorrect.background);
-  check("#theme-disabled-input", theme.color.disabledSurface);
+  check("#theme-invalid-input", dark ? theme.color.outcome.incorrect.background : theme.textField.background);
+  check("#theme-disabled-input", dark ? theme.color.disabledSurface : theme.textField.background);
   check("#theme-control-select", theme.textField.background);
   check("#theme-slips [data-slip-id]", theme.phoneCardFrame.inset);
   check("#theme-slips [data-slip-summary]", phone ? theme.phoneCardFrame.mobileHeader : theme.phoneCardFrame.header);

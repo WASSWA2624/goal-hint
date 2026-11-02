@@ -18,11 +18,11 @@ export const textFieldSurface = css`
   &[aria-invalid="true"], &:has(> input[aria-invalid="true"]) {
     border-color: ${({ theme }) => theme.color.outcome.incorrect.text};
     color: ${({ theme }) => theme.color.outcome.incorrect.text};
-    background: ${({ theme }) => theme.color.outcome.incorrect.background};
+    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.outcome.incorrect.background};
   }
   &:disabled {
     color: ${({ theme }) => theme.color.disabledText};
-    background: ${({ theme }) => theme.color.disabledSurface};
+    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.disabledSurface};
   }
 `;
 
@@ -38,11 +38,11 @@ export const selectSurface = css`
   &[aria-expanded="true"] { background: ${({ theme }) => theme.mode === "light" ? theme.textField.hoverBackground : theme.color.brandSoft}; }
   &[aria-invalid="true"] {
     color: ${({ theme }) => theme.color.outcome.incorrect.text};
-    background: ${({ theme }) => theme.color.outcome.incorrect.background};
+    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.outcome.incorrect.background};
   }
   &:disabled, &:has(> select:disabled) {
     color: ${({ theme }) => theme.color.disabledText};
-    background: ${({ theme }) => theme.color.disabledSurface};
+    background: ${({ theme }) => theme.mode === "light" ? theme.textField.background : theme.color.disabledSurface};
   }
 `;
 export const nativeSelectSurface = css`&:is(select) { ${selectSurface} }`;
