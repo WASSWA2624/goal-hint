@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styled from "styled-components";
-import { SegmentedChoice, TextInput, TextLink } from "@/components/ui/controls";
+import { SegmentedChoice, TextInput } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/icons";
 import { messageChannels, supportedMessageChannels, type MessageChannel } from "@/domain/member-verification";
@@ -11,10 +11,11 @@ import { parseVerificationCode } from "@/domain/verification-code";
 import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { AccountSupportLink, type AdminContact } from "./admin-contact";
+import { AccountFormSupport, type AdminContact } from "./admin-contact";
+import { AccountFormHeader } from "./account-form-header";
 import { accountRequest } from "./account-security";
-import { AccountCard, AccountCardBody, AccountCardHeading, AccountCodeField, AccountError, AccountNote, AccountPrimary,
-  AccountSteps, AccountSupport, AccountTextButton } from "./account-styles";
+import { AccountCard, AccountCardBody, AccountCodeField, AccountError, AccountLink, AccountNote, AccountPrimary,
+  AccountSecondaryActions, AccountSteps, AccountTextButton } from "./account-styles";
 import { MemberForm, MemberSignOut } from "./member-controls";
 import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 import { AccountWhatsAppConsentLabel } from "./account-notification-preferences";
@@ -90,7 +91,9 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
   }
   if (verifiedTrial) return <FreeTrialNotice locale={locale} {...verifiedTrial} />;
   return <AccountCard data-account-auth data-account-verification={flow.purpose} data-verification-step={step} data-analytics-ignore>
-    <AccountCardHeading><LockIcon /><h1>{m.text(step === "code" ? "account.enterCode" : recovery ? "account.resetPassword" : "account.verifyAccount")}</h1></AccountCardHeading>
+    <AccountFormHeader icon={step === "code" ? KeyIcon : LockIcon}
+      title={m.text(step === "code" ? "account.enterCode" : recovery ? "account.resetPassword" : "account.verifyAccount")}
+      description={step === "code" ? m.text(recovery ? "account.resetSteps" : "account.codeHelp") : m.text(recovery ? "account.resetHelp" : "account.verificationHelp")} />
     <AccountCardBody>
       {step === "delivery" ? <>
         <MemberForm method="post" action={`/api/account/${recovery ? "forgot" : "verification"}`} onSubmit={request}
@@ -103,15 +106,12 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
           {error && <AccountError role="alert">{error}</AccountError>}
           <AccountPrimary type="submit" disabled={!!busy || !canonicalPhone || !selectedChannel}>{busy === "request" ? m.text("account.working") : sendLabel}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
-        <AccountTextButton type="button" variant="quiet" disabled={!!busy || !canonicalPhone} onClick={() => changeStep("code")}>
-          {m.text("account.alreadyHaveCode")}
-        </AccountTextButton>
       </> : <>
         <AccountSteps aria-label={m.text("account.verificationSteps")}>
           <li><MailIcon />{m.text("account.deliveryStep")}</li>
           <li aria-current="step"><ChevronRightIcon /><KeyIcon />{m.text("account.codeStep")}</li>
         </AccountSteps>
-        <p role={requested ? "status" : undefined}>{m.text(requested ? recovery ? "account.resetSent" : "account.verificationSent" : "account.existingCode", { suffix: (canonicalPhone ?? phone).slice(-3) })}</p>
+        <AccountNote role={requested ? "status" : undefined}>{m.text(requested ? recovery ? "account.resetSent" : "account.verificationSent" : "account.existingCode", { suffix: (canonicalPhone ?? phone).slice(-3) })}</AccountNote>
         <MemberForm method="post" action={`/api/account/${recovery ? "reset-code" : "verify"}`} onSubmit={verify}
           data-account-step-form="code" data-analytics-ignore aria-busy={busy === "verify"}>
           <AccountCodeField><TextInput ref={codeInput} name="code" label={m.text("account.verificationCode")} value={code}
@@ -134,15 +134,16 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
           {error && <AccountError role="alert">{error}</AccountError>}
           <AccountPrimary type="submit" disabled={!!busy || code.length !== 6 || invalidCode}>{m.text(busy === "verify" ? "account.working" : recovery ? "account.continueReset" : "account.verifyCode")}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
-        <AccountTextButton type="button" variant="quiet" disabled={!!busy} onClick={() => changeStep("delivery")}>
-          {m.text(recovery ? "account.changeCodeDeliveryNumber" : "account.changeCodeDelivery")}
-        </AccountTextButton>
       </>}
-      <AccountSupport aria-label={m.text("account.support")} data-account-support>
-        <AccountSupportLink locale={locale} contact={contact} />
-        {recovery ? <TextLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</TextLink>
+      <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>
+        <AccountTextButton type="button" variant="quiet" disabled={!!busy || step === "delivery" && !canonicalPhone}
+          onClick={() => changeStep(step === "delivery" ? "code" : "delivery")}>
+          {m.text(step === "delivery" ? "account.alreadyHaveCode" : recovery ? "account.changeCodeDeliveryNumber" : "account.changeCodeDelivery")}
+        </AccountTextButton>
+        {recovery ? <AccountLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</AccountLink>
           : <MemberSignOut disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>}
-      </AccountSupport>
+      </AccountSecondaryActions>
+      <AccountFormSupport locale={locale} contact={contact} />
     </AccountCardBody>
   </AccountCard>;
 }

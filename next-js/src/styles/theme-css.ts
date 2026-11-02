@@ -14,7 +14,7 @@ export function themeCssVariables(theme: GoalHintTheme): string {
     chrome: { content: theme.color.surface, header: theme.header.background, footer: theme.footer.background,
       dialogHeader: theme.dialog.headerBackground, dialogFooter: theme.dialog.footerBackground,
       section: theme.color.section, slipHeader: theme.phoneCardFrame.header, mobileSlipHeader: theme.phoneCardFrame.mobileHeader },
-    layout: { gutter: theme.layout.gutter, sectionPadding: theme.layout.sectionPadding, slipGap: theme.layout.slipGap },
+    layout: { gutter: theme.layout.gutter, sectionPadding: theme.layout.sectionPadding, slipGap: theme.layout.slipGap, formMaxWidth: theme.layout.formMaxWidth },
     headerControl: { blockInset: theme.header.controlBlockInset },
     stroke: { thin: theme.border.thin, strong: theme.border.strong, focus: theme.border.focus, accent: theme.border.accent },
   };

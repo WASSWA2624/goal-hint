@@ -6,7 +6,7 @@ import { telHref, waHref } from "@/domain/phone";
 import { supportContactsOf, type SupportContactSettings } from "@/domain/support-contacts";
 import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
-import { AccountNote } from "./account-styles";
+import { AccountLink, AccountNote, AccountSupport } from "./account-styles";
 import { ActionLink, HelpActions } from "./subscribe-styles";
 import { DesktopSupportContacts, DesktopSupportContent, MobileSupportContent } from "./support-contact-links";
 
@@ -34,4 +34,14 @@ export function AccountSupportLink({ locale, contact, text }: { locale: string; 
   return <><MobileSupportContent><TextLink href={href} prefetch={false} data-analytics-ignore>{createMessages(locale).text("account.contactSupport")}</TextLink></MobileSupportContent>
     {supportContactsOf(contact).length ? <DesktopSupportContacts locale={locale} contact={contact} text={text} appearance="text" />
       : <DesktopSupportContent><TextLink href={`/${resolveLocale(locale)}/contact`} prefetch={false}>{createMessages(locale).text("account.contactSupport")}</TextLink></DesktopSupportContent>}</>;
+}
+
+/** Recovery steps share a compact support directory below the form actions. */
+export function AccountFormSupport({ locale, contact }: { locale: string; contact: AdminContact }) {
+  const m = createMessages(locale);
+  return <AccountSupport aria-label={m.text("account.support")} data-account-support>
+    <AccountNote>{m.text("account.contactSupport")}</AccountNote>
+    {supportContactsOf(contact).length ? <DesktopSupportContacts locale={locale} contact={contact} compact />
+      : <AccountLink href={`/${resolveLocale(locale)}/contact`} prefetch={false}>{m.text("account.contactAdmin")}</AccountLink>}
+  </AccountSupport>;
 }

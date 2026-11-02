@@ -4,7 +4,8 @@ import { ButtonLink } from "@/components/ui/controls";
 import { CheckIcon, UserIcon } from "@/components/ui/icons";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { createMessages } from "@/i18n/messages";
-import { AccountCard, AccountCardBody, AccountCardHeading, AccountNote } from "./account-styles";
+import { AccountCard, AccountCardBody, AccountNote } from "./account-styles";
+import { AccountFormHeader } from "./account-form-header";
 
 /** Display metadata only; the verification session remains responsible for granting device access. */
 export type FreeTrialAccess = Readonly<{ days: number; startsAt: string; endsAt: string; active: boolean }>;
@@ -12,7 +13,7 @@ export type FreeTrialAccess = Readonly<{ days: number; startsAt: string; endsAt:
 export function FreeTrialNotice({ locale, trial, next }: { locale: string; trial: FreeTrialAccess; next: string }) {
   const m = createMessages(locale), NoticeIcon = trial.active ? CheckIcon : UserIcon;
   return <AccountCard data-free-trial={trial.active ? "active" : "verification-required"} data-analytics-ignore>
-    <AccountCardHeading><NoticeIcon /><h1>{m.text(trial.active ? "freeTrial.activeTitle" : "freeTrial.createdTitle")}</h1></AccountCardHeading>
+    <AccountFormHeader icon={NoticeIcon} title={m.text(trial.active ? "freeTrial.activeTitle" : "freeTrial.createdTitle")} />
     <AccountCardBody>
       <p role="status">{m.plural("freeTrial.duration", trial.days)}<br />
         {m.text("freeTrial.ends", { end: formatPeriodEnd(new Date(trial.endsAt)) })}</p>

@@ -14,7 +14,6 @@ import { AccountActivity } from "@/components/members/account-activity";
 import { AccountReferrals, AccountReferralSummary } from "@/components/members/account-referrals";
 import { AccountReferralReviews } from "@/components/members/account-referral-reviews";
 import { AccountVerificationForm } from "@/components/members/account-verification";
-import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
 import { ApprovalRefresh, PaymentNotice } from "@/components/members/payment-status";
 import { ButtonLink } from "@/components/ui/controls";
@@ -67,7 +66,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     if (administrator) redirect(adminLandingPath);
     const member = currentMember;
     const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
-    if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></AccountCardBody></AccountCard></PublicShell>;
+    if (reset) return <PublicShell locale={locale} showAccount><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
     if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
     const verification = await resolved.auth?.verificationSession(token).catch(() => null);

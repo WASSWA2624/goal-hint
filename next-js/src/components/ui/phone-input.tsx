@@ -11,7 +11,9 @@ import { deleteGroupedDigit, integerDigits } from "@/domain/input-format";
 import { preserveDigitCaret } from "./formatted-input";
 import { controlHeight } from "./control-layout";
 import { FloatingField } from "./floating-field";
-import { textFieldSurface } from "./filled-surfaces";
+import { selectSurface, textFieldSurface } from "./filled-surfaces";
+import { FloatingOutline } from "./floating-outline";
+import { floatingLabel, raisedFloatingLabel, floatingOutline, floatingOutlineFocus } from "./floating-field-styles";
 import { dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
 import { createMessages } from "@/i18n/messages";
 import { Field, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
@@ -120,11 +122,15 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
   }
   return <Field data-phone-field data-analytics-ignore>
     <PhoneControl ref={frame} data-phone-control data-floating-label="true">
-      <CountryTrigger ref={trigger} type="button" data-phone-country-trigger disabled={inactive} aria-label={countryDescription}
-        aria-haspopup="dialog" aria-expanded={open && !inactive} aria-controls={menuId} onClick={() => open ? closeCountries() : showCountries()}
-        onKeyDown={event => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); showCountries(); } }}>
-        {country ? <PhoneCountryFlag key={country.iso2} country={country} /> : <GlobeIcon />}<span>+{parts.callingCode}</span><ChevronDownIcon />
-      </CountryTrigger>
+      <CountryField data-control-field data-phone-country-field>
+        <CountryTrigger ref={trigger} type="button" data-phone-country-trigger disabled={inactive} aria-label={`${messages.text("phone.code")}: ${countryDescription}`}
+          aria-haspopup="dialog" aria-expanded={open && !inactive} aria-controls={menuId} onClick={() => open ? closeCountries() : showCountries()}
+          onKeyDown={event => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); showCountries(); } }}>
+          <span data-phone-country-label aria-hidden="true">{messages.text("phone.code")}</span>
+          {country ? <PhoneCountryFlag key={country.iso2} country={country} /> : <GlobeIcon />}<span>+{parts.callingCode}</span><ChevronDownIcon />
+        </CountryTrigger>
+        <FloatingOutline label={messages.text("phone.code")} />
+      </CountryField>
       <FloatingField label={label}><InputControl {...props} name={undefined} ref={control} id={field.id} type="tel" inputMode="numeric" autoComplete="tel-national"
         value={formatValue ? formatNationalPhone(parts) : parts.national} dir="ltr" spellCheck={false} autoCapitalize="none" maxLength={phoneInputMaxLength} data-phone-input data-analytics-ignore
         aria-describedby={field.describedBy} aria-invalid={field.invalid} $invalid={field.isInvalid}
@@ -190,16 +196,24 @@ const PhoneControl = styled.div`
     > [data-floating-field] { margin-block-start: 0; }
   }
 `;
+const CountryField = styled.div`
+  position: relative; min-inline-size: 0; margin-block-start: var(--floating-label-space);
+  > [data-floating-outline] { ${floatingOutline} > legend { max-inline-size: 100%; } }
+  &:focus-within > [data-floating-outline] { ${floatingOutlineFocus} }
+`;
 const CountryTrigger = styled.button`
+  position: relative; inline-size: 100%;
   display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5); padding: var(--gh-spacing-1_5) var(--gh-spacing-2);
   ${controlHeight} block-size: var(--form-control-height); box-sizing: border-box;
-  border: 0; border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.fieldAdornment.background}; font: inherit; font-size: var(--gh-font-emphasis);
+  border: var(--gh-stroke-thin) solid transparent; border-radius: ${({ theme }) => theme.radius.control};
+  color: ${({ theme }) => theme.color.text}; font: inherit; font-size: var(--gh-font-emphasis);
+  ${selectSurface}
   white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
   > svg { inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); flex: none; }
-  &:hover { background: ${({ theme }) => theme.fieldAdornment.hoverBackground}; }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
-  ${focusTreatment}
+  > [data-phone-country-label] { ${floatingLabel} ${raisedFloatingLabel} }
+  &:focus-within > [data-phone-country-label] { color: ${({ theme }) => theme.color.link}; }
+  &:focus-visible { outline: none; }
   @media(max-width: ${({ theme }) => theme.viewport[22.5]}) { gap: var(--gh-spacing-1); padding-inline: var(--gh-spacing-1_5); }
 `;
 const DialFlag = styled.img`display: block; object-fit: cover; flex: none;`;

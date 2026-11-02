@@ -20,7 +20,11 @@ function fixtureServices(state: string) {
   return async () => {
     const consent = (await cookies()).get("member-fixture-whatsapp")?.value;
     return { config: { production: false },
-    settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "test" } },
+    settings: { settings: state === "unavailable" ? null : { ...defaultSubscriptionSettings, paywallMode: scenario.startsWith("off") ? "off" : "test",
+      ...(state === "support" ? { supportContacts: [
+        { id: "synthetic-support", label: "Account support", network: "other", phone: "256700000101", calls: true, whatsapp: true, enabled: true, primary: true },
+        { id: "synthetic-secondary", label: "Registration and verification support", network: "other", phone: "256700000102", calls: true, whatsapp: false, enabled: true, primary: false },
+      ] } : {}) } },
     sessions: { async verify() { return [...subscriptionScenarios.filter(value => value !== "off"), "blocked", "administrator", "history"].includes(scenario)
       ? { accountId: "00000000-0000-4000-8000-000000000101", tokenHash: "synthetic", phone: state === "administrator" ? fixtureAdminPhone : "256700000101", administrator: state === "administrator", blocked: state === "blocked", codeEnteredAt: unlocked ? new Date(at) : null, whatsappNotificationsAt: consent === "on" ? new Date(at) : null } : null; } },
     auth: { async passwordResetSession() { return state === "password-reset" ? { phone: "256700000101" } : null; },
@@ -44,7 +48,7 @@ function fixtureServices(state: string) {
   } as unknown as MemberServices;
   };
 }
-const accountRoutes = Object.fromEntries(["signed-out", "signed-in", "unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable", ...subscriptionScenarios].map((state) =>
+const accountRoutes = Object.fromEntries(["signed-out", "support", "signed-in", "unavailable", "ended", "blocked", "administrator", "unverified", "sms-only", "unsupported", "password-reset", "queued", "history", "dashboard-unavailable", "subscription-unavailable", "referral-empty", "referral-unavailable", "notifications-empty", "notifications-unavailable", ...subscriptionScenarios].map((state) =>
   [state, createAccountRoute({ services: fixtureServices(state) })]));
 
 /** Synthetic scenarios are confined to this isolated acceptance app; no owner setting or developer DB is changed. */

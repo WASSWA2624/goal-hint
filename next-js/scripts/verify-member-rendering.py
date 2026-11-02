@@ -80,8 +80,10 @@ def delivery_step(html):
     match(r'data-account-step-form="delivery"', html)
     no_match(r'data-account-step-form="code"|name="code"|autoComplete="one-time-code"', html)
     support = match(r'<nav\b[^>]*data-account-support[^>]*>([\s\S]*?)</nav>', html).group(1)
-    for label in ["Contact support", "Back to login"]:
-        match(label, support)
+    match("Contact support", support)
+    secondary = match(r'<nav\b[^>]*data-account-secondary-actions[^>]*>([\s\S]*?)</nav>', html).group(1)
+    for label in ["Have a code?", "Back to login"]:
+        match(re.escape(label), secondary)
     no_match(r'data-verification-help|data-verification-tracker|<ol\b|up to 3 messages|Codes expire after', auth_card(html))
     no_match(r'256 700 000 101', auth_card(html))
     no_match(r'only the latest code works', html, flags=re.IGNORECASE)
@@ -240,7 +242,7 @@ def subscriber_dashboard(origin):
         else:
             no_match("data-active-package", summary)
         match(r'<h1[^>]*>Account</h1>', body)
-        match("Sign-in details", body)
+        match("Login details", body)
         match("Phone", body)
         no_match(r'data-account-activity|data-payment-status|type="password"|Your access|You have access|saved-slip-configurations', body)
         no_match(r'data-subscription-status-bar', html)
@@ -387,7 +389,8 @@ def main():
         match(r'autoComplete="new-password"', register.text)
         register_html = authentication_form(visible_html(register.text), "register", "Register")
         phone_field(register_html)
-        no_match(r'Use 8–128 characters|Use the number you pay from|By logging in|You can stay logged in on two devices', register_html)
+        match("Use the number you pay from", register_html)
+        no_match(r'Use 8–128 characters|By logging in|You can stay logged in on two devices', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
         for state in ["signed-out", "unverified"]:

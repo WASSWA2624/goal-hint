@@ -202,6 +202,7 @@ export interface GoalHintTheme extends Readonly<typeof geometryTokens> {
     readonly wideMaxWidth: string;
     readonly gutter: string;
     readonly readingMaxWidth: string;
+    readonly formMaxWidth: string;
     readonly slipGap: string;
     readonly sectionPadding: string;
   };
@@ -358,7 +359,7 @@ export const foundationLightTheme: GoalHintTheme = {
     focusWidth: "3px",
     focusOffset: "3px",
   },
-  layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: geometryTokens.spacing[2], readingMaxWidth: "65ch", slipGap: geometryTokens.spacing[5], sectionPadding: geometryTokens.spacing[2] },
+  layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: geometryTokens.spacing[2], readingMaxWidth: "65ch", formMaxWidth: geometryTokens.size[120], slipGap: geometryTokens.spacing[5], sectionPadding: geometryTokens.spacing[2] },
   frame: { desktopCardRadius: brandTokens.shape.radius.none },
   textField: { background: "#FFFFFF", hoverBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF", borderWidth: "1px", borderColor: "#DFE4EC", focusBorderColor: "#A8C0E2" },
   select: { background: "#FFFFFF", hoverBackground: "#FFFFFF", expandedBackground: "#FFFFFF", invalidBackground: "#FFFFFF", disabledBackground: "#FFFFFF" },

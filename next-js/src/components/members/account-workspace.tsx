@@ -71,7 +71,7 @@ const Body = styled(PanelBody)`
   [data-account-notifications] strong { font-size: ${({ theme }) => theme.typography.scale.body}; }
 `;
 export function AccountPanel({ title, actions, narrow = false, children, ...props }: Omit<ComponentProps<typeof Panel>, "title"> & { title: ReactNode; actions?: ReactNode; narrow?: boolean }) {
-  return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "var(--gh-size-168)", ...props.style } } : {})}><PanelHead><h2>{title}</h2>{actions}</PanelHead><Body>{children}</Body></Panel>;
+  return <Panel {...props} {...(narrow ? { style: { maxInlineSize: "var(--gh-layout-formMaxWidth)", ...props.style } } : {})}><PanelHead><h2>{title}</h2>{actions}</PanelHead><Body>{children}</Body></Panel>;
 }
 export const AccountFacts = styled(StatGrid)`
   > div { padding: var(--gh-spacing-2) var(--gh-spacing-3); }

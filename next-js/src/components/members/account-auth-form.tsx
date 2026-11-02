@@ -8,7 +8,8 @@ import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import type { AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
-import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPrimary, AccountSessionInfo } from "./account-styles";
+import { AccountCard, AccountCardBody, AccountError, AccountFormFooter, AccountLink, AccountNote, AccountPrimary, AccountSecondaryActions, AccountSessionInfo } from "./account-styles";
+import { AccountFormHeader } from "./account-form-header";
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
 import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
@@ -35,25 +36,25 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
   if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} contact={contact} />;
   if (createdTrial) return <FreeTrialNotice locale={locale} {...createdTrial} />;
   return <AccountCard data-account-auth data-analytics-ignore>
-    <AccountCardHeading><UserIcon /><h1>{m.text(view === "register" ? "auth.signUp" : "auth.signIn")}</h1></AccountCardHeading>
+    <AccountFormHeader icon={UserIcon} title={m.text(view === "register" ? "auth.signUp" : "auth.signIn")}
+      description={m.text(view === "register" ? "account.registerHelp" : "account.description")}
+      actions={view === "login" && <AccountSessionInfo><summary aria-label={m.text("account.sessionLimitNotice")} title={m.text("account.sessionLimitNotice")}><InfoIcon /></summary>
+        <p role="note">{m.text("account.sessionLimitNotice")}</p></AccountSessionInfo>} />
     <AccountCardBody>
       <MemberForm method="post" action={`/api/account/${view}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}>
         <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} lookup={view === "login"} required disabled={busy} hint="" />
         <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={view === "login"}
           placeholder={m.text("account.passwordPlaceholder")} disabled={busy} />
-        {view === "login" && <AccountActions>
-          <TextLink href={href("forgot")} prefetch={false}>{m.text("account.forgotPassword")}</TextLink>
-          <AccountSessionInfo><summary aria-label={m.text("account.sessionLimitNotice")} title={m.text("account.sessionLimitNotice")}><InfoIcon /></summary>
-            <p role="note">{m.text("account.sessionLimitNotice")}</p>
-          </AccountSessionInfo>
-        </AccountActions>}
         {error && <AccountError role="alert">{error}</AccountError>}
         <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : view === "login" ? "auth.signIn" : "auth.signUp")}</AccountPrimary>
       </MemberForm>
-      <AccountActions>
-        <TextLink href={href(view === "login" ? "register" : "login")} prefetch={false}>{m.text(view === "login" ? "auth.signUp" : "auth.signIn")}</TextLink>
+      <AccountFormFooter>
+        <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>
+          {view === "login" && <AccountLink href={href("forgot")} prefetch={false}>{m.text("account.forgotPassword")}</AccountLink>}
+          <AccountLink href={href(view === "login" ? "register" : "login")} prefetch={false}>{m.text(view === "login" ? "auth.signUp" : "auth.signIn")}</AccountLink>
+        </AccountSecondaryActions>
         <AccountNote>{m.text("account.ageAssent")} · <TextLink href={`${base}/terms`} prefetch={false}>{m.text("account.terms")}</TextLink></AccountNote>
-      </AccountActions>
+      </AccountFormFooter>
     </AccountCardBody>
   </AccountCard>;
 }

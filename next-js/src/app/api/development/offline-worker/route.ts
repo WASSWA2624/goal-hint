@@ -1,5 +1,5 @@
 /** Replace an installed production worker even when its saved page cannot hydrate. */
-const retirementWorker = `
+const retirementWorker = String.raw`
 "use strict";
 self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()));
 self.addEventListener("activate", (event) => {

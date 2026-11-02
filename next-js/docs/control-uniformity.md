@@ -25,6 +25,13 @@ they fit inside their enclosing field or header. Checkbox/radio glyphs, decorati
 multiline textareas, record cards and image previews keep their own dimensions.
 Their surrounding actionable labels and ordinary buttons use the shared height.
 
+Authentication cards and narrow account panels use `theme.layout.formMaxWidth`
+(480px in both approved themes). Keep primary form actions filled and group
+secondary link actions with `AccountSecondaryActions`; support contacts keep
+Call and WhatsApp together. Link actions retain the shared control height.
+The phone country-code trigger reuses the floating label and outline primitives
+with the localized “Code” label, matching the national-number field's height.
+
 App-header actions are also embedded: Login, Register, appearance and account
 controls subtract twice `theme.header.controlBlockInset` from the inherited
 control height, with no extra vertical padding. The 4px inset gives them a

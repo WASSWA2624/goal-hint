@@ -4,6 +4,8 @@ Run `python scripts/verify-member-rendering.py --serve` from the repository root
 
 Repeat checks against an already built fixture with `--fixture .tmp/members-<id>`. Omit that option after application changes so the fixture uses current sources.
 
+`verifyAuthenticationForms` from `scripts/verify-authentication-forms.mjs` accepts a Playwright page and `{ origin, widths, captureDirectory }`. Run it in isolated light/dark and fine/coarse-pointer contexts. It checks bounded form widths, grouped link actions, phone outlines, control geometry, synthetic recovery and country-picker behavior. It verifies the fixture metadata before submitting any request. Use `?state=support&view=forgot` to inspect the synthetic multi-contact support layout.
+
 - `/en/account?state=unverified&view=verify` starts signup verification at delivery selection.
 - `/en/account?view=forgot` starts password recovery.
 - `/en/account?view=register&return=%2Fen%2Fmatches` exercises registration, verification and the final `/en` home destination.

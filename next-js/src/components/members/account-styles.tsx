@@ -1,31 +1,61 @@
 "use client";
 
-import styled from "styled-components";
-import { Button } from "@/components/ui/controls";
+import styled, { css } from "styled-components";
+import { Button, TextLink } from "@/components/ui/controls";
 
-/** Authentication surfaces follow the app shell's full-width content rails. */
+const accountLinkAction = css`
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5);
+  min-block-size: var(--form-control-height); max-inline-size: 100%;
+  color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-emphasis); font-weight: var(--gh-weight-medium);
+  text-align: center; white-space: normal; text-decoration: underline; text-underline-offset: var(--gh-size-0_75);
+  background: transparent; border: 0;
+  &:hover:not(:disabled), &:active { background: transparent; border: 0; }
+  &:disabled { color: ${({ theme }) => theme.color.disabledText}; }
+`;
+export const AccountLink = styled(TextLink)`${accountLinkAction}`;
+
+/** All authentication steps share one readable column within the app shell. */
 export const AccountCard = styled.section`
-  inline-size: 100%; min-inline-size: 0;
+  inline-size: 100%; max-inline-size: ${({ theme }) => theme.layout.formMaxWidth}; min-inline-size: 0; margin-inline: auto;
   background: ${({ theme }) => theme.color.surface};
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.surface};
+  border: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.radius.control};
   font-size: var(--gh-font-emphasis); line-height: var(--gh-leading-reading);
-  button, a { min-block-size: var(--form-control-height); }
-  input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"]) { min-block-size: var(--form-control-height); font-size: var(--gh-font-section); }
-  button { font-size: var(--gh-font-emphasis); }
   h2 { font-size: var(--gh-font-section); font-weight: var(--gh-weight-medium); margin: 0 0 var(--gh-spacing-3); }
 `;
 export const AccountCardHeading = styled.div`
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  display: flex; align-items: center; gap: var(--gh-spacing-2_5);
-  min-block-size: var(--gh-size-14_5); padding: var(--gh-spacing-2_5) var(--gh-spacing-4);
-  border-block-end: 0;
-  > svg { color: ${({ theme }) => theme.color.link}; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); }
-  h1, h2 { margin: 0; font-size: var(--gh-font-subheading); font-weight: var(--gh-weight-medium); line-height: var(--gh-leading-label); }
+  background: ${({ theme }) => theme.color.section};
+  display: flex; align-items: flex-start; gap: var(--gh-spacing-3);
+  padding: var(--gh-spacing-5);
+  border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  border-start-start-radius: inherit; border-start-end-radius: inherit;
+  > svg { flex: none; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
+    inline-size: var(--gh-size-10); block-size: var(--gh-size-10); padding: var(--gh-spacing-2_5); border-radius: ${({ theme }) => theme.radius.control}; }
+  > div { display: grid; flex: 1; gap: var(--gh-spacing-1_5); min-inline-size: 0; }
+  h1, h2 { margin: 0; font-size: var(--gh-font-heading); font-weight: var(--gh-weight-semibold); line-height: var(--gh-leading-heading); }
+  p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-reading); }
 `;
 export const AccountCardBody = styled.div`
-  padding: var(--gh-spacing-4); display: grid; gap: var(--gh-spacing-4); min-inline-size: 0;
+  padding: var(--gh-spacing-5); display: grid; gap: var(--gh-spacing-4); min-inline-size: 0;
+  > form { gap: var(--gh-spacing-4); }
   p { margin: 0; }
+`;
+export const AccountFormFooter = styled.div`
+  display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
+  padding-block-start: var(--gh-spacing-4); border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  > p { text-align: center; }
+`;
+export const AccountSecondaryActions = styled.nav`
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--gh-spacing-1) var(--gh-spacing-4); min-inline-size: 0;
+  > * { min-inline-size: 0; }
+  > :only-child { margin-inline: auto; }
+  form { margin: 0; }
+  > form > button { ${accountLinkAction} }
+`;
+export const AccountFormColumn = styled.div`
+  inline-size: 100%; max-inline-size: ${({ theme }) => theme.layout.formMaxWidth}; min-inline-size: 0;
+  display: grid; gap: var(--gh-spacing-4);
 `;
 export const AccountNote = styled.p`
   font-size: var(--gh-font-secondary); line-height: var(--gh-leading-reading); color: ${({ theme }) => theme.color.mutedText};
@@ -49,30 +79,29 @@ export const AccountSessionInfo = styled.details`
     color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); }
 `;
 export const AccountSupport = styled.nav`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: var(--gh-spacing-2);
-  border-block-start: 0; padding-block-start: var(--gh-spacing-2);
+  display: grid; gap: var(--gh-spacing-3);
+  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; padding-block-start: var(--gh-spacing-4);
   > * { min-inline-size: 0; }
   form { margin: 0; }
-  a, button { display: flex; align-items: center; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) 0; border: 0; background: transparent;
-    border-radius: ${({ theme }) => theme.radius.none};
-    color: ${({ theme }) => theme.color.link}; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-body); text-decoration: underline;
-    text-underline-offset: var(--gh-size-0_75); white-space: normal; }
-  > :last-child, > :last-child button { justify-content: flex-end; text-align: end; }
-  > :last-child button { inline-size: 100%; }
+  > form > button { inline-size: 100%; ${accountLinkAction} }
 `;
 export const AccountCodeField = styled.div`
   input { text-align: center; font-size: var(--gh-font-page); letter-spacing: var(--gh-tracking-display); min-block-size: var(--form-control-height); }
 `;
 export const AccountSteps = styled.ol`
-  display: flex; flex-wrap: wrap; gap: var(--gh-spacing-2_5);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2);
   list-style: none; margin: 0; padding: 0; font-size: var(--gh-font-secondary);
-  li { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; }
+  li { display: flex; align-items: center; gap: var(--gh-spacing-1_5); min-inline-size: 0; padding-block: var(--gh-spacing-2);
+    border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; color: ${({ theme }) => theme.color.mutedText}; }
   li svg { inline-size: var(--gh-size-4); block-size: var(--gh-size-4); flex: none; }
-  li[aria-current="step"] { color: ${({ theme }) => theme.color.link}; font-weight: var(--gh-weight-medium); }
+  li[aria-current="step"] { color: ${({ theme }) => theme.color.link}; border-color: currentColor; font-weight: var(--gh-weight-medium); }
 `;
-export const AccountPrimary = styled(Button)`width: 100%; font-weight: var(--gh-weight-medium);`;
+export const AccountPrimary = styled(Button)`
+  width: 100%; font-weight: var(--gh-weight-medium);
+  &&:disabled { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.disabledText}; }
+`;
 export const AccountTextButton = styled(Button)`
-  padding: var(--gh-spacing-1) 0; font-weight: var(--gh-weight-body); background: transparent;
+  && { padding-inline: 0; ${accountLinkAction} }
 `;
 export const AccountPhone = styled.div`
   display: flex; align-items: center; gap: var(--gh-spacing-2_5); min-inline-size: 0;
