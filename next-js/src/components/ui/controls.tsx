@@ -55,7 +55,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   min-block-size: ${({ theme }) => theme.control.compactHeight};
   min-inline-size: ${({ theme }) => theme.control.compactHeight};
   max-inline-size: 100%;
-  padding-block: 6px;
+  padding-block: ${({ theme }) => theme.space.xs};
   padding-inline: 12px;
   border: 0;
   border-radius: ${({ theme }) => theme.radius.control};
@@ -72,7 +72,6 @@ const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
     gap: ${({ theme }) => theme.space.sm};
     min-block-size: ${({ theme }) => theme.control.minHeight};
     min-inline-size: ${({ theme }) => theme.control.minHeight};
-    padding-block: ${({ theme }) => theme.space.sm};
     padding-inline: ${({ theme }) => theme.space.md};
     font-size: inherit;
     line-height: ${({ theme }) => theme.typography.lineHeight.body};
