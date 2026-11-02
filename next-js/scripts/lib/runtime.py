@@ -36,6 +36,7 @@ def service(action: str, payload: dict | None = None, *, operations: bool = Fals
     if operations:
         args.append("--env-file-if-exists=.env.operations")
     args.append(str(ROOT / "src/server/operations/cli-bridge.mjs"))
+    result = None
     try:
         result = subprocess.run(args, input=json.dumps({"action": action, "payload": payload or {}}),
                                 capture_output=True, text=True, encoding="utf-8", cwd=Path.cwd(),
@@ -44,6 +45,8 @@ def service(action: str, payload: dict | None = None, *, operations: bool = Fals
         # unambiguous and raw adapter output never becomes a public diagnostic.
         response = json.loads(result.stdout.rsplit("\x1e", 1)[-1])
     except (OSError, subprocess.SubprocessError, ValueError):
+        if result is not None and any(code in result.stderr for code in ("ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND")):
+            raise CommandError("Application runtime dependencies are incomplete. Run npm ci from next-js/, then retry.") from None
         raise CommandError("Application service unavailable; private diagnostics are withheld.") from None
     if result.returncode or not response.get("ok"):
         raise CommandError(response.get("error", "Application service unavailable; private diagnostics are withheld."))

@@ -94,8 +94,7 @@ Use `npm run cache:reconcile -- 1000 --all` to repeat bounded passes until both
 counts are zero and print the total acknowledged/removed. The command stops after
 1,000 passes; rerun it to continue a larger backlog. An incomplete local runtime
 reports the recovery command, `npm ci`, without exposing private diagnostics.
-Multiple
-replicas can consume safely. No timestamp or maximum-ID cursor is used, so a
+Multiple replicas can consume safely. No timestamp or maximum-ID cursor is used, so a
 transaction that commits late remains discoverable. Failed acknowledgment rolls
 back, and duplicate passes are harmless. Invalidation works immediately even if
 maintenance or notification delivery is offline. Retain generations and journals;

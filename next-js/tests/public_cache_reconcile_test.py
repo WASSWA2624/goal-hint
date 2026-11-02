@@ -40,9 +40,16 @@ class CacheReconcileTests(unittest.TestCase):
     def test_invalid_batch_never_reaches_database(self):
         for value in ["0", "1001", "9999", "-1", "1.5", "secret", "\u0661"]:
             with self.subTest(value=value), patch.object(cache, "service") as service, redirect_stdout(io.StringIO()):
-                with self.assertRaises(SystemExit), patch("sys.stderr", new_callable=io.StringIO):
+                with self.assertRaises(cache.CommandError):
                     cache.main([value])
                 service.assert_not_called()
+
+    def test_unknown_arguments_do_not_expose_private_values(self):
+        with patch.object(cache, "service") as service:
+            with self.assertRaises(cache.CommandError) as failure:
+                cache.main(["--private-sentinel"])
+        service.assert_not_called()
+        self.assertNotIn("private-sentinel", str(failure.exception))
 
     def test_failure_stops_further_passes_without_reporting_success(self):
         output = io.StringIO()
