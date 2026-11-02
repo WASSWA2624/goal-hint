@@ -24,10 +24,13 @@
 - A same-user limited helper followed the existing MSIX administration runbook
   to verify the real database UUID/port/datadir and quarantine the real native
   WebView profiles. Both native profile paths and the appearance cache are absent.
-  Generated build/cache files and profile backups remain local and ignored.
-- Chrome confirms `goalhint.com` has no usage data. Computer Use stopped when it
-  could not confidently verify the current browser URL during the localhost
-  check; localhost browser storage remains unverified.
+- Chrome confirms `goalhint.com` has no usage data. The remaining
+  `http://localhost:3000` storage was cleared on 2 November 2026: 7.6 MB and
+  16 cookies were removed, and Chrome now reports "No usage data".
+- Seven old cleanup backup/work folders were moved to Windows' Recycle Bin.
+  Their original locations and the known MSIX shadow copies are absent.
+  Automatic approval review still rejected permanent deletion as "blocked by
+  policy"; the recoverable Recycle Bin removal completed successfully.
 - After dependency restoration, the owned demo drain acknowledged all 1,397,822
   remaining invalidations. All 1,444,822 journal rows were retained, no expired
   responses remain, and member/payment/saved-slip counts stayed at 52/48/96.
