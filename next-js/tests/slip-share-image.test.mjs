@@ -102,3 +102,11 @@ test('export progress distinguishes confirmed upcoming matches from unresolved r
   assert.equal(page.statusLabel,'Awaiting results');
   assert.equal(page.rows[0].competitionLogo,input.slip.selections[0].competition.logoUrl);
 });
+
+test('observed scores replace VS while reserving space for both full team names',()=>{
+  const score={home:12,away:10};
+  const [page]=layoutSlipShareImages({...shared,selectionScores:{[selection.fixtureId]:score}},'en',measure);
+  assert.equal(page.rows[0].centerLabel,'12 – 10');
+  assert.ok(page.rows[0].centerWidth>=slipShareImageRules.versusGap);
+  assert.equal(layoutSlipShareImages(shared,'en',measure)[0].rows[0].centerLabel,'VS');
+});

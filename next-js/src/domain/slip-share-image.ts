@@ -11,8 +11,8 @@ export const slipShareImageRules = Object.freeze({
   width: 1080,
   maximumHeight: 8192,
   maximumRowsPerImage: 32,
-  padding: 60,
-  contentInset: 20,
+  padding: 0,
+  contentInset: 80,
   numberWidth: 140,
   leagueSize: 28,
   teamSize: 32,
@@ -55,6 +55,8 @@ export type SlipShareImageRow = Readonly<{
   awayLogo: string | null;
   competitionLogo: string | null;
   competitionName: string;
+  centerLabel: string;
+  centerWidth: number;
   pick: readonly string[];
   odds: string;
   probability: string;
@@ -152,7 +154,10 @@ export function layoutSlipShareImages(shared: SharedSlip, locale: string, measur
     const metadata = wrap(`${competitionName} · ${messages.reportingInstant(kickoff)}${settledLabel}`, "metadata", contentWidth - numberWidth - leagueSize - 22);
     const homeName = selection.homeTeam.name?.trim() || messages.text("match.homeUnknown");
     const awayName = selection.awayTeam.name?.trim() || messages.text("match.awayUnknown");
-    const teamWidth = (contentWidth - versusGap) / 2 - teamSize - teamGap;
+    const score = shared.selectionScores?.[selection.fixtureId];
+    const centerLabel = score ? `${messages.number(score.home)} – ${messages.number(score.away)}` : "VS";
+    const centerWidth = Math.max(versusGap, measure(centerLabel, "heading") + 32);
+    const teamWidth = (contentWidth - centerWidth) / 2 - teamSize - teamGap;
     const home = wrap(homeName, "teams", teamWidth), away = wrap(awayName, "teams", teamWidth);
     const teams = wrap(`${homeName} vs ${awayName}`, "teams");
     const description = selection.selection === "yes" || selection.selection === "no"
@@ -167,7 +172,7 @@ export function layoutSlipShareImages(shared: SharedSlip, locale: string, measur
     }
     rows.push({ fixtureId: selection.fixtureId, selectionIndex, top, height, metadata, numberLabel, teams, home, away, homeName, awayName,
       homeLogo: selection.homeTeam.logoUrl ?? null, awayLogo: selection.awayTeam.logoUrl ?? null,
-      competitionLogo: selection.competition.logoUrl ?? null, competitionName,
+      competitionLogo: selection.competition.logoUrl ?? null, competitionName, centerLabel, centerWidth,
       pick, odds: selection.odds, probability: messages.number(selection.probability, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }),
       outcome });
     top += height + rowGap;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createLocalSlipShare, shareSlipSourceSchema } from '../src/domain/shared-slips.ts';
+import { createLocalSlipShare, sharedSlipSchema, shareSlipSourceSchema } from '../src/domain/shared-slips.ts';
 import { createShareSlipHandler } from '../src/server/slips/shared-slips-http.ts';
 import { slipShareCaption } from '../src/domain/slip-share-caption.ts';
 import { createSharedSlips } from '../src/server/slips/shared-slips.ts';
@@ -26,6 +26,13 @@ test('personal exports contain only an image snapshot in memory and no public to
   assert.doesNotMatch(slipShareCaption(shared, 'en'), /null|undefined|\/s\//);
   assert.equal(shareSlipSourceSchema.safeParse({ source: 'builder', slipId: slip.id, criteria: '' }).success, false);
   assert.equal(shareSlipSourceSchema.safeParse({ ...source, slip }).success, false);
+});
+
+test('shared responses retain bounded observed scores, including a goalless result',()=>{
+  const local=createLocalSlipShare(slip), score={home:2,away:0};
+  const input={...local,url:`https://goalhint.com/s/${local.id}`,selectionScores:{[record.fixtureId]:score}};
+  assert.deepEqual(sharedSlipSchema.parse(input).selectionScores[record.fixtureId],score);
+  for(const home of [-1,1001,0.5])assert.equal(sharedSlipSchema.safeParse({...input,selectionScores:{[record.fixtureId]:{home,away:0}}}).success,false);
 });
 test('published sharing resolves an existing canonical link with only a minimal stable number registry', async () => {
   const f = fixture(), response = await f.handle(request(source));

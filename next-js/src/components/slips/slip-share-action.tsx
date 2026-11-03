@@ -22,7 +22,7 @@ export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnl
   publishedAt?: number; matchStates?: readonly SlipMatchState[]; results?: SlipResultView["results"]; status?: SlipStatus; outcome?: SlipResultView["outcome"];
 }) {
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
-  const resultByFixture = useMemo(() => new Map(results?.map(result => [result.fixtureId, result.outcome])), [results]);
+  const resultByFixture = useMemo(() => new Map(results?.map(result => [result.fixtureId, result])), [results]);
   const savedStatus = sharedSlip?.status;
   const savedOutcome = savedStatus === "won" || savedStatus === "lost" ? savedStatus
     : savedStatus === "void" || savedStatus === "cancelled" ? "void" : "pending";
@@ -43,8 +43,14 @@ export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnl
       aria-controls={open ? id : undefined} onClick={(event) => { event.stopPropagation(); setOpen(true); }}><ShareIcon />{!iconOnly && m.text("slipShare.share")}</ShareTrigger>
     {open && canShare && <SlipShareDrawer id={id} {...(source ? { source } : {})} {...(cached ? { initialShared: cached } : {})}
       {...(localSlip ? { localSlip, presentation: { status: slipHeaderState(localSlip, results, currentStates, outcome ?? savedOutcome, status ?? savedStatus).status,
+        ...(currentStates || results || sharedSlip?.selectionScores ? { selectionScores: Object.fromEntries(localSlip.selections.flatMap(selection => {
+          const score = slipMatchStateForSelection(selection, currentStates)?.score ?? sharedSlip?.selectionScores?.[selection.fixtureId];
+          const result = resultByFixture.get(selection.fixtureId);
+          const observed = score ?? (result?.home !== null && result?.home !== undefined && result.away !== null ? { home: result.home, away: result.away } : null);
+          return observed ? [[selection.fixtureId, observed]] : [];
+        })) } : {}),
         selectionOutcomes: Object.fromEntries(localSlip.selections.map(selection => [selection.fixtureId,
-          slipMatchStateForSelection(selection, currentStates)?.outcome ?? resultByFixture.get(selection.fixtureId) ?? sharedSlip?.selectionOutcomes?.[selection.fixtureId] ?? "pending"])) } } : {})}
+          slipMatchStateForSelection(selection, currentStates)?.outcome ?? resultByFixture.get(selection.fixtureId)?.outcome ?? sharedSlip?.selectionOutcomes?.[selection.fixtureId] ?? "pending"])) } } : {})}
       {...(publishedAt !== undefined ? { createdAt: new Date(publishedAt).toISOString() } : {})}
       locale={locale} onPrepared={setCached} onClose={close} />}
   </>;

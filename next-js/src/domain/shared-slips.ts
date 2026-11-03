@@ -7,6 +7,7 @@ import type { SlipStatus } from "./slip-status.ts";
 export type SlipSharePresentation = Readonly<{
   status?: SlipStatus;
   selectionOutcomes?: Readonly<Record<string, "correct" | "incorrect" | "pending" | "void">>;
+  selectionScores?: Readonly<Record<string, Readonly<{ home: number; away: number }>>>;
   capturedAt?: string;
 }>;
 
@@ -36,6 +37,7 @@ export const sharedSlipSchema = z.strictObject({
   number: z.string().regex(/^[0-9]{8}$/u).optional(),
   status: z.enum(["not-started", "in-progress", "pending", "won", "lost", "void", "cancelled"]).optional(),
   selectionOutcomes: z.record(z.string(), z.enum(["correct", "incorrect", "pending", "void"])).optional(),
+  selectionScores: z.record(z.string(), z.strictObject({ home: z.number().int().min(0).max(1000), away: z.number().int().min(0).max(1000) })).optional(),
   contacts: z.array(z.string().max(100)).max(2).optional(),
 }).refine((value) => {
   if (value.url === sharedSlipUrl(value.id)) return true;
@@ -46,6 +48,7 @@ export const sharedSlipSchema = z.strictObject({
   .transform((value): SharedSlip => ({ id: value.id, url: value.url, createdAt: value.createdAt, slip: value.slip as BuiltSlip,
     ...(value.number !== undefined ? { number: value.number } : {}), ...(value.status !== undefined ? { status: value.status } : {}),
     ...(value.selectionOutcomes !== undefined ? { selectionOutcomes: value.selectionOutcomes } : {}),
+    ...(value.selectionScores !== undefined ? { selectionScores: value.selectionScores } : {}),
     ...(value.contacts !== undefined ? { contacts: value.contacts } : {}) }));
 
 /** Personal exports live only in browser memory; no share token or snapshot is stored. */

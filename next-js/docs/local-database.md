@@ -427,3 +427,11 @@ normal startup task, stashes and detached worktrees remain intact; temporary
 administration tasks were removed. See [plan 207](../dev-plan/207-approved-referral-reviews.md)
 for actual tests and [the runbook](referral-reviews.md) for retention/grants.
 Production deployment and unattended worker/device qualification remain separate.
+
+## 3 November 2026 migration and sharing update
+
+The owner's migration request applied the pending payment-checkout, transient-slip/odds-band and readable-code migrations to the existing local MySQL 8.4 instance. An authenticated encrypted checkpoint first restored on a separate disposable server with all 117 prior table counts and 57 migration records matching. The two existing SharedSlip trigger delimiters were normalized only in restore input.
+
+The local database now has **60 completed migrations, none pending or unfinished**, 121 base tables and all 120 application models readable. Status, schema-drift verification and database health pass. Health also checks SlipNumber. Required checkout and numbering grants are applied and recorded privately; the application remains without DDL privileges. One existing member's referral code was converted while preserving its old invitation alias.
+
+Rollback-only smoke checks retained no synthetic rows, and the existing member/session/payment counts stayed unchanged. Nineteen real MySQL checkout/migration/numbering checks passed. The temporary native administration task was removed and the existing startup task preserved. See [plan 256](../dev-plan/256-local-migrations-and-slip-alignment.md) for verification and scope; hosted production was not changed.

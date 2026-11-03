@@ -32,7 +32,8 @@ export function createSharedSlips(database: DatabaseRuntime, { resolveResults = 
         if (!entitled && !slipCompleted(slip, results)) return { state: "restricted" };
         const states = slipMatchStatesFromResults(slip.selections, results);
         return { state: "available", shared: { id, url: sharedSlipUrl(id), createdAt: row.createdAt.toISOString(), slip,
-          status: slipSnapshotStatus(slip, results), selectionOutcomes: Object.fromEntries(states.map(leg => [leg.fixtureId, leg.outcome])) } };
+          status: slipSnapshotStatus(slip, results), selectionOutcomes: Object.fromEntries(states.map(leg => [leg.fixtureId, leg.outcome])),
+          selectionScores: Object.fromEntries(states.flatMap(leg => leg.score ? [[leg.fixtureId, leg.score]] : [])) } };
       }, { isolationLevel: "RepeatableRead", timeout: 30_000 });
     },
   });

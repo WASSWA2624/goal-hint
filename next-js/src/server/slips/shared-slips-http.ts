@@ -47,6 +47,7 @@ export function createShareSlipHandler({ members = getMemberServices, services =
       if (!view.completed && (await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
       const contacts = resolved.settings.settings ? supportContactsOf(resolved.settings.settings).slice(0, 2).map(contact => `${contact.label}: +${contact.phone}`) : [];
       return json({ id: view.id.slice(0, 32), number, contacts, status: view.status,
+        selectionScores: Object.fromEntries((view.matchStates ?? []).flatMap(leg => leg.score ? [[leg.fixtureId, leg.score]] : [])),
         createdAt: new Date(view.publishedAt).toISOString(),
         url: new URL(publicBestSlipPath("en", day, view.rank), publicPolicy.origin).toString(), slip: modelIndependentSlip(view.slip) });
     } catch { return json({ error: "unavailable" }, 503); }

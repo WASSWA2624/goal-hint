@@ -35,7 +35,7 @@ function setFont(context: CanvasRenderingContext2D, font: SlipShareImageFont, fa
 }
 
 function renderPage(context: CanvasRenderingContext2D, page: SlipShareImagePage, locale: string, family: string, assets: ReadonlyMap<string, HTMLImageElement>): void {
-  const { padding: panelLeft, contentInset, numberWidth, leagueSize, teamSize, teamGap, versusGap } = slipShareImageRules;
+  const { padding: panelLeft, contentInset, numberWidth, leagueSize, teamSize, teamGap } = slipShareImageRules;
   const padding = panelLeft + contentInset, edge = page.width - padding;
   const panelWidth = page.width - panelLeft * 2;
   const rightColumn = edge - 250, rightText = rightColumn + 14;
@@ -46,8 +46,14 @@ function renderPage(context: CanvasRenderingContext2D, page: SlipShareImagePage,
   context.fillRect(0, 0, page.width, page.height);
   context.fillStyle = colors.brand;
   context.fillRect(0, 0, page.width, 162);
-  const text = (value: string, x: number, y: number, font: SlipShareImageFont, color: string = colors.ink, align: CanvasTextAlign = "left") => {
-    setFont(context, font, family); context.fillStyle = color; context.textAlign = align; context.fillText(value, x, y);
+  const text = (value: string, x: number, y: number, font: SlipShareImageFont, color: string = colors.ink, align: CanvasTextAlign = "left", centered = false) => {
+    setFont(context, font, family); context.fillStyle = color; context.textAlign = align;
+    context.textBaseline = centered ? "alphabetic" : "top";
+    if (centered) {
+      const metrics = context.measureText(value);
+      y += (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+    }
+    context.fillText(value, x, y);
   };
   const lines = (values: readonly string[], x: number, y: number, font: SlipShareImageFont, color: string = colors.ink) => {
     values.forEach((value, index) => text(value, x, y + index * slipShareImageFonts[font].lineHeight, font, color));
@@ -89,7 +95,7 @@ function renderPage(context: CanvasRenderingContext2D, page: SlipShareImagePage,
     }
     else {
       context.fillStyle = lightTheme.color.brandSoft; context.fillRect(x, y, size, size);
-      setFont(context, "metadata", family); context.fillStyle = colors.muted; context.textAlign = "center";
+      setFont(context, "metadata", family); context.fillStyle = colors.muted; context.textAlign = "center"; context.textBaseline = "top";
       context.fillText(teamInitials(name), x + size / 2, y + (size - slipShareImageFonts.metadata.size) / 2, size - 4);
     }
   }
@@ -104,13 +110,16 @@ function renderPage(context: CanvasRenderingContext2D, page: SlipShareImagePage,
     const leagueX = padding + numberWidth + 12;
     badge(row.competitionLogo, row.competitionName, leagueX, y + 2, leagueSize);
     y = lines(row.metadata, leagueX + leagueSize + 10, y, "metadata", colors.muted) + 12;
-    const awayX = padding + (page.width - padding * 2 + versusGap) / 2;
-    const logoTop = y + (slipShareImageFonts.teams.lineHeight - teamSize) / 2;
-    badge(row.homeLogo, row.homeName, padding, logoTop);
-    badge(row.awayLogo, row.awayName, awayX, logoTop);
-    lines(row.home, padding + teamSize + teamGap, y, "teams"); lines(row.away, awayX + teamSize + teamGap, y, "teams");
-    text("VS", page.width / 2, y + 10, "metadata", colors.muted, "center");
-    y += Math.max(row.home.length, row.away.length) * slipShareImageFonts.teams.lineHeight + 12;
+    const awayX = padding + (page.width - padding * 2 + row.centerWidth) / 2;
+    const teamHeight = Math.max(row.home.length, row.away.length) * slipShareImageFonts.teams.lineHeight;
+    const centerY = y + teamHeight / 2;
+    const team = (values: readonly string[], x: number) => values.forEach((value, index) =>
+      text(value, x, centerY + (index - (values.length - 1) / 2) * slipShareImageFonts.teams.lineHeight, "teams", colors.ink, "left", true));
+    badge(row.homeLogo, row.homeName, padding, centerY - teamSize / 2);
+    badge(row.awayLogo, row.awayName, awayX, centerY - teamSize / 2);
+    team(row.home, padding + teamSize + teamGap); team(row.away, awayX + teamSize + teamGap);
+    text(row.centerLabel, page.width / 2, centerY, "heading", colors.muted, "center", true);
+    y += teamHeight + 12;
     const tone = lightTheme.color.outcome[row.outcome];
     lines(row.pick, padding, y, "pick", row.outcome === "pending" ? colors.ink : tone.text);
     const probability = `${messages.text("slips.probability")} ${row.probability}`;
