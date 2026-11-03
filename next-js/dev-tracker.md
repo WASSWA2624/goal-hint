@@ -211,3 +211,16 @@ locked-slip Share assertion fails identically on the unchanged baseline; see
 [plan 265](dev-plan/265-best-slips-filter-dialog-and-results-bar.md).
 Independent Matches/admin work was preserved. Hosted deployment
 and native release remain separate.
+
+## 266 Consistent section headers — 4 November 2026
+
+**Completed:** Performance and match result headers share themed title and
+metadata typography, line height and padding. Mobile results use Matches with
+numeric publication dates; desktop keeps Predictions with abbreviated weekdays.
+The date and time stay on the title line wherever space allows.
+
+Focused lint, theme contract, 12 timestamp tests and a production rendering/type
+build passed. Ten browser combinations with the app font passed in both themes
+from 320 to 1440px, including a 600-match count. See
+[plan 266](dev-plan/266-consistent-section-headers.md). Source integration is
+complete; deployment is separate.

@@ -133,3 +133,45 @@ export async function verifyFeedSearchFilters(page, origin) {
   }
   return { passed: results.length, results };
 }
+
+/** Compare the real Performance and Predictions headers at each responsive size. */
+export async function verifySectionHeaderUniformity(page, origin = new URL(page.url()).origin, widths = [320, 390, 768, 1024, 1440]) {
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const results = [];
+  for (const mode of ['light', 'dark']) {
+    await page.goto(origin);
+    await page.evaluate(value => localStorage.setItem('goal-hint-theme', value), mode);
+    await page.reload();
+    await page.waitForFunction(value => document.querySelector('[data-header-uniformity]')?.getAttribute('data-theme-mode') === value, mode);
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      const geometry = await page.evaluate(() => {
+        const inspect = (selector, metadata) => {
+          const node = document.querySelector(selector), title = node.querySelector('h2, h3');
+          const detail = node.querySelector(metadata), style = getComputedStyle(node), text = getComputedStyle(title), meta = getComputedStyle(detail);
+          const bounds = node.getBoundingClientRect(), heading = title.getBoundingClientRect(), first = detail.getClientRects()[0];
+          return { family: text.fontFamily, size: text.fontSize, weight: text.fontWeight, leading: text.lineHeight,
+            padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft].join(','),
+            metadata: [meta.fontSize, meta.fontWeight, meta.lineHeight].join(','), inset: heading.left - bounds.left,
+            title: title.innerText, date: detail.innerText,
+            inline: Math.abs(first.top - heading.top) < 4, fits: node.scrollWidth <= node.clientWidth };
+        };
+        return { performance: inspect('[data-performance-heading]', '[data-performance-period]'), predictions: inspect('[data-results-header]', 'time'),
+          overflow: document.documentElement.scrollWidth > innerWidth };
+      });
+      for (const key of ['family', 'size', 'weight', 'leading', 'padding', 'metadata', 'inset']) {
+        assert(geometry.performance[key] === geometry.predictions[key], `${mode}/${width}: ${key} differs: ${JSON.stringify(geometry)}`);
+      }
+      assert(geometry.performance.title === 'Performance', 'Performance retains its heading');
+      assert(geometry.predictions.title === (width < 1024 ? 'Matches' : 'Predictions'), 'Results use the responsive heading');
+      const datePattern = width < 1024 ? /^\d{2}-\d{2}-\d{4} \d{2}:\d{2} .+$/ : /^[A-Z]{3} \d{2}-[A-Za-z]{3}-\d{4} - \d{2}:\d{2} .+$/;
+      assert(datePattern.test(geometry.predictions.date), 'Results use the responsive publication format');
+      assert(geometry.performance.inline && geometry.predictions.inline, `${mode}/${width}: dates start on the title line`);
+      assert(geometry.performance.fits && geometry.predictions.fits && !geometry.overflow, `${mode}/${width}: headers fit without clipping`);
+      await page.locator('[data-header-uniformity]').screenshot({ path: `output/playwright/uniform-headers-${mode}-${width}.png` });
+      results.push({ mode, width, ...geometry });
+    }
+  }
+  return { passed: results.length, results };
+}

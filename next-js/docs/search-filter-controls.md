@@ -26,6 +26,11 @@ Matches uses one search row, one dialog field tree and one draft at every
 viewport size. The transparent search wrapper uses shared spacing instead of a
 separate gray surface. Existing admin field trees remain in their dialogs.
 
+`src/components/ui/section-header.tsx` supplies the Performance and Predictions
+headers' shared responsive title size, medium weight, line height and inset
+padding. Their date metadata uses the same secondary text styling. Both retain
+inline dates where space allows and wrap on narrower containers.
+
 `src/components/performance/performance-summary.tsx` is shared by Matches,
 Best Slips and performance reports. The compact heading places “Performance” on the left and the actual reporting day/range on the right
 (for example `02-Nov-2026 · EAT` or

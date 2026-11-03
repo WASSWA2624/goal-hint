@@ -3,6 +3,7 @@
 import styled from "styled-components";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-header";
 import { createPredictionWindow, toUtcIsoString, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { feedHeading } from "@/domain/feed-presentation";
@@ -26,45 +27,34 @@ export const feedSortOptions: readonly FeedSort[] = [
   { by: "kickoff", direction: "asc" }, { by: "kickoff", direction: "desc" },
 ];
 
-const ResultsBar = styled.header`
+const ResultsBar = styled(SectionHeader)`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: var(--gh-spacing-1) var(--gh-spacing-2);
-  min-inline-size: 0;
-  padding: var(--gh-spacing-2) ${({ theme }) => theme.layout.sectionPadding};
-  color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.brandSoft};
   border-radius: ${({ theme }) => theme.radius.none};
 `;
 const TitleLine = styled.div`
   min-inline-size: 0;
-  line-height: var(--gh-leading-compact);
+  [data-header-desktop] { display: none; }
+  ${media.desktop} {
+    [data-header-mobile] { display: none; }
+    [data-header-desktop] { display: inline; }
+  }
   > h2 {
     display: inline;
     margin: 0;
     margin-inline-end: var(--gh-spacing-1_5);
-    font-size: var(--gh-font-secondary);
-    font-weight: var(--gh-weight-medium);
-    ${media.desktop} { font-size: var(--gh-font-body); }
   }
 `;
 const PublishedAt = styled.time`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: var(--gh-font-secondary);
-  line-height: var(--gh-leading-compact);
-  overflow-wrap: anywhere;
+  ${sectionHeaderMetadata}
 `;
 const ResultCount = styled.p`
+  ${sectionHeaderMetadata}
   grid-column: 2;
   grid-row: 1;
-  margin: 0;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: var(--gh-font-secondary);
-  line-height: var(--gh-leading-label);
   text-align: end;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
   > [data-desktop-count] { display: none; }
   ${media.desktop} {
     > [data-desktop-count] { display: inline; }
@@ -87,9 +77,11 @@ export function ResultsToolbar({ query, today, total, first, last, publishedAt =
   const values = { shown: total === 0 || last < first ? "0" : `${messages.number(first)}–${messages.number(last)}`, total: total === null ? "" : messages.number(total) };
   return <ResultsBar data-results-header>
     <TitleLine>
-      <h2>{messages.text("feed.results.title")}</h2>{" "}
+      <h2><span data-header-mobile>{messages.text("navigation.matches")}</span><span data-header-desktop>{messages.text("feed.results.title")}</span></h2>{" "}
       {instant !== null && <PublishedAt dateTime={toUtcIsoString(instant)} data-prediction-publication
-        title={messages.text("feed.results.latestPublication", { time: publication! })}>{publication}</PublishedAt>}
+        title={messages.text("feed.results.latestPublication", { time: publication! })}>
+        <span data-header-mobile>{messages.predictionPublication(instant, "numeric")}</span><span data-header-desktop>{publication}</span>
+      </PublishedAt>}
     </TitleLine>
     {total !== null && <ResultCount data-match-count aria-label={messages.text("feed.results.showing", values)}>
       <span data-desktop-count>{messages.text("feed.results.showing", values)}</span>

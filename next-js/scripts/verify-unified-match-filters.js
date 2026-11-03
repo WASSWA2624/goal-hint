@@ -59,7 +59,10 @@ async function verifyUnifiedMatchFilters(page) {
     const visibleCount = await count.innerText();
     assert(width >= 1024 ? /^Showing .* matches$/.test(visibleCount) : !/Showing|matches/.test(visibleCount), "Result count uses the viewport's concise wording");
     const publication = page.locator('[data-prediction-publication]');
-    if (await publication.count()) assert(/^[A-Z]{3} \d{2}-[A-Za-z]{3}-\d{4} - \d{2}:\d{2} .+/.test(await publication.innerText()), "Publication label uses compact day-first dates, time and zone");
+    if (await publication.count()) {
+      const pattern = width < 1024 ? /^\d{2}-\d{2}-\d{4} \d{2}:\d{2} .+$/ : /^[A-Z]{3} \d{2}-[A-Za-z]{3}-\d{4} - \d{2}:\d{2} .+$/;
+      assert(pattern.test(await publication.innerText()), "Publication label follows the viewport's compact format");
+    }
     const header = await page.locator('[data-results-header]').evaluate(node => {
       const bounds = node.getBoundingClientRect(), title = node.querySelector('h2').getBoundingClientRect();
       const time = node.querySelector('time')?.getClientRects()[0];

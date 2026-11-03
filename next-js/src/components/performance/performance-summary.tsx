@@ -4,6 +4,7 @@ import styled from "styled-components";
 import type { ReactNode } from "react";
 import { desktopSectionFrame } from "@/components/ui/layout";
 import { controlHeight } from "@/components/ui/control-layout";
+import { SectionHeader, sectionHeaderMetadata } from "@/components/ui/section-header";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts, type PredictionResult } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
@@ -17,13 +18,11 @@ const Panel = styled.section`
 `;
 const Content = styled.div`
   display: grid; gap: var(--gh-spacing-0_75); min-inline-size: 0;
-  padding-block: var(--gh-spacing-1);
+  padding-block-end: var(--gh-spacing-1);
 `;
-const Header = styled.header`
-  display: flex; align-items: baseline; justify-content: space-between;
-  flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-2); min-inline-size: 0;
-  h2, h3 { margin: 0; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-control); }
-  > p { margin: 0; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; text-align: end; }
+const Header = styled(SectionHeader)`
+  justify-content: space-between;
+  > p { ${sectionHeaderMetadata} margin-inline-start: auto; text-align: end; }
 `;
 const Counts = styled.dl`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));

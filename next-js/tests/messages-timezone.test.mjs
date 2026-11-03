@@ -122,3 +122,12 @@ test("compact kickoff labels follow daylight-saving offsets and keep instant val
     assert.throws(() => messages.shortKickoffTime(invalid), CalendarValidationError);
   }
 });
+
+test("numeric publication labels preserve the selected date, time and zone on mobile", () => {
+  const at = parseUtcInstant("2026-10-27T21:56:00Z"), messages = createMessages("en");
+  assert.equal(messages.predictionPublication(at, "numeric"), "28-10-2026 00:56 EAT");
+  assert.equal(createMessages("en", undefined, "America/Los_Angeles").predictionPublication(at, "numeric"), "27-10-2026 14:56 PDT");
+  assert.equal(createMessages("en", undefined, "Asia/Kolkata").predictionPublication(at, "numeric"), "28-10-2026 03:26 GMT+5:30");
+  assert.equal(messages.predictionPublication(parseUtcInstant("2026-12-31T21:56:00Z"), "numeric"), "01-01-2027 00:56 EAT");
+  for (const invalid of [NaN, Infinity, 0.5]) assert.throws(() => messages.predictionPublication(invalid, "numeric"), CalendarValidationError);
+});

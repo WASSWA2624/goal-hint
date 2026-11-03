@@ -166,9 +166,10 @@ browsing zone and page size. Payment, subscriber and audit search screens reuse
 this dialog chrome around their existing fields and cancellation behavior.
 Without JavaScript the same dialog fields remain inline for native GET search.
 
-The results have one square, themed header: **Predictions**, a day-first
-publication label such as `WED 28-Oct-2026 - 08:00 EAT`, and the
-visible range. The timestamp is the latest stored prediction publication among
+The results have one square, themed header: **Predictions** with a label such
+as `WED 28-Oct-2026 - 00:56 EAT` on desktop, or **Matches** with
+`28-10-2026 00:56 EAT` on mobile, plus the visible range. Both headers share
+the Performance header's title size, medium weight, metadata styling and padding. The timestamp is the latest stored prediction publication among
 the displayed records, including gated forecasts; its tooltip states that scope.
 It is omitted when no visible prediction has a publication, independently of
 kickoff and feed-read time. Desktop shows `Showing 1–20 of 600 matches`; mobile
