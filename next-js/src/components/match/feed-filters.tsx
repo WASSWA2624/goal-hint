@@ -10,6 +10,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useClientReady } from "@/components/ui/use-client-ready";
 import { dialogFooterSurface } from "@/components/ui/dialog-surfaces";
 import { pageFilterPanel } from "@/components/ui/filter-chrome";
+import { filledAction } from "@/components/ui/filled-surfaces";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -494,11 +495,7 @@ const OutlineButton = styled(QuietButton)`
   border-radius: ${({ theme }) => theme.radius.control};
   font-size: var(--gh-font-body);
 
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  ${media.belowDesktop} {
-    background: ${({ theme }) => theme.color.surfaceMuted};
-    ${buttonBorder}
-  }
+  ${filledAction}
 `;
 const PhoneClear = styled(OutlineButton)`
   flex: none;

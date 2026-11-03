@@ -7,7 +7,7 @@ import { createSubscribers } from "@/server/admin/subscribers";
 import { AuditReport } from "@/components/admin/audit-report";
 import { ownerAuditActions } from "@/server/admin/audit";
 import { auditDateBounds, auditPeriods } from "@/domain/admin-audit";
-import { TextLink } from "@/components/ui/controls";
+import { ButtonLink } from "@/components/ui/controls";
 export const metadata: Metadata = { title: "Audit · Admin · Goal Hint" };
 export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
@@ -18,7 +18,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   const startDate = period === "custom" && typeof params.startDate === "string" ? params.startDate : "";
   const endDate = period === "custom" && typeof params.endDate === "string" ? params.endDate : "";
   try { auditDateBounds({ period, startDate, endDate }); }
-  catch { return <RecordBody><h1>Audit</h1><Notice $tone="error" role="alert">Invalid audit date range. <TextLink href="/admin/audit">Reset filters</TextLink></Notice></RecordBody>; }
+  catch { return <RecordBody><h1>Audit</h1><Notice $tone="error" role="alert">Invalid audit date range. <ButtonLink variant="secondary" href="/admin/audit">Reset filters</ButtonLink></Notice></RecordBody>; }
   const data = db ? await createSubscribers(db).audit(action, { period, startDate, endDate }).catch(() => null) : null;
   // The report owns the title row (its Export button sits beside the h1 on phones); the error state keeps the same h1.
   return data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} period={period} startDate={startDate} endDate={endDate} />

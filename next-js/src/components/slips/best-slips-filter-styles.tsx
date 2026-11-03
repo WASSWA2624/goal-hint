@@ -6,7 +6,7 @@ import { controlFeedback, filterButtonColors, filterControlColors, filterPanelCo
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { SelectMenu } from "@/components/ui/select-menu";
-import { selectSurface } from "@/components/ui/filled-surfaces";
+import { filledAction, selectSurface } from "@/components/ui/filled-surfaces";
 import { media } from "@/styles/theme";
 import type { BestSlipsStatus } from "@/domain/best-slips-query";
 
@@ -226,10 +226,8 @@ export const ResetButton = styled(FilterButton)`
   gap: var(--gh-spacing-1_25);
   padding: var(--gh-spacing-1) var(--gh-spacing-2_5);
 
-  color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surface};
+  ${filledAction}
   > svg { flex: none; font-size: var(--gh-font-emphasis); }
-  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};  } }
   ${media.desktop} { font-size: var(--gh-font-body); }
   ${media.belowDesktop} { padding: var(--gh-spacing-0_5) var(--gh-spacing-1_5); }
 `;

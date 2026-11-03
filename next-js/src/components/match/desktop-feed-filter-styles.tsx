@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/controls";
 import { media } from "@/styles/theme";
 import { filterDialogSurface } from "@/components/ui/dialog-surfaces";
 import { pageFilterPanel } from "@/components/ui/filter-chrome";
+import { filledAction } from "@/components/ui/filled-surfaces";
 import { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "./filter-parts";
 
 const fieldControl = css`
@@ -163,7 +164,7 @@ export const SortField = styled(FloatingField)`
 export const ActionButton = styled(Button)`
   && {
     border: 0;
-    &[type="reset"] { background: ${({ theme }) => theme.color.surfaceMuted}; }
+    &[type="reset"] { ${filledAction} }
     flex: none;
     gap: var(--gh-spacing-1_5);
     min-inline-size: 0;

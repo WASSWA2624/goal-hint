@@ -5,7 +5,7 @@ import { media } from "@/styles/theme";
 import { Fragment, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
-import { TextInput } from "@/components/ui/controls";
+import { Button, TextInput } from "@/components/ui/controls";
 import { CardIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, DocumentIcon, DownloadIcon, GiftIcon, LayersIcon, ResetIcon, SearchIcon,
   ShieldIcon, SlidersIcon, UserIcon } from "@/components/ui/icons";
 import { auditActionLabel, auditActorLabel, auditCategories, auditCategory, auditCategoryLabel, auditCsv, auditDateBounds, auditDay, auditPeriods, auditReference,
@@ -179,7 +179,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
           <div>
             <p aria-live="polite" data-audit-count>{pending ? "Loading activity…" : <b>{matches.length} {matches.length === 1 ? "event" : "events"}</b>}
               {!pending && matches.length > pageSize && ` · ${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, matches.length)} shown`}</p>
-            {filtered && <TextAction type="button" disabled={pending} onClick={reset}><ResetIcon />Reset filters</TextAction>}
+            {filtered && <Button type="button" variant="secondary" disabled={pending} onClick={reset}><ResetIcon />Reset filters</Button>}
           </div>
           <p>Up to 100 recent {action || period !== "all" ? "matching " : ""}events · EAT</p>
         </AuditSummary>
