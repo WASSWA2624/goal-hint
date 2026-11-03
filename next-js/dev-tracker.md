@@ -261,3 +261,19 @@ application types, focused lint, theme contract, scoped production rendering
 and eight light/dark browser combinations passed. See
 [plan 268](dev-plan/268-today-best-slips-odds-and-probability-review.md).
 The migration was applied only to the owned demo; hosted rollout is separate.
+
+## 269 Matches performance and connected result frames — 4 November 2026
+
+**Completed:** Matches defaults to Today’s performance in EAT while retaining
+its 30-day browsing list. Outcome controls open today's matching results;
+explicit historical views and legacy yesterday links preserve their periods.
+The shared compact heading aligns with the performance-card edges. Search and
+title spacing are tighter in both layouts. Performance remains clearly separate
+from the Matches/Predictions header, which uses the card border tokens and
+joins the first match frame without a gap or doubled divider.
+
+82 targeted tests, application types, focused lint, theme contract, scoped
+production rendering/loading checks and eight light/dark browser combinations
+passed. A live API read confirmed today's twenty pending matches. See
+[plan 269](dev-plan/269-matches-today-performance-and-spacing.md) for the live
+development restart and fixture limitations. Hosted deployment is separate.

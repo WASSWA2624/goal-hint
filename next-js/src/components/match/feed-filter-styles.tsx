@@ -3,12 +3,14 @@
 import styled from "styled-components";
 import { contentGutter } from "@/components/ui/layout";
 import { focusRing } from "@/components/ui/filter-chrome";
+import { media } from "@/styles/theme";
 
 /** Transparent search row, separated from the app header and performance by shared spacing. */
 export const Panel = styled.form`
   min-inline-size: 0;
-  padding: var(--gh-spacing-3) ${contentGutter};
+  padding: var(--gh-spacing-0_5) ${contentGutter};
   color: ${({ theme }) => theme.color.text};
+  ${media.desktop} { padding-block: var(--gh-spacing-1); }
 `;
 
 export const DialogContent = styled.div`

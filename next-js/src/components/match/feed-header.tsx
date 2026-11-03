@@ -31,6 +31,7 @@ const ResultsBar = styled(SectionHeader)`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   background: ${({ theme }) => theme.color.brandSoft};
+  border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
   border-radius: ${({ theme }) => theme.radius.none};
 `;
 const TitleLine = styled.div`

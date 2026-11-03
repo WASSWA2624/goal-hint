@@ -22,7 +22,7 @@ const Content = styled.div<{ $compactHeader: boolean }>`
 `;
 const Header = styled(SectionHeader)<{ $compactHeader: boolean }>`
   justify-content: space-between;
-  ${({ $compactHeader }) => $compactHeader && css`padding-block-end: 0;`}
+  ${({ $compactHeader }) => $compactHeader && css`padding-block-end: 0; padding-inline: 0;`}
   > p { ${sectionHeaderMetadata} margin-inline-start: auto; text-align: end; }
 `;
 const Counts = styled.dl`

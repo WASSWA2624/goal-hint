@@ -34,8 +34,9 @@ export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse):
 /** Summary dates are independent from the browsing window on the entry screen. */
 export function performanceFeedQuery(query: FeedQuery, today: ReportingDate, asOf?: number): FeedQuery {
   const reportingToday = asOf === undefined ? today : getReportingDate(utcInstantFromEpochMilliseconds(asOf));
-  return query.summary === "yesterday" ? { ...query, summary: undefined, result: undefined, zone: publicPolicy.reportingTimeZone, time: null,
-    dates: { kind: "date", date: addReportingDays(reportingToday, -1) }, status: "all", page: 1 } : { ...query, result: undefined, page: 1 };
+  return query.summary ? { ...query, summary: undefined, result: undefined, zone: publicPolicy.reportingTimeZone, time: null,
+    dates: { kind: "date", date: query.summary === "yesterday" ? addReportingDays(reportingToday, -1) : reportingToday }, status: "all", page: 1 }
+    : { ...query, result: undefined, page: 1 };
 }
 export function checkedPeriodPerformance(value: unknown, data: MatchFeedResponse): FeedPerformanceReply {
   const parsed = feedPerformanceReplySchema.safeParse(value);
@@ -47,5 +48,5 @@ export function checkedPeriodPerformance(value: unknown, data: MatchFeedResponse
 /** Drill into the cohort represented by the figures, retaining its other filters. */
 export function selectFeedSummaryResult(query: FeedQuery, result: FeedQuery["result"], today: ReportingDate, asOf: number): FeedQuery {
   const scope = performanceFeedQuery(query, today, asOf);
-  return { ...scope, dates: query.summary === "yesterday" ? { kind: "yesterday" } : scope.dates, result, page: 1 };
+  return { ...scope, dates: query.summary ? { kind: query.summary } : scope.dates, result, page: 1 };
 }

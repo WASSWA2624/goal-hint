@@ -39,6 +39,18 @@ const FeedStack = styled(Stack)`
   ${joinedDesktopSections}
   ${media.belowDesktop} { gap: var(--gh-spacing-2); }
 `;
+/** Separate the performance figures from the heading for the browsed results. */
+const PerformanceSection = styled.div`
+  min-inline-size: 0;
+  margin-block-end: var(--gh-spacing-2);
+  [data-performance-heading] { padding-block-start: var(--gh-spacing-1); }
+`;
+const MatchResults = styled.div`
+  display: grid;
+  gap: 0;
+  min-inline-size: 0;
+  > [data-results-header]:has(+ [data-match-section]) { border-block-end: 0; }
+`;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
 const Results = styled(FeedStack)`
   transition: opacity var(--gh-duration-disclosure) var(--gh-easing);
@@ -71,27 +83,29 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} />}>
+    <PerformanceSection data-feed-performance-section><Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} />}>
       <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} onApply={onApply}
         initial={summary} /></ServerThemeUntilHydrated>
-    </Suspense>
-    <ResultsToolbar query={query} today={today} total={data.total} first={first}
-      last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
-    {/* Fixtures without the selected market still list; each row states why it has no pick. */}
-    {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
-    {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
-    {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
-      {records.map((fixture, index) => <Fragment key={fixture.fixtureId}>
-        {/* Exact matches come first, so similar results start right after the last exact position. */}
-        {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
-          note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
-        <li>
-          <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-            markets={query.markets} locale={query.locale} position={first + index} startingPriceUgx={startingPriceUgx}
-            titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
-        </li>
-      </Fragment>)}
-    </MatchCardList>}
+    </Suspense></PerformanceSection>
+    <MatchResults data-feed-match-results>
+      <ResultsToolbar query={query} today={today} total={data.total} first={first}
+        last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
+      {/* Fixtures without the selected market still list; each row states why it has no pick. */}
+      {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
+      {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
+      {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
+        {records.map((fixture, index) => <Fragment key={fixture.fixtureId}>
+          {/* Exact matches come first, so similar results start right after the last exact position. */}
+          {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
+            note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
+          <li>
+            <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
+              markets={query.markets} locale={query.locale} position={first + index} startingPriceUgx={startingPriceUgx}
+              titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
+          </li>
+        </Fragment>)}
+      </MatchCardList>}
+    </MatchResults>
     {enabled && <FeedPagination firstPage={view.firstPage} shown={records.length} query={query} today={today} data={data} busy={phase !== null} error={error} onRetry={retry} />}
   </FeedStack>;
 });

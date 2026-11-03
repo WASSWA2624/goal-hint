@@ -11,6 +11,18 @@ all four markets and no league, country, time, probability or odds constraints.
 Reset restores those choices and the Predictions only default allowed by access,
 while retaining the browsing zone and page size.
 
+The default performance cards report today in EAT under **Today’s performance**,
+independently of the 30-day browsing list. Outcome controls open today's matching
+results with the existing cohort filters and restart pagination. Explicit date
+selections keep their actual reporting period; legacy yesterday summary links
+remain readable. Reset restores today's summary.
+
+The performance title and period align with the card edges and sit closely
+above them. Search and title spacing are compact on mobile and desktop, with a
+separate gap before the Matches/Predictions results header. That header reuses
+the match-card frame tokens and joins the first card without a gap or doubled
+divider. Controls retain their shared height and both theme palettes.
+
 The period selector includes Last 30/7/3 days, Yesterday, Today, Tomorrow,
 Next 3/7/30 days and Custom. The native GET form's `period` field is validated
 only by the page route, replaces older applied dates, and redirects to canonical
@@ -30,10 +42,10 @@ An idle retry of a failed read at the same URL uses `router.refresh()`.
 
 `/en/matches` and `/en/predictions/YYYY-MM-DD` share the same feed service and
 `MatchFeedPage`; dated URLs preserve historical links without separate Live or
-Results navigation destinations. The Matches page defaults to probability
+Results navigation destinations. The Matches page defaults to kickoff
 descending; dated archive routes retain their named dates and kickoff/fixture-ID
 order. Stored API defaults remain Last 30 days and kickoff descending. The first
-page uses the configured page-size limit. Validated URL variants retain the
+page shows twenty matches. Validated URL variants retain the
 existing selected market, filters, sorting and bounded page-size contract.
 
 `server/matches/public-feed.ts` composes the same database, configured competition
@@ -61,7 +73,7 @@ cards, exact filtered totals, sorting and pagination load without waiting for th
 full-period settlement audit. `/api/matches/summary` uses the same query and
 entitlement boundary and returns only complete counts, their observation clock,
 cohort version and viewer projection. The client loads this independently, checks
-that it still matches the visible cohort and viewer, and offers a separate retry
+its request scope and viewer, and offers a separate retry
 on failure. Summary loading never marks the list or route as busy. Its separate
 90-second audit budget leaves ordinary list transaction budgets unchanged.
 

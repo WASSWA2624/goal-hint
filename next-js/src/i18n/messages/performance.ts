@@ -1,6 +1,7 @@
 export const performanceMessages = {
   "performance.summary.all": "All",
   "performance.summary.title": "Performance",
+  "performance.summary.today": "Today’s performance",
   "performance.summary.figures": "Performance figures",
   "performance.summary.loading": "Loading overall performance…",
   "performance.summary.unavailable": "Overall performance is temporarily unavailable.",

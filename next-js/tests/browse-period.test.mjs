@@ -15,20 +15,20 @@ test('Best Slips defaults to today while Matches retains its separate historical
   assert.deepEqual(resolveBestSlipsDates(slips, today), { from: today, to: today });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(slips), today), slips);
   const matches = applyFeedPageDefaults(parseFeedQuery({}, { today }), {});
-  assert.equal(matches.pageSize, 20); assert.equal(matches.summary, 'yesterday');
+  assert.equal(matches.pageSize, 20); assert.equal(matches.summary, 'today');
   assert.deepEqual(matches.sort, { by: 'kickoff', direction: 'desc' });
   const range = resolveFeedDates(matches, today);
   assert.equal(range.startDate, '2026-12-03'); assert.equal(range.endDate, today);
   const summary = performanceFeedQuery(matches, today);
-  assert.deepEqual(summary.dates, { kind: 'date', date: '2026-12-31' });
+  assert.deepEqual(summary.dates, { kind: 'date', date: today });
   assert.equal(summary.zone, 'Africa/Kampala'); assert.equal(summary.summary, undefined);
-  assert.match(feedQueryHref({ ...matches, page: 3 }, today), /summary=yesterday/);
+  assert.match(feedQueryHref({ ...matches, page: 3 }, today), /summary=today/);
   const filtered = selectFeedDates(matches, { kind: 'date', date: '2026-10-01' }, today);
   assert.equal(filtered.summary, undefined); assert.deepEqual(performanceFeedQuery(filtered, today).dates, filtered.dates);
-  assert.equal(resetFeedFilters(filtered).summary, 'yesterday');
+  assert.equal(resetFeedFilters(filtered).summary, 'today');
   const deviceDay = parseReportingDate('2026-12-31'), asOf = Date.parse('2026-12-31T22:00:00Z');
   assert.deepEqual(performanceFeedQuery({ ...matches, zone: 'America/New_York' }, deviceDay, asOf).dates,
-    { kind: 'date', date: '2026-12-31' }, 'Yesterday uses the EAT day even when the visitor is still on the previous date');
+    { kind: 'date', date: '2027-01-01' }, 'Today uses the EAT day even when the visitor is still on the previous date');
 });
 
 test('today slip totals are independent of legacy date requests, result filters and pagination', async () => {

@@ -23,7 +23,6 @@ export const FiltersPanel = styled.section`
   display: grid; gap: var(--gh-spacing-1_25); min-inline-size: 0;
   padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.page};
-  [data-performance-heading] { padding-inline: 0; }
   ${media.desktop} {
     gap: var(--gh-spacing-3); padding-block: var(--gh-spacing-1);
     background: ${({ theme }) => theme.color.page};

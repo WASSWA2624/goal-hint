@@ -25,11 +25,11 @@ test('Matches summary links retain their cohort filters and select the actual re
   for (const result of predictionResults) {
     const next = selectFeedSummaryResult(original, result, today, asOf);
     assert.equal(next.result, result); assert.equal(next.summary, undefined); assert.equal(next.page, 1);
-    assert.deepEqual(next.dates, { kind: 'yesterday' }); assert.equal(next.zone, 'Africa/Kampala');
+    assert.deepEqual(next.dates, { kind: 'today' }); assert.equal(next.zone, 'Africa/Kampala');
     assert.equal(next.search, original.search); assert.deepEqual(next.countries, original.countries);
     assert.deepEqual(next.markets, original.markets); assert.equal(next.picks, original.picks);
     const href = new URL(feedQueryHref(next, today), 'https://goalhint.com');
-    assert.equal(href.searchParams.get('result'), result); assert.equal(href.searchParams.get('when'), 'yesterday');
+    assert.equal(href.searchParams.get('result'), result); assert.equal(href.searchParams.get('when'), 'today');
     const restored = parseFeedQuery(serializeFeedQuery(next, today), { today });
     assert.equal(restored.result, result); assert.deepEqual(restored.dates, next.dates); assert.equal(restored.zone, next.zone);
     assert.equal(performanceFeedQuery(next, today, asOf).result, undefined, 'summary totals retain all outcomes');
@@ -37,11 +37,19 @@ test('Matches summary links retain their cohort filters and select the actual re
   }
 });
 
-test('yesterday result navigation follows EAT across a device-calendar date boundary', () => {
+test('today result navigation follows EAT across a device-calendar date boundary', () => {
   const localDay = parseReportingDate('2026-12-31'), instant = Date.parse('2026-12-31T22:00:00Z');
   const original = applyFeedPageDefaults(parseFeedQuery({ tz: 'America/New_York' }, { today: localDay }), {});
   const next = selectFeedSummaryResult(original, 'won', localDay, instant);
-  assert.equal(resolveFeedDates(next, getFeedToday(next, instant)).startDate, '2026-12-31');
+  assert.equal(resolveFeedDates(next, getFeedToday(next, instant)).startDate, '2027-01-01');
+});
+
+test('explicit legacy yesterday summaries retain their original day and navigation', () => {
+  const input = new URLSearchParams('summary=yesterday');
+  const query = applyFeedPageDefaults(parseFeedQuery(input, { today }), input);
+  assert.equal(query.summary, 'yesterday');
+  assert.deepEqual(performanceFeedQuery(query, today, asOf).dates, { kind: 'date', date: '2026-11-02' });
+  assert.deepEqual(selectFeedSummaryResult(query, 'won', today, asOf).dates, { kind: 'yesterday' });
 });
 
 test('invalid result filters fail strictly; All clears the result without changing the date', () => {

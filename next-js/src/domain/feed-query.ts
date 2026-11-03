@@ -35,7 +35,7 @@ export type ProbabilityRange = Readonly<{ min: number; max: number }>;
 /** "only" keeps fixtures whose shown pick exists; "all" includes fixtures without a prediction. */
 export type PicksFilter = "all" | "only";
 export type FeedQuery = Readonly<{
-  summary?: "yesterday" | undefined;
+  summary?: "today" | "yesterday" | undefined;
   result?: PredictionResult | undefined;
   locale: Locale;
   dates: DateSelection;
@@ -75,7 +75,7 @@ export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirect
 export const matchFeedPageDefaults = Object.freeze({
   dates: Object.freeze({ kind: "last-30-days" }),
   sort: Object.freeze({ by: "kickoff", direction: "desc" }),
-  summary: "yesterday",
+  summary: "today",
 } as const satisfies Pick<FeedQuery, "dates" | "sort" | "summary">);
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
@@ -224,7 +224,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const result = get("result");
   if (result !== undefined && result !== "all" && !predictionResults.includes(result as PredictionResult)) fail();
   const summary = get("summary");
-  if (summary !== undefined && summary !== "yesterday") fail();
+  if (summary !== undefined && summary !== "today" && summary !== "yesterday") fail();
   const date = get("date");
   const from = get("from");
   const to = get("to");
@@ -287,7 +287,7 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, s
   const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   return { ...query,
-    ...(!dated && !explicitDates ? { summary: "yesterday" as const } : {}),
+    ...(!dated && !explicitDates ? { summary: query.summary ?? matchFeedPageDefaults.summary } : {}),
     pageSize: browseRules.pageSize,
     dates: dated || explicitDates ? query.dates : matchFeedPageDefaults.dates,
     sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
