@@ -32,11 +32,13 @@ test("device navigation selects today/live and yesterday's results in the same b
     "/en/matches?date=2026-12-31&tz=Asia%2FKathmandu&status=finished");
 });
 
-test("Clear filters returns to Today in the device zone and removes optional time bounds", () => {
+test("Clear filters restores 30-day browsing in the device zone and removes optional time bounds", () => {
   const original = query("date=2020-02-29&tz=America%2FLos_Angeles&timeFrom=12:00&timeTo=13:00&q=Club");
   const cleared = resetFeedFilters(original);
   assert.equal(cleared.zone, zone); assert.equal(cleared.time, undefined);
-  assert.deepEqual(cleared.dates, { kind: "today" });
+  assert.deepEqual(cleared.dates, { kind: "last-30-days" });
+  assert.deepEqual(cleared.sort, { by: "kickoff", direction: "desc" });
+  assert.equal(cleared.summary, "yesterday");
   assert.equal(cleared.picks, "only");
-  assert.equal(feedQueryHref(cleared, today), "/en/matches?when=today&tz=America%2FLos_Angeles&picks=only&sort=probability");
+  assert.equal(feedQueryHref(cleared, today), "/en/matches?summary=yesterday&tz=America%2FLos_Angeles&picks=only&when=last-30-days&sort=kickoff");
 });

@@ -178,6 +178,13 @@ all **9 checks** on MySQL 8.4.11 with no skips, asserting 90 tables. The two
 restores took 28,295 ms and 32,200 ms, and both matched complete-row hashes,
 schema, foreign keys and all 42 triggers.
 
+Migration `20261103180000_shared_slip_trigger_blocks` applies the same repair to
+the two retained `SharedSlip` guards from `20261029180000_shared_slips`.
+It preserves their names, events, messages and immutable-row behavior without
+changing the applied migration's checksum. Pause writers and take a verified
+backup before deploying it; MariaDB installations use the matching overlay in
+`prisma/mariadb/`. The source migration does not imply deployment to any database.
+
 Account credit (`20261024210000_account_credit`) adds the `WalletEntry` ledger with three `BEGIN … END` triggers
 (`WalletEntry_no_update`, `WalletEntry_no_delete`, `WalletEntry_links`) and the `AccountMove` history with two
 (`AccountMove_no_update`, `AccountMove_no_delete`), so a backup of a database at that migration carries five more triggers. Restore keeps them with their definer; the backup test derives its table list from the

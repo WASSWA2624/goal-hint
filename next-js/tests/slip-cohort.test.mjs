@@ -9,7 +9,8 @@ import { createSlipBuildService } from "../src/server/slips/slip-service.ts";
 import { liveRecord, now, today } from "./helpers/live-refresh-fixtures.mjs";
 
 const clock = { now: () => now };
-const criteria = { ...defaultSlipCriteria(today), dateTo: today, teamsMin: 2, teamsMax: 2, totalMin: 300, totalMax: 600 };
+const criteria = { ...defaultSlipCriteria(today), dateTo: today, markets: ["match-result"], probMin: 0,
+  teamsMin: 2, teamsMax: 2, totalMin: 300, totalMax: 600 };
 function record(id) {
   const value = liveRecord({ fixtureId: id, kickoffAt: now + 3_600_000 });
   return { ...value, homeTeam: { id: `${id}-home`, name: `${id} home` }, awayTeam: { id: `${id}-away`, name: `${id} away` },

@@ -21,9 +21,9 @@ paywall = runpy.run_path(str(ROOT / "scripts/verify-production-paywall.py"))
 
 class ProductionChecks(unittest.TestCase):
     def test_gate_rejects_added_premium_fields_and_full_access(self):
-        safe = {"status": "scheduled", "prices": [], "forecast": {"gated": True, "families": ["match-result"]}}
+        safe = {"status": "scheduled", "prices": [], "forecast": {"gated": True, "families": ["match-result"], "probabilities": []}}
         paywall["gated_record"](safe)
-        for extra in ({"probabilities": {}}, {"markets": []}, {"analysis": "private"}):
+        for extra in ({"probabilities": {}}, {"probabilities": [0.8]}, {"markets": []}, {"analysis": "private"}):
             with self.assertRaises(AssertionError):
                 paywall["gated_record"]({**safe, "forecast": {**safe["forecast"], **extra}})
         with self.assertRaises(AssertionError):
@@ -37,12 +37,15 @@ class ProductionChecks(unittest.TestCase):
 
     def test_raw_html_and_escaped_flight_leaks_fail(self):
         paywall["gated_html"]('<p>Subscriber access</p>')
+        for source in ('{"probabilities":[]}', '{"probabilities": [ ]}', r'{\"probabilities\":[]}'):
+            paywall["gated_html"](source)
         for source in ('<article data-market="match-result">', '{"probabilities":{}}', r'{\"reasons\":["private"]}'):
             with self.assertRaises(AssertionError):
                 paywall["gated_html"](source)
         # A feed page leaves card markup to FeedCards but still rejects flight data and detail markup.
         paywall["gated_html"]('<article data-market="match-result"><p data-prediction="none" data-outcome="unavailable"></p></article>', cards=True)
-        for source in ('{"probabilities":{}}', '<section data-verdict="home-win">'):
+        for source in ('{"probabilities":{}}', '{"probabilities":[0.8]}', '{"probabilities":null}',
+                       r'{\"probabilities\":{\"home-win\":0.8}}', '<section data-verdict="home-win">'):
             with self.assertRaises(AssertionError):
                 paywall["gated_html"](source, cards=True)
 
@@ -54,6 +57,10 @@ class ProductionChecks(unittest.TestCase):
         records = [{"fixtureId": "published", "forecast": {"gated": True, "families": ["match-result"]}},
             {"fixtureId": "none", "forecast": None}, {"fixtureId": "empty", "forecast": {"gated": True, "families": []}}]
         self.assertEqual(paywall["forecast_ids"]({"records": records}), {"published"})
+        completed = '<article data-fixture-id="finished"><p data-prediction="home-win" data-outcome="correct"></p></article>'
+        paywall["FeedCards"](completed, set(), {"finished"})
+        with self.assertRaises(AssertionError):
+            paywall["FeedCards"](completed, set())
         for source in ('<article data-fixture-id="published" data-market="match-result"></article>',
                 '<article data-fixture-id="published"><p data-prediction="none"></p></article>',
                 '<article data-fixture-id="none" data-market="match-result"><p data-prediction="home-win"></p></article>',
@@ -81,12 +88,12 @@ class ProductionChecks(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     private_response(response, "/en")
 
-    def test_complete_check_rejects_news_analysis_and_missing_forecast(self):
+    def test_complete_check_requires_protected_insights_and_a_published_forecast(self):
         record = {"fixtureId": "10000000-0000-4000-8000-000000000001", "slug": "synthetic-match",
-                  "status": "scheduled", "prices": [], "forecast": {"gated": True, "families": ["match-result"]}}
+                  "status": "scheduled", "prices": [], "forecast": {"gated": True, "families": ["match-result"], "probabilities": []}}
         none = {**record, "fixtureId": "10000000-0000-4000-8000-000000000002", "forecast": None}
         access = {"tier": "free", "signedIn": False}
-        state = {"kind": "report", "forecast": True, "card": ""}
+        state = {"news_status": 403, "kind": "report", "forecast": True, "card": ""}
         seen = []
 
         def cards():
@@ -101,10 +108,13 @@ class ProductionChecks(unittest.TestCase):
             headers["Cache-Control"] = "private, no-store"
             if "/insights" in path:
                 value = {"access": access, "fixtureId": record["fixtureId"], "section": "news", "data": {"items": [{"kind": state["kind"]}]}}
+                if state["news_status"] == 403:
+                    value = {"error": {"code": "subscription-required"}}
+                return Response(state["news_status"], headers, json.dumps(value))
             elif path == "/api/best-slips":
                 value = {"day": "2026-10-09", "state": "odds-unavailable", "slips": []}
             elif path.startswith("/api/matches/"):
-                value = {"access": access, "fixture": record, "history": {"gated": True}, "snapshot": {"gated": True},
+                value = {"access": access, "fixture": record, "history": {"gated": True}, "snapshot": {"gated": True, "probabilities": []},
                          "route": {"path": f'/en/matches/{record["fixtureId"]}/{record["slug"]}'}}
             elif path.startswith("/api/matches"):
                 value = {"access": access, "records": [{**record, "forecast": record["forecast"] if state["forecast"] else None}, none]}
@@ -117,9 +127,11 @@ class ProductionChecks(unittest.TestCase):
         with patch.dict(paywall["verify"].__globals__, {"get": read}), redirect_stdout(io.StringIO()):
             paywall["verify"]("http://127.0.0.1")
             self.assertEqual(len(seen), 9)
-            state["kind"] = "analysis"
-            with self.assertRaises(AssertionError):
-                paywall["verify"]("http://127.0.0.1")
+            for kind in ("report", "analysis"):
+                state.update(news_status=200, kind=kind)
+                with self.assertRaises(AssertionError):
+                    paywall["verify"]("http://127.0.0.1")
+            state["news_status"] = 403
             state.update(kind="report", card=' data-market="match-result"')
             with self.assertRaises(AssertionError):
                 paywall["verify"]("http://127.0.0.1")

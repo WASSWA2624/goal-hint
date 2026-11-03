@@ -56,7 +56,7 @@ test('new explicit abstentions suppress the default recommendation without delet
   assert.equal(fixture.forecast.markets.length, 4);
 });
 
-test('automatic slips retain the authoritative selection and explicit outcomes retain their published distribution', () => {
+test('custom slips rank complete published distributions independently of the featured recommendation', () => {
   const fixture = card(), asOf = fixture.forecast.publishedAt + 1000;
   fixture.kickoffAt = asOf + 3600000; fixture.forecast.provisional = false;
   fixture.cycle = { state: 'open', mode: 'current', ordinal: 1, lockedAt: null, voidReason: null };
@@ -64,10 +64,15 @@ test('automatic slips retain the authoritative selection and explicit outcomes r
   fixture.prices = [{ family: 'double-chance', selection: 'home-or-away', price: '1.90', basis: 'bookmaker', retrievedAt: asOf, providerUpdatedAt: null }];
   fixture.selectionPrices = [...fixture.prices, { ...fixture.prices[0], selection: 'home-or-draw', price: '1.40' }];
   const today = new Date(asOf + 3 * 3600000).toISOString().slice(0, 10);
-  const criteria = { ...defaultSlipCriteria(today), markets: ['double-chance'], teamsMax: 1, teamsMin: 1, slips: 1, reuse: true };
-  assert.equal(buildSlips(criteria, [fixture], asOf).slips[0].selections[0].selection, 'home-or-away');
+  // Exercise selection publication independently of the form's default 75% / 5.00 minimums.
+  const criteria = { ...defaultSlipCriteria(today), markets: ['double-chance'], probMin: 0, oddsMin: 101,
+    totalMin: 101, teamsMax: 1, teamsMin: 1, slips: 1, reuse: true };
+  const automatic = buildSlips(criteria, [fixture], asOf).slips[0].selections[0];
+  assert.equal(automatic.selection, 'home-or-draw'); assert.equal(automatic.probability, 0.82);
   const explicit = buildSlips({ ...criteria, outcomes: { 'double-chance': ['home-or-draw'] } }, [fixture], asOf);
   assert.equal(explicit.slips[0].selections[0].selection, 'home-or-draw'); assert.equal(explicit.slips[0].selections[0].probability, 0.82);
+  assert.equal(fixture.forecast.recommendation.selected.selection, 'home-or-away');
+  assert.equal(fixture.forecast.recommendation.selected.probability, 0.72);
 });
 
 test('private recommendation audit round-trips beside the original argmax and rejects identity or source-clock changes', () => {

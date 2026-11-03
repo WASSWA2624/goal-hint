@@ -74,27 +74,28 @@ function render({ cards = [], details = [] }) {
 const anchors = (html) => [...html.matchAll(/<a\b[^>]*\bhref="([^"]*)"/gu)].map((match) => match[1].replaceAll("&amp;", "&"));
 const pickState = (html) => html.match(/data-pick-state="([a-z]+)"/u)?.[1];
 
-test("the shared card keeps its canonical match link when an unfinished forecast is gated", () => {
+test("locked cards retain the canonical match as their return destination for guest and member access links", () => {
   const locked = gateFixture(upcoming("card-gated"), anonymous);
   assert.equal(locked.forecast.gated, true);
   const { cards: [guest, signedIn, subscriber] } = render({ cards: [
-    { fixture: locked, gated: true, analysisSlug: slug }, { fixture: gateFixture(upcoming("card-gated"), member), gated: true, analysisSlug: slug },
+    { fixture: locked, gated: true, analysisSlug: slug }, { fixture: gateFixture(upcoming("card-gated"), member), gated: true, signedIn: true, analysisSlug: slug },
     { fixture: upcoming("card-gated"), analysisSlug: slug }] });
-  for (const html of [guest, signedIn, subscriber]) {
-    assert.deepEqual(anchors(html), [`/en/matches/card-gated/${slug}`]);
-    assert.match(anchors(html)[0], /^\/en\/matches\/card-gated\/[a-z0-9-]+$/u);
-    assert.doesNotMatch(html, /return=|\/en\/account|\/en\/subscribe/u);
-  }
-  // Standalone locked cards carry no prediction, price, meter or public chance value.
+  const path = `/en/matches/card-gated/${slug}`, returnTo = encodeURIComponent(path);
+  const guestHref = `/en/account?view=register&return=${returnTo}`, memberHref = `/en/subscribe?return=${returnTo}`;
+  assert.deepEqual(anchors(guest), [guestHref, guestHref]);
+  assert.deepEqual(anchors(signedIn), [memberHref, memberHref]);
+  assert.deepEqual(anchors(subscriber), [path]);
+  // Locked cards keep the public chance placeholder without private selections, prices or meters.
   for (const html of [guest, signedIn]) {
     assert.equal(pickState(html), "subscriber");
     assert.doesNotMatch(html, prediction);
     assert.deepEqual(cardPick(html), []);
-    assert.match(html, />Locked prediction</u);
-    assert.match(html, /data-subscriber-notice="true"[^>]*title="Unlock prediction"[^>]*>Get access/u);
+    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock</u);
+    assert.match(html, /data-unlock-button="true"/u);
     assert.match(html, /data-public-probability/u);
   }
-  assert.equal(signedIn, guest);
+  assert.match(guest, /Register \/ log in to unlock/u);
+  assert.match(signedIn, /Subscribe to unlock/u);
   assert.match(subscriber, /data-pick-selection=/u);
 });
 
@@ -137,7 +138,7 @@ test("a delivered forecast stays locked for free viewers, and completed matches 
     { fixture: gateFixture(scenarios.canceled.feed.records[0], anonymous), gated: true, analysisSlug: slug }] });
   assert.equal(pickState(whole), "subscriber");
   assert.doesNotMatch(whole, prediction);
-  assert.match(whole, />Locked prediction</u);
+  assert.match(whole, /data-subscriber-notice="true"[^>]*>Unlock</u);
   assert.equal(pickState(finished), "settled");
   assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
   assert.notEqual(pickState(canceled), "subscriber");
@@ -152,10 +153,13 @@ test("the match page locks the verdict, markets and analysis only over a publish
   assert.equal(none.snapshot, null);
   assert.deepEqual(none.history, { gated: true });
   const { details: [locked, guest, subscriber] } = render({ details: [published, none, gate(scenarios["prior-cycle"].detail, full)] });
-  assert.match(locked.verdict, /Subscribe to unlock predictions, markets and odds\./u);
-  assert.match(locked.verdict, /data-public-probability/u);
-  assert.match(locked.markets, /Markets, predictions and odds are locked\./u);
-  assert.match(locked.analysis, /Goal Hint analysis is for subscribers\./u);
+  assert.match(locked.verdict, /data-match-access-required="true"/u);
+  for (const html of Object.values(locked)) {
+    assert.match(html, /data-unlock-link="true"/u);
+    assert.match(html, />Unlock</u);
+    assert.deepEqual(anchors(html), [`/en/account?view=register&return=${encodeURIComponent(published.route.path)}`]);
+    assert.doesNotMatch(html, /SENTINEL-|61\.7|62%|data-public-probability/u);
+  }
   assert.match(guest.verdict, /data-featured-pick="none"/u);
   assert.match(guest.verdict, /No prediction published/u);
   assert.match(guest.verdict, /Awaiting prediction/u);

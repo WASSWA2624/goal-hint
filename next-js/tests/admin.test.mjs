@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test, { after } from "node:test";
+import { privateResponseSources } from "./helpers/private-response.mjs";
 import { fixtureAdminSessions, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
 after(installAdminFixtureEnvironment());
 import { NextRequest } from "next/server.js";
@@ -307,7 +308,7 @@ test("verify({ touch: false }) checks a session without extending it", async () 
 test("every private exclusion point covers /admin; member pages stay crawlable but noindex", async () => {
   const rules = await nextConfig.headers();
   assert.deepEqual(rules[0], { source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] }, "The global rule stays first.");
-  const sources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*", "/en/account", "/en/subscribe", "/api/account/:path*", "/api/slips/:path*"];
+  const sources = privateResponseSources;
   // Public asset caching (tests/seo-performance.test.mjs) sits between; the private rules stay last, so they win.
   assert.deepEqual(rules.slice(-sources.length).map((rule) => rule.source), sources);
   for (const rule of rules.slice(-sources.length)) {

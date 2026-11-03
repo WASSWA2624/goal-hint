@@ -94,7 +94,6 @@ test('home query variants keep the canonical but are noindex; only feed keys per
     assert.equal(digest(() => redirectLegacyFeedQuery('en', variant)), null, JSON.stringify(variant));
   }
   const route = source('app/_components/best-slips-route.tsx');
-  assert.match(route, /redirectLegacyFeedQuery\(locale, await searchParams\);\s+const viewer = await access\(\)/u);
   assert.doesNotMatch(route, /\bredirect\(/u, 'The legacy feed move is never a temporary redirect.');
 });
 

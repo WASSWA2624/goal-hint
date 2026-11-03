@@ -68,7 +68,7 @@ test('endpoint ignores cookies and query parameters, reads one fixed anonymous p
     assert.equal(response.headers.get('set-cookie'), null);
     assert.equal(response.headers.get('vary'), null);
   }
-  assert.deepEqual(reads, Array.from({ length: 2 }, () => ({ query: 'page=1&pageSize=30', context: { locale: 'en' } })));
+  assert.deepEqual(reads, Array.from({ length: 2 }, () => ({ query: 'page=1&pageSize=30', context: { locale: 'en', completedOnly: false } })));
 });
 
 test('unavailable, malformed, future, expired and oversized source responses are never cacheable', async () => {

@@ -30,19 +30,22 @@ def gated_html(source, *, cards=False):
     assert not any(re.search(r'data-(?:detail-market|verdict)=|data-featured-pick="(?!none")', tag) for tag in tags), "Subscriber markup leaked."
     # The only probability transport allowed on an unfinished free forecast is an empty list.
     assert not re.search(r'[\\]*"(?:alternatives|reasons|uncertainty)[\\]*"\s*:', source), "Subscriber flight data leaked."
-    assert not re.search(r'[\\]*"probabilities[\\]*"\s*:\s*\[\s*[^\]\s]', source), "Subscriber probability leaked."
+    assert not re.search(r'[\\]*"probabilities[\\]*"\s*:(?!\s*\[\s*\])', source), "Subscriber probability leaked."
+    if not cards:
+        assert not re.search(r'\bdata-(?:market|prediction|outcome|pick-selection|probability-meter|pick-price|pick-odds)=', source), "Subscriber card markup leaked."
 
 
 def forecast_ids(feed):
     # The fixtures whose cards lock: those with a published family; forecast null or no family shows no prediction.
-    return {record["fixtureId"] for record in feed["records"] if (record.get("forecast") or {}).get("families")}
+    return {record["fixtureId"] for record in feed["records"]
+            if record.get("status") not in COMPLETED and (record.get("forecast") or {}).get("families")}
 
 
 class FeedCards(HTMLParser):
-    """Only cards with a published locked forecast prohibit prediction attributes."""
-    def __init__(self, source, published):
+    """Unfinished forecasts stay locked; forecastless cards allow only no-prediction markup."""
+    def __init__(self, source, published, completed=()):
         super().__init__()
-        self.published, self.elements = published, []
+        self.published, self.completed, self.elements = published, set(completed), []
         self.feed(source)
 
     def handle_starttag(self, tag, attributes):
@@ -50,9 +53,11 @@ class FeedCards(HTMLParser):
         if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
             self.elements.append((tag, attributes.get("data-fixture-id")))
         card = next((card for _, card in reversed(self.elements) if card), None)
-        if card in self.published:
+        if card not in self.completed:
             for name in CARD_PICK & set(attributes):
-                assert attributes[name] == NO_PICK.get(name), "Unfinished card exposed a pick."
+                allowed = card is not None and card not in self.published and (
+                    name == "data-market" or name in NO_PICK and attributes[name] == NO_PICK[name])
+                assert allowed, "Unfinished card exposed a pick."
 
     def handle_endtag(self, tag):
         for index in range(len(self.elements) - 1, -1, -1):
@@ -76,7 +81,8 @@ def verify(origin):
     free_access(feed)
     for record in feed["records"]:
         if record["status"] not in COMPLETED: gated_record(record)
-    FeedCards(read("/en/matches"), forecast_ids(feed))
+    FeedCards(read("/en/matches"), forecast_ids(feed),
+              {record["fixtureId"] for record in feed["records"] if record["status"] in COMPLETED})
     best = read("/api/best-slips", wire=True)
     for slip in best["slips"]:
         if slip.get("completed"):
@@ -107,6 +113,7 @@ def verify(origin):
     assert detail["history"] == {"gated": True} and "odds" not in detail
     snapshot = detail.get("snapshot")
     assert snapshot and snapshot.get("gated") is True and set(snapshot) <= SNAPSHOT_KEYS
+    assert snapshot.get("probabilities") == [], "Subscriber snapshot probability leaked."
     # The detail's canonical path survives a team rename between the feed and detail reads.
     path = detail["route"]["path"]
     assert re.fullmatch(rf"/en/matches/{re.escape(fixture_id)}/[a-z0-9]+(?:-[a-z0-9]+)*", path)

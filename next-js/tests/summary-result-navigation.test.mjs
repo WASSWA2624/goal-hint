@@ -8,14 +8,14 @@ import { predictionResults } from '../src/domain/performance-summary.ts';
 import { resetFeedFilters } from '../src/domain/feed-controls.ts';
 
 const today = parseReportingDate('2026-11-03'), asOf = Date.parse(`${today}T10:00:00+03:00`);
-test('every result chip on Best Slips and saved-slip history selects yesterday and restarts pagination', () => {
-  for (const source of ['best', 'saved']) for (const status of predictionResults) {
-    const applied = { ...defaultBestSlipsQuery(), page: 4 };
+test('every Best Slips result chip retains its odds band, selects yesterday and restarts pagination', () => {
+  for (const oddsBand of ['1.5-5', '5-10', '10-20', '20-50', '50-100']) for (const status of predictionResults) {
+    const applied = { ...defaultBestSlipsQuery(), oddsBand, page: 4 };
     const selected = selectSlipSummaryResult(applied, status);
-    assert.deepEqual(selected, { period: 'yesterday', status, page: 1 }, source);
-    assert.deepEqual(selectSlipSummaryResult(selected, 'all'), { period: 'yesterday', status: 'all', page: 1 });
+    assert.deepEqual(selected, { period: 'yesterday', oddsBand, status, page: 1 });
+    assert.deepEqual(selectSlipSummaryResult(selected, 'all'), { period: 'yesterday', oddsBand, status: 'all', page: 1 });
   }
-  const custom = { period: 'custom', from: today, to: today, status: 'all', page: 8 };
+  const custom = { period: 'custom', oddsBand: '1.5-5', from: today, to: today, status: 'all', page: 8 };
   assert.deepEqual(selectSlipSummaryResult(custom, 'void'), { ...custom, status: 'void', page: 1 });
 });
 

@@ -10,13 +10,19 @@ const stub = code => ({ url: `data:text/javascript,${encodeURIComponent(code)}`,
 const empty = names => names.map(name => `export function ${name}() { return null; }`).join('\n');
 const modules = {
   '@/components/performance/performance-dashboard': empty(['PerformanceDashboard']),
+  '@/components/slips/best-slips': empty(['BestSlips']),
+  '@/components/slips/best-slips-loading': empty(['BestSlipsLoading']),
+  '@/components/slips/slip-styles': empty(['CriteriaPanel']),
+  '@/components/ui/controls': empty(['TextLink']),
+  '@/components/ui/layout': empty(['Inline', 'Stack']),
+  '@/server/slips/best-slips': 'export const readBestSlips = async () => null; export const gateBestSlips = value => value;',
   '@/components/admin/admin-shell': empty(['AdminShell']),
   '@/components/navigation/page-loading': empty(['PageContentLoading']),
   '@/styles/provider': empty(['FallbackStyleProvider', 'ServerThemeUntilHydrated']),
   '@/server/admin/admin-http': 'export const adminPageGate = async () => globalThis.loadingAdmin;',
   '@/server/members/account-login-redirect': 'export const redirectToAccountLogin = () => { throw new Error("login-required"); };',
   '@/app/_components/online-runtime': empty(['OnlineRuntime']),
-  './public-shell': 'export const getShellInstant = async () => Date.parse("2026-11-03T09:00:00Z"); export function PublicShell() { return null; }',
+  './public-shell': 'export const getShellInstant = async () => Date.parse("2026-11-03T09:00:00Z"); export const getShellDate = async () => "2026-11-03"; export function PublicShell() { return null; }',
 };
 registerHooks({
   resolve(specifier, context, next) {
@@ -38,8 +44,22 @@ registerHooks({
   },
 });
 const { createPerformanceRoute } = await import('../src/app/_components/performance-route.tsx');
+const { createBestSlipsRoute } = await import('../src/app/_components/best-slips-route.tsx');
 const { default: OwnerLayout } = await import('../src/app/(owner)/layout.tsx');
 const props = query => ({ params: Promise.resolve({ locale: 'en' }), searchParams: Promise.resolve(query ?? {}) });
+
+test('the home route permanently redirects legacy feed queries before access or data reads and streams its valid shell', async () => {
+  const calls = [];
+  const route = createBestSlipsRoute({ access: async () => { calls.push('access'); return { tier: 'free', signedIn: false }; },
+    read: async () => { calls.push('read'); return null; } });
+  await assert.rejects(route.Page(props({ page: '2' })), error => error.digest === 'NEXT_REDIRECT;replace;/en/matches?page=2;308;');
+  assert.deepEqual(calls, []);
+  const shell = await route.Page(props());
+  const boundary = shell.props.children;
+  assert.equal(boundary.type, Symbol.for('react.suspense'));
+  assert.equal(boundary.props.fallback.type.name, 'BestSlipsLoading');
+  assert.deepEqual(calls, [], 'The shell must not wait for viewer or slip reads.');
+});
 
 test('performance shell returns with both reports pending and each read settles independently', async () => {
   let finishReport, finishHistory;

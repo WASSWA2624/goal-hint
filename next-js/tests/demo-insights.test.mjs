@@ -80,14 +80,15 @@ test("current availability resolves the exact stored canonical provider binding"
   assert.equal(await readDemoCurrentAvailability({ footballFixture: { async findUnique() { return null; } } }, stored, after), stored);
 });
 
-test("demo context uses bound observed venue facts and the corresponding raw standings", () => {
+test("demo context uses bound venue facts and source standings with normalized group names", () => {
   const { raw, stored, binding, after } = fixtureCase();
   const projected = projectDemoCurrentAvailability(stored, binding, after), context = projected.sections.context;
   assert.deepEqual(context.venue, { name: raw.fixture.venue.name, city: raw.fixture.venue.city, retrievedAt: binding.facts.infoRetrievedAt.getTime() });
   const standings = demoApiFootballResponse("standings", { league: String(raw.league.id), season: "2026" }, after).response[0].league.standings.flat();
   for (const side of ["home", "away"]) {
     const row = standings.find((entry) => entry.team.id === raw.teams[side].id);
-    assert.deepEqual(context.standings[side], { rank: row.rank, points: row.points, played: row.all.played, group: row.group });
+    assert.equal(row.group, "Pro League - Group C");
+    assert.deepEqual(context.standings[side], { rank: row.rank, points: row.points, played: row.all.played, group: "Group C" });
   }
   const unboundVenue = projectDemoCurrentAvailability(stored, { ...binding, facts: { ...binding.facts, providerFixtureId: 1n } }, after);
   assert.equal(unboundVenue.sections.context.venue, null);

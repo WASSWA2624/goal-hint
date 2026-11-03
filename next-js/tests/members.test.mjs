@@ -390,7 +390,9 @@ test("a committed save or mode switch answers saved even when the page data cann
       assert.equal(response.status, 200, `${body.action}, page data ${readable ? "read" : "unreadable"}`);
       const reply = await response.json();
       assert.deepEqual([reply.settings, reply.changed, reply.cleared, reply.protectedFields, reply.diagnostics.address],
-        [stored, ["mtnMenuShortcut"], ["mtnMenuShortcut"], [...protectedSettingFields], "203.0.113.8"]);
+        [stored, ["mtnMenuShortcut"], ["mtnMenuShortcut"], [...protectedSettingFields], "unknown"]);
+      assert.equal(reply.diagnostics.headers.find(header => header.name === "x-real-ip").value, "203.0.113.8",
+        "The raw header remains a diagnostic, never authenticated transport provenance.");
       assert.deepEqual([reply.source, reply.requirements], readable ? ["stored", requirements] : [undefined, undefined],
         "Requirements come only from a fresh read; the page keeps its own until a reload.");
     }

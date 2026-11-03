@@ -7,6 +7,7 @@ import ts from 'typescript';
 import { parseReportingDate, parseUtcInstant } from '../src/domain/calendar.ts';
 import { adjacentDays, archiveWindowDays, dayLinkRel, emptyArchiveIsMissing } from '../src/domain/feed-date-navigation.ts';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
+import { feedDiscovery } from '../src/domain/discovery.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { isDocumentRequest, PublicReadUnavailableError } from '../src/server/seo/read-status.ts';
 import { fullAccess } from './helpers/full-access.ts';
@@ -118,13 +119,15 @@ test('Matches page defaults reach the stored read while retaining viewer eligibi
   }
 });
 
-test('an indexable feed whose stored read fails answers 5xx to full document requests', async () => {
+test('the paginated browsing feed keeps its retry and noindex metadata when a stored read fails', async () => {
   for (const [dated, route, query] of [[false, {}, {}], [false, {}, { page: '2' }], [true, { date: '2026-10-20' }, {}], [false, {}, { when: 'today' }]]) {
     const page = feed({ dated });
-    // Matches defaults to Highest chance; request the indexable kickoff-ordered collection explicitly.
-    const indexable = { ...query, picks: 'all', sort: 'kickoff' };
-    await assert.rejects(page.Page(props(route, indexable)), failed, JSON.stringify({ route, indexable }));
-    await assert.rejects(page.generateMetadata(props(route, indexable)), failed);
+    const parameters = { ...query, picks: 'all', sort: 'kickoff' };
+    const rendered = view(await page.Page(props(route, parameters)), 'MatchFeedPage');
+    // The page's browsing size differs from the public transport size, so these are variants under the current policy.
+    assert.equal(feedDiscovery(rendered.query, today).eligible, false);
+    assert.equal(rendered.result.error, 'unavailable');
+    assert.equal((await page.generateMetadata(props(route, parameters))).robots.index, false);
   }
 });
 

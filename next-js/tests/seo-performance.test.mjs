@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
+import { privateResponseSources } from "./helpers/private-response.mjs";
 import { fileURLToPath } from "node:url";
 import nextConfig from "../next.config.ts";
 import { privateHeaders } from "../src/server/http/private-http.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*", "/en/account", "/en/subscribe",
-  "/api/account/:path*", "/api/slips/:path*"];
+const privateSources = privateResponseSources;
 
 test("flags and brand files are browser-cached while the private rules stay last and unchanged", async () => {
   const rules = await nextConfig.headers();

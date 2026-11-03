@@ -98,7 +98,7 @@
     "test:feed": "node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs",
     "test:detail": "node --conditions=react-server --test tests/match-detail.test.mjs tests/match-detail.integration.mjs",
     "test:performance": "node --conditions=react-server --test tests/pick-performance.test.mjs tests/performance-quotes.test.mjs tests/performance-quotes.integration.mjs tests/prediction-quote-store.test.mjs tests/performance.test.mjs tests/performance.integration.mjs tests/prediction-quotes.integration.mjs",
-    "test": "node --conditions=react-server --test tests/*.test.mjs",
+    "test": "node --conditions=react-server --test --test-concurrency=3 tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run test:theme:contract && npm run lint && npm run typecheck && npm test && npm run test:scripts && npm run build",
     "test:cache": "node --conditions=react-server --test tests/public-cache.test.mjs tests/public-cache.integration.mjs",
     "cache:reconcile": "python scripts/public-cache-reconcile.py",
