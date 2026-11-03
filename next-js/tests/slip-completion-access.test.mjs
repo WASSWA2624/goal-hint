@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { completedSlipFixtureIds, savedSlipCompleted, savedSlipOutcome } from '../src/domain/saved-slips.ts';
+import { completedSlipFixtureIds, slipCompleted, slipSnapshotOutcome } from '../src/domain/slip-snapshot.ts';
 import { readWithSlipAccess } from '../src/server/slips/slip-access.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 
@@ -16,17 +16,17 @@ test('an early loss never releases another unfinished original selection', () =>
   const results = [result(0, { regulationHome: 0, regulationAway: 2 }), result(1, {
     completed: false, fixtureCompleted: false, status: 'live', regulationVerified: false,
   })];
-  assert.equal(savedSlipOutcome(slip, results), 'lost');
-  assert.equal(savedSlipCompleted(slip, results), false);
-  assert.equal(savedSlipCompleted(slip, [results[0]]), false);
+  assert.equal(slipSnapshotOutcome(slip, results), 'lost');
+  assert.equal(slipCompleted(slip, results), false);
+  assert.equal(slipCompleted(slip, [results[0]]), false);
 });
 
 test('every canonical terminal status is public while scheduled, live, postponed and unknown stay private', () => {
   for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'abandoned', 'awarded']) {
-    assert.equal(savedSlipCompleted(slip, [result(0), result(1, { status })]), true, status);
+    assert.equal(slipCompleted(slip, [result(0), result(1, { status })]), true, status);
   }
   for (const status of ['scheduled', 'live', 'postponed', 'unknown']) {
-    assert.equal(savedSlipCompleted(slip, [result(0), result(1, { status, fixtureCompleted: false })]), false, status);
+    assert.equal(slipCompleted(slip, [result(0), result(1, { status, fixtureCompleted: false })]), false, status);
   }
 });
 
@@ -34,15 +34,15 @@ test('old-cycle voids and final scores cannot bypass an unfinished canonical rep
   for (const status of ['unknown', 'finished-regulation']) {
     const results = [result(0), result(1, { status, fixtureCompleted: false,
       cycleEligibility: { eligible: false, reason: 'ineligible-cycle' } })];
-    assert.equal(savedSlipCompleted(slip, results), false);
-    assert.equal(savedSlipCompleted(slip, [results[0], { ...results[1], fixtureCompleted: true }]), true);
+    assert.equal(slipCompleted(slip, results), false);
+    assert.equal(slipCompleted(slip, [results[0], { ...results[1], fixtureCompleted: true }]), true);
   }
 });
 
 test('foreign cycle evidence, missing original completion, and empty slips fail closed', () => {
-  assert.equal(savedSlipCompleted(slip, [result(0), result(1, { forecast: { ...slip.selections[1].forecast, cycleId: 'foreign-cycle' } })]), false);
-  assert.equal(savedSlipCompleted(slip, [result(0), result(1, { completed: false })]), false);
-  assert.equal(savedSlipCompleted({ ...slip, selections: [] }, []), false);
+  assert.equal(slipCompleted(slip, [result(0), result(1, { forecast: { ...slip.selections[1].forecast, cycleId: 'foreign-cycle' } })]), false);
+  assert.equal(slipCompleted(slip, [result(0), result(1, { completed: false })]), false);
+  assert.equal(slipCompleted({ ...slip, selections: [] }, []), false);
 });
 
 test('fresh access rechecks reread the public subset on expiry and reject a second access race', async () => {

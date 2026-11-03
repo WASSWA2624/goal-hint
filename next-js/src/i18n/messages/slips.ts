@@ -1,6 +1,10 @@
 import { authVerbs, authLabels } from "./auth.ts";
 
 export const slipsMessages = {
+  "slips.emptyPrompt": "Choose your settings above, then select Build slips.",
+  "slips.generatedCount": { one: "{count} slip generated.", other: "{count} slips generated." },
+  "slips.generatedFewer": { one: "Only {count} slip found with these filters; {requested} requested.", other: "Only {count} slips found with these filters; {requested} requested." },
+  "bestSlips.filters.oddsRange": "Total odds",
   "slips.signInToBuild": `${authLabels.signIn} to build slips`,
   "slips.subscribeToBuild": "Subscribe to build slips",
   "slips.access.signIn": `Set your slip preferences above, then ${authVerbs.signIn} to continue. Building slips with match predictions and odds requires an active subscription.`,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { savedSlipCompleted, savedSlipSnapshotSchema, savedSlipView } from '../src/domain/saved-slips.ts';
+import { slipCompleted, slipSnapshotSchema, slipResultView } from '../src/domain/slip-snapshot.ts';
 import { cycleFromRows, revisionFromRows } from '../src/server/predictions/history-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { bindSlipForecasts, projectSlipForecastResult, readSlipForecastResults, slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
@@ -32,7 +32,7 @@ test('server binding preserves the exact published revision and refuses source d
   const f = slipForecastFixture(), tx = transaction(f);
   const result = await bindSlipForecasts(tx, f.slip, f.at);
   assert.deepEqual(result.selections[0], bound(f));
-  assert.ok(savedSlipSnapshotSchema.safeParse(result).success);
+  assert.ok(slipSnapshotSchema.safeParse(result).success);
   assert.equal(await bindSlipForecasts(tx, { ...f.slip, selections: [{ ...f.slip.selections[0], probability: 0.8 }] }, f.at), null);
   assert.equal(await bindSlipForecasts(tx, { ...f.slip, selections: [{ ...bound(f), forecast: { ...bound(f).forecast, revisionId: randomUUID() } }] }, f.at), null);
   assert.equal(await bindSlipForecasts(tx, f.slip, f.cycle.cutoffAt.getTime()), null);
@@ -47,8 +47,8 @@ test('a formally void original cycle retains its adjudication but remains privat
     fixture: { ...f.fixture, activeCycleId: randomUUID(), status: 'live' } });
   assert.equal(outcome.completed, true);
   assert.equal(outcome.fixtureCompleted, false);
-  assert.equal(savedSlipCompleted({ ...f.slip, selections: [selection] }, [outcome]), false);
-  const view = savedSlipView('saved', '', { ...f.slip, selections: [selection] }, [outcome]);
+  assert.equal(slipCompleted({ ...f.slip, selections: [selection] }, [outcome]), false);
+  const view = slipResultView('saved', '', { ...f.slip, selections: [selection] }, [outcome]);
   assert.equal(view.outcome, 'void'); assert.equal(view.slip.selections[0].probability, 0.7);
   assert.equal(view.slip.selections[0].odds, '2.00');
 });
@@ -61,15 +61,15 @@ test('a superseded but cutoff-eligible saved selection is graded unchanged; a re
   const fixture = { ...f.fixture, status: 'finished-regulation', regulationHome: 2, regulationAway: 1,
     regulationVerifiedAt: new Date(result.regulationVerifiedAt), regulationEvidenceRef: 'synthetic-proof' };
   const outcome = projectSlipForecastResult(selection, { ...input, fixture, result });
-  assert.equal(savedSlipView('saved', '', { ...f.slip, selections: [selection] }, [outcome]).outcome, 'won');
+  assert.equal(slipResultView('saved', '', { ...f.slip, selections: [selection] }, [outcome]).outcome, 'won');
   const replaced = { ...fixture, activeCycleId: randomUUID(), status: 'live' };
   assert.equal(projectSlipForecastResult(selection, { ...input, fixture: replaced, result }).completed, false);
   const historical = projectSlipForecastResult(selection, { ...input, fixture: replaced, result: null,
     historical: { result, terminalVoid: false } });
-  assert.equal(savedSlipView('saved', '', { ...f.slip, selections: [selection] }, [historical]).outcome, 'won');
+  assert.equal(slipResultView('saved', '', { ...f.slip, selections: [selection] }, [historical]).outcome, 'won');
   const correction = projectSlipForecastResult(selection, { ...input, fixture: replaced, result: null,
     historical: { result: null, terminalVoid: false, completed: true } });
-  assert.equal(savedSlipView('saved', '', { ...f.slip, selections: [selection] }, [correction]).outcome, 'pending');
+  assert.equal(slipResultView('saved', '', { ...f.slip, selections: [selection] }, [correction]).outcome, 'pending');
   assert.equal(correction.regulationHome, null, 'pending corrections cannot reuse a prior winning score');
 });
 
@@ -99,16 +99,16 @@ test('open, foreign, future or altered snapshot bindings never expose a complete
   const f = slipForecastFixture(), selection = bound(f), input = projection(f), snapshot = { ...f.slip, selections: [selection] };
   for (const change of [{ cycle: { ...input.cycle, state: 'open' } }, { cycle: { ...input.cycle, id: randomUUID() } },
     { asOf: f.at - 60_000 }, { revision: { ...input.revision, publishedAt: input.revision.publishedAt + 1 } }]) {
-    assert.equal(savedSlipView('saved', '', snapshot, [projectSlipForecastResult(selection, { ...input, ...change })]), null);
+    assert.equal(slipResultView('saved', '', snapshot, [projectSlipForecastResult(selection, { ...input, ...change })]), null);
   }
-  assert.equal(savedSlipSnapshotSchema.safeParse({ ...snapshot, selections: [{ ...selection, forecast: { ...selection.forecast, revisionId: 'fabricated' } }] }).success, false);
+  assert.equal(slipSnapshotSchema.safeParse({ ...snapshot, selections: [{ ...selection, forecast: { ...selection.forecast, revisionId: 'fabricated' } }] }).success, false);
 });
 
 test('a saved revision invalidated by an earlier kickoff is void instead of graded from later scores', () => {
   const f = slipForecastFixture(), selection = bound(f), input = projection(f);
   const outcome = projectSlipForecastResult(selection, { ...input, cycle: { ...input.cycle, closedAt: input.revision.publishedAt } });
   assert.equal(outcome.cycleEligibility.reason, 'cutoff-invalidated');
-  assert.equal(savedSlipView('saved', '', { ...f.slip, selections: [selection] }, [outcome]).outcome, 'void');
+  assert.equal(slipResultView('saved', '', { ...f.slip, selections: [selection] }, [outcome]).outcome, 'void');
 });
 
 test('flattened result batches distinguish the same fixture with different original outcomes or cycles', () => {
@@ -117,9 +117,9 @@ test('flattened result batches distinguish the same fixture with different origi
     cycle: { ...input.cycle, state: 'void', voidedAt: input.asOf - 1000, voidReason: 'formal-postponement' } });
   const draw = { ...selection, selection: 'draw', probability: 0.2 };
   const drawResult = { ...voidResult, selection: 'draw', completed: false };
-  assert.equal(savedSlipView('draw', '', { ...f.slip, selections: [draw], averageProbability: 0.2 }, [voidResult, drawResult]), null);
+  assert.equal(slipResultView('draw', '', { ...f.slip, selections: [draw], averageProbability: 0.2 }, [voidResult, drawResult]), null);
   const later = { ...selection, forecast: { ...selection.forecast, cycleId: randomUUID() } };
-  assert.equal(savedSlipView('later', '', { ...f.slip, selections: [later] }, [voidResult]), null);
+  assert.equal(slipResultView('later', '', { ...f.slip, selections: [later] }, [voidResult]), null);
 });
 
 test('duplicate void-cycle selections reuse sealed cycle/revision reads without consulting a replacement result', async () => {
@@ -161,7 +161,7 @@ test('a latest pending correction keeps old-cycle history public without revivin
   };
   const selection = bound(f), results = await readSlipForecastResults(tx, [selection], at + 3000);
   assert.equal(results[0].completed, true); assert.equal(results[0].regulationHome, null);
-  assert.equal(savedSlipView('saved', '', { ...f.slip, selections: [selection] }, results).outcome, 'pending');
+  assert.equal(slipResultView('saved', '', { ...f.slip, selections: [selection] }, results).outcome, 'pending');
   latest.validIntegrity = 0;
   await assert.rejects(readSlipForecastResults(tx, [selection], at + 3000), error => error.reason === 'invalid-state');
 });

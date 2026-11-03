@@ -1,7 +1,7 @@
 import styled, { css } from "styled-components";
 
 /** Keep page navigation clearly separated from the results above it. */
-export const PagePaginationSection = styled.div.attrs({ "data-page-pagination": "" })`
+export const PagePaginationSection = styled.div.attrs<{ "data-page-pagination"?: string }>({ "data-page-pagination": "" })`
   min-inline-size: 0;
   margin-block-start: ${({ theme }) => theme.space.lg};
 `;

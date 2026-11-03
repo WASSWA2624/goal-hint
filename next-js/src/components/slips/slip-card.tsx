@@ -2,7 +2,7 @@
 
 import type { BuiltSlip } from "@/domain/slip-builder";
 import { memo } from "react";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import type { SlipMatchState } from "@/domain/slip-match-state";
 import type { SlipStatus } from "@/domain/slip-status";
 import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
@@ -25,8 +25,8 @@ const PhoneSlipFallback = styled.div`
 `;
 
 export type SlipCardProps = {
-  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[];
-  publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
+  slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[];
+  publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; initiallyOpen?: boolean; outcome?: SlipResultView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication;
 
 /** The shared production slip card for Best Slips, the builder, history and shared snapshots. */
@@ -42,7 +42,7 @@ export const SlipCard = memo(function SlipCard({ slip, index, locale, results, m
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" initiallyOpen={initiallyOpen} showRank={!sharedSlip}
     {...publication}
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})}
-    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} locale={locale} iconOnly {...(publicShareHref ? { publicHref: publicShareHref } : {})}
+    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} locale={locale} iconOnly {...(publicShareHref ? { publicHref: publicShareHref } : {})}
       {...(shareSource ? { source: shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} /> : undefined} />
   </PhoneSlipFallback>;
 });

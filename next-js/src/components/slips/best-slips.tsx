@@ -22,12 +22,12 @@ import { slipViewKey } from "@/domain/slip-browse-window";
 import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
-export function BestSlips({ result, locale, signedIn = false, source = "best" }: { result: SlipsBrowseResult; locale: string; signedIn?: boolean; source?: "best" | "saved" }) {
+export function BestSlips({ result, locale, signedIn = false }: { result: SlipsBrowseResult; locale: string; signedIn?: boolean }) {
   const m = createMessages(locale), router = useRouter();
   const desktop = useDesktopLayout();
   const [, startRefresh] = useTransition();
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
-  const { root, ...browse } = useBestSlipsBrowse(result, recheckAccess, source === "saved" ? "/api/slips/history" : "/api/best-slips");
+  const { root, ...browse } = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips");
   const content = browse.result;
   const dates = resolveBestSlipsDates(desktop ? browse.query : browse.displayQuery, result.day);
   const period = dates.from && dates.to
@@ -37,8 +37,8 @@ export function BestSlips({ result, locale, signedIn = false, source = "best" }:
   const watchedSlips = useMemo(() => content?.slips.flatMap((view) => view.slip ? [view.slip] : []) ?? [], [content]);
   const initialStates = useMemo(() => content?.slips.flatMap((view) => view.matchStates ?? []) ?? [], [content]);
   return <SlipStack data-best-slips-page>
-    {source === "best" ? <AppBrandBar locale={locale} /> : <Stack $gap="sm"><h2>{m.text("history.savedTitle")}</h2><Note>{m.text("history.savedHint")}</Note></Stack>}
-    <VisuallyHidden as={source === "best" ? "h1" : "h2"}>{m.text("bestSlips.title")}</VisuallyHidden>
+    <AppBrandBar locale={locale} />
+    <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
     <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
       entitled={browse.entitled} busy={browse.loading || browse.updating} updating={browse.updating}
       summary={content?.summary} statistics={content?.summary?.statistics ?? (content?.summary ? null : content?.statistics)} countSummary={content?.state === "generated"
@@ -69,7 +69,7 @@ export function BestSlips({ result, locale, signedIn = false, source = "best" }:
       <div ref={root} tabIndex={-1}><SlipList data-slip-list>{content.slips.map((view, index) => <Fragment key={slipViewKey(view)}>
         {view.publicationDay && (index === 0 || content.slips[index - 1]?.publicationDay !== view.publicationDay) && <MatchListDivider as="div" title={`${m.reportingDateMedium(view.publicationDay)} · EAT`} />}
         <div data-slip-key={slipViewKey(view)}>
-        <BestSlipCard source={source} view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} /></div></Fragment>)}</SlipList></div>
+        <BestSlipCard view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} /></div></Fragment>)}</SlipList></div>
       </SlipMatchRefreshProvider>
     </>}
     {content.browse && !content.browse.hasMore && content.slips.length > 0 && <Note>{m.text("history.end")}</Note>}

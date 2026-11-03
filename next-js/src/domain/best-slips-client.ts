@@ -1,6 +1,7 @@
 import type { SlipsBrowseResult } from "./best-slips.ts";
 import { bestSlipsQueryRules, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
 import { slipStatusCategory } from "./slip-status.ts";
+import { defaultBestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
 export type BestSlipsSnapshot = Readonly<{ query: BestSlipsQuery; data: SlipsBrowseResult }>;
 export type BestSlipsBrowseCache = Readonly<{
@@ -17,7 +18,7 @@ export function bestSlipsStatisticsMatch(left: SlipsBrowseResult, right: SlipsBr
 
 export function bestSlipsRangeKey(query: BestSlipsQuery, day: SlipsBrowseResult["day"]): string {
   const dates = resolveBestSlipsDates(query, day);
-  return `${dates.from ?? "all"}:${dates.to ?? "all"}`;
+  return `${dates.from ?? "all"}:${dates.to ?? "all"}:${query.oddsBand ?? defaultBestSlipOddsBand}`;
 }
 
 /** Only a complete, unfiltered cohort can establish every result and its exact total locally. */

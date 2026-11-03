@@ -2,7 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import type { SlipStatus } from "@/domain/slip-status";
 import { createMessages } from "@/i18n/messages";
 import { formatSlipProbability } from "../slip-format";
@@ -13,7 +13,7 @@ import { SlipHeaderDate, SlipStatusBadge, type SlipHeaderPublication } from "../
 export function MobileSlipHeader({ totalOdds, averageProbability, selectionCount, index, locale, outcome = "pending", status = outcome,
   headingId, headerOnly = false, showRank = false, className, variant, publicationDay, publishedAt, hasAction = false, action }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string; hasAction?: boolean; action?: ReactNode;
+  outcome?: SlipResultView["outcome"]; status?: SlipStatus; headingId?: string; headerOnly?: boolean; showRank?: boolean; className?: string; variant?: string; hasAction?: boolean; action?: ReactNode;
 } & SlipHeaderPublication) {
   const m = createMessages(locale), id = useId(), noteId = `${id}-probability-note`;
   const label = m.text(`slips.header.${status}`);

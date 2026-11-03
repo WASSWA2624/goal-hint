@@ -6,6 +6,7 @@ import { qualifiedJointModel, type JointSlipModel } from "../../domain/best-slip
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
+import { bestSlipOddsBands } from "../../domain/best-slip-odds-bands.ts";
 import { createBestSlipsService } from "./best-slips.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 import { createStoredSlipBuild, type readPublicSlipBuild } from "./public-slips.ts";
@@ -19,25 +20,36 @@ export function createDailySlipPublisher({ database, competitionIds, model, veri
   database: DatabaseRuntime; competitionIds: readonly number[]; model: JointSlipModel | null;
   verifyModel: (model: JointSlipModel) => boolean; verifyPublicOdds: () => boolean;
   providerOdds?: boolean; now?: () => number; read?: typeof readPublicSlipBuild;
-  store?: Pick<ReturnType<typeof createPublishedSlips>, "day" | "publish">;
+  store?: Pick<ReturnType<typeof createPublishedSlips>, "publishedBands" | "publish">;
 }>) {
-  const generate = createBestSlipsService({ model, providerOdds, now, read: read ?? createStoredSlipBuild({
-    database: () => database, competitionIds: () => competitionIds,
-    // One private bounded cohort per minute; public visitor search quotas do not authorize or govern a worker.
-    consume: async () => {},
-  }) });
+  const storedRead = read ?? createStoredSlipBuild({ database: () => database, competitionIds: () => competitionIds, consume: async () => {} });
   return Object.freeze({
     async publish(): Promise<DailySlipPublicationResult> {
       const day = getReportingDate(utcInstantFromEpochMilliseconds(now()));
       if (!providerOdds || !provenTrue(verifyPublicOdds)) return { day, status: "odds-unavailable" };
       if (!qualifiedJointModel(model, now()) || !provenTrue(() => verifyModel(model))) return { day, status: "model-unavailable" };
-      if (await store.day(day)) return { day, status: "already-published" };
-      const result = await generate({ tier: "full", signedIn: false, mode: "free" });
-      const slips = result.slips.flatMap((view) => view.slip ? [view.slip] : []);
-      if (!slips.length) return { day, status: result.state === "no-qualifying" || result.state === "no-combinations" ? "no-qualifying" : "unavailable" };
-      if (result.day !== day || slips.length !== result.slips.length) return { day, status: "unavailable" };
-      return { day, status: await store.publish({ day, slips, model, verifyModel, verifyPublicOdds,
-        searchLimited: result.searchLimited, partialCoverage: result.partialCoverage }) };
+      const existing = await store.publishedBands(day);
+      if (existing.includes("legacy") || bestSlipOddsBands.every(band => existing.includes(band.id))) return { day, status: "already-published" };
+      let published = false, alreadyPublished = false;
+      let unavailable: DailySlipPublicationResult["status"] | null = null;
+      for (const band of bestSlipOddsBands) {
+        if (existing.includes(band.id)) continue;
+        const generate = createBestSlipsService({ model, providerOdds, now, read: storedRead, oddsBand: band.id });
+        const result = await generate({ tier: "full", signedIn: false, mode: "free" });
+        const slips = result.slips.flatMap(view => view.slip ? [view.slip] : []);
+        if (result.day !== day) return { day, status: published ? "published" : "unavailable" };
+        if (!slips.length) {
+          if (result.state === "model-unavailable" || result.state === "odds-unavailable") unavailable = result.state;
+          else if (result.state === "data-unavailable") unavailable = "unavailable";
+          continue;
+        }
+        if (slips.length !== result.slips.length) return { day, status: "unavailable" };
+        const status = await store.publish({ day, oddsBand: band.id, slips, model, verifyModel, verifyPublicOdds,
+          searchLimited: result.searchLimited, partialCoverage: result.partialCoverage });
+        published ||= status === "published";
+        alreadyPublished ||= status === "already-published";
+      }
+      return { day, status: published ? "published" : unavailable ?? (alreadyPublished ? "already-published" : "no-qualifying") };
     },
   });
 }

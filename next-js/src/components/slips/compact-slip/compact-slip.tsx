@@ -11,7 +11,7 @@ import { snapshotCardPrediction } from "@/domain/match-card";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { matchHref } from "@/domain/navigation";
 import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-match-state";
 import type { SlipStatus } from "@/domain/slip-status";
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
@@ -27,7 +27,7 @@ import { useRefreshedSlipMatchStates } from "../slip-match-refresh";
 import { slipHeaderState } from "../slip-header-outcome";
 
 function SelectionRow({ selection, position, locale, result, matchStates, analysisLinks, showLogos }: {
-  selection: SlipSelection; position: number; locale: string; result: SavedSlipView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
+  selection: SlipSelection; position: number; locale: string; result: SlipResultView["results"][number] | undefined; analysisLinks: boolean; showLogos: boolean;
   matchStates: readonly SlipMatchState[] | undefined;
 }) {
   const messages = createMessages(locale), id = useId();
@@ -83,7 +83,7 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
   fullProbabilityLabel = false, hasHeaderAction = false, action, children }: {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
   variant?: CompactSlipVariant; initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; fullProbabilityLabel?: boolean; hasHeaderAction?: boolean; action?: ReactNode; children: ReactNode;
+  outcome?: SlipResultView["outcome"]; status?: SlipStatus; fullProbabilityLabel?: boolean; hasHeaderAction?: boolean; action?: ReactNode; children: ReactNode;
 } & SlipHeaderPublication) {
   const messages = createMessages(locale), id = useId();
   const summary = <>
@@ -122,9 +122,9 @@ export function CompactSlipDisclosure({ totalOdds, averageProbability, selection
 /** Original selection snapshots are reused by Best slips, generated slips and completed history. */
 export function CompactSlip({ slip, index, locale, variant = "clean-ledger", initiallyOpen = false, results, matchStates, analysisLinks = true, collapsible = true, showLogos = false, showRank = true,
   publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus, action }: {
-  slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"];
+  slip: BuiltSlip; index: number; locale: string; variant?: CompactSlipVariant; initiallyOpen?: boolean; results?: SlipResultView["results"];
   matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; collapsible?: boolean; showLogos?: boolean; showRank?: boolean;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus; action?: ReactNode;
+  outcome?: SlipResultView["outcome"]; status?: SlipStatus; action?: ReactNode;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;

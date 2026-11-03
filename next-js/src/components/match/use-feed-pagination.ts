@@ -46,7 +46,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const article = active instanceof Element ? active.closest("[data-fixture-id]") : null;
     saveFeedCheckpoint({ entryId: entryId.current, queryKey, href, firstPage: current.firstPage, lastPage: current.lastPage,
       scrollY: Math.max(0, Math.min(window.scrollY, 10_000_000)), focusFixtureId: article?.getAttribute("data-fixture-id") ?? null,
-      paginationVersion: current.data.paginationVersion, savedAt: Date.now() });
+      paginationVersion: current.data.paginationVersion, createdAt: Date.now() });
   }, [href, queryKey]);
 
   const run = useCallback(async (mode: Mode, checkpoint?: FeedCheckpoint) => {

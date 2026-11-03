@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, bestSlipsRules, jointSlipProbability } from '../src/domain/best-slips.ts';
+import { bestSlipBuilder, bestSlipCriteria as currentBestSlipCriteria, bestSlipViews, bestSlipsRules, jointSlipProbability } from '../src/domain/best-slips.ts';
 import { jointSlipRanking } from '../src/domain/joint-slip-model.ts';
 import { createBestSlipsService, gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
@@ -20,6 +20,8 @@ function record(id, probability = 0.7, odds = '2.20') {
     prices: [{ family: 'match-result', selection: 'home-win', price: odds, basis: 'bookmaker', retrievedAt: now - 1000, providerUpdatedAt: null }] });
 }
 const records = Array.from({ length: 20 }, (_, index) => record(`private-fixture-${index}`, 0.65 + index * 0.01));
+// The generator also supports explicit historical/custom targets independently of today's default band.
+const bestSlipCriteria = (day, target = { minimumTotal: 450, maximumTotal: 550, count: 100 }) => currentBestSlipCriteria(day, target);
 const generate = (criteria = bestSlipCriteria(today), data = records, joint = model) => bestSlipBuilder(joint)(criteria, data, now);
 
 test('daily target returns every available disjoint slip up to its capacity with actual prices and ordered matches', () => {
@@ -162,12 +164,12 @@ function service(overrides = {}) {
 }
 test('off mode still withholds unfinished picks while keeping public slip previews', async () => {
   const read = service(), publicResult = await read(free), signedInResult = await read({ ...free, signedIn: true }), paidResult = await read(full);
-  assert.equal(publicResult.slips.length, 10);
+  assert.equal(publicResult.slips.length, 20);
   assert.ok(publicResult.slips.every(view => view.preview.every(leg => leg.pick === null)));
-  assert.equal(paidResult.slips[0].slip.selections.length, 2);
+  assert.equal(paidResult.slips[0].slip.selections.length, 1);
   assert.equal(publicResult.day, today);
-  assert.deepEqual(publicResult.statistics, { total: 10, won: 0, lost: 0, pending: 10, void: 0 });
-  assert.deepEqual(paidResult.statistics, { total: 10, won: 0, lost: 0, pending: 10, void: 0 });
+  assert.deepEqual(publicResult.statistics, { total: 20, won: 0, lost: 0, pending: 20, void: 0 });
+  assert.deepEqual(paidResult.statistics, { total: 20, won: 0, lost: 0, pending: 20, void: 0 });
   assert.deepEqual(publicResult.slips, signedInResult.slips);
   assert.equal(signedInResult.access.signedIn, true);
   assert.ok(paidResult.slips.every(view => view.slip));
@@ -197,7 +199,7 @@ test('API rechecks access after generation, strips expired selections, and disab
   assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
   assert.equal(response.headers.get('set-cookie'), null);
   const payload = await response.json();
-  assert.equal(payload.slips.length, 10);
+  assert.equal(payload.slips.length, 20);
   assert.ok(payload.slips.every(view => view.preview.every(leg => leg.pick === null)));
   assert.doesNotMatch(JSON.stringify(payload), /home-win|oddsBasis|"probability"/);
 });
@@ -224,9 +226,9 @@ test('filtered API reads receive normalized dates/results and recheck access bef
     } });
   const response = await handler(new Request('https://goalhint.com/api/best-slips?period=today&status=won&page=1'));
   assert.equal(response.status, 200); assert.equal(checks, 3);
-  assert.deepEqual(received, { period: 'today', status: 'won', page: 1 });
+  assert.deepEqual(received, { period: 'today', status: 'won', oddsBand: '1.5-5', page: 1 });
   const data = await response.json();
-  assert.equal(data.browse.query.status, 'won'); assert.equal(data.slips.length, 10);
+  assert.equal(data.browse.query.status, 'won'); assert.equal(data.slips.length, 20);
   assert.ok(data.slips.every(view => view.preview.every(leg => leg.pick === null)));
   assert.doesNotMatch(JSON.stringify(data), /home-win|oddsBasis|"probability"/);
   assert.equal(response.headers.get('cache-control'), 'private, no-store');

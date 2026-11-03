@@ -9,3 +9,5 @@ next-js/prisma/migrations/20261031104143_account_notifications/migration.sql tex
 next-js/prisma/mariadb/20261031104143_account_notifications.sql text eol=lf
 next-js/prisma/migrations/20261101120000_payment_checkout/migration.sql text eol=lf
 next-js/prisma/mariadb/20261101120000_payment_checkout.sql text eol=lf
+next-js/prisma/migrations/20261103120000_transient_slips_and_odds_bands/migration.sql text eol=lf
+next-js/prisma/mariadb/20261103120000_transient_slips_and_odds_bands.sql text eol=lf

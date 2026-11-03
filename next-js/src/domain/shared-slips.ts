@@ -1,21 +1,18 @@
 import { z } from "zod";
 import { publicPolicy } from "./public-policy.ts";
-import { savedSlipSnapshotRules, savedSlipSnapshotSchema } from "./saved-slips.ts";
-import type { BuiltSlip } from "./slip-builder.ts";
+import { slipSnapshotRules, slipSnapshotSchema } from "./slip-snapshot.ts";
+import { modelIndependentSlip, type BuiltSlip } from "./slip-builder.ts";
 
 export const sharedSlipRules = Object.freeze({
-  maximumRequestBytes: savedSlipSnapshotRules.maximumSaveRequestBytes,
-  maximumSnapshotBytes: 8 * 1024 * 1024,
-  maximumNewSharesPerHour: 30,
+  maximumRequestBytes: slipSnapshotRules.maximumRequestBytes,
 });
 export const sharedSlipIdSchema = z.string().regex(/^[a-f0-9]{32}$/u);
-const slipId = z.string().min(1).max(savedSlipSnapshotRules.maximumIdentityLength);
+const slipId = z.string().min(1).max(slipSnapshotRules.maximumIdentityLength);
 export const shareSlipSourceSchema = z.discriminatedUnion("source", [
-  z.strictObject({ source: z.literal("builder"), criteria: z.string().min(1).max(2048), slipId }),
   z.strictObject({ source: z.literal("best"), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u), slipId }),
 ]);
-export type ShareSlipSource = z.infer<typeof shareSlipSourceSchema>;
-export type SharedSlip = Readonly<{ id: string; url: string; createdAt: string; slip: BuiltSlip }>;
+export type ShareSlipSource = z.infer<typeof shareSlipSourceSchema> | Readonly<{ source: "builder"; criteria: string; slipId: string }>;
+export type SharedSlip = Readonly<{ id: string; url: string | null; createdAt: string; slip: BuiltSlip }>;
 
 export function sharedSlipPath(id: string): string {
   return `/s/${sharedSlipIdSchema.parse(id)}`;
@@ -27,6 +24,13 @@ export const sharedSlipSchema = z.strictObject({
   id: sharedSlipIdSchema,
   url: z.url(),
   createdAt: z.iso.datetime(),
-  slip: savedSlipSnapshotSchema,
-}).refine((value) => value.url === sharedSlipUrl(value.id), "The public slip URL must match its identity.")
+  slip: slipSnapshotSchema,
+}).refine((value) => value.url === sharedSlipUrl(value.id) || new URL(value.url).origin === publicPolicy.origin
+  && /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/.test(new URL(value.url).pathname), "The public slip URL must identify a publication.")
   .transform((value): SharedSlip => ({ ...value, slip: value.slip as BuiltSlip }));
+
+/** Personal exports live only in browser memory; no share token or snapshot is stored. */
+export function createLocalSlipShare(slip: BuiltSlip): SharedSlip {
+  return { id: crypto.randomUUID().replaceAll("-", ""), url: null,
+    createdAt: new Date().toISOString(), slip: modelIndependentSlip(slip) };
+}

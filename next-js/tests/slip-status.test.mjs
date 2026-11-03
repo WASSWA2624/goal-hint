@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { savedSlipOutcome, savedSlipStatus, savedSlipView } from '../src/domain/saved-slips.ts';
+import { slipSnapshotOutcome, slipSnapshotStatus, slipResultView } from '../src/domain/slip-snapshot.ts';
 import { slipStatus, slipStatusCategory } from '../src/domain/slip-status.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 
@@ -39,9 +39,9 @@ test('all cancelled original selections are distinguished from mixed void outcom
     const states = selections.map((_, index) => state(index, 'canceled', 'void'));
     assert.equal(slipStatus(current, states, 'void'), 'cancelled');
     const raw = selections.map((_, index) => result(index, 'canceled'));
-    assert.equal(savedSlipOutcome(current, raw), 'void');
-    assert.equal(savedSlipStatus(current, raw), 'cancelled');
-    assert.equal(savedSlipView('public-save', '2026-10-29T09:00:00Z', current, raw).status, 'cancelled');
+    assert.equal(slipSnapshotOutcome(current, raw), 'void');
+    assert.equal(slipSnapshotStatus(current, raw), 'cancelled');
+    assert.equal(slipResultView('public-save', '2026-10-29T09:00:00Z', current, raw).status, 'cancelled');
   }
   assert.equal(slipStatus(slip, [state(0, 'canceled', 'void'), state(1, 'finished-regulation', 'correct')], 'void'), 'void');
   assert.equal(slipStatus(slip, [state(0, 'abandoned', 'void'), state(1, 'canceled', 'void')], 'void'), 'void');
@@ -54,16 +54,16 @@ test('settled wins and early losses retain their adjudicated outcome while cance
   assert.equal(slipStatus(slip, [], 'won'), 'won');
   assert.equal(slipStatus(slip, [], 'void'), 'void');
   assert.equal(slipStatus(slip, [], 'void', 'cancelled'), 'cancelled');
-  assert.equal(savedSlipStatus(slip, [result(0, 'canceled'), result(1, 'canceled', { forecast: { ...slip.selections[1].forecast, publishedAt: 2000 } })]), 'pending');
-  assert.equal(savedSlipStatus(slip, [result(0, 'live', { completed: false }), result(1, 'scheduled', { completed: false })]), 'in-progress');
-  assert.equal(savedSlipStatus(slip, [result(0, 'scheduled', { completed: false }), result(1, 'scheduled', { completed: false })]), 'not-started');
+  assert.equal(slipSnapshotStatus(slip, [result(0, 'canceled'), result(1, 'canceled', { forecast: { ...slip.selections[1].forecast, publishedAt: 2000 } })]), 'pending');
+  assert.equal(slipSnapshotStatus(slip, [result(0, 'live', { completed: false }), result(1, 'scheduled', { completed: false })]), 'in-progress');
+  assert.equal(slipSnapshotStatus(slip, [result(0, 'scheduled', { completed: false }), result(1, 'scheduled', { completed: false })]), 'not-started');
 });
 
 test('legacy saved cancellation status uses recorded terminal fixtures and pending groups every unsettled progress state', () => {
   const legacy = { ...slip, selections: slip.selections.map(withoutForecast) };
   const raw = [result(0, 'canceled'), result(1, 'canceled')].map(withoutForecast);
-  assert.equal(savedSlipStatus(legacy, raw), 'cancelled');
-  assert.equal(savedSlipOutcome(legacy, raw), 'void');
+  assert.equal(slipSnapshotStatus(legacy, raw), 'cancelled');
+  assert.equal(slipSnapshotOutcome(legacy, raw), 'void');
   for (const status of ['not-started', 'in-progress', 'pending']) assert.equal(slipStatusCategory(status), 'pending');
   for (const status of ['won', 'lost', 'void', 'cancelled']) assert.equal(slipStatusCategory(status), status);
 });

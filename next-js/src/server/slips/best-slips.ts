@@ -1,6 +1,7 @@
 import "server-only";
 
-import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
+import { bestSlipBuilder, bestSlipBandCriteria, bestSlipViews, qualifiedJointModel, type BestSlip, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
+import { defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
@@ -20,7 +21,7 @@ export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): Be
 
 /** Recomputed from today's current stored cohort; no shared cache ever contains a viewer response. */
 export function createBestSlipsService({ read = readPublicSlipBuild, model = null, providerOdds = publicPolicy.features.providerOdds,
-  now = Date.now }: { read?: typeof readPublicSlipBuild; model?: JointSlipModel | null; providerOdds?: boolean; now?: () => number } = {}) {
+  now = Date.now, oddsBand = defaultBestSlipOddsBand }: { read?: typeof readPublicSlipBuild; model?: JointSlipModel | null; providerOdds?: boolean; now?: () => number; oddsBand?: BestSlipOddsBand } = {}) {
   return async (access: ViewerAccess, locale = "en"): Promise<BestSlipsResult> => {
     const at = utcInstantFromEpochMilliseconds(now()), day = getReportingDate(at);
     const base = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false } as const;
@@ -28,7 +29,7 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
     if (!qualifiedJointModel(model, at)) return { ...base, state: "model-unavailable" };
     let started = false;
     const clock = { now: () => { if (!started) { started = true; return at; } return utcInstantFromEpochMilliseconds(now()); } };
-    const result = await read(bestSlipCriteria(day), clock, locale, bestSlipBuilder(model));
+    const result = await read(bestSlipBandCriteria(day, oddsBand), clock, locale, bestSlipBuilder(model));
     // A day/model rollover during the bounded read must not publish an outdated daily set.
     const completedAt = now();
     if (getReportingDate(utcInstantFromEpochMilliseconds(completedAt)) !== day || !qualifiedJointModel(model, completedAt)) {
@@ -50,7 +51,7 @@ const readPublishedDay: PublishedBestSlipsReader = async (day, _locale, complete
     const { ensureDemoSlipDates } = await import("../demo/slips-seed.ts");
     await ensureDemoSlipDates(database, [day]);
   }
-  return createPublishedSlips(database).day(day, completedOnly);
+  return createPublishedSlips(database).day(day, completedOnly, defaultBestSlipOddsBand);
 };
 
 /** All viewers browse today; the projection withholds unfinished per-match predictions. */

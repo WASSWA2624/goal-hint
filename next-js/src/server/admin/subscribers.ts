@@ -116,7 +116,6 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
             await tx.paymentReceiptClaim.updateMany({ where: { submission: { accountId: id } }, data: { payerPhone: null, image: null, imageSha256: null, original: Prisma.DbNull, corrections: Prisma.DbNull, purgedAt: at } });
             if (account.phone) await rememberRegistrationPhone(tx, config ?? await getAnalyticsConfig(), account.phone, at);
             await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
-            await tx.savedSlip.deleteMany({ where: { accountId: id } });
             await tx.slipConfiguration.deleteMany({ where: { accountId: id } });
             const rows = await tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true } });
             await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: rows.map(r => r.id) } } });

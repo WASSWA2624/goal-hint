@@ -64,14 +64,14 @@ test('continuous browsing retains a bounded page window and can restore that win
   assert.equal(view.pages, 10); assert.equal(view.firstPage, 3); assert.equal(view.lastPage, 12);
   assert.equal(view.records.length, 20); assert.equal(view.records[0].fixtureId, 'a-3');
   const checkpoint = { entryId: 'window', queryKey: 'cohort', href: '/en/matches', firstPage: 3, lastPage: 12,
-    scrollY: 2500, focusFixtureId: 'a-12', paginationVersion: version, savedAt: now };
+    scrollY: 2500, focusFixtureId: 'a-12', paginationVersion: version, createdAt: now };
   assert.equal(feedCheckpointSchema.safeParse(checkpoint).success, true);
   assert.equal(matchingFeedCheckpoint([checkpoint], 'window', 'cohort', '/en/matches', 1), checkpoint);
   assert.equal(replaceFeedPages(view, Array.from({ length: 10 }, (_, index) => batch(index + 3))).records.length, 20);
 });
 test('restoration records contain bounded positions only, scoped to entry, query, initial page and expiry', () => {
   const checkpoint={entryId:'entry-a',queryKey:feedQueryKey(query(),today),href:'/en',firstPage:1,lastPage:3,scrollY:15000,
-    focusFixtureId:'fixture-70',paginationVersion:version,savedAt:now};
+    focusFixtureId:'fixture-70',paginationVersion:version,createdAt:now};
   let encoded=writeFeedCheckpoint([],checkpoint,now), entries=readFeedCheckpoints(encoded,now+1);
   assert.deepEqual(matchingFeedCheckpoint(entries,'entry-a',checkpoint.queryKey,'/en',1),checkpoint);
   for(const [id,key,href,first] of [['another',checkpoint.queryKey,'/en',1],['entry-a','other','/en',1],['entry-a',checkpoint.queryKey,'/en?page=2',2]]) {
@@ -79,7 +79,7 @@ test('restoration records contain bounded positions only, scoped to entry, query
   }
   assert.deepEqual(readFeedCheckpoints(encoded,now+restorationRules.maximumAgeMilliseconds+1),[]);
   assert.deepEqual(readFeedCheckpoints(encoded,now-1),[]);
-  for(let i=0;i<25;i++) { encoded=writeFeedCheckpoint(readFeedCheckpoints(encoded,now+i),{...checkpoint,entryId:`entry-${i}`,savedAt:now+i},now+i); }
+  for(let i=0;i<25;i++) { encoded=writeFeedCheckpoint(readFeedCheckpoints(encoded,now+i),{...checkpoint,entryId:`entry-${i}`,createdAt:now+i},now+i); }
   assert.equal(readFeedCheckpoints(encoded,now+25).length,20);
   for(const value of [{...checkpoint,lastPage:11},{...checkpoint,scrollY:Infinity},{...checkpoint,records:[]},{...checkpoint,firstPage:0}]) assert.equal(feedCheckpointSchema.safeParse(value).success,false);
   for(const serialized of ['not json','x'.repeat(65537),JSON.stringify({version:1,entries:[checkpoint,checkpoint]})]) assert.deepEqual(readFeedCheckpoints(serialized,now),[]);

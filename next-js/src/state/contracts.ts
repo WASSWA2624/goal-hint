@@ -13,7 +13,7 @@ export type LoadedView = {
   scrollY: number; error: FeedFailure | null; phase: "idle" | "loading" | "ready" | "error";
 };
 export type NavigationCheckpoint = Readonly<{
-  queryKey: string; query: FeedQuery; view: LoadedView; savedAt: UtcInstant;
+  queryKey: string; query: FeedQuery; view: LoadedView; createdAt: UtcInstant;
 }>;
 export type FeedState = {
   query: FeedQuery; draft: FeedQuery; today: ReportingDate; queryKey: string;

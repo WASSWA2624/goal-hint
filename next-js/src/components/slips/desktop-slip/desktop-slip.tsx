@@ -2,7 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import type { BuiltSlip } from "@/domain/slip-builder";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import type { SlipMatchState } from "@/domain/slip-match-state";
 import type { SlipStatus } from "@/domain/slip-status";
 import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
@@ -17,7 +17,7 @@ import { slipHeaderState } from "../slip-header-outcome";
 export type DesktopSlipDisclosureProps = {
   totalOdds: string; averageProbability: number; selectionCount: number; index: number; locale: string;
   initiallyOpen?: boolean; collapsible?: boolean; showRank?: boolean; slipId?: string; headingId?: string; children: ReactNode; headerAction?: ReactNode;
-  outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
+  outcome?: SlipResultView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication;
 
 /** Public aggregate previews and full desktop slips use the same selected native disclosure. */
@@ -31,8 +31,8 @@ export function DesktopSlipDisclosure({ children, headerAction, ...props }: Desk
 /** Original snapshot facts and any supplied regulation results remain unchanged by desktop presentation. */
 export function DesktopSlip({ slip, index, locale, results, matchStates, initiallyOpen = false, shareSource, sharedSlip, publicShareHref,
   publicationDay, publishedAt, outcome: suppliedOutcome, status: suppliedStatus }: {
-  slip: BuiltSlip; index: number; locale: string; results?: SavedSlipView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
-  publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; outcome?: SavedSlipView["outcome"]; status?: SlipStatus;
+  slip: BuiltSlip; index: number; locale: string; results?: SlipResultView["results"]; matchStates?: readonly SlipMatchState[]; initiallyOpen?: boolean;
+  publicShareHref?: string; shareSource?: ShareSlipSource; sharedSlip?: SharedSlip; outcome?: SlipResultView["outcome"]; status?: SlipStatus;
 } & SlipHeaderPublication) {
   const headingId = useId();
   const currentStates = useRefreshedSlipMatchStates() ?? matchStates;
@@ -40,7 +40,7 @@ export function DesktopSlip({ slip, index, locale, results, matchStates, initial
   return <DesktopSlipDisclosure index={index} locale={locale} initiallyOpen={initiallyOpen} headingId={headingId} showRank={!sharedSlip}
     totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length} slipId={slip.id} outcome={outcome} status={status}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}
-    headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} {...(shareSource ? { source: shareSource } : {})}
+    headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} {...(shareSource ? { source: shareSource } : {})}
       {...(sharedSlip ? { sharedSlip } : {})} locale={locale} {...(publicShareHref ? { publicHref: publicShareHref } : {})} /> : undefined}>
     <ul data-slip-selections aria-labelledby={headingId}>{slip.selections.map((selection, selectionIndex) => {
       const result = results?.find((item) => item.fixtureId === selection.fixtureId);

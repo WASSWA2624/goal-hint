@@ -125,13 +125,17 @@ export const DateControls = styled.div`
   ${media.desktop} {
     @media (max-width: ${({ theme }) => theme.viewport[79.99]}) { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
   }
-  ${media.belowDesktop} { flex: 1 1 var(--gh-size-48); gap: var(--gh-spacing-1); margin: 0; padding: 0; border: 0; }
+  ${media.belowDesktop} {
+    flex: 1 1 calc(var(--gh-size-36) * 2 + var(--gh-spacing-1));
+    gap: var(--gh-spacing-1); margin: 0; padding: 0; border: 0;
+  }
 
   ${inlineControlRow}
 `;
 
 export const DateSelect = styled(SelectMenu)`
   flex: none;
+  min-inline-size: var(--gh-size-36);
   > [data-select-trigger] {
     --select-surface: ${({ theme }) => theme.color.brandSoft};
     --select-hover-surface: ${({ theme }) => theme.color.brandSoft};
@@ -145,20 +149,6 @@ export const DateSelect = styled(SelectMenu)`
     flex: 1; inline-size: 100%;
     > [data-select-trigger] { padding: var(--gh-spacing-0_75) var(--gh-spacing-2); font-size: var(--gh-font-body); box-shadow: none; }
   }
-`;
-
-export const CustomRangeButton = styled(FilterButton)`
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--gh-spacing-1_25);
-  padding: var(--gh-spacing-1) var(--gh-spacing-2);
-  border-radius: ${({ theme }) => theme.radius.control};
-  white-space: nowrap;
-  > svg { color: ${({ theme }) => theme.color.brand}; }
-  > svg { flex: none; font-size: var(--gh-font-emphasis); }
-  ${media.desktop} { font-size: var(--gh-font-body); font-weight: var(--gh-weight-semibold);  }
-  ${media.belowDesktop} { padding: var(--gh-spacing-0_5) var(--gh-spacing-1_5); }
 `;
 
 export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`

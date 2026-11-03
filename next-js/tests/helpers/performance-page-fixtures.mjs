@@ -19,7 +19,7 @@ for (const [index, record] of records.entries()) {
 }
 const publications = ["won", "lost", "void"].map((outcome, index) => {
   const original = slipForecastFixture({ at: at - 86_400_000 }), quote = index === 0 ? "2.35" : "9.20";
-  return { id: `synthetic-publication-${index}`, savedAt: new Date(at - (3 - index) * 3_600_000).toISOString(),
+  return { id: `synthetic-publication-${index}`, createdAt: new Date(at - (3 - index) * 3_600_000).toISOString(),
     publishedAt: new Date(at - (3 - index) * 3_600_000).toISOString(), publicationDay: today, rank: index + 1,
     modelId: "synthetic-reviewed-model", estimatedProbability: .7, outcome,
     slip: { ...original.slip, id: `synthetic-slip-${index}`, totalOdds: quote,

@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import type { BuiltSlip } from "@/domain/slip-builder";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import { CompactSlipDisclosure } from "../compact-slip/compact-slip";
 import type { MobileSlipVariant } from "./designs";
 import { MobileSlipRow } from "./mobile-slip-row";
@@ -10,7 +10,7 @@ import { MobileSlipLayout } from "./mobile-slip-styles";
 
 /** The approved aggregate summary stays shared; the mobile candidates vary only the selection presentation. */
 export function MobileSlipSample({ slip, index, locale, variant, initiallyOpen = false, results }: {
-  slip: BuiltSlip; index: number; locale: string; variant: MobileSlipVariant; initiallyOpen?: boolean; results?: SavedSlipView["results"];
+  slip: BuiltSlip; index: number; locale: string; variant: MobileSlipVariant; initiallyOpen?: boolean; results?: SlipResultView["results"];
 }) {
   const headingId = useId();
   return <MobileSlipLayout data-mobile-design={variant}>

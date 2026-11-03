@@ -21,9 +21,6 @@ export async function paidDatabase({ seedPlans = false, beforeCheckout } = {}) {
     await root.query(await readFile(new URL("../../prisma/migrations/20261020193000_member_password_sms/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261021090000_payment_screenshot_approval/migration.sql", import.meta.url), "utf8"));
     if (seedPlans) await root.query(await readFile(new URL("../../prisma/migrations/20261021103000_standard_subscription_packages/migration.sql", import.meta.url), "utf8"));
-    // Account erasure also removes saved slips. This auth fixture has no football catalog, so only its independent table
-    // is installed here; saved-slip integration fixtures install SavedSlipFixture with the real FootballFixture table.
-    await root.query((await readFile(new URL("../../prisma/migrations/20261021110000_saved_slips/migration.sql", import.meta.url), "utf8")).split(";")[0]);
     await root.query(await readFile(new URL("../../prisma/migrations/20261021120000_manual_password_recovery/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261023090000_member_message_verification/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261023130000_single_member_login/migration.sql", import.meta.url), "utf8"));
@@ -41,10 +38,10 @@ export async function paidDatabase({ seedPlans = false, beforeCheckout } = {}) {
     await root.query(await readFile(new URL("../../prisma/migrations/20261101120000_payment_checkout/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
-    const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "SavedSlip", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);
+    const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);
     // The credit ledger is append-only: SELECT and INSERT only; permanent deletion removes its rows by cascade.
     const appendOnly = new Set(["WalletEntry", "AccountMove", "ReferralReviewEvent", "ReferralCredit", "PaymentEvent"]);
-    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "SavedSlip", "WalletEntry", "AccountMove", "PaymentNotificationOutbox", "SlipConfiguration", "MemberReferral", "MemberNotification", "ReferralReviewCase", "ReferralReviewEvidence", "ReferralReviewEvent", "ReferralGrantReversal"])
+    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "WalletEntry", "AccountMove", "PaymentNotificationOutbox", "SlipConfiguration", "MemberReferral", "MemberNotification", "ReferralReviewCase", "ReferralReviewEvidence", "ReferralReviewEvent", "ReferralGrantReversal"])
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"}${deletable.has(table) ? ", DELETE" : ""} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
     for (const table of ["PaymentReceipt", "PaymentReceiptClaim", "PaymentReceiptEvidence", "ReferralCredit", "PaymentEvent"])
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);

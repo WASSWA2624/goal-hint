@@ -2,7 +2,7 @@ import type { LiveClock } from "./match-card.ts";
 import type { StoredMatchFeedRecord } from "./match-feed.ts";
 import { isPlayedFinalStatus, settleMarketSelection, type SettlementStatus } from "./market-settlement.ts";
 import type { MarketFamily, MarketSelection } from "./markets.ts";
-import type { SavedSlipResult } from "./saved-slips.ts";
+import type { SlipResult } from "./slip-snapshot.ts";
 import type { BuiltSlip, SlipForecastReference, SlipSelection } from "./slip-builder.ts";
 
 /** Current presentation facts stay outside the immutable saved/publication snapshot. */
@@ -51,7 +51,7 @@ const validScore = (home: number | null | undefined, away: number | null | undef
   Number.isSafeInteger(home) && home! >= 0 && home! <= 1000 && Number.isSafeInteger(away) && away! >= 0 && away! <= 1000;
 
 /** Reuses original-cycle result adjudication; live scores never settle a selection early. */
-export function slipMatchStatesFromResults(selections: readonly SelectionIdentity[], results: readonly SavedSlipResult[]): readonly SlipMatchState[] {
+export function slipMatchStatesFromResults(selections: readonly SelectionIdentity[], results: readonly SlipResult[]): readonly SlipMatchState[] {
   const resultsByFixture = groupByFixture(results);
   return selections.flatMap<SlipMatchState>((selection) => {
     const result = resultsByFixture.get(selection.fixtureId)?.find((candidate) => candidate.family !== undefined && candidate.selection !== undefined

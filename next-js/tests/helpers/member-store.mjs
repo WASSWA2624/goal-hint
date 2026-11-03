@@ -61,7 +61,7 @@ export function memberStore({ instant, settings = {} }) {
     creditUgx: 0, autoRenew: false, autoRenewPlanId: null, autoRenewTermsVersion: null, passwordHash: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
   let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [],
-    paymentScreenshot: [], walletEntry: [], accountMove: [], paymentNotificationOutbox: [], savedSlip: [], memberVerification: [],
+    paymentScreenshot: [], walletEntry: [], accountMove: [], paymentNotificationOutbox: [], memberVerification: [],
     paymentReceipt: [], paymentReceiptClaim: [], paymentReceiptEvidence: [], referralCredit: [], paymentEvent: [],
     memberReferral: [], memberNotification: [], slipConfiguration: [],
     referralReviewCase: [], referralReviewEvidence: [], referralReviewEvent: [], referralGrantReversal: [],

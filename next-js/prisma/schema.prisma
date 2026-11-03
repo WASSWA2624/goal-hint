@@ -196,7 +196,6 @@ model FootballSeason {
 model FootballFixture {
   liveMatchSnapshots    LiveMatchSnapshot[]
   publishedSlipLegs     PublishedSlipLeg[]
-  savedSlips            SavedSlipFixture[]
   id                    String                        @id @default(uuid()) @db.Char(36)
   resultState           FixtureResultState?
   results               FixtureResult[]
@@ -249,20 +248,6 @@ model FootballFixture {
   @@index([awayTeamId, kickoff])
 }
 
-// Member-owned, immutable selection snapshot. accountId stays private; public history includes only slips whose legs ended.
-// Account erasure deletes these snapshots and cascades their fixture links; no payment or betting-provider action is stored.
-model SavedSlip {
-  id           String             @id @db.Char(36)
-  accountId    String             @db.Char(36)
-  fingerprint  String             @db.Char(64)
-  snapshotJson Json
-  createdAt    DateTime           @db.DateTime(3)
-  selections   SavedSlipFixture[]
-
-  @@unique([accountId, fingerprint])
-  @@index([createdAt])
-}
-
 // Explicitly published snapshots survive source expiry and account erasure. ownerKey is a private keyed digest.
 model SharedSlip {
   id           String   @id @db.Char(32)
@@ -275,27 +260,18 @@ model SharedSlip {
   @@unique([ownerKey, fingerprint])
 }
 
-// Fixture membership for a saved slip, without personal data. Foreign keys prevent orphan legs and cascade parent erasure.
-model SavedSlipFixture {
-  slipId    String          @db.Char(36)
-  fixtureId String          @db.Char(36)
-  slip      SavedSlip       @relation(fields: [slipId], references: [id], onDelete: Cascade)
-  fixture   FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-
-  @@id([slipId, fixtureId])
-  @@index([fixtureId])
-}
-
 // Public editorial publications have no member/account relation. Bodies and membership are append-only.
 model DailySlipPublication {
   id          String          @id @db.Char(64)
-  eatDate     DateTime        @unique @db.Date
+  eatDate     DateTime        @db.Date
+  oddsBand    String          @default("legacy") @db.VarChar(16)
   publishedAt DateTime        @db.DateTime(3)
   modelId     String          @db.Char(64)
   bodyJson    Json
   integrity   String          @db.Char(64)
   slips       PublishedSlip[]
 
+  @@unique([eatDate, oddsBand])
   @@index([publishedAt])
 }
 

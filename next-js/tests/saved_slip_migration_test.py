@@ -16,12 +16,17 @@ class SavedSlipMigrationTests(unittest.TestCase):
         self.assertIn("REFERENCES `FootballFixture` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT", sql)
         self.assertIn("REFERENCES `SavedSlip` (`id`) ON DELETE CASCADE", sql)
 
-    def test_snapshot_and_link_models_preserve_private_account_identity(self):
-        schema = (ROOT / "prisma/schema.prisma").read_text()
-        self.assertEqual(schema, (ROOT / "prisma/schema.snapshot.prisma").read_text())
-        model = schema.split("model SavedSlip {", 1)[1].split("\n}", 1)[0]
-        self.assertIn("@@unique([accountId, fingerprint])", model)
-        self.assertIn("snapshotJson Json", model)
+    def test_personal_storage_removed_and_presets_preserved(self):
+        schema = (ROOT / "prisma/schema.prisma").read_text(encoding="utf-8")
+        self.assertEqual(schema, (ROOT / "prisma/schema.snapshot.prisma").read_text(encoding="utf-8"))
+        self.assertNotIn("model SavedSlip {", schema)
+        self.assertNotIn("model SavedSlipFixture {", schema)
+        self.assertIn("model SlipConfiguration {", schema)
+        sql = (ROOT / "prisma/migrations/20261103120000_transient_slips_and_odds_bands/migration.sql").read_text()
+        self.assertIn("DROP TABLE `SavedSlip`", sql)
+        self.assertNotIn("DROP TABLE `SlipConfiguration`", sql)
+        self.assertNotIn("DELETE FROM SharedSlip", sql)
+        self.assertNotIn("DROP COLUMN snapshotJson", sql)
 
 
 if __name__ == "__main__":

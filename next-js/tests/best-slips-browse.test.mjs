@@ -24,9 +24,9 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
     for (let index = 0; index < daily; index++) {
       const rank = index + 1, identity = dateIndex * 100 + rank, fixtureId = uuid(identity), forecast = {
         cycleId: uuid(100000 + identity), revisionId: uuid(200000 + identity), publishedAt: publishedAt - 1000 };
-      const snapshot = { slip: { id: `private-original-${identity}`, totalOdds: '5.00', averageProbability: 0.7, oddsBasis: 'bookmaker',
+      const snapshot = { slip: { id: `private-original-${identity}`, totalOdds: '4.00', averageProbability: 0.7, oddsBasis: 'bookmaker',
         selections: [{ fixtureId, kickoffAt: publishedAt + 3600_000, homeTeam: source.homeTeam, awayTeam: source.awayTeam,
-          competition: source.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '5.00', oddsBasis: 'bookmaker', forecast }] },
+          competition: source.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '4.00', oddsBasis: 'bookmaker', forecast }] },
         estimatedProbability: 0.65 };
       const id = evidenceFingerprint({ publicationId, rank, snapshot });
       slips.push({ id, publicationId, rank, snapshotJson: snapshot });
@@ -41,9 +41,10 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
       reads.push(sql);
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(now) }];
       if (sql.text.includes('FROM DailySlipPublication')) {
-        let rows = publications.filter((row) => +row.publishedAt <= +sql.values[0]);
-        if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +sql.values[1] && +row.eatDate <= +sql.values[2]);
-        else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +sql.values[1]);
+        const dates = sql.values.filter(value => value instanceof Date);
+        let rows = publications.filter((row) => +row.publishedAt <= +dates[0]);
+        if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[1] && +row.eatDate <= +dates[2]);
+        else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +dates[1]);
         return rows.sort((a, b) => +b.eatDate - +a.eatDate).slice(0, sql.values.at(-1)).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       }
       if (sql.text.includes('FROM PublishedSlip')) return slips.filter((row) => sql.values.includes(row.publicationId))

@@ -6,7 +6,7 @@ import { snapshotCardPrediction } from "@/domain/match-card";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { matchHref } from "@/domain/navigation";
 import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import { slipSelectionCard } from "@/domain/slip-card";
 import type { SlipSelection } from "@/domain/slip-builder";
 import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-match-state";
@@ -20,7 +20,7 @@ const shortMarkets = { "match-result": "Result", "double-chance": "DC", "total-g
 
 /** Slip-specific authorization and immutable selection binding feed the shared desktop match renderer. */
 export function DesktopSlipRow({ selection, locale, result, matchStates, analysisLinks = false, preview = false, position }: {
-  selection: SlipSelection; locale: string; result?: SavedSlipView["results"][number]; matchStates?: readonly SlipMatchState[];
+  selection: SlipSelection; locale: string; result?: SlipResultView["results"][number]; matchStates?: readonly SlipMatchState[];
   analysisLinks?: boolean; preview?: boolean; position?: number;
 }) {
   const m = createMessages(locale);

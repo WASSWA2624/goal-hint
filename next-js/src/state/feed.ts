@@ -126,19 +126,19 @@ export function createFeedReducer(bootstrap: FeedBootstrap) {
     });
     builder.addCase(navigationSaved, (state, { payload }) => {
       if (!Number.isFinite(payload.scrollY) || payload.scrollY < 0 || payload.scrollY > 10_000_000) throw new RangeError("Invalid scroll position.");
-      const savedAt = utcInstantFromEpochMilliseconds(payload.now);
+      const createdAt = utcInstantFromEpochMilliseconds(payload.now);
       state.history[historyKey(payload.entryId)] = { queryKey: state.queryKey, query: normalizeQuery(state.query, state.today),
         view: { ...state.view, ids: [...state.view.ids], scrollY: payload.scrollY,
-          phase: state.view.firstPage !== null ? "ready" : "idle", error: null }, savedAt };
-      const entries = Object.entries(state.history).sort((a, b) => b[1].savedAt - a[1].savedAt);
+          phase: state.view.firstPage !== null ? "ready" : "idle", error: null }, createdAt };
+      const entries = Object.entries(state.history).sort((a, b) => b[1].createdAt - a[1].createdAt);
       for (const [key] of entries.slice(restorationRules.maximumEntries)) delete state.history[key];
     });
     builder.addCase(navigationRestored, (state, { payload }) => {
       const checkpoint = state.history[historyKey(payload.entryId)];
       const now = utcInstantFromEpochMilliseconds(payload.now);
       applyQuery(state, payload.query);
-      if (!checkpoint || checkpoint.queryKey !== state.queryKey || checkpoint.query.page !== state.query.page || now < checkpoint.savedAt ||
-          now - checkpoint.savedAt > restorationRules.maximumAgeMilliseconds) return;
+      if (!checkpoint || checkpoint.queryKey !== state.queryKey || checkpoint.query.page !== state.query.page || now < checkpoint.createdAt ||
+          now - checkpoint.createdAt > restorationRules.maximumAgeMilliseconds) return;
       state.view = { ...checkpoint.view, ids: checkpoint.view.ids.filter((id) => Object.hasOwn(state.records, id)) };
     });
   });

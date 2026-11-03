@@ -12,11 +12,7 @@ import { createMatchInsightsService } from "../src/server/matches/insights-servi
 import { createPerformanceService } from "../src/server/performance/performance-service.ts";
 import { createStoredSlipBuild } from "../src/server/slips/public-slips.ts";
 import { ensureDemoSlipDates } from "../src/server/demo/slips-seed.ts";
-import { demoMember } from "../src/server/demo/member.ts";
 import { createPublishedSlips } from "../src/server/slips/published-slips.ts";
-import { createSavedSlips } from "../src/server/slips/saved-slips.ts";
-import { createAnalyticsConfig } from "../src/server/analytics/analytics-config.ts";
-import { memberTokenHash } from "../src/server/members/member-sessions.ts";
 
 test("development demo uses the production MySQL projections across football pages and slips", {
   skip: process.env.DEMO_DATABASE_INTEGRATION !== "1", timeout: 480_000,
@@ -80,17 +76,8 @@ test("development demo uses the production MySQL projections across football pag
   await ensureDemoSlipDates(database, [today, yesterday], at);
   const published = createPublishedSlips(database), best = await published.day(today);
   assert.ok(best); assert.equal(best.state, "generated"); assert.ok(best.slips.length > 0);
-  assert.ok(best.slips.every((entry) => Number(entry.totalOdds) >= 4.5 && Number(entry.totalOdds) <= 5.5));
+  assert.ok(best.slips.every((entry) => Number(entry.totalOdds) >= 1.5 && Number(entry.totalOdds) <= 100));
   const publishedHistory = await published.history({ from: yesterday, to: yesterday, page: 1, pageSize: 10 });
   assert.ok(publishedHistory.records.length > 0); assert.ok(publishedHistory.statistics.total > 0);
-  const saved = createSavedSlips(database, await createAnalyticsConfig(getRuntimePolicy()));
-  const completed = await saved.completed(); assert.ok(completed.length > 0);
-  const savedHistory = await saved.history({ dateFrom: yesterday, dateTo: today, timeFrom: "", timeTo: "" });
-  assert.ok(savedHistory.records.length > 0); assert.ok(savedHistory.statistics.total > 0);
-  t.diagnostic("Best-slip day/history and saved-slip history/completed use normal stored readers.");
-  const session = await database.query((tx) => tx.memberSession.findUnique({ where: { tokenHash: memberTokenHash(demoMember.token) } }));
-  if (!session) { t.diagnostic("Existing demo sign-out is preserved; authenticated saving is checked only with an active demo session."); return; }
-  const save = await saved.save({ tokenHash: session.tokenHash, accountId: demoMember.accountId, phone: demoMember.phone, blocked: false,
-    codeEnteredAt: session.codeEnteredAt, accessCodeId: session.accessCodeId, expiresAt: session.expiresAt }, slip.data.slips[0]);
-  assert.equal(save, "saved", "normal membership, forecast binding and saved-slip persistence work in development");
+  t.diagnostic("Best Slips use original stored publications, with up to 20 slips in each odds band.");
 });

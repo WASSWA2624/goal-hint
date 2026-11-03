@@ -1,4 +1,4 @@
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import { mobileSlipPreview } from "../mobile-slip-review/preview-data";
 
 export const mobileHeaderScenarios = [
@@ -22,8 +22,8 @@ export function mobileHeaderPreview(scenario: MobileHeaderScenario = "pending") 
     selections: sample.slip.selections.map((selection) => ({ ...selection, odds: "4.20" })),
     totalOdds: (4.2 ** sample.slip.selections.length).toFixed(2),
   } : sample.slip;
-  const outcome: SavedSlipView["outcome"] = scenario === "won" || scenario === "lost" || scenario === "void" ? scenario : "pending";
-  const results: SavedSlipView["results"] | undefined = outcome === "pending" ? undefined
+  const outcome: SlipResultView["outcome"] = scenario === "won" || scenario === "lost" || scenario === "void" ? scenario : "pending";
+  const results: SlipResultView["results"] | undefined = outcome === "pending" ? undefined
     : slip.selections.map((selection, index) => ({
       fixtureId: selection.fixtureId,
       ...(index === 1 && outcome === "void" ? { home: null, away: null, outcome: "void" as const }

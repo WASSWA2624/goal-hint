@@ -5,6 +5,7 @@ import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { getSlipSharingSnapshot, subscribeMemberSession } from "@/components/members/member-session";
 import { ShareIcon } from "@/components/ui/icons";
 import type { SharedSlip, ShareSlipSource } from "@/domain/shared-slips";
+import type { BuiltSlip } from "@/domain/slip-builder";
 import { createMessages } from "@/i18n/messages";
 import { PublicSlipShare } from "./sharing/public-slip-share";
 import { ShareTrigger } from "./sharing/slip-share-styles";
@@ -12,7 +13,7 @@ import { ShareTrigger } from "./sharing/slip-share-styles";
 const SlipShareDrawer = dynamic(() => import("./sharing/slip-share-drawer").then((module) => module.SlipShareDrawer));
 const serverCanShare = () => false;
 
-export function SlipShareAction({ source, sharedSlip, locale, iconOnly = false, publicHref }: { publicHref?: string; source?: ShareSlipSource; sharedSlip?: SharedSlip; locale: string; iconOnly?: boolean }) {
+export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnly = false, publicHref }: { publicHref?: string; source?: ShareSlipSource; sharedSlip?: SharedSlip; localSlip?: BuiltSlip; locale: string; iconOnly?: boolean }) {
   const [open, setOpen] = useState(false), [cached, setCached] = useState(sharedSlip);
   const canShare = useSyncExternalStore(subscribeMemberSession, getSlipSharingSnapshot, serverCanShare) && !!(source || sharedSlip);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -29,6 +30,6 @@ export function SlipShareAction({ source, sharedSlip, locale, iconOnly = false, 
       aria-description={!canShare ? m.text("slipShare.forbidden") : undefined} title={m.text(canShare ? "slipShare.share" : "slipShare.forbidden")}
       aria-controls={open ? id : undefined} onClick={(event) => { event.stopPropagation(); setOpen(true); }}><ShareIcon />{!iconOnly && m.text("slipShare.share")}</ShareTrigger>
     {open && canShare && <SlipShareDrawer id={id} {...(source ? { source } : {})} {...(cached ? { initialShared: cached } : {})}
-      locale={locale} onPrepared={setCached} onClose={close} />}
+      {...(localSlip ? { localSlip } : {})} locale={locale} onPrepared={setCached} onClose={close} />}
   </>;
 }

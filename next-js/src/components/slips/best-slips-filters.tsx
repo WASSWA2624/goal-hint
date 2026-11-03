@@ -9,7 +9,8 @@ import { parseReportingDate, validateReportingDateRange, type ReportingDate } fr
 import type { PeriodPerformance } from "@/domain/browse-period";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
-import { AppliedDetails, AppliedSelection, AppliedSummary, CustomRangeButton, DateControls, DateError, DateFields, DateHint, DateSelect, FiltersPanel,
+import { bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "@/domain/best-slip-odds-bands";
+import { AppliedDetails, AppliedSelection, AppliedSummary, DateControls, DateError, DateFields, DateHint, DateSelect, FiltersPanel,
   RangeButton, RangeDialog, ResetButton, ResultButton, ResultGroup, ToggleRow } from "./best-slips-filter-styles";
 
 const dateOptions = [
@@ -66,7 +67,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     if (from > to) { invalid("bestSlips.filters.invalidRange"); return; }
     try { validateReportingDateRange(from, to, bestSlipsQueryRules.maximumDays); }
     catch { invalid("bestSlips.filters.rangeTooLong"); return; }
-    onChange({ period: "custom", status: query.status, from, to, page: 1 });
+    onChange({ period: "custom", status: query.status, oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, from, to, page: 1 });
     closeDates();
   }
 
@@ -75,10 +76,10 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     : m.text("bestSlips.filters.dateRange", { from: m.reportingDateMedium(bounds.from), to: m.reportingDateMedium(bounds.to) }) : null;
   const periodLabel = m.text(dateOptions.find(([period]) => period === appliedQuery.period)?.[1]
     ?? (appliedQuery.period === "last30" ? "feed.date.last-30-days" : appliedQuery.period === "next30" ? "feed.date.next-30-days" : "bestSlips.filters.allDates"));
-  const selectOptions = dateOptions.map(([value, label]) => ({ value, label: m.text(label) }));
+  const selectOptions = [{ value: "custom", label: m.text("bestSlips.filters.customDate") }, ...dateOptions.map(([value, label]) => ({ value, label: m.text(label) }))];
   const currentPeriodLabel = m.text(query.period === "custom" ? "bestSlips.filters.customRange"
     : query.period === "last30" ? "feed.date.last-30-days" : query.period === "next30" ? "feed.date.next-30-days" : "bestSlips.filters.allDates");
-  const selectablePeriod = dateOptions.some(([period]) => period === query.period);
+  const selectablePeriod = query.period === "custom" || dateOptions.some(([period]) => period === query.period);
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
     {summary && <DateHint data-performance-period>{m.text(appliedQuery.summary ? "history.yesterday" : "history.performance")}
       {summary.from && summary.to && <> · {m.reportingDateMedium(summary.from)}{summary.from !== summary.to && ` – ${m.reportingDateMedium(summary.to)}`} · EAT</>}
@@ -108,15 +109,17 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
         <DateSelect value={query.period} options={selectablePeriod ? selectOptions
           : [...selectOptions, { value: query.period, label: currentPeriodLabel, disabled: true }]}
           label={m.text("bestSlips.filters.slipDate")} data-slip-period-select data-slip-period={query.period}
+          onOptionSelect={(value, trigger) => { if (value === "custom") openDates(trigger); }}
           onValueChange={(value) => {
             const option = dateOptions.find(([period]) => period === value);
-            if (option) onChange({ period: option[0], status: query.status, page: 1 });
+            if (option) onChange({ period: option[0], status: query.status, oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 });
           }} />
-        <CustomRangeButton type="button" data-slip-custom-range aria-pressed={query.period === "custom"}
-          aria-label={m.text("bestSlips.filters.customRange")} title={m.text("bestSlips.filters.customRange")}
-          aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} onClick={(event) => openDates(event.currentTarget)}>
-          <CalendarIcon />{m.text("bestSlips.filters.customDate")}
-        </CustomRangeButton>
+        <DateSelect value={query.oddsBand ?? defaultBestSlipOddsBand} label={m.text("bestSlips.filters.oddsRange")}
+          options={bestSlipOddsBands.map(band => ({ value: band.id, label: band.label }))} data-slip-odds-band
+          onValueChange={value => {
+            const { cursor: _cursor, ...scope } = query; void _cursor;
+            onChange({ ...scope, oddsBand: value as BestSlipOddsBand, page: 1 });
+          }} />
       </DateControls>
       <ResetButton type="button" onClick={() => onChange(defaultBestSlipsQuery())}><ResetIcon />{m.text("slips.reset")}</ResetButton>
     </ToggleRow>

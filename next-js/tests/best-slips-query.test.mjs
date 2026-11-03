@@ -10,9 +10,9 @@ test('slip presets resolve inclusive EAT publication dates across month and year
     last3: ['2026-10-27', '2026-10-29'], last7: ['2026-10-23', '2026-10-29'], last30: ['2026-09-30', '2026-10-29'],
     next3: ['2026-10-30', '2026-11-01'], next7: ['2026-10-30', '2026-11-05'], next30: ['2026-10-30', '2026-11-28'], all: [null, null],
   };
-  assert.deepEqual(parseBestSlipsQuery({}, today), { period: "last30", status: "all", page: 1 });
-  assert.deepEqual(defaultBestSlipsQuery(true), { period: 'last30', status: 'all', page: 1, summary: 'yesterday' });
-  assert.deepEqual(defaultBestSlipsQuery(), { period: 'last30', status: 'all', page: 1, summary: 'yesterday' });
+  assert.deepEqual(parseBestSlipsQuery({}, today), { period: "last30", status: "all", page: 1, oddsBand: '1.5-5', });
+  assert.deepEqual(defaultBestSlipsQuery(true), { period: 'last30', status: 'all', page: 1, oddsBand: '1.5-5', summary: 'yesterday' });
+  assert.deepEqual(defaultBestSlipsQuery(), { period: 'last30', status: 'all', page: 1, oddsBand: '1.5-5', summary: 'yesterday' });
   for (const [period, [from, to]] of Object.entries(expected)) {
     assert.deepEqual(resolveBestSlipsDates(parseBestSlipsQuery({ period }, today), today), { from, to });
   }
@@ -22,7 +22,7 @@ test('slip presets resolve inclusive EAT publication dates across month and year
     assert.deepEqual(resolveBestSlipsDates({ ...defaultBestSlipsQuery(), period: 'next3' }, parseReportingDate(day)), { from, to });
   }
   const nextThree = parseBestSlipsQuery(new URLSearchParams('period=next3&status=won&page=2'), today);
-  assert.deepEqual(nextThree, { period: 'next3', status: 'won', page: 2 });
+  assert.deepEqual(nextThree, { period: 'next3', status: 'won', page: 2, oddsBand: '1.5-5', });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(nextThree), today), nextThree);
 });
 
@@ -32,7 +32,7 @@ test('custom ranges accept same-day and a full leap year, while serialization re
   assert.deepEqual(resolveBestSlipsDates(query, today), { from: '2024-01-01', to: '2024-12-31' });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(query), today), query);
   assert.deepEqual(parseBestSlipsQuery({ period: 'custom', from: today, to: today }, today),
-    { period: 'custom', status: 'all', page: 1, from: today, to: today });
+    { period: 'custom', status: 'all', page: 1, oddsBand: '1.5-5', from: today, to: today });
 });
 
 test('invalid or repeated values fail before reading publications', () => {

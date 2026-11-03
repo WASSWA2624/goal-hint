@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bestSlipOddsBands } from '../src/domain/best-slip-odds-bands.ts';
 import { bestSlipViews } from '../src/domain/best-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createPublishedSlips, parsePublishedSlipHistoryQuery } from '../src/server/slips/published-slips.ts';
@@ -10,13 +11,18 @@ const base = liveRecord(), model = { calibrationReference: 'synthetic-calibratio
   validFrom: now - 1000, validUntil: now + 86_400_000, estimate: () => 0.7 };
 const fixtureId = (last) => `10000000-0000-4000-8000-${String(last).padStart(12, '0')}`;
 function slip(last = 1) {
-  return { id: `original-${last}`, totalOdds: '5.00', oddsBasis: 'bookmaker', averageProbability: 0.7, estimatedProbability: 0.7,
+  return { id: `original-${last}`, totalOdds: '4.00', oddsBasis: 'bookmaker', averageProbability: 0.7, estimatedProbability: 0.7,
     selections: [{ fixtureId: fixtureId(last), kickoffAt: now + 3_600_000, homeTeam: base.homeTeam, awayTeam: base.awayTeam,
-      competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '5.00', oddsBasis: 'bookmaker' }] };
+      competition: base.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '4.00', oddsBasis: 'bookmaker' }] };
 }
 function fixture() {
   const parents = [], rows = [], legs = [], bound = [], outcomes = new Map(), fixtureCompletion = new Map();
-  let at = now, corrupted = false, ignored = false, afterMembership = () => {};
+  let at = now, corrupted = false, ignored = false, normalized = false, afterMembership = () => {};
+  const databaseSnapshot = json => {
+    const snapshot = JSON.parse(json);
+    if (normalized) snapshot.estimatedProbability -= Number.EPSILON;
+    return snapshot;
+  };
   const statement = (query, values) => Array.isArray(query) ? { text: query.join('?'), values } : { text: query.sql, values: query.values };
   const tx = {
     dailySlipPublication: { async findUnique({ where }) { return parents.find(row => +row.eatDate === +where.eatDate) ?? null; } },
@@ -24,20 +30,21 @@ function fixture() {
     async $queryRaw(query, ...values) {
       const sql = statement(query, values);
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(at) }];
+      if (sql.text.includes('SELECT JSON_EXTRACT')) return [{ snapshot: databaseSnapshot(sql.values[0]) }];
       if (sql.text.includes('FROM FootballFixture')) return [{ id: sql.values[0] }];
-      if (sql.text.includes('FROM DailySlipPublication')) return parents.map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
-      if (sql.text.includes('FROM PublishedSlip')) return rows.map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
+      if (sql.text.includes('FROM DailySlipPublication')) return parents.filter(row => !sql.text.includes('oddsBand') || !sql.values.some(value => bestSlipOddsBands.some(band => band.id === value)) || sql.values.includes(row.oddsBand)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
+      if (sql.text.includes('FROM PublishedSlip')) return rows.filter(row => sql.values.includes(row.publicationId)).map(row => ({ ...row, validIntegrity: corrupted ? 0 : 1 }));
       assert.fail(sql.text);
     },
     async $executeRaw(query, ...values) {
       const sql = statement(query, values), v = sql.values;
       if (sql.text.includes('INSERT IGNORE INTO DailySlipPublication')) {
         if (ignored) return 0;
-        if (parents.some(row => +row.eatDate === +v[1])) return 0;
-        parents.push({ id: v[0], eatDate: v[1], publishedAt: v[2], modelId: v[3], bodyJson: JSON.parse(v[4]) }); return 1;
+        if (parents.some(row => +row.eatDate === +v[1] && row.oddsBand === v[2])) return 0;
+        parents.push({ id: v[0], eatDate: v[1], oddsBand: v[2], publishedAt: v[3], modelId: v[4], bodyJson: JSON.parse(v[5]) }); return 1;
       }
       if (sql.text.includes('INSERT INTO PublishedSlip')) {
-        rows.push({ id: v[0], publicationId: v[1], rank: v[2], snapshotJson: JSON.parse(v[3]) }); return 1;
+        rows.push({ id: v[0], publicationId: v[1], rank: v[2], snapshotJson: databaseSnapshot(v[3]) }); return 1;
       }
       assert.fail(sql.text);
     },
@@ -61,24 +68,34 @@ function fixture() {
   const publish = (changes = {}) => store.publish({ day: today, slips: [slip()], model,
     searchLimited: false, partialCoverage: false, verifyModel: () => true, verifyPublicOdds: () => true, ...changes });
   return { store, publish, parents, rows, legs, bound, outcomes, fixtureCompletion, advance(value) { at = value; }, corrupt() { corrupted = true; },
-    ignoreInsert() { ignored = true; }, afterMembership(callback) { afterMembership = callback; } };
+    ignoreInsert() { ignored = true; }, normalizeNumbers() { normalized = true; }, afterMembership(callback) { afterMembership = callback; } };
 }
 const query = { from: today, to: today, page: 1, pageSize: 1 };
 
-test('one hundred daily slips publish, read and settle across the complete history cohort', async () => {
-  const f = fixture(), slips = Array.from({ length: 100 }, (_, index) => slip(index + 1));
-  assert.equal(await f.publish({ slips }), 'published');
+test('sealed publication identities survive database JSON number normalization', async () => {
+  const f = fixture(); f.normalizeNumbers(); await f.publish();
+  const day = await f.store.day(today);
+  assert.equal(day.slips.length, 1);
+  assert.equal(day.slips[0].estimatedProbability, 0.7 - Number.EPSILON);
+});
+
+test('five bands publish twenty slips each, remain idempotent and retain stable public ranks', async () => {
+  const f = fixture();
+  for (const [index, band] of bestSlipOddsBands.entries()) {
+    const price = ["4.00", "7.00", "15.00", "30.00", "60.00"][index];
+    const slips = Array.from({ length: 20 }, (_, n) => { const original = slip(n + 1); return { ...original, totalOdds: price,
+      selections: original.selections.map(selection => ({ ...selection, odds: price })) }; });
+    assert.equal(await f.publish({ slips, oddsBand: band.id }), 'published');
+    assert.equal(await f.publish({ slips, oddsBand: band.id }), 'already-published');
+    await assert.rejects(() => f.publish({ slips: [...slips, slip(21)], oddsBand: band.id }));
+  }
   assert.equal(f.rows.length, 100);
   const day = await f.store.day(today);
   assert.equal(day.slips.length, 100); assert.equal(day.slips[99].rank, 100);
-  slips.forEach(item => f.outcomes.set(item.selections[0].fixtureId, 'won'));
-  const history = await f.store.history({ ...query, page: 2, pageSize: 50 });
-  assert.equal(history.records.length, 50); assert.equal(history.total, 100);
-  assert.equal(history.statistics.won, 100);
-  assert.equal(history.records[49].rank, 100);
-  const oversized = fixture();
-  await assert.rejects(() => oversized.publish({ slips: [...slips, slip(101)] }));
-  assert.equal(oversized.parents.length, 0);
+  assert.equal((await f.store.day(today, false, '1.5-5')).slips.length, 20);
+  Array.from({length:20}, (_,n) => f.outcomes.set(fixtureId(n+1), 'won'));
+  const history = await f.store.history({ ...query, page: 2, pageSize: 10, oddsBand: '5-10' });
+  assert.equal(history.total, 20); assert.equal(history.statistics.won, 20); assert.equal(history.records[9].rank, 40);
 });
 
 test('publication assigns probability order before sealing snapshot ranks', async () => {
@@ -108,9 +125,9 @@ test('first qualified publication preserves quotes, model evidence and original 
   assert.equal(f.parents[0].bodyJson.model.calibrationReference, model.calibrationReference);
   assert.equal(f.legs[0].cycleId, fixtureId(90)); assert.equal(f.legs[0].revisionId, fixtureId(91));
   const day = await f.store.day(today);
-  assert.equal(day.slips[0].slip.totalOdds, '5.00');
+  assert.equal(day.slips[0].slip.totalOdds, '4.00');
   const publicViews = bestSlipViews(day.slips.map(view => view.slip), false);
-  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '5.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
+  assert.deepEqual(publicViews, [{ rank: 1, matchCount: 1, totalOdds: '4.00', estimatedProbability: 0.7, averageProbability: 0.7 }]);
   const gated = gateBestSlips(day, { tier: 'free', signedIn: false, mode: 'off' });
   assert.equal(gated.slips.length, 1);
   assert.equal(gated.slips[0].slip, undefined);
@@ -129,7 +146,7 @@ test('active publications expose counts only; original-cycle completion releases
   f.outcomes.set(fixtureId(1), 'lost');
   const completed = await f.store.history(query);
   assert.equal(completed.total, 1); assert.equal(completed.records[0].outcome, 'lost');
-  assert.equal(completed.records[0].slip.totalOdds, '5.00'); assert.equal(completed.records[0].publicationDay, today);
+  assert.equal(completed.records[0].slip.totalOdds, '4.00'); assert.equal(completed.records[0].publicationDay, today);
   assert.equal(completed.statistics.profitUnits, -1); assert.equal(completed.statistics.winRate, 0);
   assert.equal('accountId' in completed.records[0], false);
 });
@@ -140,7 +157,7 @@ test('pagination uses the whole publication-period denominator and retains void 
   const page = await f.store.history({ ...query, page: 2 });
   assert.equal(page.records.length, 1); assert.equal(page.records[0].rank, 2); assert.equal(page.total, 3);
   assert.equal(page.statistics.total, 3); assert.equal(page.statistics.returnsSampleCount, 2);
-  assert.equal(page.statistics.roi, 1.5); assert.equal(page.statistics.void, 1);
+  assert.equal(page.statistics.roi, 1); assert.equal(page.statistics.void, 1);
   assert.equal((await f.store.history({ ...query, page: 3 })).records[0].outcome, 'void');
   assert.equal((await f.store.history({ ...query, page: 4 })).records.length, 0);
 });
@@ -170,7 +187,7 @@ test('daily slip performance includes every published slip and updates from orig
 
 test('a lost leg settles aggregate loss immediately while active selections and quotes stay private', async () => {
   const first = slip(1), second = slip(2);
-  const mixed = { ...first, selections: [{ ...first.selections[0], odds: '2.00' }, { ...second.selections[0], odds: '2.50' }] };
+  const mixed = { ...first, selections: [{ ...first.selections[0], odds: '2.00' }, { ...second.selections[0], odds: '2.00' }] };
   const f = fixture(); await f.publish({ slips: [mixed] });
   f.outcomes.set(fixtureId(1), 'lost');
   assert.deepEqual((await f.store.day(today)).statistics, { total: 1, won: 0, lost: 1, pending: 0, void: 0, cancelled: 0 });
@@ -198,7 +215,7 @@ test('private publisher skips unqualified generation, respects existing publicat
   let reads = 0, writes = 0;
   const options = { database: {}, competitionIds: [], model, providerOdds: true, now: () => now,
     verifyModel: () => true, verifyPublicOdds: () => true, read: async () => { reads++; throw new Error('must not generate'); },
-    store: { async day() { return {}; }, async publish() { writes++; return 'published'; } } };
+    store: { async publishedBands() { return ['legacy']; }, async publish() { writes++; return 'published'; } } };
   assert.equal((await createDailySlipPublisher(options).publish()).status, 'already-published');
   assert.equal((await createDailySlipPublisher({ ...options, model: null }).publish()).status, 'model-unavailable');
   assert.equal((await createDailySlipPublisher({ ...options, verifyPublicOdds: () => false }).publish()).status, 'odds-unavailable');
@@ -220,10 +237,10 @@ test('an ignored non-duplicate insert is unavailable and a slow write crossing c
 
 test('published forecasts survive model expiry and preserve the historical odds-target criteria', async () => {
   const f = fixture(); await f.publish();
-  f.parents[0].bodyJson.criteria = f.parents[0].bodyJson.criteria.replace('totalMin=4.50', 'totalMin=4.00');
-  f.parents[0].bodyJson.criteria = f.parents[0].bodyJson.criteria.replace('slips=100', 'slips=10');
+  f.parents[0].bodyJson.criteria = f.parents[0].bodyJson.criteria.replace('totalMin=1.50', 'totalMin=1.60');
+  f.parents[0].bodyJson.criteria = f.parents[0].bodyJson.criteria.replace('slips=20', 'slips=10');
   f.advance(model.validUntil + 1);
-  assert.equal((await f.store.day(today)).slips[0].slip.totalOdds, '5.00');
-  assert.match(f.parents[0].bodyJson.criteria, /totalMin=4.00/);
+  assert.equal((await f.store.day(today)).slips[0].slip.totalOdds, '4.00');
+  assert.match(f.parents[0].bodyJson.criteria, /totalMin=1.60/);
   assert.match(f.parents[0].bodyJson.criteria, /slips=10/);
 });

@@ -4,7 +4,7 @@ import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { isCompletedFixtureStatus, isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import type { SlipMatchWatch } from "../../domain/slip-match-refresh.ts";
-import { savedSlipCompletedStatuses, type SavedSlipResult } from "../../domain/saved-slips.ts";
+import { slipCompletedStatuses, type SlipResult } from "../../domain/slip-snapshot.ts";
 import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../domain/slip-builder.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
@@ -55,7 +55,7 @@ export async function bindSlipForecasts(tx: Tx, slip: BuiltSlip, at: number): Pr
   return { ...slip, selections };
 }
 
-const emptyResult = (selection: SlipMatchWatch): SavedSlipResult => ({ fixtureId: selection.fixtureId,
+const emptyResult = (selection: SlipMatchWatch): SlipResult => ({ fixtureId: selection.fixtureId,
   family: selection.family, selection: selection.selection,
   ...(selection.forecast ? { forecast: selection.forecast } : {}), completed: false, status: "unknown",
   fixtureCompleted: false, regulationVerified: false, regulationHome: null, regulationAway: null });
@@ -65,7 +65,7 @@ type HistoricalResult = Readonly<{ result: StoredFixtureResult | null; terminalV
 export function projectSlipForecastResult(selection: SlipMatchWatch, input: Readonly<{
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number;
-}>): SavedSlipResult {
+}>): SlipResult {
   const { fixture, cycle, revision, asOf } = input;
   const base = { ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(resultStatus.parse(fixture.status)) };
   if (!selection.forecast || !cycle || cycle.id !== selection.forecast.cycleId || cycle.fixtureId !== selection.fixtureId ||
@@ -93,11 +93,11 @@ export function projectSlipForecastResult(selection: SlipMatchWatch, input: Read
   const status = resultStatus.parse(fixture.status), result = input.result;
   const coherent = result !== null && result.observedAt <= asOf && result.fixtureId === fixture.id &&
     fixtureResultMatchesCanonical(fixture, result, fixture.lifecycleState?.issue ?? null);
-  return resultProjection(base, status, coherent ? result : null, savedSlipCompletedStatuses.includes(status));
+  return resultProjection(base, status, coherent ? result : null, slipCompletedStatuses.includes(status));
 }
 
-function resultProjection(base: SavedSlipResult, status: SavedSlipResult["status"], result: StoredFixtureResult | null,
-  completed: boolean): SavedSlipResult {
+function resultProjection(base: SlipResult, status: SlipResult["status"], result: StoredFixtureResult | null,
+  completed: boolean): SlipResult {
   const verified = isPlayedFinalStatus(status) && result?.regulation.verified === true;
   const live = status === "live" && result?.status === "live";
   const liveScore = live && result.reportedGoals.home !== null && result.reportedGoals.away !== null;
@@ -193,7 +193,7 @@ async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionId
 }
 
 /** Batch current result reads; per-original-cycle caches prevent one query per repeated slip leg. */
-export async function readSlipForecastResults(tx: Tx, selections: readonly SlipMatchWatch[], asOf: number): Promise<readonly SavedSlipResult[]> {
+export async function readSlipForecastResults(tx: Tx, selections: readonly SlipMatchWatch[], asOf: number): Promise<readonly SlipResult[]> {
   utcInstantFromEpochMilliseconds(asOf);
   if (selections.length > slipForecastReadRules.maximumSelections) return historyFail("invalid-request");
   const fixtureIds = [...new Set(selections.map((selection) => selection.fixtureId))];
@@ -209,7 +209,7 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
   if (Math.max(cycleIds.length, revisionIds.length) > slipForecastReadRules.prefetchThreshold) {
     await prefetchForecasts(tx, cycleIds, revisionIds, { cycles, revisions, schedules });
   }
-  const history = new Map<string, HistoricalResult | null>(), projected: SavedSlipResult[] = [];
+  const history = new Map<string, HistoricalResult | null>(), projected: SlipResult[] = [];
   for (const selection of selections) {
     const fixture = fixtures.get(selection.fixtureId), reference = selection.forecast;
     if (!fixture) { projected.push(emptyResult(selection)); continue; }
@@ -218,7 +218,7 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
       const status = resultStatus.parse(fixture.status), coherent = result !== null && result.observedAt <= asOf && result.fixtureId === fixture.id &&
         fixtureResultMatchesCanonical(fixture, result, fixture.lifecycleState?.issue ?? null);
       projected.push(resultProjection({ ...emptyResult(selection), fixtureCompleted: isCompletedFixtureStatus(status) },
-        status, coherent ? result : null, savedSlipCompletedStatuses.includes(status)));
+        status, coherent ? result : null, slipCompletedStatuses.includes(status)));
       continue;
     }
     if (!cycles.has(reference.cycleId)) cycles.set(reference.cycleId, await storedCycle(tx, reference.cycleId));

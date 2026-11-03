@@ -14,6 +14,7 @@ import { anchoredPanel, useAnchoredPanel } from "./anchored-panel";
 export type SelectMenuOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
 export type SelectMenuProps = Readonly<{
   value: string; options: readonly SelectMenuOption[]; label: string; onValueChange: (value: string) => void;
+  onOptionSelect?: (value: string, trigger: HTMLButtonElement) => void;
 }> & Omit<ComponentPropsWithoutRef<"button">, "children" | "value" | "onChange" | "onClick" | "onKeyDown" | "onSelect" | "role">;
 const Root = styled.div.attrs<{ "data-control-field"?: string }>({ "data-control-field": "" })`
   position: relative; min-inline-size: 0; max-inline-size: 100%; margin-block-start: var(--floating-label-space);
@@ -63,7 +64,7 @@ const Options = styled.ul`
 `;
 
 /** Single-choice menu with themed options, keyboard navigation and selection committed only on activation. */
-export function SelectMenu({ value, options, label, onValueChange, className, disabled = false, ...attributes }: SelectMenuProps) {
+export function SelectMenu({ value, options, label, onValueChange, onOptionSelect, className, disabled = false, ...attributes }: SelectMenuProps) {
   const [open, setOpen] = useState(false), [activeValue, setActiveValue] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), panel = useRef<HTMLUListElement>(null);
   const search = useRef({ text: "", at: 0 }), id = useId();
@@ -89,6 +90,7 @@ export function SelectMenu({ value, options, label, onValueChange, className, di
   function choose(option = active) {
     if (!option || disabled) return;
     close();
+    if (trigger.current) onOptionSelect?.(option.value, trigger.current);
     if (option.value !== value) onValueChange(option.value);
   }
   function keyboard(event: KeyboardEvent<HTMLButtonElement>) {

@@ -100,10 +100,10 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
       return fillMessage(translations[key] ?? catalog[key], values);
     },
-    plural(key: PluralKey, count: number): string {
+    plural(key: PluralKey, count: number, values: Readonly<Record<string, string>> = {}): string {
       if (!Number.isSafeInteger(count) || count < 0) throw new RangeError("Count must be a nonnegative safe integer.");
       const message: PluralMessage = translations[key] ?? catalog[key];
-      return (message[plurals.select(count)] ?? message.other).replaceAll("{count}", numbers.format(count));
+      return fillMessage(message[plurals.select(count)] ?? message.other, { ...values, count: numbers.format(count) });
     },
     number(value: number, options?: Intl.NumberFormatOptions): string {
       return (options ? numberFormat(language, options) : numbers).format(value);

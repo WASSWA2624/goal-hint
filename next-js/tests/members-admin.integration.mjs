@@ -11,7 +11,7 @@ import {takeMemberLimit} from "../src/server/members/rate-limit.ts";
 import {paidDatabase} from "./helpers/paid-database.mjs";
 import {jpeg} from "./helpers/payment-fixtures.mjs";
 import {silentPaymentNotifications} from "./helpers/payment-notification-fixtures.mjs";
-import {readFile} from "node:fs/promises";
+
 const DAY=86400000,HOUR=3600000;
 test("subscriber management, accounting and retention on restricted MySQL",{timeout:180000},async t=>{
  const f=await paidDatabase();t.after(()=>f.close());const{database:db,config}=f;
@@ -124,19 +124,13 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
  const members=createSubscribers(db,now,config),planId=randomUUID();let reference=0;
  await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Shared weekly plan",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:at,updatedAt:at}}));
  await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",updatedAt:at,updatedBy:"owner"}}));
- // The paid-access harness has no football catalog. This minimal shared fixture installs the real saved-slip child
- // table and its cascade, so deletion must remove private selections while preserving the referenced fixture.
- await root.query("CREATE TABLE FootballFixture (id CHAR(36) NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin");
- const fixtureId=randomUUID();await root.query("INSERT INTO FootballFixture (id) VALUES (?)",[fixtureId]);
- await root.query((await readFile(new URL("../prisma/migrations/20261021110000_saved_slips/migration.sql",import.meta.url),"utf8")).split(";")[1]);
  async function account(phone,extra={}) {return db.query(tx=>tx.memberAccount.create({data:{id:randomUUID(),phone,passwordHash:"synthetic-password-hash",phoneVerifiedAt:at,passwordChangedAt:at,ownerNote:"Synthetic private note",createdAt:at,lastSignInAt:at,...extra}}));}
  async function payment(who,extra={}) {const id=randomUUID();return db.query(tx=>tx.paymentSubmission.create({data:{id,reference:String(++reference).padStart(4,"0"),source:"report",accountId:who.id,planId,planName:"Shared weekly plan",durationDays:7,priceUgx:5000,payerPhone:who.phone,claimedNetwork:"mtn",claimedTxnRef:`SYNTHETIC${reference}`,claimedTxnKey:`SYNTHETIC${reference}`,claimedAmountUgx:5000,status:"pending",submittedAt:at,rejectText:"Synthetic private payment text",...extra}}));}
  async function code(who,extra={}) {return db.query(tx=>tx.accessCode.create({data:{id:randomUUID(),accountId:who.id,codeSalt:new Uint8Array(16).fill(reference+1),codeHash:hash(randomUUID()),reference:String(++reference).padStart(4,"0"),source:"manual",planId,planName:"Shared weekly plan",durationDays:7,priceUgx:5000,amountReceivedUgx:5000,createdAt:at,createdBy:"owner",activatedAt:at,startsAt:at,endsAt:new Date(+at+7*DAY),note:"Synthetic private code note",...extra}}));}
  async function verification(who,phone=who.phone) {return db.query(tx=>tx.memberVerification.create({data:{id:randomUUID(),accountId:who.id,phone,purpose:"register",channel:"sms",bindingHash:hash(randomUUID()),codeHash:hash(randomUUID()),createdAt:at,expiresAt:new Date(+at+HOUR)}}));}
- async function slip(who) {const row=await db.query(tx=>tx.savedSlip.create({data:{id:randomUUID(),accountId:who.id,fingerprint:hash(randomUUID()),snapshotJson:{private:"Synthetic saved selection"},createdAt:at}}));await root.query("INSERT INTO SavedSlipFixture (slipId,fixtureId) VALUES (?,?)",[row.id,fixtureId]);return row;}
  async function audit(data) {return db.query(tx=>tx.ownerAuditEvent.create({data:{at,actor:"owner",action:"access_granted",targetType:"member",targetId:"unrelated",details:{},...data}}));}
  async function snapshot() {return db.query(async tx=>{
-  const tables={memberAccount:"id",memberSession:"tokenHash",memberVerification:"id",paymentSubmission:"id",paymentScreenshot:"submissionId",accessCode:"id",savedSlip:"id",ownerAuditEvent:"id",rateLimitBucket:"key",subscriptionPlan:"id",subscriptionSettings:"id"};
+  const tables={memberAccount:"id",memberSession:"tokenHash",memberVerification:"id",paymentSubmission:"id",paymentScreenshot:"submissionId",accessCode:"id",ownerAuditEvent:"id",rateLimitBucket:"key",subscriptionPlan:"id",subscriptionSettings:"id"};
   return Object.fromEntries(await Promise.all(Object.entries(tables).map(async([table,key])=>[table,await tx[table].findMany({orderBy:{[key]:"asc"}})])));
  });}
  await t.test("removes every owned record and historical identity while preserving other accounts and shared data",async()=>{
@@ -152,7 +146,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   await db.query(tx=>tx.memberSession.create({data:{tokenHash,accountId:who.id,createdAt:at,lastSeenAt:at,expiresAt:new Date(+at+DAY),authenticatedAt:at,codeEnteredAt:at,accessCodeId:ownCode.id}}));
   const otherSession=await db.query(tx=>tx.memberSession.create({data:{tokenHash:hash("other subscriber device"),accountId:other.id,createdAt:at,lastSeenAt:at,expiresAt:new Date(+at+DAY),authenticatedAt:at,codeEnteredAt:at,accessCodeId:otherCode.id}}));
   await verification(who);await verification(who,oldPhone);const unbound=await verification({id:null,phone:oldPhone});
-  const otherVerification=await verification(other),ownSlip=await slip(who),otherSlip=await slip(other);
+  const otherVerification=await verification(other);
   const ownedAudit=await audit({accountId:who.id,targetId:who.id}),targetAudit=await audit({targetType:"payment",targetId:ownPayment.id}),actorAudit=await audit({actor:`member-admin:${who.id}`});
   await audit({actor:who.id});
   const sharedAudit=await audit({accountId:other.id,targetId:other.id,details:{previousAccountId:who.id,codeId:ownCode.id,liveCodeId:ownCycle.id,paymentReference:`P${ownPayment.reference}`,legacyPaymentReference:`P-${ownPayment.reference}`,unrelated:"retained"}});
@@ -162,7 +156,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   await db.query(tx=>tx.rateLimitBucket.createMany({data:[...ownKeys,sharedKey,otherKey].map(key=>({key,windowStartedAt:at}))}));
   const savedPlan=await db.query(tx=>tx.subscriptionPlan.findUnique({where:{id:planId}})),savedSettings=await db.query(tx=>tx.subscriptionSettings.findUnique({where:{id:1}}));
   assert.deepEqual(await members.action(who.id,"delete",undefined,"owner"),{status:"saved"});
-  for(const table of ["memberSession","memberVerification","paymentSubmission","accessCode","savedSlip"])assert.equal(await db.query(tx=>tx[table].count({where:{accountId:who.id}})),0,table);
+  for(const table of ["memberSession","memberVerification","paymentSubmission","accessCode"])assert.equal(await db.query(tx=>tx[table].count({where:{accountId:who.id}})),0,table);
   assert.equal(await db.query(tx=>tx.memberAccount.findUnique({where:{id:who.id}})),null);
   assert.equal(await members.detail(who.id),null);assert.deepEqual(await members.search(who.phone),[]);
   assert.equal(await db.query(tx=>tx.paymentScreenshot.count({where:{submissionId:{in:[ownPayment.id,pendingPayment.id]}}})),0);
@@ -178,7 +172,6 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   const retainedPayment=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:otherPayment.id}}));
   assert.equal(retainedPayment.payerPhone,null);assert.equal(retainedPayment.submittedSessionHash,null);assert.equal(retainedPayment.claimedAmountUgx,otherPayment.claimedAmountUgx);assert.ok(await db.query(tx=>tx.paymentScreenshot.findUnique({where:{submissionId:otherPayment.id}})));
   assert.deepEqual(await db.query(tx=>tx.memberAccount.findUnique({where:{id:other.id}})),other);assert.deepEqual(await db.query(tx=>tx.memberSession.findUnique({where:{tokenHash:otherSession.tokenHash}})),otherSession);assert.deepEqual(await db.query(tx=>tx.memberVerification.findUnique({where:{id:otherVerification.id}})),otherVerification);assert.deepEqual(await db.query(tx=>tx.accessCode.findUnique({where:{id:otherCode.id}})),otherCode);
-  assert.ok(await db.query(tx=>tx.savedSlip.findUnique({where:{id:otherSlip.id}})));assert.equal(Number((await root.query("SELECT COUNT(*) AS total FROM SavedSlipFixture WHERE slipId=?",[ownSlip.id]))[0].total),0);assert.equal(Number((await root.query("SELECT COUNT(*) AS total FROM SavedSlipFixture WHERE slipId=?",[otherSlip.id]))[0].total),1);assert.equal(Number((await root.query("SELECT COUNT(*) AS total FROM FootballFixture WHERE id=?",[fixtureId]))[0].total),1);
   assert.equal(await db.query(tx=>tx.rateLimitBucket.count({where:{key:{in:ownKeys}}})),0);assert.equal(await db.query(tx=>tx.rateLimitBucket.count({where:{key:{in:[sharedKey,otherKey]}}})),2);
   assert.deepEqual(await db.query(tx=>tx.subscriptionPlan.findUnique({where:{id:planId}})),savedPlan);assert.deepEqual(await db.query(tx=>tx.subscriptionSettings.findUnique({where:{id:1}})),savedSettings);
  });
@@ -211,11 +204,11 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
  });
  await t.test("a failure at the final account delete rolls back every earlier removal and cross-account edit",async()=>{
   const who=await account("256700004006"),other=await account("256700004007"),p=await payment(who),c=await code(who),otherCode=await code(other,{replacedById:c.id});
-  await verification(who);await slip(who);await audit({accountId:who.id,targetId:p.id});
+  await verification(who);await audit({accountId:who.id,targetId:p.id});
   const screenshot=jpeg();await db.query(tx=>tx.paymentScreenshot.create({data:{submissionId:p.id,width:1,height:1,bytes:screenshot.length,data:screenshot}}));
-  const before=await snapshot(),linksBefore=await root.query("SELECT * FROM SavedSlipFixture ORDER BY slipId,fixtureId");
+  const before=await snapshot();
   await root.query(`CREATE TRIGGER RejectSyntheticMemberDeletion BEFORE DELETE ON MemberAccount FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Synthetic deletion failure'`);
-  try {await assert.rejects(members.action(who.id,"delete",undefined,"owner"));assert.deepEqual(await snapshot(),before);assert.deepEqual(await root.query("SELECT * FROM SavedSlipFixture ORDER BY slipId,fixtureId"),linksBefore);}
+  try {await assert.rejects(members.action(who.id,"delete",undefined,"owner"));assert.deepEqual(await snapshot(),before);}
   finally {await root.query("DROP TRIGGER RejectSyntheticMemberDeletion");}
   assert.equal((await members.action(who.id,"delete",undefined,"owner")).status,"saved");assert.equal((await db.query(tx=>tx.accessCode.findUnique({where:{id:otherCode.id}}))).replacedById,null);
  });

@@ -16,26 +16,29 @@ function candidate(index, date = "2026-10-28", outcome = "pending") {
     forecast: { cycleId: demoId("cycle", index), revisionId: demoId("revision", index), publishedAt: Date.parse(`${date}T00:00:00+03:00`) - 43_200_000 + 3_000 } } };
 }
 
-test("editorial odds bounds use exact products rather than rounded displayed totals", () => {
-  const quote = (odds) => demoSlipQuote(odds.map((odd) => ({ odds: odd })));
-  assert.deepEqual(quote(["1.30", "1.30", "1.33", "2.00"]), { totalOdds: "4.50", belowMinimum: true, aboveMaximum: false });
-  assert.deepEqual(quote(["1.01", "1.09", "2.00", "2.50"]), { totalOdds: "5.50", belowMinimum: false, aboveMaximum: true });
-  assert.deepEqual(quote(["1.20", "1.25", "1.50", "2.00"]), { totalOdds: "4.50", belowMinimum: false, aboveMaximum: false });
-  assert.deepEqual(quote(["1.10", "1.25", "1.60", "2.50"]), { totalOdds: "5.50", belowMinimum: false, aboveMaximum: false });
+test("editorial bands test exact products and assign displayed boundaries consistently", () => {
+  const quote = odds => demoSlipQuote(odds.map(value => ({ odds: value })));
+  assert.deepEqual(quote(["1.01", "1.01", "1.47"]), { totalOdds: "1.50", belowMinimum: true, aboveMaximum: false });
+  assert.deepEqual(quote(["1.06", "1.55", "3.04"]), { totalOdds: "4.99", belowMinimum: false, aboveMaximum: true });
+  assert.deepEqual(quote(["1.50"]), { totalOdds: "1.50", belowMinimum: false, aboveMaximum: false });
+  assert.deepEqual(quote(["4.99"]), { totalOdds: "4.99", belowMinimum: false, aboveMaximum: false });
+  assert.equal(quote(["5.00"]).aboveMaximum, true);
+  assert.equal(demoSlipQuote([{ odds: "5.00" }], "5-10").belowMinimum, false);
+  assert.equal(demoSlipQuote([{ odds: "100.00" }], "50-100").aboveMaximum, false);
 });
 
 test("today receives every available disjoint opening slip with original prices, probability and forecast chronology", () => {
   const candidates = Array.from({ length: 80 }, (_, index) => candidate(index)), original = JSON.stringify(candidates);
   const dayStart = Date.parse("2026-10-28T00:00:00+03:00");
   const invalid = candidate(1000); invalid.selection.kickoffAt = dayStart + 29 * 60_000;
-  const low = candidate(1001); low.selection.probability = 0.6499;
+  const low = candidate(1001); low.selection.probability = -0.0001;
   const result = buildDemoSlipSnapshots("2026-10-28", [...candidates, invalid, low], now), ids = new Set();
   assert.equal(result.slips.length, 20);
   for (const slip of result.slips) {
-    assert.ok(slip.selections.length >= 4 && slip.selections.length <= 8); assert.equal(slip.totalOdds, "5.06");
+    assert.ok(slip.selections.length >= 1 && slip.selections.length <= 8); assert.equal(slip.totalOdds, "1.50");
     for (const selection of slip.selections) {
       assert.ok(!ids.has(selection.fixtureId)); ids.add(selection.fixtureId);
-      assert.ok(selection.probability >= 0.65); assert.equal(selection.odds, "1.50"); assert.equal(selection.oddsBasis, "bookmaker");
+      assert.ok(selection.probability >= demoSlipRules.minimumProbability); assert.equal(selection.odds, "1.50"); assert.equal(selection.oddsBasis, "bookmaker");
       assert.ok(selection.forecast.publishedAt <= result.publicationAt);
       assert.ok(result.publicationAt < getPublicationDeadline(selection.kickoffAt));
       assert.ok(selection.kickoffAt >= dayStart + 30 * 60_000);
@@ -62,7 +65,7 @@ test("daily editorial publications exclude forecasts not yet known at their orig
   const candidates = Array.from({ length: 80 }, (_, index) => candidate(index));
   for (const entry of candidates.slice(39)) entry.selection.forecast.publishedAt = Date.parse("2026-10-28T01:00:00+03:00");
   const result = buildDemoSlipSnapshots("2026-10-28", candidates, now);
-  assert.equal(result.slips.length, 9);
+  assert.equal(result.slips.length, 20);
   assert.ok(result.slips.every(slip => slip.selections.every(selection => selection.forecast.publishedAt < Date.parse("2026-10-28T00:00:00+03:00"))));
 });
 
@@ -70,7 +73,7 @@ test("historical snapshots include real won and lost examples and exclude unpubl
   const date = "2026-10-27", candidates = Array.from({ length: 100 }, (_, index) => candidate(index, date, index % 5 === 0 ? "incorrect" : "correct"));
   const midnight = candidate(1000, date, "correct"); midnight.selection.kickoffAt = Date.parse(`${date}T00:05:00+03:00`);
   const result = buildDemoSlipSnapshots(date, [...candidates, midnight], now), outcomes = new Map(candidates.map((entry) => [entry.selection.fixtureId, entry.outcome]));
-  assert.equal(result.slips.length, 25);
+  assert.equal(result.slips.length, 20);
   assert.ok(result.slips[0].selections.every((selection) => outcomes.get(selection.fixtureId) === "correct"));
   assert.ok(result.slips[1].selections.some((selection) => outcomes.get(selection.fixtureId) === "incorrect"));
   assert.ok(result.slips.every((slip) => slip.selections.every((selection) => selection.fixtureId !== midnight.selection.fixtureId)));
@@ -79,21 +82,29 @@ test("historical snapshots include real won and lost examples and exclude unpubl
 });
 
 test("sparse days publish only complete qualifying slips and duplicate fixtures cannot inflate the set", () => {
-  assert.equal(buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 39 }, (_, index) => candidate(index)), now).slips.length, 9);
+  assert.equal(buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 7 }, (_, index) => candidate(index)), now).slips.length, 7);
   const duplicates = Array.from({ length: 80 }, (_, index) => candidate(index % 20));
   const result = buildDemoSlipSnapshots("2026-10-28", duplicates, now);
-  assert.equal(result.slips.length, 5);
+  assert.equal(result.slips.length, 20);
   const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
   assert.equal(new Set(ids).size, ids.length);
-  assert.throws(() => buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 3 }, (_, index) => candidate(index)), now), /No complete qualifying/u);
+  assert.throws(() => buildDemoSlipSnapshots("2026-10-28", [], now), /No complete qualifying/u);
 });
 
-test("demo generation shares the one hundred slip capacity and does not require filling it", () => {
-  assert.equal(demoSlipRules.count, 100);
-  const result = buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 480 }, (_, index) => candidate(index)), now);
-  assert.equal(result.slips.length, 100);
-  const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
-  assert.equal(new Set(ids).size, 400);
+test("demo generation publishes up to twenty qualifying slips in each of the five bands", () => {
+  assert.equal(demoSlipRules.count, 20);
+  const candidates = Array.from({ length: 240 }, (_, index) => {
+    const value = candidate(index); return { ...value, selection: { ...value.selection, odds: "2.00" } };
+  });
+  let count = 0;
+  for (const band of ["1.5-5", "5-10", "10-20", "20-50", "50-100"]) {
+    const result = buildDemoSlipSnapshots("2026-10-28", candidates, now, band);
+    assert.equal(result.slips.length, 20); count += result.slips.length;
+    const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(result.slips.every(slip => { const quote = demoSlipQuote(slip.selections, band); return !quote.belowMinimum && !quote.aboveMaximum; }));
+  }
+  assert.equal(count, 100);
 });
 
 function actualCandidates(date) {

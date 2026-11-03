@@ -10,12 +10,12 @@ export const feedCheckpointSchema = z.strictObject({
   href: z.string().max(4096).startsWith("/"), firstPage: page, lastPage: page,
   scrollY: z.number().finite().min(0).max(feedNavigationRules.maximumScroll),
   focusFixtureId: z.string().max(128).regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/u).nullable(),
-  paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable(), savedAt: z.number().int().nonnegative(),
+  paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable(), createdAt: z.number().int().nonnegative(),
 }).refine((value) => value.lastPage >= value.firstPage && value.lastPage - value.firstPage < feedPaginationRules.maximumLoadedPages);
 export type FeedCheckpoint = z.infer<typeof feedCheckpointSchema>;
 const recordsSchema = z.strictObject({ version: z.literal(1), entries: z.array(feedCheckpointSchema).max(restorationRules.maximumEntries) });
 function current(checkpoint: FeedCheckpoint, now: number) {
-  return checkpoint.savedAt <= now && now - checkpoint.savedAt <= restorationRules.maximumAgeMilliseconds;
+  return checkpoint.createdAt <= now && now - checkpoint.createdAt <= restorationRules.maximumAgeMilliseconds;
 }
 export function readFeedCheckpoints(serialized: string | null, now: number): FeedCheckpoint[] {
   if (serialized === null || serialized.length > feedNavigationRules.maximumCharacters || !Number.isSafeInteger(now)) return [];
@@ -28,7 +28,7 @@ export function readFeedCheckpoints(serialized: string | null, now: number): Fee
 export function writeFeedCheckpoint(entries: readonly FeedCheckpoint[], checkpoint: FeedCheckpoint, now: number): string {
   const checked = feedCheckpointSchema.parse(checkpoint);
   const next = [checked, ...entries.filter((entry) => entry.entryId !== checked.entryId && current(entry, now))]
-    .sort((a, b) => b.savedAt - a.savedAt).slice(0, restorationRules.maximumEntries);
+    .sort((a, b) => b.createdAt - a.createdAt).slice(0, restorationRules.maximumEntries);
   let serialized = JSON.stringify({ version: 1, entries: next });
   while (serialized.length > feedNavigationRules.maximumCharacters && next.length > 1) {
     next.pop(); serialized = JSON.stringify({ version: 1, entries: next });

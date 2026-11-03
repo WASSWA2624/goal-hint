@@ -107,7 +107,7 @@ export function layoutSlipShareImages(shared: SharedSlip, locale: string, measur
   const footer = [
     ...wrap(messages.text("slipShare.createdWith", { name: publicPolicy.name }), "footer"),
     ...wrap(publicPolicy.origin, "footer"),
-    ...wrap(shared.url, "footer"),
+    ...(shared.url ? wrap(shared.url, "footer") : []),
   ];
   const footerHeight = footerPadding * 2 + slipShareImageFonts.heading.lineHeight
     + totalOdds.length * slipShareImageFonts.total.lineHeight + 20

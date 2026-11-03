@@ -41,7 +41,7 @@ test('yesterday slip totals are read independently of list page, filter and toda
   const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, { ...defaultBestSlipsQuery(), page: 3 });
   assert.deepEqual(result.summary, { from: previous, to: previous, statistics: counts });
   assert.equal(result.browse.query.page, 3); assert.equal(result.browse.total, 100);
-  assert.deepEqual(calls[1], { period: 'yesterday', status: 'all', page: 1 });
+  assert.deepEqual(calls[1], { period: 'yesterday', status: 'all', oddsBand: '1.5-5', page: 1 });
   calls.length = 0;
   const selected = await service({ tier: 'full', signedIn: true, mode: 'off' }, { period: 'today', status: 'won', page: 1 });
   assert.equal(calls.length, 1); assert.equal(selected.summary.from, today); assert.equal(selected.summary.statistics, selected.statistics);

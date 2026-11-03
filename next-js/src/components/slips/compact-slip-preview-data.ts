@@ -1,5 +1,5 @@
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 
 export const compactSlipScenarios = [
   { id: "standard", label: "Typical slip" },
@@ -35,7 +35,7 @@ const selections: readonly SlipSelection[] = [
 ];
 
 /** Illustrative records only: the gallery never requests published or subscriber selections. */
-export function compactSlipPreview(scenario: CompactSlipScenario): { slip: BuiltSlip; results?: SavedSlipView["results"] } {
+export function compactSlipPreview(scenario: CompactSlipScenario): { slip: BuiltSlip; results?: SlipResultView["results"] } {
   const matches = scenario === "eight" ? Array.from({ length: 8 }, (_, index): SlipSelection => ({
     ...selections[index % selections.length]!, fixtureId: `preview-eight-${index}`,
     kickoffAt: selections[index % selections.length]!.kickoffAt + Math.floor(index / 3) * 86_400_000,

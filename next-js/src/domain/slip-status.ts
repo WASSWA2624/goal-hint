@@ -1,5 +1,5 @@
 import { isPlayedFinalStatus } from "./market-settlement.ts";
-import type { SavedSlipView } from "./saved-slips.ts";
+import type { SlipResultView } from "./slip-snapshot.ts";
 import type { BuiltSlip } from "./slip-builder.ts";
 import { slipMatchStateForSelection, type SlipMatchState } from "./slip-match-state.ts";
 
@@ -8,7 +8,7 @@ export type SlipStatus = "not-started" | "in-progress" | "pending" | "won" | "lo
 
 /** Uses recorded original-selection progress and a separately adjudicated outcome; no clock or score settles a slip. */
 export function slipStatus(slip: BuiltSlip, states: readonly SlipMatchState[] = [],
-  outcome: SavedSlipView["outcome"] = "pending", fallback?: SlipStatus): SlipStatus {
+  outcome: SlipResultView["outcome"] = "pending", fallback?: SlipStatus): SlipStatus {
   const legs = slip.selections.map((selection) => slipMatchStateForSelection(selection, states));
   if (outcome === "won" || outcome === "lost") return outcome;
   if (outcome === "void") {

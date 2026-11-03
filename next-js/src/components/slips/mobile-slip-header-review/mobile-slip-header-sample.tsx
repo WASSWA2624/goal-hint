@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import type { BuiltSlip } from "@/domain/slip-builder";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import { CompactCard } from "../compact-slip/compact-slip-styles";
 import { CleanLedgerSelection } from "../compact-slip/clean-ledger-selection";
 import type { MobileSlipHeaderVariant } from "./designs";
@@ -10,8 +10,8 @@ import { HeaderRow } from "./mobile-slip-header-styles";
 
 /** Review-only disclosure: header variants share exactly the same production match rows. */
 export function MobileSlipHeaderSample({ slip, index, locale, variant, outcome, results, initiallyOpen = false, headerOnly = false }: {
-  slip: BuiltSlip; index: number; locale: string; variant: MobileSlipHeaderVariant; outcome: SavedSlipView["outcome"];
-  results?: SavedSlipView["results"]; initiallyOpen?: boolean; headerOnly?: boolean;
+  slip: BuiltSlip; index: number; locale: string; variant: MobileSlipHeaderVariant; outcome: SlipResultView["outcome"];
+  results?: SlipResultView["results"]; initiallyOpen?: boolean; headerOnly?: boolean;
 }) {
   const headingId = useId();
   const header = <HeaderRow totalOdds={slip.totalOdds} averageProbability={slip.averageProbability}

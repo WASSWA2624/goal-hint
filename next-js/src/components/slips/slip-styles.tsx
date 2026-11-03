@@ -353,3 +353,9 @@ export const Results = styled.section`
   > ${HeadingRow}, > ${Note}, > nav, > [data-page-pagination] { ${desktopContentPadding()} }
   &[aria-busy="true"] { opacity: var(--gh-opacity-65); }
 `;
+export const BuilderFeedback = styled.div`
+  padding: ${({ theme }) => theme.space.lg};
+  text-align: center;
+  color: ${({ theme }) => theme.color.mutedText};
+  > p { margin: 0 auto; max-inline-size: ${({ theme }) => theme.layout.readingMaxWidth}; }
+`;

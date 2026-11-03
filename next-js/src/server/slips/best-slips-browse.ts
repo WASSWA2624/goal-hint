@@ -1,3 +1,4 @@
+import { defaultBestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import "server-only";
 
 import type { BestSlipsResult } from "../../domain/best-slips.ts";
@@ -40,7 +41,7 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
       const result = await read(query, day, _locale, false);
       const date = yesterday(day);
       const summary = query.summary === "yesterday"
-        ? await read({ period: "yesterday", status: "all", page: 1 }, day, _locale, false).catch(() => null) : result;
+        ? await read({ period: "yesterday", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null) : result;
       return gateBestSlips({ ...result, summary: { from: query.summary ? date : dates.from,
         to: query.summary ? date : dates.to, statistics: summary?.statistics ?? null } }, access);
     }

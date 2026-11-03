@@ -9,7 +9,6 @@ import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
-import { PersonalSlipHistory } from "./personal-slip-history";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { PagePaginationSection } from "@/components/ui/pagination-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -35,7 +34,7 @@ import { SavedSlipConfigurations } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
 import { ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
-  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, StatusCopy, TargetGroups } from "./slip-styles";
+  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, BuilderFeedback, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
@@ -55,9 +54,6 @@ function SlipBuildActionLabel({ locale, restricted, pending = false }: {
     <span data-action-label="mobile">{restricted ? messages.text("paywall.unlock") : build}</span>
     <span data-action-label="desktop">{restricted ? messages.text("paywall.unlock") : build}</span>
   </BuildActionLabel>;
-}
-function SlipStatusCopy({ mobile, desktop }: { mobile: string; desktop: string }) {
-  return <StatusCopy><span data-slip-access-message="mobile">{mobile}</span><span data-slip-access-message="desktop">{desktop}</span></StatusCopy>;
 }
 function isDateTimeField(name: typeof slipInputFields[number]): name is SlipDateTimeField {
   return name === "dateFrom" || name === "dateTo" || name === "timeFrom" || name === "timeTo";
@@ -517,40 +513,33 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       </CriteriaForm>
     </BuilderPanel>
     <Results ref={resultsRef} data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
-      {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
-        requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
+      {generated && <BuilderFeedback role="status" data-slip-build-feedback><p>{messages.plural(
+        data.slips.length < criteria.slips ? "slips.generatedFewer" : "slips.generatedCount", data.slips.length,
+        { requested: messages.number(criteria.slips) })}</p></BuilderFeedback>}
       {subscriberOnly ? null : pending && !generated ? <SlipLoading locale={locale} label={messages.text("slips.building")} /> : generated ? <>
-        {data.jointProbabilities && <Note>{messages.text("slips.jointRanking")}</Note>}
         <SlipMatchRefreshProvider slips={shownSlips} enabled={!pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList data-slip-list>{shownSlips.map((slip, index) => {
           const estimatedProbability = data.jointProbabilities?.[slip.id];
           return <SlipCard key={slip.id} slip={slip} index={offset + index} locale={locale} {...(result.matchStates ? { matchStates: result.matchStates } : {})}
-            {...(!desktop ? { publishedAt: result.asOf } : {})}
+            publishedAt={result.asOf}
             shareSource={{ source: "builder", criteria: serializeSlipCriteria(criteria).toString(), slipId: slip.id }}
             {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />;
         })}</SlipList>
         </SlipMatchRefreshProvider>
-        <Note>{messages.text("history.showing", { first: messages.number(offset + 1), last: messages.number(offset + shownSlips.length), total: messages.number(data.slips.length) })}</Note>
+        {pageCount > 1 && <Note>{messages.text("history.showing", { first: messages.number(offset + 1), last: messages.number(offset + shownSlips.length), total: messages.number(data.slips.length) })}</Note>}
         {pageCount > 1 && <PagePaginationSection>
           <NumberedPagination page={page} pages={pageCount} disabled={pending}
             labels={numberedPaginationLabels(messages, messages.text("slips.generated"))}
             onPage={(next) => { resultsRef.current?.scrollIntoView({ block: "start" }); setPagination({ result, page: next }); }} />
         </PagePaginationSection>}
-        <Note>{messages.text("slips.averageHint")}</Note>
-      </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
-        description={emptyState ? messages.text(`slips.state.${emptyState}.description`) : <SlipStatusCopy
-          mobile={messages.text("slips.mobile.access.ready")} desktop={messages.text("slips.access.ready")} />} />}
+      </> : <BuilderFeedback>{emptyState ? <EmptyState headingLevel={3} title={messages.text(`slips.state.${emptyState}.title`)}
+        description={messages.text(`slips.state.${emptyState}.description`)} /> : <p>{messages.text("slips.emptyPrompt")}</p>}</BuilderFeedback>}
       {result?.searchLimited && <Note>{messages.text("slips.limited")}</Note>}
       {result?.partialCoverage && <Note>{messages.text("slips.partial")}</Note>}
-      {generated && data.slips.length < criteria.slips && !result.searchLimited && <Note>{messages.text("slips.fewer")}</Note>}
-      {data && (data.excludedMissingOdds > 0 || data.excludedMissingForecast > 0) && <Note>{messages.text("slips.excluded", {
-        odds: messages.number(data.excludedMissingOdds), forecasts: messages.number(data.excludedMissingForecast) })}</Note>}
-      {data?.excludedUnestimated !== undefined && data.excludedUnestimated > 0 && <Note>{messages.plural("slips.unestimated", data.excludedUnestimated)}</Note>}
       {result && <Note>{messages.text(desktop ? "slips.generatedAt" : "slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
       {!result && !publicPolicy.features.providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>
     </Results>
-    {signedIn && <PersonalSlipHistory locale={locale} today={today} />}
   </SlipStack>;
 }

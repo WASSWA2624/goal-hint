@@ -10,15 +10,15 @@ import { SlipCard, SlipCardSummary } from "./slip-card";
 import { LockedSurface, UnlockButton, UnlockLabel, UnlockLink } from "@/components/members/prediction-unlock";
 
 /** Both public previews and entitled slips retain the production disclosure and match layout. */
-export function BestSlipCard({ view, day, locale, signedIn = false, source = "best" }: { view: SlipPreviewView; day: string; locale: string; signedIn?: boolean; source?: "best" | "saved" }) {
+export function BestSlipCard({ view, day, locale, signedIn = false }: { view: SlipPreviewView; day: string; locale: string; signedIn?: boolean }) {
   const desktop = useDesktopLayout(), publicationDay = view.publicationDay ?? day;
-  const returnTo = source === "best" ? publicBestSlipPath(locale, publicationDay, view.rank) : `/${locale}/slips`;
+  const returnTo = publicBestSlipPath(locale, publicationDay, view.rank);
   const publication = { ...(view.publicationDay ? { publicationDay: view.publicationDay } : {}),
     ...(view.publishedAt !== undefined ? { publishedAt: view.publishedAt } : {}),
     ...(view.outcome ? { outcome: view.outcome } : {}), ...(view.status ? { status: view.status } : {}) };
   if (view.slip) return <SlipCard index={view.rank - 1} locale={locale} {...publication}
-    {...(source === "best" && view.completed ? { publicShareHref: publicBestSlipPath(locale, publicationDay, view.rank) } : {})}
-    {...(source === "best" ? { shareSource: { source: "best" as const, day: publicationDay, slipId: view.slip.id } } : {})} slip={view.slip}
+    {...(view.completed ? { publicShareHref: publicBestSlipPath(locale, publicationDay, view.rank) } : {})}
+    shareSource={{ source: "best", day: publicationDay, slipId: view.slip.id }} slip={view.slip}
     {...(view.matchStates ? { matchStates: view.matchStates } : {})} />;
   return <LockedSurface data-locked-slip><SlipCardSummary locale={locale} index={view.rank - 1} {...publication} collapsible={false}
     totalOdds={view.totalOdds} averageProbability={view.averageProbability} selectionCount={view.matchCount}

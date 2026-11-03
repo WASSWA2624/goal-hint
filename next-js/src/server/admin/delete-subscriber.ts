@@ -17,12 +17,11 @@ type Client = Prisma.TransactionClient;
 async function deletionScope(tx: Client, id: string) {
   const account = await tx.memberAccount.findUnique({ where: { id }, select: { phone: true } });
   if (!account) return null;
-  const [codes, payments, sessions, verifications, slips, wallet] = await Promise.all([
+  const [codes, payments, sessions, verifications, wallet] = await Promise.all([
     tx.accessCode.findMany({ where: { accountId: id }, select: { id: true, reference: true } }),
     tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true, reference: true, submittedSessionHash: true } }),
     tx.memberSession.findMany({ where: { accountId: id }, select: { tokenHash: true } }),
     tx.memberVerification.findMany({ where: { accountId: id }, select: { id: true, phone: true } }),
-    tx.savedSlip.findMany({ where: { accountId: id }, select: { id: true } }),
     // Ledger rows go with the account by cascade (no trigger fires); their ids are scrubbed from audit details like the rest.
     tx.walletEntry.findMany({ where: { accountId: id }, select: { id: true } }),
   ]);
@@ -40,7 +39,7 @@ async function deletionScope(tx: Client, id: string) {
   const actors = [id, `member-admin:${id}`];
   const identifiers = unique([id, ...actors, ...codes.flatMap(row => [row.id, `C-${row.reference}`]),
     ...payments.flatMap(row => [row.id, formatPaymentReference(row.reference), `P-${row.reference}`]), ...sessionHashes,
-    ...verifications.map(row => row.id), ...unbound.map(row => row.id), ...slips.map(row => row.id), ...wallet.map(row => row.id)]);
+    ...verifications.map(row => row.id), ...unbound.map(row => row.id), ...wallet.map(row => row.id)]);
   return { id, actors, exclusivePhones, phoneAccountIds: phoneAccounts.map(row => row.id),
     sessionHashes, identifiers, codeIds: codes.map(row => row.id), paymentIds: payments.map(row => row.id) };
 }
@@ -131,7 +130,6 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         if (await tx.paymentReceiptClaim.count({ where: { submissionId: { in: scope.paymentIds } } }))
           return rollback({ status: "refused", message: "This account has payment receipt accounting. Erase its personal data instead of deleting its records." });
         await tx.memberReferral.updateMany({ where: { accountId: id, status: "pending" }, data: { status: "ineligible" } });
-        await tx.savedSlip.deleteMany({ where: { accountId: id } }); // Fixture links cascade; the fixtures remain shared.
         await tx.memberSession.deleteMany({ where: { accountId: id } });
         await tx.memberVerification.deleteMany({ where: { OR: [
           { accountId: id }, { accountId: null, phone: { in: scope.exclusivePhones } },

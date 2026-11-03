@@ -12,8 +12,9 @@ import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
+import { bestSlipBand, bestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
-export const bestSlipsRules = Object.freeze({ minimumTotal: 450, maximumTotal: 550, count: 100 });
+export const bestSlipsRules = Object.freeze({ minimumTotal: 150, maximumTotal: 499, count: 100, perBand: bestSlipBandLimit });
 
 export type BestSlip = BuiltSlip & Readonly<{ estimatedProbability: number }>;
 export function compareBestSlips(left: BestSlip, right: BestSlip): number {
@@ -52,9 +53,14 @@ export type SlipsBrowseResult<T extends SlipPreviewView = SlipPreviewView> = Rea
 
 export type BestSlipsResult = SlipsBrowseResult<BestSlipView>;
 
-export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {
+export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }>
+  = { ...bestSlipBand(defaultBestSlipOddsBand), count: bestSlipBandLimit }): SlipCriteria {
   return { ...defaultSlipCriteria(today), dateTo: today, totalMin: target.minimumTotal, totalMax: target.maximumTotal,
     oddsMin: oddsRules.minimumHundredths, oddsMax: oddsRules.maximumHundredths, probMin: 0, teamsMax: 8, slips: target.count, reuse: false };
+}
+
+export function bestSlipBandCriteria(today: string, band: BestSlipOddsBand): SlipCriteria {
+  return bestSlipCriteria(today, { ...bestSlipBand(band), count: bestSlipBandLimit });
 }
 
 export function bestSlipBuilder(model: JointSlipModel) {

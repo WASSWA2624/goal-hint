@@ -4,7 +4,7 @@ import styled from "styled-components";
 import { LiveDot } from "@/components/ui/live-dot";
 import { StatusBadge as BaseStatusBadge } from "@/components/ui/status-badge";
 import { getReportingDate, toUtcIsoString, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import type { SlipStatus } from "@/domain/slip-status";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { createMessages } from "@/i18n/messages";
@@ -64,7 +64,7 @@ const StatusBadge = styled(BaseStatusBadge)`
   &[data-slip-status-value="cancelled"] { --slip-status-ink: ${({ theme }) => theme.color.accent.orange.text}; --slip-status-fill: ${({ theme }) => theme.color.accent.orange.soft}; }
 `;
 
-export function SlipStatusBadge({ outcome, status = outcome, locale }: { outcome: SavedSlipView["outcome"]; status?: SlipStatus; locale: string }) {
+export function SlipStatusBadge({ outcome, status = outcome, locale }: { outcome: SlipResultView["outcome"]; status?: SlipStatus; locale: string }) {
   const m = createMessages(locale);
   return <StatusBadge data-slip-status data-slip-outcome={outcome} data-slip-status-value={status}>
     <VisuallyHidden>{m.text("slips.header.status")}: </VisuallyHidden>

@@ -244,7 +244,7 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
     if (reply.ok) onSaved();
   }
   return <CompactForm id={formId} method="post" action={action.localOnly ? "#" : `/api/admin/subscribers/${account.id}`} onSubmit={submit} data-subscriber-removal={kind}>
-    <MutedText>{deleting ? "Permanently removes the account and all related information, including payments, screenshots, access, saved slips and audit records. Payment totals will change. This cannot be undone."
+    <MutedText>{deleting ? "Permanently removes the account and all related information, including payments, screenshots, access, saved filters and audit records. Payment totals will change. This cannot be undone."
       : `Clears numbers, passwords, notes, sessions and screenshots.${account.creditUgx > 0 ? ` The ${formatCredit(account.creditUgx)} credit is forfeited.` : ""} Payment amounts, IDs and access history remain for accounting. This cannot be undone.`}</MutedText>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => onConfirmedChange(event.target.checked)} /> I verified this account and understand this cannot be undone.</label>
     {!externalActions && <DangerButton type="submit" disabled={action.busy || !confirmed}>{deleting ? "Permanently delete account" : "Erase personal data"}</DangerButton>}

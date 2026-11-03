@@ -18,7 +18,7 @@ import { matchHref } from "@/domain/navigation";
 import { predictionDescription, predictionLabel } from "@/domain/prediction-label";
 import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import type { SlipSelection } from "@/domain/slip-builder";
 import { slipSelectionCard } from "@/domain/slip-card";
 import { slipMatchStateForSelection, type SlipMatchState } from "@/domain/slip-match-state";
@@ -34,7 +34,7 @@ function logoSource(url: string | null | undefined): string | undefined {
 
 /** The approved Team stack presents the original pick with separately bound match progress. */
 export function CleanLedgerSelection({ selection, locale, result, matchStates, analysisLinks = false, position }: {
-  selection: SlipSelection; locale: string; result?: SavedSlipView["results"][number]; matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; position?: number;
+  selection: SlipSelection; locale: string; result?: SlipResultView["results"][number]; matchStates?: readonly SlipMatchState[]; analysisLinks?: boolean; position?: number;
 }) {
   const m = useMessages(locale), id = useId();
   const savedResult = result?.fixtureId === selection.fixtureId ? result : undefined;

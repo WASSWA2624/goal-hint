@@ -1,6 +1,7 @@
 import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "./calendar.ts";
 import { bestSlipsRules } from "./best-slips.ts";
 import { slipPageSize } from "./slip-pagination.ts";
+import { bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
 export const bestSlipsPeriods = ["today", "yesterday", "tomorrow", "last3", "last7", "last30", "next3", "next7", "next30", "all", "custom"] as const;
 export const bestSlipsStatuses = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
@@ -8,7 +9,7 @@ export type BestSlipsPeriod = typeof bestSlipsPeriods[number];
 export type BestSlipsStatus = typeof bestSlipsStatuses[number];
 export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999 });
 export type BestSlipsQuery = Readonly<{
-  period: BestSlipsPeriod; status: BestSlipsStatus; from?: ReportingDate; to?: ReportingDate; page: number; cursor?: string; summary?: "yesterday";
+  period: BestSlipsPeriod; status: BestSlipsStatus; oddsBand?: BestSlipOddsBand; from?: ReportingDate; to?: ReportingDate; page: number; cursor?: string; summary?: "yesterday";
 }>;
 export type BestSlipsDates = Readonly<{ from: ReportingDate | null; to: ReportingDate | null }>;
 export class BestSlipsQueryError extends Error {
@@ -18,7 +19,7 @@ export class BestSlipsQueryError extends Error {
   }
 }
 const fail = (code: BestSlipsQueryError["code"]): never => { throw new BestSlipsQueryError(code); };
-export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "last30", status: "all", page: 1, summary: "yesterday" });
+export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "last30", status: "all", oddsBand: defaultBestSlipOddsBand, page: 1, summary: "yesterday" });
 
 function customDates(from: unknown, to: unknown): BestSlipsDates {
   let start: ReportingDate, end: ReportingDate;
@@ -73,12 +74,14 @@ export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<str
   if (!bestSlipsPeriods.includes(period as BestSlipsPeriod) || !bestSlipsStatuses.includes(status as BestSlipsStatus)
     || !/^[1-9]\d{0,3}$/u.test(pageValue)) return fail("invalid-query");
   const summary = value("summary");
+  const oddsBand = value("oddsBand") ?? defaultBestSlipOddsBand;
+  if (!bestSlipOddsBands.some(band => band.id === oddsBand)) return fail("invalid-query");
   if (summary !== undefined && summary !== "yesterday") return fail("invalid-query");
   const page = Number(pageValue), cursor = value("cursor");
   if (page > bestSlipsQueryRules.maximumPage || cursor !== undefined && period !== "all") return fail("invalid-query");
   if (cursor !== undefined) parseBestSlipsCursor(cursor);
   const dates = period === "custom" ? customDates(value("from"), value("to")) : null;
-  const query: BestSlipsQuery = { period: period as BestSlipsPeriod, status: status as BestSlipsStatus, page,
+  const query: BestSlipsQuery = { period: period as BestSlipsPeriod, status: status as BestSlipsStatus, oddsBand: oddsBand as BestSlipOddsBand, page,
     ...(dates?.from && dates.to ? { from: dates.from, to: dates.to } : {}), ...(cursor === undefined ? {} : { cursor }), ...(summary ? { summary } : {}) };
   resolveBestSlipsDates(query, today);
   return query;
@@ -86,6 +89,7 @@ export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<str
 
 export function serializeBestSlipsQuery(query: BestSlipsQuery): URLSearchParams {
   const result = new URLSearchParams({ period: query.period, status: query.status, page: String(query.page) });
+  result.set("oddsBand", query.oddsBand ?? defaultBestSlipOddsBand);
   if (query.summary) result.set("summary", query.summary);
   if (query.period === "custom") { result.set("from", query.from ?? ""); result.set("to", query.to ?? ""); }
   if (query.period === "all" && query.cursor !== undefined) result.set("cursor", query.cursor);
@@ -95,5 +99,5 @@ export function serializeBestSlipsQuery(query: BestSlipsQuery): URLSearchParams 
 /** Counts belong to the applied summary, including while another date request is pending. */
 export function selectSlipSummaryResult(applied: BestSlipsQuery, status: BestSlipsStatus): BestSlipsQuery {
   const { cursor: _cursor, ...scope } = applied; void _cursor;
-  return applied.summary === "yesterday" ? { period: "yesterday", status, page: 1 } : { ...scope, status, page: 1 };
+  return applied.summary === "yesterday" ? { period: "yesterday", status, oddsBand: applied.oddsBand ?? defaultBestSlipOddsBand, page: 1 } : { ...scope, status, page: 1 };
 }

@@ -1,5 +1,5 @@
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
-import type { SavedSlipView } from "@/domain/saved-slips";
+import type { SlipResultView } from "@/domain/slip-snapshot";
 import type { SlipMatchState } from "@/domain/slip-match-state";
 
 const selections: readonly SlipSelection[] = [
@@ -31,7 +31,7 @@ export const desktopSlip: BuiltSlip = {
   averageProbability: selections.reduce((sum, selection) => sum + selection.probability, 0) / selections.length,
 };
 
-export const savedResults: SavedSlipView["results"] = [
+export const savedResults: SlipResultView["results"] = [
   { fixtureId: selections[0]!.fixtureId, home: 2, away: 1, outcome: "correct" },
   { fixtureId: selections[1]!.fixtureId, home: 4, away: 0, outcome: "incorrect" },
   { fixtureId: selections[2]!.fixtureId, home: null, away: null, outcome: "void" },

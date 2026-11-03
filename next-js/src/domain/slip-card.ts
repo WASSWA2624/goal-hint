@@ -1,11 +1,11 @@
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { CardSnapshotPick } from "./match-card.ts";
-import type { SavedSlipView } from "./saved-slips.ts";
+import type { SlipResultView } from "./slip-snapshot.ts";
 import type { SlipSelection } from "./slip-builder.ts";
 
 /** A slip retains its original names, kickoff, pick and price. Current match data must not overwrite that record. */
-export function slipSelectionCard(selection: SlipSelection, result?: SavedSlipView["results"][number]): {
+export function slipSelectionCard(selection: SlipSelection, result?: SlipResultView["results"][number]): {
   fixture: FixtureSnapshot; snapshotPick: CardSnapshotPick;
 } {
   const outcome = result?.fixtureId === selection.fixtureId ? result : undefined;
