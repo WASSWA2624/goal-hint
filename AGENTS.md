@@ -14,6 +14,14 @@
 - Reuse the shared control height and row layout across screens. Do not add
   viewport-specific control heights; see `next-js/docs/control-uniformity.md`.
 
+## App overview
+
+- Update `APP_OVERVIEW.md` in the same change whenever app features, workflows,
+  integrations, or access rules are added, changed, or removed.
+- Keep the overview concise, complete, and accurate: cover critical implemented
+  behavior and remaining limitations, replace outdated descriptions, and
+  distinguish source implementation from deployment status.
+
 ## Git workflow
 
 - After executing each prompt, commit the intended changes and push them to GitHub.
