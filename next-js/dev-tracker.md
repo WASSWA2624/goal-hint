@@ -145,3 +145,9 @@ Best Slips is now home, with public summaries and subscriber-only selections; Ma
 
 
 **Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.
+
+## 258 Community and payment-review alerts — 3 November 2026
+
+**Partial:** configured public Community panel and platform/group icons, existing payment regression/idempotent evidence attachment, atomic reviewer events, session-bound endpoint registration, bounded delivery/resolution retries, Web Push and coordinated native ownership are implemented. Primary navigation and payment safeguards were preserved. Outbound delivery remains disabled until owner configuration/release approval.
+
+Prisma/type/lint/build checks and isolated MySQL payment/reviewer checks passed. The remaining 19 broader unit failures reproduce on unchanged `4ff10f2`; new contract failures were corrected. Live provider timing/lifecycle tests, native build environment issues and Windows WNS identity/packaging approval remain explicit. See [plan 258](dev-plan/258-community-payment-review-alerts.md) and the [complete verification/rollback handover](docs/payment-review-alerts.md). No live payment was approved or installer published.

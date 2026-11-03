@@ -1,9 +1,30 @@
 import java.util.Properties
+import java.util.Base64
 
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// FirebaseInitProvider needs these resources before Dart starts for background
+// delivery. Reuse Flutter's public build defines, keeping one configuration source.
+val firebaseResourceNames = mapOf(
+    "GOAL_HINT_FIREBASE_API_KEY" to "google_api_key",
+    "GOAL_HINT_FIREBASE_APP_ID" to "google_app_id",
+    "GOAL_HINT_FIREBASE_SENDER_ID" to "gcm_defaultSenderId",
+    "GOAL_HINT_FIREBASE_PROJECT_ID" to "project_id",
+)
+val dartDefines = providers.gradleProperty("dart-defines").orNull
+    ?.split(',')?.filter { it.isNotBlank() }?.mapNotNull {
+        val entry = String(Base64.getDecoder().decode(it), Charsets.UTF_8).split('=', limit = 2)
+        if (entry.size == 2) entry[0] to entry[1] else null
+    }?.toMap().orEmpty()
+val firebaseResources = firebaseResourceNames.mapNotNull { (define, resource) ->
+    dartDefines[define]?.takeIf { it.isNotBlank() }?.let { resource to it }
+}
+require(firebaseResources.isEmpty() || firebaseResources.size == firebaseResourceNames.size) {
+    "Supply all four GOAL_HINT_FIREBASE_* Dart defines, or omit them to disable native push."
 }
 
 // Keep credentials local or inject them through secured build environment values.
@@ -42,7 +63,12 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -56,6 +82,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        firebaseResources.forEach { (name, value) -> resValue("string", name, value) }
     }
 
     signingConfigs {
@@ -88,4 +115,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

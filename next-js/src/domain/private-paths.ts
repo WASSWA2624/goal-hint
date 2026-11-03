@@ -9,6 +9,7 @@ export const privatePaths = Object.freeze({
   admin: "/admin",
   account: "/en/account",
   subscribe: "/en/subscribe",
+  paymentReview: "/payment-review",
 });
 
 /** Owner-only pages: never counted by visitor analytics and disallowed in robots.txt. */

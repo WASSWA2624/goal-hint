@@ -1844,6 +1844,7 @@ model PaymentNotificationOutbox {
 // session is unlocked by an access period of its own account (068: at approval, grant or sign-in, under the device cap;
 // codeEnteredAt is the unlock time); the composite key keeps that period on the session's own account.
 model MemberSession {
+  paymentAlertEndpoints PaymentAlertEndpoint[]
   tokenHash     String        @id @db.Char(64)
   accountId     String        @db.Char(36)
   createdAt     DateTime      @db.DateTime(3)
@@ -1910,6 +1911,7 @@ model SubscriptionPlan {
 // so one payment is approved at most once; the unique key allows any number of NULLs. purpose `topup` is a credit top-up:
 // no plan or days, planName "Account credit", and priceUgx = claimedAmountUgx = the amount the member chose to add.
 model PaymentSubmission {
+  reviewEvents PaymentReviewEvent[]
   id                   String             @id @db.Char(36)
   reference            String             @unique @db.Char(4)
   source               String             @db.VarChar(8)
@@ -2030,7 +2032,7 @@ model PaymentReceiptEvidence {
   @@unique([claimId, imageSha256])
 }
 
-// One qualifying registration earns one day. Redemption and transfer rows never convert days to money.
+// One eligible friend's first phone verification earns one day. Redemption and transfer never convert days to money.
 model ReferralCredit {
   id           String   @id @db.Char(36)
   accountId    String   @db.Char(36)
@@ -2162,6 +2164,9 @@ model AccountMove {
 // numbers are the owner's own payment, contact and WhatsApp numbers (canonical digits) with registered names, entered on
 // the dashboard; never a subscriber's.
 model SubscriptionSettings {
+  communityLinks          Json?
+  paymentAlertsEnabled    Boolean @default(false)
+  paymentAlertRepeats      Int @default(1) @db.UnsignedTinyInt
   id                      Int       @id @db.UnsignedTinyInt
   paywallMode             String    @default("off") @db.VarChar(8)
   mtnNumber               String?   @db.VarChar(15)
@@ -2184,6 +2189,65 @@ model SubscriptionSettings {
   lastMembersPurgeAt      DateTime? @db.DateTime(3)
   updatedAt               DateTime  @db.DateTime(3)
   updatedBy               String    @db.VarChar(64)
+}
+
+// Minimal reviewer event/outbox metadata. No receipt evidence, amounts or payer identity; retained for 90 days.
+model PaymentReviewEvent {
+  id               String @id @db.Char(36)
+  eventKey         String @unique @db.VarChar(100)
+  paymentId        String? @db.Char(36)
+  revision         Int @default(0) @db.UnsignedInt
+  testEndpointId   String? @db.Char(36)
+  fannedAt         DateTime? @db.DateTime(3)
+  createdAt        DateTime @db.DateTime(3)
+  resolvedAt       DateTime? @db.DateTime(3)
+  payment          PaymentSubmission? @relation(fields: [paymentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  deliveries       PaymentAlertDelivery[]
+
+  @@index([resolvedAt, createdAt])
+  @@index([fannedAt, createdAt])
+  @@index([paymentId])
+}
+
+// Private push addresses/keys/FIDs bound to an authenticated session, deleted by session cascade or role revocation.
+model PaymentAlertEndpoint {
+  id             String @id @db.Char(36)
+  sessionHash    String @db.Char(64)
+  transport      String @db.VarChar(12)
+  fingerprint    String @unique @db.Char(64)
+  subscription   Json
+  enabled        Boolean @default(true)
+  createdAt      DateTime @db.DateTime(3)
+  updatedAt      DateTime @db.DateTime(3)
+  session        MemberSession @relation(fields: [sessionHash], references: [tokenHash], onDelete: Cascade, onUpdate: Restrict)
+  deliveries     PaymentAlertDelivery[]
+
+  @@unique([sessionHash, transport])
+  @@index([enabled, createdAt])
+}
+
+// Per-event/endpoint retry and observation metadata. Never persist provider secrets, raw errors or payment evidence.
+model PaymentAlertDelivery {
+  id             String @id @db.Char(36)
+  eventId        String @db.Char(36)
+  endpointId     String @db.Char(36)
+  status         String @default("queued") @db.VarChar(16)
+  attempts       Int @default(0) @db.UnsignedTinyInt
+  nextAttemptAt  DateTime @db.DateTime(3)
+  leaseUntil     DateTime? @db.DateTime(3)
+  attemptId      String? @db.Char(36)
+  acceptedAt     DateTime? @db.DateTime(3)
+  displayedAt    DateTime? @db.DateTime(3)
+  openedAt       DateTime? @db.DateTime(3)
+  clearAttempts  Int @default(0) @db.UnsignedTinyInt
+  clearNextAttemptAt DateTime? @db.DateTime(3)
+  clearedAt      DateTime? @db.DateTime(3)
+  lastError      String? @db.VarChar(32)
+  event          PaymentReviewEvent @relation(fields: [eventId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  endpoint       PaymentAlertEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([eventId, endpointId])
+  @@index([status, nextAttemptAt])
 }
 
 // Throttle counters keyed by an HMAC of purpose and value (address, session or account); never the raw value. Written only

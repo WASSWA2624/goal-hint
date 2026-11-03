@@ -131,10 +131,11 @@ export type CriteriaDialogProps = Readonly<{
   busy?: boolean;
   dismissOnBackdrop?: boolean;
   dismissOnEscape?: boolean;
+  hideFooter?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, dismissOnEscape = true, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, dismissOnEscape = true, hideFooter = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -170,12 +171,12 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
     }}>
     <Header><h2 id={titleId}>{title}</h2><CloseButton ref={closeButtonRef} type="button" variant="quiet" aria-label={closeLabel} disabled={busy} onClick={onCancel}><CloseIcon /></CloseButton></Header>
     <Body>{children}</Body>
-    <Actions>
+    {!hideFooter && <Actions>
       {footer ?? <>
         {onReset && <CriteriaDialogButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}>{resetLabel}</CriteriaDialogButton>}
         <CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={onCancel}>{cancelLabel}</CriteriaDialogButton>
         <CriteriaDialogButton type="button" disabled={busy} onClick={onApply}>{applyLabel}</CriteriaDialogButton>
       </>}
-    </Actions>
+    </Actions>}
   </Dialog>;
 }

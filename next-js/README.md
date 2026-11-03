@@ -328,3 +328,7 @@ live in isolated rendering fixtures, outside the shipped application.
 Read the [styling runbook](docs/brand-styling.md) for exports
 and accessibility contracts. `npm run test:styling` verifies production initial
 HTML, genuine delayed streaming, style reuse and the browser/server boundary.
+
+## Community and payment-review alerts
+
+See [setup, verification and rollback](docs/payment-review-alerts.md). The existing More menus expose configured public community links; private reviewer alerts use a separate durable outbox and opt-in browser/native adapters. Outbound alerts default off. Provider credentials, worker scheduling, coordinated native rebuilds, device qualification and Windows identity/distribution approval remain release requirements.

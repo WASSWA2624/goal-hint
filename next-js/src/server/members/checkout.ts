@@ -1,5 +1,6 @@
 import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
+import { reconcileReviewEvent } from "./payment-review-events.ts";
 
 import { createHash, randomUUID } from "node:crypto";
 import { checkoutEvidenceSchema, checkoutOpenStatuses, checkoutRules, checkoutSelectionSchema, duplicateReceiptMessage, fundingAmounts, receiptInputSchema,
@@ -30,6 +31,7 @@ export async function paymentEvent(tx: Tx, submissionId: string, action: string,
   reason?: string, receiptId?: string, details?: Prisma.InputJsonObject) {
   await tx.paymentEvent.create({ data: { id: randomUUID(), submissionId, action, actor, createdAt: at,
     reason: reason ?? null, receiptId: receiptId ?? null, ...(details ? { details } : {}) } });
+  await reconcileReviewEvent(tx, submissionId, action, at);
   const row = await tx.paymentSubmission.findUnique({ where: { id: submissionId }, select: { accountId: true } });
   if (row && !["approved", "rejected", "receipt_attached", "receipt_corrected", "evidence_withdrawn"].includes(action)) await tx.memberNotification.create({ data: { id: randomUUID(), accountId: row.accountId,
     eventKey: `payment-update:${randomUUID()}`, kind: "payment-updated", occurredAt: at, createdAt: at } });
@@ -138,6 +140,13 @@ export function createCheckout({ database, config, now = Date.now, environment =
     }
     const existing = await tx.paymentReceiptClaim.findUnique({ where: { submissionId_receiptId: { submissionId: row.id, receiptId: receipt.id } } });
     if (existing) {
+      // A lost response/repeated attach must not create another revision, audit entry or review alert.
+      const corrections = Array.isArray(existing.corrections) ? existing.corrections : [];
+      const latest = corrections.length ? corrections[corrections.length - 1] : null;
+      const evidence = latest && typeof latest === "object" && "evidence" in latest ? latest.evidence : existing.original;
+      const extracted = evidence && typeof evidence === "object" && "extracted" in evidence ? evidence.extracted : null;
+      if (!existing.withdrawn && row.status !== "correction" && extracted && typeof extracted === "object"
+        && "validationFingerprint" in extracted && extracted.validationFingerprint === fingerprint) return { ok: true, value: { id: row.id, duplicate: true } };
       if (!await reserveImage(tx, image, at)) return fail("Screenshot storage is busy. Keep your draft and try later.");
       if (!receipt.verifiedAt && !receipt.allocatedSubmissionId) {
         const corrections = Array.isArray(existing.corrections) ? existing.corrections : existing.corrections ? [existing.corrections] : [];

@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
+import { ChatIcon } from "@/components/ui/icons";
+import { CommunityDialog, useCommunityLinks } from "./community";
 import { DashboardIcon, DocumentIcon, DownloadIcon, GiftIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
 import type { NavigationLocation } from "@/domain/navigation";
 import { normalizeNavigationLocation } from "@/domain/navigation-paths";
@@ -41,6 +43,7 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
   destinations: readonly NavigationDestination[]; current?: NavigationLocation; moreLabel: string; mobile?: boolean;
 }) {
   const current = normalizeNavigationLocation(selected);
+  const communityLinks = useCommunityLinks(), [communityOpen, setCommunityOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null), measurements = useRef<HTMLDivElement>(null), list = useRef<HTMLUListElement>(null);
   const [count, setCount] = useState(Math.min(mobile ? 1 : minimumPrimaryDestinations, destinations.length));
   const pendingFocus = useRef<{ target: FocusTarget; previous: Element | null } | null>(null);
@@ -111,7 +114,13 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       })}
       {overflow.length > 0 && <li data-nav-more>
         <MoreMenu $mobile={mobile} current={overflowCurrent} label={<><MoreIcon /><span>{moreLabel}</span></>}>
-          <MoreList $mobile={mobile}>{overflow.map(({ key, href, label, icon }) => {
+          <MoreList $mobile={mobile}>
+            {communityLinks.length > 0 && <li><button type="button" data-community-entry onClick={event => {
+              const menu = event.currentTarget.closest("details");
+              if (menu) { menu.open = false; menu.querySelector("summary")?.focus({ preventScroll: true }); }
+              setCommunityOpen(true);
+            }}><ChatIcon /><span>Community</span></button></li>}
+            {overflow.map(({ key, href, label, icon }) => {
             const Icon = icons[icon];
             return <li key={key}><TextLink href={href} prefetch={key === "slips" ? null : false} data-nav-key={key}
               aria-current={current === key ? "page" : undefined}><Icon /><span>{label}</span></TextLink></li>;
@@ -129,5 +138,6 @@ export function ResponsiveNavigation({ destinations, current: selected, moreLabe
       <Measure $tone="blue" data-more-measure="default"><MoreIcon /><span>{moreLabel}</span></Measure>
       <Measure $tone="blue" data-more-measure="active" aria-current="page"><MoreIcon /><span>{moreLabel}</span></Measure>
     </div></Measurements>
+    <CommunityDialog open={communityOpen} links={communityLinks} onClose={() => setCommunityOpen(false)} />
   </Layout>;
 }

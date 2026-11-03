@@ -1,4 +1,5 @@
 import "server-only";
+import { reviewAlertFeed, reviewSessionHash } from "./payment-alerts.ts";
 import { normalizeTransactionId } from "../../domain/payment.ts";
 import { createAccessCodes, type CodeOutcome } from "../members/access-codes.ts";
 import { json, privateHeaders } from "../http/private-http.ts";
@@ -61,7 +62,8 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
   return {
     async GET({ services, request }: AdminContext) {
       if (!services.database) return storageUnavailable();
-      try { if (new URL(request.url).searchParams.has("count")) return json({ pendingCount: await services.database.query(tx => tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } })) });
+      try { if (new URL(request.url).searchParams.has("count")) return json({ pendingCount: await services.database.query(tx => tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } })),
+        reviewAlerts: await reviewAlertFeed(services.database, reviewSessionHash(request, services.config), services.config) });
         const id = paymentId(request);
         if (id && uuid(id)) return json(await createCheckoutReview(services.database).detail(id));
         const params = new URL(request.url).searchParams;

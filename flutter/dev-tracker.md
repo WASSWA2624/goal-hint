@@ -973,3 +973,9 @@ New signed builds, installed social-app/file handoffs, WebView downloads,
 temporary cache handling and physical-device app links remain **Unverified**.
 The earlier Android Gradle dependency-resolution problem remains an outstanding
 release check; this task did not rebuild or reinstall either native application.
+
+## 015 Native payment-review alerts — 3 November 2026
+
+**Partial:** one native notification owner, packaged original sound, Firebase Messaging 17 FID/background handler for Android, Windows local notifications while running, validated review taps and owned-document coordination are implemented. Native payment/accounting remains in Next.js; WebView2 general JavaScript bridging stays disabled. Apple/Linux remain unqualified.
+
+Analysis and 79 unit tests passed, plus seven focused payload/navigation tests. Android debug build is blocked by the host Gradle/JDK loopback socket failure. Windows SDK/build qualification and the separate closed-process WNS distribution/identity approval are recorded in [the shared verification runbook](../next-js/docs/payment-review-alerts.md). Live push credentials, real-device lifecycle/sound tests, signing and release approval remain outstanding. See [plan 015](dev-plan/015-native-payment-review-alerts.md).

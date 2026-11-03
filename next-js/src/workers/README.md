@@ -20,6 +20,12 @@ its decision transaction commits. Apply the outbox migration/grants and supervis
 the worker before deployment. Interrupted claims require reconciliation rather
 than automatic resend. See [the messaging runbook](../../docs/yoola-messaging.md#payment-decision-notifications).
 
+`npm run payments:alerts -- watch` dispatches private payment-review events with
+5-second checks and bounded retries; `-- run` processes one bounded batch. It
+shares no paid SMS fallback. Outbound delivery defaults off; configure the
+provider, migration/grants and approved hosting before enabling it. See the
+[review-alert runbook](../../docs/payment-review-alerts.md).
+
 Standalone Node runners and server-service tests need the
 `--conditions=react-server` Node option to resolve the server-only marker outside
 Next.js. TypeScript path aliases are understood by Next.js, but plain Node does

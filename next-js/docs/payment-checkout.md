@@ -1,6 +1,6 @@
 # Payment checkout and reconciliation
 
-`20261101120000_payment_checkout` adds the subscription and wallet top-up checkout. The customer flow now uses Package, Pay, Details and Review. Package prices and durations are unchanged. Existing access, referral periods, wallet history and payment references remain intact. New qualifying referred registrations earn one redeemable day; existing rewards are not awarded again or converted into money.
+`20261101120000_payment_checkout` adds the subscription and wallet top-up checkout. The customer flow now uses Package, Pay, Details and Review. Package prices and durations are unchanged. Existing access, referral periods, wallet history and payment references remain intact. An eligible friend's first phone verification awards one redeemable day, independently of payment; existing rewards are not awarded again or converted into money.
 
 The customer explicitly confirms internal spending. External requests reserve wallet funds and referral days for 48 hours. All spend paths exclude reservations. Expiration, cancellation and rejection release them. Expired funding requires customer confirmation before approval, even when a receipt has already been verified.
 

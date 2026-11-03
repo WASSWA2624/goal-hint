@@ -27,9 +27,10 @@ const nextConfig: NextConfig = {
       { key: "Referrer-Policy", value: "same-origin" },
     ];
     const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*",
-      "/en/account", "/en/subscribe", "/en/best-slips/:path*", "/api/account/:path*", "/api/slips/:path*", "/r/:path*", "/s/:path*"];
+      "/en/account", "/en/subscribe", "/en/best-slips/:path*", "/api/account/:path*", "/api/slips/:path*", "/r/:path*", "/s/:path*", "/payment-review/:path*"];
     const publicCache = [["/flags/:file*", "public, max-age=2592000, stale-while-revalidate=86400"],
-      ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"]] as const;
+      ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"],
+      ["/sounds/:file*", "public, max-age=31536000, immutable"]] as const;
     // The global rule stays first and the private rules last: when a key repeats, the last matching rule wins.
     return [{ source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] },
       { source: "/offline", headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" },

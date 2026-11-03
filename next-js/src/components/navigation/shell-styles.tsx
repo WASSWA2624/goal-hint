@@ -268,7 +268,8 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.overlay};
   box-shadow: ${({ theme }) => theme.shadow.popover};
-  a {
+  a, button[data-community-entry] {
+    inline-size: 100%; border: 0; background: transparent; font: inherit; text-align: start; cursor: pointer;
     position: relative;
     display: flex;
     min-inline-size: 0;
@@ -287,7 +288,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
     ${focusRing}
   }
   ${({ $mobile }) => $mobile && css`
-    a {
+    a, button[data-community-entry] {
       min-block-size: var(--form-control-height);
       font-size: var(--gh-font-emphasis);
       > svg { inline-size: var(--gh-size-5_5); block-size: var(--gh-size-5_5); }

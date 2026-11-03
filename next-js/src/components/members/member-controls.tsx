@@ -6,6 +6,8 @@ import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
 import { paymentDraftStoragePrefix } from "@/domain/member-navigation";
+import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
+import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
 import { getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
@@ -44,7 +46,17 @@ export function MemberNavigationRecovery() {
 export function MemberSignOut({ children, logoutAction = "/api/account/sign-out", ...props }: ComponentProps<typeof Button> & {
   logoutAction?: "/api/account/sign-out" | "/api/admin/logout";
 }) {
-  return <form method="post" action={logoutAction} onSubmit={() => {
+  return <form method="post" action={logoutAction} onSubmit={event => {
+    resetReviewAlerts();
+    if ("serviceWorker" in navigator) navigator.serviceWorker.controller?.postMessage({ type: "payment-alert-reconcile", events: [] });
+    window.dispatchEvent(new Event("goal-hint-payment-sign-out"));
+    const alerts = nativePaymentAlerts();
+    if (alerts) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      void Promise.race([alerts.clear(), new Promise(resolve => setTimeout(resolve, 1500))])
+        .catch(() => {}).finally(() => form.submit());
+    }
     try { for (const key of Object.keys(sessionStorage)) if (key.startsWith(paymentDraftStoragePrefix)) sessionStorage.removeItem(key); } catch { /* Browser storage may be disabled. */ }
   }} data-analytics-ignore><Button variant="secondary" {...props} type="submit">{children}</Button></form>;
 }

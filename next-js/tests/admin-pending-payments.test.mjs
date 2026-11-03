@@ -87,7 +87,7 @@ test("admin count requests are private, shared across headers and absent without
   assert.equal(view.requests.length, before, "last unmount removes all event listeners and polling");
 });
 
-test("one 30-second poll runs only while visible and rechecks on focus or restoration", async (t) => {
+test("one 15-second poll runs only while visible and rechecks on focus or restoration", async (t) => {
   const view = browserFor(t, "hidden");
   view.subscribe();
   view.subscribe();
@@ -101,7 +101,7 @@ test("one 30-second poll runs only while visible and rechecks on focus or restor
   view.document.dispatchEvent(new Event("visibilitychange"));
   await view.reply({ pendingCount: 1 });
   assert.equal(view.requests.length, 1);
-  t.mock.timers.tick(29_999);
+  t.mock.timers.tick(14_999);
   await Promise.resolve();
   assert.equal(view.requests.length, 1);
   t.mock.timers.tick(1);

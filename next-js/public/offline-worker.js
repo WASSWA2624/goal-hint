@@ -408,6 +408,7 @@ async function savedAsset(request) {
 // controller beneath an active form or overlap this writer with a legacy one.
 self.addEventListener("activate", (event) => { event.waitUntil(self.clients.claim()); });
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "payment-alert-reconcile") { reconcileReviewNotifications(event); return; }
   if (!event.source?.url || new URL(event.source.url).origin !== self.location.origin || event.ports.length !== 1
     || !exact(event.data, ["type"]) || !["PREPARE", "STATUS"].includes(event.data.type)) return;
   const port = event.ports[0];
@@ -445,3 +446,88 @@ self.addEventListener("fetch", (event) => {
   } else if (request.mode === "navigate") event.respondWith(navigate(request));
   else if (!url.search && assetPath(url.pathname)) event.respondWith(savedAsset(request));
 });
+
+// Payment alerts share the root worker, but never its public/offline response caches.
+const reviewUuid = value => typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value);
+function reviewPayload(value) {
+  return value && reviewUuid(value.eventId) && reviewUuid(value.endpointId) && (value.paymentId === null || reviewUuid(value.paymentId))
+    && typeof value.createdAt === "string" && Date.now() - Date.parse(value.createdAt) < 86_400_000 && Date.parse(value.createdAt) <= Date.now() + 300_000;
+}
+async function reviewAllowed(data) {
+  try {
+    const response = await fetch(`/api/admin/payment-alerts?${new URLSearchParams({ eventId: data.eventId, endpointId: data.endpointId })}`,
+      { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10_000) });
+    return response.ok && (await response.json()).allowed === true;
+  } catch { return false; }
+}
+async function reviewAck(data, state) {
+  try { await fetch("/api/admin/payment-alerts", { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "ack", endpointId: data.endpointId, eventId: data.eventId, state }), signal: AbortSignal.timeout(10_000) }); } catch { /* Acceptance and observation stay separate. */ }
+}
+async function rememberReview(id) {
+  // Only opaque event IDs/times. Never cache evidence, accounts, private API responses or push credentials.
+  const db = await new Promise((resolve, reject) => {
+    const request = indexedDB.open("goal-hint-payment-alerts", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("seen", { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+  });
+  try {
+    return await new Promise(resolve => {
+      const tx = db.transaction("seen", "readwrite"), store = tx.objectStore("seen");
+      const request = store.add({ id, at: Date.now() });
+      let fresh = true;
+      request.onerror = event => { event.preventDefault(); event.stopPropagation(); fresh = false; };
+      const cursor = store.openCursor();
+      cursor.onsuccess = () => { const entry = cursor.result; if (!entry) return; if (entry.value.at < Date.now() - 86_400_000) entry.delete(); entry.continue(); };
+      tx.oncomplete = () => resolve(fresh); tx.onerror = () => resolve(false);
+    });
+  } finally { db.close(); }
+}
+self.addEventListener("push", event => {
+  event.waitUntil((async () => {
+    let data; try { data = event.data?.json(); } catch { return; }
+    if (!reviewPayload(data)) return;
+    if (data.resolved === true) {
+      try { await rememberReview(data.eventId); } catch { /* Closing is safe even without deduplication storage. */ }
+      const notifications = await self.registration.getNotifications();
+      for (const notification of notifications) if (notification.tag === `payment-review:${data.eventId}`) notification.close();
+      for (const client of await self.clients.matchAll({ type: "window", includeUncontrolled: true })) client.postMessage({ type: "payment-review-update" });
+      return;
+    }
+    if (!await reviewAllowed(data)) return;
+    try { if (!await rememberReview(data.eventId)) return; } catch { /* A stable tag still coalesces when storage is unavailable. */ }
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    // A focused client already owns the in-app badge and optional foreground chime.
+    if (clients.some(client => client.focused && client.visibilityState === "visible")) {
+      for (const client of clients) client.postMessage({ type: "payment-review-update" });
+      return;
+    }
+    await self.registration.showNotification(data.paymentId ? "Payment awaiting review" : "Payment alert test", {
+      body: data.paymentId ? "Open to review this payment." : "Open to check payment alerts.",
+      tag: `payment-review:${data.eventId}`, renotify: false, data,
+    });
+    await reviewAck(data, "displayed");
+  })());
+});
+self.addEventListener("notificationclick", event => {
+  const data = event.notification.data;
+  if (!event.notification.tag.startsWith("payment-review:") || !reviewPayload(data)) return;
+  event.notification.close();
+  event.waitUntil((async () => {
+    await reviewAck(data, "opened");
+    // Construct a fixed same-origin entry; never navigate to a payload-supplied URL.
+    const target = new URL(data.paymentId ? `/payment-review/${data.paymentId}` : "/admin/settings", self.location.origin).href;
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const client = clients.find(client => new URL(client.url).origin === self.location.origin);
+    if (client) { await client.navigate(target); await client.focus(); }
+    else await self.clients.openWindow(target);
+  })());
+});
+function reconcileReviewNotifications(event) {
+  if (!event.source?.url || new URL(event.source.url).origin !== self.location.origin) return;
+  if (event.data?.type !== "payment-alert-reconcile" || !Array.isArray(event.data.events) || event.data.events.length > 50) return;
+  const active = event.data.events.filter(reviewUuid);
+  event.waitUntil(self.registration.getNotifications().then(notifications => {
+    for (const notification of notifications) if (notification.tag.startsWith("payment-review:") && !active.includes(notification.data?.eventId)) notification.close();
+  }));
+}

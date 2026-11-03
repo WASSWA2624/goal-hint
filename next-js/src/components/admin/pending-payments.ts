@@ -1,4 +1,6 @@
 import { startRequestDeadline } from "../../domain/request-deadline.ts";
+import { acceptReviewAlertFeed, resetReviewAlerts } from "./payment-alert-sound.ts";
+import type { ReviewAlertFeed } from "../../domain/payment-alerts.ts";
 
 /** Private count shared by admin headers and the queue. No browser storage or public HTML. */
 let count: number | null = null;
@@ -41,9 +43,11 @@ export function refreshPendingPayments(force = false): Promise<void> {
         cache: "no-store", credentials: "same-origin", headers: { Accept: "application/json" }, signal: requestController.signal,
       });
       if (version !== generation || !listeners.size) return;
-      if (response.status === 401 || response.status === 403) { publish(null); return; }
+      if (response.status === 401 || response.status === 403) { publish(null); resetReviewAlerts(); return; }
       if (!response.ok) return;
       const body: unknown = await response.json();
+      if (version !== generation || !listeners.size) return;
+      if (body && typeof body === "object" && "reviewAlerts" in body && body.reviewAlerts) acceptReviewAlertFeed(body.reviewAlerts as ReviewAlertFeed);
       if (version === generation && listeners.size && body && typeof body === "object" && "pendingCount" in body && validCount(body.pendingCount)) publish(body.pendingCount);
     } catch { /* Keep the last confirmed count through a temporary network failure. */ }
     finally {
@@ -58,6 +62,7 @@ export function refreshPendingPayments(force = false): Promise<void> {
 const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
 const recheck = () => { if (visible()) void refreshPendingPayments(); };
 const onRestore = (event: PageTransitionEvent) => { if (event.persisted) recheck(); };
+const onPush = (event: MessageEvent) => { if (event.data?.type === "payment-review-update") recheck(); };
 
 /** Mount only for verified admins; one poll serves desktop, mobile and the admin workspace. */
 export function subscribePendingPayments(listener: () => void): () => void {
@@ -65,17 +70,20 @@ export function subscribePendingPayments(listener: () => void): () => void {
   if (listeners.size === 1) {
     window.addEventListener("focus", recheck);
     window.addEventListener("pageshow", onRestore);
+    if (typeof navigator !== "undefined") navigator.serviceWorker?.addEventListener("message", onPush);
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", recheck);
-    timer = setInterval(recheck, 30_000);
+    timer = setInterval(recheck, 15_000);
     recheck();
   }
   return () => {
     if (!listeners.delete(listener) || listeners.size) return;
     window.removeEventListener("focus", recheck);
     window.removeEventListener("pageshow", onRestore);
+    if (typeof navigator !== "undefined") navigator.serviceWorker?.removeEventListener("message", onPush);
     if (typeof document !== "undefined") document.removeEventListener("visibilitychange", recheck);
     clearInterval(timer); timer = undefined;
     generation += 1;
     controller?.abort(); controller = null; pending = null; count = null;
+    resetReviewAlerts();
   };
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'web/native_payment_alerts.dart';
 
 import 'app.dart';
 import 'config/app_config.dart';
@@ -7,6 +9,9 @@ import 'web/native_appearance_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    FirebaseMessaging.onBackgroundMessage(paymentReviewBackgroundMessage);
+  }
   try {
     final configuration = AppConfig.fromBuildEnvironment(
       isAndroid: defaultTargetPlatform == TargetPlatform.android,

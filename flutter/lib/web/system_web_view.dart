@@ -13,6 +13,7 @@ import 'android_file_selector.dart';
 import 'app_user_agent.dart';
 import 'navigation_policy.dart';
 import 'native_invitation_share.dart';
+import 'native_payment_alerts.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 import 'web_view_failure.dart';
@@ -29,6 +30,15 @@ class SystemWebViewAdapter extends WebViewAdapter {
   final NavigationPolicy navigationPolicy;
   final Future<bool> Function(Uri) openExternal;
   final _invitationShare = NativeInvitationShare();
+  Uri? _pendingReviewUri;
+  late final _paymentAlerts = NativePaymentAlerts(
+    origin: configuration.origin,
+    environment: configuration.environment.name,
+    onOpen: (uri) {
+      _pendingReviewUri = uri;
+      if (_ready && !_loading) unawaited(load(uri));
+    },
+  );
   final _viewKey = GlobalKey();
 
   static const _browserStore = MethodChannel(
@@ -98,6 +108,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   }
 
   Future<void> _initialize() async {
+    unawaited(_paymentAlerts.initialize());
     _loading = true;
     _failure = null;
     _notify();
@@ -113,11 +124,15 @@ class SystemWebViewAdapter extends WebViewAdapter {
       final controller = WebViewController.fromPlatformCreationParams(params);
       _controller = controller;
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if ([
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+        TargetPlatform.macOS,
+      ].contains(defaultTargetPlatform)) {
         await controller.setUserAgent(
           await installedAppUserAgent(
             await controller.getUserAgent() ?? '',
-            'android',
+            defaultTargetPlatform.name,
             configuration.environment,
           ),
         );
@@ -186,6 +201,16 @@ class SystemWebViewAdapter extends WebViewAdapter {
             if (_disposed) return;
             _loading = false;
             _notify();
+            await _paymentAlerts.attach(
+              evaluate: controller.runJavaScriptReturningResult,
+              ownsDocument: () async =>
+                  !_disposed &&
+                  !_loading &&
+                  _failure == null &&
+                  await controller.currentUrl() == _currentUri.toString() &&
+                  navigationPolicy.evaluate(_currentUri.toString()) ==
+                      NavigationAction.allow,
+            );
             unawaited(_refreshHistory());
           },
           onUrlChange: (change) {
@@ -276,6 +301,8 @@ class SystemWebViewAdapter extends WebViewAdapter {
   @override
   Future<void> load(Uri uri) async {
     if (_disposed || !_ready) return;
+    uri = _pendingReviewUri ?? uri;
+    _pendingReviewUri = null;
     if (navigationPolicy.evaluate(uri.toString()) != NavigationAction.allow) {
       _loadFailed();
       return;
@@ -312,6 +339,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   @override
   Future<void> resume() async {
     if (_disposed) return;
+    await _paymentAlerts.resume();
     _hidden = false;
     _syncAppearance();
     await _refreshHistory();
@@ -383,6 +411,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
   }
 
   void _pageStarted(String url) {
+    _paymentAlerts.invalidate();
     _invitationShare.invalidate();
     if (_disposed || navigationPolicy.evaluate(url) != NavigationAction.allow) {
       return;
@@ -472,6 +501,7 @@ class SystemWebViewAdapter extends WebViewAdapter {
 
   @override
   void dispose() {
+    _paymentAlerts.dispose();
     _invitationShare.invalidate();
     _disposed = true;
     _appearanceSampler.dispose();

@@ -238,3 +238,7 @@ The Windows host selected for local use loads `http://localhost:3000`; the
 Android development host reaches the same server through its LAN address.
 Use the existing development package for this Windows configuration. Production
 release origin restrictions remain unchanged.
+
+## Payment-review notifications
+
+Native display/sound and validated review taps are supplied by `NativePaymentAlerts`; the shared website still owns sessions, payment rules and approval. Android uses Firebase Messaging 17 FIDs, Windows provides running-host local alerts and its normal sound fallback, and other native alert targets remain unqualified. See [plan 015](dev-plan/015-native-payment-review-alerts.md) and the [shared setup/capability record](../next-js/docs/payment-review-alerts.md). A successful source build does not establish real push or closed-process Windows delivery.

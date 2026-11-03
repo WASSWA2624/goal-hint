@@ -1,4 +1,5 @@
 import { authCopy } from "../i18n/messages/auth.ts";
+import { communityLinksSchema, type CommunityLink } from "./community.ts";
 import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
 import { validMobilePhone } from "./phone-mobile.ts";
 import { supportContactsOf, type SupportContact } from "./support-contacts.ts";
@@ -46,6 +47,9 @@ export type SubscriptionSettings = Readonly<{
   /** Null keeps the legacy/configured support numbers until the owner saves a contact list. */
   supportContacts: readonly SupportContact[] | null;
   messageTemplates: MessageTemplateSettings;
+  communityLinks: readonly CommunityLink[];
+  paymentAlertsEnabled: boolean;
+  paymentAlertRepeats: number;
   paymentNote: string | null;
   reviewTime: string | null;
   maxUnlockedDevices: number;
@@ -65,6 +69,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   copyFormat: "international",
   contactPhone: null, whatsappPhone: null,
   supportContacts: null, messageTemplates: defaultMessageTemplates,
+  communityLinks: [], paymentAlertsEnabled: false, paymentAlertRepeats: 1,
   paymentNote: null, reviewTime: null,
   maxUnlockedDevices: settingsRules.maxUnlockedDevices.default,
   trialDays: settingsRules.trialDays.default,
@@ -75,7 +80,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 /** The fields the Settings form saves; the mode has its own two-tap control. */
 export const editableSettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "maxUnlockedDevices", "trialDays",
-  "screenshotRetentionDays", "supportContacts", "messageTemplates"] as const);
+  "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
 
@@ -85,7 +90,7 @@ export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSetting
  */
 export const identitySettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "contactPhone", "whatsappPhone"] as const);
-export const protectedSettingFields = Object.freeze([...identitySettingFields, "supportContacts", "messageTemplates"] as const);
+export const protectedSettingFields = Object.freeze([...identitySettingFields, "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"] as const);
 export type ProtectedSettingField = (typeof protectedSettingFields)[number];
 export type IdentitySettingField = (typeof identitySettingFields)[number];
 export type SubscriptionIdentity = Pick<SubscriptionSettings, IdentitySettingField>;
@@ -109,6 +114,9 @@ export const settingLabels: Readonly<Record<EditableSettingField, string>> = Obj
   whatsappPhone: "WhatsApp number",
   supportContacts: "Support contacts",
   messageTemplates: "Message templates",
+  communityLinks: "Community links",
+  paymentAlertsEnabled: "Payment alerts",
+  paymentAlertRepeats: "Foreground sound repeats",
   paymentNote: "Extra payment note",
   reviewTime: "Typical review time",
   maxUnlockedDevices: "Unlocked devices per account",
@@ -155,7 +163,17 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
   for (const [field, value] of Object.entries(input)) {
     if (!(editableSettingFields as readonly string[]).includes(field)) { errors.changes = `Unknown setting: ${field.slice(0, 40)}.`; continue; }
     const key = field as EditableSettingField;
-    if (key === "supportContacts") {
+    if (key === "communityLinks") {
+      const parsed = communityLinksSchema.safeParse(value);
+      if (parsed.success) changes[key] = parsed.data;
+      else errors[key] = "Use unique, valid HTTPS community destinations; disable empty links.";
+    } else if (key === "paymentAlertsEnabled") {
+      if (typeof value === "boolean") changes[key] = value;
+      else errors[key] = "Choose whether to enable payment alerts.";
+    } else if (key === "paymentAlertRepeats") {
+      if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 3) changes[key] = value;
+      else errors[key] = "Choose 1–3 foreground sound repeats.";
+    } else if (key === "supportContacts") {
       const parsed = parseSupportContacts(value);
       if (parsed.ok) changes[key] = parsed.contacts;
       else errors[key] = parsed.error;
@@ -222,7 +240,7 @@ export function applySettingsChanges(current: SubscriptionSettings, changes: Set
     if (next[shortcut] !== null && next[number] === null) errors[shortcut] = "Add the payment number first: a menu shortcut works only beside it.";
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  const changed = editableSettingFields.filter((field) => field === "supportContacts" || field === "messageTemplates"
+  const changed = editableSettingFields.filter((field) => field === "supportContacts" || field === "messageTemplates" || field === "communityLinks"
     ? JSON.stringify(next[field]) !== JSON.stringify(current[field]) : next[field] !== current[field]);
   return { ok: true, change: {
     next: Object.freeze({ ...next }),

@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../config/app_config.dart';
 import '../config/app_branding.dart';
 import 'navigation_policy.dart';
+import 'native_payment_alerts.dart';
 import 'app_user_agent.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
@@ -28,6 +29,15 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   final AppConfig configuration;
   final NavigationPolicy navigationPolicy;
   final Future<bool> Function(Uri) openExternal;
+  Uri? _pendingReviewUri;
+  late final _paymentAlerts = NativePaymentAlerts(
+    origin: configuration.origin,
+    environment: configuration.environment.name,
+    onOpen: (uri) {
+      _pendingReviewUri = uri;
+      if (_controller != null && !_loading) unawaited(load(uri));
+    },
+  );
 
   WindowsWebViewEnvironment? _environment;
   WindowsInAppWebViewWidget? _view;
@@ -72,6 +82,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   @override
   Future<void> initialize() async {
     if (_disposed || ready) return;
+    unawaited(_paymentAlerts.initialize());
     try {
       PlatformInAppWebViewController.debugLoggingSettings =
           DebugLoggingSettings(enabled: false);
@@ -115,6 +126,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             unawaited(load(_pendingUri ?? configuration.origin));
           },
           onLoadStart: (_, address) {
+            _paymentAlerts.invalidate();
             if (_disposed || address == null) return;
             if (navigationPolicy.evaluate(address.toString()) !=
                 NavigationAction.allow) {
@@ -158,6 +170,19 @@ class WindowsWebViewAdapter extends WebViewAdapter {
             }
             _loading = false;
             await _updateHistory();
+            await _paymentAlerts.attach(
+              evaluate: (script) =>
+                  _controller!.evaluateJavascript(source: script),
+              ownsDocument: () async =>
+                  !_disposed &&
+                  !_loading &&
+                  _failure == null &&
+                  _currentUri != null &&
+                  (await _controller?.getUrl())?.toString() ==
+                      _currentUri.toString() &&
+                  navigationPolicy.evaluate(_currentUri.toString()) ==
+                      NavigationAction.allow,
+            );
           },
           onUpdateVisitedHistory: (_, address, _) async {
             _remember(address);
@@ -291,6 +316,8 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   @override
   Future<void> load(Uri uri) async {
     if (_disposed) return;
+    uri = _pendingReviewUri ?? uri;
+    _pendingReviewUri = null;
     if (navigationPolicy.evaluate(uri.toString()) != NavigationAction.allow) {
       _fail(WebViewFailure.browser);
       return;
@@ -306,7 +333,9 @@ class WindowsWebViewAdapter extends WebViewAdapter {
       );
       // The native widget can attach after a hidden startup. Navigation may
       // resume the engine, so apply the remembered visibility after loading.
-      if (_hidden && !_disposed) await _controller?.pause();
+      if (_hidden && !_disposed && !_paymentAlerts.enabled) {
+        await _controller?.pause();
+      }
     } catch (_) {
       _fail(WebViewFailure.connection);
     }
@@ -349,12 +378,13 @@ class WindowsWebViewAdapter extends WebViewAdapter {
     if (_disposed) return;
     _hidden = true;
     _syncAppearance();
-    await _controller?.pause();
+    if (!_paymentAlerts.enabled) await _controller?.pause();
   }
 
   @override
   Future<void> resume() async {
     if (_disposed) return;
+    await _paymentAlerts.resume();
     _hidden = false;
     await _controller?.resume();
     await _updateHistory();
@@ -421,6 +451,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
 
   @override
   void dispose() {
+    _paymentAlerts.dispose();
     _disposed = true;
     _appearanceSampler.dispose();
     _view?.dispose();

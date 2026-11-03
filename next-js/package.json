@@ -122,6 +122,8 @@
     "members:notifications": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts notifications",
     "test:notifications": "node --conditions=react-server --test --test-concurrency=1 tests/account-notifications.test.mjs tests/account-notifications.integration.mjs",
     "payments:notifications": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/payment-notifications.ts",
+    "payments:alerts": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/payment-review-alerts.ts",
+    "test:payment-alerts": "node --conditions=react-server --test --test-concurrency=1 tests/community-payment-alerts.test.mjs tests/payment-review-alerts.integration.mjs",
     "test:payment-outbox": "node --conditions=react-server --test --test-concurrency=1 tests/payment-outbox.test.mjs tests/payment-outbox.integration.mjs",
     "analytics:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/analytics.ts purge",
     "test:analytics": "node --conditions=react-server --test tests/analytics.test.mjs tests/analytics.integration.mjs",
@@ -139,6 +141,7 @@
     "@prisma/client": "7.10.0",
     "@reduxjs/toolkit": "2.13.0",
     "fflate": "0.8.3",
+    "firebase-admin": "14.5.0",
     "iso-3166": "4.4.0",
     "libphonenumber-js": "1.13.15",
     "mariadb": "3.5.4",
@@ -149,13 +152,15 @@
     "server-only": "0.0.1",
     "sharp": "0.35.5",
     "styled-components": "6.5.3",
-    "zod": "4.6.5"
+    "web-push": "3.6.7",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@tesseract.js-data/eng": "1.0.0",
     "@types/node": "24.13.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/web-push": "3.6.4",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.2",
     "nodemon": "3.1.14",

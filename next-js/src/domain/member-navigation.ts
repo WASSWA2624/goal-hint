@@ -1,3 +1,5 @@
+import { reviewReturnPath } from "./payment-alerts.ts";
+
 /** One phone-and-password sign-in page for every account role. */
 export const memberLoginPath = "/en/account?view=login";
 /** Owner decision (2026-10-25): signing out, as a member or the owner, keeps you browsing the matches with the same
@@ -6,6 +8,8 @@ export const signedOutPath = "/en/matches";
 
 /** Only an English feed, canonical match or shared-slip path can be a member return destination. No queries, fragments or escapes. */
 export function memberReturnPath(value: unknown): string | null {
+  const review = reviewReturnPath(value);
+  if (review) return review;
   return typeof value === "string" && value.length <= 512 && (["/en", "/en/matches", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || /^\/en\/matches\/[A-Za-z0-9_-]+\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) ? value : null;
 }
 

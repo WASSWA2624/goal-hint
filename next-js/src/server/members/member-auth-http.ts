@@ -1,5 +1,6 @@
 import { authCopy } from "../../i18n/messages/auth.ts";
 import "server-only";
+import { reviewReturnPath } from "../../domain/payment-alerts.ts";
 import { readReferralAttribution, referralCookieName } from "./referral-attribution.ts";
 
 import { memberReturnPath, sharedSlipReturnPath } from "../../domain/member-navigation.ts";
@@ -76,7 +77,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
       const next = result.requiresPasswordChange ? restrictedPath("new-password")
         : result.requiresVerification ? restrictedPath("verify")
-        : result.administrator ? adminLandingPath
+        : result.administrator ? reviewReturnPath(body.return) ?? adminLandingPath
         : returnTo ?? (action === "phone" ? "/en/account?status=phone-changed"
         : action === "password" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),

@@ -1,6 +1,7 @@
 "use client";
 
 import { media } from "@/styles/theme";
+import { stopReviewSound } from "./payment-alert-sound";
 
 import { FloatingField } from "@/components/ui/floating-field";
 
@@ -118,6 +119,7 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   }
   function select(payment: OwnerPayment) {
     if (action.busy) return;
+    stopReviewSound();
     focusNext.current = !desktop; setSelectedId(payment.id); setDetailOpen(true); setOpened(true);
     locationFor(payment.id);
   }
@@ -133,6 +135,7 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
     requestAnimationFrame(() => (document.querySelector<HTMLElement>(`[data-payment-row="${id}"]`) ?? document.getElementById("payment-queue-title"))?.focus());
   }
   function resolved(id: string) {
+    stopReviewSound();
     setCompleted(shown => [...shown, id]); focusNext.current = true;
     const next = payments.find(payment => payment.id !== id);
     setSelectedId(next?.id ?? ""); setDetailOpen(!!next);
