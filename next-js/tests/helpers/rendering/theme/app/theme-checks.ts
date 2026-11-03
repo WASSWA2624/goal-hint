@@ -51,7 +51,8 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   };
   checkRadius("#theme-radius-badge", theme.radius.small);
   checkRadius("#theme-control-input, #theme-control-select, #theme-controls [data-surface-control], #theme-admin-input, #theme-payment-input, #theme-payment-action, [data-slip-custom-range]", theme.radius.control);
-  checkRadius("#theme-controls, #theme-admin-panel, #theme-performance [data-performance-summary]", phone ? theme.radius.surface : theme.radius.none);
+  checkRadius("#theme-controls, #theme-admin-panel", phone ? theme.radius.surface : theme.radius.none);
+  checkRadius("#theme-performance [data-performance-summary]", theme.radius.none);
   checkRadius("#theme-large-action, #theme-admin-record, [data-subscribe-layout=stepwise]", theme.radius.surface);
   if (!phone) checkRadius("#theme-matches [data-match-board]", theme.radius.none);
   checkRadius("#theme-slips [data-slip-id]", phone ? theme.radius.surface : theme.frame.desktopCardRadius);
@@ -109,15 +110,14 @@ export function checkRenderedTheme(theme: GoalHintTheme): string[] {
   assert(!!predicted && visible(predicted), "Predicted match total remains visible on phone and desktop");
   assert(predicted?.querySelector("dt")?.textContent === "Predicted" && predicted.querySelector("dd")?.textContent === "116",
     "Predicted total excludes four unavailable or filtered-out fixtures and includes two void forecasts");
-  const wideSummary = (summary?.clientWidth ?? 0) >= 56 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
   const shares = { correct: "(62.1%)", incorrect: "(20.7%)", pending: "(15.5%)" } as const;
   for (const outcome of ["correct", "incorrect", "pending"] as const) {
     const selector = `#theme-performance [data-summary-outcome="${outcome}"]`;
-    check(selector, theme.color.performanceOutcome[outcome].background);
-    check(`${selector}, ${selector} dt, ${selector} dd, ${selector} svg`, theme.color.performanceOutcome[outcome].text, "color");
+    check(selector, theme.color.outcome[outcome].background);
+    check(`${selector}, ${selector} dt, ${selector} dd${phone ? "" : `, ${selector} svg`}`, theme.color.outcome[outcome].text, "color");
     const percentage = summary?.querySelector(`[data-summary-percentage="${outcome}"]`);
     assert(percentage?.textContent === shares[outcome], `${outcome} percentage uses the predicted total`);
-    assert(!!percentage && visible(percentage) === wideSummary, `${outcome} percentage shows only in the desktop summary layout`);
+    assert(!!percentage && visible(percentage) === !phone, `${outcome} percentage shows only in the desktop summary layout`);
   }
   const headerSelector = phone ? "#theme-phone-header > div > div:first-child" : "[data-app-header]";
   check(headerSelector, phone ? theme.header.background : theme.header.desktopBackground);

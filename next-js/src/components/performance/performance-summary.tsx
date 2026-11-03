@@ -96,26 +96,27 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   return <Panel role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
     <Content>
       <Header data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
-        {instant !== null ? <time dateTime={toUtcIsoString(instant)}>{m.reportingInstantCompact(instant)}</time> : period && <p>{period}</p>}
+        {instant !== null ? <time dateTime={toUtcIsoString(instant)}>{m.reportingInstantCompact(instant)}</time> : period && <p data-performance-period>{period}</p>}
       </Header>
       {instant !== null && period && <Period data-performance-period>{period}</Period>}
       <Counts data-performance-figures>
         {outcomes.map((outcome) => {
           const { key, label, count } = outcome, result = key === "all" ? undefined : key;
-          const fraction = key === "won" || key === "lost" || key === "pending" ? predicted?.[key] : null;
+          const fraction = key === "all" ? null : predicted
+            ? (predicted.total > 0 ? count / predicted.total : null) : counts.total > 0 ? count / counts.total : null;
           const percentage = !pending && fraction !== null && fraction !== undefined
             ? m.number(fraction, { style: "percent", maximumFractionDigits: 1 }) : null;
           const Icon = "icon" in outcome ? outcome.icon : null;
           return <Count key={key} $status={key} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
-            <dt>{label}</dt><dd>{Icon && <Icon aria-hidden="true" />}{number(count)}
-              {predicted && "tone" in outcome && <Percentage data-summary-percentage={outcome.tone}>{percentage ? `(${percentage})` : "—"}</Percentage>}
+            <dt>{label}</dt><dd>{Icon && <Icon aria-hidden="true" />}<span data-summary-count={key}>{number(count)}</span>
+              {key !== "all" && <Percentage data-summary-percentage={"tone" in outcome ? outcome.tone : key}>{percentage ? `(${percentage})` : "—"}</Percentage>}
             </dd>
             {onResult && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}
               disabled={disabled || pending} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
           </Count>;
         })}
       </Counts>
-      {showCoverage && <Coverage>
+      {showCoverage && (predicted && !showAll || (counts.unavailable ?? 0) > 0 || (counts.filteredOut ?? 0) > 0) && <Coverage>
         {predicted && !showAll && <div data-summary-predicted><dt>{m.text("performance.summary.predicted")}</dt><dd>{number(predicted.total)}</dd></div>}
         {(counts.unavailable ?? 0) > 0 && <div><dt>{m.text("performance.summary.noPrediction")}</dt><dd>{number(counts.unavailable!)}</dd></div>}
         {(counts.filteredOut ?? 0) > 0 && <div><dt>{m.text("performance.filteredOut")}</dt><dd>{number(counts.filteredOut!)}</dd></div>}

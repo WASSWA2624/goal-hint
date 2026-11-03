@@ -14,6 +14,7 @@ export type SearchBarProps = Omit<ComponentPropsWithRef<"input">, "type" | "chil
   label: string;
   submitLabel: string;
   submitDisabled?: boolean;
+  filterButtonRef?: Ref<HTMLButtonElement>;
   filters?: {
     label: string;
     accessibleLabel?: string;
@@ -21,7 +22,6 @@ export type SearchBarProps = Omit<ComponentPropsWithRef<"input">, "type" | "chil
     open: boolean;
     onOpen: () => void;
     count?: number;
-    ref?: Ref<HTMLButtonElement>;
   };
 };
 
@@ -83,17 +83,17 @@ const Filters = styled.button`
 `;
 
 /** The enclosing form owns submission; each screen owns its advanced-filter dialog. */
-export function SearchBar({ label, submitLabel, submitDisabled, filters, ...input }: SearchBarProps) {
+export function SearchBar({ label, submitLabel, submitDisabled, filters, filterButtonRef, ...input }: SearchBarProps) {
   const generated = useId(), id = input.id ?? generated;
   return <Row data-search-bar data-control-field>
     <Field data-feed-search data-floating-control data-text-field-frame>
       <label htmlFor={id} title={label}>{label}</label><FloatingOutline label={label} />
       <input {...input} id={id} type="search" placeholder=" " aria-label={label} enterKeyHint="search" />
-      <Submit type="submit" aria-label={submitLabel} title={submitLabel} data-feed-search-submit disabled={input.disabled || submitDisabled}>
+      <Submit type="submit" form={input.form} aria-label={submitLabel} title={submitLabel} data-feed-search-submit disabled={input.disabled || submitDisabled}>
         <SearchIcon aria-hidden="true" /><span>{submitLabel}</span>
       </Submit>
     </Field>
-    {filters && <Filters ref={filters.ref} type="button" aria-label={filters.accessibleLabel ?? filters.label}
+    {filters && <Filters ref={filterButtonRef} type="button" aria-label={filters.accessibleLabel ?? filters.label}
       title={filters.accessibleLabel ?? filters.label} aria-haspopup="dialog" aria-controls={filters.dialogId}
       aria-expanded={filters.open} disabled={input.disabled} onClick={filters.onOpen} data-search-filters>
       <SlidersIcon aria-hidden="true" /><span>{filters.label}</span>{!!filters.count && <b aria-hidden="true">{filters.count}</b>}

@@ -28,6 +28,8 @@ import { feedSortOptions } from "./feed-header";
 import { OptionLogo } from "./filter-parts";
 import { ActionButton, ActionRow, Count, DialogContent, Error as FilterError, Muted, OptionsRow, Panel, PeriodField, SearchRow, SectionButton, SortField } from "./desktop-feed-filter-styles";
 
+type DialogSection = FeedFilterSection | "all";
+
 type Messages = ReturnType<typeof createMessages>;
 type Draft = {
   query: FeedQuery;
@@ -114,8 +116,8 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   const stored = useAppSelector((state) => state.feed.draft), applied = useAppSelector((state) => state.feed.query);
   const deviceZone = useDeviceTimeZone();
   const [draft, setDraft] = useState(() => fromQuery(feedQueryHref(applied, today) === feedQueryHref(query, today) ? stored : query, today));
-  const [active, setActive] = useState<FeedFilterSection | null>(null), [dialogVersion, setDialogVersion] = useState(0);
-  const [issue, setIssue] = useState<{ section: FeedFilterSection | null; message: string } | null>(null);
+  const [active, setActive] = useState<DialogSection | null>(null), [dialogVersion, setDialogVersion] = useState(0);
+  const [issue, setIssue] = useState<{ section: DialogSection | null; message: string } | null>(null);
   const snapshot = useRef<Draft | null>(null), errorRef = useRef<HTMLParagraphElement>(null);
   const zone = draft.query.zone ?? draft.query.time?.zone ?? deviceZone;
   const complete = useMemo(() => compile(draft, today, zone), [draft, today, zone]);
@@ -147,29 +149,33 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   const period = (periods as readonly string[]).includes(draft.query.dates.kind)
     && draft.dates.from === currentRange.startDate && draft.dates.to === currentRange.endDate ? draft.query.dates.kind : "custom";
   const errorId = `${prefix}-error`;
-  function open(section: FeedFilterSection) {
+  function open(section: DialogSection) {
     snapshot.current = draft; setActive(section); setIssue(null); setDialogVersion((current) => current + 1);
   }
   function cancel() {
     if (active && snapshot.current) {
       const previous = snapshot.current;
-      setDraft((current) => copySection(current, previous, active));
+      setDraft((current) => active === "all" ? previous : copySection(current, previous, active));
     }
     setIssue(null); snapshot.current = null; setActive(null);
   }
-  function localReset(section: FeedFilterSection) {
+  function localReset(section: DialogSection) {
+    if (section === "all") {
+      setDraft(fromQuery(resetFeedFilters(draft.query, subscriberOnly), today));
+      setIssue(null); setDialogVersion((current) => current + 1); return;
+    }
     setDraft((current) => copySection(current, fromQuery(resetFeedFilterSection(current.query, section), today), section));
     setIssue(null); setDialogVersion((current) => current + 1);
   }
-  function save(section: FeedFilterSection) {
-    const candidate = copySection(fromQuery({ ...resetFeedFilters(draft.query, subscriberOnly), status: draft.query.status }, today), draft, section);
+  function save(section: DialogSection) {
+    const candidate = section === "all" ? draft : copySection(fromQuery({ ...resetFeedFilters(draft.query, subscriberOnly), status: draft.query.status }, today), draft, section);
     const checked = compile(candidate, today, zone);
     if (!checked) {
       const message = section === "dates" ? messages.text(validKickoffTime({ ...draft.times, zone }) ? "feed.date.tooLong" : "feed.time.invalid")
         : messages.text(section === "limits" ? "feed.filters.probabilityInvalid" : "feed.invalidQuery");
       setIssue({ section, message }); return;
     }
-    setDraft((current) => copySection(current, fromQuery(checked, today), section));
+    setDraft((current) => section === "all" ? fromQuery(checked, today) : copySection(current, fromQuery(checked, today), section));
     setIssue(null); snapshot.current = null; setActive(null);
   }
   function resetAll() {
@@ -185,7 +191,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       return { ...current, query: next, dates: { from: range.startDate, to: range.endDate } };
     });
   }
-  const error = (section: FeedFilterSection | null) => issue?.section === section
+  const error = (section: DialogSection | null) => issue?.section === section
     ? <FilterError id={errorId} ref={errorRef} tabIndex={-1}>{issue.message}</FilterError> : null;
   const input = (label: string, name: string, value: string, change: (value: string) => void, type = "text") => <FloatingField data-input label={<><span>{label}</span></>}><input type={type} name={name} value={value} placeholder={messages.text("feed.filters.any")}
       inputMode={type === "text" ? "decimal" : undefined} autoComplete="off" step={type === "time" ? 60 : undefined}
@@ -202,6 +208,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       <SearchBar name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
         placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
         submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
+        filters={{ label: messages.text("feed.filters.toggle"), dialogId: `${prefix}-all`, open: active === "all", onOpen: () => open("all") }}
         onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
       <PeriodField><FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={draft.query.result}
         onResultChange={(result) => setDraft((current) => ({ ...current, query: { ...current.query, result, page: 1 } }))} onChange={(status) => {
@@ -246,12 +253,13 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
         : messages.text("feed.filters.selectedCount", { count: messages.number(counts[section]) })}
     </VisuallyHidden>)}
     {error(null)}
-    {sections.map((section) => <CriteriaDialog key={section} id={`${prefix}-${section}`} title={titles[section]} open={active === section}
-      onCancel={cancel} onApply={() => save(section)} onReset={() => localReset(section)} resetLabel={messages.text("feed.filters.reset")}
+    {(["all", ...sections] as const).map((dialog) => <CriteriaDialog key={dialog} id={`${prefix}-${dialog}`} title={dialog === "all" ? messages.text("feed.filters.toggle") : titles[dialog]} open={active === dialog}
+      onCancel={cancel} onApply={() => save(dialog)} onReset={() => localReset(dialog)} resetLabel={messages.text("feed.filters.reset")}
       applyLabel={messages.text("feed.filters.done")} cancelLabel={messages.text("feed.filters.cancel")}
-      closeLabel={messages.text("feed.filters.closeSection", { section: titles[section] })}>
-      <DialogContent data-feed-dialog={section}>{error(section)}
-        {active === section && <>
+      closeLabel={messages.text("feed.filters.closeSection", { section: dialog === "all" ? messages.text("feed.filters.toggle") : titles[dialog] })}>
+      <DialogContent data-feed-dialog={dialog}>{error(dialog)}
+        {active === dialog && (dialog === "all" ? sections : [dialog]).map((section) => <div key={section} data-feed-dialog-section={section}>
+        {dialog === "all" && <h3>{titles[section]}</h3>}
         {section === "dates" && <div data-fields>
           {input(messages.text("feed.date.from"), "from", draft.dates.from, (from) => setDraft((current) => ({ ...current, dates: { ...current.dates, from } })), "date")}
           {input(messages.text("feed.date.to"), "to", draft.dates.to, (to) => setDraft((current) => ({ ...current, dates: { ...current.dates, to } })), "date")}
@@ -280,7 +288,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
             <FloatingField data-input label={<><span>{messages.text("feed.filters.max")}</span></>}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
           </div></fieldset>
         </>}
-        </>}
+        </div>)}
       </DialogContent>
     </CriteriaDialog>)}
   </Panel>;

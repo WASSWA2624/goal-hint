@@ -153,3 +153,16 @@ Best Slips is now home, with public summaries and subscriber-only selections; Ma
 Prisma/type/lint/build checks and isolated MySQL payment/reviewer checks passed. The remaining 19 broader unit failures reproduce on unchanged `4ff10f2`; new contract failures were corrected. Live provider timing/lifecycle tests, native build environment issues and Windows WNS identity/packaging approval remain explicit. See [plan 258](dev-plan/258-community-payment-review-alerts.md) and the [complete verification/rollback handover](docs/payment-review-alerts.md). No live payment was approved or installer published.
 
 **Owner-authorised local migration follow-up, 3 November:** all 61 migrations and required alert-table grants are now applied on the existing local MySQL target after an authenticated encrypted checkpoint. Status/schema verification/health pass; all 123 models are readable, application DDL stays denied and existing financial/account counts are unchanged. Outbound alerts remain disabled. See the [local migration record](docs/local-database.md#3-november-2026-reviewer-alert-migration-follow-up); hosted deployment and native/provider qualification remain outstanding.
+
+
+## 261 Reusable search and performance sections — 3 November 2026
+
+**Completed:** shared floating-label search with inset submit and optional
+responsive advanced filters; a combined desktop dialog reuses the existing
+section fields. Matches, Best Slips and reports share six coloured outcome
+cards, explicit 24-hour EAT timestamps and mobile layouts without card icons.
+
+Lint, types, theme contract, production build, 43 targeted tests, 18 browser
+combinations and production loading/dashboard rendering passed. The existing
+two download-catalog build tracing warnings remain. See [plan 261](dev-plan/261-reusable-search-and-performance.md).
+Source integration is complete; deployment is separate.

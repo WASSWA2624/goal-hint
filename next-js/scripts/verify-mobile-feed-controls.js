@@ -37,23 +37,26 @@ async function verifyMobileFeedControls(page) {
     const row = element.querySelector("[data-phone-query-filters]");
     const date = row?.querySelector("[data-mobile-date-filter]");
     const status = row?.querySelector("[data-feed-status]");
-    const toggle = row?.querySelector('[aria-haspopup="dialog"]:not([data-mobile-date-filter])');
+    const toggle = element.querySelector("[data-search-filters]");
     if (!search || !row || !date || !status || !toggle) return { missing: true };
-    const controls = [date, status, toggle], boxes = controls.map((control) => control.getBoundingClientRect());
+    const controls = [date, status], boxes = controls.map((control) => control.getBoundingClientRect());
+    const toggleBox = toggle.getBoundingClientRect();
     const searchBox = search.getBoundingClientRect(), rowBox = row.getBoundingClientRect();
     const panelStyle = getComputedStyle(element), rowStyle = getComputedStyle(row);
     const minimalSpacing = parseFloat(panelStyle.paddingInlineStart) === 0 && parseFloat(panelStyle.paddingInlineEnd) === 0
       && parseFloat(panelStyle.rowGap) === 4 && parseFloat(rowStyle.columnGap) === 4;
-    const square = [search, ...controls].every((control) => {
+    const radius = getComputedStyle(search).borderTopLeftRadius;
+    const square = [search, toggle, ...controls].every((control) => {
       const style = getComputedStyle(control);
       return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomLeftRadius, style.borderBottomRightRadius]
-        .every((radius) => parseFloat(radius) === 0);
+        .every((value) => value === radius);
     });
     const fits = document.documentElement.scrollWidth <= innerWidth && boxes.every((box) => box.left >= -1 && box.right <= innerWidth + 1);
     const noOverlap = boxes.every((box, index) => boxes.slice(index + 1).every((other) => box.right <= other.left + 1 || other.right <= box.left + 1));
     const oneRow = boxes.every((box) => Math.abs(box.y + box.height / 2 - boxes[0].y - boxes[0].height / 2) <= 1);
-    const ordered = boxes[0].x < boxes[1].x && boxes[1].x < boxes[2].x;
-    const targets = searchBox.height >= 44 && boxes.every((box) => box.height >= 44 && box.width >= 44);
+    const ordered = boxes[0].x < boxes[1].x && searchBox.right <= toggleBox.left && Math.abs(searchBox.top - toggleBox.top) < 1;
+    const expectedHeight = parseFloat(getComputedStyle(element).getPropertyValue("--form-control-height"));
+    const targets = [searchBox, toggleBox, ...boxes].every(box => box.height >= expectedHeight && box.width >= expectedHeight);
     return {
       missing: false, square, fits, noOverlap, oneRow, ordered, targets, minimalSpacing,
       height: Math.round(element.getBoundingClientRect().height),
@@ -76,9 +79,9 @@ async function verifyMobileFeedControls(page) {
         await settled();
         await page.evaluate(() => document.fonts.ready);
         const result = await geometry();
-        require(!result.missing && result.oneRow && result.ordered && result.twoRows, `Compact stack must retain search then Date/Status/Filters at ${width}px/${theme}.`);
+        require(!result.missing && result.oneRow && result.ordered && result.twoRows, `Compact stack must retain Search/Filters then Date/Status at ${width}px/${theme}.`);
         require(result.fits && result.noOverlap, `Mobile controls must fit without page overflow or overlap at ${width}px/${theme}.`);
-        require(result.targets && result.square, `Mobile controls need square edges and at least 44px targets at ${width}px/${theme}.`);
+        require(result.targets && result.square, `Mobile controls need shared corners and control-height targets at ${width}px/${theme}.`);
         require(result.minimalSpacing, `Compact stack must use zero outer inline padding and 4px row/control gaps at ${width}px/${theme}.`);
         require(result.duplicatedPeriod === 0 && result.oldToolbar === 0, "The enhanced phone must remove its duplicated period selector and old toolbar.");
         require(!result.cardFont || result.font === result.cardFont, "Mobile search and match cards must use the same font family.");
@@ -96,7 +99,7 @@ async function verifyMobileFeedControls(page) {
       const result = await geometry();
       require(!result.missing && result.fits && result.noOverlap && result.oneRow && result.ordered,
         `The compact toolbar must fit without overlap at ${width}px with 200% text.`);
-      require(result.targets && result.square, "Enlarged text must retain usable square controls.");
+      require(result.targets && result.square, "Enlarged text must retain usable shared control dimensions.");
       require(result.minimalSpacing, "Enlarged text must retain the requested minimal padding and 4px gaps.");
       require((await date.getAttribute("aria-label")).includes((await date.textContent()).trim()),
         "A truncated date label must retain its complete accessible name at 200% text.");

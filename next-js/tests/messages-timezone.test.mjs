@@ -3,6 +3,14 @@ import test from "node:test";
 import { CalendarValidationError, parseReportingDate, parseUtcInstant } from "../src/domain/calendar.ts";
 import { createMessages } from "../src/i18n/messages.ts";
 
+test("compact performance timestamps use padded dates, 24-hour time and the explicit zone", () => {
+  const messages = createMessages("en");
+  assert.equal(messages.reportingInstantCompact(parseUtcInstant("2026-11-03T17:30:00Z")), "03-Nov-2026 20:30 EAT");
+  assert.equal(messages.reportingInstantCompact(parseUtcInstant("2026-12-31T21:00:00Z")), "01-Jan-2027 00:00 EAT");
+  const london = createMessages("en", undefined, "Europe/London");
+  assert.equal(london.reportingInstantCompact(parseUtcInstant("2026-07-11T23:30:00Z")), "12-Jul-2026 00:30 GMT+1");
+});
+
 test("default timestamp formatting retains 24-hour EAT server output", () => {
   const messages = createMessages("en"), at = parseUtcInstant("2026-10-06T21:30:00Z");
   assert.equal(messages.reportingDay(at), "Wed, Oct 7");

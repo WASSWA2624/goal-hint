@@ -35,7 +35,7 @@ import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker, DayStrip } from "./feed-dates";
 import { MobileFeedDateFilter } from "./mobile-feed-date-filter";
-import { ChipText, CompactSelect, controlFeedback, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
+import { ChipText, CompactSelect, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
 import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
 
 type Messages = ReturnType<typeof createMessages>;
@@ -139,8 +139,6 @@ const PhoneSort = styled(CompactSelect)`
   @container (max-width: ${({ theme }) => theme.viewport[18]}) { padding-inline-start: var(--gh-spacing-2); }
   ${media.belowDesktop} { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); font-size: var(--gh-font-secondary); }
 `;
-/** Opens the filter sheet; the badge counts applied filters. */
-
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
 
 /**
@@ -654,7 +652,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
       placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
       submitLabel={messages.text("feed.search.submit")}
       filters={{ label: filtersLabel, accessibleLabel: count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel,
-        dialogId: panelId, open, onOpen: () => onOpenChange(true), count, ref: filterToggle }}
+        dialogId: panelId, open, onOpen: () => onOpenChange(true), count }} filterButtonRef={filterToggle}
       onChange={(event) => edit({ ...draft, search: event.target.value })} />
     {compactPhone ? <CompactToolbar data-phone-query-filters>
       <MobileFeedDateFilter query={query} today={today} onApply={onApply} />
@@ -682,7 +680,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
           <FilterActionLabel label={messages.text("feed.filters.clear")} />
         </PhoneClear>
-        </PhoneToolbar>
+      </PhoneToolbar>
     </>}
     {open && <SheetScrim aria-hidden="true" onClick={closeSheet} />}
     <FilterFieldsGroup ref={sheet} id={panelId} $open={open} onKeyDown={(event) => { if (open) keepFocusInSheet(event); }} tabIndex={open ? -1 : undefined}

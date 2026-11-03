@@ -2,7 +2,8 @@
 
 import { FloatingField } from "@/components/ui/floating-field";
 
-import { useId, useRef, useState, type FocusEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
+import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { CalendarIcon, ResetIcon } from "@/components/ui/icons";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, selectSlipSummaryResult, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
@@ -11,25 +12,14 @@ import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "@/domain/best-slip-odds-bands";
 import { AppliedDetails, AppliedSelection, AppliedSummary, DateControls, DateError, DateFields, DateHint, DateSelect, FiltersPanel,
-  RangeButton, RangeDialog, ResetButton, ResultButton, ResultGroup, ToggleRow } from "./best-slips-filter-styles";
+  RangeButton, RangeDialog, ResetButton, ToggleRow } from "./best-slips-filter-styles";
 
 const dateOptions = [
   ["last7", "feed.date.last-7-days"], ["last3", "feed.date.last-3-days"],
   ["last30", "feed.date.last-30-days"], ["yesterday", "feed.date.yesterday"], ["today", "feed.date.today"], ["tomorrow", "feed.date.tomorrow"],
   ["next3", "feed.date.next-3-days"], ["next7", "feed.date.next-7-days"],
 ] as const satisfies readonly (readonly [BestSlipsQuery["period"], TextKey])[];
-const results = ["all", "won", "lost", "pending", "void", "cancelled"] as const;
 type DateDraft = Readonly<{ from: string; to: string }>;
-
-/** Reveal keyboard focus inside the status rail without moving the page. */
-function revealResultToggle({ currentTarget, target }: FocusEvent<HTMLDivElement>) {
-  const control = target.closest<HTMLElement>("[data-slip-result]");
-  if (!control) return;
-  const rail = currentTarget.getBoundingClientRect(), bounds = control.getBoundingClientRect();
-  const left = rail.left + 3, right = rail.right - 3;
-  const offset = bounds.right > right ? bounds.right - right : bounds.left < left ? bounds.left - left : 0;
-  if (offset) currentTarget.scrollLeft += offset;
-}
 
 /** Responsive date/result controls; custom dates stay a local draft until Apply. */
 export function BestSlipsFilters({ query, appliedQuery = query, today, locale, busy = false, updating = false, statistics, summary, countSummary, onChange }: {
@@ -81,30 +71,14 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     : query.period === "last30" ? "feed.date.last-30-days" : query.period === "next30" ? "feed.date.next-30-days" : "bestSlips.filters.allDates");
   const selectablePeriod = query.period === "custom" || dateOptions.some(([period]) => period === query.period);
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
-    {summary && <DateHint data-performance-period>{m.text(appliedQuery.summary ? "history.yesterday" : "history.performance")}
-      {summary.from && summary.to && <> · {m.reportingDateMedium(summary.from)}{summary.from !== summary.to && ` – ${m.reportingDateMedium(summary.to)}`} · EAT</>}
-    </DateHint>}
+    <PerformanceSummary locale={locale} kind="slips" counts={statistics ?? null}
+      title={m.text(appliedQuery.summary ? "history.yesterday" : "history.performance")}
+      asOf={summary?.asOf} period={summary?.from && summary.to
+        ? `${m.reportingDateMedium(summary.from)}${summary.from !== summary.to ? ` – ${m.reportingDateMedium(summary.to)}` : ""} · EAT` : undefined}
+      showCoverage={false} activeResult={query.status === "all" ? undefined : query.status}
+      onResult={(result) => changeStatus(result ?? "all")} disabled={busy}
+      resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })} />
     <ToggleRow data-slip-toggle-row>
-      <ResultGroup role="group" aria-label={m.text("bestSlips.filters.result")} onFocusCapture={revealResultToggle}>
-        {results.map((status) => {
-          const value = statistics ? status === "all" ? statistics.total : statistics[status] ?? 0 : null;
-          const count = value === null ? "—" : m.number(value);
-          const percentage = status === "all" ? null : statistics && value !== null
-            ? m.number(statistics.total > 0 ? value / statistics.total : 0, { style: "percent", maximumFractionDigits: 1 }) : "—";
-          return <ResultButton key={status} type="button" $status={status} aria-pressed={query.status === status}
-            aria-label={m.text(percentage === null ? "bestSlips.filters.resultCount" : "bestSlips.filters.resultShare",
-              { result: m.text(`bestSlips.filters.${status}`), count, ...(percentage === null ? {} : { percentage }) })}
-            title={statistics ? m.text("bestSlips.filters.countScope") : m.text("bestSlips.filters.countUnavailable")}
-            onClick={() => changeStatus(status)} data-slip-result={status}>
-            <span>{m.text(status === "all" ? "bestSlips.filters.allShort" : `bestSlips.filters.${status}`)}</span>
-            <strong data-slip-result-count={status}>{count}</strong>
-            {percentage !== null && <span data-slip-result-percent={status}>({percentage})</span>}
-            {status === "all" && <span data-slip-result-percent="all" data-mobile-result-percent>
-              ({statistics ? m.number(statistics.total > 0 ? 1 : 0, { style: "percent", maximumFractionDigits: 1 }) : "—"})
-            </span>}
-          </ResultButton>;
-        })}
-      </ResultGroup>
       <DateControls role="group" aria-label={m.text("bestSlips.filters.slipDate")} data-slip-dates>
         <DateSelect value={query.period} options={selectablePeriod ? selectOptions
           : [...selectOptions, { value: query.period, label: currentPeriodLabel, disabled: true }]}

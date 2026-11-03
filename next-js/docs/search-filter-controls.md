@@ -1,4 +1,28 @@
-# Match search and filters
+# Reusable search and performance components
+
+`src/components/ui/search-bar.tsx` owns the floating-label input, inset search
+submit button and optional adjacent filter action. The enclosing form owns
+submission; typing only changes the draft. `filters` supplies the dialog ID,
+open state, opener and optional applied count; `filterButtonRef` supports focus
+restoration. Mobile shows only the filter
+icon; desktop shows its icon and label. All controls use the shared control
+metrics, floating-label primitives, focus styles and theme tokens.
+
+Matches uses this component on mobile and desktop. Its desktop Advanced filters
+dialog reuses the individual section fields and their draft validation; Cancel
+restores the opening draft and Done keeps edits for the next search submission.
+
+`src/components/performance/performance-summary.tsx` is shared by Matches,
+Best Slips and performance reports. The heading places its title on the left
+and an optional actual data timestamp on the right (`03-Nov-2026 20:30 EAT`).
+The reporting period remains explicit. All, Won, Lost, Pending, Void and Cancelled
+use theme colours in three mobile columns and six desktop columns. Mobile cards
+have no icons. Result actions retain each screen's date/filter navigation;
+unknown counts show dashes and cannot be selected. Desktop percentages and
+optional prediction-coverage details remain available. Missing timestamps are
+omitted rather than replaced with the browser clock.
+
+## Match search and filters
 
 `scripts/verify-unified-match-filters.js` exercises applied desktop and phone
 status/date changes and native GET forms against the SQL-backed rendering
@@ -13,8 +37,8 @@ projections remain authoritative. At desktop widths (64rem and above), the
 approved Compact toolbar puts search, match status, period and sorting on the
 first row, with no visible page title or selector prefixes. The second row
 contains five optional-filter buttons, Predictions only, a quiet Reset action
-and the primary Apply filters action. Square 32px controls, 12px labels,
-compact icons, 8px panel padding and 6px gaps match the predicted-match rows.
+and the primary Apply filters action. Shared control heights, compact labels/icons,
+themed panel padding and gaps match the predicted-match rows.
 Controls wrap when enlarged text or longer labels need more room; coarse
 pointers retain targets of at least 44px. The existing popup fields keep their
 previous sizes and behavior.
@@ -22,26 +46,22 @@ The optional sections are Match Date & Time, Leagues, Countries, Markets, and
 Limits, in that order. Each opens its own modal dialog; detailed fields and
 duplicate default-summary chips do not occupy the desktop section.
 
-On desktop, the complete filter panels on Matches, Best Slips and Slip Builder
-stick beneath the app header while results scroll. They share the shell's
-header-height offset and remain above the cards, with opaque theme surfaces.
-The Best Slips applied summary and Builder criteria summary remain inside their
-panels. Phone and tablet filters continue in normal page flow.
+Filter panels remain in normal page flow at every screen size, sharing the
+app shell's horizontal rails and themed section surfaces.
 
 Desktop app pages join adjacent filter, summary and result sections without
 page-background gutters. Shared section geometry also applies to Performance
 and Analytics; inner controls and result-card spacing keep their own tokens.
-The app content starts flush with the preceding header/access section, and
-Analytics uses the same header-height offset as the public sticky filters.
+The app content starts flush with the preceding header/access section.
 
-Below 64rem, the approved Compact stack has two resting rows: full-width search,
-then one Date button, the match-status selector, and an icon-only Advanced
-filters button. Search uses a labeled submit icon at its leading edge and also
-submits on Enter. The date button shows the applied preset or date range and
-opens its own editor. Sorting and Reset live inside Advanced filters. The day
+Below 64rem, the Compact stack has two resting rows: search with an adjacent
+icon-only Advanced filters button, then one Date button and the match-status
+selector. Search uses a floating label and an inset submit icon at the right,
+and also submits on Enter. The date button shows the applied preset or date range
+and opens its own editor. Sorting and Reset live inside Advanced filters. The day
 strip, second period selector, and repeated Showing summary are absent from the
-enhanced mobile layout. Square controls, compact 12–13px text, quiet borders,
-and theme colors match the mobile cards; top-level targets remain at least 44px.
+enhanced mobile layout. Shared subtle corners, compact text, quiet borders,
+and theme colors match the mobile cards; coarse-pointer targets remain at least 44px.
 The compact panel adds no inline padding and uses 4px gaps between its rows and
 controls. The date sheet uses 10px body padding, 10px section gaps, and 4px gaps
 between preset buttons, retaining 44px targets.

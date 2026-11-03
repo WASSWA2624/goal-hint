@@ -180,6 +180,8 @@ export const ActionButton = styled(Button)`
 
 export const DialogContent = styled.div`
   min-inline-size: 0;
+  [data-feed-dialog-section] + [data-feed-dialog-section] { margin-block-start: var(--gh-spacing-4); }
+  [data-feed-dialog-section] > h3 { margin: 0 0 var(--gh-spacing-2); font-size: var(--gh-font-secondary); }
   fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
   fieldset + fieldset { margin-block-start: var(--gh-spacing-3_75); padding-block-start: var(--gh-spacing-3_25); border-block-start: 0; }
   legend { margin-block-end: var(--gh-spacing-1_75); padding: 0; font-size: var(--gh-font-body); font-weight: ${({ theme }) => theme.typography.weight.bold}; }

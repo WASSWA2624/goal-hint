@@ -39,7 +39,7 @@ test('yesterday slip totals are read independently of list page, filter and toda
       statistics: query.period === 'yesterday' ? counts : { ...counts, total: 100, pending: 94 },
       browse: { query, total: 100, hasMore: true, nextCursor: null, pageSize: 20, ...resolveBestSlipsDates(query, today) } }; } });
   const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, { ...defaultBestSlipsQuery(), page: 3 });
-  assert.deepEqual(result.summary, { from: previous, to: previous, statistics: counts });
+  assert.deepEqual(result.summary, { asOf: Date.parse(`${today}T12:00:00+03:00`), from: previous, to: previous, statistics: counts });
   assert.equal(result.browse.query.page, 3); assert.equal(result.browse.total, 100);
   assert.deepEqual(calls[1], { period: 'yesterday', status: 'all', oddsBand: '1.5-5', page: 1 });
   calls.length = 0;

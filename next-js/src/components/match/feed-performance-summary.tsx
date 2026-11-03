@@ -17,7 +17,8 @@ import { LoadingTheme } from "@/styles/loading-theme";
 type Presentation = { query: FeedQuery; data: MatchFeedResponse; period: string };
 function summaryLabels({ query, data, period }: Presentation) {
   return { title: createMessages(query.locale).text(query.summary ? "history.yesterday" : "history.performance"),
-    period: query.summary ? `${addReportingDays(getReportingDate(utcInstantFromEpochMilliseconds(data.asOf)), -1)} · EAT` : period };
+    period: query.summary ? `${addReportingDays(getReportingDate(utcInstantFromEpochMilliseconds(data.asOf)), -1)} · EAT` : period,
+    asOf: data.asOf };
 }
 const ignoreResult = () => {};
 
@@ -27,7 +28,7 @@ export function FeedPerformancePlaceholder(props: Presentation) {
     showCoverage={false} showAll onResult={ignoreResult} disabled /></LoadingTheme>;
 }
 
-type Reply = { key: string; attempt: number; refreshAfter: number; counts: NonNullable<MatchFeedResponse["performance"]> | null; failed: boolean };
+type Reply = { key: string; attempt: number; asOf: number; refreshAfter: number; counts: NonNullable<MatchFeedResponse["performance"]> | null; failed: boolean };
 
 /** The initial audit streams from the server; later list polls retain the last confirmed figures. */
 export function FeedPerformanceSummary({ query, today, data, enabled, period, onApply, initial }: Presentation & {
@@ -43,8 +44,8 @@ export function FeedPerformanceSummary({ query, today, data, enabled, period, on
     if (seed?.href !== href) return null;
     let counts = null;
     try { if (seed.reply) counts = checkedPeriodPerformance(seed.reply, data).performance; } catch { /* Changed viewers retry through the current endpoint. */ }
-    return counts ? { key, attempt: 0, counts, refreshAfter: seed.reply!.asOf + 60_000, failed: false }
-      : { key, attempt: 0, counts: null, refreshAfter: Infinity, failed: true };
+    return counts ? { key, attempt: 0, counts, asOf: seed.reply!.asOf, refreshAfter: seed.reply!.asOf + 60_000, failed: false }
+      : { key, attempt: 0, counts: null, asOf: data.asOf, refreshAfter: Infinity, failed: true };
   });
   const latest = useRef({ query, today, data });
   useEffect(() => { latest.current = { query, today, data }; }, [data, query, today]);
@@ -57,9 +58,9 @@ export function FeedPerformanceSummary({ query, today, data, enabled, period, on
     const request = dispatch(refreshApi.endpoints.feedSummary.initiate({ query, today }, { forceRefetch: true }));
     void consumeRefresh(request, controller.signal).then((value) => {
       const checked = checkedPeriodPerformance(value, latest.current.data);
-      if (!controller.signal.aborted) setReply({ key, attempt, refreshAfter: latest.current.data.asOf + 60_000, counts: checked.performance, failed: false });
+      if (!controller.signal.aborted) setReply({ key, attempt, asOf: checked.asOf, refreshAfter: latest.current.data.asOf + 60_000, counts: checked.performance, failed: false });
     }).catch(() => {
-      if (!controller.signal.aborted) setReply((previous) => ({ key, attempt, refreshAfter: Infinity,
+      if (!controller.signal.aborted) setReply((previous) => ({ key, attempt, asOf: previous?.key === key ? previous.asOf : latest.current.data.asOf, refreshAfter: Infinity,
         counts: previous?.key === key ? previous.counts : null, failed: true }));
     });
     return () => controller.abort();
@@ -67,7 +68,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, period, on
   const counts = reply?.key === key ? reply.counts : null, failed = reply?.key === key && reply.failed;
   return <Stack $gap="sm" data-feed-performance-state={failed ? "unavailable" : counts ? "ready" : "loading"}>
     <PerformanceSummary counts={counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null} locale={query.locale} kind="matches"
-      {...summaryLabels({ query, data, period })} activeResult={query.result} disabled={!enabled}
+      {...summaryLabels({ query, data, period })} asOf={reply?.key === key ? reply.asOf : data.asOf} activeResult={query.result} disabled={!enabled}
       onResult={(result) => onApply(selectFeedSummaryResult(query, result, today, data.asOf))} showCoverage={false} showAll />
     {failed && <Inline><FeedNote role="status">{messages.text("performance.summary.unavailable")}</FeedNote>
       <Button type="button" variant="secondary" disabled={!enabled} onClick={() => retry((value) => value + 1)}>{messages.text("feed.retry")}</Button>

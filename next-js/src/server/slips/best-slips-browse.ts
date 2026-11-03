@@ -31,7 +31,7 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
   read?: typeof readPublishedBestSlips; providerOdds?: boolean; now?: () => number;
 } = {}) {
   return async (access: ViewerAccess, input: BestSlipsQuery, _locale = "en"): Promise<BestSlipsResult> => {
-    const day = getReportingDate(utcInstantFromEpochMilliseconds(now()));
+    const asOf = now(), day = getReportingDate(utcInstantFromEpochMilliseconds(asOf));
     const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), day), dates = resolveBestSlipsDates(query, day);
     const empty = { day, entitled: access.tier === "full", slips: [], searchLimited: false, partialCoverage: false, statistics: null,
       browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
@@ -44,7 +44,7 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
         query.summary === "yesterday" ? read({ period: "yesterday", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null) : null,
       ]);
       const summary = query.summary === "yesterday" ? yesterdaySummary : result;
-      return gateBestSlips({ ...result, summary: { from: query.summary ? date : dates.from,
+      return gateBestSlips({ ...result, summary: { asOf, from: query.summary ? date : dates.from,
         to: query.summary ? date : dates.to, statistics: summary?.statistics ?? null } }, access);
     }
     catch { return { ...empty, state: "data-unavailable" }; }

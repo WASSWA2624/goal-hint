@@ -142,6 +142,12 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
       const instant = displayInstant(value);
       return `${instants.format(instant)} ${zoneName(instant)}`;
     },
+    /** Stable compact date and 24-hour time for performance headings. */
+    reportingInstantCompact(value: UtcInstant): string {
+      const instant = displayInstant(value), parts = instants.formatToParts(instant);
+      const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)!.value;
+      return `${part("day").padStart(2, "0")}-${part("month")}-${part("year")} ${part("hour")}:${part("minute")} ${zoneName(instant)}`;
+    },
     /** Compact kickoff parts in the display zone; date-only reporting labels keep their named day. */
     reportingDay(value: UtcInstant): string {
       return instantDays.format(displayInstant(value));

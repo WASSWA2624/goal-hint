@@ -11,7 +11,6 @@ import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
 import { SearchBar } from "@/components/ui/search-bar";
 import { CheckoutMessage } from "@/components/members/checkout-parts";
-import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { RailNumber, RailStep, StepRail } from "@/components/members/subscribe-styles";
 import { PaymentWizard, WizardActions } from "@/components/members/payment-wizard";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
@@ -29,9 +28,9 @@ import { checkRenderedTheme } from "./theme-checks";
 
 export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureSnapshot[]; slip: BuiltSlip; edgeSlips: BuiltSlip[] }) {
   const theme = useTheme();
-  const desktop = useDesktopLayout();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [query, setQuery] = useState(defaultBestSlipsQuery(false));
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const [query, setQuery] = useState(defaultBestSlipsQuery());
   const [result, setResult] = useState<{ mode: string; width: number; errors: string[]; revision: number } | null>(null);
   const runChecks = useCallback(() => {
     const errors = checkRenderedTheme(theme), width = window.innerWidth;
@@ -60,7 +59,7 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
     </Stack></Surface>
     <section id="theme-radius"><Stack $gap="sm">
       <SectionHeading>Corner radius across screens</SectionHeading>
-      <div id="theme-filters"><BestSlipsFilters query={query} today={parseReportingDate("2026-10-19")} locale="en" onChange={setQuery} /></div>
+      <div id="theme-filters"><BestSlipsFilters query={query} today={parseReportingDate("2026-10-19")} locale="en" statistics={{ total: 12, won: 5, lost: 2, pending: 3, void: 1, cancelled: 1 }} summary={{ asOf: Date.UTC(2026, 10, 3, 17, 30), from: parseReportingDate("2026-11-02"), to: parseReportingDate("2026-11-02"), statistics: null }} onChange={setQuery} /></div>
       <AdminPanel id="theme-admin-panel"><PanelBody>
         <Inline><Badge id="theme-radius-badge">Active</Badge></Inline>
         <Segmented id="theme-joined-controls"><button type="button" aria-pressed="true">Active</button><button type="button">History</button></Segmented>
@@ -79,7 +78,9 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
       <Inline><Button>Primary action</Button><Button variant="secondary" data-surface-control>Secondary action</Button>
         <Button disabled>Disabled action</Button><Button variant="quiet" onClick={() => setDialogOpen(true)} data-open-theme-dialog>Open dialog</Button></Inline>
       <TextInput id="theme-control-input" label="Example input" defaultValue="Synthetic text" />
-      <form id="theme-search" onSubmit={event => event.preventDefault()}><SearchBar id="theme-search-input" label="Synthetic search" submitLabel="Search" /></form>
+      <form id="theme-search" onSubmit={event => { event.preventDefault(); setSubmittedSearch(String(new FormData(event.currentTarget).get("q") ?? "")); }}><SearchBar id="theme-search-input" name="q" label="Synthetic search" submitLabel="Search"
+        filters={{ label: "Advanced filters", dialogId: "theme-dialog", open: dialogOpen, onOpen: () => setDialogOpen(true) }} /></form>
+      <output data-submitted-search>{submittedSearch}</output>
       <CheckoutMessage id="theme-textarea" aria-label="Synthetic message" defaultValue="Synthetic text" />
       <TextInput id="theme-invalid-input" label="Invalid example" defaultValue="Synthetic" error="Synthetic validation message" />
       <TextInput id="theme-disabled-input" label="Disabled example" defaultValue="Synthetic" disabled />
@@ -87,7 +88,7 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
       <StepRail><RailStep><RailNumber id="theme-member-step">1</RailNumber><h3>Payment step</h3><div><p>Synthetic member payment guidance.</p></div></RailStep></StepRail>
     </Stack></Surface>
     <section id="theme-performance"><PerformanceSummary locale="en" kind="matches"
-      title="Synthetic overall performance" period="Synthetic cohort"
+      title="Synthetic overall performance" period="Synthetic cohort" showAll={false} asOf={Date.UTC(2026, 10, 3, 17, 30)}
       counts={{ total: 120, won: 72, lost: 24, pending: 18, void: 2, unavailable: 3, filteredOut: 1 }} /></section>
     <section id="theme-matches"><Stack $gap="sm"><SectionHeading>Match cards</SectionHeading>
       <MatchCardList>{fixtures.map((fixture, index) => <li key={fixture.fixtureId} style={{ contentVisibility: "visible" }}><MatchCard fixture={fixture} position={index + 1}

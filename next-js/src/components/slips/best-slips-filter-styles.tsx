@@ -8,7 +8,6 @@ import { desktopContentPadding } from "@/components/ui/layout";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { filledAction, selectSurface } from "@/components/ui/filled-surfaces";
 import { media } from "@/styles/theme";
-import type { BestSlipsStatus } from "@/domain/best-slips-query";
 
 const compactControl = css`
   box-sizing: border-box;
@@ -51,17 +50,6 @@ export const FiltersRow = styled.div`
   ${inlineControlRow}
 `;
 
-const toggleGroup = css`
-  display: flex;
-  align-items: center;
-  gap: var(--gh-spacing-0_5);
-  padding: var(--gh-spacing-0_5);
-  background: ${({ theme }) => theme.color.surface};
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.surface};
-  min-inline-size: 0;
-`;
-
 export const ToggleRow = styled.div`
   display: flex;
   flex-wrap: nowrap;
@@ -76,27 +64,6 @@ export const ToggleRow = styled.div`
   ${media.belowDesktop} { flex-wrap: wrap; gap: var(--gh-spacing-1); }
 
   ${inlineControlRow}
-`;
-
-export const ResultGroup = styled.div`
-  ${toggleGroup}
-  flex: 0 1 auto;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: ${({ theme }) => theme.color.border} transparent;
-  &::-webkit-scrollbar { block-size: var(--gh-size-0_75); }
-  &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
-  ${media.desktop} {
-    gap: var(--gh-spacing-1_5);
-    padding: 0;
-    background: transparent;
-    @media (max-width: ${({ theme }) => theme.viewport[79.99]}) { flex: 1 0 100%; box-sizing: border-box; }
-  }
-  ${media.belowDesktop} {
-    order: 2; flex: 1 0 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--gh-spacing-1); padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none};
-    overflow: visible; background: transparent;
-  }
 `;
 
 export const FilterButton = styled.button`
@@ -148,73 +115,6 @@ export const DateSelect = styled(SelectMenu)`
   ${media.belowDesktop} {
     flex: 1; inline-size: 100%;
     > [data-select-trigger] { padding: var(--gh-spacing-0_75) var(--gh-spacing-2); font-size: var(--gh-font-body); box-shadow: none; }
-  }
-`;
-
-export const ResultButton = styled(FilterButton)<{ $status: BestSlipsStatus }>`
-  ${({ theme, $status }) => {
-    const tone = $status === "all" ? { text: theme.color.text, background: theme.color.surfaceMuted }
-      : $status === "cancelled" ? { text: theme.color.accent.orange.text, background: theme.color.accent.orange.soft }
-        : theme.color.outcome[$status === "won" ? "correct" : $status === "lost" ? "incorrect" : $status === "void" ? "void" : "pending"];
-    return css`
-      --result-text: ${tone.text};
-      --result-background: ${tone.background};
-    `;
-  }}
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--gh-spacing-1_25);
-  padding: var(--gh-spacing-0_75) var(--gh-spacing-1_5);
-  white-space: nowrap;
-  border: 0;
-  color: var(--result-text);
-  background: color-mix(in srgb, var(--result-background) 55%, ${({ theme }) => theme.color.surface});
-  &::before { content: ""; inline-size: var(--gh-size-1_25); block-size: var(--gh-size-1_25); background: currentColor; }
-  > strong { font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; }
-  [data-slip-result-percent] { font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; }
-  [data-mobile-result-percent] { display: none; }
-  &:focus-visible { outline-offset: calc(-1 * var(--gh-size-0_75)); }
-  &[aria-pressed="true"]:focus-visible { outline-color: ${({ theme }) => theme.color.surface}; }
-  &[aria-pressed="true"] {
-    color: ${({ theme }) => theme.color.surface};
-    background: var(--result-text);
-  }
-  ${media.hover} {
-    &:hover:not([aria-pressed="true"]) { background: var(--result-background); }
-    &[aria-pressed="true"]:hover { background: var(--result-text); }
-  }
-  @media (max-width: ${({ theme }) => theme.viewport[79.99]}) { gap: var(--gh-spacing-0_75); padding-inline: var(--gh-spacing-1); }
-  @media (pointer: coarse) { min-block-size: var(--gh-size-11); }
-  ${media.desktop} {
-    gap: var(--gh-spacing-1_5);
-    padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
-    font-size: var(--gh-font-body);
-    > strong { font-size: var(--gh-font-body); font-weight: var(--gh-weight-bold); }
-    [data-slip-result-percent] { font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-medium); }
-    @media (pointer: coarse) { min-block-size: var(--gh-size-11); }
-    ${({ theme, $status }) => $status === "all" && css`
-      &[aria-pressed="true"], &[aria-pressed="true"]:hover {
-        color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft};
-      }
-      &[aria-pressed="true"]:focus-visible { outline-color: ${theme.color.accent.blue.text}; }
-    `}
-  }
-  ${media.belowDesktop} {
-    display: grid; grid-template-columns: max-content max-content; justify-content: center; align-content: center;
-    gap: var(--gh-spacing-0_25) var(--gh-spacing-0_75); padding: var(--gh-spacing-0_5) var(--gh-spacing-1);
-    border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-control); text-align: center;
-    &::before { display: none; }
-    > span:first-of-type { grid-column: 1 / -1; }
-    > strong { grid-row: 2; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-bold); }
-    [data-slip-result-percent] { grid-row: 2; font-size: var(--gh-font-caption); }
-    [data-mobile-result-percent] { display: inline; }
-    ${({ theme, $status }) => $status === "all" && css`
-      color: ${theme.color.accent.blue.text}; background: ${theme.color.accent.blue.soft};
-      &[aria-pressed="true"], &[aria-pressed="true"]:hover {
-        color: ${theme.color.accent.blue.soft}; background: ${theme.color.accent.blue.text};
-      }
-    `}
   }
 `;
 
