@@ -1,157 +1,125 @@
 "use client";
 
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
-import { OutcomeBadge } from "@/components/match/prediction-presentation";
+import { controlHeight } from "@/components/ui/control-layout";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
+import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts, type PredictionResult } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
-import { media, type OutcomeTone } from "@/styles/theme";
+import { media } from "@/styles/theme";
 
-const wide = css`@container performance-summary (min-width: ${({ theme }) => theme.size[224]})`;
-
-const Panel = styled.div<{ $interactive: boolean }>`
-  container: performance-summary / inline-size;
-  position: relative; min-inline-size: 0; block-size: max(var(--gh-size-11), var(--gh-size-11)); box-sizing: border-box;
-  border: 0;
-  background: ${({ theme }) => theme.color.surface}; border-radius: ${({ theme }) => theme.radius.surface}; line-height: var(--gh-leading-caption);
-  ${media.desktop} { block-size: var(--gh-size-9); }
+const Panel = styled.section`
+  min-inline-size: 0; background: ${({ theme }) => theme.color.surface};
+  border-radius: ${({ theme }) => theme.radius.none};
   ${desktopSectionFrame}
-  @media (pointer: coarse) { block-size: max(var(--gh-size-11), var(--gh-size-11)); ${media.desktop} { block-size: max(var(--gh-size-11), var(--gh-size-9)); } }
-  ${({ $interactive }) => $interactive && css`block-size: auto; ${media.desktop} { block-size: auto; } @media (pointer: coarse) { block-size: auto; }` }
 `;
 const Content = styled.div`
-  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-0_25);
-  block-size: 100%; min-inline-size: 0; padding: var(--gh-spacing-0_75) var(--gh-spacing-2) var(--gh-spacing-1_25); box-sizing: border-box;
-  ${media.desktop} { display: flex; align-items: center; gap: var(--gh-spacing-3); padding: var(--gh-spacing-0_75) var(--gh-spacing-3) var(--gh-spacing-1_25); }
+  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
+  padding: ${({ theme }) => theme.layout.sectionPadding};
   ${desktopContentPadding(true)}
 `;
 const Header = styled.header`
-  display: flex; align-items: baseline; justify-content: space-between; gap: var(--gh-spacing-2);
-  min-inline-size: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
-  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
-  > h2, > h3 { flex: none; font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-control); }
-  > p { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); line-height: var(--gh-leading-control); font-variant-numeric: tabular-nums; }
-  ${media.desktop} {
-    display: grid; flex: none; gap: var(--gh-spacing-0_25); max-inline-size: 40%;
-    padding-inline-end: var(--gh-spacing-3); border-inline-end: 0;
-  }
+  display: flex; align-items: baseline; justify-content: space-between;
+  flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-2); min-inline-size: 0;
+  h2, h3 { margin: 0; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-control); }
+  time, > p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  time { margin-inline-start: auto; }
 `;
-/** One focusable strip preserves every figure at phone widths without increasing the summary height. */
-const Figures = styled.div`
-  display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0;
-  overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
-  scrollbar-width: thin; scrollbar-color: ${({ theme }) => theme.color.border} transparent;
-  &::-webkit-scrollbar { block-size: var(--gh-size-0_75); }
-  &::-webkit-scrollbar-thumb { background: ${({ theme }) => theme.color.border}; }
-  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
-  ${media.desktop} { flex: 1; align-self: stretch; }
+const Period = styled.p`
+  margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption);
 `;
 const Counts = styled.dl`
-  display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: var(--gh-spacing-1_5);
-  inline-size: max-content; margin: 0;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gh-spacing-1); min-inline-size: 0; margin: 0;
+  ${media.desktop} { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--gh-spacing-1_5); }
 `;
-const Count = styled.div<{ $tone?: OutcomeTone; $zero?: boolean; $interactive?: boolean }>`
-  --summary-tone: ${({ theme, $tone }) => $tone === "unavailable" ? theme.color.controlBorder
-    : $tone ? theme.color.outcome[$tone].text : theme.color.text};
-  display: flex; align-items: baseline; min-inline-size: 0; white-space: nowrap;
-  ${({ $interactive }) => $interactive && css`position: relative; align-items: center; min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-1);` }
-  &::before {
-    content: ${({ $tone }) => $tone ? '""' : "none"}; order: 0; flex: none;
-    inline-size: var(--gh-size-1_5); block-size: var(--gh-size-1_5); margin-inline-end: var(--gh-spacing-1);
-    background: ${({ $zero }) => $zero ? "transparent" : "var(--summary-tone)"}; border: 0;
-  }
-  dd {
-    order: 1; margin: 0; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-heading);
-    font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
-    color: ${({ theme, $tone, $zero }) => $zero ? theme.color.mutedText
-      : $tone === "unavailable" ? theme.color.text : "var(--summary-tone)"};
-  }
-  dt { order: 2; margin-inline-start: var(--gh-spacing-1); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-micro); line-height: var(--gh-leading-heading); }
+type Status = PredictionResult | "all";
+const Count = styled.div<{ $status: Status }>`
+  ${({ theme, $status }) => {
+    const tone = $status === "all" ? { text: theme.color.accent.blue.text, background: theme.color.accent.blue.soft }
+      : $status === "cancelled" ? { text: theme.color.accent.orange.text, background: theme.color.accent.orange.soft }
+        : theme.color.outcome[$status === "won" ? "correct" : $status === "lost" ? "incorrect" : $status === "void" ? "void" : "pending"];
+    return `--summary-text: ${tone.text}; --summary-background: ${tone.background};`;
+  }}
+  ${controlHeight}
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--gh-spacing-0_5); min-inline-size: 0; padding: var(--gh-spacing-1_5) var(--gh-spacing-1);
+  box-sizing: border-box; border-radius: ${({ theme }) => theme.radius.small};
+  color: var(--summary-text); background: var(--summary-background);
+  dt { margin: 0; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); }
+  dd { display: flex; align-items: center; gap: var(--gh-spacing-1); margin: 0; font-size: var(--gh-font-emphasis); font-weight: var(--gh-weight-bold); font-variant-numeric: tabular-nums; }
+  dd > svg { display: none; }
+  ${media.desktop} { dd > svg { display: block; font-size: var(--gh-font-secondary); } }
 `;
-const OutcomeCount = styled(OutcomeBadge)<{ $outcome: "correct" | "incorrect" | "pending"; $interactive?: boolean }>`
-  flex: none; min-inline-size: max-content; min-block-size: var(--gh-size-4); padding: 0 var(--gh-spacing-1);
-  border: 0; border-radius: ${({ theme }) => theme.radius.small}; white-space: nowrap;
-  color: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].text};
-  background: ${({ theme, $outcome }) => theme.color.performanceOutcome[$outcome].background};
-  font-size: var(--gh-font-caption); line-height: var(--gh-leading-heading); font-variant-numeric: tabular-nums;
-  dt, dd { margin: 0; color: inherit; font: inherit; }
-  dt { order: 2; }
-  dd { display: inline-flex; align-items: center; gap: var(--gh-spacing-1); order: 1; }
-  dd { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  dd > svg { flex: none; font-size: var(--gh-font-micro); }
-  ${({ $interactive }) => $interactive && css`position: relative; min-block-size: var(--form-control-height); padding-inline: var(--gh-spacing-1_5);` }
+const Percentage = styled.span`
+  display: none; margin-inline-start: var(--gh-spacing-1); font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body);
+  ${media.desktop} { display: inline; }
 `;
-const PredictedCount = styled(Count)`
-  flex: none;
+const Coverage = styled.dl`
+  display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-3); margin: 0;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption);
+  > div { display: flex; gap: var(--gh-spacing-1); }
+  dt, dd { margin: 0; }
 `;
-const OutcomePercentage = styled.span`
-  display: none;
-  ${wide} { display: inline; margin-inline-start: var(--gh-spacing-1); font-size: var(--gh-font-micro); font-weight: ${({ theme }) => theme.typography.weight.body}; }
-`;
-const Extras = styled.dl`
-  display: flex; flex: none; gap: var(--gh-spacing-2); margin: 0; padding-inline-start: var(--gh-spacing-2);
-  border-inline-start: 0;
-`;
-const SummaryAction = styled.button`
-  position: absolute; inset: 0; inline-size: 100%; block-size: 100%; padding: 0; border: 0;
-  background: transparent; border-radius: ${({ theme }) => theme.radius.small}; cursor: pointer;
-  &[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--gh-stroke-strong) ${({ theme }) => theme.color.brand}; }
+const Action = styled.button`
+  position: absolute; inset: 0; inline-size: 100%; block-size: 100%; padding: 0;
+  border: 0; border-radius: inherit; background: transparent; cursor: pointer;
+  &[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--gh-stroke-strong) currentColor; }
+  color: inherit;
   &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   &:disabled { cursor: wait; }
 `;
-/** One compact, accessible presentation for full-period match and slip outcomes. */
-export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, headingLevel = 2, showCoverage = true, showAll = false, activeResult, onResult, disabled = false }: {
-  /** Null reserves the real summary layout without presenting invented zero results. */
+
+/** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
+export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, asOf, headingLevel = 2,
+  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, resultAttributes }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
-  title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
+  title?: string | undefined; period?: string | undefined; asOf?: number | undefined; headingLevel?: 2 | 3 | undefined;
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
+  resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
 }) {
-  const m = createMessages(locale), label = title ?? m.text("performance.summary.title");
-  const pending = suppliedCounts === null, counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
-  const number = (value: number) => pending ? "—" : m.number(value);
-  const action = (result: PredictionResult | undefined, text: string, count: number) => onResult ? <SummaryAction type="button"
-    aria-label={`${text}: ${number(count)}`} aria-pressed={activeResult === result} disabled={disabled || pending}
-    data-summary-result={result ?? "all"} onClick={() => onResult(result)} /> : null;
+  const m = createMessages(locale), label = title ?? m.text("performance.summary.title"), pending = suppliedCounts === null;
+  const counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
+  const number = (value: number) => pending ? "—" : m.number(value);
   const outcomes = [
+    { key: "all", label: m.text(showAll ? "performance.summary.all" : `performance.summary.${kind}`), count: showAll && predicted ? predicted.total : counts.total },
     { key: "won", tone: "correct", label: m.text("performance.won"), count: counts.won, icon: CheckIcon },
     { key: "lost", tone: "incorrect", label: m.text("performance.lost"), count: counts.lost, icon: CloseIcon },
     { key: "pending", tone: "pending", label: m.text("performance.pending"), count: counts.pending, icon: ClockIcon },
+    { key: "void", label: m.text("performance.void"), count: counts.void ?? 0 },
+    { key: "cancelled", label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 },
   ] as const;
-  const coverage = [
-    { key: "unavailable", tone: "unavailable" as const, label: m.text("performance.summary.noPrediction"), count: counts.unavailable ?? 0 },
-    { key: "filteredOut", tone: "unavailable" as const, label: m.text("performance.filteredOut"), count: counts.filteredOut ?? 0 },
-  ].filter(({ count }) => count > 0);
-  const voidOutcome = { key: "void", tone: "void" as const, label: m.text("performance.void"), count: counts.void ?? 0 };
-  const cancelledOutcome = { key: "cancelled", tone: "void" as const, label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 };
-  const extras = [voidOutcome, cancelledOutcome, ...coverage.filter(({ key }) => showCoverage || key !== "unavailable")]
-    .filter(({ key, count }) => count > 0 || showAll && (key === "void" || key === "cancelled"));
-  return <Panel $interactive={!!onResult} role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
+  const instant = asOf === undefined ? null : utcInstantFromEpochMilliseconds(asOf);
+  return <Panel role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
     <Content>
-      <Header tabIndex={0} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
-      <Figures tabIndex={0} role="region" aria-label={`${label}: ${m.text("performance.summary.figures")}`} data-performance-figures>
-      <Counts>
-        {(showCoverage || showAll) && <Count $interactive={!!onResult} $zero={counts.total === 0}><dt>{m.text(showAll ? "performance.summary.all" : `performance.summary.${kind}`)}</dt><dd>{number(showAll && predicted ? predicted.total : counts.total)}{action(undefined, m.text("performance.summary.all"), showAll && predicted ? predicted.total : counts.total)}</dd></Count>}
-        {predicted && !showAll && <PredictedCount $zero={predicted.total === 0} data-summary-predicted>
-          <dt>{m.text("performance.summary.predicted")}</dt><dd>{number(predicted.total)}</dd>
-        </PredictedCount>}
-        {outcomes.map(({ key, tone, label, count, icon: OutcomeIcon }) => {
-          const fraction = predicted?.[key], percentage = fraction === null || fraction === undefined ? null
-            : m.number(fraction, { style: "percent", maximumFractionDigits: 1 });
-          return <OutcomeCount as="div" key={tone} $interactive={!!onResult} $outcome={tone} data-summary-outcome={tone}>
-            <dt>{label}{predicted && <OutcomePercentage data-summary-percentage={tone}
-              title={percentage ? m.text("performance.summary.percentageOfPredicted", { percentage }) : m.text("performance.summary.noPredicted")}>
-              {percentage ? `(${percentage})` : "—"}
-            </OutcomePercentage>}</dt><dd><OutcomeIcon />{number(count)}{action(key, label, count)}</dd>
-          </OutcomeCount>;
+      <Header data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
+        {instant !== null ? <time dateTime={toUtcIsoString(instant)}>{m.reportingInstantCompact(instant)}</time> : period && <p>{period}</p>}
+      </Header>
+      {instant !== null && period && <Period data-performance-period>{period}</Period>}
+      <Counts data-performance-figures>
+        {outcomes.map((outcome) => {
+          const { key, label, count } = outcome, result = key === "all" ? undefined : key;
+          const fraction = key === "won" || key === "lost" || key === "pending" ? predicted?.[key] : null;
+          const percentage = !pending && fraction !== null && fraction !== undefined
+            ? m.number(fraction, { style: "percent", maximumFractionDigits: 1 }) : null;
+          const Icon = "icon" in outcome ? outcome.icon : null;
+          return <Count key={key} $status={key} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
+            <dt>{label}</dt><dd>{Icon && <Icon aria-hidden="true" />}{number(count)}
+              {predicted && "tone" in outcome && <Percentage data-summary-percentage={outcome.tone}>{percentage ? `(${percentage})` : "—"}</Percentage>}
+            </dd>
+            {onResult && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}
+              disabled={disabled || pending} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
+          </Count>;
         })}
       </Counts>
-      {extras.length > 0 && <Extras>{extras.map(({ key, tone, label, count }) => <Count key={key} $tone={tone} $interactive={!!onResult && (key === "void" || key === "cancelled")}>
-        <dt>{label}</dt><dd>{number(count)}{(key === "void" || key === "cancelled") && action(key, label, count)}</dd>
-      </Count>)}</Extras>}
-      </Figures>
+      {showCoverage && <Coverage>
+        {predicted && !showAll && <div data-summary-predicted><dt>{m.text("performance.summary.predicted")}</dt><dd>{number(predicted.total)}</dd></div>}
+        {(counts.unavailable ?? 0) > 0 && <div><dt>{m.text("performance.summary.noPrediction")}</dt><dd>{number(counts.unavailable!)}</dd></div>}
+        {(counts.filteredOut ?? 0) > 0 && <div><dt>{m.text("performance.filteredOut")}</dt><dd>{number(counts.filteredOut!)}</dd></div>}
+      </Coverage>}
     </Content>
   </Panel>;
 }

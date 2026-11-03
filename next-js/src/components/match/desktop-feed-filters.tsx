@@ -22,7 +22,7 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { PicksOnlyFilter } from "./feed-controls";
-import { FeedSearchInput } from "./feed-search-input";
+import { SearchBar } from "@/components/ui/search-bar";
 import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
 import { OptionLogo } from "./filter-parts";
@@ -199,7 +199,7 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
     }}>
     <VisuallyHidden as="h1">{feedHeading(query, today, messages)}</VisuallyHidden>
     <SearchRow data-desktop-filter-search>
-      <FeedSearchInput compact name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
+      <SearchBar name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
         placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
         submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
         onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />

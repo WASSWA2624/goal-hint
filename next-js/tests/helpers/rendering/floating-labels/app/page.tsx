@@ -3,7 +3,7 @@
 import { useState } from "react";
 import styled, { ThemeProvider } from "styled-components";
 import { ActionButton as OwnerAction, FieldBlock, FieldRow } from "@/components/admin/admin-form";
-import { FeedSearchInput } from "@/components/match/feed-search-input";
+import { SearchBar } from "@/components/ui/search-bar";
 import { CompactSelect } from "@/components/match/filter-parts";
 import { SlipNumericInput } from "@/components/slips/slip-numeric-input";
 import { CustomRangeButton, DateControls, DateSelect } from "@/components/slips/best-slips-filter-styles";
@@ -81,7 +81,7 @@ export default function Page() {
         </Inline>
         <Inline data-uniform-row="composite fields" style={{ gridColumn: "1 / -1" }}>
           <PhoneInput label="Row phone" value={phone} onValueChange={setPhone} hint="A country selector shares the input height" />
-          <FeedSearchInput label="Row search" submitLabel="Search row" />
+          <SearchBar label="Row search" submitLabel="Search row" />
           <Button>Find account</Button>
         </Inline>
         <Segmented data-uniform-row="owner tabs" style={{ gridColumn: "1 / -1" }}><button type="button">Active</button><a href="#mixed-input">History</a></Segmented>
@@ -109,7 +109,7 @@ export default function Page() {
         <FieldBlock label="Owner field"><input id="owner" name="owner" /></FieldBlock>
         <StepperPressure><SlipNumericInput field="slips" name="slips" label="Slip count" value={count} locale="en" onValueChange={setCount} /></StepperPressure>
         <SelectMenu label="Category" value={menu} options={[{ value: "all", label: "All categories" }, { value: "one", label: "One" }]} onValueChange={setMenu} />
-        <FeedSearchInput label="Search matches" submitLabel="Search" placeholder="Find a team" />
+        <SearchBar label="Search matches" submitLabel="Search" placeholder="Find a team" />
         <FileInput label="Attachment" id="attachment" />
         <Button type="reset">Reset fields</Button>
       </form>

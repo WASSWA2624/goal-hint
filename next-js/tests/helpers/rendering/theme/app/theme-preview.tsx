@@ -9,7 +9,7 @@ import { FeatureBody } from "@/components/admin/settings-feature-styles";
 import { SettingsForm } from "@/components/admin/settings-styles";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
-import { FeedSearchInput } from "@/components/match/feed-search-input";
+import { SearchBar } from "@/components/ui/search-bar";
 import { CheckoutMessage } from "@/components/members/checkout-parts";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { RailNumber, RailStep, StepRail } from "@/components/members/subscribe-styles";
@@ -79,7 +79,7 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
       <Inline><Button>Primary action</Button><Button variant="secondary" data-surface-control>Secondary action</Button>
         <Button disabled>Disabled action</Button><Button variant="quiet" onClick={() => setDialogOpen(true)} data-open-theme-dialog>Open dialog</Button></Inline>
       <TextInput id="theme-control-input" label="Example input" defaultValue="Synthetic text" />
-      <form id="theme-search" onSubmit={event => event.preventDefault()}><FeedSearchInput id="theme-search-input" label="Synthetic search" submitLabel="Search" compact mobile={!desktop} /></form>
+      <form id="theme-search" onSubmit={event => event.preventDefault()}><SearchBar id="theme-search-input" label="Synthetic search" submitLabel="Search" /></form>
       <CheckoutMessage id="theme-textarea" aria-label="Synthetic message" defaultValue="Synthetic text" />
       <TextInput id="theme-invalid-input" label="Invalid example" defaultValue="Synthetic" error="Synthetic validation message" />
       <TextInput id="theme-disabled-input" label="Disabled example" defaultValue="Synthetic" disabled />

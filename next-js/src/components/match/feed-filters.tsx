@@ -5,7 +5,7 @@ import { FloatingField } from "@/components/ui/floating-field";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { controlBodyHeight, inlineControlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
-import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
+import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useClientReady } from "@/components/ui/use-client-ready";
 import { dialogFooterSurface } from "@/components/ui/dialog-surfaces";
@@ -29,7 +29,7 @@ import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { FeedDraftStatus, FeedNote, PicksOnlyFilter } from "./feed-controls";
-import { FeedSearchInput } from "./feed-search-input";
+import { SearchBar } from "@/components/ui/search-bar";
 import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
@@ -88,7 +88,7 @@ const QueryChoices = styled.div`
 `;
 /** The approved Compact stack: one search row, then date/status and a single filter action. */
 const CompactToolbar = styled(QueryChoices)`
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--gh-size-11);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   gap: var(--gh-spacing-1);
   > select {
@@ -97,7 +97,7 @@ const CompactToolbar = styled(QueryChoices)`
     font-size: var(--gh-font-secondary);
     font-weight: ${({ theme }) => theme.typography.weight.medium};
   }
-  ${media.belowDesktop} { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--gh-size-9); }
+  ${media.belowDesktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   ${inlineControlRow}
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
@@ -140,68 +140,7 @@ const PhoneSort = styled(CompactSelect)`
   ${media.belowDesktop} { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); font-size: var(--gh-font-secondary); }
 `;
 /** Opens the filter sheet; the badge counts applied filters. */
-const FilterToggle = styled.button<{ $compact?: boolean }>`
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--gh-spacing-1_5);
-  min-block-size: var(--form-control-height);
-  padding-inline: var(--gh-spacing-2);
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  ${buttonBorder}
-  border-radius: ${({ theme }) => theme.radius.control};
-  font: inherit;
-  font-size: var(--gh-font-body);
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  cursor: pointer;
-  > svg { flex: none; font-size: var(--gh-font-section); }
-  > b {
-    min-inline-size: var(--gh-size-5);
-    padding: var(--gh-spacing-0_25) var(--gh-spacing-1_25);
-    color: ${({ theme }) => theme.color.onAction};
-    background: ${({ theme }) => theme.gradient.action};
-    font-size: var(--gh-font-caption);
-    line-height: var(--gh-leading-compact);
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-  }
-  &[aria-expanded="true"] {
-    color: ${({ theme }) => theme.color.accent.teal.text};
-    background: ${({ theme }) => theme.color.brandSoft};
 
-  }
-  ${controlFeedback}
-  ${focusRing}
-  @container (max-width: ${({ theme }) => theme.viewport[14]}) {
-    min-inline-size: var(--gh-size-11);
-    padding-inline: var(--gh-spacing-1_5);
-  }
-  ${({ $compact }) => $compact && css`
-    position: relative;
-    inline-size: var(--gh-size-11);
-    min-inline-size: var(--gh-size-11);
-    min-block-size: var(--form-control-height);
-    padding: 0;
-
-    border-radius: ${({ theme }) => theme.radius.overlay};
-    > svg { font-size: var(--gh-font-section); }
-    > b {
-      position: absolute;
-      inset-block-start: var(--gh-spacing-0_5);
-      inset-inline-end: var(--gh-spacing-0_5);
-      min-inline-size: var(--gh-size-3_5);
-      padding: 0 var(--gh-spacing-0_5);
-      font-size: var(--gh-font-micro);
-      line-height: var(--gh-size-3_5);
-    }
-  `}
-  ${media.belowDesktop} {
-    min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); font-size: var(--gh-font-secondary);
-    ${({ $compact }) => $compact && css`inline-size: var(--gh-size-9); min-inline-size: var(--gh-size-9); padding: 0;`}
-  }
-`;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
 
 /**
@@ -694,11 +633,6 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   const filtersLabel = messages.text("feed.filters.toggle");
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
   const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  const filterAction = <FilterToggle ref={filterToggle} $compact={compactPhone} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={panelId}
-    aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel}
-    title={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel} onClick={() => onOpenChange(true)}>
-    <SlidersIcon />{!compactPhone && <FilterActionLabel label={filtersLabel} />}{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
-  </FilterToggle>;
   return <Panel id={formId} data-mobile-compact-filters={compactPhone || undefined} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
     if (event.key === "Escape" && open && !event.defaultPrevented) { event.preventDefault(); closeSheet(); }
   }} onReset={(event) => {
@@ -716,14 +650,15 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     apply(applyFeedDraft(completeDraft, today));
   }}>
     {[...new URLSearchParams(parameters)].filter(([name]) => name !== "result" && (name !== "status" || !!query.result)).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-    <FeedSearchInput mobile={compactPhone} name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
+    <SearchBar name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
       placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
       submitLabel={messages.text("feed.search.submit")}
+      filters={{ label: filtersLabel, accessibleLabel: count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel,
+        dialogId: panelId, open, onOpen: () => onOpenChange(true), count, ref: filterToggle }}
       onChange={(event) => edit({ ...draft, search: event.target.value })} />
     {compactPhone ? <CompactToolbar data-phone-query-filters>
       <MobileFeedDateFilter query={query} today={today} onApply={onApply} />
       <FeedStatusSelect name="status" locale={query.locale} value={query.status} result={query.result} onResultChange={(result) => apply({ ...query, result, page: 1 })} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
-      {filterAction}
     </CompactToolbar> : <>
       {/* Preserve the native GET interface before hydration and without JavaScript. */}
       <QueryChoices data-phone-query-filters>
@@ -747,8 +682,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
           <FilterActionLabel label={messages.text("feed.filters.clear")} />
         </PhoneClear>
-        {filterAction}
-      </PhoneToolbar>
+        </PhoneToolbar>
     </>}
     {open && <SheetScrim aria-hidden="true" onClick={closeSheet} />}
     <FilterFieldsGroup ref={sheet} id={panelId} $open={open} onKeyDown={(event) => { if (open) keepFocusInSheet(event); }} tabIndex={open ? -1 : undefined}
