@@ -2,10 +2,10 @@
 
 import type { SharedSlip } from "@/domain/shared-slips";
 import { layoutSlipShareImages, slipShareImageFonts, slipShareImageRules, type SlipShareImageFont, type SlipShareImagePage } from "@/domain/slip-share-image";
-import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { providerImageSource } from "@/components/ui/provider-image";
 import { teamInitials } from "@/domain/match-card";
+import { loadSlipShareAssets, SlipShareLogoError, slipShareBrandAsset } from "./slip-share-assets";
 import { lightTheme } from "@/styles/theme";
 
 // Portable exports use the shared light palette even when the sender uses dark mode.
@@ -63,11 +63,10 @@ function renderPage(context: CanvasRenderingContext2D, page: SlipShareImagePage,
     context.fillStyle = color; context.fillRect(panelLeft, y, panelWidth, thickness);
   };
 
-  const brand = assets.get("/brand/goal-hint-logo-inverse.png");
-  if (brand) {
-    const height = 58, width = height * brand.naturalWidth / brand.naturalHeight;
-    context.drawImage(brand, padding, 26, Math.min(width, 430), height);
-  } else text(publicPolicy.name, padding, 30, "brand", lightTheme.color.onBrand);
+  const brand = assets.get(slipShareBrandAsset);
+  if (!brand) throw new SlipShareLogoError("unavailable");
+  const brandHeight = 58, brandWidth = brandHeight * brand.naturalWidth / brand.naturalHeight;
+  context.drawImage(brand, padding, 26, Math.min(brandWidth, 430), brandHeight);
   text(messages.text("slips.slipTitle", { number: page.reference }).toLocaleUpperCase(locale), rightText, 42, "heading", lightTheme.color.onBrand);
   text(messages.text("slipShare.created", { date: page.created }), padding, 111, "metadata", lightTheme.color.onBrand);
   const statusColor = page.status === "won" ? lightTheme.color.outcome.correct : page.status === "lost" ? lightTheme.color.outcome.incorrect
@@ -87,17 +86,17 @@ function renderPage(context: CanvasRenderingContext2D, page: SlipShareImagePage,
   text(messages.number(page.selectionCount), rightText, 224, "metric", colors.ink);
 
   function badge(source: string | null, name: string, x: number, y: number, size: number = teamSize) {
-    const image = source ? assets.get(providerImageSource(source, 48)) : undefined;
-    if (image) {
-      const scale = Math.min(size / image.naturalWidth, size / image.naturalHeight);
-      const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
-      context.drawImage(image, x + (size - width) / 2, y + (size - height) / 2, width, height);
-    }
-    else {
+    if (source === null) {
       context.fillStyle = lightTheme.color.brandSoft; context.fillRect(x, y, size, size);
       setFont(context, "metadata", family); context.fillStyle = colors.muted; context.textAlign = "center"; context.textBaseline = "top";
       context.fillText(teamInitials(name), x + size / 2, y + (size - slipShareImageFonts.metadata.size) / 2, size - 4);
+      return;
     }
+    const image = assets.get(providerImageSource(source, 48));
+    if (!image) throw new SlipShareLogoError("unavailable");
+    const scale = Math.min(size / image.naturalWidth, size / image.naturalHeight);
+    const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
+    context.drawImage(image, x + (size - width) / 2, y + (size - height) / 2, width, height);
   }
   for (const row of page.rows) {
     let y = row.top + 12;
@@ -147,37 +146,9 @@ function pngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-async function loadAssets(pages: readonly SlipShareImagePage[], signal?: AbortSignal): Promise<Map<string, HTMLImageElement>> {
-  const sources = new Set(["/brand/goal-hint-logo-inverse.png"]);
-  for (const row of pages.flatMap(page => page.rows)) for (const source of [row.homeLogo, row.awayLogo, row.competitionLogo]) {
-    if (!source) continue;
-    const local = providerImageSource(source, 48);
-    if (local.startsWith("/") && !local.startsWith("//") && !/[\\\u0000-\u0020]/u.test(local)) sources.add(local);
-  }
-  const assets = new Map<string, HTMLImageElement>(), queue = [...sources], deadline = Date.now() + 12_000;
-  // A small pool bounds requests and avoids retaining an unbounded batch of pending decoders.
-  await Promise.all(Array.from({ length: Math.min(6, queue.length) }, async () => {
-    for (let source = queue.shift(); source; source = queue.shift()) {
-      signal?.throwIfAborted();
-      if (Date.now() >= deadline) break;
-      const image = await new Promise<HTMLImageElement | null>(resolve => {
-        const element = new Image();
-        const finish = (loaded: boolean) => { clearTimeout(timer); signal?.removeEventListener("abort", abort); element.onload = element.onerror = null; resolve(loaded ? element : null); };
-        const abort = () => { element.src = ""; finish(false); };
-        const timer = setTimeout(() => { element.src = ""; finish(false); }, Math.min(10_000, deadline - Date.now()));
-        signal?.addEventListener("abort", abort, { once: true });
-        element.onload = () => finish(true); element.onerror = () => finish(false); element.src = source;
-      });
-      if (image) assets.set(source, image);
-    }
-  }));
-  signal?.throwIfAborted();
-  return assets;
-}
-
 /** One measured canvas and bounded first-party badge loading preserve complete, portable exports. */
 export async function createSlipShareImages(shared: SharedSlip, locale: string, signal?: AbortSignal,
-  onProgress?: (done: number, total: number) => void): Promise<File[]> {
+  onProgress?: (done: number, total: number) => void, onLogosProgress?: (done: number, total: number) => void): Promise<File[]> {
   signal?.throwIfAborted();
   if (typeof document === "undefined") throw new Error("Slip image export requires a browser.");
   const family = await loadedFontFamily();
@@ -188,9 +159,9 @@ export async function createSlipShareImages(shared: SharedSlip, locale: string, 
   const pages = layoutSlipShareImages(shared, locale, (value, font) => {
     setFont(context, font, family); return context.measureText(value).width;
   });
-  const assets = await loadAssets(pages, signal);
   const files: File[] = [];
   try {
+    const assets = await loadSlipShareAssets(pages, signal, onLogosProgress);
     for (const page of pages) {
       signal?.throwIfAborted();
       canvas.width = page.width; canvas.height = page.height;

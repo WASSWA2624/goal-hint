@@ -12,6 +12,7 @@ import { slipShareCaption } from "@/domain/slip-share-caption";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { createSlipShareDownload, downloadSlipShare } from "./slip-share-download";
 import { Drawer, DrawerBody, DrawerButton, DrawerFooter, DrawerHeader } from "./slip-share-styles";
+import { SlipShareLogoError } from "./slip-share-assets";
 
 type Prepared = { shared: SharedSlip; files: File[]; download: File; caption: string; imageUrls: string[]; nativeFiles: readonly NativeShareImage[] | null };
 
@@ -28,6 +29,7 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
   const [page, setPage] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [imageProgress, setImageProgress] = useState<{ done: number; total: number } | null>(null);
+  const [logoProgress, setLogoProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     const element = dialog.current;
@@ -80,6 +82,8 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
         const { createSlipShareImages } = await import("./slip-share-image");
         const files = await createSlipShareImages(shared, locale, controller.signal, (done, total) => {
           if (active) setImageProgress({ done, total });
+        }, (done, total) => {
+          if (active) setLogoProgress({ done, total });
         });
         const caption = slipShareCaption(shared, locale);
         const download = await createSlipShareDownload(files, shared.number!, caption);
@@ -88,7 +92,10 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
           imageUrls = files.map((file) => URL.createObjectURL(file));
           setPrepared({ shared, files, download, caption, imageUrls, nativeFiles });
         }
-      } catch { if (active) setError("slipShare.error"); }
+      } catch (error) {
+        if (active) setError(error instanceof SlipShareLogoError
+          ? error.reason === "invalid" ? "slipShare.logosInvalid" : "slipShare.logosUnavailable" : "slipShare.error");
+      }
       finally { window.clearTimeout(timeout); }
     }
     void prepare();
@@ -133,9 +140,10 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
       <DrawerButton type="button" variant="quiet" aria-label={m.text("slipShare.close")} onClick={onClose}><CloseIcon /></DrawerButton></DrawerHeader>
     <DrawerBody aria-busy={!prepared && !error}>
       {error ? <div role="alert" data-share-error><p>{m.text(error)}</p><DrawerButton type="button" variant="secondary"
-        onClick={() => { setError(null); setImageProgress(null); setAttempt((current) => current + 1); }}>{m.text("slipShare.retry")}</DrawerButton></div>
+        onClick={() => { setError(null); setImageProgress(null); setLogoProgress(null); setAttempt((current) => current + 1); }}>{m.text("slipShare.retry")}</DrawerButton></div>
         : !prepared ? <p role="status">{imageProgress && imageProgress.total > 1
           ? m.text("slipShare.preparingImages", { page: m.number(imageProgress.done), pages: m.number(imageProgress.total) })
+          : !imageProgress && logoProgress ? m.text("slipShare.preparingLogos", { done: m.number(logoProgress.done), total: m.number(logoProgress.total) })
           : m.text("slipShare.preparing")}</p> : <>
           <figure>{prepared.imageUrls[page] &&
             // Canvas PNGs are local Blob URLs; there is no remote image for Next to optimize.

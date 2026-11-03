@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { existsSync } from 'node:fs';
 import { isOptimizableProviderLogo } from '../src/domain/provider-logo.ts';
 import { providerImageSource } from '../src/components/ui/provider-image.ts';
 import { badgeParameters, badgeInputFormat, resizeBadge, loadProviderBadge } from '../src/server/images/provider-badge.ts';
@@ -22,6 +23,17 @@ test('badges use bounded retina sizes and other approved hosts stay direct', () 
   for (const args of [['players', '33', '64.webp'], ['teams', '../secret', '64.webp'], ['teams', '33', '4096.webp'], ['teams', '033', '64.webp']]) {
     assert.equal(badgeParameters(...args), null);
   }
+});
+
+test('known demo flag sources use the same bundled assets in cards and exports',()=>{
+  for(const code of ['us','kr','sa','ro','ie','nl','gb','gb-sct']){
+    const expected=`/flags/${code}.svg`;
+    assert.ok(existsSync(new URL(`../public${expected}`,import.meta.url)));
+    for(const source of [`https://media.api-sports.io/flags/${code}.svg`,`https://flagcdn.com/w80/${code}.png`])
+      assert.equal(providerImageSource(source,48),expected);
+  }
+  for(const source of ['https://flagcdn.com/w80/zz.png','https://flagcdn.com.evil.test/w80/us.png','https://flagcdn.com/w80/us.png?key=private'])
+    assert.equal(providerImageSource(source,48),source);
 });
 
 test('badge loader rejects oversized or non-raster input before decoding', async () => {
