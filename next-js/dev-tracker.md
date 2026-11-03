@@ -181,3 +181,17 @@ Lint, types, theme contract, production build, 83 targeted tests and 32 browser
 checks passed in light/dark, including fine/coarse pointers. Existing download
 tracing warnings remain. See [plan 262](dev-plan/262-shared-search-and-summary-optimization.md).
 Hosted deployment and native release remain separate.
+
+## 263 Search inset and compact performance header — 3 November 2026
+
+**Completed:** shared search inputs and actions fit inside their field at both
+control heights. Shared summaries use “Prediction performance” with one actual
+reporting day/range, compact spacing, matching header/card edges, muted selection
+borders and desktop icons beside labels. Mobile cards remain icon-free.
+
+Full lint, types, theme contract, production build, 25 targeted tests, 34 browser
+combinations and production loading/dashboard rendering passed. Both themes,
+mobile/desktop, fine/coarse pointers and reporting-date boundaries were covered.
+The existing two download tracing warnings remain. See
+[plan 263](dev-plan/263-search-inset-and-performance-period-layout.md).
+Source integration is complete; hosted deployment and native release are separate.

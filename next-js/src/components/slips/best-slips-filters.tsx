@@ -6,7 +6,7 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { CalendarIcon, ResetIcon } from "@/components/ui/icons";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, selectSlipSummaryResult, type BestSlipsQuery } from "@/domain/best-slips-query";
-import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
+import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
 import type { PeriodPerformance } from "@/domain/browse-period";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
@@ -62,6 +62,9 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   }
 
   const bounds = resolveBestSlipsDates(appliedQuery, today);
+  const summaryDates = summary ?? (appliedQuery.summary ? { from: addReportingDays(today, -1), to: addReportingDays(today, -1) } : bounds);
+  const performancePeriod = summaryDates.from && summaryDates.to
+    ? `${m.reportingDateRangeCompact(summaryDates.from, summaryDates.to)} · EAT` : m.text("bestSlips.filters.allDates");
   const currentRange = bounds.from && bounds.to ? bounds.from === bounds.to ? `${m.reportingDateMedium(bounds.from)} · EAT`
     : m.text("bestSlips.filters.dateRange", { from: m.reportingDateMedium(bounds.from), to: m.reportingDateMedium(bounds.to) }) : null;
   const periodLabel = m.text(dateOptions.find(([period]) => period === appliedQuery.period)?.[1]
@@ -72,9 +75,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   const selectablePeriod = query.period === "custom" || dateOptions.some(([period]) => period === query.period);
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
     <PerformanceSummary locale={locale} kind="slips" counts={statistics ?? null}
-      title={m.text(appliedQuery.summary ? "history.yesterday" : "history.performance")}
-      asOf={summary?.asOf} period={summary?.from && summary.to
-        ? `${m.reportingDateMedium(summary.from)}${summary.from !== summary.to ? ` – ${m.reportingDateMedium(summary.to)}` : ""} · EAT` : undefined}
+      period={performancePeriod}
       showCoverage={false} activeResult={query.status === "all" ? undefined : query.status}
       onResult={(result) => changeStatus(result ?? "all")} disabled={busy}
       resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })} />

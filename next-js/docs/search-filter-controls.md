@@ -8,7 +8,9 @@ form without submitting that parent, including Enter with IME composition
 protection. `filters` supplies the dialog ID, open state, opener and optional
 applied count; `filterButtonRef` supports focus restoration. Mobile shows only
 the filter icon; desktop shows its icon and label. All controls use the shared control
-metrics, floating-label primitives, focus styles and theme tokens.
+metrics, floating-label primitives, focus styles and theme tokens. The search
+action and input use the field’s inner grid track, overriding the standalone
+control minimum so their bounds stay inside the field on every screen size.
 
 Matches, admin payments/codes/subscribers/audit/plans/referral lookup, market
 search and league/country/phone-country option search use this component.
@@ -24,16 +26,23 @@ dialog reuses the individual section fields and their draft validation; Cancel
 restores the opening draft and Done keeps edits for the next search submission.
 
 `src/components/performance/performance-summary.tsx` is shared by Matches,
-Best Slips and performance reports. The heading places its title on the left
-and an optional actual data timestamp on the right (`03-Nov-2026 20:30 EAT`).
-The reporting period remains explicit. All, Won, Lost, Pending, Void and Cancelled
-use theme colours in three mobile columns and up to six desktop columns.
+Best Slips and performance reports. The compact heading places “Prediction
+performance” on the left and the actual reporting day/range on the right
+(for example `02-Nov-2026 · EAT` or
+`30-Oct – 03-Nov-2026 · EAT`). A refresh timestamp is not a reporting period.
+There is one date label, with no second date row. Callers own the outer gutter;
+the heading and outer status cards share the same left/right rails. All, Won,
+Lost, Pending, Void and Cancelled use theme colours in three mobile columns
+and up to six desktop columns.
 Container queries retain three columns inside narrow report panels; large
 counts wrap within their cards. Outcome definitions are shared once at module
-level and streamed match counts are normalized only when those counts change. Mobile cards have no icons. Result actions retain each screen's date/filter navigation;
+level and streamed match counts are normalized only when those counts change.
+Mobile cards have no icons. Result actions retain each screen's date/filter navigation;
 unknown counts show dashes and cannot be selected. Desktop percentages and
-optional prediction-coverage details remain available. Missing timestamps are
-omitted rather than replaced with the browser clock.
+optional prediction-coverage details remain available. Reporting dates come
+from the actual cohort; unbounded collections use their
+“All dates” label. Desktop icons sit beside labels, and selection uses a thin,
+muted inset rule while keyboard focus keeps its stronger outline.
 
 ## Match search and filters
 

@@ -17,14 +17,15 @@ export async function verifySearchPerformance(page, origin, widths = [320, 390, 
       const geometry = await search.evaluate(element => {
         const field = element.querySelector('[data-feed-search]'), button = element.querySelector('[data-feed-search-submit]');
         const filter = element.querySelector('[data-search-filters]');
-        const bounds = field.getBoundingClientRect(), action = button.getBoundingClientRect(), outside = filter.getBoundingClientRect();
-        return { inset: action.right <= bounds.right && action.left >= bounds.left && action.left > bounds.left + bounds.width / 2,
+        const bounds = field.getBoundingClientRect(), action = button.getBoundingClientRect(), outside = filter.getBoundingClientRect(), input = field.querySelector("input").getBoundingClientRect();
+        return { inset: action.right <= bounds.right && action.left >= bounds.left && action.top >= bounds.top && action.bottom <= bounds.bottom && action.left > bounds.left + bounds.width / 2,
+          inputFits: input.top >= bounds.top && input.bottom <= bounds.bottom,
           aligned: Math.abs(bounds.top - outside.top) < 1 && Math.abs(bounds.height - outside.height) < 1,
           fits: outside.right <= innerWidth && bounds.left >= 0,
           filterLabel: getComputedStyle(filter.querySelector('span')).display !== 'none',
           height: bounds.height, expectedHeight: parseFloat(getComputedStyle(field).getPropertyValue('--form-control-height')) };
       });
-      assert(geometry.inset && geometry.aligned && geometry.fits, `${mode}/${width}: search geometry ${JSON.stringify(geometry)}`);
+      assert(geometry.inset && geometry.inputFits && geometry.aligned && geometry.fits, `${mode}/${width}: search geometry ${JSON.stringify(geometry)}`);
       assert(geometry.filterLabel === !mobile, 'Filter label follows the screen size');
       assert(geometry.height === geometry.expectedHeight, 'Search uses the shared control height');
       await input.fill('Arsenal');
@@ -45,18 +46,30 @@ export async function verifySearchPerformance(page, origin, widths = [320, 390, 
       const figures = await summary.evaluate(element => {
         const cards = [...element.querySelectorAll('[data-summary-card]')];
         const boxes = cards.map(card => card.getBoundingClientRect());
+        const header = element.querySelector('[data-performance-heading]').getBoundingClientRect();
         return { order: cards.map(card => card.getAttribute('data-summary-card')).join(','),
           columns: boxes.filter(box => Math.abs(box.top - boxes[0].top) < 1).length,
           visibleIcons: [...element.querySelectorAll('svg')].filter(icon => getComputedStyle(icon).display !== 'none').length,
           colors: new Set(cards.map(card => getComputedStyle(card).backgroundColor)).size,
           fits: boxes.every(box => box.left >= 0 && box.right <= innerWidth),
-          time: element.querySelector('time')?.textContent };
+          period: element.querySelector('[data-performance-period]')?.textContent,
+          title: element.querySelector('h2, h3')?.textContent,
+          periodCount: element.querySelectorAll('[data-performance-period]').length,
+          periodInHeader: !!element.querySelector('[data-performance-heading] [data-performance-period]'),
+          aligned: Math.abs(Math.min(...boxes.map(box => box.left)) - header.left) < 1 && Math.abs(Math.max(...boxes.map(box => box.right)) - header.right) < 1,
+          headerGap: boxes[0].top - header.bottom,
+          valueIcons: element.querySelectorAll('dd svg').length,
+          labelIcons: element.querySelectorAll('dt svg').length };
       });
       assert(figures.order === 'all,won,lost,pending,void,cancelled', 'All six statuses retain their order');
       assert(figures.columns === (mobile ? 3 : 6) && figures.fits, 'Status cards fit their responsive grid');
       assert(!mobile || figures.visibleIcons === 0, 'Mobile status cards have no icons');
       assert(figures.colors >= 5, 'Status cards use distinct theme colours');
-      assert(figures.time === '03-Nov-2026 20:30 EAT', 'The heading shows the explicit 24-hour EAT timestamp');
+      assert(figures.period === '02-Nov-2026 · EAT', 'The heading shows the actual reporting day, independently of the refresh timestamp');
+      assert(figures.title === 'Prediction performance', 'The shared heading uses Prediction performance');
+      assert(figures.periodCount === 1 && figures.periodInHeader, 'Exactly one period appears, inside the header');
+      assert(figures.aligned && figures.headerGap >= 0 && figures.headerGap <= 4, 'Cards align with the header and retain minimal spacing');
+      assert(figures.valueIcons === 0 && figures.labelIcons === 3, 'Outcome icons belong to labels rather than values');
       for (const status of ['won', 'lost', 'pending', 'void', 'cancelled', 'all']) {
         const action = page.locator(`#theme-filters [data-summary-result="${status}"]`);
         await action.click();

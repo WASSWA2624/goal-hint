@@ -95,10 +95,10 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
       <StepRail><RailStep><RailNumber id="theme-member-step">1</RailNumber><h3>Payment step</h3><div><p>Synthetic member payment guidance.</p></div></RailStep></StepRail>
     </Stack></Surface>
     <section id="theme-performance"><PerformanceSummary locale="en" kind="matches"
-      title="Synthetic overall performance" period="Synthetic cohort" showAll={false} asOf={Date.UTC(2026, 10, 3, 17, 30)}
+      period="02-Nov-2026 · EAT" showAll={false}
       counts={{ total: 120, won: 72, lost: 24, pending: 18, void: 2, unavailable: 3, filteredOut: 1 }} /></section>
     <section id="theme-narrow-performance" style={{ maxWidth: theme.size[76] }}><PerformanceSummary locale="en" kind="slips"
-      title="Narrow performance" counts={{ total: 1234567890, won: 1234567890, lost: 0, pending: 0 }} /></section>
+      period="01–03-Nov-2026 · EAT" counts={{ total: 1234567890, won: 1234567890, lost: 0, pending: 0 }} /></section>
     <section id="theme-matches"><Stack $gap="sm"><SectionHeading>Match cards</SectionHeading>
       <MatchCardList>{fixtures.map((fixture, index) => <li key={fixture.fixtureId} style={{ contentVisibility: "visible" }}><MatchCard fixture={fixture} position={index + 1}
         selectedFamily={(["match-result", "total-goals", "both-teams-to-score"] as const)[index]!} analysisSlug="synthetic-preview" /></li>)}</MatchCardList>

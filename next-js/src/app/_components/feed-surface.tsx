@@ -22,10 +22,9 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { FeedPerformancePlaceholder, FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
 import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
-import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
-import { isAnyKickoffTime } from "@/domain/kickoff-time";
 import { publicPolicy } from "@/domain/public-policy";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -72,13 +71,10 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
   // Row number of the first similar search result, when this search has any.
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
-  const period = [messages.reportingDateSpan(parseReportingDate(data.range.from), parseReportingDate(data.range.to)),
-    ...(query.time && !isAnyKickoffTime(query.time) ? [`${query.time.from}–${query.time.to}`] : []),
-    messages.timeZone(utcInstantFromEpochMilliseconds(data.asOf))].join(" · ");
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} period={period} />}>
-      <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} period={period} onApply={onApply}
+    <Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} />}>
+      <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} onApply={onApply}
         initial={summary} /></ServerThemeUntilHydrated>
     </Suspense>
     <ResultsToolbar query={query} today={today} total={data.total} first={first}

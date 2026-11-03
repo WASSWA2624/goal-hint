@@ -1,10 +1,9 @@
 "use client";
 
 import styled from "styled-components";
-import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
+import { desktopSectionFrame } from "@/components/ui/layout";
 import { controlHeight } from "@/components/ui/control-layout";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
-import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { predictedPerformanceSummary, type PerformanceSummaryCounts, type PredictionResult } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -16,19 +15,14 @@ const Panel = styled.section`
   ${desktopSectionFrame}
 `;
 const Content = styled.div`
-  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
-  padding: ${({ theme }) => theme.layout.sectionPadding};
-  ${desktopContentPadding(true)}
+  display: grid; gap: var(--gh-spacing-0_75); min-inline-size: 0;
+  padding-block: var(--gh-spacing-1);
 `;
 const Header = styled.header`
   display: flex; align-items: baseline; justify-content: space-between;
   flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-2); min-inline-size: 0;
   h2, h3 { margin: 0; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-control); }
-  time, > p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  time { margin-inline-start: auto; }
-`;
-const Period = styled.p`
-  margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption);
+  > p { margin: 0; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-variant-numeric: tabular-nums; text-align: end; }
 `;
 const Counts = styled.dl`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -51,11 +45,11 @@ const Count = styled.div<{ $status: Status }>`
   gap: var(--gh-spacing-0_5); min-inline-size: 0; padding: var(--gh-spacing-1_5) var(--gh-spacing-1);
   box-sizing: border-box; border-radius: ${({ theme }) => theme.radius.small};
   color: var(--summary-text); background: var(--summary-background);
-  dt { margin: 0; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); }
+  dt { display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1); margin: 0; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); }
   dd { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0; max-inline-size: 100%; margin: 0; font-size: var(--gh-font-emphasis); font-weight: var(--gh-weight-bold); font-variant-numeric: tabular-nums; }
   dt, [data-summary-count] { max-inline-size: 100%; overflow-wrap: anywhere; text-align: center; }
-  dd > svg { display: none; }
-  ${media.desktop} { dd > svg { display: block; font-size: var(--gh-font-secondary); } }
+  dt > svg { display: none; }
+  ${media.desktop} { dt > svg { display: block; flex: none; font-size: var(--gh-font-secondary); } }
 `;
 const Percentage = styled.span`
   display: none; margin-inline-start: var(--gh-spacing-1); font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body);
@@ -70,7 +64,7 @@ const Coverage = styled.dl`
 const Action = styled.button`
   position: absolute; inset: 0; inline-size: 100%; block-size: 100%; padding: 0;
   border: 0; border-radius: inherit; background: transparent; cursor: pointer;
-  &[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--gh-stroke-strong) currentColor; }
+  &[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--gh-stroke-thin) color-mix(in srgb, currentColor ${({ theme }) => theme.opacity[40]! * 100}%, transparent); }
   color: inherit;
   &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]) { box-shadow: inset 0 0 0 var(--gh-stroke-thin) currentColor; } }
@@ -87,10 +81,10 @@ const outcomes = [
 ] as const;
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
-export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, asOf, headingLevel = 2,
+export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, headingLevel = 2,
   showCoverage = true, showAll = true, activeResult, onResult, disabled = false, resultAttributes }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
-  title?: string | undefined; period?: string | undefined; asOf?: number | undefined; headingLevel?: 2 | 3 | undefined;
+  title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
@@ -99,13 +93,11 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   const counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const number = (value: number) => pending ? "—" : m.number(value);
-  const instant = asOf === undefined ? null : utcInstantFromEpochMilliseconds(asOf);
   return <Panel role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
     <Content>
       <Header data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
-        {instant !== null ? <time dateTime={toUtcIsoString(instant)}>{m.reportingInstantCompact(instant)}</time> : period && <p data-performance-period>{period}</p>}
+        {period && <p data-performance-period>{period}</p>}
       </Header>
-      {instant !== null && period && <Period data-performance-period>{period}</Period>}
       <Counts data-performance-figures>
         {outcomes.map((outcome) => {
           const { key } = outcome, result = key === "all" ? undefined : key;
@@ -117,7 +109,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
             ? m.number(fraction, { style: "percent", maximumFractionDigits: 1 }) : null;
           const Icon = "icon" in outcome ? outcome.icon : null;
           return <Count key={key} $status={key} data-summary-card={key} data-summary-outcome={"tone" in outcome ? outcome.tone : undefined}>
-            <dt>{label}</dt><dd>{Icon && <Icon aria-hidden="true" />}<span data-summary-count={key}>{number(count)}</span>
+            <dt>{Icon && <Icon aria-hidden="true" />}{label}</dt><dd><span data-summary-count={key}>{number(count)}</span>
               {key !== "all" && <Percentage data-summary-percentage={"tone" in outcome ? outcome.tone : key}>{percentage ? `(${percentage})` : "—"}</Percentage>}
             </dd>
             {onResult && <Action type="button" aria-label={`${label}: ${number(count)}`} aria-pressed={activeResult === result}

@@ -95,6 +95,12 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
   const { numbers, plurals, dates, instants, days, instantDays, times, shortTimes, mediumDates, spans, months, zones } = formatters(language, timeZone);
   const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
     : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
+  const compactReportingDate = (value: ReportingDate) => {
+    const parts = mediumDates.formatToParts(getReportingDayBounds(value).startInclusive);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)!.value;
+    const day = part("day").padStart(2, "0"), month = part("month"), year = part("year").padStart(4, "0");
+    return { day, month, label: `${day}-${month}-${year}` };
+  };
 
   return {
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
@@ -137,6 +143,15 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     /** Compact EAT reporting date with weekday and year, for date controls. */
     reportingDateMedium(value: ReportingDate): string {
       return mediumDates.format(getReportingDayBounds(value).startInclusive);
+    },
+    /** Reporting dates stay on their named civil day, independently of the display clock. */
+    reportingDateRangeCompact(from: ReportingDate, to: ReportingDate): string {
+      const start = compactReportingDate(from);
+      if (from === to) return start.label;
+      const end = compactReportingDate(to);
+      if (from.slice(0, 7) === to.slice(0, 7)) return `${start.day}–${end.label}`;
+      const first = from.slice(0, 4) === to.slice(0, 4) ? `${start.day}-${start.month}` : start.label;
+      return `${first} – ${end.label}`;
     },
     reportingInstant(value: UtcInstant): string {
       const instant = displayInstant(value);

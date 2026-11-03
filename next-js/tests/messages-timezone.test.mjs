@@ -3,6 +3,15 @@ import test from "node:test";
 import { CalendarValidationError, parseReportingDate, parseUtcInstant } from "../src/domain/calendar.ts";
 import { createMessages } from "../src/i18n/messages.ts";
 
+test("performance period labels represent single days and compact ranges without shifting reporting dates", () => {
+  const m = createMessages("en", undefined, "America/Los_Angeles");
+  const date = parseReportingDate;
+  assert.equal(m.reportingDateRangeCompact(date("2026-11-02"), date("2026-11-02")), "02-Nov-2026");
+  assert.equal(m.reportingDateRangeCompact(date("2026-11-01"), date("2026-11-03")), "01–03-Nov-2026");
+  assert.equal(m.reportingDateRangeCompact(date("2026-10-30"), date("2026-11-03")), "30-Oct – 03-Nov-2026");
+  assert.equal(m.reportingDateRangeCompact(date("2026-12-31"), date("2027-01-02")), "31-Dec-2026 – 02-Jan-2027");
+});
+
 test("compact performance timestamps use padded dates, 24-hour time and the explicit zone", () => {
   const messages = createMessages("en");
   assert.equal(messages.reportingInstantCompact(parseUtcInstant("2026-11-03T17:30:00Z")), "03-Nov-2026 20:30 EAT");

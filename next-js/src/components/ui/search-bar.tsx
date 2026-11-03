@@ -35,6 +35,7 @@ const Row = styled.div`
 const Field = styled.div`
   container: search-field / inline-size;
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   flex: 1; min-inline-size: 0; margin-block-start: var(--floating-label-space);
   ${controlBodyHeight}
   ${textFieldSurface}
@@ -42,10 +43,11 @@ const Field = styled.div`
   border-radius: ${({ theme }) => theme.radius.control};
   &:not([data-search-action]) { grid-template-columns: minmax(0, 1fr); }
   && > label { ${floatingLabel} grid-column: 1; grid-row: 1; max-inline-size: calc(100% - var(--gh-spacing-5)); }
-  && > input {
+  /* Page-level control rules must not enlarge this embedded input beyond its field. */
+  &&& > input[type="search"] {
     ${floatingControl}
     inline-size: 100%; min-inline-size: 0;
-    min-block-size: 0; block-size: 100%; padding-inline: var(--gh-spacing-2_5);
+    min-block-size: 0; block-size: 100%; max-block-size: 100%; padding-inline: var(--gh-spacing-2_5);
     border: 0; border-radius: ${({ theme }) => theme.radius.none};
     color: ${({ theme }) => theme.color.text}; background: transparent; font: inherit;
     font-size: var(--gh-font-section);
@@ -73,11 +75,12 @@ const actionFeedback = css`
 `;
 const Submit = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: var(--gh-spacing-1_5);
+  box-sizing: border-box; min-block-size: 0; block-size: 100%; max-block-size: 100%; align-self: stretch;
   min-inline-size: calc(var(--form-control-height) - var(--gh-size-0_5));
-  padding: 0 var(--gh-spacing-2_5); border: 0;
+  padding: 0 var(--gh-spacing-2_5); margin: 0; border: 0;
   border-radius: ${({ theme }) => theme.radius.none};
-  border-start-end-radius: ${({ theme }) => theme.radius.control};
-  border-end-end-radius: ${({ theme }) => theme.radius.control};
+  border-start-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - var(--gh-stroke-thin)))`};
+  border-end-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - var(--gh-stroke-thin)))`};
   color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
   font: inherit; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-medium);
   white-space: nowrap; cursor: pointer;
