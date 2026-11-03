@@ -1,6 +1,7 @@
 package com.goalhint.goal_hint
 
 import android.os.Handler
+import android.content.Intent
 import android.os.Looper
 import android.webkit.CookieManager
 import io.flutter.embedding.android.FlutterActivity
@@ -15,10 +16,12 @@ class MainActivity : FlutterActivity() {
     }
     private val mainHandler = Handler(Looper.getMainLooper())
     private var browserStoreChannel: MethodChannel? = null
+    private var slipDownload: SlipDownload? = null
     @Volatile private var destroyed = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        slipDownload = SlipDownload(this, flutterEngine.dartExecutor.binaryMessenger)
         browserStoreChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.goalhint.goal_hint/browser_store",
@@ -72,9 +75,14 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        slipDownload?.dispose()
         destroyed = true
         browserStoreChannel?.setMethodCallHandler(null)
         browserStoreExecutor.shutdown()
         super.onDestroy()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (slipDownload?.onActivityResult(requestCode, resultCode, data) != true) super.onActivityResult(requestCode, resultCode, data)
     }
 }

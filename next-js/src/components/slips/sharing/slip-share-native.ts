@@ -22,6 +22,7 @@ export async function shareSlipImages(link: ReferralInvitation, files: File[], n
   try {
     if (window.goalHintNativeShare?.shareFiles && nativeFiles) {
       if (link.text.length > 4096) return "unsupported";
+      if (!window.goalHintNativeShare.readableReferences && nativeFiles.some(file => /^goal-hint-[0-9]{8}(?:-|\.)/u.test(file.name))) return "unsupported";
       return await window.goalHintNativeShare.shareFiles({ ...link, files: nativeFiles });
     }
     const data: ShareData = { title: link.title, text: link.text, files };

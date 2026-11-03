@@ -67,6 +67,7 @@ export const DrawerBody = styled.div`
 export const DrawerFooter = styled.footer`
   ${dialogFooterSurface}
   flex: none; padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-start: 0;
+  [data-share-actions] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gh-spacing-2); }
   [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--gh-spacing-1_5); margin-block-end: var(--gh-spacing-2_25); }
   [data-share-primary] { inline-size: 100%; }
   [data-share-feedback] { font-size: var(--gh-font-caption); margin: var(--gh-spacing-2_5) 0 0; color: ${({ theme }) => theme.color.mutedText}; }

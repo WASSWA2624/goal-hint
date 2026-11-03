@@ -48,4 +48,8 @@ test("image sharing preserves activation, native payloads, cancellation and expl
   assert.equal(await prepareNativeSlipImages([]), null);
   assert.equal(await prepareNativeSlipImages([new File(["x"], "bad.svg", { type: "image/svg+xml" })]), null);
   assert.equal(await prepareNativeSlipImages(Array(33).fill(files[0])), null);
+  const numbered = [{name:'goal-hint-00000001.png',data:'synthetic'}];
+  assert.equal(await shareSlipImages(link,files,numbered),'unsupported', 'Old hosts fail immediately instead of waiting for a rejected payload.');
+  window.goalHintNativeShare.readableReferences=true;
+  assert.equal(await shareSlipImages(link,files,numbered),'cancelled');
 });

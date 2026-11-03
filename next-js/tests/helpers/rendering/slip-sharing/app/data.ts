@@ -2,14 +2,14 @@ import { parseReportingDate } from "@/domain/calendar";
 import { defaultSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipSelection } from "@/domain/slip-builder";
 import { sharedSlipSchema, sharedSlipUrl, type SharedSlip, type ShareSlipSource } from "@/domain/shared-slips";
 
-export const scenarios = ["builder", "best", "shared", "unauthorized", "changed", "failure", "long"] as const;
+export const scenarios = ["builder", "best", "shared", "unauthorized", "changed", "failure", "long", "badges"] as const;
 export type Scenario = typeof scenarios[number];
 export const today = parseReportingDate("2026-10-29");
 export const createdAt = "2026-10-29T09:00:00.000Z";
 const examples = [
-  { home: "Arsenal", away: "Chelsea", league: "Premier League", country: "England", family: "match-result", selection: "home-win", odds: "1.72", probability: 0.762 },
-  { home: "Inter Milan", away: "Napoli", league: "Serie A", country: "Italy", family: "total-goals", selection: "over-2.5", odds: "1.42", probability: 0.817 },
-  { home: "Sporting CP", away: "Braga", league: "Primeira Liga", country: "Portugal", family: "both-teams-to-score", selection: "yes", odds: "1.68", probability: 0.694 },
+  { home: "Arsenal", away: "Chelsea", homeBadge: 42, awayBadge: 49, leagueBadge: 39, league: "Premier League", country: "England", family: "match-result", selection: "home-win", odds: "1.72", probability: 0.762 },
+  { home: "Inter Milan", away: "Napoli", homeBadge: 505, awayBadge: 492, leagueBadge: 135, league: "Serie A", country: "Italy", family: "total-goals", selection: "over-2.5", odds: "1.42", probability: 0.817 },
+  { home: "Sporting CP", away: "Braga", homeBadge: 228, awayBadge: 217, leagueBadge: 94, league: "Primeira Liga", country: "Portugal", family: "both-teams-to-score", selection: "yes", odds: "1.68", probability: 0.694 },
 ] as const;
 const uuid = (index: number) => `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 
@@ -18,8 +18,12 @@ export function fixtureSlip(scenario: Scenario = "builder"): BuiltSlip {
   const selections = Array.from({ length: count }, (_, index): SlipSelection => {
     const example = examples[index % examples.length]!;
     return { fixtureId: uuid(index + 1), kickoffAt: Date.parse("2026-10-29T15:30:00Z") + index * 60000,
-      homeTeam: { id: uuid(index * 2 + 1000), name: example.home }, awayTeam: { id: uuid(index * 2 + 1001), name: example.away },
-      competition: { id: `fixture-league-${index % 3}`, name: example.league, country: example.country },
+      homeTeam: { id: uuid(index * 2 + 1000), name: example.home,
+        ...(scenario === "badges" ? { logoUrl: `https://media.api-sports.io/football/teams/${example.homeBadge}.png` } : {}) },
+      awayTeam: { id: uuid(index * 2 + 1001), name: example.away,
+        ...(scenario === "badges" ? { logoUrl: `https://media.api-sports.io/football/teams/${example.awayBadge}.png` } : {}) },
+      competition: { id: `fixture-league-${index % 3}`, name: example.league, country: example.country,
+        ...(scenario === "badges" ? { logoUrl: `https://media.api-sports.io/football/leagues/${example.leagueBadge}.png` } : {}) },
       family: example.family, selection: example.selection, odds: scenario === "long" ? "1.01" : example.odds,
       probability: example.probability, oddsBasis: "bookmaker" };
   });

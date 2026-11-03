@@ -42,7 +42,8 @@ export const SlipCard = memo(function SlipCard({ slip, index, locale, results, m
   return <PhoneSlipFallback><CompactSlip slip={slip} index={index} locale={locale} variant="clean-ledger" initiallyOpen={initiallyOpen} showRank={!sharedSlip}
     {...publication}
     {...(results ? { results } : {})} {...(matchStates ? { matchStates } : {})}
-    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} locale={locale} iconOnly {...(publicShareHref ? { publicHref: publicShareHref } : {})}
+    action={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} locale={locale} iconOnly {...publication}
+      {...(matchStates ? { matchStates } : {})} {...(results ? { results } : {})} {...(publicShareHref ? { publicHref: publicShareHref } : {})}
       {...(shareSource ? { source: shareSource } : {})} {...(sharedSlip ? { sharedSlip } : {})} /> : undefined} />
   </PhoneSlipFallback>;
 });

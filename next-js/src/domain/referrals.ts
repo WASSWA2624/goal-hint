@@ -1,7 +1,7 @@
 import { subscriptionDayMs, type SubscriptionPeriod } from "./subscription-period.ts";
 
 export const referralRules = Object.freeze({ attributionMs: 30 * subscriptionDayMs, rewardMs: subscriptionDayMs, historyLimit: 10 });
-export const validReferralCode = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{32}$/u.test(value);
+export const validReferralCode = (value: unknown): value is string => typeof value === "string" && /^(?:[0-9]{8}|[a-f0-9]{32})$/u.test(value);
 export const referralPath = (code: string) => `/r/${code}`;
 
 type EarnedPeriod = Pick<SubscriptionPeriod, "startsAt" | "endsAt" | "revokedAt"> & Readonly<{ source: string }>;

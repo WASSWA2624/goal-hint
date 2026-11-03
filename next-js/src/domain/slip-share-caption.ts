@@ -7,6 +7,7 @@ export { whatsAppShareUrl } from "./share-links.ts";
 export function slipShareCaption(shared: SharedSlip, locale: string): string {
   const m = createMessages(locale);
   return [m.text("slipShare.captionTitle", { name: publicPolicy.name }),
+    ...(shared.number ? [m.text("slips.slipTitle", { number: shared.number })] : []),
     m.text("slipShare.summary", { selections: m.plural("slips.selections", shared.slip.selections.length), odds: shared.slip.totalOdds }), "",
     ...(shared.url ? [m.text("slipShare.viewSlip", { url: shared.url })] : []),
     m.text("slipShare.appLink", { name: publicPolicy.name, url: publicPolicy.origin }), "",

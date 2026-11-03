@@ -4,7 +4,11 @@ export type NativeShareImage = Readonly<{ name: string; data: string }>;
 
 declare global {
   interface Window {
-    goalHintNativeShare?: Readonly<{ version: 1; shareFiles?: (data: ReferralInvitation & { files: readonly NativeShareImage[] }) => Promise<"handed-off" | "cancelled">; share: (data: ReferralInvitation) => Promise<"handed-off" | "cancelled"> }>;
+    goalHintNativeShare?: Readonly<{ version: 1;
+      readableReferences?: boolean;
+      downloadFiles?: (data: ReferralInvitation & { files: readonly NativeShareImage[] }) => Promise<"handed-off" | "cancelled">;
+      shareFiles?: (data: ReferralInvitation & { files: readonly NativeShareImage[] }) => Promise<"handed-off" | "cancelled">;
+      share: (data: ReferralInvitation) => Promise<"handed-off" | "cancelled"> }>;
   }
 }
 
@@ -27,6 +31,7 @@ export function invitationShareAvailable(): boolean {
 export async function shareInvitation(data: ReferralInvitation): Promise<"handed-off" | "cancelled" | "failed"> {
   try {
     if (window.goalHintNativeShare?.version === 1) {
+      if (/\/r\/[0-9]{8}$/u.test(data.url) && !window.goalHintNativeShare.readableReferences) return "failed";
       if (data.text.length > (data.url.includes("/r/") ? 512 : 4096)) return "failed";
       return await window.goalHintNativeShare.share(data);
     }

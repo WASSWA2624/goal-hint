@@ -13,6 +13,9 @@ import { readSharedSlip } from "./shared-slips.ts";
 import { publicBestSlipPath } from "../../domain/public-best-slip.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { readWithSlipAccess } from "./slip-access.ts";
+import { slipNumberFingerprint } from "../../domain/readable-code.ts";
+import { ensureSlipNumber } from "./slip-numbers.ts";
+import { supportContactsOf } from "../../domain/support-contacts.ts";
 
 /** The browser submits only a server selection identity and its bounded source, never a claimed snapshot. */
 export function createShareSlipHandler({ members = getMemberServices, services = getAnalyticsServices,
@@ -21,10 +24,10 @@ export function createShareSlipHandler({ members = getMemberServices, services =
   return async (request: Request): Promise<Response> => {
     if (!isSameOrigin(request)) return json({ error: "forbidden" }, 403);
     try {
-      if ((await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
+      const viewer = await access(request);
       const resolved = await members();
       const member = await resolved.sessions?.verify(readCookie(request, memberCookieName(resolved.config.production)));
-      if (!member) return json({ error: "sign-in-required" }, 401);
+      if (viewer.tier === "full" && !member) return json({ error: "sign-in-required" }, 401);
       let input;
       try {
         if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) return json({ error: "invalid-request" }, 400);
@@ -39,8 +42,11 @@ export function createShareSlipHandler({ members = getMemberServices, services =
       const result = await published(database).day(day);
       const view = result?.slips.find(candidate => candidate.slip?.id === input.slipId);
       if (!view?.slip || !view.id || !view.publishedAt) return json({ error: "changed" }, 409);
-      if ((await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
-      return json({ id: view.id.slice(0, 32),
+      if (!view.completed && (viewer.tier !== "full" || (await access(request)).tier !== "full")) return json({ error: "subscription-required" }, 403);
+      const number = await database.transaction(async tx => ensureSlipNumber(tx, await slipNumberFingerprint(view.slip!)));
+      if (!view.completed && (await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
+      const contacts = resolved.settings.settings ? supportContactsOf(resolved.settings.settings).slice(0, 2).map(contact => `${contact.label}: +${contact.phone}`) : [];
+      return json({ id: view.id.slice(0, 32), number, contacts, status: view.status,
         createdAt: new Date(view.publishedAt).toISOString(),
         url: new URL(publicBestSlipPath("en", day, view.rank), publicPolicy.origin).toString(), slip: modelIndependentSlip(view.slip) });
     } catch { return json({ error: "unavailable" }, 503); }

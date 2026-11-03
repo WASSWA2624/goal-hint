@@ -218,4 +218,78 @@ void main() {
       );
     },
   );
+  test(
+    'numeric referrals, published links and image-only saves retain document checks',
+    () async {
+      final bridge = NativeInvitationShare(),
+          token = nonce(NativeInvitationShare().installScript(origin));
+      final bytes = Uint8List(33);
+      bytes.setAll(0, [137, 80, 78, 71, 13, 10, 26, 10]);
+      bytes.setAll(12, ascii.encode('IHDR'));
+      final header = ByteData.sublistView(bytes);
+      header.setUint32(8, 13);
+      header.setUint32(16, 1080);
+      header.setUint32(20, 1200);
+      final image = {
+        'name': 'goal-hint-00000042.png',
+        'data': base64Encode(bytes),
+      };
+      for (final target in [
+        'https://goalhint.com',
+        'https://goalhint.com/en/best-slips/2026-11-03/21',
+      ]) {
+        final data = {
+          ...request(token),
+          'url': target,
+          'files': [image],
+        };
+        expect(
+          NativeInvitationRequest.parse(
+            jsonEncode(data),
+            token,
+          )?.images.single.name,
+          image['name'],
+        );
+      }
+      expect(
+        NativeInvitationRequest.parse(
+          jsonEncode({
+            ...request(token),
+            'url': 'https://goalhint.com/r/00000042',
+          }),
+          token,
+        )?.url,
+        'https://goalhint.com/r/00000042',
+      );
+      expect(
+        NativeInvitationRequest.parse(
+          jsonEncode({...request(token), 'url': 'https://goalhint.com'}),
+          token,
+        ),
+        isNull,
+      );
+      final ownedToken = nonce(bridge.installScript(origin));
+      var saves = 0;
+      await bridge.handle(
+        jsonEncode({
+          ...request(ownedToken),
+          'url': 'https://goalhint.com',
+          'files': [image],
+          'action': 'download',
+        }),
+        ownsDocument: () async => true,
+        evaluate: (_) async {},
+        anchor: anchor,
+        save: (images) async {
+          saves++;
+          expect(images.single.bytes, bytes);
+          return true;
+        },
+        share: (_) async {
+          fail('Saving must not open a share sheet');
+        },
+      );
+      expect(saves, 1);
+    },
+  );
 }

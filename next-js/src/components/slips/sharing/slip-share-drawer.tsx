@@ -1,36 +1,33 @@
 "use client";
 
-import { FloatingField } from "@/components/ui/floating-field";
-
 import { useEffect, useRef, useState } from "react";
-import { ChatIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
-import { shareInvitation, type NativeShareImage } from "@/components/members/invitation-share";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
+import { type NativeShareImage } from "@/components/members/invitation-share";
 import { prepareNativeSlipImages, shareSlipImages } from "./slip-share-native";
 import { publicPolicy } from "@/domain/public-policy";
-import type { BuiltSlip } from "@/domain/slip-builder";
-import { createLocalSlipShare, sharedSlipSchema, type SharedSlip, type ShareSlipSource } from "@/domain/shared-slips";
-import { slipShareCaption, whatsAppShareUrl } from "@/domain/slip-share-caption";
+import { type BuiltSlip } from "@/domain/slip-builder";
+import { createLocalSlipShare, sharedSlipSchema, type SharedSlip, type ShareSlipSource, type SlipSharePresentation } from "@/domain/shared-slips";
+import { slipNumberFingerprint, readableCodePattern } from "@/domain/readable-code";
+import { slipShareCaption } from "@/domain/slip-share-caption";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { createSlipShareDownload, downloadSlipShare } from "./slip-share-download";
 import { Drawer, DrawerBody, DrawerButton, DrawerFooter, DrawerHeader } from "./slip-share-styles";
 
 type Prepared = { shared: SharedSlip; files: File[]; download: File; caption: string; imageUrls: string[]; nativeFiles: readonly NativeShareImage[] | null };
 
-export function SlipShareDrawer({ id, source, initialShared, localSlip, locale, onPrepared, onClose }: {
-  id: string; source?: ShareSlipSource; initialShared?: SharedSlip; localSlip?: BuiltSlip; locale: string;
+export function SlipShareDrawer({ id, source, initialShared, localSlip, createdAt, presentation, locale, onPrepared, onClose }: {
+  id: string; source?: ShareSlipSource; initialShared?: SharedSlip; localSlip?: BuiltSlip; createdAt?: string; presentation?: SlipSharePresentation; locale: string;
   onPrepared: (shared: SharedSlip) => void; onClose: () => void;
 }) {
   const m = createMessages(locale), dialog = useRef<HTMLDialogElement>(null), existing = useRef(initialShared);
   const local = useRef(source?.source === "builder" ? localSlip : undefined);
+  const snapshot = useRef({ ...presentation, capturedAt: new Date().toISOString() });
   const sourceJson = source ? JSON.stringify(source) : undefined;
   const [attempt, setAttempt] = useState(0), [prepared, setPrepared] = useState<Prepared | null>(null);
   const [error, setError] = useState<TextKey | null>(null), [feedback, setFeedback] = useState<TextKey | null>(null);
   const [page, setPage] = useState(0);
-  const [manualCopy, setManualCopy] = useState<"link" | "caption" | null>(null), [sharing, setSharing] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [imageProgress, setImageProgress] = useState<{ done: number; total: number } | null>(null);
-  const captionField = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => { if (manualCopy) captionField.current?.focus(); }, [manualCopy]);
 
   useEffect(() => {
     const element = dialog.current;
@@ -50,9 +47,8 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, locale, 
       try {
         let shared = existing.current;
         if (!shared && local.current) {
-          shared = createLocalSlipShare(local.current);
+          shared = createLocalSlipShare(local.current, createdAt);
           existing.current = shared;
-          if (active) onPrepared(shared);
         }
         if (!shared) {
           if (!sourceJson) throw new Error("missing-source");
@@ -66,8 +62,19 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, locale, 
           }
           shared = sharedSlipSchema.parse(await response.json());
           existing.current = shared;
-          if (active) onPrepared(shared);
         }
+        if (!shared.number) {
+          const response = await fetch("/api/slips/number", { method: "POST", credentials: "same-origin", signal: controller.signal,
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify(shared.url?.includes("/s/")
+              ? { token: shared.id } : { fingerprint: await slipNumberFingerprint(shared.slip) }) });
+          if (!response.ok) throw new Error("number-unavailable");
+          const reference = await response.json() as { number: string; contacts?: string[] };
+          if (!readableCodePattern.test(reference.number)) throw new Error("invalid-number");
+          shared = { ...shared, number: reference.number, ...(reference.contacts ? { contacts: reference.contacts } : {}) };
+        }
+        shared = { ...shared, ...snapshot.current };
+        existing.current = shared;
+        if (active) onPrepared(shared);
         // Network requests have a deadline; a valid long slip may need longer to encode every image.
         window.clearTimeout(timeout);
         const { createSlipShareImages } = await import("./slip-share-image");
@@ -75,7 +82,7 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, locale, 
           if (active) setImageProgress({ done, total });
         });
         const caption = slipShareCaption(shared, locale);
-        const download = await createSlipShareDownload(files, shared.id, caption);
+        const download = await createSlipShareDownload(files, shared.number!, caption);
         const nativeFiles = await prepareNativeSlipImages(files).catch(() => null);
         if (active) {
           imageUrls = files.map((file) => URL.createObjectURL(file));
@@ -86,36 +93,31 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, locale, 
     }
     void prepare();
     return () => { active = false; controller.abort(); window.clearTimeout(timeout); imageUrls.forEach((url) => URL.revokeObjectURL(url)); };
-  }, [attempt, sourceJson, locale, onPrepared]);
+  }, [attempt, sourceJson, locale, createdAt, onPrepared]);
 
-  function saveImage() {
-    if (!prepared) return;
-    try { downloadSlipShare(prepared.download); setFeedback(prepared.files.length > 1 ? "slipShare.savedArchive" : "slipShare.saved"); }
-    catch { setFeedback("slipShare.shareError"); }
+  async function saveImage() {
+    if (!prepared || sharing) return;
+    setSharing(true); setFeedback(null);
+    try {
+      if (window.goalHintNativeShare?.downloadFiles && prepared.nativeFiles) {
+        const result = await window.goalHintNativeShare.downloadFiles({ title: publicPolicy.name, text: prepared.caption,
+          url: prepared.shared.url ?? publicPolicy.origin, files: prepared.nativeFiles });
+        if (result === "handed-off") setFeedback("slipShare.downloaded");
+      } else if (window.goalHintNativeShare) setFeedback("slipShare.downloadUnavailable");
+      else { downloadSlipShare(prepared.download); setFeedback(prepared.files.length > 1 ? "slipShare.savedArchive" : "slipShare.saved"); }
+    } catch { setFeedback("slipShare.downloadUnavailable"); }
+    finally { setSharing(false); }
   }
 
-  async function copy(kind: "link" | "caption") {
-    if (!prepared || kind === "link" && !prepared.shared.url) return;
-    try { await navigator.clipboard.writeText(kind === "link" ? prepared.shared.url! : prepared.caption); setFeedback(kind === "link" ? "slipShare.linkCopied" : "slipShare.copied"); }
-    catch { setManualCopy(kind); setFeedback("slipShare.copyManually"); }
-  }
-
-  function openWhatsApp() {
-    if (!prepared) return;
-    try { window.open(whatsAppShareUrl(prepared.caption), "_blank", "noopener,noreferrer"); setFeedback("slipShare.whatsAppHint"); }
-    catch { setFeedback("slipShare.linkFallback"); }
-  }
-
-  async function share(kind: "link" | "image") {
+  async function share() {
     if (!prepared || sharing) return;
     setFeedback(null); setSharing(true);
     const link = { title: publicPolicy.name, text: prepared.caption, url: prepared.shared.url ?? publicPolicy.origin };
     try {
-      const result = kind === "image" ? await shareSlipImages(link, prepared.files, prepared.nativeFiles) : await shareInvitation(link);
+      const result = await shareSlipImages(link, prepared.files, prepared.nativeFiles);
       if (result === "handed-off") setFeedback("slipShare.handedOff");
       else if (result !== "cancelled") {
-        setFeedback(kind === "image" ? "slipShare.imageFallback" : "slipShare.linkFallback");
-        if (kind === "link") setManualCopy("link");
+        setFeedback(result === "unsupported" ? "slipShare.imageFallback" : "slipShare.shareError");
       }
     } finally { setSharing(false); }
   }
@@ -147,20 +149,16 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, locale, 
             </figcaption>}
           </figure>
           <p data-share-summary>{m.text("slipShare.summary", { selections: m.plural("slips.selections", prepared.shared.slip.selections.length), odds: prepared.shared.slip.totalOdds })}</p>
+          {prepared.files.length > 1 && <p data-share-public-note>{m.text("slipShare.multipleImagesHint")}</p>}
           <div data-share-caption><p>{m.text("slipShare.captionTitle", { name: publicPolicy.name })}</p>
             {prepared.shared.url && <a href={prepared.shared.url} target="_blank" rel="noopener noreferrer">{prepared.shared.url.replace(/^https:\/\//u, "")}</a>}
             <a href={publicPolicy.origin} target="_blank" rel="noopener noreferrer">{new URL(publicPolicy.origin).host}</a></div>
           {prepared.shared.url && <p data-share-public-note>{m.text("slipShare.publicHint")}</p>}
-          {manualCopy && <FloatingField label={m.text(manualCopy === "link" ? "slipShare.link" : "slipShare.caption")}><textarea ref={captionField} readOnly value={manualCopy === "link" ? prepared.shared.url ?? "" : prepared.caption} onFocus={(event) => event.currentTarget.select()} /></FloatingField>}
         </>}
     </DrawerBody>
     <DrawerFooter>
-      <div data-share-secondary><DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={saveImage}><DownloadIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.saveImages" : "slipShare.saveImage")}</DrawerButton>
-        <DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={() => { void copy("caption"); }}><CopyIcon />{m.text("slipShare.copyCaption")}</DrawerButton></div>
-      {prepared?.shared.url && <div data-share-secondary><DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={() => { void copy("link"); }}><CopyIcon />{m.text("slipShare.copyLink")}</DrawerButton>
-        <DrawerButton type="button" variant="quiet" disabled={!prepared} onClick={openWhatsApp}><ChatIcon />{m.text("slipShare.whatsAppLink")}</DrawerButton></div>}
-      <div data-share-secondary>{prepared?.shared.url && <DrawerButton type="button" variant="secondary" disabled={!prepared || sharing} onClick={() => { void share("link"); }}><ShareIcon />{m.text("slipShare.shareLink")}</DrawerButton>}
-        <DrawerButton type="button" disabled={!prepared || sharing} onClick={() => { void share("image"); }}><ShareIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.shareImages" : "slipShare.shareImage")}</DrawerButton></div>
+      <div data-share-actions><DrawerButton type="button" variant="secondary" disabled={!prepared || sharing} onClick={() => { void saveImage(); }}><DownloadIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.saveImages" : "slipShare.saveImage")}</DrawerButton>
+        <DrawerButton type="button" disabled={!prepared || sharing} onClick={() => { void share(); }}><ShareIcon />{m.text("slipShare.share")}</DrawerButton></div>
       {feedback && <p data-share-feedback role="status">{m.text(feedback)}</p>}
     </DrawerFooter>
   </Drawer>;

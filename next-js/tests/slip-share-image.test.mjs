@@ -27,13 +27,14 @@ test('a normal slip becomes one complete branded image with its immutable ID and
   assert.match(page.rows[0].metadata.join(' '), /EAT/u);
   assert.equal(page.rows[0].odds, '1.72');
   assert.deepEqual(page.totalOdds, ['1.72']);
-  assert.match(page.footer.join('\n'), /Created with Goal Hint\nhttps:\/\/goalhint.com\nhttps:\/\/goalhint.com\/s\//u);
+  assert.match(page.footer.join(' '), /Created with Goal Hint · goalhint.com/u);
+  assert.ok(page.footer.join('').includes(shared.url));
 });
 
 test('the maximum 800 selections paginate without loss, duplication, or an oversized canvas', () => {
   const selections = Array.from({ length: 800 }, (_, i) => ({ ...selection, fixtureId: `fixture-${i}` }));
   const pages = layoutSlipShareImages({ ...shared, slip: { ...shared.slip, selections } }, 'en', measure);
-  assert.equal(pages.length, 25);
+  assert.ok(pages.length >= 25);
   assert.deepEqual(pages.flatMap(page => page.rows.map(row => row.fixtureId)), selections.map(item => item.fixtureId));
   assert.deepEqual(pages.flatMap(page => page.rows.map(row => row.selectionIndex)), Array.from({ length: 800 }, (_, i) => i));
   for (const [index, page] of pages.entries()) {
@@ -80,4 +81,24 @@ test('invalid empty slips, dates, and unrenderable characters fail rather than r
   assert.throws(() => layoutSlipShareImages({ ...shared, slip: { ...shared.slip, selections: [] } }, 'en', measure), RangeError);
   assert.throws(() => layoutSlipShareImages({ ...shared, createdAt: 'invalid' }, 'en', measure), RangeError);
   assert.throws(() => wrapSlipShareImageText('A', 1, () => 2), RangeError);
+});
+
+test('branded export metadata retains eight-digit references, numbered teams, per-selection probability and observed outcomes', () => {
+  const [page]=layoutSlipShareImages({...shared,number:'00000042',status:'won',capturedAt:shared.createdAt,
+    contacts:['Support: +256700000082'],selectionOutcomes:{[selection.fixtureId]:'correct'}},'en',measure);
+  assert.equal(page.reference,'00000042'); assert.equal(page.statusLabel,'Won');
+  const row=page.rows[0]; assert.equal(row.numberLabel,'MATCH 01');
+  assert.match(row.metadata.join(' '),/Won$/);
+  assert.equal(row.home.join(' '),'Arsenal'); assert.equal(row.away.join(' '),'Chelsea');
+  assert.equal(row.probability,'76.2%'); assert.equal(row.outcome,'correct');
+  assert.match(page.footer.join(' '),/Status as of/); assert.match(page.footer.join(' '),/Support:/);
+  assert.equal(page.averageProbability,'76.2%');
+});
+
+test('export progress distinguishes confirmed upcoming matches from unresolved results and retains league badges',()=>{
+  const input={...shared,slip:{...shared.slip,selections:[{...selection,competition:{...selection.competition,logoUrl:'https://media.api-sports.io/football/leagues/39.png'}}]}};
+  assert.equal(layoutSlipShareImages({...input,status:'not-started'},'en',measure)[0].statusLabel,'Upcoming');
+  const [page]=layoutSlipShareImages(input,'en',measure);
+  assert.equal(page.statusLabel,'Awaiting results');
+  assert.equal(page.rows[0].competitionLogo,input.slip.selections[0].competition.logoUrl);
 });

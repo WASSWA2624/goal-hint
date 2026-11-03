@@ -24,10 +24,10 @@ test("legacy referral provisioning is idempotent under genuine database concurre
   });
   const service = createReferrals({ database: f.database });
   const attempts = await Promise.all([service.provisionCodes(true), service.provisionCodes(true)]);
-  assert.equal(attempts.reduce((sum, result) => sum + result.created, 0), 1);
+  assert.equal(attempts.reduce((sum, result) => sum + result.created, 0), 2);
   await f.database.query(async tx => {
-    assert.match((await tx.memberAccount.findUniqueOrThrow({ where: { id: legacyId } })).referralCode, /^[a-f0-9]{32}$/);
-    assert.equal((await tx.memberAccount.findUniqueOrThrow({ where: { id: existingId } })).referralCode, oldCode);
+    assert.match((await tx.memberAccount.findUniqueOrThrow({ where: { id: legacyId } })).referralCode, /^[0-9]{8}$/);
+    assert.equal((await tx.memberAccount.findUniqueOrThrow({ where: { id: existingId } })).legacyReferralCode, oldCode);
     assert.equal(await tx.accessCode.count(), 0); assert.equal(await tx.memberReferral.count(), 0);
   });
   assert.equal((await service.provisionCodes(true)).created, 0);

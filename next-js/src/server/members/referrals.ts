@@ -1,5 +1,5 @@
 import "server-only";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { referralRules, remainingRewardMs, validReferralCode, type ReferralSummary } from "../../domain/referrals.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -10,14 +10,27 @@ import type { MemberIdentity } from "./member-sessions.ts";
 
 type Key = Pick<AnalyticsConfig, "key">;
 const phoneKey = (config: Key, phone: string) => config.key("referral-registration-phone", phone);
-export const newReferralCode = () => randomBytes(16).toString("hex");
-/** Caller holds the account lock; existing invitation links must never change. */
-async function ensureReferralCode(tx: Prisma.TransactionClient, account: Pick<MemberAccount, "id" | "referralCode">) {
-  if (account.referralCode) return account.referralCode;
-  const code = newReferralCode();
-  await tx.memberAccount.update({ where: { id: account.id }, data: { referralCode: code } });
-  return code;
+export const newReferralCode = () => String(randomInt(100_000_000)).padStart(8, "0");
+/** Caller holds the account lock. A legacy alias survives changing the public code. */
+export async function ensureReferralCode(tx: Prisma.TransactionClient, account: Pick<MemberAccount, "id" | "referralCode">,
+  generate = newReferralCode): Promise<string> {
+  if (account.referralCode && /^[0-9]{8}$/u.test(account.referralCode)) return account.referralCode;
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const code = generate();
+    try {
+      await tx.memberAccount.update({ where: { id: account.id }, data: { referralCode: code,
+        ...(account.referralCode ? { legacyReferralCode: account.referralCode } : {}) } });
+      return code;
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === "P2002")) throw error;
+    }
+  }
+  throw new Error("Referral numbering unavailable.");
 }
+
+const inviterByCode = async (tx: Prisma.TransactionClient, code: string) =>
+  await tx.memberAccount.findUnique({ where: { referralCode: code } })
+  ?? await tx.memberAccount.findUnique({ where: { legacyReferralCode: code } });
 function eligibleInviter(account: MemberAccount | null): account is MemberAccount & { phone: string } {
   return !!account?.phone && !!account.passwordHash && !!account.phoneVerifiedAt && !account.blockedAt && !account.erasedAt && !isMemberAdminPhone(account.phone);
 }
@@ -34,7 +47,7 @@ export async function recordReferralRegistration(tx: Prisma.TransactionClient, c
   if (!account.phone) return;
   const key = phoneKey(config, account.phone);
   if (await tx.memberReferral.findUnique({ where: { phoneKey: key } })) return;
-  const inviter = validReferralCode(code) ? await tx.memberAccount.findUnique({ where: { referralCode: code } }) : null;
+  const inviter = validReferralCode(code) ? await inviterByCode(tx, code) : null;
   const inviterId = eligibleInviter(inviter) && inviter.id !== account.id && inviter.phone !== account.phone ? inviter.id : null;
   await tx.memberReferral.create({ data: { id: randomUUID(), phoneKey: key, accountId: account.id, inviterId,
     registeredAt: at, status: inviterId ? "pending" : "ineligible" } });
@@ -64,17 +77,18 @@ export function createReferrals({ database, now = Date.now }: { database: Databa
       let cursor: string | undefined, missing = 0, created = 0, skipped = 0;
       while (true) {
         const accounts = await database.query(tx => tx.memberAccount.findMany({
-          where: { referralCode: null, phone: { not: null }, passwordHash: { not: null }, erasedAt: null,
+          where: { phone: { not: null }, passwordHash: { not: null }, erasedAt: null,
             ...(cursor ? { id: { gt: cursor } } : {}) },
-          orderBy: { id: "asc" }, take: 100, select: { id: true, phone: true },
+          orderBy: { id: "asc" }, take: 100, select: { id: true, phone: true, referralCode: true },
         }));
         if (!accounts.length) break;
         for (const row of accounts) {
           if (isMemberAdminPhone(row.phone)) { skipped++; continue; }
+          if (/^[0-9]{8}$/u.test(row.referralCode ?? "")) continue;
           missing++;
           if (apply) created += await accessCodeTransaction(database, async tx => {
             const account = await lockMemberAccount(tx, row.id);
-            if (!account?.phone || !account.passwordHash || account.erasedAt || account.referralCode || isMemberAdminPhone(account.phone)) return 0;
+            if (!account?.phone || !account.passwordHash || account.erasedAt || /^[0-9]{8}$/u.test(account.referralCode ?? "") || isMemberAdminPhone(account.phone)) return 0;
             await ensureReferralCode(tx, account);
             return 1;
           });
@@ -85,7 +99,7 @@ export function createReferrals({ database, now = Date.now }: { database: Databa
     },
     async inviter(code: string): Promise<boolean> {
       if (!validReferralCode(code)) return false;
-      return database.query(async tx => eligibleInviter(await tx.memberAccount.findUnique({ where: { referralCode: code } })));
+      return database.query(async tx => eligibleInviter(await inviterByCode(tx, code)));
     },
     async read(member: MemberIdentity): Promise<ReferralSummary | null> {
       if (member.blocked || member.administrator) return null;

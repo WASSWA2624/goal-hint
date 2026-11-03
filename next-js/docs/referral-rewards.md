@@ -9,7 +9,7 @@ invitee phone, account identifier or registration digest is returned to the UI.
 New registrations receive a persistent random invitation code immediately.
 Existing registered members can be provisioned with `npm run members:referral-codes`
 (preview), then `npm run members:referral-codes -- --apply`. This bounded,
-rerunnable operator command fills only missing codes and preserves existing links.
+rerunnable operator command provisions missing codes and converts legacy codes while preserving their existing links as aliases.
 Erased, passwordless and configured administrator accounts are excluded. Pending
 or blocked members cannot earn as inviters until the existing eligibility checks
 pass. An authenticated Referrals read retains a safe fallback for old releases.
@@ -74,3 +74,6 @@ On 31 October, the authorized local backfill assigned the one missing registered
 member code. A private before-snapshot was preserved, existing links remained
 unchanged and a repeat preview found zero missing registered member codes. No
 new migration, attribution rewrite or reward grant was involved.
+
+
+New public referral codes use eight numeric characters, preserving leading zeros. Existing 32-character codes remain valid aliases in MemberAccount.legacyReferralCode, including already-signed 30-day attribution cookies. Conversion is atomic under the account lock; a unique-index collision retries another cryptographic code. The operator provisioning command also converts legacy accounts in bounded batches.

@@ -41,7 +41,9 @@ export function DesktopSlip({ slip, index, locale, results, matchStates, initial
     totalOdds={slip.totalOdds} averageProbability={slip.averageProbability} selectionCount={slip.selections.length} slipId={slip.id} outcome={outcome} status={status}
     {...(publicationDay ? { publicationDay } : {})} {...(publishedAt !== undefined ? { publishedAt } : {})}
     headerAction={shareSource || sharedSlip ? <SlipShareAction key={sharedSlip?.id ?? slip.id} localSlip={slip} {...(shareSource ? { source: shareSource } : {})}
-      {...(sharedSlip ? { sharedSlip } : {})} locale={locale} {...(publicShareHref ? { publicHref: publicShareHref } : {})} /> : undefined}>
+      {...(sharedSlip ? { sharedSlip } : {})} locale={locale} status={status} outcome={outcome}
+      {...(publishedAt !== undefined ? { publishedAt } : {})} {...(currentStates ? { matchStates: currentStates } : {})} {...(results ? { results } : {})}
+      {...(publicShareHref ? { publicHref: publicShareHref } : {})} /> : undefined}>
     <ul data-slip-selections aria-labelledby={headingId}>{slip.selections.map((selection, selectionIndex) => {
       const result = results?.find((item) => item.fixtureId === selection.fixtureId);
       return <DesktopSlipRow key={selection.fixtureId} selection={selection} position={selectionIndex + 1} locale={locale} analysisLinks {...(result ? { result } : {})}

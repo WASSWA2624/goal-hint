@@ -248,7 +248,7 @@ model FootballFixture {
   @@index([awayTeamId, kickoff])
 }
 
-// Explicitly published snapshots survive source expiry and account erasure. ownerKey is a private keyed digest.
+// Existing public tokens retain their sealed snapshots; new personal exports are transient.
 model SharedSlip {
   id           String   @id @db.Char(32)
   ownerKey     String   @db.Char(64)
@@ -258,6 +258,11 @@ model SharedSlip {
   createdAt    DateTime @db.DateTime(3)
 
   @@unique([ownerKey, fingerprint])
+}
+
+model SlipNumber {
+  number      Int    @id @default(autoincrement()) @db.UnsignedInt
+  fingerprint String @unique @db.Char(64)
 }
 
 // Public editorial publications have no member/account relation. Bodies and membership are append-only.
@@ -1671,6 +1676,7 @@ model MemberAccount {
   autoRenewPlanId  String?             @db.Char(36)
   autoRenewTermsVersion String?        @db.VarChar(16)
   referralCode     String?             @unique @db.Char(32)
+  legacyReferralCode String?           @unique @db.Char(32)
   sessions         MemberSession[]
   submissions      PaymentSubmission[]
   codes            AccessCode[]

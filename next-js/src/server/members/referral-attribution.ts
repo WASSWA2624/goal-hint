@@ -14,7 +14,7 @@ export function signReferralAttribution(config: Key, code: string, at: number): 
 }
 export function readReferralAttribution(config: Key, value: string | undefined, now: number): { code: string; at: number } | null {
   if (!value || value.length > 120) return null;
-  const match = /^([a-f0-9]{32})\.([0-9]{13})\.([a-f0-9]{64})$/u.exec(value);
+  const match = /^([0-9]{8}|[a-f0-9]{32})\.([0-9]{13})\.([a-f0-9]{64})$/u.exec(value);
   if (!match) return null;
   const [, code, stamp, signature] = match, at = Number(stamp);
   if (at > now || now - at >= referralRules.attributionMs) return null;

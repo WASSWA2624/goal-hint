@@ -36,6 +36,7 @@ export async function paidDatabase({ seedPlans = false, beforeCheckout } = {}) {
     await root.query(await readFile(new URL("../../prisma/migrations/20261031135652_referral_review/migration.sql", import.meta.url), "utf8"));
     await beforeCheckout?.(root);
     await root.query(await readFile(new URL("../../prisma/migrations/20261101120000_payment_checkout/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261103160000_readable_slip_and_referral_codes/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "PaymentNotificationOutbox", "SlipConfiguration", "MemberNotification"]);
@@ -45,6 +46,7 @@ export async function paidDatabase({ seedPlans = false, beforeCheckout } = {}) {
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"}${deletable.has(table) ? ", DELETE" : ""} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
     for (const table of ["PaymentReceipt", "PaymentReceiptClaim", "PaymentReceiptEvidence", "ReferralCredit", "PaymentEvent"])
       await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
+    await root.query(`GRANT SELECT, INSERT ON ${instance.databaseName}.SlipNumber TO 'paid_application'@'127.0.0.1'`);
     const url = `mysql://paid_application:${password}@127.0.0.1:${instance.port}/${instance.databaseName}`;
     database = createDatabase(parseRuntimePolicy(costTestEnvironment(url, instance.url)));
     const secret = randomBytes(32);

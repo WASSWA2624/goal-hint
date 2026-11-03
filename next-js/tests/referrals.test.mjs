@@ -20,7 +20,7 @@ async function inviter(f) {
 async function register(f, inviteCode, phone = friend) {
   const result = await f.service.register(phone, password, { member: null }, address, inviteCode);
   assert.equal(result.status, "authenticated"); assert.equal(result.requiresVerification, true);
-  assert.match([...f.accounts.values()].find(account => account.phone === phone).referralCode, /^[a-f0-9]{32}$/, "Registration creates a persistent invitation code before the Referrals screen is visited.");
+  assert.match([...f.accounts.values()].find(account => account.phone === phone).referralCode, /^[0-9]{8}$/, "Registration creates a persistent invitation code before the Referrals screen is visited.");
   return result;
 }
 
@@ -36,13 +36,13 @@ test("legacy member codes are provisioned in bounded batches without changing ex
   f.accounts.set("erased", account("erased", { erasedAt: new Date(f.now()) }));
   f.accounts.set("unregistered", account("unregistered", { passwordHash: null }));
   f.accounts.set("admin", account("admin", { phone: "256700000991" }));
-  assert.deepEqual(await referrals.provisionCodes(), { missing: 205, created: 0, skipped: 1, applied: false });
+  assert.deepEqual(await referrals.provisionCodes(), { missing: 206, created: 0, skipped: 1, applied: false });
   const runs = await Promise.all([referrals.provisionCodes(true), referrals.provisionCodes(true)]);
-  assert.equal(runs.reduce((sum, run) => sum + run.created, 0), 205);
+  assert.equal(runs.reduce((sum, run) => sum + run.created, 0), 206);
   const generated = [...f.accounts.values()].filter(row => row.id.startsWith("legacy-")).map(row => row.referralCode);
   assert.equal(new Set(generated).size, 205);
-  assert.ok(generated.every(value => /^[a-f0-9]{32}$/.test(value)));
-  assert.equal(f.accounts.get("kept").referralCode, code);
+  assert.ok(generated.every(value => /^[0-9]{8}$/.test(value)));
+  assert.match(f.accounts.get("kept").referralCode, /^[0-9]{8}$/); assert.equal(f.accounts.get("kept").legacyReferralCode, code);
   for (const id of ["admin", "erased", "unregistered"]) assert.equal(f.accounts.get(id).referralCode, null);
   assert.deepEqual(await referrals.provisionCodes(true), { missing: 0, created: 0, skipped: 1, applied: true });
   assert.equal(await referrals.inviter(generated[0]), false, "A pending member's code does not bypass phone verification.");

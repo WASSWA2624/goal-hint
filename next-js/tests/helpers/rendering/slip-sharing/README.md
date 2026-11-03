@@ -19,6 +19,7 @@ mobile label alignment and gaps.
 - `/unauthorized`, `/changed`, `/failure`: preparation API returns 403, 409, or
   503 respectively. Each still uses the production drawer error UI.
 - `/long`: all 800 selections, exercising image pagination and ZIP generation.
+- `/badges`: synthetic match selections with real public team/league badge URLs. This opt-in case reads the provider's public image CDN through the production first-party badge route; other scenarios retain the offline initials path.
 
 `POST /api/slips/share` checks the real strict source schema and the exact fixture
 identity. Unknown/extra fields and unknown slip identities fail. It returns a

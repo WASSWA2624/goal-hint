@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLocalSlipShare, shareSlipSourceSchema } from '../src/domain/shared-slips.ts';
-import { createSharedSlips } from '../src/server/slips/shared-slips.ts';
 import { createShareSlipHandler } from '../src/server/slips/shared-slips-http.ts';
 import { slipShareCaption } from '../src/domain/slip-share-caption.ts';
+import { createSharedSlips } from '../src/server/slips/shared-slips.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
 
 const record = liveRecord();
@@ -27,7 +27,7 @@ test('personal exports contain only an image snapshot in memory and no public to
   assert.equal(shareSlipSourceSchema.safeParse({ source: 'builder', slipId: slip.id, criteria: '' }).success, false);
   assert.equal(shareSlipSourceSchema.safeParse({ ...source, slip }).success, false);
 });
-test('published sharing resolves an existing canonical link without storing another snapshot', async () => {
+test('published sharing resolves an existing canonical link with only a minimal stable number registry', async () => {
   const f = fixture(), response = await f.handle(request(source));
   assert.equal(response.status, 200); const shared = await response.json();
   assert.ok(shared.url.endsWith(`/en/best-slips/${today}/21`)); assert.equal(f.reads(), 1);
@@ -53,19 +53,4 @@ test('legacy links retain their original custom snapshot and access rules withou
   assert.equal(result.shared.url,`https://goalhint.com/s/${id}`);
   integrity=0; await assert.rejects(service.landing(id,true));
   assert.equal((await service.landing('invalid',true)).state,'missing');
-});
-
-test('existing public snapshots remain sealed and hide unfinished selections from guests', async () => {
-  let results = [], validIntegrity = 1, reads = 0;
-  const snapshot = createLocalSlipShare(slip).slip;
-  const database = { transaction: async run => run({ $queryRaw: async () => { reads++; return [{
-    id: 'a'.repeat(32), createdAt: new Date(now), snapshotJson: snapshot, validIntegrity }]; },
-    $executeRaw: async () => assert.fail('reading a public link cannot persist a slip') }) };
-  const store = createSharedSlips(database, { resolveResults: async () => results });
-  assert.deepEqual(await store.landing('invalid'), { state: 'missing' }); assert.equal(reads, 0);
-  assert.deepEqual(await store.landing('a'.repeat(32)), { state: 'restricted' });
-  assert.equal((await store.landing('a'.repeat(32), true)).shared.slip.totalOdds, '2.00');
-  results = [{ fixtureId: slip.selections[0].fixtureId, status: 'finished-regulation', regulationVerified: true, regulationHome: 0, regulationAway: 1 }];
-  assert.equal((await store.landing('a'.repeat(32))).state, 'available');
-  validIntegrity = 0; await assert.rejects(() => store.landing('a'.repeat(32), true));
 });

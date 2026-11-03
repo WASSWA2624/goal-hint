@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'dart:typed_data';
 
 import 'package:share_plus/share_plus.dart';
+import 'native_slip_download.dart';
 
 /// Generated PNG bytes only: no filesystem paths, remote URLs or arbitrary types.
 class NativeSlipImage {
@@ -19,7 +20,9 @@ class NativeSlipImage {
       return null;
     }
     final name = value['name'] as String, encoded = value['data'] as String;
-    if (!RegExp('^goal-hint-$token(?:-[0-9]{2,3})?\\.png\$').hasMatch(name) ||
+    if (!RegExp(
+          '^goal-hint-(?:[0-9]{8}|$token)(?:-[0-9]{2,3})?\\.png\$',
+        ).hasMatch(name) ||
         encoded.length > 5592408) {
       return null;
     }
@@ -54,6 +57,7 @@ class NativeInvitationRequest {
     this.text,
     this.url, [
     this.images = const [],
+    this.download = false,
   ]);
 
   final String id;
@@ -61,16 +65,24 @@ class NativeInvitationRequest {
   final String text;
   final String url;
   final List<NativeSlipImage> images;
+  final bool download;
 
   static NativeInvitationRequest? parse(String message, String? nonce) {
     if (nonce == null || message.length > 16 * 1024 * 1024 + 8192) return null;
     try {
       final data = jsonDecode(message);
       if (data is! Map ||
-          (data.length != 5 && data.length != 6) ||
+          (data.length < 5 || data.length > 7) ||
           data.keys.any(
-            (key) =>
-                !['id', 'nonce', 'title', 'text', 'url', 'files'].contains(key),
+            (key) => ![
+              'id',
+              'nonce',
+              'title',
+              'text',
+              'url',
+              'files',
+              'action',
+            ].contains(key),
           ) ||
           data['nonce'] != nonce ||
           data['id'] is! String ||
@@ -83,17 +95,24 @@ class NativeInvitationRequest {
           RegExp(r'[\x00-\x08\x0b-\x1f\x7f]').hasMatch(data['text']) ||
           data['url'] is! String ||
           !RegExp(
-            r'^https://goalhint\.com/(?:r|s)/[a-f0-9]{32}$',
+            r'^https://goalhint\.com(?:/(?:r/(?:[0-9]{8}|[a-f0-9]{32})|s/[a-f0-9]{32}|en/best-slips/[0-9]{4}-[0-9]{2}-[0-9]{2}/[1-9][0-9]{0,2}))?$',
           ).hasMatch(data['url'])) {
         return null;
       }
-      final slip = (data['url'] as String).contains('/s/');
+      final slip = !(data['url'] as String).contains('/r/');
+      if (data['url'] == 'https://goalhint.com' && !data.containsKey('files')) {
+        return null;
+      }
       if (!slip &&
           ((data['text'] as String).length > 512 ||
               data.containsKey('files'))) {
         return null;
       }
       final images = <NativeSlipImage>[];
+      if (data.containsKey('action') &&
+          (data['action'] != 'download' || !data.containsKey('files'))) {
+        return null;
+      }
       if (data.containsKey('files')) {
         final files = data['files'];
         if (!slip || files is! List || files.isEmpty || files.length > 32) {
@@ -120,6 +139,7 @@ class NativeInvitationRequest {
         data['text'],
         data['url'],
         images,
+        data['action'] == 'download',
       );
     } on FormatException {
       return null;
@@ -145,17 +165,17 @@ class NativeInvitationShare {
   if (window.top !== window || location.origin !== ${jsonEncode(origin.origin)}) return;
   const nonce = ${jsonEncode(_nonce)}, pending = new Map();
   let counter = 0;
-  function send(data, files) {
+  function send(data, files, action) {
     if (navigator.userActivation && !navigator.userActivation.isActive) return Promise.reject(new DOMException('Click Share to continue.', 'NotAllowedError'));
     if (pending.size) return Promise.reject(new DOMException('Sharing is in progress.', 'InvalidStateError'));
     const id = String(++counter);
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => { pending.delete(id); reject(new Error('Sharing timed out.')); }, 120000);
       pending.set(id, {resolve, reject, timeout});
-      GoalHintInvitationShare.postMessage(JSON.stringify({id, nonce, title: data.title, text: data.text, url: data.url, ...(files ? {files} : {})}));
+      GoalHintInvitationShare.postMessage(JSON.stringify({id, nonce, title: data.title, text: data.text, url: data.url, ...(files ? {files} : {}), ...(action ? {action} : {})}));
     });
   }
-  const bridge = Object.freeze({version: 1, share(data) { return send(data); }, shareFiles(data) { return send(data, data.files); }});
+  const bridge = Object.freeze({version: 1, readableReferences: true, share(data) { return send(data); }, shareFiles(data) { return send(data, data.files); }, downloadFiles(data) { return send(data, data.files, 'download'); }});
   window.addEventListener('goalhint:native-share-result', event => {
     if (event.detail?.nonce !== nonce) return;
     const request = pending.get(event.detail.id);
@@ -177,6 +197,7 @@ class NativeInvitationShare {
     required Future<void> Function(String) evaluate,
     required Rect anchor,
     Future<ShareResult> Function(ShareParams)? share,
+    Future<bool> Function(List<NativeSlipImage>)? save,
   }) async {
     final nonce = _nonce;
     final request = NativeInvitationRequest.parse(message, nonce);
@@ -195,30 +216,36 @@ class NativeInvitationShare {
     _sharing = true;
     var result = 'failed';
     try {
-      final outcome = await (share ?? SharePlus.instance.share)(
-        ShareParams(
-          title: request.title,
-          text: request.text.contains(request.url)
-              ? request.text
-              : '${request.text}\n${request.url}',
-          files: request.images.isEmpty
-              ? null
-              : request.images
-                    .map(
-                      (image) =>
-                          XFile.fromData(image.bytes, mimeType: 'image/png'),
-                    )
-                    .toList(),
-          fileNameOverrides: request.images.isEmpty
-              ? null
-              : request.images.map((image) => image.name).toList(),
-          sharePositionOrigin: anchor,
-        ),
-      );
-      // Some platforms cannot identify the chosen action; do not claim delivery.
-      result = outcome.status == ShareResultStatus.dismissed
-          ? 'cancelled'
-          : 'handed-off';
+      if (request.download) {
+        result = await (save ?? saveNativeSlipImages)(request.images)
+            ? 'handed-off'
+            : 'cancelled';
+      } else {
+        final outcome = await (share ?? SharePlus.instance.share)(
+          ShareParams(
+            title: request.title,
+            text: request.text.contains(request.url)
+                ? request.text
+                : '${request.text}\n${request.url}',
+            files: request.images.isEmpty
+                ? null
+                : request.images
+                      .map(
+                        (image) =>
+                            XFile.fromData(image.bytes, mimeType: 'image/png'),
+                      )
+                      .toList(),
+            fileNameOverrides: request.images.isEmpty
+                ? null
+                : request.images.map((image) => image.name).toList(),
+            sharePositionOrigin: anchor,
+          ),
+        );
+        // Some platforms cannot identify the chosen action; do not claim delivery.
+        result = outcome.status == ShareResultStatus.dismissed
+            ? 'cancelled'
+            : 'handed-off';
+      }
     } catch (_) {
       // The web panel keeps explicit social links and manual copying available.
     } finally {
