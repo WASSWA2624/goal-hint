@@ -40,6 +40,16 @@ export function feedRowNumber(page: number, pageSize: number, index: number): nu
   return (page - 1) * pageSize + index + 1;
 }
 
+/** Latest stored publication in the visible list; a feed read or kickoff is never a publication. */
+export function latestPredictionPublication(records: readonly Pick<FixtureSnapshot, "forecast">[]): number | null {
+  let latest: number | null = null;
+  for (const record of records) {
+    const publishedAt = record.forecast?.publishedAt;
+    if (publishedAt != null && (latest === null || publishedAt > latest)) latest = publishedAt;
+  }
+  return latest;
+}
+
 export type PaginationWindow = Readonly<{ from: number; to: number }>;
 
 /**

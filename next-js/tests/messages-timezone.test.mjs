@@ -96,6 +96,19 @@ test("compact dates and times cross midnight together in the selected display zo
   assert.equal(halfHour.shortKickoffTime(nextDay), "1:45 AM");
 });
 
+test("publication headings use abbreviated day-first dates and the publication's local date and zone", () => {
+  const messages = createMessages("en");
+  assert.equal(messages.predictionPublication(parseUtcInstant("2026-11-03T05:00:00Z")), "TUE 03-Nov-2026 - 08:00 EAT");
+  assert.equal(messages.predictionPublication(parseUtcInstant("2026-10-28T05:00:00Z")), "WED 28-Oct-2026 - 08:00 EAT");
+  for (const day of [1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31]) {
+    const instant = parseUtcInstant(`2026-10-${String(day).padStart(2, "0")}T05:00:00Z`);
+    assert.ok(messages.predictionPublication(instant).includes(` ${String(day).padStart(2, "0")}-Oct-2026 - 08:00 EAT`));
+  }
+  const local = createMessages("en", undefined, "America/Los_Angeles");
+  assert.equal(local.predictionPublication(parseUtcInstant("2026-11-03T05:00:00Z")), "MON 02-Nov-2026 - 21:00 PST");
+  for (const invalid of [NaN, Infinity, 0.5]) assert.throws(() => messages.predictionPublication(invalid), CalendarValidationError);
+});
+
 test("compact kickoff labels follow daylight-saving offsets and keep instant validation", () => {
   const messages = createMessages("en", undefined, "America/Los_Angeles");
   for (const [value, zone] of [["2026-11-01T08:30:00Z", "PDT"], ["2026-11-01T09:30:00Z", "PST"]]) {

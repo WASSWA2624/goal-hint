@@ -1,12 +1,11 @@
 "use client";
 
-import { Fragment, memo, Suspense, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, Suspense, useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
-import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
-import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/components/match/feed-filters";
-import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
-import { DesktopFeedFilters } from "@/components/match/desktop-feed-filters";
+import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
+import { FeedFilters } from "@/components/match/feed-filters";
+import { FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { plainClick } from "@/components/match/filter-parts";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
@@ -18,15 +17,14 @@ import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { FeedPerformancePlaceholder, FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
 import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
-import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { publicPolicy } from "@/domain/public-policy";
-import { feedRowNumber } from "@/domain/feed-presentation";
+import { feedRowNumber, latestPredictionPublication } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { feedReturnStorageKey } from "@/domain/navigation";
@@ -78,15 +76,12 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
         initial={summary} /></ServerThemeUntilHydrated>
     </Suspense>
     <ResultsToolbar query={query} today={today} total={data.total} first={first}
-      last={first + records.length - 1} />
+      last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
     {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
     {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
       {records.map((fixture, index) => <Fragment key={fixture.fixtureId}>
-        {query.sort.by === "kickoff" && fixture.kickoffAt !== null && (index === 0 ||
-          getReportingDate(utcInstantFromEpochMilliseconds(records[index - 1]!.kickoffAt ?? data.asOf)) !== getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt))) &&
-          <MatchListDivider title={messages.reportingDateMedium(getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoffAt)))} note="EAT" />}
         {/* Exact matches come first, so similar results start right after the last exact position. */}
         {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
           note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
@@ -109,24 +104,6 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery, count: st
     : `${count}. ${messages.text("feed.search.similarFrom", { position: messages.number(search.exact + 1) })}`;
 }
 
-/** The server/phone interface keeps its existing controls and owns its sheet lifecycle. */
-function FallbackFeedControls({ query, today, leagues, onApply, showAccount, subscriberOnly }: {
-  query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
-  showAccount: boolean; subscriberOnly: boolean;
-}) {
-  const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId(), filtersFormId = useId();
-  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true, changed: false });
-  const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
-    [filterStatus, filtersFormId, query.locale]);
-  return <>
-    <FeedHeader query={query} today={today} onApply={onApply} showAccount={showAccount} />
-    <FeedFilters subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={onApply}
-      open={filtersOpen} panelId={filtersId} onOpenChange={setFiltersOpen} formId={filtersFormId} onDraftStatus={setFilterStatus}
-      controls={<FeedFilterToolbar subscriberOnly={subscriberOnly} query={query} onApply={onApply} actions={filterActions}
-        summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
-  </>;
-}
-
 /** Successful server projections remain visible if a later navigation fails. */
 function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", startingPriceUgx = null, summary }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
@@ -134,7 +111,6 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
   summary?: Promise<FeedPerformanceSeed>;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
-  const desktopLayout = useDesktopLayout();
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
   const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
@@ -162,8 +138,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? searchAnnouncement(result.data, query, messages.plural("feed.matchCount", result.data.total))
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
-    {desktopLayout ? <DesktopFeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply} pending={pending} />
-      : <FallbackFeedControls query={query} today={today} leagues={leagues} onApply={apply} showAccount={showAccount} subscriberOnly={subscriberOnly} />}
+    <FeedHeader query={query} today={today} showAccount={showAccount} />
+    <FeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply} pending={pending} />
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>

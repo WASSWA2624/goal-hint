@@ -1,7 +1,7 @@
 "use client";
 
 import { SearchBar } from "@/components/ui/search-bar";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
 import { media } from "@/styles/theme";
 import { stopReviewSound } from "./payment-alert-sound";
 
@@ -13,7 +13,6 @@ import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ResetIcon } fr
 import { formatPhone } from "@/domain/phone";
 import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
-import { ActionButton } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { NetworkChip } from "./network-chip";
 import { paymentWarnings, PaymentReview, type PaymentRecovery } from "./payment-review";
@@ -188,14 +187,14 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
               count: Number(provider !== "all") + Number(sort !== "queue"),
               onOpen: () => { setFilterDraft({ provider, sort }); setFiltersOpen(true); } }} />
         </form>
-        {filtersOpen && <CriteriaDialog id={filtersId} title="Payment filters" open onCancel={() => setFiltersOpen(false)} closeLabel="Close payment filters"
-          onApply={() => { setProvider(filterDraft.provider); setSort(filterDraft.sort); setFiltersOpen(false); }} applyLabel="Apply filters" cancelLabel="Cancel"
-          onReset={() => setFilterDraft({ provider: "all", sort: "queue" })} resetLabel="Reset">
+        {filtersOpen && <AdvancedFilterDialog id={filtersId} open onCancel={() => setFiltersOpen(false)} closeLabel="Close payment filters"
+          onApply={() => { setProvider(filterDraft.provider); setSort(filterDraft.sort); setFiltersOpen(false); }}
+          onReset={() => setFilterDraft({ provider: "all", sort: "queue" })}>
           <QueueFilters>
             <FloatingField label="Payment provider"><select aria-label="Payment provider" value={filterDraft.provider} onChange={event => setFilterDraft(current => ({ ...current, provider: event.target.value }))}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FloatingField>
             <FloatingField label="Sort payments"><select aria-label="Sort payments" value={filterDraft.sort} onChange={event => setFilterDraft(current => ({ ...current, sort: event.target.value as PaymentSort }))}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FloatingField>
           </QueueFilters>
-        </CriteriaDialog>}
+        </AdvancedFilterDialog>}
       </QueueBar>
       <QueueSummary><span data-payment-count>{payments.length} of {queue.total ?? payments.length} requests</span><span>{sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
         {queue.page && <nav aria-label="Payment pages">{queue.page > 1 && <Link href={`/admin/payments?tab=${tab}&page=${queue.page - 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Previous page</Link>}{" "}
@@ -213,7 +212,7 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
           {warnings > 0 && <TicketWarn><AlertIcon />{warnings} warning{warnings === 1 ? "" : "s"}</TicketWarn>}
         </Ticket></li>;
       })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{search || provider !== "all" ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
-        {(search || provider !== "all") && <ActionButton type="button" disabled={action.busy} onClick={() => { setSearch(""); setProvider("all"); }}>Clear filters</ActionButton>}</QueueEmpty>}
+      </QueueEmpty>}
     </QueuePanel>
     <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}>
       {selected?.workflowVersion === 2 ? <CheckoutReview key={selected.id} payment={selected} nav={nav} onResolved={() => { resolved(selected.id); refreshAdmin(); }} /> : selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}

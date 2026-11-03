@@ -66,7 +66,7 @@ export async function verifySearchPerformance(page, origin, widths = [320, 390, 
       assert(!mobile || figures.visibleIcons === 0, 'Mobile status cards have no icons');
       assert(figures.colors >= 5, 'Status cards use distinct theme colours');
       assert(figures.period === '02-Nov-2026 · EAT', 'The heading shows the actual reporting day, independently of the refresh timestamp');
-      assert(figures.title === 'Prediction performance', 'The shared heading uses Prediction performance');
+      assert(figures.title === 'Performance', 'The shared heading uses Performance');
       assert(figures.periodCount === 1 && figures.periodInHeader, 'Exactly one period appears, inside the header');
       assert(figures.aligned && figures.headerGap >= 0 && figures.headerGap <= 4, 'Cards align with the header and retain minimal spacing');
       assert(figures.valueIcons === 0 && figures.labelIcons === 3, 'Outcome icons belong to labels rather than values');
@@ -90,7 +90,7 @@ export async function verifySearchPerformance(page, origin, widths = [320, 390, 
   } finally { page.off('pageerror', onError); }
 }
 
-/** Exercise both production feed filter implementations in the loading fixture. */
+/** Exercise the shared production feed filters at both viewport sizes in the loading fixture. */
 export async function verifyFeedSearchFilters(page, origin) {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const results = [];
@@ -100,7 +100,7 @@ export async function verifyFeedSearchFilters(page, origin) {
     await page.evaluate(value => localStorage.setItem('goal-hint-theme', value), mode);
     await page.reload();
     const desktop = width >= 1024;
-    const panel = page.locator(desktop ? '[data-desktop-feed-filters]' : '[data-mobile-compact-filters]');
+    const panel = page.locator('[data-feed-filters]');
     await panel.waitFor({ state: 'visible' });
     const field = panel.getByRole('searchbox'), filter = panel.locator('[data-search-filters]');
     const before = page.url();
@@ -109,10 +109,10 @@ export async function verifyFeedSearchFilters(page, origin) {
     await panel.locator('[data-feed-search-submit]').click();
     await page.waitForURL(url => url.searchParams.get('q') === 'Arsenal');
     await filter.click();
-    const dialog = page.getByRole('dialog', { name: 'Advanced filters', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Advanced Filters', exact: true });
     await dialog.waitFor({ state: 'visible' });
     assert(await filter.getAttribute('aria-controls') === await dialog.getAttribute('id'), 'The feed opener targets its own dialog');
-    if (desktop) assert(await dialog.locator('[data-feed-dialog-section]').count() === 5, 'Desktop advanced filters reuse all five sections');
+    assert(await dialog.locator('input[type="date"]').count() === 2, 'One shared pair of date fields');
     const probability = dialog.locator('input[inputmode="decimal"]').first(), original = await probability.inputValue();
     const applied = page.url();
     await probability.fill('101');

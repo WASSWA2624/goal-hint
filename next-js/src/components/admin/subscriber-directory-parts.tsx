@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { SearchBar } from "@/components/ui/search-bar";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
 import { authCopy } from "@/i18n/messages/auth";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
@@ -30,9 +30,9 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange }: {
     <SearchBar label="Search subscribers" value={query.search} onChange={event => onQueryChange({ ...query, search: event.currentTarget.value })}
       placeholder="Phone, package, code or note" maxLength={120} autoComplete="off"
       filters={{ label: "Advanced filters", dialogId, open, count: filterCount, onOpen: () => { setDraft(query); setOpen(true); } }} />
-    {open && <CriteriaDialog id={dialogId} title="Subscriber filters" open onCancel={() => setOpen(false)} closeLabel="Close subscriber filters"
-      onApply={() => { onQueryChange({ ...draft, search: query.search }); setOpen(false); }} applyLabel="Apply filters" cancelLabel="Cancel"
-      onReset={() => setDraft({ ...query, status: "all", access: "all", plan: "all", recent: "all" })} resetLabel="Reset">
+    {open && <AdvancedFilterDialog id={dialogId} open onCancel={() => setOpen(false)} closeLabel="Close subscriber filters"
+      onApply={() => { onQueryChange({ ...draft, search: query.search }); setOpen(false); }}
+      onReset={() => setDraft({ ...query, status: "all", access: "all", plan: "all", recent: "all" })}>
     <FilterFields>
     <FloatingField label="Account status"><select value={draft.status} onChange={event => setDraft({ ...draft, status: event.currentTarget.value as SubscriberDirectoryQuery["status"] })}>
       <option value="all">All accounts</option><option value="open">Open</option><option value="blocked">Blocked</option><option value="erased">Erased</option></select></FloatingField>
@@ -42,7 +42,7 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange }: {
       <option value="all">All packages</option>{names.map(name => <option key={name} value={name}>{name}</option>)}<option value="none">No current package</option></select></FloatingField>
     <FloatingField label={authCopy.lastLogin}><select value={draft.recent} onChange={event => setDraft({ ...draft, recent: event.currentTarget.value as SubscriberDirectoryQuery["recent"] })}>
       <option value="all">Any time</option><option value="1">Within 24 hours</option><option value="7">Within 7 days</option><option value="30">Within 30 days</option></select></FloatingField>
-    </FilterFields></CriteriaDialog>}
+    </FilterFields></AdvancedFilterDialog>}
   </Filters>;
 }
 

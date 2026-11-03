@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bestCardFamily, countryOptions, feedRowNumber, leagueOptions, noPickReason, paginationWindow } from "../src/domain/feed-presentation.ts";
+import { bestCardFamily, countryOptions, feedRowNumber, latestPredictionPublication, leagueOptions, noPickReason, paginationWindow } from "../src/domain/feed-presentation.ts";
 import { cardFixture } from "./helpers/match-card-fixtures.mjs";
 
 test("scrolling pagination mounts consecutive viewport pages with bounded overscan through page 10,000", () => {
@@ -43,6 +43,15 @@ test("row numbers continue across pages", () => {
   assert.equal(feedRowNumber(1, 30, 0), 1);
   assert.equal(feedRowNumber(2, 30, 0), 31);
   assert.equal(feedRowNumber(3, 10, 9), 30);
+});
+
+test("the results timestamp uses the latest visible publication, including locked and gated forecasts", () => {
+  assert.equal(latestPredictionPublication([]), null);
+  assert.equal(latestPredictionPublication([{ forecast: null, kickoffAt: 9999999 }]), null);
+  const published = { forecast: { publishedAt: 10 } }, gated = { forecast: { gated: true, publishedAt: 20 } };
+  assert.equal(latestPredictionPublication([gated, { forecast: null }, published]), 20);
+  assert.equal(latestPredictionPublication([published, { forecast: { publishedAt: 0 } }]), 10);
+  assert.equal(latestPredictionPublication([{ forecast: { publishedAt: 0 } }]), 0);
 });
 
 test("the shown pick is the most likely available pick among selected markets, ties in policy order", () => {

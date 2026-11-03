@@ -165,8 +165,8 @@ test('the browse service retains public counts and releases complete original se
   assert.equal(gated.slips[0].publicationDay, today); assert.equal(gated.slips[0].outcome, 'won');
   assert.equal(gated.slips.find(view => view.rank === 3).preview[0].pick, null);
   const read = createBestSlipsBrowseService({ read: async (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly), providerOdds: true, now: () => now });
-  assert.deepEqual(await read(free, query()), { ...gated, summary: { from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
-  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
+  assert.deepEqual(await read(free, query()), { ...gated, summary: { asOf: now, from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
+  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { asOf: now, from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
 });
 
 test('a replacement cycle on the same fixture cannot overwrite the original published outcome or row state', async () => {

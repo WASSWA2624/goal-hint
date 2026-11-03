@@ -15,7 +15,7 @@ const catalog = { ...en, ...matchTouchlineMessages, ...predictionMessages, ...sl
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
   days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; shortTimes: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
-  spans: Intl.DateTimeFormat; months: Intl.DateTimeFormat; zones: Intl.DateTimeFormat };
+  spans: Intl.DateTimeFormat; months: Intl.DateTimeFormat; zones: Intl.DateTimeFormat; publicationDates: Intl.DateTimeFormat };
 // Immutable formatters are shared by locale and display zone; no visitor records are cached.
 const formattersByLocale = new Map<string, Formatters>();
 function formatters(language: string, timeZone: string): Formatters {
@@ -38,6 +38,7 @@ function formatters(language: string, timeZone: string): Formatters {
     spans: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "short", day: "numeric" }),
     months: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "long", year: "numeric" }),
     zones: new Intl.DateTimeFormat(language, { ...instantOptions, timeZoneName: "short" }),
+    publicationDates: new Intl.DateTimeFormat(language, { ...instantOptions, weekday: "short", day: "numeric", month: "short", year: "numeric" }),
   };
   formattersByLocale.set(key, created);
   return created;
@@ -92,7 +93,7 @@ export function createMessages(locale?: string, translations?: Partial<MessageCa
 }
 
 function buildMessages(language: string, translations: Partial<MessageCatalog>, timeZone: string) {
-  const { numbers, plurals, dates, instants, days, instantDays, times, shortTimes, mediumDates, spans, months, zones } = formatters(language, timeZone);
+  const { numbers, plurals, dates, instants, days, instantDays, times, shortTimes, mediumDates, spans, months, zones, publicationDates } = formatters(language, timeZone);
   const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
     : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
   const compactReportingDate = (value: ReportingDate) => {
@@ -156,6 +157,12 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     reportingInstant(value: UtcInstant): string {
       const instant = displayInstant(value);
       return `${instants.format(instant)} ${zoneName(instant)}`;
+    },
+    /** Compact day-first publication label in the selected display zone. */
+    predictionPublication(value: UtcInstant): string {
+      const instant = displayInstant(value), parts = publicationDates.formatToParts(instant);
+      const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)!.value;
+      return `${part("weekday").toUpperCase()} ${part("day").padStart(2, "0")}-${part("month")}-${part("year")} - ${times.format(instant)} ${zoneName(instant)}`;
     },
     /** Stable compact date and 24-hour time for performance headings. */
     reportingInstantCompact(value: UtcInstant): string {

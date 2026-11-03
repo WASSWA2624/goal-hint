@@ -6,13 +6,13 @@ phone and desktop. Live selects Today in the active browsing zone, removes
 kickoff-time bounds and locks date/time controls until another status is selected.
 Status changes retain compatible filters and mirror past/future relative periods
 for Upcoming and Completed. Wholly incompatible explicit ranges are repaired.
-Matches opens with an empty search, All statuses, Today, Highest chance order,
+Matches opens with an empty search, All statuses, Last 30 days, latest kickoff first,
 all four markets and no league, country, time, probability or odds constraints.
 Reset restores those choices and the Predictions only default allowed by access,
 while retaining the browsing zone and page size.
 
 The period selector includes Last 30/7/3 days, Yesterday, Today, Tomorrow,
-Next 3/7/30 days and Custom. The native phone form's `period` field is validated
+Next 3/7/30 days and Custom. The native GET form's `period` field is validated
 only by the page route, replaces older applied dates, and redirects to canonical
 parameters. Stored API query validation stays unchanged. Direct stale Live links,
 including dated archive links, redirect to the current filtered Matches view
@@ -79,25 +79,17 @@ aggregate limiter before cache lookup.
 
 ## Navigation and presentation
 
-Below the desktop breakpoint, the search, date/status and Advanced controls use
-compact 36px faces. Advanced and date sheets use tighter padding, 8px body gaps
-and compact action rows; probability entries are centered. Native filter state,
-date presets, validation, Apply/Cancel/Reset and URLs retain the same behavior.
-Desktop filter presentation is unchanged.
-
-Desktop quick date presets use ordinary links with prefetch disabled and retain
-their existing date-navigation behavior. The body search bar is shared across
-every screen size. Phones and tablets use an Advanced filters button to reveal the fields;
-desktop always shows all fields and omits that toggle. Search edits the same Redux draft as the
-filter fields; Enter in search and Apply both submit the complete validated
-draft and reset page position to one. On desktop, search and the period selector
-share the first filter row without a visible title or selector prefix. Predictions
+Search and dialog controls use the shared 40px fine-pointer or 44px
+coarse-pointer height at every viewport. One body search row opens Advanced
+Filters on both mobile and desktop. The shared draft holds every filter;
+Enter in search and the footer's Apply Filters submit the validated draft and
+restart pagination. Predictions
 only defaults on for full-access pages and finished results; free unfinished feeds
 keep their existing subscriber restriction. Explicit `picks=all` preserves an
 unchecked page choice, while Reset restores the available page default. API reads
 and offline snapshots retain their unrestricted default. Four native From date,
-To date, From time and To time inputs share the filter section, which starts collapsed below
-64rem and remains expanded on desktop. Equal date endpoints select a day and equal
+To date, From time and To time inputs render once inside the filter dialog,
+which starts closed at every viewport. Equal date endpoints select a day and equal
 time endpoints select a kickoff minute. Different date
 endpoints select an inclusive range of up to 366 days; time ranges retain inclusive
 minute bounds and their explicit timezone. Incomplete or invalid ranges remain
@@ -109,7 +101,7 @@ The page uses the shared light or dark shell, controls, feedback and match cards
 Light mode uses the Porcelain Blue page background with white cards and
 header/navigation chrome; dark mode uses navy surfaces with light text. Phone
 match/slip frames and Aligned ledger row edges remain square. Other controls use the shared
-`theme.border.radius` token.
+`theme.radius` scale.
 Matches reuse Clean ledger cards below 64rem and the same Aligned ledger rows as
 betting slips and the slip builder at desktop widths. `MatchCardList` provides
 one `useDesktopLayout` subscription through `MatchCardLayoutContext`; individual
@@ -150,82 +142,39 @@ a current preview for an empty lock.
 
 ### Compact header and filters
 
-Below 64rem, feed pages hide the shell header, so `FeedHeader` opens with the
-branded bar. It uses the same adaptive `theme.header.background` and themed
-separator as the desktop header: white in light mode and navy in dark mode.
-The bar uses `theme.header.phoneHeight` and runs past the
-feed's gutters and top padding to the screen edge. The adaptive logo links
-home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
-The theme button sits at the end of the row and switches between the approved
-R03 Light and R04 Dark palettes. Feed sections use 6px gaps. There is no
-visible feed page heading or subtitle. One visually hidden h1
-preserves the semantic page heading on every screen size. The search
-bar and labelled Advanced filters button sit below the header in the page body and remain
-visible whether filters are open or collapsed.
+`FeedHeader` retains the phone brand bar and one visually hidden page heading.
+Desktop uses the shell header. Both viewports render the same `FeedFilters`:
+one search row and its Advanced filters button, with transparent surroundings
+and shared spacing above and below. There is no separate gray filter panel.
 
-On phones and tablets the body Advanced filters button opens or collapses one section
-containing the date/time pairs together with Markets, Leagues, Countries and
-Probability. The section starts collapsed below 64rem; desktop always shows
-all fields. Escape closes the mobile section without applying its draft;
-clicking outside leaves it open. A down or up chevron indicates the collapsed
-or expanded state, and the button's accessible name and title say Show advanced
-filters or Hide advanced filters. Checklist popovers retain their own
-outside-click and Escape dismissal. The common range controls render once:
-initial HTML contains exactly two date and two time inputs while collapsed.
-Full From date, To date, From time and To time labels sit inside their subtly rounded
-controls, above each native value in narrower layouts and to its left in wider layouts.
-Each pair occupies one phone row and is directly editable when expanded.
-Compact padding preserves readable text and lets the expanded controls scroll
-naturally with the page on smaller screens. There are no visible Date range/Time
-range group headings, nested date/time panels or per-range Apply buttons.
-Accessible fieldset names, input labels, focus rings and invalid feedback remain
-present. Invalid or incomplete edits are retained; a single Apply action remains
-disabled until the complete draft is valid.
+One branded **Advanced Filters** dialog owns status/result, period, custom
+dates, kickoff times, display zone, sorting, Predictions only, markets, leagues,
+countries, probability bounds and the existing unavailable-odds explanation.
+Each field renders once; desktop and mobile share the same draft and validation.
+Leagues and countries reuse one searchable checklist with bundled country flags.
+Live selects Today and disables incompatible date/time fields. Invalid or
+incomplete drafts remain editable and disable Apply.
 
-Expanded mobile filters use one labeled summary dropdown each for Markets,
-Leagues and Countries. A single selection displays its name, multiple selections
-display a count, and the checklists retain all choices, with search for leagues
-and countries. Country options and selected country summaries use bundled local
-SVG flags with readable names if a flag is unavailable. Probability uses compact
-directly editable minimum/maximum fields, accepting decimal percentages from
-0 through 100 with minimum no greater than maximum; equal bounds are valid.
-The muted Odds unavailable explanation remains compact. Mobile filter edits
-remain drafts until Apply; no timer applies them automatically.
+The shared `AdvancedFilterDialog` wraps `CriteriaDialog` with the existing brand
+mark, theme surfaces, modal focus handling and exactly two footer actions:
+**Reset Filters** on the left and **Apply Filters** on the right. The body
+scrolls independently of the header and footer. Reset edits only the draft;
+Apply commits the complete validated query and closes the dialog. Escape,
+backdrop dismissal and the close button restore the opening draft and opener
+focus. Reset restores the configured Matches defaults while retaining the
+browsing zone and page size. Payment, subscriber and audit search screens reuse
+this dialog chrome around their existing fields and cancellation behavior.
+Without JavaScript the same dialog fields remain inline for native GET search.
 
-On phones and tablets, Advanced filters, Clear and Apply always retain visible backgrounds and solid 1px borders, with the shared 2px corner radius.
-One persistent action row below the filter options stays outside the mobile
-collapsible section and places Sort by first, followed by Clear and Apply
-filters. The action group aligns right on desktop, while mobile keeps Sort on
-the left. When the mobile fields are collapsed, the row follows search directly. A compact
-summary shows the applied date or range, markets, leagues
-and countries, with search, time and probability constraints when present.
-The summary uses the applied query and does not change while its draft is
-edited. On desktop its chips sit at the far left of the same row as the actions
-on the right; mobile places the summary underneath the actions. Filter fields sit between search
-and the action row, always visible on desktop and toggleable on mobile. The applied
-query's total match count sits with the results below the toolbar and summary, updates with
-the displayed projection and is omitted when no successful projection is available. Editing a draft
-does not request an advisory count or change that label. Empty-result messages
-appear below the action row. The sort menu
-contains both kickoff directions and
-both probability directions. Predictions only is a checkbox in the filter actions;
-there is no separate reverse-order button. Reset returns to Today, All statuses,
-Highest chance and the available Predictions only default while retaining the
-browsing zone and page size.
-
-Desktop retains the shell logo and shared Aligned ledger matches, with its theme control at the
-far right of the shell header. Its top filter row contains search and an unlabeled
-period selector. Feed pages
-omit the shell search and use the same body search bar,
-persistent actions and applied summary as compact screens. All filter fields
-remain visible on desktop, without a Filters toggle. Inline date/time controls
-precede one row of Leagues, Countries,
-Markets, Odds and Probability fields. Probability uses compact minimum/maximum
-decimal percentage inputs; the row contains no sliders. One Apply action
-submits all search and filter edits. The sort menu remains independent and
-applies ordering immediately from the applied query. Sort, Clear and Apply
-align to the right below the fields, with the applied summary chips at the far
-left of that same row.
+The results have one square, themed header: **Predictions**, a day-first
+publication label such as `WED 28-Oct-2026 - 08:00 EAT`, and the
+visible range. The timestamp is the latest stored prediction publication among
+the displayed records, including gated forecasts; its tooltip states that scope.
+It is omitted when no visible prediction has a publication, independently of
+kickoff and feed-read time. Desktop shows `Showing 1–20 of 600 matches`; mobile
+shows `1–20 of 600`, with the timestamp beside the title and natural wrapping on narrow screens. Counts follow
+filtering, accumulated pagination, retained projections and live refresh. Match
+rows retain their kickoff dates; redundant kickoff-day dividers are removed.
 
 Phones and tablets keep the shared Clean ledger presentation: kickoff and
 competition metadata, mirrored teams around VS/the supplied score, then one

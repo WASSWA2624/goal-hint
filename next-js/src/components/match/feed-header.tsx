@@ -1,187 +1,100 @@
 "use client";
 
-import { controlRow } from "@/components/ui/control-layout";
-
-import type { ReactNode } from "react";
 import styled from "styled-components";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { desktopContentPadding } from "@/components/ui/layout";
-import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
+import { createPredictionWindow, toUtcIsoString, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { feedHeading } from "@/domain/feed-presentation";
+import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { DatePresets } from "./feed-dates";
 import { FeedNote } from "./feed-controls";
-import { FloatingField } from "@/components/ui/floating-field";
 
-const desktop = media.desktop;
-const HeaderContent = styled.div`
-  display: grid;
-  gap: var(--gh-spacing-1_5);
-  min-inline-size: 0;
-  ${media.belowDesktop} { display: contents; }
-`;
-const BrandContainer = styled.div`
-  display: contents;
-`;
-/** Phones show the brand bar; desktops align quick date presets beneath the shell header. */
-const Row = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gh-spacing-3) var(--gh-spacing-6);
-  ${media.belowDesktop} { display: contents; }
-`;
-const DesktopActions = styled.div`
-  display: none;
-  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2); margin-inline-start: auto; }
-`;
-
-
-/** The brand bar carries page-level controls; search and filters belong in the body. */
-export function FeedHeader({ query, today, onApply, showAccount = false }: {
-  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; showAccount?: boolean;
+/** Page branding stays outside the single search/filter row. */
+export function FeedHeader({ query, today, showAccount = false }: {
+  query: FeedQuery; today: ReportingDate; showAccount?: boolean;
 }) {
-  const messages = createMessages(query.locale);
-  const heading = feedHeading(query, today, messages);
-  return <HeaderContent>
-    <Row>
-      <BrandContainer><AppBrandBar locale={query.locale} showAccount={showAccount} /></BrandContainer>
-      <VisuallyHidden as="h1">{heading}</VisuallyHidden>
-      <DesktopActions>
-        <DatePresets query={query} today={today} onApply={onApply} />
-      </DesktopActions>
-    </Row>
-  </HeaderContent>;
+  return <>
+    <AppBrandBar locale={query.locale} showAccount={showAccount} />
+    <VisuallyHidden as="h1">{feedHeading(query, today, createMessages(query.locale))}</VisuallyHidden>
+  </>;
 }
 
-/** Sorting and filter actions stay outside the collapsible fields. */
-const Toolbar = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gh-spacing-1_5) var(--gh-spacing-2);
-  ${media.belowDesktop} {
-    display: block;
-  }
-`;
-/** Desktop shares one row; phones show only an active-filter summary here, and nothing by default. */
-const FilterToolbar = styled(Toolbar)`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--gh-spacing-2);
-  ${media.belowDesktop} { &:has(> [data-quiet]) { display: none; } }
-  ${desktop} {
-    grid-template-columns: minmax(0, 1fr) auto;
-    > [data-active-filter-summary] { grid-column: 1; grid-row: 1; }
-    > div { grid-column: 2; grid-row: 1; }
-  }
-`;
-const Count = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: var(--gh-spacing-3);
-  min-inline-size: 0;
-  > h2 { font-size: var(--gh-font-secondary); ${desktop} { font-size: var(--gh-font-section); } }
-  ${desktop} { flex: 1; justify-content: space-between; white-space: nowrap; }
-  ${media.belowDesktop} { > h2 {
-    position: absolute;
-    inline-size: var(--gh-size-0_25);
-    block-size: var(--gh-size-0_25);
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  } }
-`;
-const SortGroup = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  min-inline-size: 0;
-  align-items: center;
-  gap: var(--gh-spacing-2);
-  ${desktop} { margin-inline-start: auto; justify-content: flex-end; }
-  ${media.belowDesktop} { display: none; }
-
-  ${controlRow}
-  > [data-filter-actions] { margin-block-start: var(--gh-spacing-1_5); }
-`;
-const ResultCount = styled.p`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.caption};
-  line-height: var(--gh-leading-control);
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-  ${desktop} { font-size: var(--gh-font-emphasis); }
-  > [data-phone-count] { display: none; }
-  ${media.belowDesktop} {
-    font-size: var(--gh-font-secondary);
-    > [data-desktop-count] { display: none; }
-    > [data-phone-count] { display: inline; }
-  }
-`;
 export const feedSortOptions: readonly FeedSort[] = [
   { by: "probability", direction: "desc" }, { by: "probability", direction: "asc" },
   { by: "kickoff", direction: "asc" }, { by: "kickoff", direction: "desc" },
 ];
 
-/** One independent sort menu retains the established immediate sort behavior. */
-export function FeedFilterToolbar({ query, onApply, actions, summary }: {
-  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode; subscriberOnly?: boolean;
-}) {
-  const messages = createMessages(query.locale);
-  const sortKey = `${query.sort.by}-${query.sort.direction}`;
-  const choose = (sort: FeedSort) => onApply({ ...query, sort, page: 1 });
-  const chooseKey = (key: string) => {
-    const selected = feedSortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
-    if (selected) choose(selected);
-  };
-  return <FilterToolbar>
-    {summary}
-    <SortGroup>
-      <FloatingField label={messages.text("feed.sort.label")}>
-        <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
-          {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
-            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
-          </option>)}
-        </select>
-      </FloatingField>
-      {actions}
-    </SortGroup>
-  </FilterToolbar>;
-}
-
-/** The mobile count follows the filters and aligns with their right edge. */
-const ResultsBar = styled(Toolbar)`
-  ${desktopContentPadding()}
-  ${desktop} { flex-wrap: nowrap; gap: var(--gh-spacing-2) var(--gh-spacing-4); }
-  ${media.belowDesktop} { display: flex; justify-content: flex-end; padding-inline: var(--gh-spacing-1_5); }
+const ResultsBar = styled.header`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--gh-spacing-1) var(--gh-spacing-2);
+  min-inline-size: 0;
+  padding: var(--gh-spacing-2) ${({ theme }) => theme.layout.sectionPadding};
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.brandSoft};
+  border-radius: ${({ theme }) => theme.radius.none};
+`;
+const TitleLine = styled.div`
+  min-inline-size: 0;
+  line-height: var(--gh-leading-compact);
+  > h2 {
+    display: inline;
+    margin: 0;
+    margin-inline-end: var(--gh-spacing-1_5);
+    font-size: var(--gh-font-secondary);
+    font-weight: var(--gh-weight-medium);
+    ${media.desktop} { font-size: var(--gh-font-body); }
+  }
+`;
+const PublishedAt = styled.time`
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-compact);
+  overflow-wrap: anywhere;
+`;
+const ResultCount = styled.p`
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: var(--gh-font-secondary);
+  line-height: var(--gh-leading-label);
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  > [data-desktop-count] { display: none; }
+  ${media.desktop} {
+    > [data-desktop-count] { display: inline; }
+    > [data-phone-count] { display: none; }
+  }
 `;
 const AvailabilityNote = styled(FeedNote)`
-  min-inline-size: 0;
-  margin-inline-start: auto;
-  ${desktop} { font-size: var(--gh-font-body); line-height: var(--gh-leading-label); text-align: end; white-space: nowrap; }
-  ${media.belowDesktop} { flex-basis: 100%; }
+  grid-column: 1 / -1;
+  margin: 0;
 `;
 
-/** Counts follow the successful result projection, including pagination and live refresh. */
-export function ResultsToolbar({ query, today, total, first, last }: {
-  query: FeedQuery; today: ReportingDate; total: number | null; first: number; last: number;
+/** One header follows the visible results and their actual stored prediction publication. */
+export function ResultsToolbar({ query, today, total, first, last, publishedAt = null }: {
+  query: FeedQuery; today: ReportingDate; total: number | null; first: number; last: number; publishedAt?: number | null;
 }) {
-  const messages = createMessages(query.locale);
+  const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const outsidePredictionWindow = resolveFeedDates(query, today).endDate > createPredictionWindow(today).lastDate;
-  return <ResultsBar>
-    <Count>
-      <h2>{messages.text("feed.results.title")}</h2>
-      {total !== null && <ResultCount data-match-count>
-        <span data-desktop-count>{messages.text("feed.results.showing", { shown: total === 0 ? "0"
-          : `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</span>
-        <span data-phone-count>{messages.text("feed.results.showingCount", { count: messages.plural("feed.results.count", total) })}</span>
-      </ResultCount>}
-    </Count>
+  const instant = publishedAt === null ? null : utcInstantFromEpochMilliseconds(publishedAt);
+  const publication = instant === null ? null : messages.predictionPublication(instant);
+  const values = { shown: total === 0 || last < first ? "0" : `${messages.number(first)}–${messages.number(last)}`, total: total === null ? "" : messages.number(total) };
+  return <ResultsBar data-results-header>
+    <TitleLine>
+      <h2>{messages.text("feed.results.title")}</h2>{" "}
+      {instant !== null && <PublishedAt dateTime={toUtcIsoString(instant)} data-prediction-publication
+        title={messages.text("feed.results.latestPublication", { time: publication! })}>{publication}</PublishedAt>}
+    </TitleLine>
+    {total !== null && <ResultCount data-match-count aria-label={messages.text("feed.results.showing", values)}>
+      <span data-desktop-count>{messages.text("feed.results.showing", values)}</span>
+      <span data-phone-count aria-hidden="true">{messages.text("feed.results.range", values)}</span>
+    </ResultCount>}
     {outsidePredictionWindow && <AvailabilityNote>{messages.text("feed.sevenDayAvailability")}</AvailabilityNote>}
   </ResultsBar>;
 }

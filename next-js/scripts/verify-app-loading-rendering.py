@@ -53,7 +53,7 @@ def main():
         status, events = stream(server.origin, "/en/matches")
         assert status == 200
         early = next(html for at, html in events if at < 1.3 and 'data-performance-summary="matches"' in html)
-        for text in ["Prediction performance", "Won", "Lost", "Pending", "Void", "Cancelled"]:
+        for text in ["Performance", "Won", "Lost", "Pending", "Void", "Cancelled"]:
             assert text in visible_html(early), text
         assert 'aria-busy="true"' in early
         assert request(server.origin, "/en/matches?page=0").status == 404

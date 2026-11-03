@@ -1,774 +1,205 @@
 "use client";
 
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
 import { FloatingField } from "@/components/ui/floating-field";
-
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { controlBodyHeight, inlineControlRow } from "@/components/ui/control-layout";
-import styled, { css } from "styled-components";
-import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SortIcon } from "@/components/ui/icons";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { useClientReady } from "@/components/ui/use-client-ready";
-import { dialogFooterSurface } from "@/components/ui/dialog-surfaces";
-import { pageFilterPanel } from "@/components/ui/filter-chrome";
-import { filledAction } from "@/components/ui/filled-surfaces";
+import { SearchBar } from "@/components/ui/search-bar";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
-import { useDeviceTimeZone } from "@/i18n/use-messages";
+import { searchFilterOptions } from "@/domain/filter-option-search";
 import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, selectFeedDates, selectFeedStatus } from "@/domain/feed-controls";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
-import {
-  canonicalMarkets, defaultPagePicks, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, isAnyMarkets, matchFeedPageDefaults, panelFilterCount, resolveFeedDates,
-  serializeFeedQuery, type FeedQuery, type ProbabilityRange,
-} from "@/domain/feed-query";
+import { defaultPagePicks, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, matchFeedPageDefaults, panelFilterCount, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
+import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import type { MatchFeedResponse } from "@/domain/match-feed";
-import type { MarketFamily } from "@/domain/markets";
-import { media, type AccentName } from "@/styles/theme";
+import { matchesHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
+import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
-import { FeedDraftStatus, FeedNote, PicksOnlyFilter } from "./feed-controls";
-import { SearchBar } from "@/components/ui/search-bar";
+import { PicksOnlyFilter } from "./feed-controls";
 import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
-import { FeedTimeFilter } from "./feed-time";
-import { DateRangePicker, DayStrip } from "./feed-dates";
-import { MobileFeedDateFilter } from "./mobile-feed-date-filter";
-import { ChipText, CompactSelect, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
-import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
+import { OptionLogo } from "./filter-parts";
+import { DialogContent, FilterError, Muted, Panel } from "./feed-filter-styles";
 
 type Messages = ReturnType<typeof createMessages>;
-const desktop = media.desktop;
-const buttonBorder = css`
-  border: 0;
-`;
-
-function valid(query: FeedQuery, today: ReportingDate): boolean {
-  try { serializeFeedQuery({ ...query, search: "" }, today); return true; } catch { return false; }
-}
-function toggled(list: readonly string[], value: string, maximum: number): string[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : list.length >= maximum ? [...list] : [...list, value].sort();
-}
-function probabilityInputValues(range: ProbabilityRange) {
-  return { min: range.min === 0 ? "" : formatProbabilityValue(range.min), max: range.max === 100 ? "" : formatProbabilityValue(range.max) };
-}
-/** At least one market stays selected; removing the last one is not offered. */
-function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | null {
-  const has = query.markets.includes(family);
-  if (has && query.markets.length === 1) return null;
-  return { ...query, markets: canonicalMarkets(has ? query.markets.filter((item) => item !== family) : [...query.markets, family]), page: 1 };
-}
-
-/**
- * One form owns search and the entire draft; persistent actions use native form association.
- * It is not a size container: that would make it the containing block of the fixed phone sheet.
- */
-const Panel = styled.form`
-  display: grid;
-  gap: var(--gh-spacing-1);
-  min-inline-size: 0;
-  ${media.belowDesktop} {
-    gap: var(--gh-spacing-1_5); padding-inline: var(--gh-spacing-1_5);
-    &[data-mobile-compact-filters] { gap: var(--gh-spacing-1); padding-inline: 0; }
-  }
-  ${pageFilterPanel}
-`;
-const QueryChoices = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-1_5); min-inline-size: 0;
-  > select {
-    inline-size: 100%; min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-2);
-    border: 0; border-radius: ${({ theme }) => theme.radius.control};
-    color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-    font: inherit; font-size: var(--gh-font-body);
-    ${focusRing}
-    &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
-  }
-  ${media.belowDesktop} { > select { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-1_5); font-size: var(--gh-font-secondary); } }
-`;
-/** The approved Compact stack: one search row, then date/status and a single filter action. */
-const CompactToolbar = styled(QueryChoices)`
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: var(--gh-spacing-1);
-  > select {
-    padding-inline: var(--gh-spacing-2) var(--gh-spacing-1);
-    border-radius: ${({ theme }) => theme.radius.control};
-    font-size: var(--gh-font-secondary);
-    font-weight: ${({ theme }) => theme.typography.weight.medium};
-  }
-  ${media.belowDesktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  ${inlineControlRow}
-`;
-/** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
-const PhoneToolbar = styled.div`
-  container-type: inline-size;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--gh-spacing-1_5);
-  min-inline-size: 0;
-  ${desktop} { display: none; }
-  ${inlineControlRow}
-`;
-const SortField = styled.span`
-  position: relative;
-  display: inline-flex;
-  flex: 1;
-  min-inline-size: 0;
-  > svg {
-    position: absolute;
-    z-index: var(--gh-layer-content);
-    inset-inline-start: var(--gh-spacing-2);
-    inset-block-start: 50%;
-    transform: translateY(-50%);
-    color: ${({ theme }) => theme.color.mutedText};
-    font-size: var(--gh-font-reading);
-    pointer-events: none;
-  }
-  @container (max-width: ${({ theme }) => theme.viewport[18]}) { > svg { display: none; } }
-`;
-const PhoneSort = styled(CompactSelect)`
-  flex: 1;
-  ${controlBodyHeight}
-  padding-inline: var(--gh-spacing-7) var(--gh-spacing-6);
-
-  font-size: var(--gh-font-body);
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  > svg { inset-inline-end: var(--gh-spacing-1_75); }
-  @container (max-width: ${({ theme }) => theme.viewport[18]}) { padding-inline-start: var(--gh-spacing-2); }
-  ${media.belowDesktop} { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); font-size: var(--gh-font-secondary); }
-`;
-const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
-
-/**
- * Desktop fields stay in the page. Phones show the same fields, rendered once, in a bottom sheet
- * above the tab bar; closing it without Apply discards the unapplied edits.
- */
-const FilterFieldsGroup = styled.div<{ $open: boolean }>`
-  min-inline-size: 0;
-  container: feed-filter-fields / inline-size;
-  background: ${({ theme }) => theme.color.surface};
-  ${media.belowDesktop} {
-    ${sheetFrame}
-    display: ${({ $open }) => $open ? "flex" : "none"};
-    && ${SheetHeader} { padding: var(--gh-spacing-0_5) var(--gh-spacing-0_5) var(--gh-spacing-0_5) var(--gh-spacing-2_5); }
-    && ${SheetHeader} > h2 { font-size: var(--gh-font-emphasis); }
-    && ${SheetHeader} > button { inline-size: var(--gh-size-9); block-size: var(--gh-size-9); padding: 0; }
-    && button { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
-    && select { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); }
-    && input:not([type="checkbox"]) { min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-0_5); }
-    && input[inputmode="decimal"] { text-align: center; }
-    && [role="group"] li > label { min-block-size: var(--form-control-height); font-size: var(--gh-font-secondary); }
-    && [data-filter-actions] br { display: none; }
-  }
-  ${desktop} {
-    position: relative;
-    /* Open pickers must cover the sticky table column header (10) but stay under the app header (20). */
-    z-index: var(--gh-layer-stickyControl);
-    display: grid;
-    padding: var(--gh-spacing-1) var(--gh-spacing-2);
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.surface};
-  }
-`;
-/** Desktop keeps dates and times side by side above the filter row; phones stack sections and scroll. */
-const SheetBody = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: var(--gh-spacing-0_5) var(--gh-spacing-2_5);
-  min-inline-size: 0;
-  ${media.belowDesktop} {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--gh-spacing-2);
-    min-block-size: 0;
-    padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
-`;
-const SheetFooter = styled.div`
-  display: none;
-  ${media.belowDesktop} {
-    display: grid;
-    flex: none;
-    gap: var(--gh-spacing-1);
-    padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
-    ${dialogFooterSurface}
-    border-block-start: 0;
-  }
-`;
-const PhoneSection = styled.div`
-  display: grid;
-  gap: var(--gh-spacing-1);
-  min-inline-size: 0;
-  ${desktop} { display: none; }
-`;
-const SectionLabel = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--gh-spacing-2);
-  font-size: var(--gh-font-body);
-  font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: var(--gh-leading-label);
-  > small { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); font-weight: ${({ theme }) => theme.typography.weight.body}; }
-`;
-/** Market toggles carry each family's card colour, so a choice matches the picks it produces. */
-const MarketToggles = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--gh-spacing-1_5);
-  @container feed-filter-fields (max-width: ${({ theme }) => theme.viewport[18]}) { grid-template-columns: minmax(0, 1fr); }
-`;
-const MarketToggle = styled.button<{ $family: MarketFamily }>`
-  display: flex;
-  align-items: center;
-  gap: var(--gh-spacing-2);
-  min-inline-size: 0;
-  min-block-size: var(--form-control-height);
-  padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5);
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  ${buttonBorder}
-  border-radius: ${({ theme }) => theme.radius.control};
-  font: inherit;
-  font-size: var(--gh-font-body);
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: var(--gh-leading-heading);
-  text-align: start;
-  cursor: pointer;
-  &::before {
-    content: "";
-    flex: none;
-    inline-size: var(--gh-size-3);
-    block-size: var(--gh-size-3);
-    border: 0;
-  }
-  > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; }
-  > svg { flex: none; font-size: var(--gh-font-section); }
-  &[aria-pressed="true"] {
-    color: ${({ theme, $family }) => theme.color.market[$family].text};
-    background: ${({ theme, $family }) => theme.color.market[$family].soft};
-
-    &::before { background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
-  }
-  &[aria-disabled="true"] { cursor: not-allowed; }
-  ${focusRing}
-`;
-/** One labelled trigger per list; its checklist opens in place inside the sheet. */
-const PhonePicker = styled(OptionPicker)`
-  min-inline-size: 0;
-  > button { ${controlBodyHeight} padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5); font-size: var(--gh-font-body); }
-  [data-picker-label] { flex: 0 1 auto; min-inline-size: 0; overflow-wrap: anywhere; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: var(--gh-spacing-1_25); overflow-wrap: anywhere; }
-  @container feed-filter-fields (max-width: ${({ theme }) => theme.viewport[14]}) {
-    > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5); }
-    [data-picker-label] { grid-column: 1; grid-row: 1; }
-    [data-picker-value] { grid-column: 1; grid-row: 2; justify-content: flex-start; text-align: start; }
-    > button > svg { grid-column: 2; grid-row: 1 / span 2; }
-  }
-  > [role="group"] {
-    position: static;
-    grid-template-columns: minmax(0, 1fr);
-    max-inline-size: 100%;
-    inline-size: 100%;
-    margin-block-start: var(--gh-spacing-1_5);
-    border-radius: ${({ theme }) => theme.radius.overlay};
-    box-shadow: none;
-    padding: var(--gh-spacing-2);
-    gap: var(--gh-spacing-2);
-    > input { min-inline-size: 0; min-block-size: var(--form-control-height); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-section); }
-    label:not([for]) { min-block-size: var(--form-control-height); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-emphasis); }
-    label > span { overflow-wrap: anywhere; }
-  }
-`;
-const ProbabilityGroup = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gh-spacing-1);
-  min-inline-size: 0;
-  font-size: var(--gh-font-body);
-  > span { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-`;
-const ProbabilityInputs = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--gh-spacing-1_5);
-  align-items: start; min-inline-size: 0;
-  > [data-range-separator] { align-self: start; margin-block-start: var(--gh-spacing-4_5); }
-  input { font-variant-numeric: tabular-nums; text-align: center; }
-`;
-
-const ProbabilityError = styled.p`
-  color: ${({ theme }) => theme.color.accent.red.text};
-  font-size: var(--gh-font-secondary);
-  ${desktop} { grid-column: 1 / -1; order: 2; }
-`;
-const QuietButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--gh-spacing-1_5);
-  min-block-size: var(--form-control-height);
-  padding-inline: var(--gh-spacing-2_5);
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.control};
-  font-size: var(--gh-font-caption);
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  white-space: nowrap;
-  font: inherit;
-  cursor: pointer;
-  > svg { font-size: var(--gh-font-section); }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  ${focusRing}
-`;
-const OddsNote = styled.p`
-  display: flex;
-  align-items: start;
-  gap: var(--gh-spacing-1_75);
-  margin-block-start: 0;
-  padding-block-start: var(--gh-spacing-2);
-  border-block-start: 0;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: var(--gh-font-secondary);
-  line-height: var(--gh-leading-normal);
-  > svg { flex: none; margin-block-start: var(--gh-spacing-0_5); font-size: var(--gh-font-emphasis); }
-`;
-const ProbabilityHelp = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: var(--gh-font-secondary);
-  line-height: var(--gh-leading-normal);
-`;
-
-/** Five compact desktop fields share one row; numeric bounds need no sliders. */
-const DesktopGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
-  align-items: center;
-  gap: var(--gh-spacing-2) var(--gh-spacing-2_5);
-
-  ${inlineControlRow}
-`;
-const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: var(--gh-spacing-2);
-  min-inline-size: 0;
-  ${controlBodyHeight}
-  padding-inline: var(--gh-spacing-2_5) var(--gh-spacing-1);
-  background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.field};
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.control};
-  &:focus-within { background: ${({ theme }) => theme.color.fieldHover}; }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.fieldHover}; } }
-`;
-const FieldName = styled.span<{ $accent: AccentName }>`
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: var(--gh-spacing-1_25);
-  color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: var(--gh-font-secondary);
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  white-space: nowrap;
-  &::before { content: ""; inline-size: var(--gh-size-1_75); block-size: var(--gh-size-1_75); border-radius: ${({ theme }) => theme.radius.circle}; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
-`;
-/** Selected values on one line: chips shrink with an ellipsis and the remainder becomes "+N". */
-const ChipLine = styled.div`
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: var(--gh-spacing-1);
-  min-inline-size: 0;
-  overflow: hidden;
-  > a, > span { flex: 0 1 auto; min-inline-size: 0; }
-  > [data-more] { flex: none; }
-  > span[data-placeholder] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-`;
-/** One shared action label uses two lines on phones and one line on desktop. */
-const ActionLabel = styled.span`
-  line-height: var(--gh-leading-control);
-  text-align: center;
-  white-space: nowrap;
-  > br { display: none; }
-  ${media.belowDesktop} { > br { display: block; } }
-`;
-function FilterActionLabel({ label }: { label: string }) {
-  const split = label.indexOf(" ");
-  return <ActionLabel>{split < 0 ? label : <>{label.slice(0, split)}{" "}<br />{label.slice(split + 1)}</>}</ActionLabel>;
-}
-const ApplyButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--gh-spacing-1_5);
-  min-block-size: var(--form-control-height);
-  padding-inline: var(--gh-spacing-2_5);
-  color: ${({ theme }) => theme.color.onAction};
-  background: ${({ theme }) => theme.gradient.action};
-  border: 0;
-  ${media.belowDesktop} { ${buttonBorder} }
-  border-radius: ${({ theme }) => theme.radius.control};
-  font: inherit;
-  font-size: var(--gh-font-body);
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  white-space: nowrap;
-  cursor: pointer;
-  &:disabled { opacity: var(--gh-opacity-50); cursor: default; }
-  > svg { flex: none; font-size: var(--gh-font-emphasis); }
-  ${media.hover} { &:hover { filter: brightness(${({ theme }) => theme.interaction.filterHoverBrightness}); } }
-  ${focusRing}
-`;
-const OutlineButton = styled(QuietButton)`
-  min-block-size: var(--form-control-height);
-  border-radius: ${({ theme }) => theme.radius.control};
-  font-size: var(--gh-font-body);
-
-  ${filledAction}
-`;
-const PhoneClear = styled(OutlineButton)`
-  flex: none;
-  min-inline-size: var(--gh-size-11);
-  min-block-size: var(--form-control-height);
-  padding-inline: var(--gh-spacing-1_5);
-  ${media.belowDesktop} { min-inline-size: var(--gh-size-9); min-block-size: var(--form-control-height); padding-block: var(--gh-spacing-1); font-size: var(--gh-font-secondary); }
-`;
-const FilterActions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--gh-spacing-1_5);
-  [data-desktop-icon] { display: inline-flex; }
-  ${media.belowDesktop} {
-    flex-wrap: wrap;
-    inline-size: auto;
-    max-inline-size: 100%;
-    min-inline-size: 0;
-    flex: 1 1 auto;
-    gap: var(--gh-spacing-1_5);
-    > button { padding-inline: var(--gh-spacing-2); font-size: var(--gh-font-body); white-space: normal; }
-    > button[type="submit"] { flex: 1; min-inline-size: min(100%, var(--gh-size-20)); }
-    > button > svg { font-size: var(--gh-font-emphasis); }
-    [data-desktop-icon] { display: none; }
-  }
-
-  ${inlineControlRow}
-`;
-
-export type FeedFilterDraftStatus = Readonly<{ valid: boolean; changed: boolean }>;
-/** Native form association keeps one action row beside sorting, outside the filter fields. */
-export function FeedFilterActions({ formId, locale, status }: {
-  formId: string; locale: FeedQuery["locale"]; status: FeedFilterDraftStatus;
-}) {
-  const messages = createMessages(locale);
-  return <FilterActions data-filter-actions>
-    <OutlineButton type="reset" form={formId} aria-label={messages.text("feed.filters.clear")}>
-      <span data-desktop-icon><ResetIcon /></span><FilterActionLabel label={messages.text("feed.filters.clear")} />
-    </OutlineButton>
-    <ApplyButton type="submit" form={formId} disabled={!status.valid} aria-label={messages.text("feed.filters.applyPlain")}>
-      <span data-desktop-icon><FilterIcon /></span><FilterActionLabel label={messages.text("feed.filters.applyPlain")} />
-    </ApplyButton>
-  </FilterActions>;
-}
-
-/** Shared decimal entry on every screen; incomplete drafts never become an applied filter. */
-function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, messages, disabled = false }: {
-  values: { min: string; max: string }; onChange: (bound: "min" | "max", value: string) => void;
-  invalid: boolean; descriptionId: string; messages: Messages; disabled?: boolean;
-}) {
-  return <ProbabilityInputs>
-    {(["min", "max"] as const).map((bound) => <Fragment key={bound}><FloatingField label={<><span data-bound-label>{messages.text(bound === "min" ? "feed.filters.minimumPercent" : "feed.filters.maximumPercent")}</span></>}><input disabled={disabled} type="text" inputMode="decimal" autoComplete="off" value={values[bound]} placeholder={messages.text("feed.filters.any")}
-        aria-label={messages.text(bound === "min" ? "feed.filters.minimum" : "feed.filters.maximum", { label: messages.text("feed.filters.probabilityLabel") })}
-        aria-invalid={invalid} aria-describedby={invalid ? descriptionId : undefined}
-        onChange={(event) => { if (/^\d*(?:\.\d*)?$/u.test(event.target.value)) onChange(bound, event.target.value); }} /></FloatingField>{bound === "min" && <span data-range-separator aria-hidden="true">–</span>}</Fragment>)}
-  </ProbabilityInputs>;
-}
-
-type FeedFiltersProps = {
-  query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
-  subscriberOnly?: boolean; formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
-  open: boolean; panelId: string; onOpenChange: (open: boolean) => void; controls: ReactNode;
+type Draft = {
+  query: FeedQuery;
+  dates: { from: string; to: string };
+  times: { from: string; to: string };
+  probability: { min: string; max: string };
 };
-export function FeedFilters(props: FeedFiltersProps) {
-  const range = resolveFeedDates(props.query, props.today);
-  return <FilterFields key={`${feedQueryHref(props.query, props.today)}:${range.startDate}:${range.endDate}`} {...props} />;
+function fromQuery(query: FeedQuery, today: ReportingDate): Draft {
+  const range = resolveFeedDates(query, today);
+  return { query, dates: { from: range.startDate, to: range.endDate },
+    times: { from: query.time?.from ?? fullDayKickoffTime.from, to: query.time?.to ?? fullDayKickoffTime.to },
+    probability: { min: query.probability.min === 0 ? "" : formatProbabilityValue(query.probability.min),
+      max: query.probability.max === 100 ? "" : formatProbabilityValue(query.probability.max) } };
 }
-function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onOpenChange, controls, subscriberOnly = false }: FeedFiltersProps) {
-  const compactPhone = useClientReady();
-  const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
-  const storedQuery = useAppSelector((state) => state.feed.query);
-  const storedHref = feedQueryHref(storedQuery, today), appliedHref = feedQueryHref(query, today);
-  // The provider already owns the initial query. Only a real navigation needs synchronization;
-  // settle it before interaction so a pending mount effect cannot overwrite the first edit.
-  useLayoutEffect(() => {
-    if (storedHref !== appliedHref) dispatch(queryApplied(query));
-  }, [appliedHref, dispatch, query, storedHref]);
-  const draft = valid(storedDraft, today) ? storedDraft : query;
-  const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
-  const filterToggle = useRef<HTMLButtonElement>(null), sheet = useRef<HTMLDivElement>(null);
-  // Desktop always shows the fields in the page, so the sheet only exists below the desktop width.
-  usePhoneSheet(open, sheet, () => onOpenChange(false));
-  const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
-  const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? fullDayKickoffTime.from, to: query.time?.to ?? fullDayKickoffTime.to });
-  const [probabilityInputs, setProbabilityInputs] = useState(() => probabilityInputValues(query.probability));
-  const probability = useMemo(() => parseProbabilityInputs(probabilityInputs), [probabilityInputs]);
-  const zone = query.zone ?? query.time?.zone ?? deviceZone;
-  const completeDraft = useMemo(() => {
-    try {
-      if (!probability) return null;
-      const from = parseReportingDate(dateInputs.from), to = parseReportingDate(dateInputs.to);
-      const dates: FeedQuery["dates"] = from === range.startDate && to === range.endDate ? query.dates
-        : from === to ? { kind: "date", date: from } : { kind: "range", from, to };
-      resolveFeedDates({ dates }, today);
-      const time = isAnyKickoffTime(timeInputs) ? null : { ...timeInputs, zone };
-      if (time && !validKickoffTime(time)) return null;
-      const next = { ...draft, dates, time, probability, page: 1 };
-      return applyFeedDraft(next, today);
-    } catch { return null; }
-  }, [dateInputs, draft, probability, query.dates, range.endDate, range.startDate, timeInputs, today, zone]);
-  const messages = createMessages(query.locale);
-  // Hundreds of leagues are sorted once per cohort, not on every chip tap.
-  const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
+function compile(draft: Draft, today: ReportingDate, zone: string): FeedQuery | null {
+  try {
+    const probability = parseProbabilityInputs(draft.probability);
+    if (!probability) return null;
+    const from = parseReportingDate(draft.dates.from), to = parseReportingDate(draft.dates.to), original = resolveFeedDates(draft.query, today);
+    const dates: FeedQuery["dates"] = from === original.startDate && to === original.endDate ? draft.query.dates
+      : from === to ? { kind: "date", date: from } : { kind: "range", from, to };
+    const time = isAnyKickoffTime(draft.times) ? null : { ...draft.times, zone };
+    if (time && !validKickoffTime(time)) return null;
+    return applyFeedDraft({ ...draft.query, dates, time, probability, page: 1 }, today);
+  } catch { return null; }
+}
+
+/** The same searchable checklist handles leagues and countries, including retained missing choices. */
+const OptionChecklist = memo(function OptionChecklist({ kind, options, selected, onChange, messages }: {
+  kind: "leagues" | "countries"; options: readonly FilterOption[]; selected: readonly string[];
+  onChange: (values: string[]) => void; messages: Messages;
+}) {
+  const [search, setSearch] = useState(""), similarId = useId();
+  const label = messages.text(`feed.filters.${kind}`), maximum = kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries;
+  const available = useMemo(() => [...options, ...selected.filter((value) => !options.some((option) => option.value === value)).map((value) => ({
+    value, label: value, detail: null, logoUrl: kind === "countries" ? countryFlagAsset(value) : null, fixtures: 0,
+  }))], [kind, options, selected]);
+  const { exact, similar } = useMemo(() => searchFilterOptions(available, search), [available, search]);
+  const optionRow = (option: FilterOption, isSimilar = false) => <label data-choice key={option.value}>
+    <input type="checkbox" name={kind === "leagues" ? "league" : "country"} value={option.value} checked={selected.includes(option.value)}
+      disabled={!selected.includes(option.value) && selected.length >= maximum} aria-describedby={isSimilar ? similarId : undefined}
+      onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value].sort())} />
+    <OptionLogo url={option.logoUrl} /><span>{option.label}{option.detail && <small> · {option.detail}</small>}</span>
+  </label>;
+  return <fieldset><legend>{label}</legend>
+    <SearchBar label={messages.text("feed.filters.findOption", { label })} data-option-search value={search}
+      placeholder={messages.text("feed.filters.findOption", { label })} onChange={(event) => setSearch(event.target.value)}
+      onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
+    <label data-choice><input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
+      {messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.allCountries")}</label>
+    <div data-options>{exact.map((option) => optionRow(option))}
+      {similar.length > 0 && <><Muted id={similarId}>{messages.text("feed.search.similar")}</Muted>{similar.map((option) => optionRow(option, true))}</>}
+    </div>
+    {exact.length === 0 && similar.length === 0 && <Muted>{messages.text(options.length === 0 ? "feed.filters.noOptions" : "feed.filters.noOptionMatches")}</Muted>}
+  </fieldset>;
+});
+
+/** One form, draft and dialog field tree serves every viewport. */
+export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = false, pending = false }: {
+  query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (next: FeedQuery) => void;
+  subscriberOnly?: boolean; pending?: boolean;
+}) {
+  const messages = createMessages(query.locale), prefix = useId(), dispatch = useAppDispatch();
+  const stored = useAppSelector((state) => state.feed.draft), applied = useAppSelector((state) => state.feed.query);
+  const [draft, setDraft] = useState(() => fromQuery(feedQueryHref(applied, today) === feedQueryHref(query, today) ? stored : query, today));
+  const [open, setOpen] = useState(false), [version, setVersion] = useState(0), [issue, setIssue] = useState<string | null>(null);
+  const snapshot = useRef<Draft | null>(null), errorRef = useRef<HTMLParagraphElement>(null);
+  const deviceZone = useDeviceTimeZone(), zone = draft.query.zone ?? draft.query.time?.zone ?? deviceZone;
+  const complete = useMemo(() => compile(draft, today, zone), [draft, today, zone]);
+  useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
+  useEffect(() => { if (complete) dispatch(draftChanged(complete)); }, [complete, dispatch]);
+  useEffect(() => { if (issue) errorRef.current?.focus(); }, [issue]);
+  const leagueList = useMemo(() => leagueOptions(leagues, messages.text("match.competitionUnknown")), [leagues, messages]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
-  const marketList = useMemo((): FilterOption[] => publicPolicy.markets.map((family) => ({ value: family,
-    label: createMessages(query.locale).text(`market.family.${family}`), detail: null, logoUrl: null, fixtures: 0 })), [query.locale]);
-  const href = (next: FeedQuery) => feedQueryHref({ ...next, page: 1 }, today);
-  const edit = (next: FeedQuery) => { if (valid(next, today)) dispatch(draftChanged({ ...next, page: 1 })); };
-  /** One application step for the complete draft. */
-  const apply = (next: FeedQuery) => {
-    const applied = applyFeedDraft(next, today), selectedRange = resolveFeedDates(applied, today);
-    setDateInputs({ from: selectedRange.startDate, to: selectedRange.endDate });
-    setTimeInputs({ from: applied.time?.from ?? fullDayKickoffTime.from, to: applied.time?.to ?? fullDayKickoffTime.to });
-    dispatch(draftChanged(applied));
-    onApply(applied);
-  };
-  /** Closing without Apply restores the applied filters; typed search text stays in the field. */
-  const closeSheet = () => {
-    setDateInputs({ from: range.startDate, to: range.endDate });
-    setTimeInputs({ from: query.time?.from ?? fullDayKickoffTime.from, to: query.time?.to ?? fullDayKickoffTime.to });
-    setProbabilityInputs(probabilityInputValues(query.probability));
-    dispatch(draftChanged({ ...query, search: draft.search, page: 1 }));
-    onOpenChange(false);
-    filterToggle.current?.focus();
-  };
-  const phone = draft;
-  const reset = resetFeedFilters(query, subscriberOnly);
-  const draftValid = completeDraft !== null;
-  const changed = completeDraft === null || draft.search !== query.search
-    || serializeFeedQuery({ ...completeDraft, search: "", page: 1 }, today).toString()
-      !== serializeFeedQuery({ ...query, search: "", page: 1 }, today).toString();
-  useEffect(() => { onDraftStatus({ valid: draftValid, changed }); }, [changed, draftValid, onDraftStatus]);
-
-  function phonePicker(kind: "leagues" | "countries", options: FilterOption[]) {
-    const label = messages.text(`feed.filters.${kind}`), selected: readonly string[] = phone[kind];
-    // Selections absent from a refreshed option list remain available to remove.
-    const missing = selected.filter((value) => !options.some((option) => option.value === value))
-      .map((value): FilterOption => ({ value, label: value, detail: null, logoUrl: kind === "countries" ? countryFlagAsset(value) : null, fixtures: 0 }));
-    const summary = selected.length === 0 ? messages.text("feed.filters.any")
-      : selected.length === 1 ? options.find((option) => option.value === selected[0])?.label ?? selected[0]!
-      : messages.text("feed.filters.selectedCount", { count: messages.number(selected.length) });
-    return <PhonePicker title={`${label}: ${summary}`} options={[...options, ...missing]} selected={selected}
-      summary={<><span data-picker-label>{label}</span><span data-picker-value>
-        {kind === "countries" && selected.length === 1 && <OptionLogo key={selected[0]} url={countryFlagAsset(selected[0])} />}
-        {summary}
-      </span></>}
-      onToggle={(value) => edit({ ...phone, [kind]: toggled(selected, value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) })}
-      findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")}
-        noMatchLabel={messages.text("feed.filters.noOptionMatches")} similarLabel={messages.text("feed.search.similar")} />;
+  const changeLeagues = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, leagues: values } })), []);
+  const changeCountries = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, countries: values } })), []);
+  const currentRange = resolveFeedDates(draft.query, today);
+  const period = (feedDatePresets as readonly string[]).includes(draft.query.dates.kind)
+    && draft.dates.from === currentRange.startDate && draft.dates.to === currentRange.endDate ? draft.query.dates.kind : "custom";
+  const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result)
+    + Number(query.dates.kind !== matchFeedPageDefaults.dates.kind)
+    + Number(query.picks !== defaultPagePicks(query.status, subscriberOnly))
+    + Number(query.sort.by !== matchFeedPageDefaults.sort.by || query.sort.direction !== matchFeedPageDefaults.sort.direction);
+  const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
+  const errorId = `${prefix}-error`;
+  function cancel() {
+    if (snapshot.current) setDraft(snapshot.current);
+    snapshot.current = null; setIssue(null); setOpen(false);
   }
-
-  function multiField(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
-    const label = messages.text(`feed.filters.${kind}`);
-    const accent: AccentName = kind === "leagues" ? "blue" : kind === "countries" ? "orange" : "violet";
-    const selected: readonly string[] = draft[kind];
-    const chosen = selected.map((value) => options.find((option) => option.value === value)
-      ?? { value, label: value, detail: null, logoUrl: kind === "countries" ? countryFlagAsset(value) : null, fixtures: 0 });
-    const any = kind === "markets" ? isAnyMarkets(draft.markets) : selected.length === 0;
-    const visible = any ? [] : chosen.slice(0, 2), extra = any ? 0 : chosen.length - visible.length;
-    const toggle = (value: string): FeedQuery | null => kind === "markets" ? toggledMarkets(draft, value as MarketFamily)
-      : { ...draft, [kind]: toggled(draft[kind], value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) };
-    const appliedToggle = (value: string): FeedQuery => (kind === "markets" ? toggledMarkets(query, value as MarketFamily)
-      : { ...query, [kind]: toggled(query[kind], value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) }) ?? query;
-    return <Field $accent={accent} role="group" aria-labelledby={`filters-${kind}`}>
-      <FieldName id={`filters-${kind}`} $accent={accent}>{label}</FieldName>
-      <ChipLine>
-        {any && <span data-placeholder>{messages.text("feed.filters.any")}</span>}
-        {visible.map((option) => {
-          const next = toggle(option.value);
-          return next ? <FilterChip key={option.value} label={option.label} selected accent={accent} href={href(appliedToggle(option.value))}
-            logoUrl={kind !== "markets" ? option.logoUrl : null} onSelect={() => edit(next)}
-            actionLabel={messages.text("feed.filters.remove", { label: option.label })} />
-            : <ChipText key={option.value} $selected $accent={accent} title={messages.text("feed.filters.oneMarket")}><span>{option.label}</span></ChipText>;
-        })}
-        {extra > 0 && <ChipText data-more $selected $accent={accent} title={chosen.slice(2).map((option) => option.label).join(", ")}>
-          {messages.text("feed.filters.moreCount", { count: messages.number(extra) })}
-        </ChipText>}
-      </ChipLine>
-      <OptionPicker title={messages.text("feed.filters.showAll", { label })} options={options} selected={selected}
-        searchable={kind !== "markets"} onToggle={(value) => { const next = toggle(value); if (next) edit(next); }}
-        findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")}
-        noMatchLabel={messages.text("feed.filters.noOptionMatches")} similarLabel={messages.text("feed.search.similar")} />
-    </Field>;
+  function apply() {
+    if (!complete) { setIssue(messages.text("feed.invalidQuery")); return; }
+    snapshot.current = null; setIssue(null); setOpen(false); onApply(complete);
   }
-
-  const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
-  const probabilityErrorId = `${formId}-probability-error`, titleId = `${panelId}-title`, marketsId = `${panelId}-markets`;
-  const probabilityFields = <ProbabilityRangeInputs disabled={subscriberOnly && query.status !== "finished"} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
-    onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
-
-  const count = panelFilterCount(query) + (compactPhone
-    ? Number(query.picks !== defaultPagePicks(query.status, subscriberOnly))
-      + Number(query.sort.by !== matchFeedPageDefaults.sort.by || query.sort.direction !== matchFeedPageDefaults.sort.direction)
-    : 0);
-  const filtersLabel = messages.text("feed.filters.toggle");
-  const sortKey = `${query.sort.by}-${query.sort.direction}`;
-  const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  return <Panel id={formId} data-mobile-compact-filters={compactPhone || undefined} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
-    if (event.key === "Escape" && open && !event.defaultPrevented) { event.preventDefault(); closeSheet(); }
-  }} onReset={(event) => {
-    event.preventDefault();
-    const resetRange = resolveFeedDates(reset, today);
-    setDateInputs({ from: resetRange.startDate, to: resetRange.endDate });
-    setTimeInputs(fullDayKickoffTime);
-    setProbabilityInputs(probabilityInputValues(reset.probability));
-    onOpenChange(false);
-    apply(reset);
-  }} onSubmit={(event) => {
-    event.preventDefault();
-    if (!completeDraft) return;
-    onOpenChange(false);
-    apply(applyFeedDraft(completeDraft, today));
-  }}>
-    {[...new URLSearchParams(parameters)].filter(([name]) => name !== "result" && (name !== "status" || !!query.result)).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-    <SearchBar name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
-      placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
-      submitLabel={messages.text("feed.search.submit")}
-      filters={{ label: filtersLabel, accessibleLabel: count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel,
-        dialogId: panelId, open, onOpen: () => onOpenChange(true), count }} filterButtonRef={filterToggle}
-      onChange={(event) => edit({ ...draft, search: event.target.value })} />
-    {compactPhone ? <CompactToolbar data-phone-query-filters>
-      <MobileFeedDateFilter query={query} today={today} onApply={onApply} />
-      <FeedStatusSelect name="status" locale={query.locale} value={query.status} result={query.result} onResultChange={(result) => apply({ ...query, result, page: 1 })} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
-    </CompactToolbar> : <>
-      {/* Preserve the native GET interface before hydration and without JavaScript. */}
-      <QueryChoices data-phone-query-filters>
-        <FeedStatusSelect name="status" locale={query.locale} value={query.status} result={query.result} onResultChange={(result) => apply({ ...query, result, page: 1 })} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
-        <FeedPeriodSelect name="period" locale={query.locale} value={feedDatePresets.some((preset) => preset === query.dates.kind) ? query.dates.kind : "custom"}
-          disabled={query.status === "live"} title={query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={(period) => {
-            if (period === "custom") { onOpenChange(true); return; }
-            const kind = feedDatePresets.find((preset) => preset === period);
-            if (kind) apply(selectFeedDates(query, { kind }, today));
+  function reset() {
+    setDraft(fromQuery(resetFeedFilters(draft.query, subscriberOnly), today));
+    setIssue(null); setVersion((value) => value + 1);
+  }
+  const input = (label: string, name: string | undefined, value: string, change: (value: string) => void, type = "text", disabled = false) =>
+    <FloatingField label={label}><input type={type} name={name} value={value} disabled={disabled}
+      placeholder={messages.text("feed.filters.any")} inputMode={type === "text" ? "decimal" : undefined} autoComplete="off"
+      step={type === "time" ? 60 : undefined} aria-invalid={!!issue || undefined} aria-describedby={issue ? errorId : undefined}
+      onChange={(event) => change(event.target.value)} /></FloatingField>;
+  // Retain native GET navigation. Actual fields own their names; hidden values preserve the remaining query choices.
+  const native = useMemo(() => {
+    const parameters = serializeFeedQuery({ ...query, search: "", page: 1 }, today);
+    for (const key of ["q", "date", "from", "to", "when", "timeFrom", "timeTo", "tz", "status", "result", "league", "country", "market"]) parameters.delete(key);
+    if (query.result) parameters.set("status", query.status);
+    parameters.set("picks", query.picks);
+    parameters.set("sort", query.sort.by); parameters.set("dir", query.sort.direction);
+    return [...parameters];
+  }, [query, today]);
+  return <Panel data-feed-filters action={matchesHref(query.locale)} method="get" aria-label={messages.text("feed.filters.form")} aria-busy={pending}
+    onReset={(event) => { event.preventDefault(); reset(); }} onSubmit={(event) => { event.preventDefault(); apply(); }}>
+    {native.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+    <SearchBar name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
+      label={messages.text("feed.filters.search")} submitLabel={messages.text("feed.search.submit")}
+      filters={{ label: messages.text("feed.filters.toggle"), accessibleLabel: count ? messages.plural("feed.filters.toggleCount", count) : messages.text("feed.filters.toggle"),
+        count, dialogId: `${prefix}-filters`, open, onOpen: () => { snapshot.current = draft; setIssue(null); setOpen(true); } }}
+      onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
+    <AdvancedFilterDialog id={`${prefix}-filters`} open={open} locale={query.locale} onCancel={cancel}
+      closeLabel={messages.text("feed.filters.close")} onApply={apply} onReset={reset} applyDisabled={!complete}>
+      <DialogContent data-feed-dialog>
+        {!complete && <FilterError id={errorId} ref={errorRef}>{issue ?? messages.text("feed.invalidQuery")}</FilterError>}
+        <fieldset><legend>{messages.text("feed.filters.matchDateTime")}</legend><div data-fields>
+          <FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={draft.query.result}
+            onResultChange={(result) => setDraft((current) => ({ ...current, query: { ...current.query, result, page: 1 } }))}
+            onChange={(status) => { setDraft((current) => {
+              const next = fromQuery(selectFeedStatus(current.query, status, today), today);
+              return { ...current, query: next.query, dates: next.dates, times: next.times };
+            }); setIssue(null); }} />
+          <FeedPeriodSelect name="period" locale={query.locale} value={period} disabled={live} onChange={(value) => {
+            if (value === "custom") { setDraft((current) => ({ ...current, query: { ...current.query, dates: { kind: "range", from: currentRange.startDate, to: currentRange.endDate } } })); return; }
+            const kind = feedDatePresets.find((preset) => preset === value);
+            if (kind) setDraft((current) => {
+              const next = selectFeedDates(current.query, { kind }, today), range = resolveFeedDates(next, today);
+              return { ...current, query: next, dates: { from: range.startDate, to: range.endDate } };
+            });
           }} />
-      </QueryChoices>
-      {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
-      <PhoneToolbar data-phone-filter-toolbar>
-        <SortField>
-          <SortIcon />
-          <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
-            const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
-            if (sort) onApply({ ...query, sort, page: 1 });
-          }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
-        </SortField>
-        <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
-          <FilterActionLabel label={messages.text("feed.filters.clear")} />
-        </PhoneClear>
-      </PhoneToolbar>
-    </>}
-    {open && <SheetScrim aria-hidden="true" onClick={closeSheet} />}
-    <FilterFieldsGroup ref={sheet} id={panelId} $open={open} onKeyDown={(event) => { if (open) keepFocusInSheet(event); }} tabIndex={open ? -1 : undefined}
-      role={open ? "dialog" : undefined} aria-modal={open || undefined} aria-labelledby={open ? titleId : undefined}>
-      <SheetHeader>
-        <h2 id={titleId}>{filtersLabel}</h2>
-        <SheetClose type="button" aria-label={messages.text("feed.filters.close")} title={messages.text("feed.filters.close")} onClick={closeSheet}>
-          <CloseIcon />
-        </SheetClose>
-      </SheetHeader>
-      <SheetBody>
-        {compactPhone && <PhoneSection>
-          <SectionLabel as="label" htmlFor={`${panelId}-sort`}>{messages.text("feed.sort.label")}</SectionLabel>
-          <SortField><SortIcon />
-            <PhoneSort id={`${panelId}-sort`} aria-label={messages.text("feed.sort.label")} value={`${draft.sort.by}-${draft.sort.direction}`} onChange={(event) => {
-              const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
-              if (sort) edit({ ...draft, sort, page: 1 });
-            }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.${sort.by}-${sort.direction}`) }))} />
-          </SortField>
-        </PhoneSection>}
-        <PhoneSection>
-          <SectionLabel>{messages.text("feed.date.zone", { zone: query.zone ?? publicPolicy.reportingTimeZone })}</SectionLabel>
-          <MarketToggles>
-            {deviceZone !== (query.zone ?? publicPolicy.reportingTimeZone) && <MarketToggle type="button" $family="match-result" onClick={() => {
-              onOpenChange(false); onApply({ ...query, zone: deviceZone, time: null, page: 1 });
-            }}>{messages.text("feed.date.useLocal")}</MarketToggle>}
-            {query.zone && <MarketToggle type="button" $family="match-result" onClick={() => {
-              onOpenChange(false); onApply({ ...query, zone: null, time: null, page: 1 });
-            }}>{messages.text("feed.date.useReporting")}</MarketToggle>}
-          </MarketToggles>
-        </PhoneSection>
-        {query.status === "live" && <FeedNote>{messages.text("feed.filters.liveToday")}</FeedNote>}
-        {!compactPhone && <DateRangePicker query={query} today={today} {...dateInputs} disabled={query.status === "live"} onChange={(from, to) => setDateInputs({ from, to })} />}
-        <FeedTimeFilter query={query} {...timeInputs} disabled={query.status === "live"} onChange={(from, to) => setTimeInputs({ from, to })} />
-        <PhoneSection role="group" aria-labelledby={marketsId}>
-          <SectionLabel><span id={marketsId}>{messages.text("feed.filters.markets")}</span>
-            <small>{messages.text(isAnyMarkets(draft.markets) ? "feed.filters.any" : "feed.filters.marketsHint")}</small>
-          </SectionLabel>
-          <MarketToggles>
-            {publicPolicy.markets.map((family) => {
-              const pressed = draft.markets.includes(family), next = toggledMarkets(draft, family);
-              return <MarketToggle key={family} type="button" $family={family} aria-pressed={pressed} aria-disabled={next === null || undefined}
-                title={next === null ? messages.text("feed.filters.oneMarket") : undefined} onClick={() => { if (next) edit(next); }}>
-                <span>{messages.text(`market.family.${family}`)}</span>{pressed && <CheckIcon />}
-              </MarketToggle>;
-            })}
-          </MarketToggles>
-        </PhoneSection>
-        <PhoneSection>
-          {phonePicker("leagues", leagueList)}
-          {phonePicker("countries", countryList)}
-        </PhoneSection>
-        <PhoneSection>
-          <ProbabilityGroup role="group" aria-label={probabilityLabel}>
-            <span>{messages.text("feed.filters.predictionProbability")}</span>{probabilityFields}
-          </ProbabilityGroup>
-          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly && query.status !== "finished"} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
-          <ProbabilityHelp>{messages.text("feed.filters.probabilityExplanation")}</ProbabilityHelp>
-        </PhoneSection>
-        {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
-        <PhoneSection>
-          <OddsNote><InfoIcon /><span><strong>{oddsLabel}: {messages.text("feed.filters.any")}</strong><br />
-            {messages.text("feed.filters.oddsUnavailable")} · {messages.text("feed.filters.oddsPending")}</span></OddsNote>
-        </PhoneSection>
-        <DesktopOnly>
-          <DesktopGrid>
-            {multiField("leagues", leagueList)}
-            {multiField("countries", countryList)}
-            {multiField("markets", marketList)}
-            <Field $accent="amber" $disabled role="group" aria-labelledby="filters-odds" title={messages.text("feed.filters.oddsPending")}>
-              <FieldName id="filters-odds" $accent="amber">{oddsLabel}</FieldName>
-              <ChipLine><span data-placeholder aria-disabled="true">{messages.text("feed.filters.any")}</span></ChipLine>
-              <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
-            </Field>
-            <Field $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
-              <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
-              {probabilityFields}%
-              <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
-            </Field>
-          </DesktopGrid>
-          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly && query.status !== "finished"} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
-        </DesktopOnly>
-      </SheetBody>
-      <SheetFooter>
-        <FeedDraftStatus locale={query.locale} changed={changed && draftValid} />
-        <FeedFilterActions formId={formId} locale={query.locale} status={{ valid: draftValid, changed }} />
-      </SheetFooter>
-    </FilterFieldsGroup>
-    {!compactPhone && controls}
+          {input(messages.text("feed.date.from"), "from", draft.dates.from, (from) => setDraft((current) => ({ ...current, dates: { ...current.dates, from } })), "date", live)}
+          {input(messages.text("feed.date.to"), "to", draft.dates.to, (to) => setDraft((current) => ({ ...current, dates: { ...current.dates, to } })), "date", live)}
+          {input(messages.text("feed.time.from"), "timeFrom", draft.times.from, (from) => setDraft((current) => ({ ...current, times: { ...current.times, from: from || fullDayKickoffTime.from } })), "time", live)}
+          {input(messages.text("feed.time.to"), "timeTo", draft.times.to, (to) => setDraft((current) => ({ ...current, times: { ...current.times, to: to || fullDayKickoffTime.to } })), "time", live)}
+          <FloatingField data-full label={messages.text("feed.filters.timezone")}><select name="tz" value={zone} onChange={(event) => {
+            const zone = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, zone } }));
+          }}>{[...new Set([publicPolicy.reportingTimeZone, deviceZone, zone])].map((value) => <option key={value} value={value}>{value}</option>)}</select></FloatingField>
+        </div>{live && <Muted data-help>{messages.text("feed.filters.liveToday")}</Muted>}</fieldset>
+        <fieldset><legend>{messages.text("feed.sort.label")}</legend><div data-fields>
+          <FloatingField data-full label={messages.text("feed.sort.label")}><select value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={(event) => {
+            const sort = feedSortOptions.find((value) => `${value.by}-${value.direction}` === event.target.value);
+            if (sort) setDraft((current) => ({ ...current, query: { ...current.query, sort } }));
+          }}>{feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
+            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
+          </option>)}</select></FloatingField>
+        </div><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={locked}
+          onChange={(checked) => setDraft((current) => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} /></fieldset>
+        <fieldset><legend>{messages.text("feed.filters.markets")}</legend>{publicPolicy.markets.map((family) => {
+          const selected = draft.query.markets.includes(family), last = selected && draft.query.markets.length === 1;
+          return <label data-choice key={family}>
+            {last && <input type="hidden" name="market" value={family} />}
+            <input type="checkbox" name="market" value={family} checked={selected} disabled={last}
+              title={last ? messages.text("feed.filters.oneMarket") : undefined}
+              onChange={() => setDraft((current) => ({ ...current, query: { ...current.query, markets: selected
+                ? current.query.markets.filter((market) => market !== family) : [...current.query.markets, family] } }))} />{messages.text(`market.family.${family}`)}
+          </label>;
+        })}</fieldset>
+        <OptionChecklist key={`leagues-${version}`} kind="leagues" options={leagueList} selected={draft.query.leagues} onChange={changeLeagues} messages={messages} />
+        <OptionChecklist key={`countries-${version}`} kind="countries" options={countryList} selected={draft.query.countries} onChange={changeCountries} messages={messages} />
+        <fieldset disabled={locked}><legend>{messages.text("feed.filters.probabilityLabel")} %</legend><div data-fields>
+          {input(messages.text("feed.filters.min"), undefined, draft.probability.min, (min) => setDraft((current) => ({ ...current, probability: { ...current.probability, min } })))}
+          {input(messages.text("feed.filters.max"), undefined, draft.probability.max, (max) => setDraft((current) => ({ ...current, probability: { ...current.probability, max } })))}
+        </div><Muted data-help>{messages.text("feed.filters.probabilityExplanation")}</Muted></fieldset>
+        <fieldset disabled><legend>{messages.text("feed.filters.oddsUnavailable")}</legend><div data-fields>
+          <FloatingField label={messages.text("feed.filters.min")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
+          <FloatingField label={messages.text("feed.filters.max")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
+        </div></fieldset>
+      </DialogContent>
+    </AdvancedFilterDialog>
   </Panel>;
 }

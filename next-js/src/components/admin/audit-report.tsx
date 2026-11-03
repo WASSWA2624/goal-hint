@@ -6,9 +6,8 @@ import { Fragment, useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { SearchBar } from "@/components/ui/search-bar";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { Button } from "@/components/ui/controls";
-import { CardIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, DocumentIcon, DownloadIcon, GiftIcon, LayersIcon, ResetIcon, SearchIcon,
+import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
+import { CardIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, DocumentIcon, DownloadIcon, GiftIcon, LayersIcon, SearchIcon,
   ShieldIcon, SlidersIcon, UserIcon } from "@/components/ui/icons";
 import { auditActionLabel, auditActorLabel, auditCategories, auditCategory, auditCategoryLabel, auditCsv, auditDateBounds, auditDay, auditPeriods, auditReference,
   auditTargetLabel, filterAuditRows, type AuditCategory, type AuditPeriod } from "@/domain/admin-audit";
@@ -85,10 +84,6 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     if (draft.action !== action || draft.period !== period || draft.startDate !== startDate || draft.endDate !== endDate)
       changeFilters(draft.action, draft.period, draft.startDate, draft.endDate);
   }
-  function reset() {
-    setSearch(""); setCategory(""); setPageIndex(0); setSelectedId(null); setExportStatus(null);
-    if (action || period !== "all") changeFilters("", "all");
-  }
   function paginate(next: number) {
     setPageIndex(next);
     requestAnimationFrame(() => {
@@ -123,9 +118,9 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
           filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen, count: activeFilters,
             onOpen: () => { setDraft({ category, action, period, startDate, endDate }); setRangeError(null); setFiltersOpen(true); } }} />
         {period === "custom" && <p data-audit-applied-range>{startDate} – {endDate} · EAT</p>}
-        {filtersOpen && <CriteriaDialog id={filtersId} title="Audit filters" open onCancel={() => setFiltersOpen(false)} closeLabel="Close audit filters"
-          onApply={applyFilters} applyLabel="Apply filters" cancelLabel="Cancel"
-          onReset={() => { setDraft({ category: "", action: "", period: "all", startDate: "", endDate: "" }); setRangeError(null); }} resetLabel="Reset">
+        {filtersOpen && <AdvancedFilterDialog id={filtersId} open onCancel={() => setFiltersOpen(false)} closeLabel="Close audit filters"
+          onApply={applyFilters}
+          onReset={() => { setDraft({ category: "", action: "", period: "all", startDate: "", endDate: "" }); setRangeError(null); }}>
           <FilterBody>
             <FloatingField label="Category"><select id="audit-category" value={draft.category} onChange={event => setDraft(current => ({ ...current, category: event.target.value as AuditCategory | "" }))}>
               <option value="">All categories</option>{auditCategories.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -142,7 +137,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
             </>}
             {rangeError && <p role="alert">{rangeError}</p>}
           </FilterBody>
-        </CriteriaDialog>}
+        </AdvancedFilterDialog>}
       </AuditTools>
       <AuditFeed as="section" id="audit-results" tabIndex={0} aria-label="Audit activity" aria-busy={pending}>
         {matches.length === 0 ? <EmptyPanel data-audit-empty><SearchIcon /><strong>{filtered ? "No matching activity" : "No activity yet"}</strong></EmptyPanel>
@@ -176,7 +171,6 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
           <div>
             <p aria-live="polite" data-audit-count>{pending ? "Loading activity…" : <b>{matches.length} {matches.length === 1 ? "event" : "events"}</b>}
               {!pending && matches.length > pageSize && ` · ${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, matches.length)} shown`}</p>
-            {filtered && <Button type="button" variant="secondary" disabled={pending} onClick={reset}><ResetIcon />Reset filters</Button>}
           </div>
           <p>Up to 100 recent {action || period !== "all" ? "matching " : ""}events · EAT</p>
         </AuditSummary>

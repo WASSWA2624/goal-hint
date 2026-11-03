@@ -105,26 +105,22 @@ def verify_feed(origin, directory, scenarios):
             match(r'\bvalue="' + re.escape(time_range[bound]) + r'"', field)
         for label in ["From date", "To date", "From time", "To time"]:
             match(label, visible)
-        match(r'aria-label="Reset filters"', visible)
+        match(r'>Reset Filters</button>', visible)
+        match(r'>Apply Filters</button>', visible)
         match(r'aria-label="Advanced filters(?:, [^"]+ active)?"', visible)
         no_match("Clear filters", visible)
         filter_form = match(r'<form\b[^>]*aria-label="Search and filter matches"[\s\S]*?</form>', visible).group()
-        form_id = match(r'\bid="([^"]+)"', filter_form).group(1)
-        submit_buttons = [button for button in re.findall(r'<button\b[^>]*>', visible)
-            if 'type="submit"' in button and f'form="{form_id}"' in button]
-        # The existing chrome has desktop actions and the phone sheet footer, sharing one form.
-        assert len(submit_buttons) == 2
-        assert all('aria-label="Apply filters"' in button for button in submit_buttons)
+        assert len(re.findall(r'\bdata-feed-dialog=', filter_form)) == 1
+        assert len(re.findall(r'>Reset Filters</button>', filter_form)) == 1
+        assert len(re.findall(r'>Apply Filters</button>', filter_form)) == 1
+        assert len(re.findall(r'Predictions only</label>', filter_form)) == 1
         no_match('role="slider"|With predictions|Any time|Specific time', visible)
-        # 062 supplies this control in both layouts; these fixtures have full access.
-        picks_filters = re.findall(r'<label\b[^>]*>(<input\b[^>]*type="checkbox"[^>]*>)Predictions only</label>', visible)
-        assert len(picks_filters) == 2 and all('disabled' not in field for field in picks_filters)
         articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
         no_match("data-match-table-header", visible, name + ": shared match presentation replaces the former column header")
         data = scenario["result"].get("data")
         if data and data["state"] not in ("ready", "insufficient-data"):
             heading = match(r'<h2\b[^>]*>' + re.escape(empty_titles[data["state"]]) + r'</h2>', visible)
-            assert visible.index(submit_buttons[0]) < heading.start(), name + ": filter actions before empty state"
+            assert visible.index("Apply Filters</button>") < heading.start(), name + ": filter footer before empty state"
         records = data["records"] if data else []
         assert [article[1] for article in articles] == [record["fixtureId"] for record in records]
         assert len({article[1] for article in articles}) == len(articles), name + ": one server-rendered instance per fixture"
