@@ -6,6 +6,7 @@ import { getDateInTimeZone, getDayBoundsInTimeZone, validTimeZone } from "./devi
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
+import { predictionResults, type PredictionResult } from "./performance-summary.ts";
 import { browseRules } from "./browse-period.ts";
 import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
@@ -35,6 +36,7 @@ export type ProbabilityRange = Readonly<{ min: number; max: number }>;
 export type PicksFilter = "all" | "only";
 export type FeedQuery = Readonly<{
   summary?: "yesterday" | undefined;
+  result?: PredictionResult | undefined;
   locale: Locale;
   dates: DateSelection;
   search: string;
@@ -84,7 +86,7 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["summary", "date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
+const keys = new Set(["result", "summary", "date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
 export const feedQueryKeys: ReadonlySet<string> = keys;
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
@@ -219,6 +221,8 @@ function oddsRange(value: string | undefined, enabled: boolean): OddsRange | nul
 export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; asOf?: number; locale?: string; routeDate?: string; providerOdds?: boolean }): FeedQuery {
   const values = parameters(input);
   const get = (key: string) => values.get(key);
+  const result = get("result");
+  if (result !== undefined && result !== "all" && !predictionResults.includes(result as PredictionResult)) fail();
   const summary = get("summary");
   if (summary !== undefined && summary !== "yesterday") fail();
   const date = get("date");
@@ -261,7 +265,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const by = get("sort") ?? "kickoff", direction = get("dir");
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
-    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}),
+    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResult } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}),
     leagues, countries, status: parseFeedStatus(get("status")), markets,
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
@@ -284,7 +288,7 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, s
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   return { ...query,
     ...(!dated && !explicitDates ? { summary: "yesterday" as const } : {}),
-    pageSize: has("pageSize") ? query.pageSize : browseRules.pageSize,
+    pageSize: browseRules.pageSize,
     dates: dated || explicitDates ? query.dates : matchFeedPageDefaults.dates,
     sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
     picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly),
@@ -302,6 +306,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   const result = new URLSearchParams();
   const dates = query.dates;
   if (query.summary) result.set("summary", query.summary);
+  if (query.result) result.set("result", query.result);
   if (dates.kind === "date") result.set("date", dates.date);
   else if (dates.kind === "range") { result.set("from", dates.from); result.set("to", dates.to); }
   else if (dates.kind !== defaultFeedDatePreset) result.set("when", dates.kind);
@@ -338,7 +343,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   // Validate callers as well as URL inputs; never silently normalize an invalid query.
   // An odds range can only exist in a query that parsed it, so the re-check accepts the key it serialized.
   const checked = parseFeedQuery(result, { today, locale: query.locale, ...(odds === null ? {} : { providerOdds: true }) });
-  if (checked.summary !== query.summary || checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
+  if (checked.result !== query.result || checked.summary !== query.summary || checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
       checked.status !== query.status || !sameList(checked.markets, markets) ||
       checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max ||
@@ -388,5 +393,5 @@ export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" 
 
 export function activeFeedFilterCount(query: FeedQuery): number {
   return Number(query.search !== "") + panelFilterCount(query) + Number(query.picks === "only") +
-    Number(query.status !== feedDefaults.today.status);
+    Number(query.status !== feedDefaults.today.status) + Number(query.result !== undefined);
 }

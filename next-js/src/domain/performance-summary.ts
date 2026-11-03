@@ -1,3 +1,6 @@
+export const predictionResults = ["won", "lost", "pending", "void", "cancelled"] as const;
+export type PredictionResult = typeof predictionResults[number];
+
 /** Outcome counts for an entire selected cohort, independent of visible pagination. */
 export type PerformanceSummaryCounts = Readonly<{
   total: number;

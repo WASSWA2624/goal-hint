@@ -18,7 +18,6 @@ import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
 import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
-import { InfiniteResults } from "@/components/ui/infinite-results";
 import { slipViewKey } from "@/domain/slip-browse-window";
 import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
@@ -73,8 +72,6 @@ export function BestSlips({ result, locale, signedIn = false, source = "best" }:
         <BestSlipCard source={source} view={view} day={content.day} locale={locale} signedIn={content.access?.signedIn ?? signedIn} /></div></Fragment>)}</SlipList></div>
       </SlipMatchRefreshProvider>
     </>}
-    <InfiniteResults hasMore={content.browse?.hasMore === true} busy={browse.updating} failed={browse.failed}
-      onMore={browse.failed ? browse.retry : browse.loadMore} locale={locale} />
     {content.browse && !content.browse.hasMore && content.slips.length > 0 && <Note>{m.text("history.end")}</Note>}
     {content?.browse?.total !== null && content?.browse?.total !== undefined && <BestSlipsPagination onPage={browse.goToPage}
       total={content.browse.total} page={browse.displayQuery.page}

@@ -7,6 +7,7 @@ import { fieldShortForms, predictionShortForms } from "../../domain/betting-shor
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "feed.filters.result": "Result",
   "history.yesterday": "Yesterday’s performance",
   "history.performance": "Performance for selected dates",
   "history.browsing": "Browsing",

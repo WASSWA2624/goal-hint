@@ -203,7 +203,8 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
         placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
         submitLabel={messages.text("feed.search.submit")} submitDisabled={!complete}
         onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
-      <PeriodField><FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} onChange={(status) => {
+      <PeriodField><FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={draft.query.result}
+        onResultChange={(result) => setDraft((current) => ({ ...current, query: { ...current.query, result, page: 1 } }))} onChange={(status) => {
         setDraft((current) => {
           const selected = selectFeedStatus(current.query, status, today), next = fromQuery(selected, today);
           return { ...current, query: selected, dates: next.dates, times: next.times };

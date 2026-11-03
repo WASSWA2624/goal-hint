@@ -4,7 +4,7 @@ import { FloatingField } from "@/components/ui/floating-field";
 
 import { useId, useRef, useState, type FocusEvent, type ReactNode } from "react";
 import { CalendarIcon, ResetIcon } from "@/components/ui/icons";
-import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
+import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, selectSlipSummaryResult, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
 import type { PeriodPerformance } from "@/domain/browse-period";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
@@ -53,7 +53,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
     requestAnimationFrame(() => opener.current?.focus());
   }
   function changeStatus(status: BestSlipsQuery["status"]) {
-    onChange(query.summary ? { period: "yesterday", status, page: 1 } : { ...query, status, page: 1 });
+    onChange(selectSlipSummaryResult(appliedQuery, status));
   }
   function invalid(key: TextKey) {
     setIssue(key);

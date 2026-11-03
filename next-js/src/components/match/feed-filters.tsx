@@ -718,19 +718,19 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     onOpenChange(false);
     apply(applyFeedDraft(completeDraft, today));
   }}>
-    {[...new URLSearchParams(parameters)].filter(([name]) => name !== "status").map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+    {[...new URLSearchParams(parameters)].filter(([name]) => name !== "result" && (name !== "status" || !!query.result)).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
     <FeedSearchInput mobile={compactPhone} name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
       placeholder={messages.text("feed.search.placeholder")} label={messages.text("feed.filters.search")}
       submitLabel={messages.text("feed.search.submit")}
       onChange={(event) => edit({ ...draft, search: event.target.value })} />
     {compactPhone ? <CompactToolbar data-phone-query-filters>
       <MobileFeedDateFilter query={query} today={today} onApply={onApply} />
-      <FeedStatusSelect name="status" locale={query.locale} value={query.status} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
+      <FeedStatusSelect name="status" locale={query.locale} value={query.status} result={query.result} onResultChange={(result) => apply({ ...query, result, page: 1 })} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
       {filterAction}
     </CompactToolbar> : <>
       {/* Preserve the native GET interface before hydration and without JavaScript. */}
       <QueryChoices data-phone-query-filters>
-        <FeedStatusSelect name="status" locale={query.locale} value={query.status} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
+        <FeedStatusSelect name="status" locale={query.locale} value={query.status} result={query.result} onResultChange={(result) => apply({ ...query, result, page: 1 })} onChange={(status) => apply(selectFeedStatus(query, status, today))} />
         <FeedPeriodSelect name="period" locale={query.locale} value={feedDatePresets.some((preset) => preset === query.dates.kind) ? query.dates.kind : "custom"}
           disabled={query.status === "live"} title={query.status === "live" ? messages.text("feed.filters.liveToday") : undefined} onChange={(period) => {
             if (period === "custom") { onOpenChange(true); return; }

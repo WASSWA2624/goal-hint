@@ -5,7 +5,7 @@ import { defaultBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, 
 import { applyFeedPageDefaults, parseFeedQuery, feedQueryHref, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { selectFeedDates, resetFeedFilters } from '../src/domain/feed-controls.ts';
 import { performanceFeedQuery, checkedPeriodPerformance } from '../src/domain/feed-performance-summary.ts';
-import { appendSlipBrowse } from '../src/domain/slip-browse-window.ts';
+import { singleSlipPage } from '../src/domain/slip-pagination.ts';
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
 
 const today = parseReportingDate('2027-01-01');
@@ -53,14 +53,14 @@ function page(number, changes = {}) {
     browse: { query: { ...defaultBestSlipsQuery(), page: number }, pageSize: 20, total: 300, hasMore: true, nextCursor: null,
       version: 'stable', from: '2026-12-03', to: today }, ...changes };
 }
-test('continuous slip browsing bounds the DOM and rejects changed cohorts, duplicates and access changes', () => {
-  let view = page(1);
-  for (let number = 2; number <= 9; number++) view = appendSlipBrowse(view, page(number));
-  assert.equal(view.slips.length, 100); assert.equal(view.browse.firstPage, 5); assert.equal(view.browse.query.page, 9);
-  assert.equal(view.slips[0].id, 'slip-80'); assert.equal(view.slips.at(-1).id, 'slip-179');
-  for (const next of [page(11), page(10, { entitled: true }), page(10, { access: { tier: 'free', signedIn: true } }),
-    page(10, { slips: [view.slips[0]] }), { ...page(10), browse: { ...page(10).browse, version: 'different' } }])
-    assert.throws(() => appendSlipBrowse(view, next), /changed/);
+test('slip pages show at most 20 records, including legacy unpaged daily seeds', () => {
+  const input = page(3, { slips: Array.from({ length: 60 }, (_, index) => ({ id: `id-${index}` })) });
+  const selected = singleSlipPage(input);
+  assert.equal(selected.slips.length, 20); assert.equal(selected.browse.firstPage, 3);
+  assert.equal(selected.browse.total, 300); assert.equal(input.slips.length, 60);
+  const { browse, ...legacy } = input; void browse;
+  const first = singleSlipPage(legacy);
+  assert.equal(first.slips.length, 20); assert.equal(first.browse.total, 60); assert.equal(first.browse.query.period, 'today');
 });
 
 test('a yesterday aggregate can differ from the browsing total but never from the viewer access', () => {

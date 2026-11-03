@@ -3,16 +3,24 @@
 import { FloatingField } from "@/components/ui/floating-field";
 
 import type { ComponentPropsWithoutRef } from "react";
-import { feedDatePresets, feedFilterStatuses, parseFeedStatus, type FeedStatus } from "@/domain/feed-query";
+import { feedDatePresets, feedFilterStatuses, parseFeedStatus, type FeedStatus, type FeedQuery } from "@/domain/feed-query";
+import { predictionResults } from "@/domain/performance-summary";
 import { createMessages } from "@/i18n/messages";
 
 type SelectProps = Omit<ComponentPropsWithoutRef<"select">, "children" | "value" | "onChange"> & { locale: string };
 
 /** Shared choices keep phone and desktop filters in the same order. */
-export function FeedStatusSelect({ locale, value, onChange, ...props }: SelectProps & {
-  value: FeedStatus; onChange: (status: FeedStatus) => void;
+export function FeedStatusSelect({ locale, value, result, onResultChange, onChange, ...props }: SelectProps & {
+  value: FeedStatus; result?: FeedQuery["result"]; onResultChange?: ((result: FeedQuery["result"]) => void) | undefined; onChange: (status: FeedStatus) => void;
 }) {
   const messages = createMessages(locale);
+  if (result && onResultChange) return <FloatingField label={messages.text("feed.filters.result")}>
+    <select {...props} name="result" data-feed-result aria-label={messages.text("feed.filters.result")} value={result}
+      onChange={(event) => onResultChange(predictionResults.find((item) => item === event.target.value))}>
+      <option value="all">{messages.text("performance.summary.all")}</option>
+      {predictionResults.map((item) => <option key={item} value={item}>{messages.text(`performance.${item}`)}</option>)}
+    </select>
+  </FloatingField>;
   const retained = !feedFilterStatuses.some((status) => status === value);
   return <FloatingField label={messages.text("feed.filters.status")}><select {...props} data-feed-status aria-label={messages.text("feed.filters.status")} value={value}
     onChange={(event) => onChange(parseFeedStatus(event.target.value))}>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { Button } from "@/components/ui/controls";
 import { Inline } from "@/components/ui/layout";
-import { checkedPeriodPerformance, feedPerformanceApiHref, performanceFeedQuery } from "@/domain/feed-performance-summary";
+import { checkedPeriodPerformance, feedPerformanceApiHref, performanceFeedQuery, selectFeedSummaryResult } from "@/domain/feed-performance-summary";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import type { FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -14,8 +14,8 @@ import { consumeRefresh, refreshApi } from "@/state/refresh-api";
 import { FeedNote } from "./feed-controls";
 
 /** Complete-period audits load separately so cards and navigation stay usable. */
-export function FeedPerformanceSummary({ query, today, data, enabled, period }: {
-  query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; enabled: boolean; period: string;
+export function FeedPerformanceSummary({ query, today, data, enabled, period, onApply }: {
+  query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; enabled: boolean; period: string; onApply: (query: FeedQuery) => void;
 }) {
   const summaryQuery = performanceFeedQuery(query, today, data.asOf);
   const dispatch = useAppDispatch(), messages = createMessages(query.locale);
@@ -44,6 +44,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, period }: 
   if (counts) return <PerformanceSummary counts={{ ...counts, cancelled: counts.cancelled ?? 0 }} locale={query.locale} kind="matches"
     title={messages.text(query.summary ? "history.yesterday" : "history.performance")}
     period={query.summary ? `${addReportingDays(getReportingDate(utcInstantFromEpochMilliseconds(data.asOf)), -1)} · EAT` : period}
+    activeResult={query.result} disabled={!enabled} onResult={(result) => onApply(selectFeedSummaryResult(query, result, today, data.asOf))}
     showCoverage={false} showAll />;
   const failed = reply?.key === key && reply.attempt === attempt && reply.counts === null;
   return <Inline data-feed-performance-state={failed ? "unavailable" : "loading"}>

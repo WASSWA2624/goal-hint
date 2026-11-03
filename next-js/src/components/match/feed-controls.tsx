@@ -114,6 +114,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
     selection(messages.text("feed.filters.leagues"), leagueNames, messages.text("feed.filters.allLeagues")),
     selection(messages.text("feed.filters.countries"), query.countries, messages.text("feed.filters.anyCountry")),
   ];
+  if (query.result) entries.push({ label: `${messages.text("feed.filters.result")}: ${messages.text(`performance.${query.result}`)}`, title: messages.text("feed.filters.result") });
   if (query.time) entries.push({ label: `${query.time.from}–${query.time.to}`, title: query.time.zone });
   if (query.probability.min !== 0 || query.probability.max !== 100) {
     const label = messages.text("feed.filters.percentRange", {
@@ -123,7 +124,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
   }
   if (query.odds) entries.push({ label: `${messages.text("feed.filters.oddsLabel")}: ${formatOddsRange(query.odds)}`, title: messages.text("feed.filters.oddsLabel") });
   if (query.search) entries.push({ label: `${messages.text("feed.search.submit")}: ${query.search}`, title: query.search });
-  return <AppliedSummary data-active-filter-summary data-quiet={panelFilterCount(query) === 0 && !query.search || undefined}>
+  return <AppliedSummary data-active-filter-summary data-quiet={panelFilterCount(query) === 0 && !query.search && !query.result || undefined}>
     <SummaryLabel>{messages.text("feed.filters.showing")}</SummaryLabel>
     <SummaryList aria-label={messages.text("feed.filters.activeSummary")}>
       {entries.map((entry, index) => <li key={index} title={entry.title}>{entry.label}</li>)}
@@ -144,6 +145,7 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
     {query.countries.length > 0 && <> · {query.countries.join(", ")}</>}
     {(query.probability.min !== 0 || query.probability.max !== 100) && <> · {messages.text("feed.filters.percentRange",
       { min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) })}</>}
+    {query.result && <> · {messages.text("feed.filters.result")}: {messages.text(`performance.${query.result}`)}</>}
     {query.search && <> · {messages.text("feed.filters.search")}: “{query.search}”</>}
   </FeedNote>;
 }

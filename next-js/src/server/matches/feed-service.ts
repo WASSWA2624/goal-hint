@@ -17,6 +17,7 @@ import { feedSql, storedFeedCoverage, storedFeedRunContext } from "./feed-read.t
 import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixtures } from "./fixture-read.ts";
 import { feedPerformanceCacheKey, readFeedPerformance } from "./feed-performance.ts";
+import { filterFeedResult } from "./feed-result-filter.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
@@ -73,7 +74,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         // changes do not reorder a cohort; catalog/date changes conservatively do.
         const paginationVersion = await storedFeedPaginationVersion(tx, query, today, sourceRange, competitionIds, context.completedOnly);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
-        const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
+        const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly);
+        const sql = query.result ? await filterFeedResult(tx, baseSql, query.result) : baseSql;
         // Start with the indexed date cohort. Choosing the competition/season
         // join first scans its entire archive before applying the date window.
         // Options cover the entire date cohort, independently of applied filters/page.
@@ -123,7 +125,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 17, completedOnly: context.completedOnly === true, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 18, completedOnly: context.completedOnly === true, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

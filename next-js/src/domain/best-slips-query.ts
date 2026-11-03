@@ -91,3 +91,9 @@ export function serializeBestSlipsQuery(query: BestSlipsQuery): URLSearchParams 
   if (query.period === "all" && query.cursor !== undefined) result.set("cursor", query.cursor);
   return result;
 }
+
+/** Counts belong to the applied summary, including while another date request is pending. */
+export function selectSlipSummaryResult(applied: BestSlipsQuery, status: BestSlipsStatus): BestSlipsQuery {
+  const { cursor: _cursor, ...scope } = applied; void _cursor;
+  return applied.summary === "yesterday" ? { period: "yesterday", status, page: 1 } : { ...scope, status, page: 1 };
+}

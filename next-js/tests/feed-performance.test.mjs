@@ -87,6 +87,17 @@ test('cohort counts preserve missing predictions and voids without classifying t
     { total: 9, won: 0, lost: 0, pending: 3, void: 0, unavailable: 6 });
 });
 
+test('result observers receive audited fixture membership even when aggregate counts are cached', async () => {
+  const values = [sample(), sample({ canonicalScore: [0, 0] })], entries = new Map(), generations = new Map();
+  const counts = { total: 2, available: 2, void: 0, cancelled: 0 }, context = { key: 'observer-test', nowMs: at };
+  await readFeedPerformance(cachedTransaction(values, entries, generations), sql, counts, context);
+  const tx = cachedTransaction(values, entries, generations), observed = [];
+  const summary = await readFeedPerformance(tx, sql, counts, context, (id, result) => observed.push({ id, result }));
+  assert.deepEqual(observed, [{ id: values[0].row.fixtureId, result: 'won' }]);
+  assert.equal(summary.pending, 1);
+  assert.ok(tx.calls.some(statement => statement.sql.includes('AS fixtureStatus')), 'cached counts cannot replace membership evidence');
+});
+
 test('a cancellation remains pending until its original settlement is audited, then has its own category', async () => {
   const value = sample(); value.row.fixtureStatus = 'canceled';
   const counts = { total: 1, available: 1, void: 0, cancelled: 0 };

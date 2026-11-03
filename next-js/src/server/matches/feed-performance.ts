@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import type { PredictionResult } from "../../domain/performance-summary.ts";
 import type { feedPerformanceSchema } from "../../domain/match-feed.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { MARKET_RULE_VERSION, isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelection } from "../../domain/markets.ts";
@@ -43,7 +44,7 @@ type Sample = HistoryRow & Readonly<{
  * open picks are pending, missing picks unavailable, and void cycles stay distinct from losses.
  * Keyset batches bound memory without limiting the reporting period or using the visible page. */
 export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>,
-  counts: Readonly<{ total: number; available: number; void: number; cancelled?: number }>, cache?: SummaryCacheContext): Promise<Summary> {
+  counts: Readonly<{ total: number; available: number; void: number; cancelled?: number }>, cache?: SummaryCacheContext, onSettled?: (fixtureId: string, result: PredictionResult) => void): Promise<Summary> {
   const summary: Summary = { total: counts.total, won: 0, lost: 0, pending: counts.available - counts.void - (counts.cancelled ?? 0),
     ...(counts.cancelled === undefined ? {} : { cancelled: counts.cancelled }),
     void: counts.void, unavailable: counts.total - counts.available };
@@ -62,7 +63,7 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
     if (!(last.kickoff instanceof Date)) throw new MatchFeedError("unavailable");
     after = { kickoff: last.kickoff, fixtureId: last.id };
     const ids = candidates.map((fixture) => fixture.id);
-    const key = cache ? evidenceFingerprint({ contract: "feed-performance-batch-v3", splitCancelled: counts.cancelled !== undefined, query: cache.key, ids }) : null;
+    const key = cache && !onSettled ? evidenceFingerprint({ contract: "feed-performance-batch-v3", splitCancelled: counts.cancelled !== undefined, query: cache.key, ids }) : null;
     const tags = ["global:catalog", ...new Set(candidates.map(fixture => `date:${getReportingDate(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()))}`))];
     let generations: Readonly<Record<string, string>> | null = null;
     if (key && cache) {
@@ -127,6 +128,8 @@ export async function readFeedPerformance(tx: Prisma.TransactionClient, sql: Ret
         && result?.regulation.verified && result.regulation.home !== null && result.regulation.away !== null
         ? selectionOccurred(row.currentSelection, result.regulation.home, result.regulation.away) ? "correct" : "incorrect" : previous.status;
       const status = selectedStatus === "correct" ? "won" : selectedStatus === "incorrect" ? "lost" : selectedStatus;
+      if (status === "won" || status === "lost" || status === "void") onSettled?.(String(row.fixtureId),
+        status === "void" && row.fixtureStatus === "canceled" ? "cancelled" : status);
       if (status === "void" && row.fixtureStatus === "canceled" && counts.cancelled !== undefined) delta.cancelled++;
       else if (status === "won" || status === "lost" || status === "void") delta[status]++;
     }

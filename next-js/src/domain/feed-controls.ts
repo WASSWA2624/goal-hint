@@ -35,7 +35,8 @@ export function selectFeedStatus(query: FeedQuery, status: FeedStatus, today: Re
     const period = status === "scheduled" ? upcomingPeriods[dates.kind] : status === "finished" ? completedPeriods[dates.kind] : undefined;
     if (period) dates = { kind: period };
   }
-  return synchronizeFeedStatusDates({ ...query, summary: undefined, status, dates, page: 1 }, today);
+  const { result: _result, ...scope } = query; void _result;
+  return synchronizeFeedStatusDates({ ...scope, summary: undefined, status, dates, page: 1 }, today);
 }
 
 /** Live stays on Today until the visitor chooses another status. */
@@ -77,7 +78,7 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 /** Restore every filter, retaining the browsing zone and page size. */
 export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): FeedQuery {
   const reset = { ...query };
-  delete reset.time;
+  delete reset.time; delete reset.result;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
     picks: defaultPagePicks("all", subscriberOnly),
     page: 1 };
