@@ -23,7 +23,12 @@ export const FiltersPanel = styled.section`
   display: grid; gap: var(--gh-spacing-1_25); min-inline-size: 0;
   padding: 0; border: 0; border-radius: ${({ theme }) => theme.radius.none};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  ${media.desktop} { padding-block: var(--gh-spacing-2); }
+  ${media.desktop} {
+    gap: var(--gh-spacing-0_5); padding-block: var(--gh-spacing-1);
+    background: ${({ theme }) => theme.color.page};
+    [data-performance-summary] { background: transparent; }
+    [data-performance-heading] { padding-block: var(--gh-spacing-0_5); }
+  }
   ${desktopContentPadding()}
 `;
 
@@ -52,7 +57,7 @@ export const DateControls = styled.div`
   display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
 `;
 
-/** One results bar replaces the applied-filter row and repeated publication-day dividers. */
+/** Desktop browsing details sit directly on the page; mobile retains its publication bar. */
 export const AppliedSummary = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline;
   gap: var(--gh-spacing-1) var(--gh-spacing-3); min-inline-size: 0;
@@ -62,23 +67,25 @@ export const AppliedSummary = styled.div`
   font-size: var(--gh-font-caption); line-height: var(--gh-leading-compact);
   [data-applied-result] { color: ${({ theme }) => theme.color.text}; }
   [data-best-slips-summary] { grid-column: -2 / -1; grid-row: 1; text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  &:has(> [data-best-slips-publication]) > [data-applied-selection] { grid-column: 1 / -1; grid-row: 2; }
+  ${media.belowDesktop} {
+    &:has(> [data-best-slips-publication]) > [data-applied-selection] { grid-column: 1 / -1; grid-row: 2; }
+  }
   ${media.desktop} {
-    font-size: var(--gh-font-secondary);
-    &:has(> [data-best-slips-publication]) { grid-template-columns: auto minmax(0, 1fr) auto; }
-    &:has(> [data-best-slips-publication]) > [data-applied-selection] { grid-column: 2; grid-row: 1; }
+    padding: 0; background: transparent; font-size: var(--gh-font-secondary);
   }
 `;
 
 export const PublicationDate = styled.p`
   grid-column: 1; grid-row: 1; margin: 0; min-inline-size: 0;
   color: ${({ theme }) => theme.color.text}; font-weight: var(--gh-weight-medium);
+  ${media.desktop} { display: none; }
 `;
 
 export const AppliedSelection = styled.div`
   display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline;
   gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5); min-inline-size: 0; text-align: end;
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
+  ${media.desktop} { justify-content: flex-start; text-align: start; }
 `;
 
 export const DateFields = styled.div`

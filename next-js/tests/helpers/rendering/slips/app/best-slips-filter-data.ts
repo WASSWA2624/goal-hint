@@ -48,11 +48,14 @@ export async function fixtureBrowseBestSlips(access: ViewerAccess, query: BestSl
   const last = slips.at(-1);
   const from: ReportingDate | null = dates.from ?? remaining.at(-1)?.publicationDay ?? null;
   const to: ReportingDate | null = dates.to ?? remaining[0]?.publicationDay ?? null;
+  const summaryDates = query.summary ? resolveBestSlipsDates({ ...query, period: "yesterday" }, today) : dates;
+  const summarized = query.summary ? publications.filter(view => view.publicationDay === summaryDates.from) : inRange;
+  const statistics = query.period === "all" && !query.summary ? null : { total: summarized.length,
+    won: summarized.filter(view => view.outcome === "won").length,
+    lost: summarized.filter(view => view.outcome === "lost").length,
+    pending: summarized.filter(view => view.outcome === "pending").length, void: 0 };
   return gateBestSlips({ day: today, state: "generated", slips, searchLimited: false, partialCoverage: false,
-    statistics: query.period === "all" ? null : { total: inRange.length,
-      won: inRange.filter((view) => view.outcome === "won").length,
-      lost: inRange.filter((view) => view.outcome === "lost").length,
-      pending: inRange.filter((view) => view.outcome === "pending").length, void: 0 },
+    statistics, summary: { asOf: now, ...summaryDates, statistics },
     browse: { query, total: query.period === "all" ? null : matches.length,
       pageSize: bestSlipsQueryRules.pageSize, hasMore,
       nextCursor: query.period === "all" && hasMore && last ? `${last.publicationDay}:${last.rank}` : null, from, to },

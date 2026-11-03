@@ -374,7 +374,7 @@ const Segments = styled.fieldset`
   &:disabled span { cursor: not-allowed; opacity: var(--gh-opacity-60); }
 `;
 
-/** Two full-size choices, with native radio keyboard and form behavior. */
+/** Labelled single-choice buttons, with native radio keyboard and form behavior. */
 export function SegmentedChoice<Value extends string>({ label, name, value, options, onValueChange, disabled = false }: {
   label: string; name?: string; value: Value; options: readonly { value: Value; label: string }[];
   onValueChange: (value: Value) => void; disabled?: boolean;

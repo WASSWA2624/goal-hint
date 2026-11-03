@@ -224,3 +224,19 @@ build passed. Ten browser combinations with the app font passed in both themes
 from 320 to 1440px, including a 600-match count. See
 [plan 266](dev-plan/266-consistent-section-headers.md). Source integration is
 complete; deployment is separate.
+
+## 267 Desktop Best Slips summary and filter options — 4 November 2026
+
+**Completed:** Desktop hides the separate publication date, places left-aligned
+browsing details directly on the page, and reduces performance-section spacing.
+The performance heading shows the actual snapshot's 24-hour EAT time while
+distinguishing historical reporting dates from the checked date. Advanced
+Filters lists all date presets and total-odds bands as shared single-choice
+buttons. Mobile presentation and dropdowns are preserved.
+
+Application typecheck, focused lint, theme contract, 44 targeted tests and the
+production rendering fixture passed. Eight light/dark browser combinations
+passed at 320, 390, 1024 and 1440px, including draft cancellation, combined Apply,
+Reset, custom-date validation and native keyboard selection. Screenshots were
+reviewed. See [plan 267](dev-plan/267-desktop-best-slips-summary-and-filter-options.md)
+for fixture limitations. Source integration is complete; deployment is separate.

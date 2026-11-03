@@ -3,11 +3,13 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
+import { SegmentedChoice } from "@/components/ui/controls";
 import { FloatingField } from "@/components/ui/floating-field";
 import { SlidersIcon } from "@/components/ui/icons";
 import { SelectMenu } from "@/components/ui/select-menu";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { bestSlipsQueryRules, defaultBestSlipsQuery, resolveBestSlipsDates, selectSlipSummaryResult, type BestSlipsDates, type BestSlipsQuery } from "@/domain/best-slips-query";
-import { addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
+import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type ReportingDate } from "@/domain/calendar";
 import type { PeriodPerformance } from "@/domain/browse-period";
 import type { PerformanceSummaryCounts } from "@/domain/performance-summary";
 import { createMessages, type TextKey } from "@/i18n/messages";
@@ -36,6 +38,7 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   publicationDay?: ReportingDate | undefined;
 }) {
   const m = createMessages(locale), prefix = useId();
+  const desktop = useDesktopLayout();
   const [open, setOpen] = useState(false), [draft, setDraft] = useState(() => filterDraft(appliedQuery, today));
   const [issue, setIssue] = useState<TextKey | null>(null);
   const opener = useRef<HTMLButtonElement>(null), error = useRef<HTMLParagraphElement>(null);
@@ -51,6 +54,13 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
   function invalid(key: TextKey) {
     setIssue(key);
     requestAnimationFrame(() => error.current?.focus());
+  }
+  function selectPeriod(period: BestSlipsQuery["period"]) {
+    setDraft(current => ({ ...current, query: { period, status: current.query.status, oddsBand: current.query.oddsBand ?? defaultBestSlipOddsBand, page: 1 } }));
+    setIssue(null);
+  }
+  function selectOddsBand(oddsBand: BestSlipOddsBand) {
+    setDraft(current => ({ ...current, query: { ...current.query, oddsBand } }));
   }
   function applyFilters() {
     const { cursor: _cursor, from: _from, to: _to, ...scope } = draft.query;
@@ -70,14 +80,20 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
 
   const bounds = resolveBestSlipsDates(appliedQuery, today);
   const summaryDates = summary ?? (appliedQuery.summary ? { from: addReportingDays(today, -1), to: addReportingDays(today, -1) } : bounds);
-  const performancePeriod = summaryDates.from && summaryDates.to
-    ? `${m.reportingDateRangeCompact(summaryDates.from, summaryDates.to)} · EAT` : m.text("bestSlips.filters.allDates");
+  const performanceDates = summaryDates.from && summaryDates.to
+    ? m.reportingDateRangeCompact(summaryDates.from, summaryDates.to) : m.text("bestSlips.filters.allDates");
+  const performancePeriod = summaryDates.from && summaryDates.to ? `${performanceDates} · EAT` : performanceDates;
+  const asOf = summary?.asOf === undefined ? null : utcInstantFromEpochMilliseconds(summary.asOf);
+  const desktopPerformancePeriod = asOf === null ? performancePeriod
+    : summaryDates.from === summaryDates.to && summaryDates.to === getReportingDate(asOf)
+      ? `${performanceDates} · ${m.reportingTime(asOf)} EAT`
+      : `${performanceDates} · ${m.text("slips.asOf", { time: m.reportingInstantCompact(asOf) })}`;
   const browsingDates = appliedQuery.period === "all" ? scannedDates : bounds;
   const currentRange = browsingDates?.from && browsingDates.to ? `${m.reportingDateRangeCompact(browsingDates.from, browsingDates.to)} · EAT` : null;
   const periodLabel = m.text(dateOptions.find(([period]) => period === appliedQuery.period)![1]);
   const oddsLabel = bestSlipOddsBands.find(band => band.id === (appliedQuery.oddsBand ?? defaultBestSlipOddsBand))!.label;
   return <FiltersPanel aria-label={m.text("bestSlips.filters.title")} aria-busy={busy} data-best-slips-filters>
-    <PerformanceSummary locale={locale} kind="slips" counts={statistics ?? null} period={performancePeriod}
+    <PerformanceSummary locale={locale} kind="slips" counts={statistics ?? null} period={desktop ? desktopPerformancePeriod : performancePeriod}
       showCoverage={false} activeResult={query.status === "all" ? undefined : query.status}
       onResult={(result) => onChange(selectSlipSummaryResult(appliedQuery, result ?? "all"))} disabled={busy}
       resultAttributes={(result) => ({ "data-slip-result": result ?? "all" })}
@@ -100,13 +116,11 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
       onReset={() => { setDraft(filterDraft(defaultBestSlipsQuery(), today)); setIssue(null); }}
       closeLabel={m.text("slips.dialog.close", { section: m.text("bestSlips.filters.title") })}>
       <DateControls data-best-slips-dialog-fields>
-        <SelectMenu value={draft.query.period} label={m.text("bestSlips.filters.slipDate")} data-slip-period-select
+        {desktop ? <SegmentedChoice value={draft.query.period} label={m.text("bestSlips.filters.slipDate")}
+          options={dateOptions.map(([value, label]) => ({ value, label: m.text(label) }))} onValueChange={selectPeriod} />
+        : <SelectMenu value={draft.query.period} label={m.text("bestSlips.filters.slipDate")} data-slip-period-select
           options={dateOptions.map(([value, label]) => ({ value, label: m.text(label) }))}
-          onValueChange={value => {
-            const period = dateOptions.find(([period]) => period === value)![0];
-            setDraft(current => ({ ...current, query: { period, status: current.query.status, oddsBand: current.query.oddsBand ?? defaultBestSlipOddsBand, page: 1 } }));
-            setIssue(null);
-          }} />
+          onValueChange={value => selectPeriod(value as BestSlipsQuery["period"])} />}
         {draft.query.period === "custom" && <div>
           <DateFields>
             <FloatingField label={m.text("feed.date.from")}><input id={`${prefix}-from`} type="date" value={draft.from}
@@ -119,9 +133,11 @@ export function BestSlipsFilters({ query, appliedQuery = query, today, locale, b
           <DateHint id={hintId}>{m.text("bestSlips.filters.dateHint", { days: m.number(bestSlipsQueryRules.maximumDays) })}</DateHint>
           {issue && <DateError id={errorId} ref={error} role="alert" tabIndex={-1}>{m.text(issue, { days: m.number(bestSlipsQueryRules.maximumDays) })}</DateError>}
         </div>}
-        <SelectMenu value={draft.query.oddsBand ?? defaultBestSlipOddsBand} label={m.text("bestSlips.filters.oddsRange")} data-slip-odds-band
+        {desktop ? <SegmentedChoice value={draft.query.oddsBand ?? defaultBestSlipOddsBand} label={m.text("bestSlips.filters.oddsRange")}
+          options={bestSlipOddsBands.map(band => ({ value: band.id, label: band.label }))} onValueChange={selectOddsBand} />
+        : <SelectMenu value={draft.query.oddsBand ?? defaultBestSlipOddsBand} label={m.text("bestSlips.filters.oddsRange")} data-slip-odds-band
           options={bestSlipOddsBands.map(band => ({ value: band.id, label: band.label }))}
-          onValueChange={value => setDraft(current => ({ ...current, query: { ...current.query, oddsBand: value as BestSlipOddsBand } }))} />
+          onValueChange={value => selectOddsBand(value as BestSlipOddsBand)} />}
       </DateControls>
     </AdvancedFilterDialog>}
   </FiltersPanel>;
