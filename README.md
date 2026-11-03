@@ -15,11 +15,12 @@ goal-hint/
 └── app-write-up.md   # Product specification and shared application architecture
 ```
 
+- [Implemented app overview](APP_OVERVIEW.md)
 - [App write-up](app-write-up.md)
 - [Next.js setup and commands](next-js/README.md)
 - [Flutter status and requirements](flutter/README.md)
 - [Development packages and deployment](deploy/README.md)
-- [Flutter implementation prompt](prompts/flutter-app-shell.md)
+- [Flutter integration guide](flutter/docs/web-app-integration.md)
 - [Next.js development plans](next-js/dev-plan/000-index.md)
 - [Flutter development plans](flutter/dev-plan/000-index.md)
 
@@ -63,8 +64,8 @@ Windows installable bundles, Android signing and unavailable-host limitations.
 Production launch is currently blocked by the hosting suspension at the retained
 `https://goalhint.com` origin; no published release is claimed.
 See the [Flutter tracker](flutter/dev-tracker.md) for actual execution status and
-verification evidence, and the [implementation prompt](prompts/flutter-app-shell.md)
-for the full requirements. Normal product changes continue to belong in `next-js/`.
+verification evidence, and the [integration guide](flutter/docs/web-app-integration.md)
+for host behavior and boundaries. Normal product changes continue to belong in `next-js/`.
 
 For cable-free Android development, see
 [wireless pairing, connection, and Flutter target selection](flutter/docs/development-urls.md#android-wireless-development).
