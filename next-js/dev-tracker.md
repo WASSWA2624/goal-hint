@@ -195,3 +195,19 @@ mobile/desktop, fine/coarse pointers and reporting-date boundaries were covered.
 The existing two download tracing warnings remain. See
 [plan 263](dev-plan/263-search-inset-and-performance-period-layout.md).
 Source integration is complete; hosted deployment and native release are separate.
+
+## 265 Best Slips filter dialog and results bar — 4 November 2026
+
+**Completed:** desktop performance cards share their row with a matching-height
+Advanced filters button; mobile places the action below the cards. The shared
+dialog holds date presets/custom dates and total odds, with local drafts, Reset,
+validation, Apply and focus restoration. One publication/browsing/count bar
+replaces the separate applied row and repeated publication-day dividers.
+
+Types, focused lint, theme contract, 26 targeted tests, scoped production SSR and
+12 light/dark browser combinations passed, including coarse pointers, plus four
+more after integration with the updated main branch. The older
+locked-slip Share assertion fails identically on the unchanged baseline; see
+[plan 265](dev-plan/265-best-slips-filter-dialog-and-results-bar.md).
+Independent Matches/admin work was preserved. Hosted deployment
+and native release remain separate.

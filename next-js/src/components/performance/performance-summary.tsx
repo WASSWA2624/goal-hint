@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import type { ReactNode } from "react";
 import { desktopSectionFrame } from "@/components/ui/layout";
 import { controlHeight } from "@/components/ui/control-layout";
 import { CheckIcon, ClockIcon, CloseIcon } from "@/components/ui/icons";
@@ -32,6 +33,17 @@ const Counts = styled.dl`
     @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   }
 `;
+const Figures = styled.div`
+  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
+  ${media.desktop} {
+    &:has(> [data-performance-actions]) { grid-template-columns: minmax(0, 1fr) auto; }
+  }
+`;
+const Actions = styled.div`
+  display: flex; min-inline-size: 0;
+  > button { flex: 1; }
+`;
+
 type Status = PredictionResult | "all";
 const Count = styled.div<{ $status: Status }>`
   ${({ theme, $status }) => {
@@ -81,10 +93,11 @@ const outcomes = [
 ] as const;
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
-export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, headingLevel = 2,
+export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, actions, headingLevel = 2,
   showCoverage = true, showAll = true, activeResult, onResult, disabled = false, resultAttributes }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
+  actions?: ReactNode;
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
@@ -98,7 +111,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
       <Header data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
         {period && <p data-performance-period>{period}</p>}
       </Header>
-      <Counts data-performance-figures>
+      <Figures><Counts data-performance-figures>
         {outcomes.map((outcome) => {
           const { key } = outcome, result = key === "all" ? undefined : key;
           const label = m.text(key === "all" && !showAll ? `performance.summary.${kind}` : outcome.message);
@@ -116,7 +129,7 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
               disabled={disabled || pending} data-summary-result={key} {...resultAttributes?.(result)} onClick={() => onResult(result)} />}
           </Count>;
         })}
-      </Counts>
+      </Counts>{actions && <Actions data-performance-actions>{actions}</Actions>}</Figures>
       {showCoverage && (predicted && !showAll || (counts.unavailable ?? 0) > 0 || (counts.filteredOut ?? 0) > 0) && <Coverage>
         {predicted && !showAll && <div data-summary-predicted><dt>{m.text("performance.summary.predicted")}</dt><dd>{number(predicted.total)}</dd></div>}
         {(counts.unavailable ?? 0) > 0 && <div><dt>{m.text("performance.summary.noPrediction")}</dt><dd>{number(counts.unavailable!)}</dd></div>}

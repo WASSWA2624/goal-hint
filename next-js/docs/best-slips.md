@@ -11,6 +11,26 @@ This applies regardless of publication day: yesterday's unfinished slips remain
 restricted, while today's fully completed results can be public. Both the
 initial read and final entitlement recheck enforce this completion rule.
 
+Best Slips places Advanced filters beside the performance cards on desktop,
+matching the card row's height, and below them on mobile. The shared dialog
+contains Slip date, custom From/To dates when selected, and Total odds. Date
+and odds edits remain local until Apply Filters, which restarts pagination.
+Reset Filters restores the default draft; closing, Escape or backdrop dismissal
+discards it and restores focus. Custom dates must be valid, ordered and span no
+more than 366 inclusive days. Result cards retain their existing cohort drilldowns.
+
+One tinted information bar retains the first visible publication date on the
+left and shows the applied browsing period, result and odds toward the right,
+with the visible range/total at the far end. It replaces the
+separate applied row and repeated publication-day dividers. Each slip retains
+its own publication date, and All dates shows its bounded scan dates in this bar.
+
+`python scripts/verify-best-slips-rendering.py --serve` builds an isolated
+production fixture. Run `verifyBestSlipsFilters` from
+`scripts/verify-best-slips-filters.mjs` through Playwright CLI against its origin
+to exercise responsive placement, draft dismissal, Reset, validation and Apply
+in both themes. The fixture has multiple publication days and numbered pages.
+
 Desktop Best slips use Blue Signal over the shared Aligned ledger layout:
 square cards, 44px collapsed headers, 4.5px gaps (1.5× the previous 3px), and a
 blue rail that spans the full card in both collapsed and expanded states.
@@ -216,8 +236,7 @@ projection, preserving selected dates/status across page changes. Pagination
 and date/result controls work on both desktop and mobile.
 
 Explicit ranges have exact result counts and 50 slips per page. The API retains
-the All dates option for compatibility, although it is no longer in the date
-button row. All dates scans at most 31 publications per request and uses an
+the All dates option in the date selector. All dates scans at most 31 publications per request and uses an
 original-day/rank cursor to
 continue without dropping remaining slips from a publication. Its summary
 states the dates examined and the number shown rather than claiming an
