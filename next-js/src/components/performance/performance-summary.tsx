@@ -101,15 +101,18 @@ const SummaryAction = styled.button`
   &:disabled { cursor: wait; }
 `;
 /** One compact, accessible presentation for full-period match and slip outcomes. */
-export function PerformanceSummary({ counts, locale, kind, title, period, headingLevel = 2, showCoverage = true, showAll = false, activeResult, onResult, disabled = false }: {
-  counts: PerformanceSummaryCounts; locale: string; kind: "matches" | "slips" | "predictions";
+export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, headingLevel = 2, showCoverage = true, showAll = false, activeResult, onResult, disabled = false }: {
+  /** Null reserves the real summary layout without presenting invented zero results. */
+  counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
 }) {
   const m = createMessages(locale), label = title ?? m.text("performance.summary.title");
+  const pending = suppliedCounts === null, counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
+  const number = (value: number) => pending ? "—" : m.number(value);
   const action = (result: PredictionResult | undefined, text: string, count: number) => onResult ? <SummaryAction type="button"
-    aria-label={`${text}: ${m.number(count)}`} aria-pressed={activeResult === result} disabled={disabled}
+    aria-label={`${text}: ${number(count)}`} aria-pressed={activeResult === result} disabled={disabled || pending}
     data-summary-result={result ?? "all"} onClick={() => onResult(result)} /> : null;
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const outcomes = [
@@ -125,14 +128,14 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
   const cancelledOutcome = { key: "cancelled", tone: "void" as const, label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 };
   const extras = [voidOutcome, cancelledOutcome, ...coverage.filter(({ key }) => showCoverage || key !== "unavailable")]
     .filter(({ key, count }) => count > 0 || showAll && (key === "void" || key === "cancelled"));
-  return <Panel $interactive={!!onResult} role="group" aria-label={label} data-performance-summary={kind}>
+  return <Panel $interactive={!!onResult} role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
     <Content>
       <Header tabIndex={0} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}{period && <p>{period}</p>}</Header>
       <Figures tabIndex={0} role="region" aria-label={`${label}: ${m.text("performance.summary.figures")}`} data-performance-figures>
       <Counts>
-        {(showCoverage || showAll) && <Count $interactive={!!onResult} $zero={counts.total === 0}><dt>{m.text(showAll ? "performance.summary.all" : `performance.summary.${kind}`)}</dt><dd>{m.number(showAll && predicted ? predicted.total : counts.total)}{action(undefined, m.text("performance.summary.all"), showAll && predicted ? predicted.total : counts.total)}</dd></Count>}
+        {(showCoverage || showAll) && <Count $interactive={!!onResult} $zero={counts.total === 0}><dt>{m.text(showAll ? "performance.summary.all" : `performance.summary.${kind}`)}</dt><dd>{number(showAll && predicted ? predicted.total : counts.total)}{action(undefined, m.text("performance.summary.all"), showAll && predicted ? predicted.total : counts.total)}</dd></Count>}
         {predicted && !showAll && <PredictedCount $zero={predicted.total === 0} data-summary-predicted>
-          <dt>{m.text("performance.summary.predicted")}</dt><dd>{m.number(predicted.total)}</dd>
+          <dt>{m.text("performance.summary.predicted")}</dt><dd>{number(predicted.total)}</dd>
         </PredictedCount>}
         {outcomes.map(({ key, tone, label, count, icon: OutcomeIcon }) => {
           const fraction = predicted?.[key], percentage = fraction === null || fraction === undefined ? null
@@ -141,12 +144,12 @@ export function PerformanceSummary({ counts, locale, kind, title, period, headin
             <dt>{label}{predicted && <OutcomePercentage data-summary-percentage={tone}
               title={percentage ? m.text("performance.summary.percentageOfPredicted", { percentage }) : m.text("performance.summary.noPredicted")}>
               {percentage ? `(${percentage})` : "—"}
-            </OutcomePercentage>}</dt><dd><OutcomeIcon />{m.number(count)}{action(key, label, count)}</dd>
+            </OutcomePercentage>}</dt><dd><OutcomeIcon />{number(count)}{action(key, label, count)}</dd>
           </OutcomeCount>;
         })}
       </Counts>
       {extras.length > 0 && <Extras>{extras.map(({ key, tone, label, count }) => <Count key={key} $tone={tone} $interactive={!!onResult && (key === "void" || key === "cancelled")}>
-        <dt>{label}</dt><dd>{m.number(count)}{(key === "void" || key === "cancelled") && action(key, label, count)}</dd>
+        <dt>{label}</dt><dd>{number(count)}{(key === "void" || key === "cancelled") && action(key, label, count)}</dd>
       </Count>)}</Extras>}
       </Figures>
     </Content>

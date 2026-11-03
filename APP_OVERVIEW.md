@@ -27,7 +27,7 @@ It combines a responsive website with a Flutter host for the same experience. Be
 | **Results and performance** | Prediction outcomes by market, source, and league; published-slip results, illustrative unit-stake returns/ROI, and losing streaks. Correct, incorrect, pending, void, and unavailable stay distinct. Accuracy/calibration metrics require reviewed policies and sufficient samples; illustrations do not represent customer profits. |
 | **Administration and analytics** | Payment review and legacy reversals, subscriber search, manual access grants/extensions/revocation, account blocking/sign-out, verified number transfers, credit adjustments, erasure, plans, sales/trial/device settings, audit history, revenue summaries, and forecast-source comparisons. First-party visitor analytics provides reports and exports. |
 | **Security, privacy, and discovery** | Hashed passwords/codes, request throttling, server authorization, private account/payment responses, and controlled erasure with accounting safeguards. Analytics requires consent and honors browser privacy signals. Canonical/social metadata, crawlable archives, robots rules, and sitemaps control public discovery. |
-| **Interface and support** | Responsive components, remembered light/dark themes, English, help, privacy, terms, support links, and Android/Windows downloads with install/update prompts for new releases. Availability depends on published installers/store configuration. |
+| **Interface and support** | Responsive components, remembered light/dark themes, English, help, privacy, terms, support links, and Android/Windows downloads with install/update prompts for new releases. Home and match loading states retain headings and controls; match summaries start on the server, performance sections load independently, and admin loading follows authorization. Availability depends on published installers/store configuration. |
 
 ## Payment integration and approvals
 
@@ -56,6 +56,7 @@ A typical journey is **browse → inspect a match → register and verify → ob
 - **Prediction integrity:** forecasts lock five minutes before scheduled kickoff. Settlement uses verified regulation scores, including stoppage time, excluding extra time/shootouts. Postponements, cancellations, voids, and score corrections preserve audited history. Live scores do not settle predictions.
 - **Native and offline:** Flutter supplies persistent sessions, themed recovery, Android pull-to-refresh, external/app links, and sharing. Reconnection and safe cache updates retain the last usable bundle. Prepared anonymous fixture facts/scores remain available for up to 24 hours with staleness notices; predictions, accounts, payments, and writes require connectivity.
 - **Operations:** synthetic demo data, automated tests, deployment/package scripts, quota/cost controls, durable job recovery, backup/restore, and monitoring foundations. Production scheduling and services need configuration and approval.
+- **Loading and refresh:** independent reads run together, slip history indexes results by fixture while preserving original-cycle checks, and rapid navigation briefly reuses confirmed header state in memory. Page/API authorization and explicit session refresh remain server-verified. Hosted response times require measurement after deployment.
 
 ## Current boundaries and unfinished work
 

@@ -5,6 +5,7 @@ import { HeaderBrand } from "@/components/ui/brand";
 import { Container, DesktopContent, desktopSectionFrame, PageMain, Stack } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 import { FallbackStyleProvider } from "@/styles/provider";
+import { LoadingTheme } from "@/styles/loading-theme";
 import { Header, HeaderContent, ShellFrame } from "./shell-styles";
 
 const Placeholder = styled.div`
@@ -26,10 +27,15 @@ export function PageLoading({ label }: { label: string }) {
   return <FallbackStyleProvider><ShellFrame>
     <Header><HeaderContent $wide><HeaderBrand /></HeaderContent></Header>
     <PageMain id="main-content" tabIndex={-1} $app $compact>
-      <Container $wide><Stack>
-        <LoadingStatus role="status">{label}</LoadingStatus>
-        <DesktopContent><Stack aria-hidden="true"><Placeholder /><Placeholder /><Placeholder /></Stack></DesktopContent>
-      </Stack></Container>
+      <Container $wide><PageContentLoading label={label} /></Container>
     </PageMain>
   </ShellFrame></FallbackStyleProvider>;
+}
+
+/** Reuse the themed loading content inside an already rendered, authorized workspace. */
+export function PageContentLoading({ label }: { label: string }) {
+  return <LoadingTheme><Stack aria-busy="true" data-page-content-loading>
+    <LoadingStatus role="status">{label}</LoadingStatus>
+    <DesktopContent><Stack aria-hidden="true"><Placeholder /><Placeholder /><Placeholder /></Stack></DesktopContent>
+  </Stack></LoadingTheme>;
 }

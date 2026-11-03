@@ -65,24 +65,24 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const administrator = !!currentMember && !currentMember.blocked && !!currentMember.administrator;
     if (administrator) redirect(adminLandingPath);
     const member = currentMember;
-    const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
+    const resetPromise = resolved.auth?.passwordResetSession(token).catch(() => null);
+    const verificationPromise = resolved.auth?.verificationSession(token).catch(() => null);
+    const reset = await resetPromise;
     if (reset) return <PublicShell locale={locale} showAccount><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     if (authView === "forgot" && member && !member.blocked) redirect(accountSectionHref(locale, "password", returnTo));
     if (authView === "forgot" && !member) return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
-    const verification = await resolved.auth?.verificationSession(token).catch(() => null);
+    const verification = await verificationPromise;
     if (verification) return <PublicShell locale={locale} showAccount><AccountVerificationForm locale={locale} phone={verification.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     const now = new Date();
-    const [view, paymentView, subscription, dashboard, referrals] = member && !member.blocked ? await Promise.all([
+    const [view, paymentView, subscription, dashboard, referrals, notifications, referralReviews] = member && !member.blocked ? await Promise.all([
       member.codeEnteredAt && (summarySection || section === "devices") ? resolved.codes?.accountView(member).catch(() => null) ?? null : null,
       settings && (summarySection || section === "payments") ? resolved.payments?.view(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" ? resolved.codes?.subscriptionStatus(member).catch(() => null) ?? null : null,
       summarySection || section === "payments" || section === "activity" ? resolved.dashboard?.read(member).catch(() => null) ?? null : null,
       summarySection || section === "referrals" ? resolved.referrals?.read(member).catch(() => null) ?? null : null,
-    ]) : [null, null, null, null, null];
-    const notifications = member && !member.blocked && section === "notifications"
-      ? await resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null;
-    const referralReviews = member && !member.blocked && section === "referrals"
-      ? await resolved.referralReviews?.member(member, referralReviewCursor(parameters.reviewBefore) ? parameters.reviewBefore as string : undefined).catch(() => null) ?? null : null;
+      section === "notifications" ? resolved.notifications?.read(member, parameters.before).catch(() => null) ?? null : null,
+      section === "referrals" ? resolved.referralReviews?.member(member, referralReviewCursor(parameters.reviewBefore) ? parameters.reviewBefore as string : undefined).catch(() => null) ?? null : null,
+    ]) : [null, null, null, null, null, null, null];
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;

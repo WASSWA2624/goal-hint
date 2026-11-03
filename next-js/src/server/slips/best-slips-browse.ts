@@ -38,10 +38,12 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
     try {
-      const result = await read(query, day, _locale, false);
       const date = yesterday(day);
-      const summary = query.summary === "yesterday"
-        ? await read({ period: "yesterday", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null) : result;
+      const [result, yesterdaySummary] = await Promise.all([
+        read(query, day, _locale, false),
+        query.summary === "yesterday" ? read({ period: "yesterday", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null) : null,
+      ]);
+      const summary = query.summary === "yesterday" ? yesterdaySummary : result;
       return gateBestSlips({ ...result, summary: { from: query.summary ? date : dates.from,
         to: query.summary ? date : dates.to, statistics: summary?.statistics ?? null } }, access);
     }

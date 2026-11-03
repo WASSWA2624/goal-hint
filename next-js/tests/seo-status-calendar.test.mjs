@@ -110,8 +110,8 @@ test('Matches page defaults reach the stored read while retaining viewer eligibi
         read: async (input) => { storedQuery = parseFeedQuery(input, { today }); throw new MatchFeedError('rate-limited'); } });
       const rendered = view(await page.Page(props({}, parameters)), 'MatchFeedPage');
       assert.deepEqual(storedQuery, rendered.query, 'The rendered controls and stored read use the same effective query.');
-      assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'today' });
-      assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'probability', direction: 'desc' });
+      assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'last-30-days' });
+      assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'kickoff', direction: 'desc' });
       assert.equal(storedQuery.picks, parameters.picks ?? (tier === 'free' && parameters.status !== 'finished' ? 'all' : 'only'));
       assert.equal(rendered.result.error, 'rate-limited');
     }
@@ -269,4 +269,31 @@ test('feed pricing overlaps fixture loading and skips full-access viewers', asyn
     resolveAccess: fullAccess, read: unavailable,
     readOffer: async () => { throw new Error('Full access must not load pricing.'); } });
   assert.equal(view(await full.Page(props({})), 'MatchFeedPage').startingPriceUgx, null);
+});
+
+test('feed summary starts beside the list, streams independently and is never read for metadata', async () => {
+  let finishList, finishSummary, summaries = 0;
+  const list = new Promise(resolve => { finishList = resolve; });
+  const summary = new Promise(resolve => { finishSummary = resolve; });
+  const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument, resolveAccess: fullAccess,
+    read: async () => { await list; return { records: [], total: 0, coverage: { knownFixtures: 0 } }; },
+    readSummary: async (parameters, clock) => {
+      summaries++;
+      assert.equal(parameters.get('date'), '2026-10-25', 'Entry performance audits yesterday, not the 30-day list.');
+      assert.equal(clock.now(), at);
+      await summary; throw new Error('private summary failure');
+    } });
+  const rendering = page.Page(props({}));
+  await new Promise(setImmediate);
+  assert.equal(summaries, 1, 'The audit starts before the primary stored read completes.');
+  finishList();
+  const rendered = view(await rendering, 'MatchFeedPage');
+  assert.equal(rendered.result.error, null, 'An unresolved audit cannot hold the primary page.');
+  assert.ok(rendered.summary instanceof Promise);
+  await page.generateMetadata(props({}));
+  assert.equal(summaries, 1, 'Metadata must not start optional audits.');
+  finishSummary();
+  const seed = await rendered.summary;
+  assert.equal(seed.reply, null);
+  assert.doesNotMatch(JSON.stringify(seed), /private summary failure/);
 });

@@ -7,7 +7,7 @@ import { bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPubl
 import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
-import { completedSlipFixtureIds, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView } from "../../domain/slip-snapshot.ts";
+import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotOutcome, slipSnapshotStatus, slipSnapshotSchema, slipResultView } from "../../domain/slip-snapshot.ts";
 import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
@@ -182,19 +182,20 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           if (family.length !== parent.count || family.some((row, index) => row.rank !== index + 1)) fail("unavailable");
         }
         const results = await resolveResults(tx, snapshots.flatMap(snapshot => snapshot.slip.selections), asOf);
+        const resultsFor = indexSlipResults(results);
         const views: BestSlipView[] = [];
         for (const [index, row] of items.entries()) {
           const snapshot = snapshots[index]!, parent = parents.get(row.publicationId)!;
           const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
           if (parent.oddsBand && parent.oddsBand !== band) fail("unavailable");
           if (oddsBand && oddsBand !== band) continue;
-          const completed = slipCompleted(snapshot.slip, results);
+          const slipResults = resultsFor(snapshot.slip), completed = slipCompleted(snapshot.slip, slipResults);
           if (completedOnly && !completed) continue;
           const [view] = bestSlipViews([{ ...snapshot.slip, estimatedProbability: snapshot.estimatedProbability }], true,
-            slipMatchStatesFromResults(snapshot.slip.selections, results));
+            slipMatchStatesFromResults(snapshot.slip.selections, slipResults));
           views.push({ ...view!, id: row.id, rank: publicRank(parent, row.rank), publicationDay: parseReportingDate(day), publishedAt: parent.publishedAt,
-            outcome: slipSnapshotOutcome(snapshot.slip, results), status: slipSnapshotStatus(snapshot.slip, results), completed,
-            completedFixtureIds: completedSlipFixtureIds(snapshot.slip, results) });
+            outcome: slipSnapshotOutcome(snapshot.slip, slipResults), status: slipSnapshotStatus(snapshot.slip, slipResults), completed,
+            completedFixtureIds: completedSlipFixtureIds(snapshot.slip, slipResults) });
         }
         views.sort((a,b) => a.rank - b.rank);
         const statistics = { total: views.length, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
@@ -239,17 +240,14 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           }
           const snapshots = await readSnapshots(tx, rows);
           const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), asOf);
-          const resultsByFixture = new Map<string, typeof results[number][]>();
-          for (const result of results) {
-            const candidates = resultsByFixture.get(result.fixtureId) ?? []; candidates.push(result); resultsByFixture.set(result.fixtureId, candidates);
-          }
+          const resultsFor = indexSlipResults(results);
           const ordered = rows.map((row, index) => ({ row, snapshot: snapshots[index]!, parent: parents.get(row.publicationId)! }))
             .sort((left, right) => right.parent.day.localeCompare(left.parent.day) || publicRank(left.parent, left.row.rank) - publicRank(right.parent, right.row.rank));
           for (const { row, snapshot, parent } of ordered) {
             const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
             if (parent.oddsBand && parent.oddsBand !== band) fail("unavailable");
             if (band !== (query.oddsBand ?? defaultBestSlipOddsBand)) continue;
-            const slipResults = snapshot.slip.selections.flatMap((selection) => resultsByFixture.get(selection.fixtureId) ?? []);
+            const slipResults = resultsFor(snapshot.slip);
             const completed = slipCompleted(snapshot.slip, slipResults);
             if (completedOnly && !completed) continue;
             const outcome = slipSnapshotOutcome(snapshot.slip, slipResults), status = slipSnapshotStatus(snapshot.slip, slipResults, outcome);
@@ -297,17 +295,19 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           if (siblings.length !== parents.get(id)!.count || siblings.some((row, index) => row.rank !== index + 1)) fail("unavailable");
         }
         const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), asOf);
+        const resultsFor = indexSlipResults(results);
         const samples = [], records = [];
         for (const [index, row] of rows.entries()) {
           const parent = parents.get(row.publicationId)!, snapshot = snapshots[index]!;
           const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
           if (parent.oddsBand && parent.oddsBand !== band) fail("unavailable");
           if (band !== (query.oddsBand ?? defaultBestSlipOddsBand)) continue;
-          if (completedOnly && !slipCompleted(snapshot.slip, results)) continue;
+          const slipResults = resultsFor(snapshot.slip);
+          if (completedOnly && !slipCompleted(snapshot.slip, slipResults)) continue;
           const publishedAt = new Date(parent.publishedAt).toISOString();
-          const view = slipResultView(row.id, publishedAt, snapshot.slip, results);
+          const view = slipResultView(row.id, publishedAt, snapshot.slip, slipResults);
           samples.push({ id: row.id, publishedAt: parent.publishedAt, rank: publicRank(parent, row.rank),
-            totalOdds: view ? snapshot.slip.totalOdds : "", outcome: view?.outcome ?? slipSnapshotOutcome(snapshot.slip, results) });
+            totalOdds: view ? snapshot.slip.totalOdds : "", outcome: view?.outcome ?? slipSnapshotOutcome(snapshot.slip, slipResults) });
           // Until every original cycle has ended, no selections, quote or probabilities leave this boundary.
           if (view) records.push({ ...view, publicationDay: parent.day, publishedAt, modelId: parent.model.id,
             rank: publicRank(parent, row.rank), estimatedProbability: snapshot.estimatedProbability });

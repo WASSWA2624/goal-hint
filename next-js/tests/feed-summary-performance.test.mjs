@@ -4,6 +4,7 @@ import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
 import { createMatchFeedSummaryHandler } from '../src/server/matches/feed-summary-http.ts';
 import { fullAccess } from './helpers/full-access.ts';
+import { createGatedFeedSummary } from '../src/server/matches/feed-summary-read.ts';
 
 const at = Date.parse('2026-10-09T08:00:00Z'), clock = { now: () => at };
 const counts = { total: 80, won: 0, lost: 0, pending: 20, void: 10, unavailable: 50 };
@@ -102,4 +103,29 @@ test('summary HTTP retains strict feed response-option validation without return
   const response = await handler(new Request('https://example.test/api/matches/summary?date=2026-10-09&leagues=0'));
   assert.equal(response.status, 200); assert.equal(reads, 1);
   assert.deepEqual(await response.json(), { performance: counts, paginationVersion: 'a'.repeat(64), asOf: at, access: { tier: 'full', signedIn: false } });
+});
+
+test('streamed page summaries and HTTP summaries recheck restricted filters after access expires', async () => {
+  for (const viaHttp of [false, true]) {
+    let checks = 0, reads = 0;
+    const access = async () => ({ tier: ++checks === 1 ? 'full' : 'free', signedIn: true, mode: 'on' });
+    const source = async () => { reads++; return { performance: counts, paginationVersion: 'a'.repeat(64), asOf: at }; };
+    const query = new URLSearchParams('date=2026-10-09&prob=60-100');
+    if (viaHttp) {
+      const reply = await createMatchFeedSummaryHandler(source, clock, access)(new Request(`https://example.test/api/matches/summary?${query}`));
+      assert.equal(reply.status, 403);
+    } else await assert.rejects(createGatedFeedSummary(source, access)(query, clock), error => error.code === 'subscription-required');
+    assert.equal(reads, 1); assert.equal(checks, 2);
+  }
+});
+
+test('restricted summaries refuse free viewers before querying; public summaries use the final viewer', async () => {
+  let reads = 0;
+  const free = async () => ({ tier: 'free', signedIn: false, mode: 'free' });
+  const source = async () => { reads++; return { performance: counts, paginationVersion: 'a'.repeat(64), asOf: at }; };
+  await assert.rejects(createGatedFeedSummary(source, free)(new URLSearchParams('prob=60-100'), clock), error => error.code === 'subscription-required');
+  assert.equal(reads, 0);
+  const reply = await createGatedFeedSummary(source, free)(new URLSearchParams('date=2026-10-09'), clock);
+  assert.deepEqual(reply.access, { tier: 'free', signedIn: false });
+  assert.deepEqual(reply.performance, counts);
 });

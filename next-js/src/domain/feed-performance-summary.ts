@@ -12,6 +12,8 @@ export const feedPerformanceReplySchema = z.strictObject({
   asOf: z.number().int(), access: contentAccessSchema,
 });
 export type FeedPerformanceReply = z.infer<typeof feedPerformanceReplySchema>;
+/** A server-started read is tied to its canonical summary scope, never the visible list page. */
+export type FeedPerformanceSeed = Readonly<{ href: string; reply: FeedPerformanceReply | null }>;
 
 export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): string {
   return feedPageApiHref(query, today, query.page).replace("/api/matches?", "/api/matches/summary?");

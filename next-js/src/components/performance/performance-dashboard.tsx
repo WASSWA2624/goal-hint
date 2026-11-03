@@ -1,6 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, use, type ReactNode } from "react";
+import { ServerThemeUntilHydrated } from "@/styles/provider";
+import { LoadingTheme } from "@/styles/loading-theme";
 import type { PerformanceCell, PerformanceLeague, PerformanceResponse } from "@/domain/performance";
 import type { PublishedSlipHistory } from "@/domain/published-slips";
 import type { SlipPerformanceSummary } from "@/domain/slip-performance";
@@ -25,6 +27,9 @@ export type PerformanceDashboardProps = Readonly<{
   filters: PerformancePageFilters;
   report: PerformanceResponse | null;
   history: PublishedSlipHistory | null;
+  reportPromise?: Promise<PerformanceResponse | null>;
+  historyPromise?: Promise<PublishedSlipHistory | null>;
+  historyPage?: number;
 }>;
 const percent = (value: number | null, m: Messages) => value === null ? "—" : m.number(value, { style: "percent", maximumFractionDigits: 1 });
 const metric = (value: number | null, m: Messages) => value === null ? "—" : m.number(value, { maximumFractionDigits: 3 });
@@ -123,13 +128,11 @@ function SlipMetrics({ summary, locale, period }: { summary: SlipPerformanceSumm
   </Stack></Surface>;
 }
 
-export function PerformanceDashboard({ locale, filters, report, history }: PerformanceDashboardProps) {
-  const m = createMessages(locale), cells = report?.cells.filter((cell) => cell.horizon === null && cell.source === filters.source) ?? [];
-  const pages = history ? Math.ceil(history.total / history.pageSize) : 0, outOfRange = Boolean(history && history.page > Math.max(1, pages));
-  const href = (page: number) => performancePageHref(filters, page, locale);
-  const leaguePages = report ? Math.ceil(report.leagues.totalGroups / report.leagues.pageSize) : 0;
-  const leagueOutOfRange = Boolean(report && report.leagues.page > Math.max(1, leaguePages));
-  const leagueHref = (page: number) => performancePageHref({ ...filters, leaguePage: page }, history?.page ?? 1, locale);
+type SectionProps = Pick<PerformanceDashboardProps, "locale" | "filters">;
+
+/** Independent reads stream into their existing positions; filters and headings render immediately. */
+export function PerformanceDashboard({ locale, filters, report, history, reportPromise, historyPromise, historyPage }: PerformanceDashboardProps) {
+  const m = createMessages(locale), page = historyPage ?? history?.page ?? 1;
   return <PerformanceSections $gap="lg" data-performance-dashboard>
     <DesktopInset><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></DesktopInset>
     <PerformanceFilterPanel><Stack $gap="sm">
@@ -148,34 +151,66 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
       </PerformanceFilters>
       <MutedText>{m.text("performance.periodHint")}</MutedText><MutedText>{m.text("performance.pickFilterHint")}</MutedText>
     </Stack></PerformanceFilterPanel>
+    {reportPromise ? <Suspense fallback={<LoadingTheme><PredictionSections locale={locale} filters={filters} report={null} page={page} loading /></LoadingTheme>}>
+      <ServerThemeUntilHydrated><StreamedPredictions locale={locale} filters={filters} read={reportPromise} page={page} /></ServerThemeUntilHydrated>
+    </Suspense> : <PredictionSections locale={locale} filters={filters} report={report} page={page} />}
+    {historyPromise ? <Suspense fallback={<LoadingTheme><HistorySection locale={locale} filters={filters} history={null} loading /></LoadingTheme>}>
+      <ServerThemeUntilHydrated><StreamedHistory locale={locale} filters={filters} read={historyPromise} /></ServerThemeUntilHydrated>
+    </Suspense> : <HistorySection locale={locale} filters={filters} history={history} />}
+    <DesktopInset><MutedText>{m.text("performance.noGuarantee")}</MutedText></DesktopInset>
+  </PerformanceSections>;
+}
+
+function StreamedPredictions({ read, ...props }: SectionProps & { read: Promise<PerformanceResponse | null>; page: number }) {
+  return <PredictionSections {...props} report={use(read)} />;
+}
+function StreamedHistory({ read, ...props }: SectionProps & { read: Promise<PublishedSlipHistory | null> }) {
+  return <HistorySection {...props} history={use(read)} />;
+}
+function PredictionSections({ locale, filters, report, page, loading = false }: SectionProps & {
+  report: PerformanceResponse | null; page: number; loading?: boolean;
+}) {
+  const m = createMessages(locale), cells = report?.cells.filter((cell) => cell.horizon === null && cell.source === filters.source) ?? [];
+  const leaguePages = report ? Math.ceil(report.leagues.totalGroups / report.leagues.pageSize) : 0;
+  const leagueOutOfRange = Boolean(report && report.leagues.page > Math.max(1, leaguePages));
+  const leagueHref = (next: number) => performancePageHref({ ...filters, leaguePage: next }, page, locale);
+  return <>
     <DesktopInset as="section" aria-labelledby="individual-performance"><Stack>
       <SectionHeading id="individual-performance">{m.text("performance.pickHeading")}</SectionHeading><MutedText>{m.text("performance.pickBasis")}</MutedText>
-      {report ? <>
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" /> : report ? <>
         <Inline><strong>{m.text("performance.fixtureCount")}: {m.number(report.cohort.fixtureCount)}</strong>
           <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(report.asOf)) })}</MutedText></Inline>
         {report.cohort.fixtureCount === 0 ? <EmptyState headingLevel={3} title={m.text("performance.noPredictions")} />
           : <MarketGrid>{cells.map((cell) => <PredictionCard key={cell.family} cell={cell} locale={locale} />)}</MarketGrid>}
       </> : <EmptyState headingLevel={3} title={m.text("performance.dataUnavailable")} />}
     </Stack></DesktopInset>
-    {report && <DesktopInset as="section" aria-labelledby="league-performance"><Stack>
+    {(report || loading) && <DesktopInset as="section" aria-labelledby="league-performance"><Stack>
       <SectionHeading id="league-performance">{m.text("performance.leagueHeading")}</SectionHeading><MutedText>{m.text("performance.leagueBasis")}</MutedText>
-      {report.leagues.records.length ? report.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="matches" /> : report!.leagues.records.length ? report!.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
         : <EmptyState headingLevel={3} title={m.text(leagueOutOfRange ? "performance.leaguePageUnavailable" : "performance.noLeagueGroups")}
           {...(leagueOutOfRange ? { action: <ButtonLink href={leagueHref(1)}>{m.text("performance.firstLeaguePage")}</ButtonLink> } : {})} />}
-      {leaguePages > 1 && !leagueOutOfRange && <NumberedPagination page={report.leagues.page} pages={leaguePages}
+      {leaguePages > 1 && !leagueOutOfRange && <NumberedPagination page={report!.leagues.page} pages={leaguePages}
         labels={numberedPaginationLabels(m, m.text("performance.leaguePagination"))} href={leagueHref} />}
     </Stack></DesktopInset>}
+  </>;
+}
+function HistorySection({ locale, filters, history, loading = false }: SectionProps & {
+  history: PublishedSlipHistory | null; loading?: boolean;
+}) {
+  const m = createMessages(locale), pages = history ? Math.ceil(history.total / history.pageSize) : 0;
+  const outOfRange = Boolean(history && history.page > Math.max(1, pages));
+  const href = (page: number) => performancePageHref(filters, page, locale);
+  return (
     <DesktopInset as="section" aria-labelledby="published-performance"><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
-      {history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
-      {history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={`${filters.from} – ${filters.to} · EAT`} /> : history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
+      {loading ? <MutedText role="status">{m.text("performance.summary.loading")}</MutedText> : history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />
       </article>)}</SlipList> : <EmptyState headingLevel={3} title={m.text(history === null ? "performance.historyUnavailable" : outOfRange ? "performance.pageUnavailable" : "performance.historyEmpty")}
         {...(outOfRange ? { action: <ButtonLink href={href(1)}>{m.text("performance.firstPage")}</ButtonLink> } : {})} />}
       {pages > 1 && !outOfRange && <NumberedPagination page={history!.page} pages={pages} labels={numberedPaginationLabels(m, m.text("performance.historyPagination"))} href={href} />}
     </Stack></DesktopInset>
-    <DesktopInset><MutedText>{m.text("performance.noGuarantee")}</MutedText></DesktopInset>
-  </PerformanceSections>;
+  );
 }

@@ -80,3 +80,16 @@ test('an unavailable yesterday aggregate does not discard the current browsing p
   const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, defaultBestSlipsQuery());
   assert.equal(result.state, 'generated'); assert.equal(result.slips.length, 1); assert.equal(result.summary.statistics, null);
 });
+
+test('Best Slips starts its list and yesterday totals together', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const started = [];
+  const service = createBestSlipsBrowseService({ providerOdds: true, now: () => Date.parse(`${today}T12:00:00+03:00`),
+    read: async query => { started.push(query.period); await pending; return { ...page(1), browse: { ...page(1).browse, query } }; } });
+  const rendering = service({ tier: 'free', signedIn: false, mode: 'free' }, defaultBestSlipsQuery());
+  await new Promise(setImmediate);
+  assert.deepEqual(started, ['last30', 'yesterday']);
+  release();
+  assert.equal((await rendering).state, 'generated');
+});

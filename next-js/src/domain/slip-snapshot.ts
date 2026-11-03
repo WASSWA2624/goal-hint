@@ -47,6 +47,16 @@ export type SlipResult = Readonly<{
   /** Validated current/original-cycle presentation facts; never part of the persisted slip. */
   progress?: SlipMatchProgress;
 }>;
+
+/** Build once per stored batch. Keep all original-cycle candidates for each fixture in source order. */
+export function indexSlipResults(results: readonly SlipResult[]): (slip: BuiltSlip) => readonly SlipResult[] {
+  const byFixture = new Map<string, SlipResult[]>();
+  for (const result of results) {
+    const group = byFixture.get(result.fixtureId) ?? [];
+    group.push(result); byFixture.set(result.fixtureId, group);
+  }
+  return (slip) => slip.selections.flatMap((selection) => byFixture.get(selection.fixtureId) ?? []);
+}
 export const slipCompletedStatuses: readonly SettlementStatus[] = completedFixtureStatuses;
 export type SlipResultView = Readonly<{
   id: string; createdAt: string; slip: BuiltSlip; outcome: "won" | "lost" | "pending" | "void";

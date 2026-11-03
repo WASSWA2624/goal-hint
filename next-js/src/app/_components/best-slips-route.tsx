@@ -1,5 +1,9 @@
 import "server-only";
 
+import { Suspense } from "react";
+import { ServerThemeUntilHydrated } from "@/styles/provider";
+import { BestSlipsLoading } from "@/components/slips/best-slips-loading";
+
 import { BestSlips } from "@/components/slips/best-slips";
 import { CriteriaPanel } from "@/components/slips/slip-styles";
 import { TextLink } from "@/components/ui/controls";
@@ -11,35 +15,44 @@ import { bestSlipsMetadata } from "@/server/seo/metadata";
 import { homeBrowseLinks, redirectLegacyFeedQuery } from "@/server/seo/home-query";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
 import { homeStructuredData, serializeStructuredData } from "@/domain/discovery";
-import { PublicShell } from "./public-shell";
+import { getShellDate, PublicShell } from "./public-shell";
 
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
 export function createBestSlipsRoute({ read = readBestSlips, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
+  async function Content({ locale }: { locale: string }) {
+    const m = createMessages(locale);
+    const initialViewer = await access();
+    let published = await read(initialViewer, locale), viewer = await access();
+    if (initialViewer.tier !== viewer.tier) {
+      published = await read(viewer, locale);
+      viewer = await access();
+    }
+    const result = gateBestSlips(published, viewer);
+    const browse = homeBrowseLinks(result, locale);
+    return <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />
+      <Stack $gap="sm">
+        <BestSlips result={result} locale={locale} signedIn={viewer.signedIn} />
+        {browse.length > 0 && <CriteriaPanel as="nav" aria-labelledby="browse-predictions"><Stack $gap="sm">
+          <h2 id="browse-predictions">{m.text("bestSlips.browseTitle")}</h2>
+          <Inline>{browse.map(([href, label]) => <TextLink key={href} href={href} prefetch={false}>{m.text(label)}</TextLink>)}</Inline>
+        </Stack></CriteriaPanel>}
+      </Stack>
+    </>;
+  }
   return {
     async generateMetadata({ params, searchParams }: Props) {
       const [{ locale }, query] = await Promise.all([params, searchParams]);
       return bestSlipsMetadata(locale, query, policy);
     },
     async Page({ params, searchParams }: Props) {
-      const { locale } = await params, m = createMessages(locale);
+      const { locale } = await params;
       redirectLegacyFeedQuery(locale, await searchParams);
-      const initialViewer = await access();
-      let published = await read(initialViewer, locale), viewer = await access();
-      if (initialViewer.tier !== viewer.tier) {
-        published = await read(viewer, locale);
-        viewer = await access();
-      }
-      const result = gateBestSlips(published, viewer);
-      const browse = homeBrowseLinks(result, locale);
-      return <PublicShell locale={locale} current="best-slips" app compact>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />
-        <Stack $gap="sm">
-          <BestSlips result={result} locale={locale} signedIn={viewer.signedIn} />
-          {browse.length > 0 && <CriteriaPanel as="nav" aria-labelledby="browse-predictions"><Stack $gap="sm">
-            <h2 id="browse-predictions">{m.text("bestSlips.browseTitle")}</h2>
-            <Inline>{browse.map(([href, label]) => <TextLink key={href} href={href} prefetch={false}>{m.text(label)}</TextLink>)}</Inline>
-          </Stack></CriteriaPanel>}
-        </Stack>
+      const today = await getShellDate();
+      return <PublicShell locale={locale} today={today} current="best-slips" app compact>
+        <Suspense fallback={<BestSlipsLoading locale={locale} today={today} />}>
+          <ServerThemeUntilHydrated><Content locale={locale} /></ServerThemeUntilHydrated>
+        </Suspense>
       </PublicShell>;
     },
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, Suspense, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -19,7 +19,9 @@ import { EmptyState } from "@/components/ui/feedback";
 import { joinedDesktopSections, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
+import { FeedPerformancePlaceholder, FeedPerformanceSummary } from "@/components/match/feed-performance-summary";
+import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
+import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
@@ -50,9 +52,10 @@ const Results = styled(FeedStack)`
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, startingPriceUgx }: {
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, startingPriceUgx, summary }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
   startingPriceUgx: number | null;
+  summary?: Promise<FeedPerformanceSeed> | undefined;
   onStatus: (href: string, message: string) => void; onApply: (query: FeedQuery) => void;
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
@@ -74,7 +77,10 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
     messages.timeZone(utcInstantFromEpochMilliseconds(data.asOf))].join(" · ");
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} period={period} onApply={onApply} />
+    <Suspense fallback={<FeedPerformancePlaceholder query={query} data={data} period={period} />}>
+      <ServerThemeUntilHydrated><FeedPerformanceSummary query={query} today={today} data={data} enabled={enabled} period={period} onApply={onApply}
+        initial={summary} /></ServerThemeUntilHydrated>
+    </Suspense>
     <ResultsToolbar query={query} today={today} total={data.total} first={first}
       last={first + records.length - 1} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
@@ -126,9 +132,10 @@ function FallbackFeedControls({ query, today, leagues, onApply, showAccount, sub
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", startingPriceUgx = null }: {
+function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free", startingPriceUgx = null, summary }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
   startingPriceUgx?: number | null | undefined;
+  summary?: Promise<FeedPerformanceSeed>;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
   const desktopLayout = useDesktopLayout();
@@ -175,7 +182,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
         data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={apply}
-        startingPriceUgx={startingPriceUgx} />}
+        startingPriceUgx={startingPriceUgx} summary={summary} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

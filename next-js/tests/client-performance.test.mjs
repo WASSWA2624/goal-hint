@@ -134,3 +134,45 @@ test("private shared polls recover from a hung request without changing confirme
     assert.equal(source.snapshot(), source.expected);
   });
 });
+
+test("rapid route remounts reuse confirmed header state while explicit refresh, focus and expiry remain fresh", async t => {
+  const browser = new EventTarget(), document = new EventTarget();
+  document.visibilityState = "visible";
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: browser });
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document });
+  let unsubscribe = () => {}, calls = 0, now = Date.parse("2026-11-03T09:00:00Z");
+  t.after(() => {
+    unsubscribe();
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow); else delete globalThis.window;
+    if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument); else delete globalThis.document;
+  });
+  t.mock.method(Date, "now", () => now);
+  t.mock.method(globalThis, "fetch", async () => { calls++; return Response.json({ phone: "+256700000002", subscription: null }); });
+  await refreshMemberSession();
+  unsubscribe = subscribeMemberSession(() => {});
+  await new Promise(setImmediate);
+  assert.equal(calls, 1);
+  unsubscribe();
+  now += 4_999;
+  unsubscribe = subscribeMemberSession(() => {});
+  await new Promise(setImmediate);
+  assert.equal(calls, 1, "A remounted header cannot start another identical read immediately.");
+  await refreshMemberSession();
+  assert.equal(calls, 2, "Explicit refresh always checks the server.");
+  browser.dispatchEvent(new Event("focus"));
+  await new Promise(setImmediate);
+  assert.equal(calls, 3);
+  unsubscribe(); now += 5_000;
+  unsubscribe = subscribeMemberSession(() => {});
+  await new Promise(setImmediate);
+  assert.equal(calls, 4, "Expired display reuse never skips the next mount check.");
+  t.mock.method(globalThis, "fetch", async () => { calls++; return Response.json({ phone: "+256700000002",
+    subscription: { activeUntil: new Date(now + 100).toISOString(), paymentPending: false, canSubscribe: true } }); });
+  await refreshMemberSession();
+  unsubscribe(); now += 200;
+  unsubscribe = subscribeMemberSession(() => {});
+  await new Promise(setImmediate);
+  assert.equal(calls, 6, "An expired entitlement display bypasses the reuse window.");
+});

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { slipSnapshotOutcome, slipResultView, slipSnapshotSchema, slipSnapshotRules } from '../src/domain/slip-snapshot.ts';
+import { indexSlipResults, slipSnapshotOutcome, slipResultView, slipSnapshotSchema, slipSnapshotRules } from '../src/domain/slip-snapshot.ts';
 import { liveRecord, now } from './helpers/live-refresh-fixtures.mjs';
 
 const record = liveRecord(), id = '10000000-0000-4000-8000-000000000099';
@@ -9,6 +9,23 @@ const slip = { id: 'server-generated-selection', selections: [{ fixtureId: id, k
   family: 'match-result', selection: 'home-win', probability: 0.7, odds: '2.00', oddsBasis: 'bookmaker' }],
   totalOdds: '2.00', oddsBasis: 'bookmaker', averageProbability: 0.7 };
 const result = { fixtureId: id, status: 'finished-regulation', regulationVerified: true, regulationHome: 2, regulationAway: 1 };
+
+test('history result indexing stays linear and preserves multiple original cycles and first-match order', () => {
+  let reads = 0;
+  const results = Array.from({ length: 5_000 }, (_, index) => ({ ...result,
+    get fixtureId() { reads++; return String(index); } }));
+  const forecast = { cycleId: '10000000-0000-4000-8000-000000000001', revisionId: '10000000-0000-4000-8000-000000000002', publishedAt: now };
+  const bound = { ...slip, selections: [{ ...slip.selections[0], forecast }] };
+  const foreign = { ...result, forecast: { ...forecast, cycleId: 'replacement' }, family: 'match-result', selection: 'home-win', completed: true };
+  const original = { ...foreign, forecast, regulationHome: 0 }, duplicate = { ...original, regulationHome: 5 };
+  results.push(foreign, original, duplicate);
+  const resultsFor = indexSlipResults(results);
+  for (let index = 0; index < 5_000; index++) assert.equal(resultsFor({ ...slip, selections: [{ ...slip.selections[0], fixtureId: String(index) }] }).length, 1);
+  assert.ok(reads <= 10_000, `${reads} fixture reads must grow with the batch, not slip count times batch size.`);
+  assert.deepEqual(resultsFor(bound), [foreign, original, duplicate]);
+  assert.deepEqual(slipResultView('original', '', bound, resultsFor(bound)), slipResultView('original', '', bound, results));
+  assert.equal(slipResultView('original', '', bound, resultsFor(bound)).outcome, 'lost');
+});
 
 test('slip snapshots preserve long slips and exact uncapped totals within independent storage bounds', () => {
   const long = { ...slip, id: 'source:'.repeat(1000),

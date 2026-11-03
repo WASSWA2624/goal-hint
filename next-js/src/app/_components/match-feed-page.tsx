@@ -2,6 +2,7 @@ import "server-only";
 import type { ReactNode } from "react";
 import type { ReportingDate } from "@/domain/calendar";
 import type { FeedQuery } from "@/domain/feed-query";
+import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedSurface } from "./feed-surface";
 import { PublicShell } from "./public-shell";
@@ -10,6 +11,7 @@ import { PublicShell } from "./public-shell";
 export function MatchFeedPage(props: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
   startingPriceUgx?: number | null | undefined;
+  summary?: Promise<FeedPerformanceSeed>;
 }) {
   const { query, today } = props;
   return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current="today" showAccount={props.showAccount === true} app compact>
