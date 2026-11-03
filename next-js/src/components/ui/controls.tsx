@@ -350,7 +350,7 @@ const Segments = styled.fieldset`
   margin: 0;
   padding: 0;
   border: 0;
-  > legend { margin-block-end: var(--gh-spacing-1_5); font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  > legend { padding: 0; margin-block-end: var(--gh-spacing-1_5); font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > label { position: relative; min-inline-size: 0; }
   > label:first-of-type > span { border-start-start-radius: ${({ theme }) => theme.radius.control}; border-end-start-radius: ${({ theme }) => theme.radius.control}; }
   > label:last-of-type > span { border-start-end-radius: ${({ theme }) => theme.radius.control}; border-end-end-radius: ${({ theme }) => theme.radius.control}; }

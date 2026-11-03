@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseReportingDate, addReportingDays } from '../src/domain/calendar.ts';
+import { parseReportingDate } from '../src/domain/calendar.ts';
 import { defaultBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, parseBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { applyFeedPageDefaults, parseFeedQuery, feedQueryHref, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { selectFeedDates, resetFeedFilters } from '../src/domain/feed-controls.ts';
@@ -9,10 +9,10 @@ import { singleSlipPage } from '../src/domain/slip-pagination.ts';
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
 
 const today = parseReportingDate('2027-01-01');
-test('entry defaults separate yesterday performance from 30 civil days of browsing, with 20 results', () => {
+test('Best Slips defaults to today while Matches retains its separate historical browsing defaults', () => {
   const slips = defaultBestSlipsQuery();
-  assert.equal(slips.summary, 'yesterday');
-  assert.deepEqual(resolveBestSlipsDates(slips, today), { from: '2026-12-03', to: today });
+  assert.equal(slips.summary, undefined);
+  assert.deepEqual(resolveBestSlipsDates(slips, today), { from: today, to: today });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(slips), today), slips);
   const matches = applyFeedPageDefaults(parseFeedQuery({}, { today }), {});
   assert.equal(matches.pageSize, 20); assert.equal(matches.summary, 'yesterday');
@@ -31,17 +31,17 @@ test('entry defaults separate yesterday performance from 30 civil days of browsi
     { kind: 'date', date: '2026-12-31' }, 'Yesterday uses the EAT day even when the visitor is still on the previous date');
 });
 
-test('yesterday slip totals are read independently of list page, filter and today pending slips', async () => {
-  const calls = [], previous = addReportingDays(today, -1);
+test('today slip totals are independent of legacy date requests, result filters and pagination', async () => {
+  const calls = [];
   const counts = { total: 8, won: 3, lost: 1, pending: 2, void: 1, cancelled: 1 };
   const service = createBestSlipsBrowseService({ providerOdds: true, now: () => Date.parse(`${today}T12:00:00+03:00`),
     read: async (query) => { calls.push(query); return { day: today, state: 'generated', slips: [], searchLimited: false, partialCoverage: false,
-      statistics: query.period === 'yesterday' ? counts : { ...counts, total: 100, pending: 94 },
+      statistics: query.period === 'today' ? counts : { ...counts, total: 100, pending: 94 },
       browse: { query, total: 100, hasMore: true, nextCursor: null, pageSize: 20, ...resolveBestSlipsDates(query, today) } }; } });
-  const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, { ...defaultBestSlipsQuery(), page: 3 });
-  assert.deepEqual(result.summary, { asOf: Date.parse(`${today}T12:00:00+03:00`), from: previous, to: previous, statistics: counts });
+  const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, { ...defaultBestSlipsQuery(), period: 'last30', page: 3 });
+  assert.deepEqual(result.summary, { asOf: Date.parse(`${today}T12:00:00+03:00`), from: today, to: today, statistics: counts });
   assert.equal(result.browse.query.page, 3); assert.equal(result.browse.total, 100);
-  assert.deepEqual(calls[1], { period: 'yesterday', status: 'all', oddsBand: '1.5-5', page: 1 });
+  assert.deepEqual(calls[1], { period: 'today', status: 'all', oddsBand: '1.5-5', page: 1 });
   calls.length = 0;
   const selected = await service({ tier: 'full', signedIn: true, mode: 'off' }, { period: 'today', status: 'won', page: 1 });
   assert.equal(calls.length, 1); assert.equal(selected.summary.from, today); assert.equal(selected.summary.statistics, selected.statistics);
@@ -70,26 +70,26 @@ test('a yesterday aggregate can differ from the browsing total but never from th
   assert.throws(() => checkedPeriodPerformance(reply, { access: { tier: 'full', signedIn: true } }));
 });
 
-test('an unavailable yesterday aggregate does not discard the current browsing page or invent zero statistics', async () => {
+test('an unavailable today aggregate does not discard a legacy historical page or invent zero statistics', async () => {
   const service = createBestSlipsBrowseService({ providerOdds: true, now: () => Date.parse(`${today}T12:00:00+03:00`),
     read: async (query) => {
-      if (query.period === 'yesterday') throw new Error('summary unavailable');
+      if (query.period === 'today') throw new Error('summary unavailable');
       return { ...page(1), slips: [{ rank: 1, totalOdds: '5.00', averageProbability: .7, matchCount: 4 }],
         browse: { ...page(1).browse, query } };
     } });
-  const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, defaultBestSlipsQuery());
+  const result = await service({ tier: 'free', signedIn: false, mode: 'off' }, { ...defaultBestSlipsQuery(), period: 'last30' });
   assert.equal(result.state, 'generated'); assert.equal(result.slips.length, 1); assert.equal(result.summary.statistics, null);
 });
 
-test('Best Slips starts its list and yesterday totals together', async () => {
+test('legacy historical requests start their list and today totals together', async () => {
   let release;
   const pending = new Promise(resolve => { release = resolve; });
   const started = [];
   const service = createBestSlipsBrowseService({ providerOdds: true, now: () => Date.parse(`${today}T12:00:00+03:00`),
     read: async query => { started.push(query.period); await pending; return { ...page(1), browse: { ...page(1).browse, query } }; } });
-  const rendering = service({ tier: 'free', signedIn: false, mode: 'free' }, defaultBestSlipsQuery());
+  const rendering = service({ tier: 'free', signedIn: false, mode: 'free' }, { ...defaultBestSlipsQuery(), period: 'last30' });
   await new Promise(setImmediate);
-  assert.deepEqual(started, ['last30', 'yesterday']);
+  assert.deepEqual(started, ['last30', 'today']);
   release();
   assert.equal((await rendering).state, 'generated');
 });

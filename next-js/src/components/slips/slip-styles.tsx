@@ -77,7 +77,7 @@ export const SlipStack = styled(Stack)`
   }
   &[data-slip-builder-page], &[data-best-slips-page] { ${joinedDesktopSections} }
   &[data-slip-builder-page], &[data-best-slips-page] {
-    > p, > [data-best-slips-update-failed] { ${desktopContentPadding()} }
+    > p { ${desktopContentPadding()} }
   }
 `;
 /** Slip collections share one generous gap at every viewport width. */

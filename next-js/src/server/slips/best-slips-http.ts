@@ -3,7 +3,7 @@ import "server-only";
 import { privateMatchHeaders } from "../matches/public-http.ts";
 import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 import { gateBestSlips, readBestSlips } from "./best-slips.ts";
-import { BestSlipsQueryError, defaultBestSlipsQuery, parseBestSlipsQuery } from "../../domain/best-slips-query.ts";
+import { BestSlipsQueryError, parseBestSlipsQuery } from "../../domain/best-slips-query.ts";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { readBestSlipsBrowse } from "./best-slips-browse.ts";
 
@@ -11,14 +11,11 @@ export function createBestSlipsHandler({ read = readBestSlips, browse = readBest
   return async (request: Request) => {
     try {
       const parameters = new URL(request.url).searchParams;
-      const parsed = parameters.size ? parseBestSlipsQuery(parameters, getReportingDate(utcInstantFromEpochMilliseconds(now()))) : null;
+      const query = parameters.size ? parseBestSlipsQuery(parameters, getReportingDate(utcInstantFromEpochMilliseconds(now()))) : null;
       const viewer = await access(request);
-      const defaultPeriod = !parameters.has("period");
-      const queryFor = () => parsed && defaultPeriod ? { ...parsed, period: defaultBestSlipsQuery().period, summary: "yesterday" as const } : parsed;
-      let query = queryFor(), result = query ? await browse(viewer, query) : await read(viewer);
+      let result = query ? await browse(viewer, query) : await read(viewer);
       let finalViewer = await access(request);
       if (viewer.tier !== finalViewer.tier) {
-        query = queryFor();
         result = query ? await browse(finalViewer, query) : await read(finalViewer);
         const checked = await access(request);
         if (checked.tier !== finalViewer.tier) return Response.json({ error: "access-changed" }, { status: 503, headers: privateMatchHeaders });

@@ -1,6 +1,6 @@
-import { defaultSlipCriteria, buildSlips, compareSlipTotalOdds, type BuiltSlip, type SlipCriteria } from "./slip-builder.ts";
+import { defaultSlipCriteria, buildSlips, type BuiltSlip, type SlipCriteria } from "./slip-builder.ts";
 import { oddsRules } from "./odds.ts";
-import { jointSlipBuilder, type JointSlipModel } from "./joint-slip-model.ts";
+import { compareSlipEstimates, jointSlipBuilder, type JointSlipModel } from "./joint-slip-model.ts";
 export { jointSlipProbability, qualifiedJointModel, type JointSlipModel } from "./joint-slip-model.ts";
 import type { ReportingDate } from "./calendar.ts";
 import type { SlipBuildState } from "./slip-page.ts";
@@ -12,14 +12,14 @@ import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { CardSnapshotPick } from "./match-card.ts";
 import type { PeriodPerformance } from "./browse-period.ts";
 import type { ContentAccess } from "./paywall.ts";
-import { bestSlipBand, bestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
+import { bestSlipBand, bestSlipBandLimit, bestSlipOddsBands, defaultBestSlipOddsBand, type BestSlipOddsBand } from "./best-slip-odds-bands.ts";
 
-export const bestSlipsRules = Object.freeze({ minimumTotal: 150, maximumTotal: 499, count: 100, perBand: bestSlipBandLimit });
+export const bestSlipsRules = Object.freeze({ minimumTotal: bestSlipBand().minimumTotal, maximumTotal: bestSlipBand().maximumTotal,
+  count: bestSlipOddsBands.length * bestSlipBandLimit, perBand: bestSlipBandLimit });
 
 export type BestSlip = BuiltSlip & Readonly<{ estimatedProbability: number }>;
 export function compareBestSlips(left: BestSlip, right: BestSlip): number {
-  return right.estimatedProbability - left.estimatedProbability || left.selections.length - right.selections.length
-    || compareSlipTotalOdds(right.totalOdds, left.totalOdds) || left.id.localeCompare(right.id);
+  return compareSlipEstimates(left, right, left.estimatedProbability, right.estimatedProbability);
 }
 export type BestSlipSummary = Readonly<{
   rank: number; totalOdds: string; estimatedProbability: number; averageProbability: number; matchCount: number;

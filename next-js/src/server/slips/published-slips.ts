@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
 import { bestSlipBandCriteria, bestSlipViews, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
-import { bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicRank, defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
+import { bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { bestSlipsQueryRules, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { publishedSlipRules, type PublishedSlipHistory, type PublishedSlipHistoryQuery } from "../../domain/published-slips.ts";
@@ -11,7 +11,7 @@ import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotO
 import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
-import { serializeSlipCriteria, type BuiltSlip } from "../../domain/slip-builder.ts";
+import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -32,11 +32,11 @@ const publicationSchema = z.strictObject({ version: z.union([z.literal(1), z.lit
   count: z.number().int().min(1).max(publishedSlipRules.maximumDailySlips), searchLimited: z.boolean(), partialCoverage: z.boolean(),
 }).refine((value) => value.model.validFrom <= value.publishedAt && value.publishedAt < value.model.validUntil
   && getReportingDate(utcInstantFromEpochMilliseconds(value.publishedAt)) === value.day
-  && (value.version === 1 ? value.oddsBand === undefined : value.oddsBand !== undefined && value.count <= bestSlipBandLimit));
+  && (value.version === 1 ? value.oddsBand === undefined && value.count <= 100 : value.oddsBand !== undefined && value.count <= bestSlipBandLimit));
 const snapshotSchema = z.strictObject({ slip: slipSnapshotSchema, estimatedProbability: z.number().min(0).max(1) })
   .refine((value) => value.slip.selections.every((selection) => selection.forecast !== undefined), "Original forecasts are required.")
   .transform((value) => ({ ...value, slip: value.slip as BuiltSlip }));
-type Publication = z.infer<typeof publicationSchema>;
+type Publication = z.infer<typeof publicationSchema> & Readonly<{ bounds: SlipCriteria | null }>;
 type PublicationRow = { id: string; eatDate: Date; oddsBand?: string; publishedAt: Date; modelId: string; bodyJson: unknown; validIntegrity: unknown };
 type SlipRow = { id: string; publicationId: string; rank: number; snapshotJson: unknown; validIntegrity: unknown };
 export class SlipPublicationError extends Error {
@@ -58,7 +58,13 @@ function publication(row: PublicationRow): Publication {
   const value = publicationSchema.parse(historyJson(row.bodyJson));
   if (row.id !== slipPublicationIdentity(value.day, value.oddsBand) || (row.oddsBand ?? "legacy") !== (value.oddsBand ?? "legacy") || row.eatDate.toISOString().slice(0, 10) !== value.day ||
     row.publishedAt.getTime() !== value.publishedAt || row.modelId !== value.model.id) fail("unavailable");
-  return value;
+  return { ...value, bounds: value.oddsBand ? parseSlipCriteria(new URLSearchParams(value.criteria), value.day) : null };
+}
+/** Sealed publications retain their original bounds when the browsing policy changes. */
+function verifyPublishedOdds(parent: Publication, totalOdds: string) {
+  if (!parent.bounds) return;
+  const value = BigInt(totalOdds.replace(".", ""));
+  if (value < BigInt(parent.bounds.totalMin) || parent.bounds.totalMax !== undefined && value > BigInt(parent.bounds.totalMax)) fail("unavailable");
 }
 const databaseTime = async (tx: Prisma.TransactionClient) => (await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime();
 export function parsePublishedSlipHistoryQuery(input: PublishedSlipHistoryQuery): PublishedSlipHistoryQuery {
@@ -187,7 +193,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         for (const [index, row] of items.entries()) {
           const snapshot = snapshots[index]!, parent = parents.get(row.publicationId)!;
           const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
-          if (parent.oddsBand && parent.oddsBand !== band) fail("unavailable");
+          verifyPublishedOdds(parent, snapshot.slip.totalOdds);
           if (oddsBand && oddsBand !== band) continue;
           const slipResults = resultsFor(snapshot.slip), completed = slipCompleted(snapshot.slip, slipResults);
           if (completedOnly && !completed) continue;
@@ -212,12 +218,26 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const asOf = await databaseTime(tx);
         const scope = allDates ? cursor ? Prisma.sql`AND eatDate<=${new Date(`${cursor.day}T00:00:00Z`)}` : Prisma.empty
           : Prisma.sql`AND eatDate>=${new Date(`${dates.from}T00:00:00Z`)} AND eatDate<=${new Date(`${dates.to}T00:00:00Z`)}`;
-        const publicationLimit = allDates ? bestSlipsQueryRules.scanDays : bestSlipsQueryRules.maximumDays;
+        const sourceBands = bestSlipPublicationBands(query.oddsBand);
+        const publicationLimit = (allDates ? bestSlipsQueryRules.scanDays : bestSlipsQueryRules.maximumDays) * sourceBands.length;
         const publications = await tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
-          FROM DailySlipPublication WHERE publishedAt<=${new Date(asOf)} AND oddsBand IN ('legacy',${query.oddsBand ?? defaultBestSlipOddsBand}) ${scope} ORDER BY eatDate DESC LIMIT ${publicationLimit + 1}`);
+          FROM DailySlipPublication WHERE publishedAt<=${new Date(asOf)} AND oddsBand IN ('legacy',${Prisma.join([...sourceBands])}) ${scope}
+          ORDER BY eatDate DESC, FIELD(oddsBand,'legacy',${Prisma.join([...sourceBands])}) LIMIT ${publicationLimit + 1}`);
         if (!allDates && publications.length > publicationLimit) fail("unavailable");
-        const hasOlder = allDates && publications.length > publicationLimit;
-        const selected = publications.slice(0, publicationLimit), parents = new Map(selected.map((row) => [row.id, publication(row)]));
+        const scannedDays = new Set<number>();
+        let selected = publications.slice(0, publicationLimit).filter(row => {
+          if (!allDates) return true;
+          const date = row.eatDate.getTime();
+          if (!scannedDays.has(date) && scannedDays.size >= bestSlipsQueryRules.scanDays) return false;
+          scannedDays.add(date); return true;
+        });
+        const hasOlder = allDates && publications.length > selected.length;
+        // Never skip the rest of a civil day when a bounded scan ends between adjacent bands.
+        if (hasOlder && selected.at(-1)?.eatDate.getTime() === publications[publicationLimit]?.eatDate.getTime()) {
+          const incompleteDay = selected.at(-1)!.eatDate.getTime();
+          selected = selected.filter(row => row.eatDate.getTime() !== incompleteDay);
+        }
+        const parents = new Map(selected.map((row) => [row.id, publication(row)]));
         const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const views: BestSlipView[] = [];
         let total = 0;
@@ -245,7 +265,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             .sort((left, right) => right.parent.day.localeCompare(left.parent.day) || publicRank(left.parent, left.row.rank) - publicRank(right.parent, right.row.rank));
           for (const { row, snapshot, parent } of ordered) {
             const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
-            if (parent.oddsBand && parent.oddsBand !== band) fail("unavailable");
+            verifyPublishedOdds(parent, snapshot.slip.totalOdds);
             if (band !== (query.oddsBand ?? defaultBestSlipOddsBand)) continue;
             const slipResults = resultsFor(snapshot.slip);
             const completed = slipCompleted(snapshot.slip, slipResults);
@@ -280,10 +300,12 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       const query = parsePublishedSlipHistoryQuery(input);
       return transaction(async (tx) => {
         const asOf = await databaseTime(tx);
-        const publications = await tx.$queryRaw<PublicationRow[]>`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
+        const sourceBands = bestSlipPublicationBands(query.oddsBand);
+        const publicationLimit = publishedSlipRules.maximumDays * sourceBands.length;
+        const publications = await tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
           FROM DailySlipPublication WHERE eatDate>=${new Date(`${query.from}T00:00:00Z`)} AND eatDate<=${new Date(`${query.to}T00:00:00Z`)}
-          AND oddsBand IN ('legacy',${query.oddsBand ?? defaultBestSlipOddsBand}) AND publishedAt<=${new Date(asOf)} ORDER BY eatDate DESC LIMIT 32`;
-        if (publications.length > publishedSlipRules.maximumDays) fail("unavailable");
+          AND oddsBand IN ('legacy',${Prisma.join([...sourceBands])}) AND publishedAt<=${new Date(asOf)} ORDER BY eatDate DESC LIMIT ${publicationLimit + 1}`);
+        if (publications.length > publicationLimit) fail("unavailable");
         const parents = new Map(publications.map((row) => [row.id, publication(row)]));
         const rows = publications.length ? await tx.$queryRaw<SlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
           FROM PublishedSlip WHERE publicationId IN (${Prisma.join([...parents.keys()])}) ORDER BY publicationId,\`rank\`
@@ -300,7 +322,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         for (const [index, row] of rows.entries()) {
           const parent = parents.get(row.publicationId)!, snapshot = snapshots[index]!;
           const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
-          if (parent.oddsBand && parent.oddsBand !== band) fail("unavailable");
+          verifyPublishedOdds(parent, snapshot.slip.totalOdds);
           if (band !== (query.oddsBand ?? defaultBestSlipOddsBand)) continue;
           const slipResults = resultsFor(snapshot.slip);
           if (completedOnly && !slipCompleted(snapshot.slip, slipResults)) continue;

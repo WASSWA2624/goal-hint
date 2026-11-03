@@ -3,7 +3,7 @@ import test from 'node:test';
 import { addReportingDays, parseReportingDate } from '../src/domain/calendar.ts';
 import { bestSlipsQueryRules, parseBestSlipsQuery } from '../src/domain/best-slips-query.ts';
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
-import { createPublishedSlips } from '../src/server/slips/published-slips.ts';
+import { createPublishedSlips, slipPublicationIdentity } from '../src/server/slips/published-slips.ts';
 import { gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
@@ -71,7 +71,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
   });
   return { store, reads, resultBatches, outcomes, publications, slips, legs, corrupt() { corrupt = true; } };
 }
-const query = (input = {}) => parseBestSlipsQuery(input, today);
+const query = (input = {}) => parseBestSlipsQuery({ period: 'last30', ...input }, today);
 
 test('publication pages show 20 slips and preserve every original rank across page boundaries', async () => {
   for (const count of [20, 21, 50, 51, 100]) {
@@ -131,7 +131,7 @@ test('exact custom ranges resolve forecast results in bounded batches without tr
   const f = fixture(64, 4), result = await f.store.browse(query({ period: 'custom', from: addReportingDays(today, -63), to: today, status: 'lost' }), today);
   assert.equal(result.browse.total, 64); assert.equal(result.slips.length, bestSlipsQueryRules.pageSize); assert.equal(result.browse.hasMore, true);
   assert.equal(result.statistics.total, 256); assert.deepEqual(f.resultBatches, [124, 124, 8]);
-  assert.ok(f.reads.filter((read) => read.text.includes('FROM PublishedSlip')).every((read) => read.values.at(-1) === 3101));
+  assert.ok(f.reads.filter((read) => read.text.includes('FROM PublishedSlip')).every((read) => read.values.at(-1) === 3721));
 });
 
 test('All dates continues within publication ranks without skipping and never claims a partial total', async () => {
@@ -159,14 +159,46 @@ test('an empty All dates scan exposes a continuation for matching older publicat
   assert.ok(f.resultBatches.every((count) => count <= bestSlipsQueryRules.scanDays * 4));
 });
 
+test('All dates pages retain every adjacent-band historical boundary and civil-day continuation', async () => {
+  const f = fixture(35, 4), parents = [];
+  for (const original of f.publications) {
+    const rows = f.slips.filter(row => row.publicationId === original.id);
+    for (const [index, oddsBand] of ['50-100', '100-200'].entries()) {
+      const day = original.bodyJson.day, id = slipPublicationIdentity(day, oddsBand);
+      const criteria = `dateFrom=${day}&dateTo=${day}&totalMin=${index ? '100.00' : '50.00'}&totalMax=${index ? '200.00' : '100.00'}`;
+      parents.push({ ...original, id, oddsBand, bodyJson: { ...original.bodyJson, version: 2, oddsBand, criteria, count: 2 } });
+      for (const row of rows.slice(index * 2, index * 2 + 2)) {
+        const oldId = row.id;
+        row.publicationId = id; row.rank -= index * 2;
+        row.snapshotJson.slip.totalOdds = index ? '150.00' : '100.00';
+        row.snapshotJson.slip.selections[0].odds = row.snapshotJson.slip.totalOdds;
+        row.id = evidenceFingerprint({ publicationId: id, rank: row.rank, snapshot: row.snapshotJson });
+        f.legs.filter(leg => leg.slipId === oldId).forEach(leg => { leg.slipId = row.id; });
+      }
+    }
+  }
+  f.publications.splice(0, f.publications.length, ...parents);
+  const seen = [];
+  let cursor;
+  for (let page = 1; page <= 8; page++) {
+    const result = await f.store.browse(query({ period: 'all', oddsBand: '100-200', page: String(page), ...(cursor ? { cursor } : {}) }), today);
+    seen.push(...result.slips);
+    if (!result.browse.hasMore) break;
+    cursor = result.browse.nextCursor;
+  }
+  assert.equal(seen.length, 140); assert.equal(new Set(seen.map(row => row.id)).size, 140);
+  assert.deepEqual(seen.slice(0, 4).map(row => row.rank), [81, 82, 101, 102]);
+  assert.equal(seen.at(-1).publicationDay, addReportingDays(today, -34));
+});
+
 test('the browse service retains public counts and releases complete original selections beside locked previews', async () => {
   const f = fixture(), result = await f.store.browse(query(), today), gated = gateBestSlips(result, free);
   assert.equal(gated.slips.length, 4); assert.equal(gated.slips.filter(view => view.slip && view.completed).length, 3);
   assert.equal(gated.slips[0].publicationDay, today); assert.equal(gated.slips[0].outcome, 'won');
   assert.equal(gated.slips.find(view => view.rank === 3).preview[0].pick, null);
   const read = createBestSlipsBrowseService({ read: async (selected, day, _locale, completedOnly) => f.store.browse(selected, day, completedOnly), providerOdds: true, now: () => now });
-  assert.deepEqual(await read(free, query()), { ...gated, summary: { asOf: now, from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
-  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { asOf: now, from: result.browse.from, to: result.browse.to, statistics: result.statistics } });
+  assert.deepEqual(await read(free, query()), { ...gated, summary: { asOf: now, from: today, to: today, statistics: result.statistics } });
+  assert.deepEqual(await read(full, query()), { ...gateBestSlips(result, full), summary: { asOf: now, from: today, to: today, statistics: result.statistics } });
 });
 
 test('a replacement cycle on the same fixture cannot overwrite the original published outcome or row state', async () => {
@@ -183,7 +215,7 @@ test('invalid ranges, unsealed publications and read failures fail closed; disab
   const service = createBestSlipsBrowseService({ read: async () => { reads++; throw new Error('private database detail'); }, providerOdds: true, now: () => now });
   const failure = await service(full, query()); assert.equal(failure.state, 'data-unavailable'); assert.deepEqual(failure.slips, []);
   const off = createBestSlipsBrowseService({ read: async () => { reads++; throw new Error('must not read'); }, providerOdds: false, now: () => now });
-  assert.equal((await off(full, query())).state, 'odds-unavailable'); assert.equal(reads, 1);
+  assert.equal((await off(full, query())).state, 'odds-unavailable'); assert.equal(reads, 2);
   assert.doesNotMatch(JSON.stringify(failure), /private database detail/);
 });
 

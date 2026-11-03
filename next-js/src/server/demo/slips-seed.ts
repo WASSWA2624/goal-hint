@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getPublicationDeadline, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { bestSlipBandCriteria } from "../../domain/best-slips.ts";
+import { bestSlipBandCriteria, compareBestSlips } from "../../domain/best-slips.ts";
 import { bestSlipOddsBands, bestSlipBand, bestSlipBandLimit, defaultBestSlipOddsBand, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
 import { slipPublicationIdentity } from "../slips/published-slips.ts";
 import { selectedCardPrediction, selectedCardPrice } from "../../domain/match-card.ts";
@@ -21,7 +21,7 @@ import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { DEMO_MATCHES_PER_DAY } from "./api-football.ts";
 
 export const demoSlipRules = Object.freeze({ count: bestSlipBandLimit, minimumSelections: 1, maximumSelections: 8, minimumProbability: 0,
-  minimumTotalHundredths: 150, maximumTotalHundredths: 499, minimumLeadMs: 30 * 60_000 });
+  minimumTotalHundredths: bestSlipBand().minimumTotal, maximumTotalHundredths: bestSlipBand().maximumTotal, minimumLeadMs: 30 * 60_000 });
 export type DemoSlipCandidate = Readonly<{ selection: SlipSelection; outcome: SettlementOutcomeStatus }>;
 class IncompleteDemoPublication extends Error {}
 
@@ -58,7 +58,7 @@ export function buildDemoSlipSnapshots(date: string, candidates: readonly DemoSl
       && (historical ? outcome === "correct" || outcome === "incorrect" || outcome === "void" :
         selection.kickoffAt >= dayStart + demoSlipRules.minimumLeadMs
           && (outcome === "pending" || outcome === "correct" || outcome === "incorrect"));
-  }).sort((left, right) => Number(right.selection.odds) - Number(left.selection.odds) ||
+  }).sort((left, right) => right.selection.probability - left.selection.probability || Number(right.selection.odds) - Number(left.selection.odds) ||
     left.selection.fixtureId.localeCompare(right.selection.fixtureId) || left.selection.family.localeCompare(right.selection.family));
   const used = new Set<string>(), slips: BuiltSlip[] = [];
   const accept = (selected: readonly SlipSelection[]) => {
@@ -178,8 +178,11 @@ export async function ensureDemoSlipDates(database: DatabaseRuntime, dates: read
           }
           return;
         }
-        for (const [index, slip] of slips.entries()) {
-          const snapshot = { slip, estimatedProbability: slip.selections.reduce((value, selection) => value * selection.probability, 1) };
+        // Synthetic independent examples use the production ranking comparator; no live model is approved here.
+        const ranked = slips.map(slip => ({ ...slip, estimatedProbability: slip.selections.reduce((value, selection) => value * selection.probability, 1) }))
+          .sort(compareBestSlips);
+        for (const [index, { estimatedProbability, ...slip }] of ranked.entries()) {
+          const snapshot = { slip, estimatedProbability };
           const snapshotJson = JSON.stringify(snapshot), rank = index + 1;
           // MySQL's JSON renderer can normalize a binary64 value by one ULP.
           // Bind the identity to the exact value the ordinary reader receives.

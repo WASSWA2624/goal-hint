@@ -11,7 +11,7 @@ def verify(origin):
         html = visible_html(response.text)
         assert html.count("data-best-slips-filter-trigger") == 1
         assert html.count("data-best-slips-applied") == 1
-        assert html.count("data-best-slips-publication") == 1
+        assert "data-best-slips-publication" not in html
         assert html.count("data-best-slips-summary") == 1
         assert "data-list-divider" not in html
         assert "data-performance-heading" in html and "Advanced filters" in html

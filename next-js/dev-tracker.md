@@ -240,3 +240,24 @@ passed at 320, 390, 1024 and 1440px, including draft cancellation, combined Appl
 Reset, custom-date validation and native keyboard selection. Screenshots were
 reviewed. See [plan 267](dev-plan/267-desktop-best-slips-summary-and-filter-options.md)
 for fixture limitations. Source integration is complete; deployment is separate.
+
+## 268 Today's Best Slips and shared filters — 4 November 2026
+
+**Completed:** Best Slips defaults to today in EAT, with today's performance,
+closely attached headings, aligned section edges and a separate browsing gap.
+Advanced Filters uses the same six two-decimal odds choices on mobile and
+desktop, with a more visible themed Reset button. Mobile shows Today’s best
+slips, the odds range and full range/total count on the body background, 2px
+above the list. Inline updating text and failed-update banners above retained
+slips are removed. Empty/end guidance reflects the remaining odds filter.
+
+Shared engine ordering uses whole-slip probability, more matches, then odds.
+The 34.7% audit traced an original synthetic forecast; future demo selection
+now follows probability first. Sealed forecasts and canonical history remain
+intact. A sixth-band migration adds 100.00–200.00 without rewriting history.
+
+208 targeted unit tests, 165 Python tests, genuine disposable MySQL integration,
+application types, focused lint, theme contract, scoped production rendering
+and eight light/dark browser combinations passed. See
+[plan 268](dev-plan/268-today-best-slips-odds-and-probability-review.md).
+The migration was applied only to the owned demo; hosted rollout is separate.

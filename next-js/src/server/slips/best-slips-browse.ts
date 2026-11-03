@@ -8,7 +8,6 @@ import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { getDatabase } from "../database/client.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
-import { yesterday } from "../../domain/browse-period.ts";
 import { gateBestSlips } from "./best-slips.ts";
 import { createPublishedSlips } from "./published-slips.ts";
 
@@ -38,14 +37,13 @@ export function createBestSlipsBrowseService({ read = readPublishedBestSlips, pr
         hasMore: false, nextCursor: null, ...dates } } as const;
     if (!providerOdds) return { ...empty, state: "odds-unavailable" };
     try {
-      const date = yesterday(day);
-      const [result, yesterdaySummary] = await Promise.all([
+      const representsToday = dates.from === day && dates.to === day;
+      const [result, todaySummary] = await Promise.all([
         read(query, day, _locale, false),
-        query.summary === "yesterday" ? read({ period: "yesterday", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null) : null,
+        representsToday ? null : read({ period: "today", status: "all", oddsBand: query.oddsBand ?? defaultBestSlipOddsBand, page: 1 }, day, _locale, false).catch(() => null),
       ]);
-      const summary = query.summary === "yesterday" ? yesterdaySummary : result;
-      return gateBestSlips({ ...result, summary: { asOf, from: query.summary ? date : dates.from,
-        to: query.summary ? date : dates.to, statistics: summary?.statistics ?? null } }, access);
+      const summary = representsToday ? result : todaySummary;
+      return gateBestSlips({ ...result, summary: { asOf, from: day, to: day, statistics: summary?.statistics ?? null } }, access);
     }
     catch { return { ...empty, state: "data-unavailable" }; }
   };

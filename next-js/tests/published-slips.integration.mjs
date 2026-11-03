@@ -21,7 +21,8 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
     CREATE TABLE PredictionSet (id CHAR(36) NOT NULL, cycleId CHAR(36) NOT NULL, fixtureId CHAR(36) NOT NULL,
       PRIMARY KEY(id), UNIQUE KEY(id,cycleId,fixtureId)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;`);
   for (const name of ['20261021110000_saved_slips','20261025113516_daily_slip_publications','20261028130000_daily_slip_capacity','20261029180000_shared_slips']) await root.query(await migration(name));
-  const at = (await root.query('SELECT UTC_TIMESTAMP(3) AS at'))[0].at.getTime();
+  // Read an epoch to keep the raw connector's host-local DATETIME decoding out of the EAT clock.
+  const at = Number((await root.query('SELECT UNIX_TIMESTAMP(UTC_TIMESTAMP(3))*1000 AS epoch'))[0].epoch);
   const day = getReportingDate(utcInstantFromEpochMilliseconds(at)), yesterday = addReportingDays(day,-1);
   const fixtureId = randomUUID(), cycleId = randomUUID(), revisionId = randomUUID(), accountId = randomUUID();
   await root.query('INSERT INTO FootballFixture(id) VALUES (?)', [fixtureId]);
@@ -47,6 +48,7 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   }
   const before=await root.query('SELECT bodyJson,integrity FROM DailySlipPublication');
   await root.query(await migration('20261103120000_transient_slips_and_odds_bands'));
+  await root.query(await migration('20261104090000_six_best_slip_odds_bands'));
   assert.deepEqual(await root.query('SELECT bodyJson,integrity FROM DailySlipPublication'),before);
   assert.equal((await root.query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('SavedSlip','SavedSlipFixture')")).length,0);
   assert.equal(await database.query(tx=>tx.slipConfiguration.count()),1);
@@ -62,8 +64,13 @@ test('MySQL cleanup preserves presets, legacy publications and explicit public l
   if(kickoffAt-at<600000){t.diagnostic('Cleanup and legacy checks passed; live publication skipped at the EAT day cutoff.');return;}
   const current={...slip,estimatedProbability:0.7,selections:slip.selections.map(selection=>({...selection,kickoffAt,forecast:{...selection.forecast,publishedAt:at-1000}}))};
   const input={day,slips:[current],searchLimited:false,partialCoverage:false,model:{...model,estimate:()=>0.7},verifyModel:()=>true,verifyPublicOdds:()=>true};
+  const upper = { ...current, totalOdds: '150.00', selections: current.selections.map(selection => ({ ...selection, odds: '150.00' })) };
+  assert.deepEqual((await Promise.all([store.publish({ ...input, slips: [upper], oddsBand: '100-200' }),
+    store.publish({ ...input, slips: [upper], oddsBand: '100-200' })])).sort(), ['already-published', 'published']);
+  const upperDay = await store.day(day, false, '100-200');
+  assert.equal(upperDay.slips[0].rank, 101); assert.equal(upperDay.slips[0].totalOdds, '150.00');
   assert.deepEqual((await Promise.all([store.publish(input),store.publish(input)])).sort(),['already-published','published']);
-  assert.equal((await store.browse(defaultBestSlipsQuery(),day)).slips.length,2);
+  assert.equal((await store.browse(defaultBestSlipsQuery(),day)).slips.length,1);
   assert.equal((await store.history({from:day,to:day,page:1,pageSize:10})).records[0].outcome,'lost');
   const high={...current,totalOdds:'7.00',selections:current.selections.map(selection=>({...selection,odds:'7.00'}))};
   assert.equal(await store.publish({...input,oddsBand:'5-10',slips:[high]}),'published');

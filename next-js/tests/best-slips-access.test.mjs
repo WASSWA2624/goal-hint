@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { addReportingDays, parseReportingDate } from '../src/domain/calendar.ts';
 import { defaultBestSlipsQuery } from '../src/domain/best-slips-query.ts';
-import { createPublishedBestSlipsService, gateBestSlips } from '../src/server/slips/best-slips.ts';
+import { createPublishedBestSlipsService, createPublicBestSlipDayService, gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
 
 const today = parseReportingDate('2026-10-30'), yesterday = addReportingDays(today, -1), tomorrow = addReportingDays(today, 1);
@@ -19,6 +19,24 @@ function publication(day) {
 }
 const result = (slips) => ({ day: today, state: 'generated', searchLimited: false, partialCoverage: false, slips });
 
+test('canonical links read the complete original day, including higher bands and older below-2.50 quotes', async () => {
+  const calls = [];
+  const archived = (rank, odds) => {
+    const view = publication(yesterday);
+    return { ...view, rank, totalOdds: odds, slip: { ...view.slip, totalOdds: odds,
+      selections: view.slip.selections.map(selection => ({ ...selection, odds })) } };
+  };
+  const low = archived(1, '2.00'), high = archived(101, '150.00'), active = { ...archived(41, '15.00'), completed: false, outcome: 'pending' };
+  const service = createPublicBestSlipDayService({ providerOdds: true,
+    read: async (...args) => { calls.push(args); return { ...result([low, active, high]), day: yesterday }; } });
+  const view = await service(guest, { period: 'custom', from: yesterday, to: yesterday, status: 'all', page: 5 });
+  assert.deepEqual(calls[0], [yesterday, 'en', false, null]);
+  assert.deepEqual(view.slips.map(slip => [slip.rank, slip.totalOdds]), [[1, '2.00'], [41, '15.00'], [101, '150.00']]);
+  assert.equal(view.entitled, false);
+  assert.ok(view.slips[0].slip && view.slips[2].slip);
+  assert.equal(view.slips[1].slip, undefined);
+});
+
 test('all viewers start today with public previews and subscriber predictions', async () => {
   const dates = [];
   const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at,
@@ -29,7 +47,7 @@ test('all viewers start today with public previews and subscriber predictions', 
     assert.equal(data.slips[0].publicationDay, today);
     assert.equal(!!data.slips[0].slip, entitled);
     assert.equal(data.slips[0].preview?.[0].pick ?? null, null);
-    assert.equal(defaultBestSlipsQuery(entitled).period, 'last30');
+    assert.equal(defaultBestSlipsQuery().period, 'today');
   }
   assert.deepEqual(dates, [today, today, today]);
 });
@@ -72,7 +90,7 @@ test('API filters without a date use the viewer default, and unavailable default
       browse: async (_viewer, query) => { received = query; return result([]); } });
     const response = await handler(new Request('https://goalhint.com/api/best-slips?status=won'));
     assert.equal(response.status, 200); assert.equal(received.status, 'won');
-    assert.equal(received.period, 'last30');
+    assert.equal(received.period, 'today'); assert.equal(received.summary, undefined);
     const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at, read: async () => { throw new Error('private'); } });
     const data = await read(viewer);
     assert.equal(data.entitled, viewer.tier === 'full'); assert.equal(data.state, 'data-unavailable'); assert.deepEqual(data.slips, []);

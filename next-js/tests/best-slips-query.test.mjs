@@ -10,9 +10,8 @@ test('slip presets resolve inclusive EAT publication dates across month and year
     last3: ['2026-10-27', '2026-10-29'], last7: ['2026-10-23', '2026-10-29'], last30: ['2026-09-30', '2026-10-29'],
     next3: ['2026-10-30', '2026-11-01'], next7: ['2026-10-30', '2026-11-05'], next30: ['2026-10-30', '2026-11-28'], all: [null, null],
   };
-  assert.deepEqual(parseBestSlipsQuery({}, today), { period: "last30", status: "all", page: 1, oddsBand: '1.5-5', });
-  assert.deepEqual(defaultBestSlipsQuery(true), { period: 'last30', status: 'all', page: 1, oddsBand: '1.5-5', summary: 'yesterday' });
-  assert.deepEqual(defaultBestSlipsQuery(), { period: 'last30', status: 'all', page: 1, oddsBand: '1.5-5', summary: 'yesterday' });
+  assert.deepEqual(parseBestSlipsQuery({}, today), { period: "today", status: "all", page: 1, oddsBand: '1.5-5' });
+  assert.deepEqual(defaultBestSlipsQuery(), { period: 'today', status: 'all', page: 1, oddsBand: '1.5-5' });
   for (const [period, [from, to]] of Object.entries(expected)) {
     assert.deepEqual(resolveBestSlipsDates(parseBestSlipsQuery({ period }, today), today), { from, to });
   }
@@ -57,9 +56,9 @@ test('void and cancelled result filters survive parsing and serialization', () =
 });
 
 test('All dates cursors retain within-publication ranks and reject arbitrary cursor data', () => {
-  const query = parseBestSlipsQuery({ period: 'all', status: 'pending', page: '2', cursor: '2026-10-28:100' }, today);
+  const query = parseBestSlipsQuery({ period: 'all', status: 'pending', page: '2', cursor: '2026-10-28:120' }, today);
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(query), today), query);
-  for (const cursor of ['2026-10-28:0', '2026-10-28:101', '2026-02-30:3', '2026-10-28:1;DROP TABLE', '2026-10-28:01']) {
+  for (const cursor of ['2026-10-28:0', '2026-10-28:121', '2026-02-30:3', '2026-10-28:1;DROP TABLE', '2026-10-28:01']) {
     assert.throws(() => parseBestSlipsQuery({ period: 'all', cursor }, today), BestSlipsQueryError);
   }
   assert.throws(() => parseBestSlipsQuery({ period: 'today', cursor: '2026-10-28:1' }, today), BestSlipsQueryError);

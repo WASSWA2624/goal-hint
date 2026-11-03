@@ -1,6 +1,6 @@
 "use client";
 
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import type { ReactNode } from "react";
 import { desktopSectionFrame } from "@/components/ui/layout";
 import { controlHeight } from "@/components/ui/control-layout";
@@ -16,12 +16,13 @@ const Panel = styled.section`
   border-radius: ${({ theme }) => theme.radius.none};
   ${desktopSectionFrame}
 `;
-const Content = styled.div`
-  display: grid; gap: var(--gh-spacing-0_75); min-inline-size: 0;
+const Content = styled.div<{ $compactHeader: boolean }>`
+  display: grid; gap: ${({ $compactHeader }) => $compactHeader ? "var(--gh-spacing-0_25)" : "var(--gh-spacing-0_75)"}; min-inline-size: 0;
   padding-block-end: var(--gh-spacing-1);
 `;
-const Header = styled(SectionHeader)`
+const Header = styled(SectionHeader)<{ $compactHeader: boolean }>`
   justify-content: space-between;
+  ${({ $compactHeader }) => $compactHeader && css`padding-block-end: 0;`}
   > p { ${sectionHeaderMetadata} margin-inline-start: auto; text-align: end; }
 `;
 const Counts = styled.dl`
@@ -93,10 +94,11 @@ const outcomes = [
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
 export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, actions, headingLevel = 2,
-  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, resultAttributes }: {
+  showCoverage = true, showAll = true, activeResult, onResult, disabled = false, resultAttributes, compactHeader = false }: {
   counts: PerformanceSummaryCounts | null; locale: string; kind: "matches" | "slips" | "predictions";
   title?: string | undefined; period?: string | undefined; headingLevel?: 2 | 3 | undefined;
   actions?: ReactNode;
+  compactHeader?: boolean;
   showCoverage?: boolean | undefined; showAll?: boolean;
   activeResult?: PredictionResult | undefined; onResult?: ((result: PredictionResult | undefined) => void) | undefined; disabled?: boolean;
   resultAttributes?: ((result: PredictionResult | undefined) => Record<`data-${string}`, string>) | undefined;
@@ -106,8 +108,8 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const number = (value: number) => pending ? "—" : m.number(value);
   return <Panel role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
-    <Content>
-      <Header data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
+    <Content $compactHeader={compactHeader}>
+      <Header $compactHeader={compactHeader} data-performance-heading>{headingLevel === 3 ? <h3>{label}</h3> : <h2>{label}</h2>}
         {period && <p data-performance-period>{period}</p>}
       </Header>
       <Figures><Counts data-performance-figures>

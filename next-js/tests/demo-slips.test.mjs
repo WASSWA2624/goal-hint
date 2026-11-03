@@ -18,13 +18,17 @@ function candidate(index, date = "2026-10-28", outcome = "pending") {
 
 test("editorial bands test exact products and assign displayed boundaries consistently", () => {
   const quote = odds => demoSlipQuote(odds.map(value => ({ odds: value })));
-  assert.deepEqual(quote(["1.01", "1.01", "1.47"]), { totalOdds: "1.50", belowMinimum: true, aboveMaximum: false });
-  assert.deepEqual(quote(["1.06", "1.55", "3.04"]), { totalOdds: "4.99", belowMinimum: false, aboveMaximum: true });
-  assert.deepEqual(quote(["1.50"]), { totalOdds: "1.50", belowMinimum: false, aboveMaximum: false });
+  assert.deepEqual(quote(["1.01", "1.01", "2.45"]), { totalOdds: "2.50", belowMinimum: true, aboveMaximum: false });
+  assert.deepEqual(quote(["1.06", "4.72"]), { totalOdds: "5.00", belowMinimum: false, aboveMaximum: true });
+  assert.deepEqual(quote(["2.50"]), { totalOdds: "2.50", belowMinimum: false, aboveMaximum: false });
   assert.deepEqual(quote(["4.99"]), { totalOdds: "4.99", belowMinimum: false, aboveMaximum: false });
-  assert.equal(quote(["5.00"]).aboveMaximum, true);
+  assert.equal(quote(["5.01"]).aboveMaximum, true);
   assert.equal(demoSlipQuote([{ odds: "5.00" }], "5-10").belowMinimum, false);
-  assert.equal(demoSlipQuote([{ odds: "100.00" }], "50-100").aboveMaximum, false);
+  assert.equal(demoSlipQuote([{ odds: "5.01" }], "5-10").belowMinimum, false);
+  assert.equal(demoSlipQuote([{ odds: "100.00" }], "50-100").aboveMaximum, true);
+  assert.equal(demoSlipQuote([{ odds: "100.00" }], "100-200").belowMinimum, false);
+  assert.equal(demoSlipQuote([{ odds: "200.00" }], "100-200").aboveMaximum, false);
+  assert.equal(demoSlipQuote([{ odds: "200.01" }], "100-200").aboveMaximum, true);
 });
 
 test("today receives every available disjoint opening slip with original prices, probability and forecast chronology", () => {
@@ -35,7 +39,7 @@ test("today receives every available disjoint opening slip with original prices,
   const result = buildDemoSlipSnapshots("2026-10-28", [...candidates, invalid, low], now), ids = new Set();
   assert.equal(result.slips.length, 20);
   for (const slip of result.slips) {
-    assert.ok(slip.selections.length >= 1 && slip.selections.length <= 8); assert.equal(slip.totalOdds, "1.50");
+    assert.ok(slip.selections.length >= 1 && slip.selections.length <= 8); assert.equal(slip.totalOdds, "3.38");
     for (const selection of slip.selections) {
       assert.ok(!ids.has(selection.fixtureId)); ids.add(selection.fixtureId);
       assert.ok(selection.probability >= demoSlipRules.minimumProbability); assert.equal(selection.odds, "1.50"); assert.equal(selection.oddsBasis, "bookmaker");
@@ -61,9 +65,18 @@ test("first startup late in the day retains the original editorial cohort withou
   assert.equal(JSON.stringify(settled), original, "settlement observations remain unchanged");
 });
 
+test("demo selection prioritizes probability before odds and preserves the original 34.7% forecast", () => {
+  const candidates = [[0.347073, "2.78"], [0.9, "2.60"], [0.9, "2.75"]].map(([probability, odds], index) => {
+    const value = candidate(index);
+    return { ...value, selection: { ...value.selection, probability, odds } };
+  });
+  const result = buildDemoSlipSnapshots("2026-10-28", candidates, now);
+  assert.deepEqual(result.slips.map(slip => [slip.averageProbability, slip.totalOdds]), [[0.9, "2.75"], [0.9, "2.60"], [0.347073, "2.78"]]);
+});
+
 test("daily editorial publications exclude forecasts not yet known at their original publication clock", () => {
   const candidates = Array.from({ length: 80 }, (_, index) => candidate(index));
-  for (const entry of candidates.slice(39)) entry.selection.forecast.publishedAt = Date.parse("2026-10-28T01:00:00+03:00");
+  for (const entry of candidates.slice(60)) entry.selection.forecast.publishedAt = Date.parse("2026-10-28T01:00:00+03:00");
   const result = buildDemoSlipSnapshots("2026-10-28", candidates, now);
   assert.equal(result.slips.length, 20);
   assert.ok(result.slips.every(slip => slip.selections.every(selection => selection.forecast.publishedAt < Date.parse("2026-10-28T00:00:00+03:00"))));
@@ -82,29 +95,29 @@ test("historical snapshots include real won and lost examples and exclude unpubl
 });
 
 test("sparse days publish only complete qualifying slips and duplicate fixtures cannot inflate the set", () => {
-  assert.equal(buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 7 }, (_, index) => candidate(index)), now).slips.length, 7);
+  assert.equal(buildDemoSlipSnapshots("2026-10-28", Array.from({ length: 7 }, (_, index) => candidate(index)), now).slips.length, 2);
   const duplicates = Array.from({ length: 80 }, (_, index) => candidate(index % 20));
   const result = buildDemoSlipSnapshots("2026-10-28", duplicates, now);
-  assert.equal(result.slips.length, 20);
+  assert.equal(result.slips.length, 6);
   const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
   assert.equal(new Set(ids).size, ids.length);
   assert.throws(() => buildDemoSlipSnapshots("2026-10-28", [], now), /No complete qualifying/u);
 });
 
-test("demo generation publishes up to twenty qualifying slips in each of the five bands", () => {
+test("demo generation publishes up to twenty qualifying slips in each of the six bands", () => {
   assert.equal(demoSlipRules.count, 20);
   const candidates = Array.from({ length: 240 }, (_, index) => {
     const value = candidate(index); return { ...value, selection: { ...value.selection, odds: "2.00" } };
   });
   let count = 0;
-  for (const band of ["1.5-5", "5-10", "10-20", "20-50", "50-100"]) {
+  for (const band of ["1.5-5", "5-10", "10-20", "20-50", "50-100", "100-200"]) {
     const result = buildDemoSlipSnapshots("2026-10-28", candidates, now, band);
     assert.equal(result.slips.length, 20); count += result.slips.length;
     const ids = result.slips.flatMap(slip => slip.selections.map(selection => selection.fixtureId));
     assert.equal(new Set(ids).size, ids.length);
     assert.ok(result.slips.every(slip => { const quote = demoSlipQuote(slip.selections, band); return !quote.belowMinimum && !quote.aboveMaximum; }));
   }
-  assert.equal(count, 100);
+  assert.equal(count, 120);
 });
 
 function actualCandidates(date) {

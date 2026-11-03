@@ -21,10 +21,10 @@ export function BestSlipsSummary({ result, locale }: { result: SlipsBrowseResult
   const m = createMessages(locale), browse = result.browse;
   const total = browse?.total ?? (browse ? null : result.slips.length);
   const first = result.slips.length ? ((browse?.firstPage ?? browse?.query.page ?? 1) - 1) * (browse?.pageSize ?? result.slips.length) + 1 : 0;
-  return <span data-best-slips-summary>
-    <span>{total === null ? m.text("bestSlips.filters.shown", { count: m.number(result.slips.length) })
-      : m.text("bestSlips.filters.showing", { first: m.number(first), last: m.number(result.slips.length ? first + result.slips.length - 1 : 0), total: m.number(total) })}</span>
-  </span>;
+  const last = result.slips.length ? first + result.slips.length - 1 : 0;
+  const description = total === null ? m.text("bestSlips.filters.shown", { count: m.number(result.slips.length) })
+    : m.text("bestSlips.filters.showing", { first: m.number(first), last: m.number(last), total: m.number(total) });
+  return <output data-best-slips-summary>{description}</output>;
 }
 
 export function BestSlipsPagination({ onPage, total, page, busy, locale }: {

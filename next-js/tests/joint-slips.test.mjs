@@ -43,6 +43,20 @@ function record(id, odds = '2.00', probability = 0.8, offset = 0) {
     availabilityMessage: null, scorePeriod: null,
     prices: [{ family: 'match-result', selection: 'home-win', price: odds, basis: 'bookmaker', retrievedAt: asOf - 1000, providerUpdatedAt: null }] });
 }
+
+test('unrounded whole-slip probability wins before descending match count and then total odds', () => {
+  const selection = { probability: 0.8 };
+  const short = { id: 'short', selections: [{ probability: 0.7 }], totalOdds: '5.00', averageProbability: 0.7, estimatedProbability: 0.7 };
+  const long = { ...short, id: 'long', selections: [selection, selection, selection], totalOdds: '4.00' };
+  const largerOdds = { ...long, id: 'larger-odds', totalOdds: '6.00' };
+  const precise = { ...short, id: 'precise', selections: [{ probability: 0.7000000001 }], estimatedProbability: 0.7000000001 };
+  assert.deepEqual([short, long, largerOdds, precise].sort(compareBestSlips).map(slip => slip.id), ['precise', 'larger-odds', 'long', 'short']);
+  const { ranking } = jointSlipRanking({ ...synthetic, estimate: selections => selections.length === 1 ? selections[0].probability : 0.7 });
+  assert.ok(ranking.compare(precise, largerOdds) < 0);
+  assert.ok(ranking.compare(largerOdds, long) < 0);
+  const { ranking: tied } = jointSlipRanking({ ...synthetic, estimate: () => 0.7 });
+  assert.ok(tied.compare(long, short) < 0);
+});
 function criteria(overrides = {}) {
   return { ...defaultSlipCriteria(today), markets: ['match-result'], oddsMin: 101, oddsMax: 100_000,
     probMin: 0, probMax: 100, totalMin: 101, totalMax: 10_000_000, teamsMin: 1, teamsMax: 8, slips: 10, reuse: true, ...overrides };
@@ -64,7 +78,7 @@ function qualifyingSlips(records, bounds, joint) {
     const slip = buildSlips(criteria({ teamsMin: subset.length, teamsMax: subset.length, slips: 1 }), subset, asOf).slips[0];
     const estimate = jointSlipProbability(joint, slip);
     return estimate === null || estimate < minimum || estimate > maximum ? [] : [{ slip, estimate }];
-  }).sort((left, right) => right.estimate - left.estimate || left.slip.selections.length - right.slip.selections.length
+  }).sort((left, right) => right.estimate - left.estimate || right.slip.selections.length - left.slip.selections.length
     || Number(right.slip.totalOdds) - Number(left.slip.totalOdds) || left.slip.id.localeCompare(right.slip.id));
 }
 

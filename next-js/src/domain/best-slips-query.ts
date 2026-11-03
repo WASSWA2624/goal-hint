@@ -19,7 +19,7 @@ export class BestSlipsQueryError extends Error {
   }
 }
 const fail = (code: BestSlipsQueryError["code"]): never => { throw new BestSlipsQueryError(code); };
-export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "last30", status: "all", oddsBand: defaultBestSlipOddsBand, page: 1, summary: "yesterday" });
+export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "today", status: "all", oddsBand: defaultBestSlipOddsBand, page: 1 });
 
 function customDates(from: unknown, to: unknown): BestSlipsDates {
   let start: ReportingDate, end: ReportingDate;
@@ -70,7 +70,7 @@ export function parseBestSlipsQuery(input: URLSearchParams | Readonly<Record<str
     }
     return values;
   };
-  const period = value("period") ?? "last30", status = value("status") ?? "all", pageValue = value("page") ?? "1";
+  const period = value("period") ?? "today", status = value("status") ?? "all", pageValue = value("page") ?? "1";
   if (!bestSlipsPeriods.includes(period as BestSlipsPeriod) || !bestSlipsStatuses.includes(status as BestSlipsStatus)
     || !/^[1-9]\d{0,3}$/u.test(pageValue)) return fail("invalid-query");
   const summary = value("summary");
@@ -96,8 +96,7 @@ export function serializeBestSlipsQuery(query: BestSlipsQuery): URLSearchParams 
   return result;
 }
 
-/** Counts belong to the applied summary, including while another date request is pending. */
+/** Today's performance drilldowns retain their odds band and restart pagination. */
 export function selectSlipSummaryResult(applied: BestSlipsQuery, status: BestSlipsStatus): BestSlipsQuery {
-  const { cursor: _cursor, ...scope } = applied; void _cursor;
-  return applied.summary === "yesterday" ? { period: "yesterday", status, oddsBand: applied.oddsBand ?? defaultBestSlipOddsBand, page: 1 } : { ...scope, status, page: 1 };
+  return { period: "today", status, oddsBand: applied.oddsBand ?? defaultBestSlipOddsBand, page: 1 };
 }

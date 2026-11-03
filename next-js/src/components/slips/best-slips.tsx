@@ -17,7 +17,7 @@ import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
 import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
 import { slipViewKey } from "@/domain/slip-browse-window";
-import { FilterButton, FiltersRow } from "./best-slips-filter-styles";
+import { FilterButton } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
 export function BestSlips({ result, locale, signedIn = false }: { result: SlipsBrowseResult; locale: string; signedIn?: boolean }) {
@@ -33,15 +33,10 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
     <AppBrandBar locale={locale} />
     <VisuallyHidden as="h1">{m.text("bestSlips.title")}</VisuallyHidden>
     <BestSlipsFilters query={browse.query} appliedQuery={browse.displayQuery} today={result.day} locale={locale}
-      entitled={browse.entitled} busy={browse.loading || browse.updating} updating={browse.updating}
+      entitled={browse.entitled} busy={browse.loading || browse.updating}
       scannedDates={content?.browse?.total === null ? content.browse : undefined}
-      publicationDay={content?.slips[0]?.publicationDay}
       summary={content?.summary} statistics={content?.summary?.statistics ?? (content?.summary ? null : content?.statistics)} countSummary={content?.state === "generated"
         ? <BestSlipsSummary result={content} locale={locale} /> : null} onChange={browse.change} />
-    {browse.failed && content && <FiltersRow role="alert" data-best-slips-update-failed>
-      <Note>{m.text("bestSlips.filters.updateFailed")}</Note>
-      <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton>
-    </FiltersRow>}
     {browse.loading ? <SlipLoading locale={locale} />
     : browse.failed && !content ? <CriteriaPanel role="alert"><Stack $gap="sm"><p>{m.text("bestSlips.filters.dataUnavailable")}</p>
       <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton></Stack></CriteriaPanel>
@@ -66,7 +61,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
       </div>)}</SlipList></div>
       </SlipMatchRefreshProvider>
     </>}
-    {content.browse && !content.browse.hasMore && content.slips.length > 0 && <Note>{m.text("history.end")}</Note>}
+    {content.browse && !content.browse.hasMore && content.slips.length > 0 && <Note>{m.text("bestSlips.filters.end")}</Note>}
     {content?.browse?.total !== null && content?.browse?.total !== undefined && <BestSlipsPagination onPage={browse.goToPage}
       total={content.browse.total} page={browse.displayQuery.page}
       busy={browse.navigating || browse.retained} locale={locale} />}

@@ -21,6 +21,12 @@ export function jointSlipProbability(model: JointSlipModel, slip: BuiltSlip): nu
   return value >= lower - tolerance && value <= upper + tolerance ? Math.min(upper, Math.max(lower, value)) : null;
 }
 
+/** Shared ordering keeps unrounded model estimates primary, then favours more matches and higher odds. */
+export function compareSlipEstimates(left: BuiltSlip, right: BuiltSlip, leftProbability: number, rightProbability: number): number {
+  return rightProbability - leftProbability || right.selections.length - left.selections.length
+    || compareSlipTotalOdds(right.totalOdds, left.totalOdds) || left.id.localeCompare(right.id);
+}
+
 /** Unretained combinations stay collectable; a bounded search need not retain 100,000 long slip identifiers. */
 export function jointSlipRanking(model: JointSlipModel) {
   const estimates = new WeakMap<BuiltSlip, number | null>();
@@ -35,8 +41,7 @@ export function jointSlipRanking(model: JointSlipModel) {
   };
   const ranking: SlipRanking = {
     probability, accepts: (slip) => probability(slip) !== null,
-    compare: (left, right) => probability(right)! - probability(left)! || left.selections.length - right.selections.length
-      || compareSlipTotalOdds(right.totalOdds, left.totalOdds) || left.id.localeCompare(right.id),
+    compare: (left, right) => compareSlipEstimates(left, right, probability(left)!, probability(right)!),
   };
   return { ranking, probability, unestimated: () => unestimated };
 }
