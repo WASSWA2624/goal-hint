@@ -60,7 +60,7 @@ A typical journey is **browse → inspect a match → register and verify → ob
 
 ## Current boundaries and unfinished work
 
-- **Rollout requirements:** the earlier 60-migration local baseline is recorded. Community/alerts add `20261103170000_community_payment_alerts`, tested only in isolated MySQL targets in this change. The configured local/hosted targets still need that migration/grants and coordinated web, worker and native releases after approval.
+- **Rollout requirements:** all 61 migrations, including `20261103170000_community_payment_alerts`, and required application grants are applied to the configured local MySQL target. Schema verification and health pass. Hosted targets still need their migration/grants and coordinated web, worker and native releases after approval.
 - **Conditional features:** live odds, AI/research, joint-slip estimates, and accuracy claims require permissions, credentials, evidence, and qualification. Demo output establishes no live availability or prediction quality.
 - **Partial foundations:** expanded goal/bookmaker-implied markets have derivation/storage/settlement groundwork; public activation is unfinished. Owner cost accounting lacks a complete profit service/interface. Some legal/publication and unattended-operation checks remain open.
 - **Platform gaps:** Android/Windows have recorded local execution evidence; Apple requires host/device qualification, and Linux lacks a qualified browser. Signing, domain app links, stores, hosting, and full release acceptance remain separate work.

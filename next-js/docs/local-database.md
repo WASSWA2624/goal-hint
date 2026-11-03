@@ -435,3 +435,13 @@ The owner's migration request applied the pending payment-checkout, transient-sl
 The local database now has **60 completed migrations, none pending or unfinished**, 121 base tables and all 120 application models readable. Status, schema-drift verification and database health pass. Health also checks SlipNumber. Required checkout and numbering grants are applied and recorded privately; the application remains without DDL privileges. One existing member's referral code was converted while preserving its old invitation alias.
 
 Rollback-only smoke checks retained no synthetic rows, and the existing member/session/payment counts stayed unchanged. Nineteen real MySQL checkout/migration/numbering checks passed. The temporary native administration task was removed and the existing startup task preserved. See [plan 256](../dev-plan/256-local-migrations-and-slip-alignment.md) for verification and scope; hosted production was not changed.
+
+## 3 November 2026 reviewer-alert migration follow-up
+
+The owner's request to run all migrations applied the sole pending migration, `20261103170000_community_payment_alerts`, through the separate migration role on the existing local MySQL 8.4.11 target. Native file-handle checks, SQL server identity, port 3307, datadir and normal recovery mode matched the recorded instance. The documented native-path workflow avoided the older AppData-shadow administrator file without changing any credential.
+
+Before DDL, a write-fenced logical checkpoint preserved all 121 prior base tables and 60 completed migrations in an access-restricted AES-256-GCM artifact with a separate key. Full authenticated decryption matched the original stream's SHA-256. The checkpoint and grants-file copy remain private and outside Git.
+
+The local target now has **61 completed migrations, none pending or failed**, 124 base tables and all **123 application models readable**. `npm run db:status`, `npm run db:verify` and `npm run db:health` pass, with health **ready** and no schema drift. The application has SELECT/INSERT/UPDATE/DELETE on `PaymentReviewEvent`, `PaymentAlertEndpoint` and `PaymentAlertDelivery`, recorded in the real private grants file. Zero-row transaction probes passed; application DDL remains denied.
+
+Account, session, payment, receipt, access and ledger counts matched the checkpoint. No synthetic rows were retained. New alert tables are empty; outbound alerts remain disabled and community URLs unconfigured. The temporary native helper task was removed and `GoalHintMySQL84` preserved. Hosted/MariaDB migrations, application deployment and device/provider qualification remain separate; see [alert setup and verification](payment-review-alerts.md).
