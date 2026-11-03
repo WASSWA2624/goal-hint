@@ -7,6 +7,7 @@ import Link from "@/components/navigation/navigation-link";
 import { CardIcon, ChevronRightIcon, SignInIcon, SignOutIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NotificationUnread } from "./notification-unread";
+import { DownloadHeaderLink } from "@/components/downloads/download-header-link";
 import { compactHeaderControl, compactHeaderIconControl } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { createMessages } from "@/i18n/messages";
@@ -177,6 +178,7 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   const adminIdentity = administratorName ?? (administrator ? messages.text("navigation.dashboard") : undefined);
   return <Actions data-account-actions>
     {(administratorName || administrator) && <AdminPaymentsLink />}
+    <DownloadHeaderLink locale={locale} />
     {phone || adminIdentity ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} /></> : <>
       <AuthLink href={`${base}?view=login`} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("auth.signIn")}</span></AuthLink>
       <AuthLink href={`${base}?view=register`} prefetch={false} $primary aria-label={messages.text("auth.signUp")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("auth.signUp")}</span></AuthLink>

@@ -75,6 +75,14 @@ export const PencilIcon = (props: IconProps) => <Icon {...props}><path d="M4 20h
 export const PlusIcon = (props: IconProps) => <Icon {...props}><path d="M12 5v14M5 12h14" /></Icon>;
 export const ExpandIcon = (props: IconProps) => <Icon {...props}><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" /></Icon>;
 export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 4v11M7 10l5 5 5-5M4 20h16" /></Icon>;
+/** Platform silhouettes inherit the active theme, keeping their shapes legible in both modes. */
+export const AndroidIcon = (props: IconProps) => <Icon {...props}>
+  <path d="m7 7-2-3m12 3 2-3" strokeWidth={1.5} />
+  <path fill="currentColor" stroke="none" fillRule="evenodd" d="M3 16a9 9 0 0 1 18 0H3Zm5.5-4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+</Icon>;
+export const WindowsIcon = (props: IconProps) => <Icon {...props}>
+  <path fill="currentColor" stroke="none" d="M3 5.5 10.5 4.5V11H3Zm9-1.2L21 3v8h-9ZM3 12.5h7.5V19L3 18Zm9 0h9V21l-9-1.3Z" />
+</Icon>;
 export const ShareIcon = (props: IconProps) => <Icon {...props}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" /></Icon>;
 export const AlertIcon = (props: IconProps) => <Icon {...props}><path d="M12 3 2 20h20L12 3ZM12 10v4M12 17h.01" /></Icon>;
 export const EyeIcon = (props: IconProps) => <Icon {...props}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></Icon>;

@@ -40,6 +40,7 @@ import zipfile
 
 from lib.runtime import CommandError, ROOT, main_guard
 from lib.deployment import PRIVATE_ROOT, web_archive
+from lib.app_downloads import prepare_app_downloads
 
 HOST = os.environ.get("CPANEL_SSH_HOST", "66.29.132.57")
 PORT = os.environ.get("CPANEL_SSH_PORT", "21098")
@@ -103,12 +104,54 @@ activate() {  # $1 = release stamp. Touching the release keeps `ls -t` in activa
   complete "$1" || { echo "Release $1 is incomplete." >&2; exit 3; }
   badge_runtime "$target"
   sync_private "$target/standalone"
+  mkdir -p "$HOME/$app_root-downloads"
+  ln -sfn "$HOME/$app_root-downloads" "$target/standalone/.app-downloads"
   for f in app.js package.json BUILD_INFO.json DEPLOY.md .env.example; do [ ! -e "$target/$f" ] || cp -p "$target/$f" "$app/$f"; done
   ln -sfn "$target/standalone" "$app/standalone.next" && mv -Tf "$app/standalone.next" "$app/standalone"
   touch "$releases/$1"
 }
 
 case "$command" in
+  downloads-install)
+    python3 - "$HOME/$3" "$HOME/$app_root-downloads" <<'PY'
+import hashlib, json, os, pathlib, re, shutil, sys, zipfile
+archive, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+root.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(archive) as bundle:
+    catalog = json.loads(bundle.read('catalog.json'))
+    assert catalog['schema'] == 1 and catalog['channel'] == 'production'
+    assert len(catalog['releases']) == 1
+    for release in catalog['releases']:
+        assert release['platform'] == 'windows'
+        assert re.fullmatch(r'\d+\.\d+\.\d+', release['version'])
+        assert isinstance(release['build'], int) and release['build'] > 0
+        assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]+\.exe', release['fileName'])
+        relative = pathlib.Path('files/windows') / (release['version'] + '-' + str(release['build'])) / release['fileName']
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        pending = target.with_suffix('.pending')
+        try:
+            with bundle.open(relative.as_posix()) as source, pending.open('wb') as destination:
+                shutil.copyfileobj(source, destination)
+            with pending.open('rb') as source:
+                digest = hashlib.sha256()
+                for block in iter(lambda: source.read(1024 * 1024), b''): digest.update(block)
+            assert pending.stat().st_size == release['size'] and digest.hexdigest() == release['sha256']
+            if target.exists():
+                digest = hashlib.sha256()
+                with target.open('rb') as source:
+                    for block in iter(lambda: source.read(1024 * 1024), b''): digest.update(block)
+                assert digest.hexdigest() == release['sha256'], 'Published installers are immutable; increment the build number.'
+            os.replace(pending, target)
+        finally:
+            pending.unlink(missing_ok=True)
+    pending_catalog = root / 'catalog.json.pending'
+    pending_catalog.write_text(json.dumps(catalog) + '\n', encoding='utf-8')
+    os.replace(pending_catalog, root / 'catalog.json')
+archive.unlink()
+print('Verified Windows installer and activated download catalog.')
+PY
+    ;;
   deploy)
     zip="$HOME/$3"; stamp="$4"; env_json="$5"; domain="$6"; keep="$7"
     trap 'rm -f "$zip"' EXIT
@@ -344,6 +387,7 @@ def verify() -> None:
 
 def deploy(archive: Path) -> None:
     info = inspect_bundle(archive)
+    publish_app_downloads()
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + info["commit"][:7]
     print(f"Deploying {archive.name}: commit {info['commit'][:7]}{' (uncommitted changes)' if info.get('uncommittedChanges') else ''}, built {info['builtAt']}")
@@ -358,6 +402,31 @@ def deploy(archive: Path) -> None:
         raise CommandError("Uploaded file checksum does not match; nothing was activated.")
     print(remote("deploy", upload, stamp, json.dumps(INITIAL_ENV), DOMAIN, str(KEEP_RELEASES)))
     verify()
+
+
+def publish_app_downloads() -> None:
+    """Publish available production Windows packages independently of web rollback."""
+    with tempfile.TemporaryDirectory(prefix="goal-hint-downloads-") as temporary:
+        directory = Path(temporary)
+        root = prepare_app_downloads("production", directory / "downloads")
+        catalog = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
+        if not catalog["releases"]:
+            print("No Windows production installer packaged; preserving hosted downloads.")
+            return
+        archive = directory / "downloads.zip"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            for file in root.rglob("*"):
+                if file.is_file():
+                    bundle.write(file, file.relative_to(root).as_posix())
+        with archive.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        upload = f"{APP_ROOT}-downloads-{digest[:16]}.zip"
+        scp(archive, upload)
+        check = subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "sha256sum " + shlex.quote(upload)],
+                               capture_output=True, text=True, timeout=120)
+        if check.returncode or check.stdout.split(" ")[0] != digest:
+            raise CommandError("Download upload checksum mismatch; hosted catalog was not changed.")
+        print(remote("downloads-install", upload))
 
 
 def main():

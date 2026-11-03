@@ -2,6 +2,7 @@ import type { ReportingDate } from "../../domain/calendar.ts";
 import { deviceFeedEntryHref } from "../../domain/device-feed.ts";
 import { adminLandingPath } from "../../domain/admin-navigation.ts";
 import { accountSectionHref } from "../../domain/account-navigation.ts";
+import { appDownloadsHref } from "../../domain/app-downloads.ts";
 import { homeHref, informationHref, informationPages, matchesHref, performanceHref, slipsHref } from "../../domain/navigation.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import type { NavigationDestination } from "./responsive-navigation";
@@ -16,6 +17,7 @@ export function navigationDestinations(today: ReportingDate, locale: string, zon
     { key: "performance", href: performanceHref(locale), label: messages.text("performance.title"), tab: messages.text("performance.title"), icon: "results", tone: "violet" },
     ...informationPages.map(page => ({ key: page, href: informationHref(page, locale), label: messages.text(`navigation.${page}`), tab: messages.text(`navigation.${page}`), icon: page, tone: "blue" as const })),
     { key: "invite-friends", href: accountSectionHref(locale, "referrals"), label: messages.text("referrals.invite"), tab: messages.text("referrals.invite"), icon: "invite", tone: "blue" },
+    { key: "download", href: appDownloadsHref(locale), label: messages.text("downloads.header"), tab: messages.text("downloads.header"), icon: "download", tone: "blue" },
   ];
 }
 

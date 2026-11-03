@@ -28,7 +28,7 @@ def git(*args: str) -> str:
 
 def stage_source(destination: Path) -> None:
     """Export Git-visible application files without private or generated state."""
-    excluded = {".git", ".private", ".goal-hint", ".next", "node_modules", "__pycache__",
+    excluded = {".git", ".private", ".goal-hint", ".app-downloads", ".next", "node_modules", "__pycache__",
                 "deploy", "build", "out", "dist", "coverage", "test-results", "playwright-report",
                 "output", ".tmp", ".vercel"}
     destination.mkdir(parents=True, exist_ok=True)

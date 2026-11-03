@@ -47,7 +47,7 @@ archive is created by the Windows host, and Linux remains excluded.
 
 The root [`deploy/`](../../deploy/README.md) folder is the only delivery
 location. Initial packages keep public version **1.0.0**; `pubspec.yaml` is
-`1.0.0+5`. The internal build number stays distinct from the public ZIP filename.
+`1.0.0+7`. The internal build number stays distinct from the public ZIP filename.
 Do not increment the public version until the first production release.
 Compiler caches/intermediates remain ignored under `flutter/build/`; they are
 not additional release locations. Linux is excluded from these initial packages.

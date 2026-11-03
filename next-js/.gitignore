@@ -24,6 +24,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .goal-hint/
+.app-downloads/
 chrome-filters/
 public/ocr/
 public/offline-manifest.json

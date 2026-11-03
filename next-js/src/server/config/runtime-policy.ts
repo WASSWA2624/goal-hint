@@ -134,11 +134,15 @@ const environmentSchema = z.object({
   GOAL_HINT_OPERATION_SCOPE: z.enum(["disabled", "trial", "shadow", "production"]).default("disabled")
     .describe("Use disabled, trial, shadow or production; deployment mode does not qualify forecasts."),
   GOAL_HINT_DEPLOYMENT_ENVIRONMENT: text
-    .describe("SEO deployment classification only; missing or unknown values disable indexing and production does not grant release approval."),
+    .describe("Deployment classification for SEO and native download channels; missing or unknown values disable indexing and production does not grant release approval."),
   GOAL_HINT_ANDROID_APP_LINK_SHA256: optional(z.string().trim().refine((value) => androidAppLinkFingerprints(value).length > 0))
     .describe("Comma-separated SHA-256 signing fingerprints in colon-separated hexadecimal; blank leaves app links unconfigured."),
   GOAL_HINT_IOS_APP_LINK_TEAM_ID: optional(z.string().trim().regex(/^[A-Z0-9]{10}$/))
     .describe("Public ten-character Apple team ID for the signed iOS app; blank leaves universal links unconfigured."),
+  GOAL_HINT_APP_DOWNLOADS_ROOT: text.describe("Optional persistent installer root; blank uses .app-downloads beside the web runtime."),
+  GOAL_HINT_ANDROID_PLAY_STORE_URL: text.describe("Published production Google Play listing; blank keeps Android production downloads unavailable."),
+  GOAL_HINT_ANDROID_PLAY_STORE_VERSION: text.describe("Actual Google Play native version for update checks; never the website version."),
+  GOAL_HINT_ANDROID_PLAY_STORE_BUILD: text.describe("Actual Google Play native build number for update checks."),
   GOAL_HINT_DATABASE_ENABLED: enabled.describe("Use true or false; database integration belongs to prompt 003."),
   GOAL_HINT_TRUSTED_PROXY_CIDRS: text.describe("Comma-separated exact proxy IPs/CIDRs, verified from the actual socket chain. Blank trusts no forwarded address."),
   GOAL_HINT_MTN_MOMO_NUMBER: subscriptionPhone.describe("Supply the MTN MoMo receiving number with its country code; independent of support numbers."),

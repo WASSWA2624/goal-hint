@@ -33,6 +33,23 @@ void main() {
     );
   });
 
+  test('installer links leave the webview without replacing its document', () {
+    expect(
+      production.evaluate(
+        'https://goalhint.com/api/downloads/windows?version=1.2.3&build=7',
+      ),
+      NavigationAction.external,
+    );
+    expect(
+      production.evaluate('https://goalhint.com/api/downloads'),
+      NavigationAction.allow,
+    );
+    expect(
+      production.evaluate('https://goalhint.com/en/download'),
+      NavigationAction.allow,
+    );
+  });
+
   test(
     'outside destinations use native handlers instead of gaining app trust',
     () {

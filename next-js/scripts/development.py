@@ -12,6 +12,7 @@ import threading
 from lib.development_mysql import DevelopmentMysql
 from lib.development_process import process_record, process_snapshot, release_port, stop_process
 from lib.runtime import CommandError, ROOT, hidden_process, main_guard, node_binary
+from lib.app_downloads import prepare_app_downloads
 
 
 def development_node_binary():
@@ -239,6 +240,7 @@ def main():
     if "--help" in args or "-h" in args:
         return subprocess.call([development_node_binary(), str(ROOT / "node_modules/next/dist/bin/next"), "dev", "--help"], cwd=ROOT)
     if not prepare_only and not verify_only:
+        prepare_app_downloads("development")
         args, port = web_arguments(args)
         release_development_web(port)
     if live:

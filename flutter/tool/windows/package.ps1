@@ -128,6 +128,10 @@ the browser profile. This ZIP is not an MSIX, signed installer or store release.
     New-Item -ItemType Directory -Path $delivery | Out-Null
     $setup = Join-Path $delivery ('Goal-Hint-Setup-' + $releaseVersion + '.exe')
     New-GoalHintSetup $installer $setup
+    $downloadVersion = $version -split '\+'
+    [ordered]@{ schema = 1; platform = 'windows'; environment = 'production'; mode = 'release'
+        version = $downloadVersion[0]; build = [int]$downloadVersion[1]; artifactSha256 = Get-FileDigest $setup
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $delivery 'download-manifest.json') -Encoding UTF8
     @"
 Goal Hint $releaseVersion for Windows x64
 Extract this ZIP, then run Goal-Hint-Setup-$releaseVersion.exe.

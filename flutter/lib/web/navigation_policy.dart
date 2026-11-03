@@ -37,6 +37,11 @@ class NavigationPolicy {
           RegExp(r'[/\\?#@]').hasMatch(host)) {
         return NavigationAction.block;
       }
+      if (uri.origin == _origin &&
+          (uri.path == '/api/downloads/android' ||
+              uri.path == '/api/downloads/windows')) {
+        return NavigationAction.external;
+      }
       return uri.origin == _origin
           ? NavigationAction.allow
           : NavigationAction.external;

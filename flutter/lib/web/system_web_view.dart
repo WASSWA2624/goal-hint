@@ -10,6 +10,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import '../config/app_config.dart';
 import '../config/app_branding.dart';
 import 'android_file_selector.dart';
+import 'app_user_agent.dart';
 import 'navigation_policy.dart';
 import 'native_invitation_share.dart';
 import 'web_appearance.dart';
@@ -112,6 +113,15 @@ class SystemWebViewAdapter extends WebViewAdapter {
       final controller = WebViewController.fromPlatformCreationParams(params);
       _controller = controller;
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await controller.setUserAgent(
+          await installedAppUserAgent(
+            await controller.getUserAgent() ?? '',
+            'android',
+            configuration.environment,
+          ),
+        );
+      }
       await controller.addJavaScriptChannel(
         'GoalHintInvitationShare',
         onMessageReceived: (message) {

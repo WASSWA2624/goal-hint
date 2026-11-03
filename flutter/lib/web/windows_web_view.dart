@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../config/app_config.dart';
 import '../config/app_branding.dart';
 import 'navigation_policy.dart';
+import 'app_user_agent.dart';
 import 'web_appearance.dart';
 import 'web_view_adapter.dart';
 import 'web_view_failure.dart';
@@ -95,10 +96,19 @@ class WindowsWebViewAdapter extends WebViewAdapter {
         return;
       }
       _environment = environment;
+      final userAgent = await installedAppUserAgent(
+        await WindowsInAppWebViewController.static().getDefaultUserAgent(),
+        'windows',
+        configuration.environment,
+      );
+      if (_disposed) return;
       _view = WindowsInAppWebViewWidget(
         WindowsInAppWebViewWidgetCreationParams(
           webViewEnvironment: environment,
-          initialSettings: _ShellWebViewSettings(configuration.origin),
+          initialSettings: _ShellWebViewSettings(
+            configuration.origin,
+            userAgent,
+          ),
           onWebViewCreated: (controller) {
             if (_disposed) return;
             _controller = controller;
@@ -422,8 +432,9 @@ class WindowsWebViewAdapter extends WebViewAdapter {
 
 /// Extra keys are handled only by the pinned Windows native security patch.
 class _ShellWebViewSettings extends InAppWebViewSettings {
-  _ShellWebViewSettings(this.origin)
+  _ShellWebViewSettings(this.origin, String browserAgent)
     : super(
+        userAgent: browserAgent,
         javaScriptEnabled: true,
         transparentBackground: true,
         useShouldOverrideUrlLoading: true,

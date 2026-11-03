@@ -22,6 +22,7 @@
     "start": "next start",
     "package:cpanel": "python scripts/package-cpanel.py",
     "package:development": "python scripts/package-development.py",
+    "downloads:prepare": "python scripts/app-downloads.py",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "postinstall": "npm run db:generate && node scripts/ocr-assets.mjs",
