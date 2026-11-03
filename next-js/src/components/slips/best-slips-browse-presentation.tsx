@@ -1,6 +1,7 @@
 "use client";
 
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { PagePaginationSection } from "@/components/ui/pagination-styles";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipsQueryRules } from "@/domain/best-slips-query";
 import { createMessages } from "@/i18n/messages";
@@ -8,7 +9,7 @@ import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { desktopContentPadding } from "@/components/ui/layout";
 
-const Pagination = styled.div`
+const Pagination = styled(PagePaginationSection)`
   ${desktopContentPadding()}
   [aria-current="page"] { background: ${({ theme }) => theme.color.accent.blue.text}; color: ${({ theme }) => theme.color.accent.blue.soft}; }
   ${media.belowDesktop} {

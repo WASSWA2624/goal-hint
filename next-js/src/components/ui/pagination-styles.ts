@@ -1,4 +1,11 @@
-import { css } from "styled-components";
+import styled, { css } from "styled-components";
+
+/** Keep page navigation clearly separated from the results above it. */
+export const PagePaginationSection = styled.div.attrs({ "data-page-pagination": "" })`
+  min-inline-size: 0;
+  margin-block-start: ${({ theme }) => theme.space.lg};
+`;
+
 /** Numbered links and scroll-only arrow buttons share the theme's compact control treatment. */
 export const paginationControlStyles = css`
   display: grid;

@@ -4,6 +4,7 @@ import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { desktopContentPadding } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { PagePaginationSection } from "@/components/ui/pagination-styles";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedPageHref, type FeedPaginationError } from "@/domain/feed-pagination";
 import { feedQueryRules, type FeedQuery } from "@/domain/feed-query";
@@ -12,12 +13,11 @@ import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
 const desktop = media.desktop;
-const Bar = styled.div`
+const Bar = styled(PagePaginationSection)`
   ${desktopContentPadding()}
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--gh-spacing-2);
-  margin-block-start: ${({ theme }) => theme.space.sm};
   padding-block-start: var(--gh-spacing-3);
   background: ${({ theme }) => theme.color.page};
   border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};

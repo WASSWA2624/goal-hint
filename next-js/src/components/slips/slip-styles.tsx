@@ -350,6 +350,6 @@ export const ClearLink = styled(ButtonLink)`
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: var(--gh-font-body);`;
 export const Results = styled.section`
   display: grid; gap: var(--gh-spacing-2_25); min-inline-size: 0;
-  > ${HeadingRow}, > ${Note}, > nav { ${desktopContentPadding()} }
+  > ${HeadingRow}, > ${Note}, > nav, > [data-page-pagination] { ${desktopContentPadding()} }
   &[aria-busy="true"] { opacity: var(--gh-opacity-65); }
 `;

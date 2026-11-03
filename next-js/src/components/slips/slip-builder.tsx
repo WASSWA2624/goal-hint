@@ -11,6 +11,7 @@ import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
 import { PersonalSlipHistory } from "./personal-slip-history";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
+import { PagePaginationSection } from "@/components/ui/pagination-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { marketSelections, type MarketFamily, type MarketSelection } from "@/domain/markets";
@@ -531,9 +532,11 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         })}</SlipList>
         </SlipMatchRefreshProvider>
         <Note>{messages.text("history.showing", { first: messages.number(offset + 1), last: messages.number(offset + shownSlips.length), total: messages.number(data.slips.length) })}</Note>
-        {pageCount > 1 && <NumberedPagination page={page} pages={pageCount} disabled={pending}
-          labels={numberedPaginationLabels(messages, messages.text("slips.generated"))}
-          onPage={(next) => { resultsRef.current?.scrollIntoView({ block: "start" }); setPagination({ result, page: next }); }} />}
+        {pageCount > 1 && <PagePaginationSection>
+          <NumberedPagination page={page} pages={pageCount} disabled={pending}
+            labels={numberedPaginationLabels(messages, messages.text("slips.generated"))}
+            onPage={(next) => { resultsRef.current?.scrollIntoView({ block: "start" }); setPagination({ result, page: next }); }} />
+        </PagePaginationSection>}
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={emptyState ? messages.text(`slips.state.${emptyState}.description`) : <SlipStatusCopy
