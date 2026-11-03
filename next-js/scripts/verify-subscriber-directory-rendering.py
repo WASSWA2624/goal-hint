@@ -101,10 +101,11 @@ def directory_rendering(origin: str) -> None:
     directory = workspace.one(attribute="data-subscriber-directory")
     filters = directory.one(attribute="data-subscriber-review-filters")
     assert filters.attributes.get("role") == "search"
-    assert [label.text() for label in filters.all("label")] == ["Search subscribers", "Account status", "Access", "Package", "Last sign-in"]
+    assert [label.text() for label in filters.all("label")] == ["Search subscribers"]
     search = filters.one(tag="input")
-    assert search.attributes.get("type") == "search" and search.attributes.get("placeholder") == "Phone, package, code or note"
-    assert len(filters.all("select")) == 4 and not filters.all("button") and not filters.all("form")
+    assert search.attributes.get("type") == "search" and search.attributes.get("placeholder") == " "
+    assert not filters.all("select") and not filters.all("form")
+    assert filters.one(attribute="data-search-filters").attributes.get("aria-haspopup") == "dialog"
     for control in filters.all("input") + filters.all("select"):
         assert "disabled" not in control.attributes
         assert any(label.attributes.get("for") == control.attributes.get("id") for label in filters.all("label"))
@@ -141,7 +142,7 @@ def directory_rendering(origin: str) -> None:
     filtered = page(origin, {"status": "blocked"}).one(attribute="data-subscriber-directory")
     assert [row.attributes["data-subscriber-row"] for row in filtered.all(attribute="data-subscriber-row")] == [BLOCKED]
     assert filtered.one(attribute="data-subscriber-count").text() == "1 account shown · up to 100"
-    assert any(option.attributes.get("value") == "blocked" and "selected" in option.attributes for option in filtered.all("option"))
+    assert filtered.one(attribute="data-search-filters").one(tag="b").text() == "1"
     empty = page(origin, {"search": "NoMatchingSubscriberFixture"}).one(attribute="data-subscriber-directory")
     assert empty.one(attribute="data-subscriber-empty").text() == "No matching subscribers."
     assert not empty.all(attribute="data-subscriber-row")

@@ -21,10 +21,9 @@ def audit_rendering(harness, origin):
     html = visible_html(response.text)
     match(r"data-audit-report", html)
     match(r"<h1>Audit</h1>", html)
-    assert len(re.findall(r"data-floating-field", html)) == 3
+    match(r"data-search-bar", html)
+    match(r"data-search-filters", html)
     assert re.findall(r'data-audit-event="([^"]+)"', html) == [str(10_000 + index) for index in range(20)]
-    for label in ["Any date", "Last hour", "Today", "Last 7 days", "Last 30 days", "Last 3 months", "Last 6 months", "Custom date range"]:
-        match(re.escape(label), html)
     for label in ["First page", "Last page", "Previous", "Next", "Page 1 of 5"]:
         match(re.escape(label), html)
     match(r"data-audit-export", html)
@@ -33,7 +32,7 @@ def audit_rendering(harness, origin):
         "/admin/audit?period=custom&startDate=2025-01-15&endDate=2025-01-15").text)
     assert re.findall(r'data-audit-event="([^"]+)"', historical) == ["20001", "20000"]
     match(r"2025-01-15", historical)
-    match(r"Edit range", historical)
+    match(r"data-audit-applied-range", historical)
     combined = visible_html(harness.request(origin,
         "/admin/audit?action=payment_approved&period=custom&startDate=2025-01-15&endDate=2025-01-15").text)
     assert re.findall(r'data-audit-event="([^"]+)"', combined) == ["20001", "20000"]

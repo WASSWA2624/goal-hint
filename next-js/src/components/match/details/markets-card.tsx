@@ -1,8 +1,9 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { FloatingField } from "@/components/ui/floating-field";
 import { PredictionOdds, PredictionOutcome, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { predictionDescription } from "@/domain/prediction-label";
 import { detailAnalysis } from "@/domain/detail-presentation";
@@ -24,7 +25,7 @@ import {
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
 import { marketName, percent } from "./labels";
 
-const Search = styled(FloatingField)`min-inline-size: min(100%, var(--gh-size-48));`;
+const Search = styled(SearchBar)`min-inline-size: min(100%, var(--gh-size-48));`;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
 const columns = "minmax(0, 1.4fr) minmax(0, 1.1fr) var(--gh-size-16) var(--gh-size-3)";
 const wideColumns = "minmax(0, 1.35fr) minmax(0, 1.2fr) minmax(0, 1.1fr) var(--gh-size-3_5)";
@@ -239,8 +240,8 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false }: { emb
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
       {view.marketsOpen && (!embedded && view.market ? <MarketPanel family={view.market} /> : <Body>
         <Tools>
-          <Search label={messages.text("details.searchMarkets")}><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
-            aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>
+          <Search label={messages.text("details.searchMarkets")} value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
+            onChange={(event) => setSearch(event.target.value)} />
           {!query && <ChoiceGroup label={messages.text("details.categories")} value={view.marketCategory}
             options={marketCategories.map((category) => ({ value: category, label: categoryLabel(category) }))}
             onChange={(category) => update((current) => ({ ...current, marketCategory: category }), "replace")} />}

@@ -95,9 +95,9 @@ const OptionChecklist = memo(function OptionChecklist({ kind, options, selected,
     <OptionLogo url={option.logoUrl} /><span>{option.label}{option.detail && <small> · {option.detail}</small>}</span>
   </label>;
   return <fieldset><VisuallyHidden as="legend">{label}</VisuallyHidden>
-    <FloatingField label={messages.text("feed.filters.findOption", { label })}><input data-option-search type="search" value={search} aria-label={messages.text("feed.filters.findOption", { label })}
+    <SearchBar label={messages.text("feed.filters.findOption", { label })} data-option-search value={search}
       placeholder={messages.text("feed.filters.findOption", { label })} onChange={(event) => setSearch(event.target.value)}
-      onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} /></FloatingField>
+      onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
     <label data-choice><input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
       {messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.allCountries")}</label>
     <div data-options>{exact.map((option) => optionRow(option))}

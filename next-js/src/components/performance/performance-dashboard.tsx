@@ -72,12 +72,12 @@ function Calibration({ cell, m }: { cell: PerformanceCell; m: Messages }) {
     </PerformanceTable></TableFrame>
   </details>;
 }
-function PredictionCard({ cell, locale }: { cell: PerformanceCell; locale: string }) {
+function PredictionCard({ cell, locale, asOf }: { cell: PerformanceCell; locale: string; asOf: number }) {
   const m = createMessages(locale), values = cell.metrics;
   return <Surface data-prediction-performance={cell.family}><Stack $gap="sm">
     <PerformanceSummary counts={{ total: cell.coverage.total, won: values.correct, lost: values.incorrect,
       pending: cell.coverage.pending, void: cell.coverage.void, unavailable: cell.coverage.unavailable, filteredOut: cell.coverage.filteredOut }}
-      locale={locale} kind="matches" title={marketName(m, cell.family)} headingLevel={3} />
+      locale={locale} asOf={asOf} kind="matches" title={marketName(m, cell.family)} headingLevel={3} />
     <strong>{m.text(values.state === "available" ? "performance.qualityAvailable" : "performance.qualityPending")}</strong>
     <Metrics values={[
       { label: m.text("performance.settled"), value: m.number(values.denominator) },
@@ -115,10 +115,10 @@ function LeagueCard({ league, locale }: { league: PerformanceLeague; locale: str
     </Stack>
   </details></Surface>;
 }
-function SlipMetrics({ summary, locale, period }: { summary: SlipPerformanceSummary; locale: string; period: string }) {
+function SlipMetrics({ summary, locale, period, asOf }: { summary: SlipPerformanceSummary; locale: string; period: string; asOf: number }) {
   const m = createMessages(locale);
   return <Surface><Stack $gap="sm">
-    <PerformanceSummary counts={summary} locale={locale} kind="slips" period={period} headingLevel={3} />
+    <PerformanceSummary counts={summary} locale={locale} asOf={asOf} kind="slips" period={period} headingLevel={3} />
     <Metrics values={[
       { label: m.text("performance.slipSettled"), value: m.number(summary.settled) },
       { label: m.text("performance.slipWinRate"), value: percent(summary.winRate, m) },
@@ -181,7 +181,7 @@ function PredictionSections({ locale, filters, report, page, loading = false }: 
         <Inline><strong>{m.text("performance.fixtureCount")}: {m.number(report.cohort.fixtureCount)}</strong>
           <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(report.asOf)) })}</MutedText></Inline>
         {report.cohort.fixtureCount === 0 ? <EmptyState headingLevel={3} title={m.text("performance.noPredictions")} />
-          : <MarketGrid>{cells.map((cell) => <PredictionCard key={cell.family} cell={cell} locale={locale} />)}</MarketGrid>}
+          : <MarketGrid>{cells.map((cell) => <PredictionCard key={cell.family} cell={cell} locale={locale} asOf={report.asOf} />)}</MarketGrid>}
       </> : <EmptyState headingLevel={3} title={m.text("performance.dataUnavailable")} />}
     </Stack></DesktopInset>
     {(report || loading) && <DesktopInset as="section" aria-labelledby="league-performance"><Stack>
@@ -204,7 +204,7 @@ function HistorySection({ locale, filters, history, loading = false }: SectionPr
     <DesktopInset as="section" aria-labelledby="published-performance"><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}
-      {loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={`${filters.from} – ${filters.to} · EAT`} /> : history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
+      {loading ? <PerformanceSummary counts={null} locale={locale} kind="slips" period={`${filters.from} – ${filters.to} · EAT`} /> : history?.statistics ? <SlipMetrics summary={history.statistics} locale={locale} asOf={history.asOf} period={`${filters.from} – ${filters.to} · EAT`} /> : <MutedText>{m.text("performance.statisticsUnavailable")}</MutedText>}
       {loading ? <MutedText role="status">{m.text("performance.summary.loading")}</MutedText> : history?.records.length ? <SlipList $inset={false} data-slip-list>{history.records.map((item) => <article key={item.id} data-published-slip={item.id}>
         <SlipCard slip={item.slip} index={item.rank - 1} estimatedProbability={item.estimatedProbability} results={item.results} locale={locale}
           publishedAt={Date.parse(item.publishedAt)} outcome={item.outcome} {...(item.status ? { status: item.status } : {})} />

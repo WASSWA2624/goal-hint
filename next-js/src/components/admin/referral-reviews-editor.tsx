@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+
 import { useId, useRef, useState, type FormEvent } from "react";
 import type { ReferralReviewCase, ReferralReviewGrant, ReferralReviewMutation } from "@/domain/referral-reviews";
 import { referralReviewReasons, referralReviewRules, referralReviewStatuses } from "@/domain/referral-reviews";
@@ -118,8 +120,7 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
       footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={close}>Cancel</CriteriaDialogButton>
         <CriteriaDialogButton type="submit" form={`${id}-form`} disabled={busy || !confirmed || !draft.grantId}>Create case</CriteriaDialogButton></>}>
       <ReviewForm id={`${id}-form`} method="post" action={endpoint} onSubmit={saveCreate}>
-        <ReviewField label={"Find earned grant"}><input value={search} maxLength={60} onChange={event => setSearch(event.target.value)} placeholder="Phone or grant reference" /></ReviewField>
-        <ActionButton type="button" disabled={busy} onClick={() => void findGrants()}>Find grants</ActionButton>
+        <SearchBar label="Find earned grant" submitLabel="Find grants" onSearch={() => void findGrants()} disabled={busy} value={search} maxLength={60} onChange={event => setSearch(event.target.value)} placeholder="Phone or grant reference" />
         <ReviewField label={"Earned grant"}><select required value={draft.grantId} onChange={event => setDraft(previous => ({ ...previous, grantId: event.target.value }))}>
           <option value="">Choose grant</option>{grants.map(item => <option key={item.id} value={item.id}>{item.phone ? `+${formatPhone(item.phone)}` : "Erased account"} · {item.reference} · {referralReviewTime(item.unusedMs)} unused</option>)}</select></ReviewField>
         <ReviewField label={"Reason"}><select value={draft.reason} onChange={event => setDraft(previous => ({ ...previous, reason: event.target.value as typeof previous.reason }))}>

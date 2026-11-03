@@ -1,13 +1,15 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { media } from "@/styles/theme";
 import { stopReviewSound } from "./payment-alert-sound";
 
 import { FloatingField } from "@/components/ui/floating-field";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import Link from "@/components/navigation/navigation-link";
-import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { formatPhone } from "@/domain/phone";
 import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
@@ -20,7 +22,7 @@ import { useAdminRefresh } from "./use-admin-refresh";
 import { paymentSortOptions, sortPayments, type PaymentSort } from "./payment-order";
 import { CheckoutReview } from "./checkout-review";
 import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueuePanel, QueueSummary, RefreshSquare, ReviewBack, ReviewNav, ReviewSection,
-  SearchField, StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketPhone, TicketPlan, TicketProvider, TicketRef, TicketTime, TicketTray, TicketWarn } from "./payment-styles";
+  StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketPhone, TicketPlan, TicketProvider, TicketRef, TicketTime, TicketTray, TicketWarn } from "./payment-styles";
 
 const tabLabels = { pending: "Pending", remaining: "Part-paid", disputed: "Disputed", approved: "Approved", rejected: "Rejected", cancelled: "Cancelled", reconciliation: "Unallocated funds" };
 const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
@@ -48,6 +50,8 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverDesktopSnapshot);
   const [search, setSearch] = useState(queue.search ?? ""), [selectedId, setSelectedId] = useState(initialPaymentId ?? queue.payments[0]?.id ?? "");
+  const filtersId = useId(), [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState({ provider: "all", sort: "queue" as PaymentSort });
   const [provider, setProvider] = useState("all"), [sort, setSort] = useState<PaymentSort>("queue");
   const [detailOpen, setDetailOpen] = useState(!!initialPaymentId), [completed, setCompleted] = useState<readonly string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
@@ -57,9 +61,9 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   const lastHash = useRef<string | null>(null);
   const query = queue.total === undefined ? searchText(search) : "";
   const payments = sortPayments(queue.payments.filter(payment => !completed.includes(payment.id)
-    && (!desktop || provider === "all" || (payment.final?.network || payment.network) === provider) && (!query || searchText([
+    && (provider === "all" || (payment.final?.network || payment.network) === provider) && (!query || searchText([
     payment.reference, payment.accountPhone ?? "", payment.payerPhone ?? "", payment.transactionId, payment.final?.transactionId ?? "", payment.planName,
-  ].join(" ")).includes(query))), desktop ? sort : "queue");
+  ].join(" ")).includes(query))), sort);
   const selected = payments.find(payment => payment.id === selectedId) ?? payments[0];
   const selectedKey = selected?.id, index = selected ? payments.indexOf(selected) : -1;
   const reviewing = detailOpen && !!selected;
@@ -177,17 +181,23 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
     <QueuePanel aria-labelledby="payment-queue-title" $reviewing={reviewing}>
       <h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"} queue</h2>
       <QueueBar>
-        <form action="/admin/payments" method="get"><input type="hidden" name="tab" value={tab} /><input type="hidden" name="search" value={search} />
-        <SearchField label="Find a payment" leading={<SearchIcon />} >
-          <input id="payment-search" type="search" placeholder="Phone, transaction ID or reference" value={search} maxLength={100} disabled={action.busy} autoComplete="off"
-            onChange={event => setSearch(event.target.value)} /></SearchField>
-        <ActionButton type="submit">Search all requests</ActionButton></form>
-        <QueueFilters>
-          <FloatingField label={<><span>Payment provider</span></>}><select aria-label="Payment provider" value={provider} disabled={action.busy} onChange={event => setProvider(event.target.value)}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FloatingField>
-          <FloatingField label={<><span>Sort payments</span></>}><select aria-label="Sort payments" value={sort} disabled={action.busy} onChange={event => setSort(event.target.value as PaymentSort)}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FloatingField>
-        </QueueFilters>
+        <form action="/admin/payments" method="get"><input type="hidden" name="tab" value={tab} />
+          <SearchBar id="payment-search" name="search" label="Find a payment" submitLabel="Search all requests"
+            value={search} maxLength={100} disabled={action.busy} autoComplete="off" onChange={event => setSearch(event.target.value)}
+            filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen,
+              count: Number(provider !== "all") + Number(sort !== "queue"),
+              onOpen: () => { setFilterDraft({ provider, sort }); setFiltersOpen(true); } }} />
+        </form>
+        {filtersOpen && <CriteriaDialog id={filtersId} title="Payment filters" open onCancel={() => setFiltersOpen(false)} closeLabel="Close payment filters"
+          onApply={() => { setProvider(filterDraft.provider); setSort(filterDraft.sort); setFiltersOpen(false); }} applyLabel="Apply filters" cancelLabel="Cancel"
+          onReset={() => setFilterDraft({ provider: "all", sort: "queue" })} resetLabel="Reset">
+          <QueueFilters>
+            <FloatingField label="Payment provider"><select aria-label="Payment provider" value={filterDraft.provider} onChange={event => setFilterDraft(current => ({ ...current, provider: event.target.value }))}><option value="all">All providers</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FloatingField>
+            <FloatingField label="Sort payments"><select aria-label="Sort payments" value={filterDraft.sort} onChange={event => setFilterDraft(current => ({ ...current, sort: event.target.value as PaymentSort }))}>{paymentSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></FloatingField>
+          </QueueFilters>
+        </CriteriaDialog>}
       </QueueBar>
-      <QueueSummary><span data-payment-count>{payments.length} of {queue.total ?? payments.length} requests</span><span>{desktop && sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
+      <QueueSummary><span data-payment-count>{payments.length} of {queue.total ?? payments.length} requests</span><span>{sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
         {queue.page && <nav aria-label="Payment pages">{queue.page > 1 && <Link href={`/admin/payments?tab=${tab}&page=${queue.page - 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Previous page</Link>}{" "}
           Page {queue.page}{" "}{queue.page * (queue.pageSize ?? 30) < (queue.total ?? 0) && <Link href={`/admin/payments?tab=${tab}&page=${queue.page + 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Next page</Link>}</nav>}
         {queueChanged && <span role="status" data-payment-queue-updated>Queue updated</span>}</QueueSummary>
@@ -202,8 +212,8 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
           <TicketTime data-ticket-time>{ticketTime(payment.submittedAt)}<span data-ticket-timezone> EAT</span></TicketTime>
           {warnings > 0 && <TicketWarn><AlertIcon />{warnings} warning{warnings === 1 ? "" : "s"}</TicketWarn>}
         </Ticket></li>;
-      })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{search || desktop && provider !== "all" ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
-        {(search || desktop && provider !== "all") && <ActionButton type="button" disabled={action.busy} onClick={() => { setSearch(""); setProvider("all"); }}>Clear filters</ActionButton>}</QueueEmpty>}
+      })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{search || provider !== "all" ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
+        {(search || provider !== "all") && <ActionButton type="button" disabled={action.busy} onClick={() => { setSearch(""); setProvider("all"); }}>Clear filters</ActionButton>}</QueueEmpty>}
     </QueuePanel>
     <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}>
       {selected?.workflowVersion === 2 ? <CheckoutReview key={selected.id} payment={selected} nav={nav} onResolved={() => { resolved(selected.id); refreshAdmin(); }} /> : selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}

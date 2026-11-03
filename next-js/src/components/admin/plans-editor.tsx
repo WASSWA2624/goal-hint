@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
@@ -135,7 +137,7 @@ export function PlansEditor({ initialPlans, initialSelectedId }: { initialPlans:
       {desktop && status && <RecordFeedback><Notice $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice></RecordFeedback>}
       {desktop ? <>
         <RecordList aria-label="Plan directory">
-          <RecordListTools><FieldBlock label={"Find a plan"}><input aria-label="Find a plan" type="search" value={search} disabled={busy} onChange={event => setSearch(event.target.value)} placeholder="Name, days or price" /></FieldBlock></RecordListTools>
+          <RecordListTools><SearchBar label="Find a plan" value={search} disabled={busy} onChange={event => setSearch(event.target.value)} placeholder="Name, days or price" /></RecordListTools>
           <RecordListScroll aria-label="Plan list" data-plans-list-scroll tabIndex={0}>{listedPlans.length ? listedPlans.map(plan => <li key={plan.id}>
             <RecordItem id={controlId(`${plan.id}:edit`)} data-plan-row={plan.id} aria-current={!adding && selected?.id === plan.id ? "true" : undefined} aria-controls="plan-record-detail" disabled={busy}
               onClick={() => { setSelectedId(plan.id); setAdding(false); setStatus(null); setEditing({ id: plan.id, draft: draftOf(plan), errors: {} }); }}>

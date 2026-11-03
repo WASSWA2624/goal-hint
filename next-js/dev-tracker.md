@@ -166,3 +166,18 @@ Lint, types, theme contract, production build, 43 targeted tests, 18 browser
 combinations and production loading/dashboard rendering passed. The existing
 two download-catalog build tracing warnings remain. See [plan 261](dev-plan/261-reusable-search-and-performance.md).
 Source integration is complete; deployment is separate.
+
+
+## 262 Shared search and summary optimization — 3 November 2026
+
+**Completed:** submitted searches, instant list filters and option pickers reuse
+SearchBar, with faint inset action fills and accessible hover/press/focus states.
+Adjacent payment/subscriber/audit filter dialogs support Apply, Cancel and Reset
+on both layouts. PerformanceSummary uses shared outcome definitions, cached
+streamed-count normalization and container-responsive cards; report timestamps
+follow the same presentation.
+
+Lint, types, theme contract, production build, 83 targeted tests and 32 browser
+checks passed in light/dark, including fine/coarse pointers. Existing download
+tracing warnings remain. See [plan 262](dev-plan/262-shared-search-and-summary-optimization.md).
+Hosted deployment and native release remain separate.

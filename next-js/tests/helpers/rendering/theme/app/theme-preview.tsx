@@ -30,6 +30,7 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
   const theme = useTheme();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submittedSearch, setSubmittedSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [query, setQuery] = useState(defaultBestSlipsQuery());
   const [result, setResult] = useState<{ mode: string; width: number; errors: string[]; revision: number } | null>(null);
   const runChecks = useCallback(() => {
@@ -81,6 +82,12 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
       <form id="theme-search" onSubmit={event => { event.preventDefault(); setSubmittedSearch(String(new FormData(event.currentTarget).get("q") ?? "")); }}><SearchBar id="theme-search-input" name="q" label="Synthetic search" submitLabel="Search"
         filters={{ label: "Advanced filters", dialogId: "theme-dialog", open: dialogOpen, onOpen: () => setDialogOpen(true) }} /></form>
       <output data-submitted-search>{submittedSearch}</output>
+      <form id="theme-local-search" onSubmit={event => { event.preventDefault(); setLocalSearch("wrong parent submission"); }}>
+        <SearchBar label="Find a local item" submitLabel="Find" onSearch={() => setLocalSearch("local search executed")} />
+        <output data-local-search>{localSearch}</output>
+      </form>
+      <SearchBar id="theme-instant-search" label="Find within options" />
+      <SearchBar id="theme-disabled-search" label="Unavailable search" submitLabel="Search" disabled />
       <CheckoutMessage id="theme-textarea" aria-label="Synthetic message" defaultValue="Synthetic text" />
       <TextInput id="theme-invalid-input" label="Invalid example" defaultValue="Synthetic" error="Synthetic validation message" />
       <TextInput id="theme-disabled-input" label="Disabled example" defaultValue="Synthetic" disabled />
@@ -90,6 +97,8 @@ export function ThemePreview({ fixtures, slip, edgeSlips }: { fixtures: FixtureS
     <section id="theme-performance"><PerformanceSummary locale="en" kind="matches"
       title="Synthetic overall performance" period="Synthetic cohort" showAll={false} asOf={Date.UTC(2026, 10, 3, 17, 30)}
       counts={{ total: 120, won: 72, lost: 24, pending: 18, void: 2, unavailable: 3, filteredOut: 1 }} /></section>
+    <section id="theme-narrow-performance" style={{ maxWidth: theme.size[76] }}><PerformanceSummary locale="en" kind="slips"
+      title="Narrow performance" counts={{ total: 1234567890, won: 1234567890, lost: 0, pending: 0 }} /></section>
     <section id="theme-matches"><Stack $gap="sm"><SectionHeading>Match cards</SectionHeading>
       <MatchCardList>{fixtures.map((fixture, index) => <li key={fixture.fixtureId} style={{ contentVisibility: "visible" }}><MatchCard fixture={fixture} position={index + 1}
         selectedFamily={(["match-result", "total-goals", "both-teams-to-score"] as const)[index]!} analysisSlug="synthetic-preview" /></li>)}</MatchCardList>

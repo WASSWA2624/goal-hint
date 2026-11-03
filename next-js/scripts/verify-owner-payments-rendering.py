@@ -208,8 +208,9 @@ def audit_rendering(origin):
         match(r'data-audit-report', html)
         for marker in ["data-record-workspace", "data-record-list-scroll", "data-record-detail-scroll"]:
             match(marker, html)
-        for control in ["audit-search", "audit-category", "audit-action", "audit-period"]:
+        for control in ["audit-search"]:
             match(rf'id="{control}"', html)
+        match(r'data-search-filters', html)
         match(r'data-audit-count', html)
         export = match(r'<button\b(?=[^>]*data-audit-export)[^>]*>', html).group(0)
         assert len(re.findall(r'<button\b(?=[^>]*data-audit-export)', html)) == 1, "One shared export control covers all matching events."

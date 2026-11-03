@@ -2,11 +2,22 @@
 
 `src/components/ui/search-bar.tsx` owns the floating-label input, inset search
 submit button and optional adjacent filter action. The enclosing form owns
-submission; typing only changes the draft. `filters` supplies the dialog ID,
-open state, opener and optional applied count; `filterButtonRef` supports focus
-restoration. Mobile shows only the filter
-icon; desktop shows its icon and label. All controls use the shared control
+submission. Omit `submitLabel` for immediate in-list/option filtering. Submitted
+searches use the inset action; `onSearch` handles local searches inside another
+form without submitting that parent, including Enter with IME composition
+protection. `filters` supplies the dialog ID, open state, opener and optional
+applied count; `filterButtonRef` supports focus restoration. Mobile shows only
+the filter icon; desktop shows its icon and label. All controls use the shared control
 metrics, floating-label primitives, focus styles and theme tokens.
+
+Matches, admin payments/codes/subscribers/audit/plans/referral lookup, market
+search and league/country/phone-country option search use this component.
+Payment, subscriber and audit advanced filters open adjacent shared dialogs
+with Apply, Cancel and Reset; payment provider/sort filters also work on phones.
+Button fills, hover/press states, visible keyboard focus, disabled states and
+reduced motion use shared tokens. The search action keeps its accessible name
+and uses an icon in narrow desktop fields, leaving more space to type. No
+search-specific resize listener is needed.
 
 Matches uses this component on mobile and desktop. Its desktop Advanced filters
 dialog reuses the individual section fields and their draft validation; Cancel
@@ -16,8 +27,10 @@ restores the opening draft and Done keeps edits for the next search submission.
 Best Slips and performance reports. The heading places its title on the left
 and an optional actual data timestamp on the right (`03-Nov-2026 20:30 EAT`).
 The reporting period remains explicit. All, Won, Lost, Pending, Void and Cancelled
-use theme colours in three mobile columns and six desktop columns. Mobile cards
-have no icons. Result actions retain each screen's date/filter navigation;
+use theme colours in three mobile columns and up to six desktop columns.
+Container queries retain three columns inside narrow report panels; large
+counts wrap within their cards. Outcome definitions are shared once at module
+level and streamed match counts are normalized only when those counts change. Mobile cards have no icons. Result actions retain each screen's date/filter navigation;
 unknown counts show dashes and cannot be selected. Desktop percentages and
 optional prediction-coverage details remain available. Missing timestamps are
 omitted rather than replaced with the browser clock.

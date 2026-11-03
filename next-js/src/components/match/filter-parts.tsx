@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+
 import Link from "@/components/navigation/navigation-link";
 import {
   useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
@@ -18,7 +20,7 @@ import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
 import { searchFilterOptions } from "@/domain/filter-option-search";
 import { media, type AccentName } from "@/styles/theme";
-import { controlFeedback, filterButtonColors, filterControlColors, focusRing } from "@/components/ui/filter-chrome";
+import { controlFeedback, filterButtonColors, focusRing } from "@/components/ui/filter-chrome";
 
 export { controlFeedback, filterButtonColors, filterControlColors, filterPanelColors, focusRing } from "@/components/ui/filter-chrome";
 
@@ -214,20 +216,7 @@ const PickerPanel = styled.div`
   &[data-picker-placement="above"] { inset-block-start: auto; inset-block-end: calc(100% + var(--gh-spacing-1_5)); }
 `;
 /** Phones list compact 36px rows at 13px; desktop keeps its 40px rows at 15px. */
-const PickerSearch = styled.input`
-  min-inline-size: 0;
-  min-block-size: var(--form-control-height);
-  padding-inline: ${({ theme }) => theme.space.sm};
-  color: ${({ theme }) => theme.color.text};
-  border: 0;
-  ${filterControlColors}
-  border-radius: ${({ theme }) => theme.radius.control};
-  font: inherit;
-  font-size: var(--gh-font-body);
-  ${controlFeedback}
-  ${focusRing}
-  ${media.desktop} { min-block-size: var(--form-control-height); font-size: var(--gh-font-reading); }
-`;
+
 const PickerList = styled.ul`
   min-inline-size: 0;
   min-block-size: 0;
@@ -371,8 +360,8 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
     <Trigger ref={button} type="button" aria-expanded={open} aria-controls={panelId} aria-label={title} title={title}
       onClick={() => setOpen(!open)}>{summary ?? trigger}{(summary || !trigger) && <ChevronDownIcon />}</Trigger>
     {open && <PickerPanel ref={panel} id={panelId} role="group" aria-label={title} data-option-picker-panel>
-      {searchable && <PickerSearch type="search" value={filter} onChange={(event) => setFilter(event.target.value)}
-        aria-label={findLabel} placeholder={findLabel} autoFocus />}
+      {searchable && <SearchBar label={findLabel ?? title} value={filter} onChange={(event) => setFilter(event.target.value)}
+        placeholder={findLabel} autoFocus onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }} />}
       {exact.length + similar.length === 0 ? <PickerEmpty>{needle && noMatchLabel ? noMatchLabel : emptyLabel}</PickerEmpty> : <PickerList>
         {exact.map((option) => row(option))}
         {similar.length > 0 && similarLabel && <PickerHeading id={similarId}>{similarLabel}</PickerHeading>}

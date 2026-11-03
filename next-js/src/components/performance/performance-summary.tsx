@@ -10,6 +10,7 @@ import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
 const Panel = styled.section`
+  container: performance-summary / inline-size;
   min-inline-size: 0; background: ${({ theme }) => theme.color.surface};
   border-radius: ${({ theme }) => theme.radius.none};
   ${desktopSectionFrame}
@@ -32,7 +33,10 @@ const Period = styled.p`
 const Counts = styled.dl`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gh-spacing-1); min-inline-size: 0; margin: 0;
-  ${media.desktop} { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--gh-spacing-1_5); }
+  ${media.desktop} {
+    gap: var(--gh-spacing-1_5);
+    @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  }
 `;
 type Status = PredictionResult | "all";
 const Count = styled.div<{ $status: Status }>`
@@ -48,13 +52,14 @@ const Count = styled.div<{ $status: Status }>`
   box-sizing: border-box; border-radius: ${({ theme }) => theme.radius.small};
   color: var(--summary-text); background: var(--summary-background);
   dt { margin: 0; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-label); }
-  dd { display: flex; align-items: center; gap: var(--gh-spacing-1); margin: 0; font-size: var(--gh-font-emphasis); font-weight: var(--gh-weight-bold); font-variant-numeric: tabular-nums; }
+  dd { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--gh-spacing-1); min-inline-size: 0; max-inline-size: 100%; margin: 0; font-size: var(--gh-font-emphasis); font-weight: var(--gh-weight-bold); font-variant-numeric: tabular-nums; }
+  dt, [data-summary-count] { max-inline-size: 100%; overflow-wrap: anywhere; text-align: center; }
   dd > svg { display: none; }
   ${media.desktop} { dd > svg { display: block; font-size: var(--gh-font-secondary); } }
 `;
 const Percentage = styled.span`
   display: none; margin-inline-start: var(--gh-spacing-1); font-size: var(--gh-font-caption); font-weight: var(--gh-weight-body);
-  ${media.desktop} { display: inline; }
+  ${media.desktop} { @container performance-summary (min-width: ${({ theme }) => theme.size[144]}) { display: inline; } }
 `;
 const Coverage = styled.dl`
   display: flex; flex-wrap: wrap; gap: var(--gh-spacing-1) var(--gh-spacing-3); margin: 0;
@@ -68,8 +73,18 @@ const Action = styled.button`
   &[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--gh-stroke-strong) currentColor; }
   color: inherit;
   &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
+  ${media.hover} { &:hover:not(:disabled):not([aria-pressed="true"]) { box-shadow: inset 0 0 0 var(--gh-stroke-thin) currentColor; } }
   &:disabled { cursor: wait; }
 `;
+
+const outcomes = [
+  { key: "all", message: "performance.summary.all" },
+  { key: "won", tone: "correct", message: "performance.won", icon: CheckIcon },
+  { key: "lost", tone: "incorrect", message: "performance.lost", icon: CloseIcon },
+  { key: "pending", tone: "pending", message: "performance.pending", icon: ClockIcon },
+  { key: "void", message: "performance.void" },
+  { key: "cancelled", message: "performance.cancelled" },
+] as const;
 
 /** Shared period outcomes; null counts remain unknown and all six statuses stay visible. */
 export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title, period, asOf, headingLevel = 2,
@@ -84,14 +99,6 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
   const counts = suppliedCounts ?? { total: 0, won: 0, lost: 0, pending: 0 };
   const predicted = kind === "matches" ? predictedPerformanceSummary(counts) : null;
   const number = (value: number) => pending ? "—" : m.number(value);
-  const outcomes = [
-    { key: "all", label: m.text(showAll ? "performance.summary.all" : `performance.summary.${kind}`), count: showAll && predicted ? predicted.total : counts.total },
-    { key: "won", tone: "correct", label: m.text("performance.won"), count: counts.won, icon: CheckIcon },
-    { key: "lost", tone: "incorrect", label: m.text("performance.lost"), count: counts.lost, icon: CloseIcon },
-    { key: "pending", tone: "pending", label: m.text("performance.pending"), count: counts.pending, icon: ClockIcon },
-    { key: "void", label: m.text("performance.void"), count: counts.void ?? 0 },
-    { key: "cancelled", label: m.text("performance.cancelled"), count: counts.cancelled ?? 0 },
-  ] as const;
   const instant = asOf === undefined ? null : utcInstantFromEpochMilliseconds(asOf);
   return <Panel role="group" aria-label={label} aria-busy={pending || undefined} data-performance-summary={kind}>
     <Content>
@@ -101,7 +108,9 @@ export function PerformanceSummary({ counts: suppliedCounts, locale, kind, title
       {instant !== null && period && <Period data-performance-period>{period}</Period>}
       <Counts data-performance-figures>
         {outcomes.map((outcome) => {
-          const { key, label, count } = outcome, result = key === "all" ? undefined : key;
+          const { key } = outcome, result = key === "all" ? undefined : key;
+          const label = m.text(key === "all" && !showAll ? `performance.summary.${kind}` : outcome.message);
+          const count = key === "all" ? (showAll && predicted ? predicted.total : counts.total) : counts[key] ?? 0;
           const fraction = key === "all" ? null : predicted
             ? (predicted.total > 0 ? count / predicted.total : null) : counts.total > 0 ? count / counts.total : null;
           const percentage = !pending && fraction !== null && fraction !== undefined

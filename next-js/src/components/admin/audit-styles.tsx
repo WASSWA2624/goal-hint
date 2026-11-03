@@ -1,9 +1,7 @@
 "use client";
 
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { ButtonLink } from "@/components/ui/controls";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { mobileFilterPanel } from "@/components/ui/filter-chrome";
 import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
 import { RecordDetails, RecordHead, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
@@ -21,61 +19,16 @@ export const ExportButton = styled(ActionButton)`
   > svg { flex: none; font-size: var(--gh-font-section); }
 `;
 
-/** Search and filters: loose on phones (search, then a Filters drawer), one open side panel from desktop up. */
+/** The shared search bar keeps the advanced-filter opener on the same row at every width. */
 export const AuditTools = styled(RecordListTools)`
+  > p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); }
   ${media.belowDesktop} { input, select { font-size: var(--gh-font-section); } }
   [data-floating-field] select { border-radius: ${({ theme }) => theme.radius.control}; }
 `;
 
-/** Shared floating search keeps the visible label and the same body height as adjacent filters. */
-export const SearchField = styled.div`min-inline-size: 0;`;
-
-export const FilterDrawer = styled.div`
-  ${mobileFilterPanel}
-  min-inline-size: 0;
-  ${media.belowDesktop} {
-    background: ${({ theme }) => theme.color.surface};
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.surface};
-  }
-`;
-
-export const FilterToggle = styled.button`
-  display: flex; align-items: center; gap: var(--gh-spacing-2); inline-size: 100%; min-block-size: var(--form-control-height); padding: 0 var(--gh-spacing-3_5);
-  border: 0; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
-  font: inherit; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: start; cursor: pointer;
-  > svg { flex: none; font-size: var(--gh-font-title); }
-  > span { margin-inline-start: var(--gh-spacing-1); }
-  > svg:last-child { margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-section); transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
-  &[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
-  @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
-  ${media.desktop} { display: none; }
-`;
-
-export const FilterBody = styled.div<{ $open: boolean }>`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-3) var(--gh-spacing-2); min-inline-size: 0;
-  > * { min-inline-size: 0; }
-  > :nth-child(n + 3) { grid-column: 1 / -1; }
-  ${({ $open }) => css`${media.belowDesktop} {
-    padding: var(--gh-spacing-3) 0 var(--gh-spacing-3_5); border-block-start: 0;
-    ${!$open && css`display: none;`}
-  }`}
-`;
-
-export const AuditRangeSummary = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1) var(--gh-spacing-2);
-  color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary};
-`;
-
-export const AuditRangeDialog = styled(CriteriaDialog)`
-  border-radius: ${({ theme }) => theme.radius.overlay};
-  && button { border-radius: ${({ theme }) => theme.radius.control}; }
-`;
-
-export const AuditRangeFields = styled.div`
-  display: grid; gap: var(--gh-spacing-3_5);
-  > p { margin: 0; }
+export const FilterBody = styled.div`
+  display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
+  > p[role="alert"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; margin: 0; }
 `;
 
 /** "n events · 1–20 shown" on the start side, the window and time zone on the end side. */

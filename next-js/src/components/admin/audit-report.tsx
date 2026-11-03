@@ -2,10 +2,12 @@
 
 import { media } from "@/styles/theme";
 
-import { Fragment, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
-import { Button, TextInput } from "@/components/ui/controls";
+import { SearchBar } from "@/components/ui/search-bar";
+import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { Button } from "@/components/ui/controls";
 import { CardIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, DocumentIcon, DownloadIcon, GiftIcon, LayersIcon, ResetIcon, SearchIcon,
   ShieldIcon, SlidersIcon, UserIcon } from "@/components/ui/icons";
 import { auditActionLabel, auditActorLabel, auditCategories, auditCategory, auditCategoryLabel, auditCsv, auditDateBounds, auditDay, auditPeriods, auditReference,
@@ -14,10 +16,10 @@ import type { OwnerAuditRow } from "@/domain/owner-members";
 import { publicPolicy } from "@/domain/public-policy";
 import { auditEventLink } from "@/domain/admin-audit-links";
 import { FloatingField } from "./floating-field";
-import { DrawerNote, EmptyPanel, Panel, PanelBody, TextAction } from "./desk-styles";
+import { EmptyPanel, Panel, PanelBody, TextAction } from "./desk-styles";
 import { RecordBody, RecordCard, RecordDetailHead, RecordFeedback, RecordFooter, RecordList, RecordListFooter, RecordScroll } from "./record-workspace";
-import { AuditDay, AuditDetails, AuditEvent, AuditFeed, AuditHead, AuditLayout, AuditPager, AuditRangeDialog, AuditRangeFields, AuditRangeSummary, AuditSummary, AuditTools, EventDetails, EventFacts, EventIcon, EventLink,
-  EventText, EventTime, ExportButton, FilterBody, FilterDrawer, FilterToggle, HeadActions, SearchField } from "./audit-styles";
+import { AuditDay, AuditDetails, AuditEvent, AuditFeed, AuditHead, AuditLayout, AuditPager, AuditSummary, AuditTools, EventDetails, EventFacts, EventIcon, EventLink,
+  EventText, EventTime, ExportButton, FilterBody, HeadActions } from "./audit-styles";
 
 const pageSize = 20;
 const categoryIcons = { security: ShieldIcon, accounts: UserIcon, payments: CardIcon, access: GiftIcon,
@@ -46,10 +48,8 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<AuditCategory | "">("");
-  const periodControl = useRef<HTMLSelectElement>(null);
-  const [rangeOpen, setRangeOpen] = useState(false);
-  const [draftStart, setDraftStart] = useState("");
-  const [draftEnd, setDraftEnd] = useState("");
+  const filtersId = useId();
+  const [draft, setDraft] = useState({ category, action, period, startDate, endDate });
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -76,18 +76,14 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     setPageIndex(0); setSelectedId(null); setExportStatus(null);
     startNavigation(() => router.push(`/admin/audit${params.size ? `?${params}` : ""}`, { scroll: false }));
   }
-  function openRange() {
-    const today = auditDay(new Date().toISOString());
-    setDraftStart(startDate || today); setDraftEnd(endDate || today); setRangeError(null); setRangeOpen(true);
-  }
-  function closeRange() {
-    setRangeOpen(false);
-    requestAnimationFrame(() => periodControl.current?.focus());
-  }
-  function applyRange() {
-    try { auditDateBounds({ period: "custom", startDate: draftStart, endDate: draftEnd }); }
-    catch { setRangeError(!draftStart || !draftEnd ? "Choose both a start date and an end date." : "Enter valid dates with the end date on or after the start date."); return; }
-    closeRange(); changeFilters(action, "custom", draftStart, draftEnd);
+  function applyFilters() {
+    if (draft.period === "custom") {
+      try { auditDateBounds({ period: "custom", startDate: draft.startDate, endDate: draft.endDate }); }
+      catch { setRangeError("Enter valid dates with the end date on or after the start date."); return; }
+    }
+    setCategory(draft.category); setPageIndex(0); setSelectedId(null); setExportStatus(null); setFiltersOpen(false);
+    if (draft.action !== action || draft.period !== period || draft.startDate !== startDate || draft.endDate !== endDate)
+      changeFilters(draft.action, draft.period, draft.startDate, draft.endDate);
   }
   function reset() {
     setSearch(""); setCategory(""); setPageIndex(0); setSelectedId(null); setExportStatus(null);
@@ -122,30 +118,31 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     {exportStatus && <RecordFeedback><Notice role="status">{exportStatus}</Notice></RecordFeedback>}
     <RecordList aria-label="Audit activity list">
       <AuditTools role="search" aria-label="Find audit activity">
-        <SearchField>
-          <TextInput id="audit-search" type="search" label="Search recent activity" placeholder="Event, person or reference" leading={<SearchIcon />}
-            value={search} maxLength={160} autoComplete="off" onChange={event => { setSearch(event.target.value); setPageIndex(0); setExportStatus(null); }} />
-        </SearchField>
-        <FilterDrawer>
-          <FilterToggle type="button" aria-expanded={filtersOpen} aria-controls="audit-filters" onClick={() => setFiltersOpen(open => !open)}>
-            <SlidersIcon />Filters<DrawerNote>{activeFilters ? `${activeFilters} active` : "none active"}</DrawerNote><ChevronDownIcon />
-          </FilterToggle>
-          <FilterBody id="audit-filters" $open={filtersOpen}>
-            <FloatingField label="Category"><select id="audit-category" value={category} disabled={pending} onChange={event => { setCategory(event.target.value as AuditCategory | ""); setPageIndex(0); setExportStatus(null); }}>
+        <SearchBar id="audit-search" label="Search recent activity" value={search} maxLength={160} autoComplete="off" disabled={pending}
+          onChange={event => { setSearch(event.target.value); setPageIndex(0); setExportStatus(null); }}
+          filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen, count: activeFilters,
+            onOpen: () => { setDraft({ category, action, period, startDate, endDate }); setRangeError(null); setFiltersOpen(true); } }} />
+        {period === "custom" && <p data-audit-applied-range>{startDate} – {endDate} · EAT</p>}
+        {filtersOpen && <CriteriaDialog id={filtersId} title="Audit filters" open onCancel={() => setFiltersOpen(false)} closeLabel="Close audit filters"
+          onApply={applyFilters} applyLabel="Apply filters" cancelLabel="Cancel"
+          onReset={() => { setDraft({ category: "", action: "", period: "all", startDate: "", endDate: "" }); setRangeError(null); }} resetLabel="Reset">
+          <FilterBody>
+            <FloatingField label="Category"><select id="audit-category" value={draft.category} onChange={event => setDraft(current => ({ ...current, category: event.target.value as AuditCategory | "" }))}>
               <option value="">All categories</option>{auditCategories.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select></FloatingField>
-            <FloatingField label="Event"><select id="audit-action" value={action} disabled={pending} onChange={event => changeFilters(event.target.value, period, startDate, endDate)}>
+            <FloatingField label="Event"><select id="audit-action" value={draft.action} onChange={event => setDraft(current => ({ ...current, action: event.target.value }))}>
               <option value="">All events</option>{eventOptions.map(value => <option key={value} value={value}>{auditActionLabel(value)}</option>)}
             </select></FloatingField>
-            <FloatingField label="Date"><select ref={periodControl} id="audit-period" value={period} disabled={pending} onChange={event => {
-              const value = event.target.value as AuditPeriod;
-              if (value === "custom") openRange(); else changeFilters(action, value);
-            }}>
+            <FloatingField label="Date"><select id="audit-period" value={draft.period} onChange={event => setDraft(current => ({ ...current, period: event.target.value as AuditPeriod }))}>
               {auditPeriods.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select></FloatingField>
-            {period === "custom" && <AuditRangeSummary><span>{startDate} – {endDate} · EAT</span><TextAction type="button" disabled={pending} onClick={openRange}>Edit range</TextAction></AuditRangeSummary>}
+            {draft.period === "custom" && <>
+              <FloatingField label="Start date"><input id="audit-start-date" type="date" required value={draft.startDate} max={draft.endDate || undefined} onChange={event => setDraft(current => ({ ...current, startDate: event.target.value }))} /></FloatingField>
+              <FloatingField label="End date"><input id="audit-end-date" type="date" required value={draft.endDate} min={draft.startDate || undefined} onChange={event => setDraft(current => ({ ...current, endDate: event.target.value }))} /></FloatingField>
+            </>}
+            {rangeError && <p role="alert">{rangeError}</p>}
           </FilterBody>
-        </FilterDrawer>
+        </CriteriaDialog>}
       </AuditTools>
       <AuditFeed as="section" id="audit-results" tabIndex={0} aria-label="Audit activity" aria-busy={pending}>
         {matches.length === 0 ? <EmptyPanel data-audit-empty><SearchIcon /><strong>{filtered ? "No matching activity" : "No activity yet"}</strong></EmptyPanel>
@@ -210,14 +207,5 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
         {selectedLink && <RecordFooter><EventLink href={selectedLink.href} variant="secondary" prefetch={false}>{selectedLink.label}</EventLink></RecordFooter>}
       </RecordCard>
     </AuditDetails>
-    {rangeOpen && <AuditRangeDialog id="audit-date-range" title="Custom date range" open onCancel={closeRange} onApply={applyRange}
-      applyLabel="Apply range" cancelLabel="Cancel" closeLabel="Close date range">
-      <AuditRangeFields>
-        <p>Choose dates in East Africa Time (EAT). Both dates are included.</p>
-        <FloatingField label="Start date"><input id="audit-start-date" type="date" required value={draftStart} max={draftEnd || undefined} aria-invalid={!!rangeError} aria-describedby={rangeError ? "audit-range-error" : undefined} onChange={event => { setDraftStart(event.target.value); setRangeError(null); }} /></FloatingField>
-        <FloatingField label="End date"><input id="audit-end-date" type="date" required value={draftEnd} min={draftStart || undefined} aria-invalid={!!rangeError} aria-describedby={rangeError ? "audit-range-error" : undefined} onChange={event => { setDraftEnd(event.target.value); setRangeError(null); }} /></FloatingField>
-        {rangeError && <Notice id="audit-range-error" $tone="error" role="alert">{rangeError}</Notice>}
-      </AuditRangeFields>
-    </AuditRangeDialog>}
   </AuditLayout>;
 }

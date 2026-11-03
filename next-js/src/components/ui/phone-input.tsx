@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
@@ -11,12 +13,12 @@ import { deleteGroupedDigit, integerDigits } from "@/domain/input-format";
 import { preserveDigitCaret } from "./formatted-input";
 import { controlHeight } from "./control-layout";
 import { FloatingField } from "./floating-field";
-import { selectSurface, textFieldSurface } from "./filled-surfaces";
+import { selectSurface } from "./filled-surfaces";
 import { FloatingOutline } from "./floating-outline";
 import { floatingLabel, raisedFloatingLabel, floatingOutline, floatingOutlineFocus } from "./floating-field-styles";
 import { dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
 import { createMessages } from "@/i18n/messages";
-import { Field, FieldMessage, focusTreatment, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
+import { Field, FieldMessage, hasContent, InputControl, useFieldAccessibility, type TextInputProps } from "./controls";
 import { CheckIcon, ChevronDownIcon, GlobeIcon } from "./icons";
 
 // Apart from ./controls, so libphonenumber's metadata and the country list load only with a phone field, not with every Button.
@@ -168,8 +170,8 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lo
     {open && !inactive && portalRoot && createPortal(<CountryMenu ref={menu} id={menuId} role="dialog" aria-label={messages.text("phone.country")}
       style={position} onKeyDown={menuKey} data-phone-country-picker data-analytics-ignore
       onBlur={event => { if (event.relatedTarget instanceof Node && !menu.current?.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) closeCountries(); }}>
-      <FloatingField label={messages.text("phone.countrySearchLabel")}><CountrySearch ref={countrySearch} id={searchId} type="search" value={query} onChange={event => setQuery(event.currentTarget.value)}
-        placeholder={messages.text("phone.countrySearch")} autoComplete="off" disabled={inactive} data-phone-country-search /></FloatingField>
+      <SearchBar label={messages.text("phone.countrySearchLabel")} ref={countrySearch} id={searchId} value={query} onChange={event => setQuery(event.currentTarget.value)}
+        placeholder={messages.text("phone.countrySearch")} autoComplete="off" disabled={inactive} data-phone-country-search />
       <CountryResults role="group" aria-label={messages.text("phone.countries")}>
         {options.map(option => <CountryOption key={option.iso2} type="button" disabled={inactive} aria-pressed={parts.country === option.iso2} data-phone-country-option={option.iso2}
           onClick={() => { if (inactive) return; change({ country: option.iso2, callingCode: option.callingCode, national: parts.national }); closeCountries(); control.current?.focus(); }}>
@@ -227,11 +229,7 @@ const CountryMenu = styled.div`
   color: ${({ theme }) => theme.color.text}; ${dialogHeaderSurface}
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
-const CountrySearch = styled.input`
-  box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: var(--form-control-height); padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
-  border: 0; border-radius: ${({ theme }) => theme.radius.control}; font: inherit; font-size: var(--gh-font-section);
-  color: ${({ theme }) => theme.color.text}; ${textFieldSurface} ${focusTreatment}
-`;
+
 const CountrySearchLabel = styled.label`
   position: absolute; inline-size: var(--gh-size-0_25); block-size: var(--gh-size-0_25); padding: 0; margin: calc(-1 * var(--gh-spacing-0_25)); overflow: hidden;
   clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0;

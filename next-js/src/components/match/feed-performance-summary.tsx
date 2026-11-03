@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { Button } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
@@ -66,8 +66,9 @@ export function FeedPerformanceSummary({ query, today, data, enabled, period, on
     return () => controller.abort();
   }, [attempt, dispatch, key, needsRead]);
   const counts = reply?.key === key ? reply.counts : null, failed = reply?.key === key && reply.failed;
+  const summaryCounts = useMemo(() => counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null, [counts]);
   return <Stack $gap="sm" data-feed-performance-state={failed ? "unavailable" : counts ? "ready" : "loading"}>
-    <PerformanceSummary counts={counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null} locale={query.locale} kind="matches"
+    <PerformanceSummary counts={summaryCounts} locale={query.locale} kind="matches"
       {...summaryLabels({ query, data, period })} asOf={reply?.key === key ? reply.asOf : data.asOf} activeResult={query.result} disabled={!enabled}
       onResult={(result) => onApply(selectFeedSummaryResult(query, result, today, data.asOf))} showCoverage={false} showAll />
     {failed && <Inline><FeedNote role="status">{messages.text("performance.summary.unavailable")}</FeedNote>

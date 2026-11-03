@@ -1,5 +1,7 @@
 "use client";
 
+import { SearchBar } from "@/components/ui/search-bar";
+
 import { controlRow } from "@/components/ui/control-layout";
 
 import { FloatingField } from "@/components/ui/floating-field";
@@ -11,7 +13,7 @@ import styled, { css } from "styled-components";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { ChevronDownIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, PlusIcon } from "@/components/ui/icons";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
 import { formatPeriodEnd } from "@/domain/subscription-period";
@@ -245,9 +247,8 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     <CodeList aria-label="Code directory">
       <RecordListTools>
         <SearchForm method="post" action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
-          <FloatingField label="Phone or reference"><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Enter phone number or code" maxLength={40} autoComplete="off" disabled={action.busy} /></FloatingField>
+          <SearchBar label="Phone or reference" submitLabel="Search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Enter phone number or code" maxLength={40} autoComplete="off" disabled={action.busy} />
           <FloatingField label="Status"><select value={status} disabled={action.busy} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{Object.entries(codeStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FloatingField>
-          <ActionButton type="submit" disabled={action.busy}><SearchIcon />Search</ActionButton>
         </SearchForm>
       </RecordListTools>
       <RecordListScroll aria-label="Codes" tabIndex={0} data-codes-list-scroll>
@@ -311,7 +312,7 @@ const MobileCodeDetails = styled(PlainDrawer)`
   > [data-record-actions] { margin-block-start: var(--gh-spacing-3); }
 `;
 const SearchForm = styled.form`
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--gh-spacing-2); min-inline-size: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: var(--gh-spacing-2); min-inline-size: 0;
   > :first-child { grid-column: 1 / -1; }
   > button > svg { flex: none; font-size: var(--gh-font-section); }
   ${media.desktop} { input, select { min-block-size: var(--form-control-height); font-size: var(--gh-font-body); } > button { min-block-size: var(--form-control-height); } }

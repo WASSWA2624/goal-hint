@@ -1,10 +1,9 @@
 "use client";
 
-import { FloatingField } from "@/components/ui/floating-field";
 
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
-import { ActionButton, adminControl } from "./admin-form";
+import { ActionButton } from "./admin-form";
 import { DeskHeadEnd, Drawer, EmptyPanel, Segmented, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopBalancedReview } from "./payment-balanced-styles";
 import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
@@ -94,15 +93,8 @@ export const QueueBar = styled(RecordListTools)`
   ${media.belowDesktop} { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-2); padding: 0; border: 0; > :first-child { flex-basis: 100%; max-inline-size: none; } }
 `;
 export const QueueFilters = styled.div`
-  display: none;
-  ${media.desktop} {
-    display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2);
-    label { min-inline-size: 0; }
-    label > span { ${visuallyHidden} }
-    select { ${adminControl} min-block-size: var(--form-control-height); padding: var(--gh-spacing-0_5) var(--gh-spacing-4_5) var(--gh-spacing-0_5) 0; border: 0; border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-secondary); color: ${({ theme }) => theme.color.mutedText}; }
-  }
+  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
 `;
-export const SearchField = styled(FloatingField)`min-inline-size: 0;`;
 export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
   gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
   > span + span::before { content: "·"; margin-inline-end: var(--gh-spacing-1_5); }
