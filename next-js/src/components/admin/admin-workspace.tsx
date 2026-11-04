@@ -145,6 +145,7 @@ const Frame = styled.div<{ $fixed: boolean }>`
   ${media.desktop} {
     grid-template-columns: var(--admin-sidebar-width, var(--gh-size-58)) var(--admin-sidebar-handle-width, var(--gh-size-1_5)) minmax(0, 1fr);
     align-content: stretch;
+    border-inline-end: var(--admin-sidebar-handle-width) solid var(--admin-header-divider-surface);
     &[data-sidebar-resizing="true"], &[data-sidebar-resizing="true"] * { cursor: col-resize !important; user-select: none; }
   }
   ${({ $fixed }) => $fixed && css`${media.desktop} { block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); flex: none; min-block-size: 0; overflow: hidden; }`}
