@@ -1,41 +1,15 @@
 "use client";
 
-import styled from "styled-components";
 import { HeaderBrand } from "@/components/ui/brand";
-import { Container, DesktopContent, desktopSectionFrame, PageMain, Stack } from "@/components/ui/layout";
-import { media } from "@/styles/theme";
+import { PageMain } from "@/components/ui/layout";
 import { FallbackStyleProvider } from "@/styles/provider";
-import { LoadingTheme } from "@/styles/loading-theme";
 import { Header, HeaderContent, ShellFrame } from "./shell-styles";
-
-const Placeholder = styled.div`
-  border-radius: ${({ theme }) => theme.radius.surface};
-  min-block-size: var(--gh-size-28);
-  border: 0;
-  background: ${({ theme }) => theme.color.surface};
-  ${desktopSectionFrame}
-`;
-const LoadingStatus = styled.p`
-  margin: 0;
-  padding-block: ${({ theme }) => theme.space.md};
-  color: ${({ theme }) => theme.color.mutedText};
-  ${media.desktop} { padding-inline: ${({ theme }) => theme.space.md}; }
-`;
+import { NavigationProgress } from "./navigation-progress";
 
 /** A request-independent shell that can be prefetched before any stored page reads. */
 export function PageLoading({ label }: { label: string }) {
   return <FallbackStyleProvider><ShellFrame>
-    <Header><HeaderContent $wide><HeaderBrand /></HeaderContent></Header>
-    <PageMain id="main-content" tabIndex={-1} $app $compact>
-      <Container $wide><PageContentLoading label={label} /></Container>
-    </PageMain>
+    <Header><HeaderContent $wide><HeaderBrand /></HeaderContent><NavigationProgress label={label} /></Header>
+    <PageMain id="main-content" tabIndex={-1} $app $compact aria-busy="true" />
   </ShellFrame></FallbackStyleProvider>;
-}
-
-/** Reuse the themed loading content inside an already rendered, authorized workspace. */
-export function PageContentLoading({ label }: { label: string }) {
-  return <LoadingTheme><Stack aria-busy="true" data-page-content-loading>
-    <LoadingStatus role="status">{label}</LoadingStatus>
-    <DesktopContent><Stack aria-hidden="true"><Placeholder /><Placeholder /><Placeholder /></Stack></DesktopContent>
-  </Stack></LoadingTheme>;
 }

@@ -104,7 +104,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
             : <AccountNote role="status">{m.text("account.countryUnsupported")}</AccountNote>}
           {selectedChannel === "whatsapp" && <AccountNote>{m.text("account.whatsappConsent")}</AccountNote>}
           {error && <AccountError role="alert">{error}</AccountError>}
-          <AccountPrimary type="submit" disabled={!!busy || !canonicalPhone || !selectedChannel}>{busy === "request" ? m.text("account.working") : sendLabel}<ChevronRightIcon /></AccountPrimary>
+          <AccountPrimary type="submit" disabled={!!busy || !canonicalPhone || !selectedChannel}>{sendLabel}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
       </> : <>
         <AccountSteps aria-label={m.text("account.verificationSteps")}>
@@ -132,7 +132,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
             </AccountWhatsAppConsentLabel>
           </DesktopConsent>}
           {error && <AccountError role="alert">{error}</AccountError>}
-          <AccountPrimary type="submit" disabled={!!busy || code.length !== 6 || invalidCode}>{m.text(busy === "verify" ? "account.working" : recovery ? "account.continueReset" : "account.verifyCode")}<ChevronRightIcon /></AccountPrimary>
+          <AccountPrimary type="submit" disabled={!!busy || code.length !== 6 || invalidCode}>{m.text(recovery ? "account.continueReset" : "account.verifyCode")}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
       </>}
       <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>

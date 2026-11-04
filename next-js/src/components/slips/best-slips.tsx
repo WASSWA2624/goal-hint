@@ -12,7 +12,6 @@ import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipList, SlipStack } from "./slip-styles";
 import { BestSlipCard } from "./best-slip-card";
-import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
 import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
@@ -37,7 +36,7 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
       scannedDates={content?.browse?.total === null ? content.browse : undefined}
       summary={content?.summary} statistics={content?.summary?.statistics ?? (content?.summary ? null : content?.statistics)} countSummary={content?.state === "generated"
         ? <BestSlipsSummary result={content} locale={locale} /> : null} onChange={browse.change} />
-    {browse.loading ? <SlipLoading locale={locale} />
+    {browse.loading ? null
     : browse.failed && !content ? <CriteriaPanel role="alert"><Stack $gap="sm"><p>{m.text("bestSlips.filters.dataUnavailable")}</p>
       <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton></Stack></CriteriaPanel>
     : content.state === "data-unavailable" ? <CriteriaPanel role="alert"><Stack $gap="sm">

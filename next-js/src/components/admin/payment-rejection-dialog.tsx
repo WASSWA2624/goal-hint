@@ -1,34 +1,12 @@
 "use client";
 
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useId, useState } from "react";
 import styled from "styled-components";
-import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { AlertIcon } from "@/components/ui/icons";
 import { paymentRejectionLabels, paymentRejectionMaxLength, paymentRejectionReasons, paymentRejectionText, type PaymentRejectionReason } from "@/domain/payment-rejection";
-import { media } from "@/styles/theme";
 import { CheckField, DangerButton, FieldBlock, FormStack } from "./admin-form";
+import { PaymentActionDialog, PaymentDialogCancel } from "./payment-action-dialog";
 
-const Anchor = styled.div`display: contents;`;
-const Dialog = styled(CriteriaDialog)`
-  ${media.desktop} {
-    &&[data-enhanced="true"] {
-      inset: auto;
-      left: var(--rejection-x, 50%);
-      top: var(--rejection-y, 50%);
-      transform: translate(-50%, -50%);
-      margin: 0;
-      max-inline-size: calc(var(--rejection-width, 100vw) - var(--gh-size-6));
-    }
-  }
-  header h2 {
-    display: flex;
-    align-items: center;
-    gap: var(--gh-spacing-2);
-    font-weight: var(--gh-weight-medium);
-  }
-  header h2 svg { color: ${({ theme }) => theme.color.outcome.incorrect.text}; }
-`;
-const CancelButton = styled(CriteriaDialogButton)`margin-inline-end: auto;`;
 const Reasons = styled.fieldset`
   margin: 0;
   padding: 0;
@@ -47,7 +25,7 @@ export type PaymentRejection = {
 export function PaymentRejectionDialog({ busy, error, canDeleteImage = false, onCancel, onReject }: {
   busy: boolean; error?: string; canDeleteImage?: boolean; onCancel: () => void; onReject: (rejection: PaymentRejection) => void;
 }) {
-  const anchor = useRef<HTMLDivElement>(null), id = useId(), formId = `${id}-form`;
+  const formId = useId();
   const [checked, setChecked] = useState<PaymentRejectionReason[]>([]);
   const [note, setNote] = useState(""), [deleteImage, setDeleteImage] = useState(false);
   const presets = paymentRejectionReasons.filter(reason => checked.includes(reason));
@@ -55,31 +33,11 @@ export function PaymentRejectionDialog({ busy, error, canDeleteImage = false, on
   const text = paymentRejectionText(presets, note);
   const tooLong = note.trim().length >= 3 && !text;
 
-  useLayoutEffect(() => {
-    const element = anchor.current, pane = element?.closest("#payment-review");
-    if (!element || !pane) return;
-    const position = () => {
-      const bounds = pane.getBoundingClientRect();
-      element.style.setProperty("--rejection-x", `${bounds.left + bounds.width / 2}px`);
-      element.style.setProperty("--rejection-y", `${bounds.top + bounds.height / 2}px`);
-      element.style.setProperty("--rejection-width", `${bounds.width}px`);
-    };
-    position();
-    const observer = new ResizeObserver(position);
-    observer.observe(pane);
-    window.addEventListener("resize", position);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", position);
-    };
-  }, []);
-
-  return <Anchor ref={anchor}>
-    <Dialog id={id} title={<><AlertIcon />Reject payment</>} open busy={busy} dismissOnEscape={false}
-      onCancel={onCancel} closeLabel="Close rejection dialog" footer={<>
-        <CancelButton type="button" variant="secondary" onClick={onCancel} disabled={busy}>Cancel</CancelButton>
-        <DangerButton type="submit" form={formId} disabled={busy || !text}>Reject</DangerButton>
-      </>}>
+  return <PaymentActionDialog title={<><AlertIcon />Reject payment</>} busy={busy} dismissOnEscape={false}
+    onClose={onCancel} closeLabel="Close rejection dialog" footer={<>
+      <PaymentDialogCancel type="button" variant="secondary" onClick={onCancel} disabled={busy}>Cancel</PaymentDialogCancel>
+      <DangerButton type="submit" form={formId} disabled={busy || !text}>Reject</DangerButton>
+    </>}>
       <form id={formId} onSubmit={event => {
         event.preventDefault();
         if (!busy && text) onReject({ presets, note: note.trim(), text, deleteImage });
@@ -103,6 +61,5 @@ export function PaymentRejectionDialog({ busy, error, canDeleteImage = false, on
           {error && <p role="alert">{error}</p>}
         </FormStack>
       </form>
-    </Dialog>
-  </Anchor>;
+  </PaymentActionDialog>;
 }

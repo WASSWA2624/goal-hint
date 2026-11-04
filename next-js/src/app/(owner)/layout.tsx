@@ -5,15 +5,14 @@ import { adminPageGate } from "@/server/admin/admin-http";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { OnlineRuntime } from "@/app/_components/online-runtime";
 import { FallbackStyleProvider, ServerThemeUntilHydrated } from "@/styles/provider";
-import { PageContentLoading } from "@/components/navigation/page-loading";
-import { createMessages } from "@/i18n/messages";
+import { AppLoading } from "@/components/navigation/navigation-progress";
 
 /** Both /admin and /analytics retain the same workspace; each page also enforces its own access gate. */
 export default async function OwnerLayout({ children }: { children: ReactNode }) {
   const page = await adminPageGate();
   if (!page.owner) redirectToAccountLogin();
   return <FallbackStyleProvider><AdminShell username={adminDisplayName(page.owner)}>
-    <Suspense fallback={<PageContentLoading label={createMessages("en").text("navigation.loading")} />}>
+    <Suspense fallback={<AppLoading />}>
       <ServerThemeUntilHydrated>{children}</ServerThemeUntilHydrated>
     </Suspense>
     <OnlineRuntime />

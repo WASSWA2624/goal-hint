@@ -51,11 +51,11 @@ export function AccountNotifications({ locale, page, older = false }: { locale: 
     finally { inFlight.current = false; setBusy(false); }
   }
   const disabled = busy || transition;
-  return <AccountPanel title={m.text("notifications.inbox")} data-account-notification-feed
+  return <AccountPanel title={m.text("notifications.inbox")} data-account-notification-feed aria-busy={disabled}
     actions={page && page.unread > 0 && <NotificationButton type="button" variant="quiet" disabled={disabled} onClick={() => void update("read-all")}>{m.text("notifications.readAll")}</NotificationButton>}>
     {error && <AccountError role="alert">{error}</AccountError>}
     {!page ? <AccountFine role="status">{m.text("notifications.unavailable")}</AccountFine> : <>
-      {!page.items.length ? <AccountFine>{m.text("notifications.empty")}</AccountFine> : <List aria-busy={disabled}>{page.items.map(item => {
+      {!page.items.length ? <AccountFine>{m.text("notifications.empty")}</AccountFine> : <List>{page.items.map(item => {
         const section = notificationSection(item.kind), Icon = section === "payments" ? CardIcon : section === "referrals" ? GiftIcon : item.kind === "access-activated" ? ShieldIcon : ClockIcon;
         return <li key={item.id} data-notification-id={item.id} data-unread={!item.read ? "true" : undefined}>
           <Icon /><div data-notice-body><h3>{m.text(`notifications.${item.kind}`)}</h3>

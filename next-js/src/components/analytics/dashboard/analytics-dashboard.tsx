@@ -11,11 +11,12 @@ import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analy
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { authCopy } from "@/i18n/messages/auth";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { AppLoading } from "@/components/navigation/navigation-progress";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
 import { getLiveReportSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, subscribeLiveReport } from "./live-report";
 import { Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, LiveList,
-  Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Skeleton, Tab, Tabs, ToolButton,
+  Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Tab, Tabs, ToolButton,
   WidePanel } from "./dashboard-styles";
 
 type Filters = Partial<Record<AnalyticsFilterKey, Readonly<{ value: string; label: string }>>>;
@@ -214,7 +215,8 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
           {load.message ?? "Analytics data is unavailable."}
           <ToolButton type="button" onClick={refreshReport}>Retry</ToolButton>
         </Notice>}
-        {load.status === "loading" && !report ? <LoadingState /> : report && <>
+        <AppLoading active={load.status === "loading" || busy} />
+        {report && <>
           <Cards as="dl" $busy={busy} aria-busy={busy} aria-label="Summary">
             {cards.map((card) => {
               const delta = deltaFor(card, report.summary[card.key], report.previous?.[card.key], compareLabel);
@@ -441,13 +443,6 @@ function Count({ children }: { children: ReactNode }) {
   return <span style={{ marginInlineStart: "var(--gh-spacing-1)", opacity: "var(--gh-opacity-70)", fontVariantNumeric: "tabular-nums" }}>{children}</span>;
 }
 
-function LoadingState() {
-  return <div aria-busy="true" aria-label="Loading analytics" style={{ display: "grid", gap: "var(--gh-spacing-4)" }}>
-    <Skeleton $height={92} /><Skeleton $height={300} />
-    <Grid $columns={3}><Skeleton $height={180} /><Skeleton $height={180} /><Skeleton $height={180} /></Grid>
-  </div>;
-}
-
 function SettingsPanel({ onSaved }: { onSaved: () => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [days, setDays] = useState<number | null>(null);
@@ -495,9 +490,9 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
 
   const choices = settings ? [...new Set([...settings.retentionChoices, settings.retention.retentionDays])].sort((a, b) => a - b) : [];
   return (
-    <Panel aria-labelledby="settings-title">
+    <Panel aria-labelledby="settings-title" aria-busy={saving || !settings && !status}>
       <PanelHeader><h2 id="settings-title">Data retention and tracking</h2></PanelHeader>
-      {settings ? <>
+      {settings && <>
         <Muted>
           Tracking is {settings.collecting ? "on" : "off"} · location from {settings.geoSource === "timezone" ? "browser time zones" : `${settings.geoSource} edge headers`} ·
           this browser is {settings.browserExcluded ? "excluded from statistics" : "not yet excluded"} · last automatic purge {settings.retention.lastPurgedAt
@@ -517,7 +512,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
         </SettingsRow>
         <Muted>Records older than the retention period are deleted automatically every hour. Source: {settings.retention.source === "dashboard"
           ? "set in this dashboard" : "GOAL_HINT_ANALYTICS_RETENTION_DAYS or the 395-day default"}.</Muted>
-      </> : !status && <Skeleton $height={60} />}
+      </>}
       {status && <Notice $tone={status.tone} role="status">{status.text}</Notice>}
     </Panel>
   );

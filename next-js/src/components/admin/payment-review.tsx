@@ -1,27 +1,30 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import Link from "@/components/navigation/navigation-link";
 import { AlertIcon, CheckIcon, ChevronDownIcon, CloseIcon, InfoIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
+import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { normalizeTransactionId, parseTransactionId } from "@/domain/payment";
 import { parsePaymentSms, type PaymentSms } from "@/domain/payment-sms";
 import { formatInternationalPhone } from "@/domain/phone-countries";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment } from "@/domain/owner-members";
-import { ActionButton, CheckField, DangerButton, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
+import { ActionButton, CheckField, DangerButton, FieldBlock, FieldRow, Hint } from "./admin-form";
 import { ManualCodeForm, type CodeAction } from "./code-tools";
 import { CopyTextButton } from "./copy-text-button";
 import { PaymentScreenshotPreview } from "@/components/members/payment-image-preview";
 import { PaymentRejectionDialog } from "./payment-rejection-dialog";
+import { PaymentReversalDialog } from "./payment-reversal-dialog";
+import { PaymentActionDialog, PaymentDialogCancel } from "./payment-action-dialog";
 import { paymentReceiptChecks } from "./payment-receipt-checks";
 import { PaymentAccountSummary, PaymentFacts } from "./payment-account-summary";
 import { DrawerNote, TextAction, ZoneLabel } from "./desk-styles";
 import { NetworkChip } from "./network-chip";
 import { PaymentReviewScroll, ReviewSectionHead, TransactionControl } from "./payment-balanced-styles";
 import { ApprovalForm, CheckList, CopyRow, DecisionBar, DecisionPanel, DecisionZone, ExpectedZone, PaymentWarnings,
-  ProofZone, RecoveryStack, ReviewCard, ReviewHead, ReviewZones, ShieldMark,
+  ProofZone, ReviewCard, ReviewHead, ReviewZones, ShieldMark,
   ZoneDrawer } from "./payment-styles";
 
 export type PaymentRecovery = Readonly<{ reversed: boolean; recovery: boolean; carried: boolean }>;
@@ -42,14 +45,17 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
   const [sms, setSms] = useState<PaymentSms>({}), [hasSms, setHasSms] = useState(false);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [rejecting, setRejecting] = useState(false), [smsOpen, setSmsOpen] = useState(false);
+  const [dialog, setDialog] = useState<"reverse" | "recovery" | null>(null), recoveryFormId = useId();
   const [draftId, setDraftId] = useState(p.id);
   if (draftId !== p.id) {
     setDraftId(p.id);
     setNetwork(p.network); setId(normalizeTransactionId(p.transactionId)); setAmount(String(p.amount)); setPlanId(p.planId ?? "");
     setSms({}); setHasSms(false); setChecked({});
-    setRejecting(false); setSmsOpen(false);
+    setRejecting(false); setSmsOpen(false); setDialog(null);
   }
   const pending = ["pending", "superseded"].includes(p.status), reversed = recovery?.reversed || p.status === "reversed";
+  const canReverse = p.status === "approved" && !reversed;
+  const canRecover = !!recovery?.recovery && !topUp;
   const warnings = paymentWarnings(p);
   const checks = [...new Map(p.checks.filter(check => check.tone !== "warning" && !warnings.includes(check.text)).map(check => [check.text, check])).values()];
   const allClear = !warnings.length && checks.every(check => check.tone === "good");
@@ -63,6 +69,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
   const canApprove = confirmed && !!p.accountPhone && !!parseTransactionId(id) && validAmount && ["mtn", "airtel"].includes(network) && validPlan && (topUp || Number(amount) >= price);
   const shownNetwork = pending ? network : p.final?.network || p.network, screenshot = `/api/admin/payments/${p.id}/screenshot`;
   const approvalId = `payment-approval-${p.id}`;
+  function closeDialog() { action.clearFeedback(); setDialog(null); }
 
   function parse(text: string) {
     const parsed = parsePaymentSms(text, {});
@@ -74,7 +81,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
     if (action.busy || !canApprove) return;
     onStart();
     await action.send(`/api/admin/payments/${p.id}`, { action: "approve", verified: true, network, transactionId: id, amount: Number(amount), ...(topUp ? {} : { planId }) },
-      "", !desktop || !nextAcrossPages, () => onResolved(true));
+      "", !nextAcrossPages, () => onResolved(true));
   }
   const status = reversed ? "reversed" : p.status;
   const warningLabels = new Map(p.checks.filter(check => check.tone === "warning").map(check => [check.text, check.summary ?? check.text]));
@@ -138,18 +145,9 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
             {p.status === "approved" && (topUp ? <div><dt>Wallet credit</dt><dd>Full deposit</dd></div>
               : typeof receivedAmount === "number" && receivedAmount > p.price && <div><dt>Wallet credit</dt><dd>{formatUgx(receivedAmount - p.price)}</dd></div>)}
           </PaymentFacts>
-          {p.status === "approved" && !reversed && <ZoneDrawer $tone="danger"><summary>Reverse payment<ChevronDownIcon /></summary><div><form method="post" action={`/api/admin/payments/${p.id}`} onSubmit={async event => {
-            event.preventDefault(); if (action.busy) return; const reason = new FormData(event.currentTarget).get("reason"); onStart();
-            const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "reverse", reason }, `Reversed ${p.reference}.`);
-            if (reply.ok) onRecovery({ reversed: true, carried: reply.body.carriedOtherDays === true, recovery: reason === "wrong-account" });
-          }}><FormStack><FieldBlock label={"Reason"}><select name="reason" disabled={action.busy}><option value="network-reversal">Network reversal</option><option value="wrong-account">Wrong account</option></select></FieldBlock>
-            <CheckField><input type="checkbox" required disabled={action.busy} />End access from this payment</CheckField>
-            <DangerButton type="submit" disabled={action.busy}>Confirm reversal</DangerButton></FormStack></form></div></ZoneDrawer>}
           {recovery?.carried && <Notice $tone="warning">Other days moved with this payment. Restore any verified remaining access manually.</Notice>}
           {recovery?.recovery && p.purpose === "topup" && <Notice $tone="warning">This was a credit top-up. Add {formatUgx(p.final?.amount ?? p.amount)} to the real payer&apos;s account
             with Subscribers → Credit → Correct credit, noting {p.reference}.</Notice>}
-          {recovery?.recovery && p.purpose !== "topup" && <RecoveryStack><h3>Grant access to the real payer</h3><Hint>Leave the transaction ID empty here so the payment is counted once.</Hint>
-            <ManualCodeForm compact withoutTransaction plans={plans} action={action} onStart={onStart} phone={p.payerPhone ?? ""} amount={p.final?.amount ?? p.amount} note={`for ${p.reference}`} /></RecoveryStack>}
         </DecisionPanel>}
       </DecisionZone>
       {p.hasImage && <ProofZone aria-label="Payment evidence" data-payment-zone="proof">
@@ -167,11 +165,19 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
       </ExpectedZone>}
     </ReviewZones>
     </PaymentReviewScroll>
-    {pending && <DecisionBar data-decision-bar>
+    {(pending || canReverse || canRecover) && <DecisionBar data-decision-bar>
+      {pending && <>
       <DangerButton type="button" aria-haspopup="dialog" disabled={action.busy} onClick={() => {
         action.clearFeedback(); setRejecting(true);
       }}><CloseIcon />Reject with reason</DangerButton>
-      <ActionButton type="submit" form={approvalId} $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : desktop && hasNext ? "Approve and next" : "Approve"}</ActionButton>
+      <ActionButton type="submit" form={approvalId} $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{hasNext ? "Approve and next" : "Approve"}</ActionButton>
+      </>}
+      {canReverse && <DangerButton type="button" aria-haspopup="dialog" disabled={action.busy} onClick={() => {
+        action.clearFeedback(); setDialog("reverse");
+      }}>Reverse payment</DangerButton>}
+      {canRecover && <ActionButton type="button" aria-haspopup="dialog" disabled={action.busy} onClick={() => {
+        action.clearFeedback(); setDialog("recovery");
+      }}>Grant access to the real payer</ActionButton>}
     </DecisionBar>}
     {pending && rejecting && <PaymentRejectionDialog busy={action.busy} error={action.message} canDeleteImage={p.hasImage}
       onCancel={() => { action.clearFeedback(); setRejecting(false); }}
@@ -180,5 +186,23 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
         void action.send(`/api/admin/payments/${p.id}`, { action: "reject", reason: presets[0] ?? "other", text, deleteImage },
           `Rejected ${p.reference}.`, true, () => { setRejecting(false); onResolved(false); });
       }} />}
+    {dialog === "reverse" && <PaymentReversalDialog busy={action.busy} error={action.message} topUp={topUp} onClose={closeDialog}
+      onReverse={async ({ reasons, note }) => {
+        onStart();
+        const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "reverse", reasons, note, endAccess: true }, `Reversed ${p.reference}.`);
+        if (reply.ok) {
+          setDialog(null);
+          onRecovery({ reversed: true, carried: reply.body.carriedOtherDays === true, recovery: reasons.includes("wrong-account") });
+        }
+      }} />}
+    {dialog === "recovery" && <PaymentActionDialog title="Grant access to the real payer" busy={action.busy} onClose={closeDialog} footer={<>
+      <PaymentDialogCancel type="button" variant="secondary" disabled={action.busy} onClick={closeDialog}>Cancel</PaymentDialogCancel>
+      <CriteriaDialogButton type="submit" form={recoveryFormId} disabled={action.busy}>Grant access</CriteriaDialogButton>
+    </>}>
+      <Hint as="p">The original transaction ID stays with the reversed payment so it is counted once.</Hint>
+      <ManualCodeForm compact withoutTransaction externalActions formId={recoveryFormId} plans={plans} action={action} onStart={onStart}
+        onSaved={() => setDialog(null)} phone={p.payerPhone ?? ""} amount={p.final?.amount ?? p.amount} note={`for ${p.reference}`} />
+      {action.message && <p role="alert">{action.message}</p>}
+    </PaymentActionDialog>}
   </ReviewCard>;
 }

@@ -33,6 +33,6 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
   const selectedId = paymentId ?? data?.focusId;
   return <AdminFrame {...(data ? { pendingCount: data.pendingCount } : {})}>{invalidTarget || data?.targetFound === false
     ? <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">This payment is unavailable. It may have been removed.</Notice></PaymentUnavailable>
-    : data ? <PaymentsEditor key={selectedId ?? ""} queue={data} filters={resolvedFilters} sort={readPaymentSort(params.sort)} plans={plans} {...(selectedId ? { initialPaymentId: selectedId } : {})} />
+    : data ? <PaymentsEditor key={paymentId ?? ""} queue={data} filters={resolvedFilters} sort={readPaymentSort(params.sort)} plans={plans} {...(selectedId ? { initialPaymentId: selectedId } : {})} />
       : <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">Member storage is unavailable.</Notice></PaymentUnavailable>}</AdminFrame>;
 }

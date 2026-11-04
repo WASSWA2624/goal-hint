@@ -62,7 +62,7 @@ export function ResetPasswordForm({ locale, phone, returnTo = null, contact }: {
       <MemberForm method="post" action="/api/account/reset" onSubmit={submit} aria-busy={busy}>
         <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />
         {error && <AccountError role="alert">{error}</AccountError>}
-        <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.savePassword")}</AccountPrimary>
+        <AccountPrimary type="submit" disabled={busy}>{m.text("account.savePassword")}</AccountPrimary>
       </MemberForm><AccountFormSupport locale={locale} contact={contact} />
     </AccountCardBody></AccountCard>;
 }
@@ -97,7 +97,7 @@ export function AccountSecurityForm({ task, locale, contact, cancelHref }: {
         : <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />}
       {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneVerification")}</AccountNote>}
       {error && <AccountError role="alert">{error}</AccountError>}
-      <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
+      <AccountPrimary type="submit" disabled={busy}>{m.text(task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
       <AccountLink href={cancelHref} prefetch={false}>{m.text("account.cancelLabel")}</AccountLink>
     </MemberForm><AccountFormSupport locale={locale} contact={contact} /></TaskForm>;
 }

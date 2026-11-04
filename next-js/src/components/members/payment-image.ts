@@ -33,12 +33,12 @@ export async function preparePaymentImage(file: File): Promise<Blob> {
   } finally { if ("close" in source) source.close(); }
 }
 
-export function uploadPayment(body: FormData, progress: (percentage: number) => void): Promise<{ reference: string }> {
+export function uploadPayment(body: FormData, progress?: (percentage: number) => void): Promise<{ reference: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/account/payments"); xhr.timeout = 90_000;
     xhr.setRequestHeader("Accept", "application/json");
-    xhr.upload.onprogress = (event) => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)); };
+    if (progress) xhr.upload.onprogress = (event) => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)); };
     xhr.onerror = xhr.ontimeout = () => reject(new Error("Couldn't confirm submission. Your details are kept; try again."));
     xhr.onload = () => {
       let result;

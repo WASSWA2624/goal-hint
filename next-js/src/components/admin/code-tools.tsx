@@ -244,7 +244,7 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     setSelectedId(code.id); setGrantOpen(false);
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-codes-detail-scroll]")?.scrollTo({ top: 0 }));
   }
-  return <Codes data-codes-workspace data-code-variant={preview?.variant ?? "balanced"} data-analytics-ignore>
+  return <Codes aria-busy={action.busy || undefined} data-codes-workspace data-code-variant={preview?.variant ?? "balanced"} data-analytics-ignore>
     <RecordToolbar><h1>Codes</h1>
       <form method="post" action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
         <SearchBar label="Phone or reference" submitLabel="Search" value={search} onChange={e => setSearch(e.target.value)} maxLength={40} autoComplete="off" disabled={action.busy}

@@ -1,57 +1,20 @@
 "use client";
 
-import styled, { css, keyframes } from "styled-components";
+import styled, { css } from "styled-components";
 import { CheckIcon, InfoIcon } from "@/components/ui/icons";
 import type { PaymentEvidence } from "@/domain/payment-sms";
 import { createMessages } from "@/i18n/messages";
-import type { ScreenshotProgress } from "./payment-ocr";
 
 /** What a payment must cover: a plan, or a credit top-up (durationDays null). */
 export type PaymentTarget = Readonly<{ priceUgx: number; durationDays: number | null }>;
-/** Where a screenshot read is: the two reader stages, then the moment its text is searched for the ID and amount. */
-export type ReadingState = ScreenshotProgress | Readonly<{ stage: "finding"; progress: number }>;
-const stages = ["preparing", "reading", "finding"] as const;
-const spin = keyframes`to { transform: rotate(360deg); }`;
 const smallText = css`font-size: var(--gh-font-secondary); line-height: var(--gh-size-4_5);`;
 
-const Panel = styled.div`
-  display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0; padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
-  border: 0; border-radius: ${({ theme }) => theme.radius.surface};
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  progress { inline-size: 100%; block-size: var(--gh-size-1_5); accent-color: ${({ theme }) => theme.color.brand}; }
-`;
-const Steps = styled.ol`display: grid; gap: var(--gh-spacing-1); margin: 0; padding: 0; list-style: none;`;
-const Step = styled.li<{ $state: "done" | "active" | "waiting" }>`
-  display: flex; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0; ${smallText}
-  color: ${({ theme, $state }) => $state === "waiting" ? theme.color.mutedText : theme.color.text};
-  font-weight: ${({ theme, $state }) => $state === "active" ? theme.typography.weight.bold : "inherit"};
-  > svg, > i { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); }
-  > svg { color: ${({ theme }) => theme.color.brand}; }
-`;
-const Spinner = styled.i`
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.circle}; animation: ${spin} var(--gh-duration-spin) var(--gh-easing-linear) infinite;
-  @media (prefers-reduced-motion: reduce) { animation: none; }
-`;
-const Waiting = styled.i`border: 0; border-radius: ${({ theme }) => theme.radius.circle};`;
 const List = styled.ul`display: grid; gap: var(--gh-spacing-1); margin: 0; padding: 0; list-style: none;`;
 const Item = styled.li<{ $ok: boolean }>`
   display: flex; align-items: flex-start; gap: var(--gh-spacing-1_5); min-inline-size: 0; ${smallText} overflow-wrap: anywhere;
   color: ${({ theme, $ok }) => $ok ? theme.color.text : theme.color.outcome.incorrect.text};
   > svg { flex: none; inline-size: var(--gh-size-3_5); block-size: var(--gh-size-3_5); margin-block-start: var(--gh-spacing-0_5); color: ${({ theme, $ok }) => $ok ? theme.color.brand : "currentColor"}; }
 `;
-
-/** The three steps of reading a screenshot, with a bar for the current one, so the member sees the work as it happens. */
-export function ReadingProgress({ locale, state, compact = false }: { locale: string; state: ReadingState; compact?: boolean }) {
-  const m = createMessages(locale), current = stages.indexOf(state.stage);
-  const label = m.text(`subscribe.reading.${state.stage}`);
-  return <Panel data-reading-progress={state.stage}>
-    {compact ? <span>{m.text("subscribe.wizard.reading")}</span> : <Steps aria-hidden="true">{stages.map((stage, index) => <Step key={stage} $state={index < current ? "done" : index === current ? "active" : "waiting"}>
-      {index < current ? <CheckIcon /> : index === current ? <Spinner /> : <Waiting />}<span>{m.text(`subscribe.reading.${stage}`)}</span>
-    </Step>)}</Steps>}
-    <progress max={100} value={state.progress} aria-label={label} />
-  </Panel>;
-}
 
 /**
  * What a pasted message or a screenshot gave the form, judged against the plan or top-up chosen now: the transaction ID (and

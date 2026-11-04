@@ -84,7 +84,7 @@ export function AccountReferrals({ locale, summary }: { locale: string; summary:
     } finally { sharing.current = false; setBusy(false); }
   }
   return <>
-    <AccountPanel title={<InviteTitle><GiftIcon />{m.text("referrals.invite")}</InviteTitle>} data-account-referrals>
+    <AccountPanel title={<InviteTitle><GiftIcon />{m.text("referrals.invite")}</InviteTitle>} data-account-referrals aria-busy={busy}>
       <InviteContent>
         <p>{m.text("referrals.hint")}</p>
         <ShareActions aria-label={m.text("referrals.invite")} role="group" data-invitation-actions>

@@ -19,11 +19,13 @@ export async function verifyAppLoading(page, origin) {
       await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
       await page.evaluate(() => document.fonts.ready);
       assert(await summary.getAttribute('aria-busy') === 'true', `${theme}/${width}: summary must render while pending`);
+      assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 1, 'Pending matches use one header progress bar');
       assert((await summary.textContent()).includes('Won'), 'Pending summaries retain outcome labels');
       const height = await summary.evaluate(element => element.getBoundingClientRect().height);
       const background = await summary.evaluate(element => getComputedStyle(element).backgroundColor);
       if (width === 390) await page.screenshot({ path: `output/playwright/loading-matches-${theme}.png` });
       await page.locator('[data-feed-performance-state="ready"]').waitFor();
+      await page.getByRole('progressbar', { name: /loading/i }).waitFor({ state: 'hidden' });
       const readyHeight = await summary.evaluate(element => element.getBoundingClientRect().height);
       assert(Math.abs(readyHeight - height) < 1, `${theme}/${width}: summary height changed (${height} → ${readyHeight})`);
       assert(await summary.evaluate(element => getComputedStyle(element).backgroundColor) === background, `${theme}/${width}: loading colors differ from the selected theme`);
@@ -52,6 +54,8 @@ export async function verifyAppLoading(page, origin) {
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       await page.goto(`${origin}/en`, { waitUntil: 'commit' });
       await page.locator('[data-best-slips-loading]').waitFor({ state: 'visible' });
+      assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 1, 'Pending Best Slips uses one header progress bar');
+      assert(await page.locator('[data-slip-skeleton]').count() === 0, 'Pending Best Slips has no separate skeleton');
       await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
       const artwork = await page.locator('[data-best-slips-loading] [data-header-brand]').evaluate(element => getComputedStyle(element).content);
       assert(artwork.includes(theme === 'dark' ? 'inverse.svg' : 'primary.svg'), 'Pending header artwork must follow the selected theme');

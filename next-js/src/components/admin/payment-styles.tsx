@@ -2,6 +2,7 @@
 
 
 import styled, { css } from "styled-components";
+import { contentGutter } from "@/components/ui/layout";
 import { media } from "@/styles/theme";
 import { Drawer, EmptyPanel, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopBalancedReview } from "./payment-balanced-styles";
@@ -36,7 +37,7 @@ export const PaymentLayout = styled(RecordWorkspace)`
       [data-payment-queue-footer] { grid-row: 2; }
       [data-payment-empty] { grid-row: 1; align-self: start; }
     }
-    &:not([data-payment-mobile-queue]) { gap: var(--gh-spacing-2); }
+    &:not([data-payment-mobile-queue]) { gap: var(--gh-spacing-0_5); }
   }
 `;
 export const PaymentUnavailable = styled.section`
@@ -133,7 +134,18 @@ export const QueueEmpty = styled(EmptyPanel)`
 
 export const ReviewSection = styled(RecordDetails)<{ $reviewing: boolean }>`
   scroll-margin-block-start: calc(var(--app-header-content-height, var(--gh-size-16)) + var(--gh-spacing-4));
-  ${media.belowDesktop} { ${({ $reviewing }) => !$reviewing && css`display: none;`} }
+  ${media.belowDesktop} {
+    ${({ $reviewing }) => !$reviewing && css`display: none;`}
+    --payment-review-footer-padding: var(--gh-spacing-1);
+    --payment-review-footer-height: calc(var(--form-control-height) + 2 * var(--payment-review-footer-padding) + var(--gh-stroke-thin));
+    --payment-review-footer-offset: calc(var(--app-mobile-tab-height) + env(safe-area-inset-bottom));
+    &:has([data-record-footer]) {
+      padding-block-end: var(--payment-review-footer-height);
+      :is(input, textarea, select, button, summary, a) {
+        scroll-margin-block-end: calc(var(--payment-review-footer-offset) + var(--payment-review-footer-height) + var(--gh-spacing-2));
+      }
+    }
+  }
 `;
 
 /* ---------------- Review ---------------- */
@@ -270,21 +282,21 @@ export const ApprovalForm = styled.form`${decisionPanel}`;
 export const PaymentReviewFooter = styled(RecordFooter)`
   justify-content: space-between;
   ${media.belowDesktop} {
-    inset-block-end: calc(var(--app-mobile-tab-height) + env(safe-area-inset-bottom));
+    position: fixed;
+    inset-block-end: var(--payment-review-footer-offset);
+    inset-inline: ${({ theme }) => theme.layout.gutter};
     gap: var(--gh-spacing-2);
-    padding: var(--gh-spacing-1_5) 0;
+    padding: var(--payment-review-footer-padding) ${contentGutter};
     border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     > button { flex: 0 1 auto; min-inline-size: 0; padding-inline: var(--gh-spacing-2_5); }
+    &:has([data-payment-more-actions]) {
+      gap: var(--gh-spacing-1);
+      > button { padding-inline: var(--gh-spacing-1_5); }
+    }
   }
 `;
 export const DecisionBar = styled(PaymentReviewFooter)`background: ${({ theme }) => theme.color.surface};`;
 export const CopyRow = styled.dd`
   && { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 var(--gh-spacing-2); }
   > span { overflow-wrap: anywhere; }
-`;
-export const RecoveryStack = styled.div`
-  display: grid;
-  gap: var(--gh-spacing-3);
-  min-inline-size: 0;
-  h3 { font-size: var(--gh-font-reading); }
 `;

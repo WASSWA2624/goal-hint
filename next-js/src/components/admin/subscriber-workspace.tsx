@@ -108,7 +108,7 @@ export function SubscribersWorkspace({ accounts, detail: selected, plans, initia
   const detail = selected?.id === deletedId || key !== seedKey && !listed.some(account => account.id === selected?.id) ? null : selected;
   const selectedNetwork = listed.find(account => account.id === detail?.id)?.network ?? null;
 
-  return <LiveWorkspace $selected={!!detail && selectedExplicitly} data-subscriber-workspace data-analytics-ignore>
+  return <LiveWorkspace aria-busy={action.busy || loading || undefined} $selected={!!detail && selectedExplicitly} data-subscriber-workspace data-analytics-ignore>
     <WorkspaceTitle><h1>Subscribers</h1><SubscriberDirectoryFilters query={query} plans={plans} onQueryChange={changeQuery}
       trailingAction={<RecordPrimaryAction label="Grant access / add subscriber" icon={<UserPlusIcon />} disabled={action.busy} aria-haspopup="dialog"
         onClick={() => { action.clearFeedback(); setAdding(true); }} />} /></WorkspaceTitle>

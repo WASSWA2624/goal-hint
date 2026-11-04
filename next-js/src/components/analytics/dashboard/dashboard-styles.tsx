@@ -317,18 +317,6 @@ export const SegmentButton = styled.button<{ $selected: boolean }>`
   cursor: pointer;
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
 `;
-const shimmer = keyframes`
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
-`;
-export const Skeleton = styled.div<{ $height?: number }>`
-  block-size: ${({ $height = 120 }) => $height}px;
-  background: linear-gradient(90deg, ${({ theme }) => theme.color.surfaceMuted} 25%, ${({ theme }) => theme.color.surface} 50%,
-    ${({ theme }) => theme.color.surfaceMuted} 75%);
-  background-size: 200% 100%;
-  animation: ${shimmer} var(--gh-duration-loading) var(--gh-easing-linear) infinite;
-  @media (prefers-reduced-motion: reduce) { animation: none; }
-`;
 export const Definitions = styled.dl`
   display: grid;
   gap: var(--gh-spacing-2_5);

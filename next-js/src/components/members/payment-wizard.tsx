@@ -47,7 +47,7 @@ const Card = styled.section`
   ${Preview}, ${ConfirmPreview} { max-block-size: var(--gh-size-24); }
   [data-payment-review] ${ConfirmPreview} { max-block-size: var(--gh-size-18); }
   ${Note} { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
-  ${FieldMessage}, [data-evidence-findings] li, [data-reading-progress] li { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
+  ${FieldMessage}, [data-evidence-findings] li { font-size: var(--gh-font-emphasis); line-height: var(--gh-size-5); }
   ${RowButton} { min-block-size: var(--form-control-height); font-size: var(--gh-font-emphasis); }
   ${Assent} { align-items: flex-start; padding-block: var(--gh-spacing-1); font-size: var(--gh-font-reading); line-height: var(--gh-size-5_25); }
   ${Assent} input { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); min-block-size: var(--gh-size-4_5); margin-block-start: var(--gh-spacing-0_25); }

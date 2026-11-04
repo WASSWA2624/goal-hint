@@ -297,7 +297,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const saveButtons = <>
     <ActionButton type="button" disabled={busy || changed.length === 0} onClick={undo}><UndoIcon />Undo</ActionButton>
     <ActionButton type="submit" $variant="primary" disabled={busy || changed.length === 0 || (needsPassword && password === "")} data-settings-save>
-      <CheckIcon />{busy ? "Saving…" : "Save changes"}</ActionButton>
+      <CheckIcon />Save changes</ActionButton>
   </>;
 
   return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-settings-editor>

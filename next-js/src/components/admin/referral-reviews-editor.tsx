@@ -96,7 +96,7 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
       : { action: "appeal-decision", id: selected.id, revision: selected.revision, decision, evidenceConfirmed: confirmed });
   }
   const needsEvidence = decision !== "no-action";
-  return <RecordWorkspace data-referral-reviews>
+  return <RecordWorkspace data-referral-reviews aria-busy={busy}>
     <RecordToolbar><h1>Referral review</h1>
       <form method="post" action={endpoint} role="search" aria-label="Find referral cases" onSubmit={event => { event.preventDefault(); void reload(status, "", caseSearch.trim()); }}>
         <SearchBar label="Find a case" value={caseSearch} maxLength={60} autoComplete="off" disabled={busy} submitLabel="Search"

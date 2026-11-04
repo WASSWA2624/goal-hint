@@ -8,6 +8,8 @@ import { createPaymentReview } from "./payment-review.ts";
 import type { PaymentNotifications } from "../members/payment-notifications.ts";
 import { createCheckoutReview } from "./checkout-review.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
+import { readPaymentReversal } from "../../domain/payment-reversal.ts";
+import { auditTextErrors } from "./audit.ts";
 
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
 export const invalidAction = () => json({ message: "Check the action and values." }, 400);
@@ -110,7 +112,13 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
             ...(uuid(b.planId) ? { planId: b.planId } : {}) }, owner.username));
         }
         if (b.action === "reject") { const outcome = await createPaymentReview(services.database, Date.now, notifications ? { notifications } : {}).reject(id, b.reason, b.text ?? "", b.deleteImage === true, owner.username); return json(outcome, outcome.status === "saved" ? 200 : 400); }
-        if (b.action === "reverse" && ["network-reversal", "wrong-account"].includes(String(b.reason))) return codeAnswer(await codes.reversePayment(id, b.reason as "network-reversal" | "wrong-account", owner.username));
+        if (b.action === "reverse") {
+          const reversal = readPaymentReversal(b);
+          if (!reversal) return invalidAction();
+          const errors = auditTextErrors({ note: reversal.details?.note });
+          if (errors?.note) return json({ message: errors.note }, 400);
+          return codeAnswer(await codes.reversePayment(id, reversal.reason, owner.username, reversal.details));
+        }
         return invalidAction();
       } catch { return storageUnavailable(); }
     },

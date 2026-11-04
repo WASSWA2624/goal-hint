@@ -213,7 +213,6 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, applied
         {editorFields}
         <Row>{editorActions}</Row>
       </EditorPanel>}
-      {loading && <p role="status">{m.text("slipConfigs.loading")}</p>}
       {currentParameters === null && <p>{m.text("slipConfigs.invalidFilters")}</p>}
       {error && !editor && <p role="alert">{m.text(error)} <Button type="button" variant="quiet" disabled={busy}
         onClick={() => { setLoading(true); setReload(value => value + 1); }}>{m.text("slipConfigs.retry")}</Button></p>}

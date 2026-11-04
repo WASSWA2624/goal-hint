@@ -4,7 +4,7 @@ import type { ComponentType } from "react";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { BellIcon, CalendarIcon, CardIcon, ChartIcon, ChevronRightIcon, ImageIcon, UserIcon, UserPlusIcon, type IconProps } from "@/components/ui/icons";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { AppLoading } from "@/components/navigation/navigation-progress";
 import { formatUgx } from "@/domain/subscription-plans";
 import type { OwnerOverview } from "@/domain/owner-members";
 import { media } from "@/styles/theme";
@@ -12,46 +12,43 @@ import { media } from "@/styles/theme";
 type Report = Readonly<{ value: OwnerOverview; noticeCount: number | null; uploadAlertsHref: string }>;
 type Metric = Readonly<{
   label: string;
-  value: string | number | undefined;
+  value: string | number;
   icon: ComponentType<IconProps>;
   href?: string | undefined;
   attention?: boolean;
 }>;
 
-export function OverviewReport({ report }: { report?: Report }) {
-  const value = report?.value;
+export function OverviewReport({ report }: { report: Report }) {
+  const { value } = report;
   const metrics: Metric[] = [
-    { label: "Pending payments", value: value?.pending, icon: CardIcon, href: report && "/admin/payments", attention: !!value?.pending },
-    { label: "Upload alerts this week", value: value?.busy, icon: ImageIcon, href: report?.uploadAlertsHref, attention: !!value?.busy },
-    { label: "Active paid subscribers", value: value?.active, icon: UserIcon },
-    { label: "Revenue this week", value: value && formatUgx(value.weekRevenue), icon: ChartIcon },
-    { label: "Revenue this month", value: value && formatUgx(value.monthRevenue), icon: CalendarIcon },
-    { label: "Trials this week", value: value?.trials, icon: UserPlusIcon },
-    { label: "Credit held by members", value: value && formatUgx(value.creditHeld), icon: CardIcon },
-    { label: "Message notices to check", value: report && (report.noticeCount ?? "Unavailable"), icon: BellIcon, attention: !!report?.noticeCount },
+    { label: "Pending payments", value: value.pending, icon: CardIcon, href: "/admin/payments", attention: !!value.pending },
+    { label: "Upload alerts this week", value: value.busy, icon: ImageIcon, href: report.uploadAlertsHref, attention: !!value.busy },
+    { label: "Active paid subscribers", value: value.active, icon: UserIcon },
+    { label: "Revenue this week", value: formatUgx(value.weekRevenue), icon: ChartIcon },
+    { label: "Revenue this month", value: formatUgx(value.monthRevenue), icon: CalendarIcon },
+    { label: "Trials this week", value: value.trials, icon: UserPlusIcon },
+    { label: "Credit held by members", value: formatUgx(value.creditHeld), icon: CardIcon },
+    { label: "Message notices to check", value: report.noticeCount ?? "Unavailable", icon: BellIcon, attention: !!report.noticeCount },
   ];
-  if (value && value.creditOwed > 0) {
+  if (value.creditOwed > 0) {
     metrics.push({ label: "Credit owed after reversals", value: formatUgx(value.creditOwed), icon: CardIcon, attention: true });
   }
 
-  return <MetricGrid aria-label="Admin overview" aria-busy={!report || undefined}>
+  return <MetricGrid aria-label="Admin overview">
     {metrics.map(({ label, value, icon: Icon, href, attention }) => (
-      <MetricCard key={label} $attention={attention ?? false} aria-hidden={!report || undefined}>
+      <MetricCard key={label} $attention={attention ?? false}>
         <dt>
           <MetricIcon><Icon /></MetricIcon>
           {href ? <MetricLink href={href} prefetch={false}>{label}<ChevronRightIcon /></MetricLink> : label}
         </dt>
-        <dd>{value ?? <MetricPlaceholder />}</dd>
+        <dd>{value}</dd>
       </MetricCard>
     ))}
   </MetricGrid>;
 }
 
 export function OverviewLoading() {
-  return <>
-    <VisuallyHidden role="status">Loading overview</VisuallyHidden>
-    <OverviewReport />
-  </>;
+  return <AppLoading />;
 }
 
 const MetricGrid = styled.dl`
@@ -150,13 +147,4 @@ const MetricCard = styled.div<{ $attention: boolean }>`
   }
 
   @media (prefers-reduced-motion: reduce) { transition: none; }
-`;
-
-const MetricPlaceholder = styled.span`
-  display: inline-block;
-  inline-size: var(--gh-size-16);
-  max-inline-size: 100%;
-  block-size: var(--gh-size-3_5);
-  border-radius: ${({ theme }) => theme.radius.small};
-  background: ${({ theme }) => theme.color.cardHeader};
 `;

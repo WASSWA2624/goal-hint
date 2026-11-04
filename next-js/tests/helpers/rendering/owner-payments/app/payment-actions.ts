@@ -1,6 +1,7 @@
 import { readJsonBody } from "@/server/admin/admin-http";
 import { json } from "@/server/http/private-http";
 import { formatPaymentReference, normalizeTransactionId, transactionKey } from "@/domain/payment";
+import { readPaymentReversal } from "@/domain/payment-reversal";
 import { rejectionReasons } from "@/server/admin/payment-review";
 import { chainPeriods } from "@/domain/subscription-period";
 import { fixturePaymentPlans, fixtureState, grantFixtureAccess, recordFixtureAudit } from "./fixture";
@@ -13,7 +14,7 @@ export async function paymentAction(request: Request) {
   const payment = state.payments.find(row => row.id === id);
   if (!payment) return json({ status: "refused", message: "This payment is unavailable." }, 409);
   if (body.action === "reverse") {
-    if (payment.status !== "approved" || !["network-reversal", "wrong-account"].includes(String(body.reason)))
+    if (payment.status !== "approved" || !readPaymentReversal(body))
       return json({ status: "refused", message: "This payment cannot be reversed." }, 409);
     payment.status = "reversed";
     const now = new Date(), codes = state.codes.filter(row => row.accountId === payment.accountId);

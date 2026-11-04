@@ -46,7 +46,7 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
         <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={view === "login"}
           placeholder={m.text("account.passwordPlaceholder")} disabled={busy} />
         {error && <AccountError role="alert">{error}</AccountError>}
-        <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : view === "login" ? "auth.signIn" : "auth.signUp")}</AccountPrimary>
+        <AccountPrimary type="submit" disabled={busy}>{m.text(view === "login" ? "auth.signIn" : "auth.signUp")}</AccountPrimary>
       </MemberForm>
       <AccountFormFooter>
         <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>

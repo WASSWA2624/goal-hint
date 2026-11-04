@@ -77,7 +77,7 @@ export function PaymentAlertControls() {
   }
   const endpoint = state?.endpoints.find(endpoint => endpoint.transport === (native ? /GoalHintNative\/windows\//u.test(navigator.userAgent) ? "windows-local" : "fcm" : "web"));
   const delivery = endpoint?.deliveries?.[0];
-  return <div data-payment-alert-controls>
+  return <div data-payment-alert-controls aria-busy={busy}>
     <Hint>{native ? "Native payment alerts" : `Browser notifications: ${permission}`} · {endpoint?.enabled ? "Enabled on this device" : "Not enabled on this device"}</Hint>
     {native && /\bGoalHintNative\/windows\//u.test(navigator.userAgent) && <Hint>Keep Goal Hint running to receive Windows alerts.</Hint>}
     {delivery && <Hint>Last test/delivery: {delivery.openedAt ? "Opened" : delivery.displayedAt ? "Displayed" : delivery.status === "accepted" ? "Provider accepted" : delivery.status}</Hint>}

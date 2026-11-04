@@ -7,6 +7,7 @@ import { HeaderBrand } from "@/components/ui/brand";
 import { Button } from "@/components/ui/controls";
 import { Container, Inline, PageHeading, PageMain, Stack, Surface } from "@/components/ui/layout";
 import { Header, HeaderContent } from "@/components/navigation/shell-styles";
+import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
 import { offlineFixture, offlineRules, offlineSnapshotSchema, type OfflineSnapshot } from "@/domain/offline";
@@ -53,11 +54,11 @@ export function OfflineView() {
   }, [snapshot]);
   const saved = snapshot && supported;
   return <div data-offline-view data-offline-state={loading ? "loading" : saved ? "saved" : "unavailable"}>
-    <Header><Heading $wide><HeaderBrand /><span>Saved view</span></Heading></Header>
-    <PageMain id="main-content" $app $compact><Container $wide><Stack>
+    <Header><Heading $wide><HeaderBrand /><span>Saved view</span></Heading><NavigationProgress label="Loading saved view" /></Header>
+    <PageMain id="main-content" $app $compact aria-busy={loading}><Container $wide><Stack>
       <PageHeading>{supported ? "Saved matches" : "This page needs a connection"}</PageHeading>
       <Notice aria-live="polite"><Stack $gap="sm">
-        {loading ? <p>Opening the saved app…</p> : saved ? <>
+        {loading ? null : saved ? <>
           <p>Showing an anonymous saved view. Scores and match status may have changed.</p>
           <p>Saved <time data-offline-saved-at dateTime={new Date(snapshot.capturedAt).toISOString()}>{new Date(snapshot.capturedAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" })} EAT</time>.</p>
         </> : <p>{supported ? "No usable saved matches are available. Connect to the internet and try again." : "This route was not saved. Open saved matches or reconnect to use it."}</p>}

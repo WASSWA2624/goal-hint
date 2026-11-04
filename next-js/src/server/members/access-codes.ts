@@ -6,6 +6,7 @@ import { formatPaymentReference, normalizeTransactionId, transactionKey } from "
 import { normalizePhone } from "../../domain/phone.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
+import { paymentReversalReasons, type PaymentReversalDetails, type PaymentReversalReason } from "../../domain/payment-reversal.ts";
 import { chainPeriods, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
 import { activeSubscriptionUntil, type SubscriptionStatus } from "../../domain/subscription-summary.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
@@ -401,8 +402,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       });
     },
 
-    async reversePayment(id: string, reason: "network-reversal" | "wrong-account", actor: string): Promise<CodeOutcome & { carriedOtherDays?: boolean }> {
-      if (!["network-reversal", "wrong-account"].includes(reason)) return invalid();
+    async reversePayment(id: string, reason: PaymentReversalReason, actor: string, details?: PaymentReversalDetails): Promise<CodeOutcome & { carriedOtherDays?: boolean }> {
+      if (!paymentReversalReasons.includes(reason)) return invalid();
       // Discover account locks first, then re-read the chain while holding all of them. A concurrent transfer retries discovery.
       for (let attempt = 0; attempt < 4; attempt++) {
         const chain = await database.query(async (tx) => {
@@ -456,6 +457,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
               note: "Reversed payment debt moved from the old number" });
           })() : null;
           await audit(tx, submission.accountId, id, "payment_reversed", actor, at, { reason, ...(live ? { liveCodeId: live.id } : {}),
+            ...(details ? { reasons: details.reasons, ...(details.note ? { note: details.note } : {}) } : {}),
             ...(debit ? { creditDebitedUgx: given!.amountUgx, balanceUgx: (moved ?? debit).balanceAfter, ...(moved ? { debtAccountId: holderId } : {}) } : {}) }, "payment");
           return { status: "saved", carriedOtherDays: live?.source === "number-change" };
         });

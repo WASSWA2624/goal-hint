@@ -49,7 +49,7 @@ export function AccountReferralReviews({ initial, locale = "en", older = false }
     } catch { setError("Unable to send the appeal. Refresh the cases and try again."); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <AccountPanel title="Reward reviews" data-account-referral-reviews>
+  return <AccountPanel title="Reward reviews" data-account-referral-reviews aria-busy={busy}>
     {notice && <AccountFine role="status">{notice}</AccountFine>}
     {initial === null ? <AccountFine role="status">Reward reviews are temporarily unavailable.</AccountFine> : <Cases>{cases.map(item => <li key={item.id} id={`review-${item.id}`}>
       <div><h3>{(item.status === "reversed" || item.status === "upheld") && item.reversedMs === 0 ? "No unused time removed"

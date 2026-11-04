@@ -46,17 +46,18 @@ export function CheckoutReview({ payment, hasNext, busy, onBusyChange, onResolve
     return () => controller.abort();
   }, [detailUrl]);
   async function act(body: Record<string, unknown>, advance = false) {
-    if (busy || !detail) return;
+    if (busy || !detail) return false;
     onBusyChange(true); setFeedback({ url: detailUrl, error: "", notice: "" });
     try {
       const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, revision: detail.revision }) });
       const result = await response.json();
-      if (response.ok && advance) { onResolved(body.action === "approve-checkout"); return; }
+      if (response.ok && advance) { onResolved(body.action === "approve-checkout"); return true; }
       await refresh();
-      if (result.code === "remaining") { setFeedback({ url: detailUrl, error: "", notice: result.message }); return; }
+      if (result.code === "remaining") { setFeedback({ url: detailUrl, error: "", notice: result.message }); return false; }
       if (!response.ok) throw new Error(result.message ?? "Action could not be completed.");
       setFeedback({ url: detailUrl, error: "", notice: "Saved." });
-    } catch (e) { setFeedback({ url: detailUrl, error: (e as Error).message, notice: "" }); }
+      return true;
+    } catch (e) { setFeedback({ url: detailUrl, error: (e as Error).message, notice: "" }); return false; }
     finally { onBusyChange(false); }
   }
   const changing = !current && !error;

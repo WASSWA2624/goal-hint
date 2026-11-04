@@ -29,11 +29,11 @@ export function SubscriberDirectory({ accounts, selectedId, query, loading = fal
     {error && <RecordListTools><DirectoryError role="alert"><FieldError>{error}</FieldError>{onRetry && <ActionButton type="button" onClick={onRetry}>Retry</ActionButton>}</DirectoryError></RecordListTools>}
     <RecordListScroll data-subscriber-results data-review-subscriber-list aria-label="Subscriber accounts" aria-busy={loading} tabIndex={0}>
       {accounts.length ? accounts.map(account => <li key={account.id}><SubscriberAccountRow account={account} selected={selectedId === account.id} href={accountHref(account.id)} /></li>)
-        : <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{loading ? "Finding subscribers…" : filtered ? "No matching subscribers." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
+        : !loading && <li><EmptyPanel data-subscriber-empty><UserIcon /><p>{filtered ? "No matching subscribers." : "No subscriber accounts yet."}</p></EmptyPanel></li>}
       {adminPhone && <li><AdminNumber><ShieldIcon /><span><strong>+{formatPhone(adminPhone)}</strong> is an administrator number. Its password is managed in the environment.</span></AdminNumber></li>}
     </RecordListScroll>
     <RecordListFooter>
-      <span data-subscriber-count role="status" aria-live="polite">{loading ? "Updating…" : `${accounts.length} account${accounts.length === 1 ? "" : "s"} shown · up to 100`}</span>
+      <span data-subscriber-count role="status" aria-live="polite">{`${accounts.length} account${accounts.length === 1 ? "" : "s"} shown · up to 100`}</span>
       {filtered && <TextAction type="button" onClick={() => onQueryChange(emptySubscriberDirectoryQuery)}>Clear filters</TextAction>}
     </RecordListFooter>
   </DirectoryRoot>;

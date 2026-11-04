@@ -13,6 +13,11 @@
 - Keep each application's numbered implementation plans in its own `dev-plan/`.
 - Reuse the shared control height and row layout across screens. Do not add
   viewport-specific control heights; see `next-js/docs/control-uniformity.md`.
+- Use the shared `NavigationProgress` bar immediately below the app header
+  for foreground loading throughout the app, including admin and analytics.
+  Mark pending content with `aria-busy` or use `AppLoading` for a fallback
+  without a content container. Keep existing content and control labels visible
+  when possible. Keep passive polling and lazy media loading quiet.
 
 ## App overview
 

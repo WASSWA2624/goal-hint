@@ -45,8 +45,7 @@ export function AccountNotificationPreferences({ locale, phone, whatsappNotifica
         onChange={event => void update(event.currentTarget.checked)} />
       <span><strong>{m.text("account.whatsappUpdates")}</strong><AccountFine as="span" id={`${id}-purpose`}>{m.text("account.whatsappUpdatesPurpose", { phone: `+${formatPhone(phone)}` })}</AccountFine></span>
     </AccountWhatsAppConsentLabel>
-      {busy ? <AccountFine role="status">{m.text("account.working")}</AccountFine>
-        : saved && <AccountFine role="status">{m.text(consentAt ? "account.whatsappUpdatesEnabled" : "account.whatsappUpdatesDisabled")}</AccountFine>}
+      {!busy && saved && <AccountFine role="status">{m.text(consentAt ? "account.whatsappUpdatesEnabled" : "account.whatsappUpdatesDisabled")}</AccountFine>}
       {error && <AccountError role="alert">{error}</AccountError>}
     </AccountBlockText>
   </Preferences>;

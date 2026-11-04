@@ -1,4 +1,6 @@
 "use client";
+
+import { AppLoading } from "@/components/navigation/navigation-progress";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InputControl } from "@/components/ui/controls";
@@ -50,6 +52,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     paidAt: localDate(), text: "", extracted: {}, originalText: "", accepted: false, attachingId: null });
   const [draft, setDraft] = useState(initial), [image, setImage] = useState<Blob | null>(null), [loaded, setLoaded] = useState(false);
   const [quote, setQuote] = useState<CheckoutQuote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [finishedQuote, setFinishedQuote] = useState<string>();
   const [reading, setReading] = useState(""), storageWarning = useRef(false);
   const [notice, setNotice] = useState<{ title: string; message: string; confirm?: () => void; confirmLabel?: string; cancelLabel?: string } | null>(null);
   const [readingActive, setReadingActive] = useState(false);
@@ -112,13 +115,14 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
     method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
   const selectionKey = JSON.stringify(selection());
+  const reviewQuoteKey = loaded && draft.step >= 2 && !draft.attachingId ? `${quoteEpoch}:${draft.step}:${selectionKey}` : null;
   useEffect(() => {
     const retry = () => setQuoteEpoch(epoch => epoch + 1);
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
   }, []);
   useEffect(() => {
-    if (!loaded || draft.step < 2 || draft.attachingId) return;
+    if (!reviewQuoteKey) return;
     let alive = true;
     void send<CheckoutQuote>({ action: "quote", selection: JSON.parse(selectionKey) }).then(value => { if (alive) {
       if (lastQuoteKey.current && lastQuoteKey.current !== value.quoteKey) {
@@ -126,9 +130,10 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       }
       lastQuoteKey.current = value.quoteKey; setQuote(value);
     } })
-      .catch(e => { if (alive) { setQuote(null); setError(e.message); } });
+      .catch(e => { if (alive) { setQuote(null); setError(e.message); } })
+      .finally(() => { if (alive) setFinishedQuote(reviewQuoteKey); });
     return () => { alive = false; };
-  }, [loaded, draft.step, draft.attachingId, selectionKey, quoteEpoch]);
+  }, [reviewQuoteKey, selectionKey]);
   useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded, draft.step]);
   async function next() {
     setError("");
@@ -264,6 +269,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       method: request.method as CheckoutDraft["method"], attachingId: request.id });
   }
   return <>
+    <AppLoading active={!loaded || busy || readingActive || !!reviewQuoteKey && finishedQuote !== reviewQuoteKey} />
     {warningDialog && <PaymentEvidenceWarning warnings={warningDialog.warnings} onCancel={() => setWarningDialog(null)}
       {...(!attaching ? { onChangeMethod: () => { setWarningDialog(null); update({ step: 1 }); } } : {})}
       onContinue={() => { const action = warningDialog.continue; setWarningsAccepted(warningDialog.key); setWarningDialog(null); action?.(); }} />}
@@ -382,7 +388,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         </div>}
         <label><input type="checkbox" disabled={busy} checked={draft.accepted} onChange={e => update({ accepted: e.target.checked })} /> I checked these details and confirm this {draft.purpose === "referral" ? "redemption" : "purchase"}. I accept the <a href="/en/terms" target="_blank" rel="noopener">terms</a>.</label>
         <WizardActions><Button type="button" variant="secondary" disabled={busy || readingActive} onClick={() => update({ step: external ? 2 : 1 })}>Back</Button>
-          <Button type="submit" disabled={busy || readingActive || !draft.accepted || !attaching && !quote || external && (!!image && !screenshotReady || !image && !draft.text.trim())}>{busy ? "Saving…" : "Submit"}</Button></WizardActions>
+          <Button type="submit" disabled={busy || readingActive || !draft.accepted || !attaching && !quote || external && (!!image && !screenshotReady || !image && !draft.text.trim())}>Submit</Button></WizardActions>
         {external ? <Button variant="quiet" disabled={busy || readingActive} onClick={() => setNotice({ title: "Payment verification", message: "Reported details and extraction do not verify payment. The admin checks the incoming transfer." })}>About payment verification</Button>
           : <WizardNotice>Your available balance is debited only when you confirm.</WizardNotice>}
       </form>}
@@ -393,6 +399,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
 function PaymentDestination({ selection, settings, plans, onError }: { selection: CheckoutSelection; settings: PublicSubscriptionSettings;
   plans: readonly SubscriptionPlanView[]; onError: (message: string) => void }) {
   const [result, setResult] = useState<{ identity: string; quote: CheckoutQuote } | null>(null);
+  const [quoting, setQuoting] = useState(false);
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
   const identity = JSON.stringify(selection);
   const plan = selection.purpose === "plan" ? plans.find(plan => plan.id === selection.planId) : null;
@@ -409,13 +416,17 @@ function PaymentDestination({ selection, settings, plans, onError }: { selection
   useEffect(() => {
     if (!canQuote) return;
     let alive = true;
-    const timer = setTimeout(() => { void send<CheckoutQuote>({ action: "quote", selection: JSON.parse(identity) }).then(q => {
-      if (alive) setResult({ identity, quote: q });
-    }).catch(e => { if (alive) onError(e.message); }); }, 200);
+    const timer = setTimeout(() => {
+      setQuoting(true);
+      void send<CheckoutQuote>({ action: "quote", selection: JSON.parse(identity) })
+        .then(q => { if (alive) setResult({ identity, quote: q }); })
+        .catch(e => { if (alive) onError(e.message); })
+        .finally(() => { if (alive) setQuoting(false); });
+    }, 200);
     return () => { alive = false; clearTimeout(timer); };
   }, [identity, canQuote, onError]);
   const copied = copiedNumber === quote.recipient && !!quote.recipient;
-  return <div data-payment-destination><CheckoutPaySummary quote={quote} />
+  return <div data-payment-destination aria-busy={canQuote && quoting}><CheckoutPaySummary quote={quote} />
     {quote.recipient && (quote.method === "mtn" || quote.method === "airtel") && <CheckoutPayee>
       <div><CheckoutProviderMark><MobileMoneyLogo network={quote.method} /></CheckoutProviderMark><strong>{localUgandaPhone(quote.recipient)}</strong>
         <Button type="button" variant="quiet" aria-label={copied ? "Number copied" : `Copy ${methodNames[quote.method]} receiving number`} title={copied ? "Copied" : "Copy number"}

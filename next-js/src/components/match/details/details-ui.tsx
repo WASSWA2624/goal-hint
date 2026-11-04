@@ -1,5 +1,7 @@
 "use client";
 
+import { AppLoading } from "@/components/navigation/navigation-progress";
+
 import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import styled, { css, type DefaultTheme } from "styled-components";
 import { CheckIcon, ChevronRightIcon } from "@/components/ui/icons";
@@ -286,7 +288,7 @@ export function SectionState({ loading, error, onRetry }: { loading: boolean; er
   const { messages } = useStableDetails();
   if (error) return <Note role="alert">{messages.text("details.sectionFailed")}{" "}
     <LinkButton type="button" onClick={onRetry}>{messages.text("feed.retry")}</LinkButton></Note>;
-  return loading ? <Note role="status">{messages.text("details.sectionLoading")}</Note> : null;
+  return <AppLoading active={loading} />;
 }
 
 /** The fill width is a custom property, so every value shares one class per accent and direction. */

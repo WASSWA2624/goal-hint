@@ -84,10 +84,10 @@ export function CreditPurchase({ locale, credit, plan, acceptedTerms, accepted, 
     finally { setBusy(false); }
   }
   const ready = acceptedTerms || accepted;
-  return <Box data-credit-purchase>
+  return <Box data-credit-purchase aria-busy={busy}>
     <Line><strong>{m.text("credit.balance", { amount: m.number(balance) })}</strong>
       {enough && <Button type="button" variant="secondary" disabled={disabled || busy || !ready} onClick={() => canConfirm ? setConfirming(true) : void buy()} data-credit-pay>
-        {m.text(busy ? "credit.paying" : "credit.payWith", { amount: m.number(plan.priceUgx) })}</Button>}</Line>
+        {m.text("credit.payWith", { amount: m.number(plan.priceUgx) })}</Button>}</Line>
     {balance < 0 ? <Note>{m.text("credit.negative")}</Note> : !enough && !message && <Note>{m.text("credit.notEnough")}</Note>}
     {enough && !acceptedTerms && (onAccept ? <TermsAssent locale={locale} checked={accepted} disabled={busy} onChange={onAccept} />
       : <Note>{m.text("subscribe.needAssent")}</Note>)}
@@ -138,7 +138,7 @@ export function CreditSection({ locale, credit, plans, salesOpen, acceptedTerms,
     : richText(m.text(credit.balanceUgx < renewing.priceUgx ? "account.autoRenewShort" : active ? "account.autoRenewOn" : "account.autoRenewAfterEnd"),
       { plan: <strong>{planLabel(renewing)}</strong> });
   return <>
-    {(salesOpen || on) && <AccountBlock data-credit-renewal>
+    {(salesOpen || on) && <AccountBlock data-credit-renewal aria-busy={busy}>
       <AccountBlockText>
         <p>{sentence}</p>
         {picking && <PlanPicker label={m.text("credit.autoRenewPlan")}><select value={planId} disabled={busy} onChange={(event) => setPlanId(event.currentTarget.value)} data-credit-plan>

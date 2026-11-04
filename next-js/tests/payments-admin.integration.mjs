@@ -45,7 +45,22 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   await t.test("stolen-ID recovery keeps the ID unapprovable and records the real money once",async()=>{
     const stranger=await member(),payer=await member(),p=await report(stranger,"STOLEN.TEST",{payerPhone:payer.phone});await codes.approvePayment(p.id,fields("STOLEN.TEST"),"owner");
     assert.equal((await payments.submit(payer,{planId,payerPhone:payer.phone,network:"mtn",transactionId:"STOLENTEST",amount:5000,accepted:true},jpeg())).status,"duplicate");
-    assert.equal((await codes.reversePayment(p.id,"wrong-account","owner")).status,"saved");assert.equal((await codes.manual({phone:payer.phone,planId,amountReceivedUgx:5000,note:`for P${p.reference}`},"owner")).status,"created");
+    const { createReviewHandlers } = await import("../src/server/admin/codes-http.ts");
+    const handlers = createReviewHandlers();
+    const reverse = body => handlers.POST({
+      services: { database: db, config }, owner: { username: "owner" },
+      request: new Request(`http://localhost/api/admin/payments/${p.id}`, { method: "POST",
+        headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "reverse", ...body }) }),
+    });
+    const reasons = ["network-reversal", "wrong-account"], note = "Provider confirmed a wrong-account transfer";
+    assert.equal((await reverse({ reasons, note })).status, 400, "Structured reversal requires end-access confirmation.");
+    assert.equal((await reverse({ reasons, note: "Call 256700000000", endAccess: true })).status, 400, "Private numbers cannot enter the audit note.");
+    assert.equal((await reverse({ reasons, note, endAccess: true })).status, 200);
+    const audit = await db.query(tx => tx.ownerAuditEvent.findFirstOrThrow({ where: { action: "payment_reversed", targetId: p.id } }));
+    assert.equal(audit.details.reason, "wrong-account");
+    assert.deepEqual(audit.details.reasons, reasons);
+    assert.equal(audit.details.note, note);
+    assert.equal((await codes.manual({phone:payer.phone,planId,amountReceivedUgx:5000,note:`for P${p.reference}`},"owner")).status,"created");
     assert.equal((await codes.manual({phone:payer.phone,planId,network:"mtn",transactionRef:"STOLENTEST",amountReceivedUgx:5000,note:"Synthetic duplicate"},"owner")).status,"duplicate");
     const [paid,manual]=await db.query(tx=>Promise.all([tx.paymentSubmission.aggregate({where:{id:p.id,status:"approved"},_sum:{amountReceivedUgx:true}}),tx.accessCode.aggregate({where:{accountId:payer.accountId,source:"manual"},_sum:{amountReceivedUgx:true}})]));assert.equal((paid._sum.amountReceivedUgx??0)+(manual._sum.amountReceivedUgx??0),5000);
   });

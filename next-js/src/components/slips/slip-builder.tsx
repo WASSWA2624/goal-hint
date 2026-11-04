@@ -28,7 +28,6 @@ import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { compareSlipDisplayProbability, slipPageSize } from "@/domain/slip-pagination";
 import { SlipCard } from "./slip-card";
-import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { SlipNumericInput } from "./slip-numeric-input";
@@ -47,11 +46,11 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
-function SlipBuildActionLabel({ locale, restricted, pending = false }: {
-  locale: string; restricted: boolean; signedIn: boolean; pending?: boolean;
+function SlipBuildActionLabel({ locale, restricted }: {
+  locale: string; restricted: boolean;
 }) {
   const messages = createMessages(locale);
-  const build = messages.text(pending ? "slips.building" : "slips.build");
+  const build = messages.text("slips.build");
   return <BuildActionLabel>
     <span data-action-label="mobile">{restricted ? messages.text("paywall.unlock") : build}</span>
     <span data-action-label="desktop">{restricted ? messages.text("paywall.unlock") : build}</span>
@@ -517,9 +516,9 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           {desktop && savedFiltersButton}
           <ClearLink href={action} variant="quiet" prefetch={false} onClick={(event) => { event.preventDefault(); reset(); }}><ResetIcon />{messages.text("slips.reset")}</ClearLink>
           {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
-            <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />
+            <SlipBuildActionLabel locale={locale} restricted />
           </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
-            <SlipBuildActionLabel locale={locale} restricted={false} signedIn={signedIn} pending={pending} />
+            <SlipBuildActionLabel locale={locale} restricted={false} />
           </BuildButton>}
           </ActionControls>
         </Actions>
@@ -540,7 +539,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {generated && <BuilderFeedback role="status" data-slip-build-feedback><p>{messages.plural(
         data.slips.length < criteria.slips ? "slips.generatedFewer" : "slips.generatedCount", data.slips.length,
         { requested: messages.number(criteria.slips) })}</p></BuilderFeedback>}
-      {subscriberOnly ? null : pending && !generated ? <SlipLoading locale={locale} label={messages.text("slips.building")} /> : generated ? <>
+      {subscriberOnly || pending && !generated ? null : generated ? <>
         <SlipMatchRefreshProvider slips={shownSlips} enabled={!pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList data-slip-list>{shownSlips.map((slip, index) => {

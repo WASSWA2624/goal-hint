@@ -18,12 +18,12 @@ const Track = styled.div`
     block-size: 100%;
     background: ${({ theme }) => theme.header.accent};
   }
-  body:has([data-navigation-pending], main [aria-busy="true"]) & {
+  body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]) & {
     opacity: 1;
     > span { display: block; animation: ${travel} var(--gh-duration-shimmer) var(--gh-easing-linear) infinite; }
   }
   @media (prefers-reduced-motion: reduce) {
-    body:has([data-navigation-pending], main [aria-busy="true"]) & > span {
+    body:has([data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]) & > span {
       animation: none;
       transform: translateX(115%);
     }
@@ -33,4 +33,9 @@ const Track = styled.div`
 /** Real router or content loading reveals the track and its accessible busy indicator. */
 export function NavigationProgress({ label }: { label: string }) {
   return <Track data-navigation-progress><span role="progressbar" aria-label={label} /></Track>;
+}
+
+/** Report foreground work without creating a second visible loading state. */
+export function AppLoading({ active = true }: { active?: boolean }) {
+  return active ? <span hidden data-app-loading /> : null;
 }

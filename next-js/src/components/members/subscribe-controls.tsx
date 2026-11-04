@@ -1,5 +1,7 @@
 "use client";
 
+import { AppLoading } from "@/components/navigation/navigation-progress";
+
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
@@ -25,7 +27,7 @@ import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
-import { EvidenceFindings, ReadingProgress, evidenceRows, type PaymentTarget, type ReadingState } from "./payment-evidence";
+import { EvidenceFindings, evidenceRows, type PaymentTarget } from "./payment-evidence";
 import { CreditPurchase } from "./credit-controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { PaymentStatusCard, useApprovalRefresh } from "./payment-status";
@@ -97,10 +99,10 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     purpose: startWithTopUp && account ? "topup" as const : "plan" as const,
     accepted: false, network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial, startWithTopUp, account]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
-  const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
+  const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">("");
   const [idNote, setIdNote] = useState(""), [messageFound, setMessageFound] = useState<PaymentEvidence | null>(null);
-  const [shotState, setShotState] = useState<ReadingState | null>(null), [shotFound, setShotFound] = useState<ShotFindings | null>(null);
+  const [shotState, setShotState] = useState(false), [shotFound, setShotFound] = useState<ShotFindings | null>(null);
   // The pasted SMS's amount outlives edits to its ID; with the screenshot's, either one below the plan's price blocks submitting.
   const [messageAmount, setMessageAmount] = useState<number | null>(null);
   const canPaste = useSyncExternalStore(subscribeNothing, clipboardReadable, serverReady), canConfirm = useSyncExternalStore(subscribeNothing, modalDialogs, serverReady);
@@ -178,7 +180,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
   function goToStep(next: PaymentStep) {
     if (busy) return;
     if (next === 1) setMethodVisited(true);
-    setError(""); setPercentage(null); setConfirmationKey(null); focusStep.current = true; setStep(next);
+    setError(""); setConfirmationKey(null); focusStep.current = true; setStep(next);
   }
   /** A new manual recipient or package needs its own proof; OCR inference keeps the image it just read. */
   function changePayment(values: Partial<PaymentDraft>) {
@@ -242,20 +244,19 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
   async function readScreenshot(file: Blob) {
     const attempt = ++reading.current, current = () => attempt === reading.current, controller = new AbortController(), startedWith = currentId.current;
     stopReading.current?.abort(); stopReading.current = controller;
-    setShotFound(null); setShotState({ stage: "preparing", progress: 0 }); setAnnouncement(m.text("subscribe.reading.reading"));
+    setShotFound(null); setShotState(true); setAnnouncement(m.text("subscribe.reading.reading"));
     const editedMeanwhile = () => currentId.current !== startedWith && idSource.current !== "screenshot";
     let text: string;
-    try { text = await readScreenshotText(file, (progress) => { if (current()) setShotState(progress); }, controller.signal); }
+    try { text = await readScreenshotText(file, undefined, controller.signal); }
     catch {
       if (!current()) return;
       if (idSource.current === "screenshot" && !editedMeanwhile()) { update({ transactionId: "" }); idSource.current = null; }
-      setShotState(null); setShotFound({ evidence: noEvidence, replaced: null, unreadable: true, idCurrent: true });
+      setShotState(false); setShotFound({ evidence: noEvidence, replaced: null, unreadable: true, idCurrent: true });
       setAnnouncement(m.text("subscribe.screenshotUnreadable"));
       return;
     }
     if (!current()) return;
     // A short pause on the last step, so the member sees the text being searched rather than a jump.
-    setShotState({ stage: "finding", progress: 100 });
     await new Promise((resolve) => setTimeout(resolve, 300));
     if (!current()) return;
     const evidence = paymentEvidence(text, owners, { bare: false }), id = evidence.transactionId, previous = currentId.current;
@@ -266,15 +267,15 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     else if (clear) idSource.current = null;
     const replaced = !kept && id && previous && previous !== id ? previous : null;
     const idCurrent = !kept || previous === id;
-    setShotState(null); setShotFound({ evidence, replaced, unreadable: false, idCurrent }); say(evidence, replaced, true, idCurrent);
+    setShotState(false); setShotFound({ evidence, replaced, unreadable: false, idCurrent }); say(evidence, replaced, true, idCurrent);
   }
   function removeScreenshot() {
     reading.current++; stopReading.current?.abort(); stopReading.current = null;
-    setImage(null); setPreview(""); setPercentage(null); setShotState(null); setShotFound(null);
+    setImage(null); setPreview(""); setShotState(false); setShotFound(null);
   }
   async function chooseImage(file: File | undefined) {
     if (!file || busy) return;
-    setBusy(true); setError(""); setPercentage(null);
+    setBusy(true); setError("");
     try {
       const prepared = await preparePaymentImage(file);
       setImage(prepared); setPreview(URL.createObjectURL(prepared));
@@ -320,7 +321,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     if (busy || sending.current || blocker || "problem" in details || !topUp && (step !== 3 || !paymentConfirmed || !showForm)) return;
     sending.current = true;
     const { plan, account, payer, transactionId, image: screenshot, topUpUgx: credit } = details, body = new FormData();
-    setBusy(true); setPercentage(0);
+    setBusy(true);
     // The server records the plan's price (or the top-up) as the claim; the screenshot's amount goes along only as the owner's hint.
     for (const [key, value] of Object.entries({ purpose: credit === null ? "plan" : "topup", planId: credit === null ? plan.id : "", topUpAmount: credit === null ? "" : String(credit),
       network: draft.network, payerPhone: payer, transactionId,
@@ -329,7 +330,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     if (screenshot) body.append("image", screenshot, "payment.jpg");
     let failed = false;
     try {
-      const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted");
+      const result = await uploadPayment(body); clearPaymentDraft(account.id); trackEvent("payment_submitted");
       setSent({ before: view?.status?.reference ?? null, status: { reference: result.reference, status: "pending", rejectText: null, rejectReason: null,
         planName: credit === null ? plan.name : m.text("credit.topUp"), priceUgx: credit ?? plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null,
         purpose: credit === null ? "plan" : "topup" } });
@@ -439,7 +440,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
         <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
           onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox></FileChoices>
       <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
-      {shotState ? <ReadingProgress locale={locale} state={shotState} compact={!topUp} />
+      {shotState ? null
         : shotFound?.unreadable ? <Note data-screenshot-note>{m.text("subscribe.screenshotUnreadable")}</Note>
           : shotFound && <div data-screenshot-note><EvidenceFindings locale={locale} evidence={shotFound.evidence} target={target} replaced={shotFound.replaced}
             showId={shotFound.idCurrent} networkName={networkName(shotFound.evidence)} needAmount /></div>}
@@ -451,19 +452,18 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     {/* Plan terms belong to review; a top-up keeps its existing submit-time consent. */}
     {topUp && !view?.acceptedTerms && <Note data-payment-consent>{m.text("subscribe.consent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</Note>}
     {topUp && <VisuallyHidden role="status">{announcement}</VisuallyHidden>}
-    {topUp ? <Submit ref={submitButton} type="submit" disabled={busy || !restored || !draft.network} aria-disabled={formBlocker ? true : undefined} aria-describedby={formBlocker ? `${ids}-blocker` : undefined}>
-      {m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
+    {topUp ? <Submit ref={submitButton} type="submit" disabled={busy || !restored || !draft.network} aria-disabled={formBlocker ? true : undefined} aria-describedby={formBlocker && !shotState ? `${ids}-blocker` : undefined}>
+      {m.text("subscribe.report")}<ChevronRightIcon /></Submit>
       : <WizardActions><Button type="button" variant="secondary" disabled={busy} onClick={() => goToStep(1)}><ChevronLeftIcon />{m.text("subscribe.wizard.back")}</Button>
-        <Submit ref={submitButton} type="submit" disabled={busy || !restored} aria-disabled={formBlocker ? true : undefined} aria-describedby={formBlocker ? `${ids}-blocker` : undefined}>
+        <Submit ref={submitButton} type="submit" disabled={busy || !restored} aria-disabled={formBlocker ? true : undefined} aria-describedby={formBlocker && !shotState ? `${ids}-blocker` : undefined}>
           {m.text("subscribe.wizard.review")}<ChevronRightIcon /></Submit></WizardActions>}
-    {formBlocker && <SubmitNote id={`${ids}-blocker`} $warning={formBlocker.warning} data-submit-blocker>{formBlocker.text}
+    {formBlocker && !shotState && <SubmitNote id={`${ids}-blocker`} $warning={formBlocker.warning} data-submit-blocker>{formBlocker.text}
       {formBlocker.switchTo && <> <PlanSwitch type="button" variant="quiet" data-plan-switch
         onClick={() => { update({ planId: formBlocker.switchTo!.id }); setTimeout(() => submitButton.current?.focus(), 0); }}>
         {m.text("subscribe.switchPlan", { plan: m.plural("paywall.days", formBlocker.switchTo.durationDays) })}</PlanSwitch></>}
       {formBlocker.useAmount !== undefined && <> <PlanSwitch type="button" variant="quiet" data-topup-switch
         onClick={() => { update({ topUpAmount: String(formBlocker.useAmount) }); setTimeout(() => submitButton.current?.focus(), 0); }}>
         {m.text("credit.useAmount", { amount: m.number(formBlocker.useAmount) })}</PlanSwitch></>}</SubmitNote>}
-    {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
   </ReportForm>;
   const confirmation = topUp && canConfirm && showForm && <CriteriaDialog id={`${ids}-confirm`} title={m.text("subscribe.confirmTitle")} open={confirming} onCancel={() => setConfirming(false)} onApply={() => void send()}
     applyLabel={m.text("subscribe.confirmSend")} cancelLabel={m.text("subscribe.editDetails")} closeLabel={m.text("subscribe.editDetails")}>
@@ -482,6 +482,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
   // Adding credit: the title with the member's credit, then three numbered steps. Choosing a plan from here means going back
   // to the plan page, and the money-menu link and payment note stay with plan payments.
   if (topUp) return <>
+    <AppLoading active={busy || shotState} />
     {accountPanel}
     {backToStatus}
     <TopUpHeader id="plans" aria-labelledby={`${ids}-plan`}>
@@ -508,6 +509,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     aria-label={m.text("subscribe.wizard.editField", { field })}>{m.text("subscribe.wizard.edit")}</WizardEdit>;
   const titles = ["subscribe.wizard.choosePackage", "subscribe.wizard.chooseMethod", "subscribe.wizard.addProof", "subscribe.wizard.check"] as const;
   return <>
+    <AppLoading active={busy || shotState} />
     {accountPanel}
     {backToStatus}
     {!statusOnly && paymentStatus}{topUpCard}
@@ -549,8 +551,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
         <WizardNotice>{m.text("subscribe.wizard.approval")}</WizardNotice>
         <WizardActions><Button type="button" variant="secondary" disabled={busy} onClick={() => goToStep(2)}><ChevronLeftIcon />{m.text("subscribe.wizard.back")}</Button>
           <Submit ref={submitButton} type="submit" disabled={busy || !restored} aria-disabled={blocker || !paymentConfirmed ? true : undefined}>
-            {m.text(busy ? "subscribe.sending" : "subscribe.wizard.submit")}<ChevronRightIcon /></Submit></WizardActions>
-        {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
+            {m.text("subscribe.wizard.submit")}<ChevronRightIcon /></Submit></WizardActions>
       </ReportForm>}
       {error && <p role="alert">{error}</p>}
     </PaymentWizard>

@@ -139,7 +139,7 @@ export async function verifyDesktopThemes(page, { origin = "http://127.0.0.1:311
           return ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"]
             .some(edge => Number.parseFloat(style[edge]) > 0);
         }).map(element => element.tagName.toLowerCase() + (element.id ? `#${element.id}` : ""));
-        const idleProgressVisible = !document.querySelector('[data-navigation-pending], main [aria-busy="true"]')
+        const idleProgressVisible = !document.querySelector('[data-navigation-pending], [data-app-loading], main[aria-busy="true"], main [aria-busy="true"]')
           && [...canvas.querySelectorAll("[data-navigation-progress]")].some(element => getComputedStyle(element).opacity !== "0");
         const footer = canvas.querySelector("[data-app-footer]");
         const statusSelect = [...canvas.querySelectorAll("[data-feed-status]")].find(element => element.getBoundingClientRect().width > 0);

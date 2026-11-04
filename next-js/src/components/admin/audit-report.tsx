@@ -172,7 +172,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
       <RecordListFooter>
         <AuditSummary>
           <div>
-            <p aria-live="polite" data-audit-count>{pending ? "Loading activity…" : <b>{matches.length} {matches.length === 1 ? "event" : "events"}</b>}
+            <p aria-live="polite" data-audit-count><b>{matches.length} {matches.length === 1 ? "event" : "events"}</b>
               {!pending && matches.length > pageSize && ` · ${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, matches.length)} shown`}</p>
           </div>
           <p>Up to 100 recent {action || period !== "all" ? "matching " : ""}events · EAT</p>

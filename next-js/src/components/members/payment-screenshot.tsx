@@ -28,7 +28,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
   onRemove: () => void; onBusyChange: (busy: boolean) => void; onPasteMessage: () => void;
 }) {
   const id = useId(), input = useRef<HTMLInputElement>(null), abort = useRef<AbortController | null>(null), running = useRef(false);
-  const [progress, setProgress] = useState(""), [dialog, setDialog] = useState<Dialog | null>(null);
+  const [processing, setProcessing] = useState(false), [dialog, setDialog] = useState<Dialog | null>(null);
   const [cancellable, setCancellable] = useState(false);
   const [selected, setSelected] = useState<number | null>(null), urls = useRef<string[]>([]), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; abort.current?.abort(); urls.current.forEach(url => URL.revokeObjectURL(url)); }; }, []);
@@ -38,18 +38,15 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
   function accept(candidate: Candidate, meta: ScreenshotMetadata, text: string) { close(); onAccept(candidate.image, meta, text); }
   async function read(candidate: Candidate) {
     if (running.current || disabled) return;
-    running.current = true; close(); onBusyChange(true); setProgress("Reading screenshot…");
+    running.current = true; close(); onBusyChange(true); setProcessing(true);
     const controller = new AbortController(); abort.current = controller;
     setCancellable(true);
     let checking = false;
     try {
-      const text = (await readScreenshotText(candidate.image, value => {
-        if (!controller.signal.aborted && mounted.current) setProgress(value.stage === "preparing" ? "Preparing screenshot reader…" : `Reading screenshot… ${value.progress}%`);
-      }, controller.signal)).slice(0, 12000);
+      const text = (await readScreenshotText(candidate.image, undefined, controller.signal)).slice(0, 12000);
       if (controller.signal.aborted || !mounted.current) return;
       const checked = inspectPaymentScreenshot(text);
       if (!checked.ok) { failure(checked.message); return; }
-      setProgress("Checking transaction…");
       checking = true;
       const result = await sendCheckout<CheckoutEvidenceCheck>({ action: "check-evidence", evidence: { provider, transactionId: checked.evidence.transactionId,
         submissionId, imageSha256: candidate.imageSha256 } });
@@ -70,12 +67,12 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     } finally {
       running.current = false;
       abort.current = null;
-      if (mounted.current) { setProgress(""); setCancellable(false); onBusyChange(false); }
+      if (mounted.current) { setProcessing(false); setCancellable(false); onBusyChange(false); }
     }
   }
   async function prepare(file: File, recheck = false) {
     if (running.current || disabled) return;
-    running.current = true; abort.current = null; onBusyChange(true); setProgress("Preparing screenshot…");
+    running.current = true; abort.current = null; onBusyChange(true); setProcessing(true);
     let candidate: Candidate | null = null;
     try {
       if (!file.size || file.size > 25_000_000 || !file.type.startsWith("image/")) { failure("Choose one image smaller than 25 MB. This file is not a supported payment screenshot."); return; }
@@ -89,7 +86,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
         setDialog({ kind: "replace", title: "Replace screenshot?", message: "Only one screenshot can be attached to this transaction. Your current screenshot stays until the replacement passes its checks.", candidate }); return;
       }
     } catch { if (mounted.current) failure("This image could not be opened as a payment screenshot. Choose a clear, complete screenshot or paste the transaction message."); }
-    finally { running.current = false; if (mounted.current) { setProgress(""); onBusyChange(false); } }
+    finally { running.current = false; if (mounted.current) { setProcessing(false); onBusyChange(false); } }
     if (candidate && mounted.current) await read(candidate);
   }
   async function choose(files: File[]) {
@@ -98,7 +95,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     if (files.length === 1) { await prepare(files[0]!); return; }
     if (!files.length) { failure("No image was found. Copy a screenshot or choose an image file."); return; }
     if (files.length > 8 || files.some(file => file.size > 25_000_000)) { failure("Choose one image smaller than 25 MB, or paste fewer images to select one."); return; }
-    running.current = true; onBusyChange(true); setProgress("Preparing screenshot choices…");
+    running.current = true; onBusyChange(true); setProcessing(true);
     try {
       const unique: File[] = [], hashes = new Set<string>();
       for (const file of files) { const hash = await screenshotDigest(file); if (!hashes.has(hash)) { unique.push(file); hashes.add(hash); } }
@@ -106,7 +103,7 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
       const picked = unique.map(file => { const url = URL.createObjectURL(file); urls.current.push(url); return { file, url }; });
       setDialog({ kind: "pick", title: "Choose one screenshot", message: `One screenshot is allowed per transaction.${unique.length < files.length ? " Repeated copies were removed." : ""} Select the image you want to use.`, files: picked });
     } catch { if (mounted.current) failure("These images could not be read. Choose one clear screenshot and try again."); }
-    finally { running.current = false; if (mounted.current) { onBusyChange(false); setProgress(""); } }
+    finally { running.current = false; if (mounted.current) { onBusyChange(false); setProcessing(false); } }
   }
   async function paste() {
     try {
@@ -122,9 +119,9 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
     const files = [...event.clipboardData?.items ?? []].filter(item => item.kind === "file" && item.type.startsWith("image/")).flatMap(item => item.getAsFile() ?? []);
     event.preventDefault(); void choose(files);
   }
-  const busy = disabled || !!progress;
+  const busy = disabled || processing;
   const ready = !!image && metadata?.version === 1;
-  return <CheckoutEvidenceField>
+  return <CheckoutEvidenceField aria-busy={processing}>
     <header><label htmlFor={`${id}-file`}>Payment screenshot{optional ? " (optional)" : ""}</label></header>
     <VisuallyHidden as="input" ref={input} id={`${id}-file`} type="file" accept="image/*" disabled={busy}
       onChange={event => { const files = [...event.currentTarget.files ?? []]; event.currentTarget.value = ""; void choose(files); }} />
@@ -133,8 +130,8 @@ export function PaymentScreenshot({ image, metadata, provider, submissionId, dis
         <Button variant="quiet" disabled={busy} onClick={() => void paste()}><ClipboardIcon />Paste image</Button></div>
       {image && <div data-screenshot-preview><PaymentImagePreview image={image} disabled={busy} />
         <Button variant="quiet" disabled={busy} onClick={onRemove}><TrashIcon />Remove screenshot</Button></div>}
-      {image && !ready && !progress && <Button variant="secondary" disabled={disabled} onClick={() => void prepare(new File([image], "Saved screenshot", { type: image.type }), true)}>Recheck saved screenshot</Button>}
-      {progress && <><p role="status">{progress}</p>{cancellable && <Button variant="quiet" onClick={() => abort.current?.abort()}>Cancel reading</Button>}</>}
+      {image && !ready && !processing && <Button variant="secondary" disabled={disabled} onClick={() => void prepare(new File([image], "Saved screenshot", { type: image.type }), true)}>Recheck saved screenshot</Button>}
+      {cancellable && <Button variant="quiet" onClick={() => abort.current?.abort()}>Cancel reading</Button>}
     </CheckoutScreenshot>
     {dialog && <CheckoutDialog id={`${id}-dialog`} title={dialog.title} open onCancel={close} closeLabel="Close screenshot message"
       footer={dialog.kind === "replace" ? <><CriteriaDialogButton variant="secondary" onClick={close}>Keep current</CriteriaDialogButton>
