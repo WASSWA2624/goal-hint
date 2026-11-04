@@ -85,10 +85,10 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
     <Frame data-analytics-ignore data-sidebar-resizing={resizing || undefined} $fixed={recordWorkspace} style={sidebarStyle}>
       <Sidebar id="admin-sidebar" data-admin-sidebar data-collapsed={collapsed} aria-label="Admin sections" $fixed={recordWorkspace}>
         <SidebarHead>
-          <Caption data-sidebar-caption>Admin</Caption>
+          <Caption data-sidebar-caption><SidebarAvatar aria-hidden="true"><UserIcon /></SidebarAvatar>Admin</Caption>
           <SidebarButton type="button" data-sidebar-toggle aria-controls="admin-sidebar" aria-expanded={!collapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setSidebarPreference({ collapsed: !collapsed })}>{collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}</SidebarButton>
+            onClick={() => setSidebarPreference({ collapsed: !collapsed })}><SidebarToggleIcon aria-hidden="true">{collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}</SidebarToggleIcon></SidebarButton>
         </SidebarHead>
         <SectionLinks current={current} collapsed={collapsed} />
       </Sidebar>
@@ -156,15 +156,38 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
   }
 `;
 const SidebarHead = styled.div`
-  display: flex; align-items: center; justify-content: space-between; min-block-size: var(--gh-size-8); gap: var(--gh-spacing-1); margin-block-end: var(--gh-spacing-1_5);
-  [data-collapsed="true"] & { justify-content: center; }
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1);
+  min-block-size: var(--form-control-height);
+  margin: calc(-1 * var(--gh-spacing-2)) calc(-1 * var(--gh-spacing-2_5)) var(--gh-spacing-1_5);
+  padding-inline: var(--gh-spacing-2_5);
+  background: ${({ theme }) => theme.header.background};
+  [data-collapsed="true"] & {
+    justify-content: center;
+    margin-inline: calc(-1 * var(--gh-spacing-1_5));
+    padding-inline: 0;
+  }
 `;
 const SidebarButton = styled.button`
-  display: grid; place-items: center; inline-size: var(--form-control-height); block-size: var(--form-control-height); padding: 0;
-  border: 0; border-radius: ${({ theme }) => theme.radius.control}; color: ${({ theme }) => theme.color.mutedText}; background: none; cursor: pointer;
+  display: grid; place-items: center; flex: none;
+  inline-size: var(--form-control-height); block-size: var(--form-control-height); padding: 0;
+  border: 0; border-radius: ${({ theme }) => theme.radius.control};
+  color: ${({ theme }) => theme.header.text}; background: none; cursor: pointer;
+  &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.header.accent}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
+`;
+const SidebarToggleIcon = styled.span`
+  display: grid; place-items: center; inline-size: var(--gh-size-6); block-size: var(--gh-size-6);
+  border-radius: ${({ theme }) => theme.radius.control};
+  background: ${({ theme }) => theme.action.headerBackground};
+  > svg { font-size: var(--gh-font-body); }
+  ${media.hover} { ${SidebarButton}:hover & { background: ${({ theme }) => theme.header.controlHover}; } }
+`;
+const SidebarAvatar = styled.span`
+  display: grid; place-items: center; flex: none;
+  inline-size: var(--gh-size-6); block-size: var(--gh-size-6);
+  border-radius: ${({ theme }) => theme.radius.control};
+  color: ${({ theme }) => theme.header.accent};
+  background: ${({ theme }) => theme.action.headerBackground};
   > svg { font-size: var(--gh-font-section); }
-  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.rowHover}; } }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
 `;
 const SidebarResize = styled.div<{ $fixed: boolean }>`
   display: none;
@@ -177,8 +200,8 @@ const SidebarResize = styled.div<{ $fixed: boolean }>`
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; }`}
 `;
 const Caption = styled.p`
-  padding-inline-start: var(--gh-spacing-2_5);
-  color: ${({ theme }) => theme.color.mutedText};
+  display: flex; align-items: center; gap: var(--gh-spacing-2);
+  color: ${({ theme }) => theme.header.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   letter-spacing: var(--gh-tracking-uppercase);
