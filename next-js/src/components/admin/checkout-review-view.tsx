@@ -221,7 +221,8 @@ export function CheckoutReviewView({ payment, detail, busy, loading, hasNext, er
       },
     });
     if (editing(claim) && exception) actions.push({
-      id: `${claim.id}-verify`, label: `Confirm transfer for ${claim.receipt.disputed ? "dispute" : "reconciliation"}${suffix}`, run: () => {
+      id: `${claim.id}-verify`, label: `Confirm transfer for ${claim.receipt.disputed ? "dispute" : "reconciliation"}${suffix}`,
+      alignEnd: !claim.receipt.disputed, run: () => {
         requestAnimationFrame(() => {
           const form = document.getElementById(receiptForm(claim.id));
           if (form instanceof HTMLFormElement) form.requestSubmit();

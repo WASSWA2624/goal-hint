@@ -281,6 +281,7 @@ export const ApprovalForm = styled.form`${decisionPanel}`;
 
 export const PaymentReviewFooter = styled(RecordFooter)`
   justify-content: space-between;
+  > [data-payment-action-end] { margin-inline-start: auto; }
   ${media.belowDesktop} {
     position: fixed;
     inset-block-end: var(--payment-review-footer-offset);

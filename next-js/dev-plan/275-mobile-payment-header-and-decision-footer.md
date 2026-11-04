@@ -10,5 +10,7 @@
 - Put reconciliation, evidence review, ownership resolution, reversal and
   recovery actions in the footer or its dialogs. Read-only records can
   omit the footer.
+- Align the direct reconciliation confirmation to the right and reversal
+  to the left in both layouts.
 - Require checked reversal reasons and confirmation. Record an optional
   note and retain the wrong-account recovery path.

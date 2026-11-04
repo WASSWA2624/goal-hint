@@ -55,7 +55,7 @@ export function PaymentActionDialog({ title, closeLabel, children, footer, busy,
     onCancel={onClose} closeLabel={closeLabel ?? "Close payment action"} footer={footer}>{children}</Dialog></Anchor>;
 }
 
-export type PaymentAction = Readonly<{ id: string; label: string; run: () => void }>;
+export type PaymentAction = Readonly<{ id: string; label: string; run: () => void; alignEnd?: boolean }>;
 const MoreButton = styled(Button)`
   && { min-inline-size: var(--form-control-height); }
   ${media.belowDesktop} { && { padding-inline: 0; } }
@@ -69,8 +69,9 @@ export function PaymentActionMenu({ actions, busy, compact }: {
 }) {
   const [open, setOpen] = useState(false);
   if (!actions.length) return null;
-  if (!compact && actions.length === 1 && !open) return <Button type="button" variant="secondary" disabled={busy}
-    onClick={actions[0]!.run}>{actions[0]!.label}</Button>;
+  const [first] = actions;
+  if (!compact && actions.length === 1 && first && !open) return <Button type="button" variant="secondary" disabled={busy}
+    data-payment-action-end={first.alignEnd || undefined} onClick={first.run}>{first.label}</Button>;
   const close = () => setOpen(false);
   return <>
     {compact ? <MoreButton type="button" variant="quiet" aria-label="More payment actions" aria-haspopup="dialog" title="More payment actions"
