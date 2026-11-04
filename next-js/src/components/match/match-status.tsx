@@ -7,13 +7,17 @@ import { cardResultStatus } from "@/domain/match-card";
 import { liveClockLabel } from "@/domain/match-clock";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import type { Messages } from "@/i18n/messages";
-import type { OutcomeTone } from "@/styles/theme";
+import { media, type OutcomeTone } from "@/styles/theme";
 import { MatchClockText } from "./score-presentation";
 
 const Label = styled(StatusBadge)`
   --status-ink: ${({ theme }) => theme.color.outcome.unavailable.text};
   --status-fill: ${({ theme }) => theme.color.outcome.unavailable.background};
   box-shadow: inset 0 0 0 var(--gh-stroke-thin) color-mix(in srgb, var(--status-ink) 40%, var(--status-fill));
+  ${media.belowDesktop} {
+    background-color: color-mix(in srgb, var(--status-fill) calc(var(--gh-opacity-55) * 100%), transparent);
+    box-shadow: inset 0 0 0 var(--gh-stroke-thin) color-mix(in srgb, var(--status-ink) calc(var(--gh-opacity-25) * 100%), transparent);
+  }
   gap: var(--gh-spacing-1_5); font-size: var(--gh-font-body);
   &[data-match-status="upcoming"] { --status-ink: ${({ theme }) => theme.color.accent.blue.text}; --status-fill: ${({ theme }) => theme.color.accent.blue.soft}; }
   &[data-match-status="live"] { --status-ink: ${({ theme }) => theme.color.live.text}; --status-fill: ${({ theme }) => theme.color.live.soft}; }

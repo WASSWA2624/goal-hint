@@ -23,6 +23,8 @@ above them. Search and title spacing are compact on mobile and desktop, with a
 separate gap before the Matches/Predictions results header. That header reuses
 the match-card frame tokens and joins the first card without a gap or doubled
 divider. Controls retain their shared height and both theme palettes.
+Mobile match status badges use lighter fills and borders with their existing
+status text colors.
 
 The dialog uses From/To date-times rather than a period or time-zone selector.
 Dates display as `04-JAN-2026` with 24-hour time and scrolling date/time columns.
