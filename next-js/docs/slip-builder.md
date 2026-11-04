@@ -40,7 +40,7 @@ From the 1024px desktop breakpoint, the individual odds and probability
 ranges appear inline, with combined probability when available.
 The date and time inputs use floating From date and time and To date and time
 labels. The date range and daily kickoff times in EAT use the same criteria
-as the separate mobile inputs. The Markets dialog groups each market with
+as the combined mobile inputs. The Markets dialog groups each market with
 Automatic and its specific results. The toolbar summary shows selected markets,
 selection mode and whether match reuse is on.
 
@@ -49,33 +49,16 @@ both layouts. The labels remain visible with entered values and blank Any
 placeholders, reclaiming the former sub-label row. Numeric values are centered;
 desktop mouse steppers reserve equal side padding so values remain centered.
 
-Below 1024px, the mobile toolbar uses 36px controls with compact padding,
-12px category and floating Min/Max labels, and 14px numeric values and Any
-placeholders. Reset and the account action use 12px text; dialog triggers scale
-from 11px on narrow phones to 12px, with 11px count badges. The secondary summary
-scales from 10px to 11px to preserve wrapping on narrow phones.
-Existing label and summary line heights preserve the compact layout. Dialog
-forms and guard messages keep their independent typography. Total slips, Total odds
-and Matches per slip remain visible together. Three short dialog buttons for
-odds and probability, date and time, and markets share
-the next row, followed by Reset and the fixed 208px action. The compact summary
-shows date, time, selected market count and Auto/manual outcomes. Longer custom
-summaries wrap. At tablet widths below desktop, popup buttons and actions share
-one row. Dialog controls also use compact mobile spacing, with date/time
-fields in two columns. Reset grows into available action-row space while the
-account action retains its fixed dimensions. Date/time controls retain their
-native editing size. Mobile steppers use the existing keyboard increment rules;
-desktop mouse steppers remain available. These rules are scoped to the builder;
-shared Best Slips/history spacing is unchanged.
+Below 1024px, Advanced Filters shares a row with Custom Filters for signed-in
+users. The dialog contains the odds and probability ranges, the two combined
+date-time fields, and the match reuse checkbox. Markets is the final section
+and starts expanded. Its Automatic checkbox enables all markets and clears
+manual picks. Individual markets and results can also be selected. The
+Advanced Filters badge counts changed ranges, the kickoff window and market
+settings. The compact summary shows the dates, times and market selections.
 
-On mobile the buttons show counts for their current settings. Odds & probability counts custom
-individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date
-range and a custom daily time window, also up to two. Markets shows the number
-of selected market families, starting at four. A range counts once even when
-both its minimum and maximum are changed. Limits and date/time hide their count
-when zero; Markets always shows its selected-family count.
-
-Apply validates and retains the current dialog's changes. Cancel and Escape
+Apply validates and retains the current dialog's changes. Reset restores its
+defaults. Cancel and Escape
 discard changes made since that dialog opened. Backdrop clicks leave it open. Native dialog
 behavior contains keyboard focus while open and returns it to the trigger after
 closing. Deselecting a market clears its specific results. On desktop,
@@ -84,9 +67,8 @@ The match-reuse checkbox defaults to off and can be enabled explicitly or by
 applying a saved filter.
 
 All fields remain uniquely named and associated with the same native GET form.
-Before JavaScript attaches, dialogs render as visible inline sections so the
-complete form remains usable without JavaScript. Hydration enables the modal
-presentation and the responsive controls.
+Before JavaScript attaches, Advanced Filters renders inline with separate
+native date and time inputs. Hydration enables the modal and combined controls.
 
 All numeric controls progressively enhance to guarded spinbuttons. Typing,
 pasting and stepping reject signs, exponents, nonnumeric characters, excessive
@@ -425,7 +407,7 @@ the pre-LIMIT completion query and restricted-grant persistence when its test
 server is available.
 
 `npm run test:slips:rendering` builds the isolated Next.js fixture and verifies
-real server-rendered controls, the three dialog groups and their inline
+real server-rendered controls, the Advanced Filters groups and their inline
 no-JavaScript fallback, the explicit minimum/default values and blank Any maxima,
 retained custom numeric bounds, and
 unique form-associated inputs. It also checks result states, native GET builds, invalid criteria,

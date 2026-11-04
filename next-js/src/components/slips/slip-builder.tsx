@@ -8,7 +8,7 @@ import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import type { TextInputProps } from "@/components/ui/controls";
 import { ChoicePicker } from "@/components/ui/choice-picker";
-import { CriteriaDialog } from "@/components/ui/criteria-dialog";
+import { CriteriaAccordion } from "@/components/ui/criteria-accordion";
 import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/feedback";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
@@ -35,8 +35,8 @@ import { SlipNumericInput } from "./slip-numeric-input";
 import { SavedSlipConfigurations } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
-import { ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
-  Fields, InlineCriteria, LimitGroups, MarketChoice, MarketChoices, MarketField, MarketsDialog, Note, Results, BuilderFeedback, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
+import { ActionControls, Actions, AdvancedCriteria, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
+  Fields, InlineCriteria, LimitGroups, MarketChoice, MarketChoices, MarketField, BuilderCriteriaDialog, Note, Results, BuilderFeedback, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
@@ -46,8 +46,6 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
-const criteriaGroups = ["limits", "kickoff", "markets"] as const;
-const desktopDialogGroups = ["markets"] as const;
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
 function SlipBuildActionLabel({ locale, restricted, pending = false }: {
   locale: string; restricted: boolean; signedIn: boolean; pending?: boolean;
@@ -66,8 +64,8 @@ type NumericRangeField = `${"total" | "teams" | "odds" | "prob" | "totalProb"}${
 const groupFields = {
   limits: ["oddsMin", "oddsMax", "probMin", "probMax", "totalProbMin", "totalProbMax"],
   kickoff: ["dateFrom", "dateTo", "timeFrom", "timeTo"],
-  markets: [],
 } as const;
+const advancedFields = [...groupFields.limits, ...groupFields.kickoff];
 const subscribeNever = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
@@ -146,9 +144,10 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const [outcomes, setOutcomes] = useState(initialOutcomes ?? criteria.outcomes ?? {});
   const [reuse, setReuse] = useState(initialReuse ?? criteria.reuse);
   const missingKickoff = groupFields.kickoff.find((name) => !draft[name]?.trim());
-  const dialogGroups = desktop ? desktopDialogGroups : criteriaGroups;
+  const dialogGroup = desktop ? "markets" : "advanced";
+  const dialogId = `${prefix}-${dialogGroup}`;
   const currentParameters = useMemo(() => {
-    if (desktop && missingKickoff) return null;
+    if (missingKickoff) return null;
     try {
       const parameters = new URLSearchParams();
       for (const field of slipInputFields) parameters.set(field, draft[field] ?? "");
@@ -156,10 +155,14 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       for (const market of selectedMarkets) if (outcomes[market]?.length) parameters.set(`picks.${market}`, outcomes[market]!.join(","));
       return canonicalSlipConfigurationParameters(parameters.toString(), today);
     } catch { return null; }
-  }, [desktop, missingKickoff, draft, selectedMarkets, outcomes, reuse, today]);
-  const [activeGroup, setActiveGroup] = useState<CriteriaGroup | null>(() => issueGroup(initialError));
-  const snapshot = useRef<{ group: CriteriaGroup; draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
-    activeGroup ? { group: activeGroup, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse } : null);
+  }, [missingKickoff, draft, selectedMarkets, outcomes, reuse, today]);
+  const [dialogState, setDialogState] = useState<"open" | "mobile-error" | null>(() => {
+    const group = issueGroup(initialError);
+    return group === "markets" ? "open" : group ? "mobile-error" : null;
+  });
+  const dialogOpen = dialogState === "open" || !desktop && dialogState === "mobile-error";
+  const snapshot = useRef<{ draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
+    dialogState ? { draft, markets: selectedMarkets, outcomes, reuse } : null);
   const clearAppliedConfiguration = useCallback(() => {
     setSelectedConfiguration(null);
     const url = new URL(window.location.href);
@@ -171,7 +174,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     const next = slipConfigurationCriteria(configuration.parameters, day);
     setDraft(criteriaDraft(next)); setSelectedMarkets(next.markets); setOutcomes(next.outcomes ?? {}); setReuse(next.reuse);
     setError(null); setFeedbackKey(value => value + 1);
-    snapshot.current = null; setActiveGroup(null); setSelectedConfiguration(configuration.id); setClearedResult(receivedResult);
+    snapshot.current = null; setDialogState(null); setSelectedConfiguration(configuration.id); setClearedResult(receivedResult);
     // Keep the management dialog open and replace the generation URL without a server build/read.
     window.history.replaceState(null, "", slipConfigurationHref(configuration, locale, day));
   }, [locale, receivedResult]);
@@ -183,7 +186,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     if (!error) return;
     const frame = requestAnimationFrame(() => errorRef.current?.focus());
     return () => cancelAnimationFrame(frame);
-  }, [error, activeGroup]);
+  }, [error, dialogOpen]);
   function range(from: typeof slipInputFields[number], to: typeof slipInputFields[number], unit = "") {
     const lower = draft[from]?.trim(), upper = draft[to]?.trim(), any = messages.text("slips.any");
     if (!lower && !upper) return any;
@@ -200,10 +203,9 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const invalidField = error?.field;
   const showJoint = jointEstimates || criteria.totalProbMin !== undefined || criteria.totalProbMax !== undefined
     || initialInputs.totalProbMin !== undefined || initialInputs.totalProbMax !== undefined || Boolean(draft.totalProbMin || draft.totalProbMax);
-  const invalidLimits = groupFields.limits.some((field) => field === invalidField);
-  const invalidKickoff = invalidField === "dateFrom" || invalidField === "dateTo" || invalidField === "timeFrom" || invalidField === "timeTo";
   const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
   const manualMarkets = selectedMarkets.filter((family) => outcomes[family]?.length).length;
+  const allAutomatic = publicPolicy.markets.every((family) => selectedMarkets.includes(family) && !outcomes[family]?.length);
   const marketCountSummary = selectedMarkets.length === publicPolicy.markets.length
     ? messages.text("slips.summary.allMarkets", { count: messages.number(selectedMarkets.length) })
     : messages.plural("slips.marketCount", selectedMarkets.length);
@@ -213,55 +215,53 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       : messages.text("slips.summary.automaticResults"),
   });
   const errorGroup = issueGroup(error);
-  const dialogTitle = (group: CriteriaGroup) => group === "limits" ? messages.text("slips.dialog.limits")
-    : group === "kickoff" ? messages.text("slips.dialog.kickoffTitle") : messages.text("slips.accordion.markets");
-  const summaries = {
-    limits: messages.text(showJoint ? "slips.summary.limitsJoint" : "slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%"), combined: range("totalProbMin", "totalProbMax", "%") }),
-    kickoff: messages.text("slips.summary.kickoff", { dates: dateSummary(), times: range("timeFrom", "timeTo") }),
-    markets: marketsSummary,
-  };
+  const dialogTitle = messages.text(desktop ? "slips.accordion.markets" : "feed.filters.dialogTitle");
+  const dialogLabel = messages.text(desktop ? manualMarkets ? "slips.toolbar.manual" : "slips.automatic" : "feed.filters.dialogTitle");
+  const dialogIssue = (group: CriteriaGroup | null) => group !== null && (!desktop || group === "markets");
   function changed(fields: readonly typeof slipInputFields[number][]) {
     return fields.some((name) => isNumericRange(name)
       ? rangeValue(name, draft[name], resetCriteria) !== rangeValue(name, undefined, resetCriteria) : draft[name] !== resetDraft[name]);
   }
-  const criteriaCounts = {
-    limits: Number(changed(["oddsMin", "oddsMax"])) + Number(changed(["probMin", "probMax"])) + Number(changed(["totalProbMin", "totalProbMax"])),
-    kickoff: Number(changed(["dateFrom", "dateTo"])) + Number(changed(["timeFrom", "timeTo"])),
-    markets: selectedMarkets.length,
-  };
-  function edited(group: CriteriaGroup) {
-    return group === "markets" ? selectedMarkets.length !== publicPolicy.markets.length || manualMarkets > 0 || reuse : criteriaCounts[group] > 0;
-  }
-  function openDialog(group: CriteriaGroup) {
+  const marketsEdited = !allAutomatic || reuse;
+  const criteriaCount = desktop ? selectedMarkets.length
+    : Number(changed(["oddsMin", "oddsMax"])) + Number(changed(["probMin", "probMax"]))
+      + Number(changed(["totalProbMin", "totalProbMax"])) + Number(changed(groupFields.kickoff)) + Number(marketsEdited);
+  function openDialog() {
     setFeedbackKey((current) => current + 1);
-    snapshot.current = { group, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse };
-    setActiveGroup(group);
+    snapshot.current = { draft, markets: selectedMarkets, outcomes, reuse };
+    setDialogState("open");
+  }
+  function restoreAdvanced(values: SlipInputs) {
+    setDraft((current) => ({ ...current, ...Object.fromEntries(advancedFields.map((name) => [name, values[name]])) }));
   }
   function cancelDialog() {
     setFeedbackKey((current) => current + 1);
     const previous = snapshot.current;
     if (previous) {
-      if (previous.group === "markets") { setSelectedMarkets(previous.markets); setOutcomes(previous.outcomes); setReuse(previous.reuse); }
-      else setDraft((current) => ({ ...current, ...Object.fromEntries(groupFields[previous.group].map((name) => [name, previous.draft[name]])) }));
+      restoreAdvanced(previous.draft);
+      setSelectedMarkets(previous.markets); setOutcomes(previous.outcomes); setReuse(previous.reuse);
     }
-    setError((current) => issueGroup(current) === activeGroup ? null : current);
-    snapshot.current = null; setActiveGroup(null);
+    setError((current) => dialogIssue(issueGroup(current)) ? null : current);
+    snapshot.current = null; setDialogState(null);
   }
-  function applyDialog(group: CriteriaGroup) {
-    const parameters = serializeSlipCriteria(resetCriteria);
-    for (const name of groupFields[group]) parameters.set(name, draft[name] ?? "");
-    if (group === "markets") {
-      parameters.delete("markets");
-      selectedMarkets.forEach((market) => parameters.append("markets", market));
-      for (const market of selectedMarkets) outcomes[market]?.forEach((value) => parameters.append(`picks.${market}`, value));
-      parameters.set("reuse", reuse ? "1" : "0"); parameters.set("build", "1");
+  function validateCriteria(parameters: URLSearchParams, requireKickoff: boolean) {
+    if (requireKickoff && missingKickoff) {
+      throw new SlipCriteriaError(missingKickoff, missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
     }
+    return parseSlipCriteria(parameters, today);
+  }
+  function applyDialog() {
+    const parameters = serializeSlipCriteria(resetCriteria);
+    if (!desktop) for (const name of advancedFields) parameters.set(name, draft[name] ?? "");
+    parameters.delete("markets");
+    selectedMarkets.forEach((market) => parameters.append("markets", market));
+    for (const market of selectedMarkets) outcomes[market]?.forEach((value) => parameters.append(`picks.${market}`, value));
+    parameters.set("reuse", reuse ? "1" : "0"); parameters.set("build", "1");
     try {
-      if (group === "kickoff" && missingKickoff) throw new SlipCriteriaError(missingKickoff, missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
-      parseSlipCriteria(parameters, today);
-      setError((current) => issueGroup(current) === group ? null : current);
+      validateCriteria(parameters, !desktop);
+      setError((current) => dialogIssue(issueGroup(current)) ? null : current);
       setFeedbackKey((current) => current + 1);
-      snapshot.current = null; setActiveGroup(null);
+      snapshot.current = null; setDialogState(null);
     } catch (issue) {
       if (!(issue instanceof SlipCriteriaError)) throw issue;
       setError({ code: issue.code, field: issue.field });
@@ -270,16 +270,16 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   function reset() {
     setFeedbackKey((current) => current + 1);
     setDraft(resetDraft); setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
-    setError(null); snapshot.current = null; setActiveGroup(null);
+    setError(null); snapshot.current = null; setDialogState(null);
     setSelectedConfiguration(null);
     setClearedResult(receivedResult);
     if (window.location.search) startTransition(() => router.push(`${action}?${serializeSlipCriteria(resetCriteria)}`, { scroll: false }));
   }
-  function resetDialog(group: CriteriaGroup) {
+  function resetDialog() {
     setFeedbackKey((current) => current + 1);
-    if (group === "markets") { setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse); }
-    else setDraft((current) => ({ ...current, ...Object.fromEntries(groupFields[group].map((name) => [name, resetDraft[name]])) }));
-    setError((current) => issueGroup(current) === group ? null : current);
+    if (!desktop) restoreAdvanced(resetDraft);
+    setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
+    setError((current) => dialogIssue(issueGroup(current)) ? null : current);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -289,8 +289,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     const configuration = parameters.get("configuration");
     parameters.delete("configuration");
     try {
-      if (desktop && missingKickoff) throw new SlipCriteriaError(missingKickoff, missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
-      const next = serializeSlipCriteria(parseSlipCriteria(parameters, today));
+      const next = serializeSlipCriteria(validateCriteria(parameters, true));
       setClearedResult(null);
       if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
       next.set("build", "1"); setError(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
@@ -303,9 +302,8 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       if (issue instanceof SlipCriteriaError) {
         const nextError = { code: issue.code, field: issue.field };
         setError(nextError);
-        const group = issueGroup(nextError);
-        if (group && dialogGroups.some((dialog) => dialog === group)) openDialog(group);
-        else { snapshot.current = null; setActiveGroup(null); }
+        if (dialogIssue(issueGroup(nextError))) openDialog();
+        else { snapshot.current = null; setDialogState(null); }
       }
       else throw issue;
     }
@@ -344,7 +342,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     return <>
       <input type="hidden" name={date} value={draft[date] ?? ""} />
       <input type="hidden" name={time} value={draft[time] ?? ""} />
-      <DateTimeField id={`${prefix}-date-time-${endpoint}`} locale={locale} mode="datetime" timeZone={publicPolicy.reportingTimeZone}
+      <DateTimeField key={desktop ? undefined : feedbackKey} id={`${prefix}-date-time-${endpoint}`} locale={locale} mode="datetime" timeZone={publicPolicy.reportingTimeZone}
         label={messages.text(`slips.dateTime${endpoint}`)} value={value} required
         aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined}
         onValueChange={(value) => {
@@ -382,6 +380,56 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
     </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></fieldset>}
   </LimitGroups>;
+  const kickoffFields = desktop || enhanced ? <Fields data-combined-kickoff-fields>
+    {kickoffField("From")}{kickoffField("To")}
+  </Fields> : <Fields data-kickoff-fields>
+    {field("dateFrom", messages.text("slips.dateFrom"))}
+    {field("dateTo", messages.text("slips.dateTo"))}
+    {field("timeFrom", messages.text("slips.timeFrom"))}
+    {field("timeTo", messages.text("slips.timeTo"))}
+  </Fields>;
+  const reuseField = <ReuseRow>
+    <input type="hidden" name="reuse" value="0" />
+    <label><input type="checkbox" name="reuse" value="1" checked={reuse}
+      aria-describedby={desktop ? `${prefix}-reuse-hint` : undefined} onChange={(event) => setReuse(event.target.checked)} />{messages.text("slips.reuse")}</label>
+    {desktop && <Note id={`${prefix}-reuse-hint`}>{messages.text("slips.reuseHint")}</Note>}
+  </ReuseRow>;
+  const marketFields = <FieldGroup data-criteria-field="markets" aria-describedby={invalidMarkets ? errorId : undefined}>
+    <VisuallyHidden as="legend">{messages.text("slips.accordion.markets")}</VisuallyHidden>
+    {desktop && <Note>{messages.text("slips.marketsHint")}</Note>}
+    {!desktop && enhanced && <>
+      <MarketChoice>
+        <input type="checkbox" checked={allAutomatic} aria-describedby={`${prefix}-all-automatic-hint`}
+          onChange={() => { setSelectedMarkets(resetCriteria.markets); setOutcomes({}); }} />
+        {messages.text("slips.automatic")}
+      </MarketChoice>
+      <Note id={`${prefix}-all-automatic-hint`}>{messages.text("slips.automaticAllHint")}</Note>
+    </>}
+    <MarketChoices>
+      {publicPolicy.markets.map((family) => {
+        const enabled = selectedMarkets.includes(family), market = messages.text(`market.family.${family}`);
+        return <MarketField key={family}>
+          <MarketChoice>
+            <input type="checkbox" name="markets" value={family} checked={enabled}
+              onChange={() => {
+                setSelectedMarkets((current) => enabled ? current.filter((value) => value !== family) : [...current, family]);
+                setOutcomes((current) => { const next = { ...current }; delete next[family]; return next; });
+              }} aria-invalid={error?.field === "markets" || undefined} />{market}
+          </MarketChoice>
+          <ChoicePicker inline name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market })}
+            automaticLabel={messages.text("slips.automatic")} automaticHint={messages.text("slips.automaticHint")}
+            options={marketSelections[family].map((value) => ({ value, label: predictionLabel(messages, value) }))}
+            selected={outcomes[family] ?? []}
+            onChange={(values) => setOutcomes((current) => ({ ...current, [family]: values as readonly MarketSelection[] }))}
+            disabled={!enabled} invalid={error?.field === "outcomes"} {...(error?.field === "outcomes" ? { describedBy: errorId } : {})} />
+        </MarketField>;
+      })}
+    </MarketChoices>
+    {desktop && reuseField}
+  </FieldGroup>;
+  const savedFiltersButton = signedIn && <SavedFiltersButton ref={savedFiltersTrigger} type="button" variant="secondary" data-saved-filters-trigger
+    aria-haspopup="dialog" aria-expanded={savedFiltersOpen} aria-controls={savedFiltersId} disabled={pending || !enhanced}
+    onClick={() => setSavedFiltersOpen(true)}>{messages.text("slipConfigs.title")}</SavedFiltersButton>;
 
   return <SlipStack data-slip-builder-page aria-busy={pending} onInputCapture={markInteracted} onClickCapture={markInteracted} onKeyDownCapture={markInteracted}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
@@ -409,103 +457,64 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           </Fields></fieldset>
         </TargetGroups></FieldGroup>
         </BuilderEssentials>
-        {dialogGroups.map((group) => <VisuallyHidden key={group} id={`${prefix}-${group}-summary`}>{summaries[group]}</VisuallyHidden>)}
-        {desktop ? <>
+        {desktop && <>
+          <VisuallyHidden id={`${dialogId}-summary`}>{marketsSummary}</VisuallyHidden>
           <InlineCriteria data-criteria-field="limits">
-            <VisuallyHidden as="legend">{dialogTitle("limits")}</VisuallyHidden>
+            <VisuallyHidden as="legend">{messages.text("slips.dialog.limits")}</VisuallyHidden>
             {limitsFields}
             {errorMessage("limits")}
           </InlineCriteria>
           <InlineCriteria data-criteria-field="kickoff">
             <VisuallyHidden as="legend">{messages.text("slips.dialog.kickoffTitle")}</VisuallyHidden>
-            <Fields>{kickoffField("From")}{kickoffField("To")}</Fields>
+            {kickoffFields}
             {errorMessage("kickoff")}
           </InlineCriteria>
-        </> : <>
-        <CriteriaDialog id={`${prefix}-limits`} group="limits" title={dialogTitle("limits")} open={activeGroup === "limits"}
-          onReset={() => resetDialog("limits")} resetLabel={messages.text("slips.reset")}
-          onCancel={cancelDialog} onApply={() => applyDialog("limits")} applyLabel={messages.text("slips.dialog.apply")}
-          cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle("limits") })}>
-          {errorMessage("limits")}
-          {limitsFields}
-        </CriteriaDialog>
-        <CriteriaDialog id={`${prefix}-kickoff`} group="kickoff" title={dialogTitle("kickoff")} open={activeGroup === "kickoff"}
-          onReset={() => resetDialog("kickoff")} resetLabel={messages.text("slips.reset")}
-          onCancel={cancelDialog} onApply={() => applyDialog("kickoff")} applyLabel={messages.text("slips.dialog.apply")}
-          cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle("kickoff") })}>
-        <FieldGroup data-criteria-field="kickoff"><VisuallyHidden as="legend">{dialogTitle("kickoff")}</VisuallyHidden><Fields data-kickoff-fields>
-          {field("dateFrom", messages.text("slips.dateFrom"), { type: "date", inputMode: undefined })}
-          {field("dateTo", messages.text("slips.dateTo"), { type: "date", inputMode: undefined })}
-          {field("timeFrom", messages.text("slips.timeFrom"), { type: "time", inputMode: undefined, step: 60 })}
-          {field("timeTo", messages.text("slips.timeTo"), { type: "time", inputMode: undefined, step: 60 })}
-        </Fields></FieldGroup>
-        </CriteriaDialog>
         </>}
-        <MarketsDialog id={`${prefix}-markets`} group="markets" title={dialogTitle("markets")} open={activeGroup === "markets"}
-          onReset={() => resetDialog("markets")} resetLabel={messages.text("slips.reset")}
-          onCancel={cancelDialog} onApply={() => applyDialog("markets")} applyLabel={messages.text("slips.dialog.apply")}
-          cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle("markets") })}>
-        {errorMessage("markets")}
-        <FieldGroup data-criteria-field="markets" aria-describedby={invalidMarkets ? errorId : undefined}>
-          <VisuallyHidden as="legend">{messages.text("slips.accordion.markets")}</VisuallyHidden>
-          {desktop && <Note>{messages.text("slips.marketsHint")}</Note>}
-          <MarketChoices>
-            {publicPolicy.markets.map((family) => {
-              const enabled = selectedMarkets.includes(family), market = messages.text(`market.family.${family}`);
-              return <MarketField key={family}>
-                <MarketChoice>
-                  <input type="checkbox" name="markets" value={family} checked={enabled}
-                    onChange={() => {
-                      setSelectedMarkets((current) => enabled ? current.filter((value) => value !== family) : [...current, family]);
-                      setOutcomes((current) => { const next = { ...current }; delete next[family]; return next; });
-                    }} aria-invalid={error?.field === "markets" || undefined} />{market}
-                </MarketChoice>
-                <ChoicePicker inline clearDisabledSelection={desktop} name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market })}
-                  automaticLabel={messages.text("slips.automatic")} automaticHint={messages.text("slips.automaticHint")}
-                  options={marketSelections[family].map((value) => ({ value, label: predictionLabel(messages, value) }))}
-                  selected={outcomes[family] ?? []}
-                  onChange={(values) => setOutcomes((current) => ({ ...current, [family]: values as readonly MarketSelection[] }))}
-                  disabled={!enabled} invalid={error?.field === "outcomes"} {...(error?.field === "outcomes" ? { describedBy: errorId } : {})} />
-              </MarketField>;
-            })}
-          </MarketChoices>
-        <ReuseRow>
-          <input type="hidden" name="reuse" value="0" />
-          <label><input type="checkbox" name="reuse" value="1" checked={reuse}
-            aria-describedby={desktop ? `${prefix}-reuse-hint` : undefined} onChange={(event) => setReuse(event.target.checked)} />{messages.text("slips.reuse")}</label>
-          {desktop && <Note id={`${prefix}-reuse-hint`}>{messages.text("slips.reuseHint")}</Note>}
-        </ReuseRow>
-        </FieldGroup>
-        </MarketsDialog>
+        <BuilderCriteriaDialog id={dialogId} group={dialogGroup} title={dialogTitle} open={dialogOpen}
+          onReset={resetDialog} resetLabel={messages.text("slips.reset")}
+          onCancel={cancelDialog} onApply={applyDialog} applyLabel={messages.text("slips.dialog.apply")}
+          cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle })}>
+          {dialogIssue(errorGroup) && errorMessage(errorGroup)}
+          {desktop ? marketFields : <AdvancedCriteria>
+            <FieldGroup data-criteria-field="limits">
+              <VisuallyHidden as="legend">{messages.text("slips.dialog.limits")}</VisuallyHidden>
+              {limitsFields}
+            </FieldGroup>
+            <FieldGroup data-criteria-field="kickoff">
+              <VisuallyHidden as="legend">{messages.text("slips.dialog.kickoffTitle")}</VisuallyHidden>
+              {kickoffFields}
+            </FieldGroup>
+            {reuseField}
+            <CriteriaAccordion group="markets" title={messages.text("slips.dialog.markets")} summary={marketsSummary}
+              defaultOpen invalid={invalidMarkets} resetVersion={feedbackKey}>
+              {marketFields}
+            </CriteriaAccordion>
+          </AdvancedCriteria>}
+        </BuilderCriteriaDialog>
         {errorMessage(null)}
         <BuilderOptions data-slip-builder-options>
         <CriteriaOptions data-slip-criteria-options hidden={!enhanced}>
-          {dialogGroups.map((group) => {
-            const title = messages.text(group === "kickoff" ? "slips.toolbar.kickoff" : `slips.dialog.${group}`);
-            const desktopLabel = messages.text(manualMarkets ? "slips.toolbar.manual" : "slips.automatic");
-            return <CriteriaOption key={group} data-criteria-option={group} data-toolbar-group={group}>
-            <CriteriaTitle data-criteria-title>{title}</CriteriaTitle>
-            <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger={group}
-            aria-label={desktop ? `${title}: ${desktopLabel}` : title}
-            data-edited={edited(group)} aria-haspopup="dialog" aria-controls={`${prefix}-${group}`} aria-expanded={activeGroup === group}
-            aria-describedby={`${prefix}-${group}-summary`} aria-invalid={({ limits: invalidLimits, kickoff: invalidKickoff, markets: invalidMarkets })[group] || undefined}
-            disabled={pending} onClick={() => openDialog(group)}>
-            <span data-criteria-label><span data-criteria-view="mobile">{group === "limits" ? messages.text("slips.mobile.limits") : title}</span><span data-criteria-view="desktop">{desktopLabel}</span></span>
-            {group === "markets" && !edited(group) ? <span data-criteria-value data-criteria-view="mobile">{messages.text("slips.autoShort")}</span>
-              : criteriaCounts[group] > 0 && <>
-                <small data-criteria-count aria-hidden="true">{messages.number(criteriaCounts[group])}</small>
-                <VisuallyHidden> {messages.plural(group === "markets" ? "slips.marketCount" : "slips.activeFilterCount", criteriaCounts[group])}</VisuallyHidden>
+          <CriteriaOption data-criteria-option={dialogGroup} data-toolbar-group={dialogGroup}>
+            <CriteriaTitle data-criteria-title>{desktop ? messages.text("slips.dialog.markets") : dialogTitle}</CriteriaTitle>
+            <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger={dialogGroup}
+              aria-label={desktop ? `${messages.text("slips.dialog.markets")}: ${dialogLabel}` : undefined}
+              data-edited={desktop ? marketsEdited : criteriaCount > 0} aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={dialogOpen}
+              aria-describedby={desktop ? `${dialogId}-summary` : undefined} aria-invalid={dialogIssue(errorGroup) || undefined}
+              disabled={pending} onClick={openDialog}>
+              <span data-criteria-label>{dialogLabel}</span>
+              {criteriaCount > 0 && (!desktop || marketsEdited) && <>
+                <small data-criteria-count aria-hidden="true">{messages.number(criteriaCount)}</small>
+                {!desktop && <VisuallyHidden> {messages.plural("slips.activeFilterCount", criteriaCount)}</VisuallyHidden>}
               </>}
-            <ChevronRightIcon data-dialog-arrow />
-          </CriteriaTrigger></CriteriaOption>;
-          })}
+              <ChevronRightIcon data-dialog-arrow />
+            </CriteriaTrigger>
+          </CriteriaOption>
+          {!desktop && savedFiltersButton}
         </CriteriaOptions>
         <Actions data-criteria-actions data-toolbar-group="actions">
           <CriteriaTitle data-criteria-title>{messages.text("slips.toolbar.actions")}</CriteriaTitle>
           <ActionControls>
-          {signedIn && <SavedFiltersButton ref={savedFiltersTrigger} type="button" variant="secondary" data-saved-filters-trigger
-            aria-haspopup="dialog" aria-expanded={savedFiltersOpen} aria-controls={savedFiltersId} disabled={pending || !enhanced}
-            onClick={() => setSavedFiltersOpen(true)}>{messages.text("slipConfigs.title")}</SavedFiltersButton>}
+          {desktop && savedFiltersButton}
           <ClearLink href={action} variant="quiet" prefetch={false} onClick={(event) => { event.preventDefault(); reset(); }}><ResetIcon />{messages.text("slips.reset")}</ClearLink>
           {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
             <SlipBuildActionLabel locale={locale} restricted signedIn={signedIn} />

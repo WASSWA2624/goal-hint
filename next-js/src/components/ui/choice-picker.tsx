@@ -60,15 +60,15 @@ const clientReady = () => true;
 const serverReady = () => false;
 
 /** Native disclosure keeps named inputs available to GET forms, including without JavaScript. */
-export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy, inline = false, clearDisabledSelection = false }: {
+export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy, inline = false }: {
   name: string; label: string; automaticLabel: string; automaticHint: string; options: readonly Option[]; selected: readonly string[];
-  onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean; clearDisabledSelection?: boolean;
+  onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean;
 }) {
   const root = useRef<HTMLDetailsElement>(null), panelId = useId(), [open, setOpen] = useState(false);
   const trigger = useRef<HTMLElement>(null), panel = useRef<HTMLFieldSetElement>(null);
   const hydrated = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const inactive = disabled && hydrated;
-  const clearSelection = inline && inactive && clearDisabledSelection;
+  const clearSelection = inline && inactive;
   const close = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
   useOutsideDismiss({ enabled: open && !inline, root, onDismiss: close });
   useAnchoredPanel({ open: open && !inline, anchor: trigger, panel });

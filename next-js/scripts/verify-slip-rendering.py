@@ -156,24 +156,26 @@ NUMERIC_RANGE_DEFAULTS = {
 
 def criteria_groups(document, path, error_group=None):
     groups = document.nodes("dialog", "data-slip-criteria-group")
-    assert len(groups) == 3, f"{path}: three native criteria dialogs"
-    by_name = {group.attrs["data-slip-criteria-group"]: group for group in groups}
-    assert set(by_name) == set(CRITERIA_GROUP_FIELDS), f"{path}: limits, kickoff and markets groups"
+    assert len(groups) == 1 and groups[0].attrs["data-slip-criteria-group"] == "advanced", f"{path}: one native Advanced Filters dialog"
+    dialog = groups[0]
+    assert "open" in dialog.attrs and dialog.attrs.get("data-enhanced") == "false", f"{path}: advanced fields stay available inline before hydration"
+    labelled_by = dialog.attrs.get("aria-labelledby")
+    assert labelled_by and any(node.attrs.get("id") == labelled_by and node.text.strip() == "Advanced Filters" for node in dialog.nodes()), f"{path}: accessible Advanced Filters title"
+    for action in ("Cancel", "Apply"):
+        assert any(button.text.strip() == action and button.attrs.get("type") == "button" for button in dialog.nodes("button")), f"{path}: {action} does not submit a build"
+    by_name = {group.attrs["data-criteria-field"]: group for group in dialog.nodes(attr="data-criteria-field")}
+    assert list(by_name) == list(CRITERIA_GROUP_FIELDS), f"{path}: limits, kickoff and markets appear in order"
+    disclosure = dialog.nodes("details", "data-slip-criteria-group")
+    assert len(disclosure) == 1 and "open" in disclosure[0].attrs and by_name["markets"] in disclosure[0].nodes(), f"{path}: Markets is collapsible and expanded by default"
     option_rows = document.nodes(attr="data-slip-criteria-options")
     assert len(option_rows) == 1, f"{path}: one compact row of optional criteria"
-    triggers = option_rows[0].nodes("button")
-    assert len(triggers) == 3, f"{path}: three optional criteria buttons"
-    assert all(button.attrs.get("type") == "button" and button.attrs.get("aria-haspopup") == "dialog" for button in triggers), f"{path}: optional criteria open dialogs without submitting"
-    assert all(any(node.attrs.get("d") == "m9 6 6 6-6 6" for node in button.nodes("path")) for button in triggers), f"{path}: dialog triggers use right-pointing arrows"
+    triggers = option_rows[0].nodes("button", "data-criteria-trigger")
+    assert len(triggers) == 1 and triggers[0].attrs.get("aria-controls") == dialog.attrs.get("id"), f"{path}: one trigger opens Advanced Filters"
+    assert triggers[0].attrs.get("type") == "button" and triggers[0].attrs.get("aria-haspopup") == "dialog", f"{path}: Advanced Filters opens without submitting"
+    assert any(node.attrs.get("d") == "m9 6 6 6-6 6" for node in triggers[0].nodes("path")), f"{path}: the trigger uses a right-pointing arrow"
+    assert option_rows[0].nodes("button", "data-saved-filters-trigger") == document.nodes("button", "data-saved-filters-trigger"), f"{path}: Custom Filters shares the Advanced Filters row"
     values = {}
     for name, group in by_name.items():
-        assert "open" in group.attrs and group.attrs.get("data-enhanced") == "false", f"{path}: {name} stays available inline before hydration"
-        assert len([button for button in triggers if button.attrs.get("aria-controls") == group.attrs.get("id")]) == 1, f"{path}: one trigger targets the {name} dialog"
-        labelled_by = group.attrs.get("aria-labelledby")
-        assert labelled_by and any(node.attrs.get("id") == labelled_by and node.text.strip() for node in group.nodes()), f"{path}: accessible {name} dialog title"
-        buttons = group.nodes("button")
-        assert any(button.text.strip() == "Cancel" and button.attrs.get("type") == "button" for button in buttons), f"{path}: {name} has a non-submitting Cancel action"
-        assert any(button.text.strip() == "Apply" and button.attrs.get("type") == "button" for button in buttons), f"{path}: {name} has a non-submitting Apply action"
         inputs = group.nodes("input")
         values[name] = tuple((node.attrs.get("name"), node.attrs.get("value", ""), "checked" in node.attrs) for node in inputs)
         optional_joint = ["totalProbMin", "totalProbMax"] if name == "limits" and any(node.attrs.get("name") == "totalProbMin" for node in inputs) else []
@@ -184,9 +186,7 @@ def criteria_groups(document, path, error_group=None):
         assert all("disabled" not in fieldset.attrs for fieldset in group.nodes("fieldset")), f"{path}: dialog presentation does not disable native submission"
         if name == error_group:
             assert any(node.attrs.get("aria-invalid") == "true" for node in group.nodes()), f"{path}: {name} exposes the invalid controls"
-            assert group.nodes(attr="role") and any(node.attrs.get("role") == "alert" for node in group.nodes()), f"{path}: {name} contains its validation message"
-    markets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "markets"]
-    assert len(markets) == 1 and markets[0] in by_name["markets"].nodes(), f"{path}: market toggles and outcomes share their own dialog"
+            assert any(node.attrs.get("role") == "alert" for node in dialog.nodes(attr="role")), f"{path}: Advanced Filters contains the validation message"
     targets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "targets"]
     assert len(targets) == 1 and all(targets[0] not in group.nodes() for group in groups), f"{path}: essential slip targets always stay visible"
     toolbars = document.nodes(attr="data-slip-builder-toolbar")
@@ -204,7 +204,7 @@ def criteria_groups(document, path, error_group=None):
         assert len(labels) == 1 and labels[0].attrs.get("for") == control.attrs.get("id"), f"{path}: {name} retains its associated accessible floating label"
         assert labels[0].text.strip() == ("Min" if name.endswith("Min") else "Max"), f"{path}: {name} keeps a visible range-bound label"
     toolbar_groups = toolbar.nodes(attr="data-toolbar-group")
-    assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "limits", "kickoff", "markets", "actions"], f"{path}: controls retain their titled category order"
+    assert [node.attrs["data-toolbar-group"] for node in toolbar_groups] == ["slips", "total", "matches", "advanced", "actions"], f"{path}: controls retain their titled category order"
     for group in toolbar_groups:
         name = group.attrs["data-toolbar-group"]
         titles = [child for child in group.children if isinstance(child, Element) and child.tag == "legend"] if name in {"slips", "total", "matches"} else group.nodes(attr="data-criteria-title")
@@ -216,10 +216,10 @@ def criteria_groups(document, path, error_group=None):
         assert controls[0] in toolbar.nodes("input"), f"{path}: essential {name} belongs to the settings toolbar"
     inputs = document.nodes("input")
     reuse = [node for node in inputs if node.attrs.get("name") == "reuse"]
-    choices = [node for node in markets[0].nodes("input")
+    choices = [node for node in by_name["markets"].nodes("input")
                if node.attrs.get("name") == "markets" or (node.attrs.get("name") or "").startswith("picks.")]
-    assert len(reuse) == 2 and all(node in by_name["markets"].nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Markets"
-    assert reuse and choices and min(inputs.index(node) for node in reuse) > max(inputs.index(node) for node in choices), f"{path}: match reuse follows Markets in native keyboard order"
+    assert len(reuse) == 2 and all(node in dialog.nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Advanced Filters"
+    assert choices and max(inputs.index(node) for node in reuse) < min(inputs.index(node) for node in choices), f"{path}: match reuse precedes Markets in native keyboard order"
     return values
 
 

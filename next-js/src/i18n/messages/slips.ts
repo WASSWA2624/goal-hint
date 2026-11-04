@@ -42,6 +42,7 @@ export const slipsMessages = {
   "slips.dateTimeFrom": "From date and time",
   "slips.dateTimeTo": "To date and time",
   "slips.marketsHint": "Enable the markets to include. Choose Automatic or select specific results for each market.",
+  "slips.automaticAllHint": "Include every market and let the builder choose the results.",
   "slips.reuseHint": "When off, each match can appear in only one generated slip.",
   "slips.reuseOn": "Match reuse on",
   "slips.reuseOff": "Match reuse off",
