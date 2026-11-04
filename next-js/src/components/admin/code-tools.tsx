@@ -2,6 +2,7 @@
 
 import { SearchBar } from "@/components/ui/search-bar";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
+import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 
 import { controlRow } from "@/components/ui/control-layout";
 
@@ -15,16 +16,15 @@ import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronDownIcon, PlusIcon, TicketIcon } from "@/components/ui/icons";
-import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { paymentNotificationNotice } from "@/domain/payment-notification";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
 import { ActionButton, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
-import { FactList, Panel, TextAction } from "./desk-styles";
-import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordDisclosureSummary, RecordEmpty, RecordFeedback, RecordFooter, RecordItem,
-  RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordRowContent, RecordScroll, RecordWorkspace } from "./record-workspace";
+import { FactList, TextAction } from "./desk-styles";
+import { RecordBack, RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordItem,
+  RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
 import { RecordFormDialog, RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
 import { refreshPendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
@@ -156,29 +156,35 @@ const GrantButton = styled(ActionButton)<{ $inline: boolean }>`
   inline-size: 100%;
   ${({ $inline }) => $inline && css`${media.desktop} { inline-size: auto; justify-self: start; }`}
 `;
-/**
- * Extend and Revoke for one access period: "Extend by [n] days · Extend · Revoke" on one line, and Revoke asks once
- * before it ends the period. `onRevoked` lets a list move focus somewhere that outlives these controls.
- */
+/** One set of access-period actions for Codes and subscriber access history. */
 export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; action: CodeAction; compact?: boolean; onRevoked?: () => void }) {
-  const [confirming, setConfirming] = useState(false), revokeTrigger = useRef<HTMLButtonElement>(null), tools = useRef<HTMLDivElement>(null), id = useId();
+  const [operation, setOperation] = useState<"extend" | "revoke" | null>(null), id = useId();
   const locked = action.busy || code.status === "revoked";
-  function cancel() { setConfirming(false); revokeTrigger.current?.focus(); }
-  return <CodeTools ref={tools} tabIndex={-1} role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
-    {code.source !== "referral" && <ExtendForm method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); if (!action.busy) void action.send("/api/admin/codes", { action: "extend", id: code.id, days: Number(new FormData(event.currentTarget).get("days")) }, "Access period extended."); }}>
-      <ExtendField label="Extend by (days)"><input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} /></ExtendField>
-      <ActionButton type="submit" disabled={locked}>Extend</ActionButton>
-    </ExtendForm>}
-    <TextAction ref={revokeTrigger} type="button" $tone="danger" disabled={locked} aria-expanded={confirming} aria-controls={confirming ? `${id}-revoke` : undefined}
-      onClick={() => setConfirming(value => !value)}>Revoke</TextAction>
-    {confirming && <RevokeConfirmation id={`${id}-revoke`} role="group" aria-labelledby={`${id}-revoke-title`} onKeyDown={event => { if (event.key === "Escape" && !action.busy) { event.preventDefault(); cancel(); } }}>
-      <p id={`${id}-revoke-title`}>End this access period now?</p>
-      <div><ActionButton type="button" disabled={action.busy} onClick={cancel}>Cancel</ActionButton>
-        <DangerButton type="button" disabled={action.busy} onClick={async () => {
-          const reply = await action.send("/api/admin/codes", { action: "revoke", id: code.id, reason: "owner-revoked" }, "Access period revoked.");
-          if (reply.ok) { setConfirming(false); if (onRevoked) onRevoked(); else tools.current?.focus(); }
-        }}>Confirm revoke</DangerButton></div>
-    </RevokeConfirmation>}
+  function open(next: "extend" | "revoke") { action.clearFeedback(); setOperation(next); }
+  function close() { if (!action.busy) setOperation(null); }
+  async function save(input: { action: "extend"; days: number } | { action: "revoke"; reason: string }) {
+    if (locked) return;
+    const reply = await action.send("/api/admin/codes", { id: code.id, ...input }, input.action === "extend" ? "Access period extended." : "Access period revoked.");
+    if (reply.ok) {
+      setOperation(null);
+      if (input.action === "revoke") onRevoked?.();
+    }
+  }
+  return <CodeTools role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
+    {code.source !== "referral" && <ActionButton type="button" disabled={locked} aria-haspopup="dialog" onClick={() => open("extend")}>Extend</ActionButton>}
+    <TextAction type="button" $tone="danger" disabled={locked} aria-haspopup="dialog" onClick={() => open("revoke")}>Revoke</TextAction>
+    {operation === "extend" && <RecordFormDialog id={`${id}-extend`} title="Extend access" submitLabel="Extend" formId={`${id}-days`} busy={action.busy} onClose={close}>
+      <form id={`${id}-days`} method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => {
+        event.preventDefault(); void save({ action: "extend", days: Number(new FormData(event.currentTarget).get("days")) });
+      }}><FormStack><FieldBlock label="Extend by (days)"><input type="number" name="days" inputMode="numeric" min={1} max={60} defaultValue={1} required disabled={locked} /></FieldBlock>
+        {action.message && <ActionNotices action={action} />}</FormStack></form>
+    </RecordFormDialog>}
+    {operation === "revoke" && <CriteriaDialog id={`${id}-revoke`} title="Revoke access" closeLabel="Close revoke access" open onCancel={close} busy={action.busy}
+      footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={action.busy} onClick={close}>Cancel</CriteriaDialogButton>
+        <DangerButton type="button" disabled={locked} onClick={() => void save({ action: "revoke", reason: "owner-revoked" })}>Confirm revoke</DangerButton></>}>
+      <FormStack><p>End this access period now? Devices stay unlocked only while another access period is active.</p>
+        {action.message && <ActionNotices action={action} />}</FormStack>
+    </CriteriaDialog>}
   </CodeTools>;
 }
 const CodeTools = styled.div`
@@ -187,38 +193,16 @@ const CodeTools = styled.div`
   align-items: center;
   gap: var(--gh-spacing-2) var(--gh-spacing-3);
   min-inline-size: 0;
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
-`;
-const ExtendForm = styled.form`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gh-spacing-2);
-  min-inline-size: 0;
-
-  ${controlRow}
-`;
-const ExtendField = styled(FloatingField)`flex: 1;`;
-/** Stacked, so it never needs more width than the controls above it (a list may give them only an auto column). */
-const RevokeConfirmation = styled.div`
-  flex: 1 1 100%;
-  display: grid;
-  justify-items: start;
-  gap: var(--gh-spacing-2);
-  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.surface};
-  background: ${({ theme }) => theme.color.outcome.pending.background};
-  p { color: ${({ theme }) => theme.color.outcome.pending.text}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > div { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-2); }
 `;
 
 const codeTone = (status: OwnerCode["status"]) => status === "active" ? "good" : status === "queued" ? "warning" : "muted";
 const codeStatusLabel = { all: "All", active: "Active", queued: "Queued", expired: "Expired", revoked: "Revoked" } as const;
 export type CodesPreview = Readonly<{ variant: string; initialView: "grant" | "details"; request: CodeRequest }>;
-/** Access records use the shared desktop workspace and mobile disclosures. */
+/** Access records use the same list and detail on desktop and mobile. */
 export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: readonly OwnerCode[]; plans: readonly SubscriptionPlanView[]; preview?: CodesPreview }) {
-  const router = useRouter(), desktop = useDesktopLayout(), id = useId(), [grantOpen, setGrantOpen] = useState(preview?.initialView === "grant");
+  const router = useRouter(), id = useId(), list = useRef<HTMLOListElement>(null), detailScroll = useRef<HTMLDivElement>(null);
+  const { detailOpen, openDetail, closeDetail } = useRecordView({ initiallyOpen: preview?.initialView === "details" });
+  const [grantOpen, setGrantOpen] = useState(preview?.initialView === "grant");
   const [selectedId, setSelectedId] = useState(initialCodes[0]?.id ?? "");
   const [found, setFound] = useState<readonly OwnerCode[] | null>(null), [status, setStatus] = useState("all"), [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false), [draftStatus, setDraftStatus] = useState("all");
@@ -232,19 +216,24 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     setFound(reply.body.codes as OwnerCode[]);
   }, preview ? { request, localOnly: true } : undefined);
   const codes = (found ?? initialCodes).filter(c => status === "all" || c.status === status);
-  const selected = codes.find(code => code.id === selectedId) ?? codes[0];
+  const matched = codes.find(code => code.id === selectedId);
+  const selected = matched ?? codes[0];
   const grantId = `${id}-manual-grant`;
+  useEffect(() => { if (detailOpen && !matched) closeDetail(); }, [detailOpen, matched, closeDetail]);
   async function find(nextStatus: string) {
     const query = { search, status: nextStatus };
     const reply = await action.send("/api/admin/codes", { action: "search", ...query }, "", false);
-    if (reply.ok && Array.isArray(reply.body.codes)) { appliedSearch.current = query; setStatus(nextStatus); setFound(reply.body.codes as OwnerCode[]); }
+    if (reply.ok && Array.isArray(reply.body.codes)) {
+      appliedSearch.current = query; setStatus(nextStatus); setFound(reply.body.codes as OwnerCode[]);
+      list.current?.scrollTo({ top: 0 });
+    }
   }
-  function select(code: OwnerCode) {
+  function select(code: OwnerCode, trigger: HTMLElement) {
     if (action.busy) return;
-    setSelectedId(code.id); setGrantOpen(false);
-    requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-codes-detail-scroll]")?.scrollTo({ top: 0 }));
+    setSelectedId(code.id); openDetail(trigger);
+    detailScroll.current?.scrollTo({ top: 0 });
   }
-  return <Codes aria-busy={action.busy || undefined} data-codes-workspace data-code-variant={preview?.variant ?? "balanced"} data-analytics-ignore>
+  return <Codes $compact $detailOpen={detailOpen && !!matched} aria-busy={action.busy || undefined} data-codes-workspace data-code-variant={preview?.variant ?? "balanced"} data-analytics-ignore>
     <RecordToolbar><h1>Codes</h1>
       <form method="post" action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
         <SearchBar label="Phone or reference" submitLabel="Search" value={search} onChange={e => setSearch(e.target.value)} maxLength={40} autoComplete="off" disabled={action.busy}
@@ -262,33 +251,30 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     </RecordToolbar>
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
     <RecordList aria-label="Code directory">
-      <RecordListScroll aria-label="Codes" tabIndex={0} data-codes-list-scroll>
-        {codes.length === 0 ? <li><RecordEmpty>No matching codes.</RecordEmpty></li> : codes.map(code => {
-          const content = <RecordRowContent icon={<TicketIcon />} primary={<><RecordItemTitle>{code.reference}</RecordItemTitle>
-            <Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge></>}
-            secondary={<>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"} · {code.planName}</>} />;
-          return desktop ? <li key={code.id}><RecordItem type="button" aria-current={selected?.id === code.id ? "true" : undefined} aria-controls={`${id}-detail`} disabled={action.busy} onClick={() => select(code)} data-code-row={code.id}>
-            {content}
-          </RecordItem></li> : <li key={code.id} id={`${id}-${code.id}`} data-code-row={code.id} tabIndex={-1}>
-            <MobileCodeDetails open={preview?.initialView === "details" && selected?.id === code.id} data-mobile-code-details>
-              <RecordDisclosureSummary>{content}<ChevronDownIcon /></RecordDisclosureSummary><CodeFacts code={code} preview={!!preview} />
-              {code.status !== "revoked" && <CodeActions code={code} action={action} onRevoked={() => document.getElementById(`${id}-${code.id}`)?.focus()} />}</MobileCodeDetails>
-          </li>;
-        })}
+      <RecordListScroll ref={list} aria-label="Codes" tabIndex={0} data-codes-list-scroll>
+        {codes.length === 0 ? <li><RecordEmpty>No matching codes</RecordEmpty></li> : codes.map(code => <li key={code.id}>
+          <RecordItem type="button" aria-current={selected?.id === code.id ? "true" : undefined} aria-controls={`${id}-detail`} disabled={action.busy}
+            onClick={event => select(code, event.currentTarget)} data-code-row={code.id}>
+            <RecordRowContent icon={<TicketIcon />} primary={<><RecordItemTitle>{code.reference}</RecordItemTitle>
+              <Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge></>}
+              secondary={<>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"} · {code.planName}</>} />
+          </RecordItem></li>)}
       </RecordListScroll>
-      <RecordListFooter>{codes.length} access period{codes.length === 1 ? "" : "s"} · up to 100</RecordListFooter>
+      {codes.length >= 100 && <RecordListFooter>Showing the latest 100 access periods</RecordListFooter>}
     </RecordList>
-    {desktop && <RecordDetails id={`${id}-detail`} aria-label="Selected access record">
+    <RecordDetails id={`${id}-detail`} aria-label="Selected access record">
+      <RecordBack onClick={closeDetail} disabled={action.busy}>Back to codes</RecordBack>
       <RecordCard>
-        <RecordScroll data-codes-detail-scroll tabIndex={desktop ? 0 : undefined}>
+        <RecordScroll ref={detailScroll} data-codes-detail-scroll tabIndex={0} aria-label="Access period details">
           {selected ? <>
             <RecordDetailHead><h2>{selected.reference}</h2><Badge $tone={codeTone(selected.status)}>{codeStatusLabel[selected.status]}</Badge></RecordDetailHead>
-            <RecordBody><Panel><CodeFacts code={selected} preview={!!preview} /></Panel><Hint>Revoke ends a period at once; devices stay unlocked only while another period is live.</Hint></RecordBody>
-          </> : <RecordEmpty><h2>Select an access record</h2><p>Find a record or grant access manually.</p></RecordEmpty>}
+            <RecordBody><CodeFacts code={selected} preview={!!preview} /></RecordBody>
+          </> : <RecordEmpty><h2>No access period selected</h2></RecordEmpty>}
         </RecordScroll>
-        {selected && selected.status !== "revoked" && <RecordFooter><CodeActions key={selected.id} code={selected} action={action} /></RecordFooter>}
+        {selected && selected.status !== "revoked" && <RecordFooter><CodeActions key={selected.id} code={selected} action={action}
+          onRevoked={() => requestAnimationFrame(() => detailScroll.current?.focus({ preventScroll: true }))} /></RecordFooter>}
       </RecordCard>
-    </RecordDetails>}
+    </RecordDetails>
     {grantOpen && <RecordFormDialog id={`${id}-grant-dialog`} title="Grant access manually" submitLabel="Grant access" formId={grantId}
       busy={action.busy} onClose={() => { if (!action.busy) setGrantOpen(false); }}>
       {action.message && <ActionNotices action={action} />}
@@ -311,7 +297,3 @@ const Codes = styled(RecordWorkspace)`
   &[data-code-variant="balanced"] { ${balancedCodePresentation} }
 `;
 const Facts = styled(FactList)`padding: var(--gh-spacing-3);`;
-const MobileCodeDetails = styled(PlainDrawer)`
-  > summary { min-block-size: var(--form-control-height); }
-  > [data-record-actions] { margin-block-start: var(--gh-spacing-3); }
-`;

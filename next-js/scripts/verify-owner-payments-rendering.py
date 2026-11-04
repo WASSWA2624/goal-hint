@@ -180,10 +180,11 @@ def settings_rendering(origin):
         html = visible_html(response.text)
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
         match(r'data-settings-editor', html)
-        navigation = match(r'<(?:nav|div)\b[^>]*data-settings-nav[^>]*>([\s\S]*?)</(?:nav|div)>', html).group(1)
-        assert len(re.findall(r'<button\b', navigation)) == 4
-        assert len(re.findall(r'aria-current="page"', navigation)) == 1
+        navigation = match(r'<ol\b[^>]*data-settings-nav[^>]*>([\s\S]*?)</ol>', html).group(1)
+        assert re.findall(r'id="settings-tab-([^"]+)"', navigation) == ["payments", "support", "access", "display", "messages"]
+        assert len(re.findall(r'aria-current="true"', navigation)) == 1
         assert re.findall(r'data-settings-section="([^"]+)"', html) == ["payments"]
+        assert len(re.findall(r'<button\b(?=[^>]*data-settings-save)', html)) == 1
         save = match(r'<button\b(?=[^>]*data-settings-save)[^>]*>', html).group(0)
         match(r'\bdisabled(?:=""|\s|>)', save)
         no_match(r'type="password"', html)
@@ -214,8 +215,10 @@ def audit_rendering(origin):
         match(r'data-audit-count', html)
         export = match(r'<button\b(?=[^>]*data-audit-export)[^>]*>', html).group(0)
         assert len(re.findall(r'<button\b(?=[^>]*data-audit-export)', html)) == 1, "One shared export control covers all matching events."
-        found = re.findall(r'<details\b[^>]*data-audit-event="([^"]+)"', html)
+        found = re.findall(r'<button\b[^>]*data-audit-event="([^"]+)"', html)
         assert found == ids, (action, found)
+        assert html.index('data-record-list-footer') < html.index('data-audit-export'), "Export belongs with the results."
+        no_match(r'data-audit-inline-details', html, "The inspector is the only event detail view.")
         if not ids:
             match(r'data-audit-empty', html)
             match(r'\bdisabled(?:=""|\s|>)', export)
@@ -223,7 +226,7 @@ def audit_rendering(origin):
             assert re.findall(r'data-audit-detail="([^"]+)"', html) == [ids[0]], "The latest matching event starts in the read-only inspector."
         main = match(r'<main\b[^>]*>([\s\S]*?)</main>', html).group(1)
         no_match(r'<form\b|data-payment-approval|Approve payment|Reject payment', main, "Audit is a read-only inspector.")
-        summaries = re.findall(r'<details\b[^>]*data-audit-event="([^"]+)"[^>]*>[\s\S]*?<summary\b[^>]*>([\s\S]*?)</summary>', html)
+        summaries = re.findall(r'<button\b[^>]*data-audit-event="([^"]+)"[^>]*>([\s\S]*?)</button>', html)
         summary_text = {key: unescape(re.sub(r'<[^>]+>', " ", summary)) for key, summary in summaries}
         for value in summary_text.values():
             no_match(r'member-admin:|code_created|payment_approved|member_blocked|future_feature_event|owner_signed_in|owner_sign_in_refused|member-session|access-code', value)
@@ -305,12 +308,14 @@ def payments_api(origin):
             result = queue(tab)
             assert [row["id"] for row in result["payments"]] == ids, (tab, result)
             assert result["pendingCount"] == 3
-            assert set(result) == {"pendingCount", "payments"}, "Automatic trials never enter the payment-review queue."
+            assert set(result) == {"pendingCount", "payments", "page", "pageSize", "search", "total"}, "The queue contains payment results and pagination only."
+            assert (result["page"], result["total"]) == (1, len(ids))
         assert [row["id"] for row in queue("invalid")["payments"]] == expected["pending"]
         pending = queue()["payments"]
         assert [(row["amount"], row["durationDays"]) for row in pending] == [(4500, 7), (15000, 30), (1000, 1)]
         assert [row["hasImage"] for row in pending] == [False, True, False]
-        assert fixture_json(origin, "/api/admin/payments?count")[1] == {"pendingCount": 3}
+        status, summary = fixture_json(origin, "/api/admin/payments?count")
+        assert status == 200 and summary["pendingCount"] == 3 and summary["reviewAlerts"]["events"] == []
         screenshot = "/api/admin/payments/" + payment("01") + "/screenshot"
         with urlopen(Request(origin + screenshot), timeout=20) as response:
             image = response.read()

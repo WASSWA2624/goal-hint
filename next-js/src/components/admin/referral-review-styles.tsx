@@ -3,13 +3,10 @@
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { FieldBlock } from "./admin-form";
-import { RecordFooter, RecordItem } from "./record-workspace";
+import { RecordFooter } from "./record-workspace";
 
-export const ReviewItem = styled(RecordItem)`grid-template-columns: minmax(0, 1fr);`;
 export const ReviewFooter = styled(RecordFooter)`
-  align-items: center; flex-wrap: wrap; margin-inline: 0;
-  > button { min-block-size: var(--form-control-height); flex: 1 1 var(--gh-size-32); }
-  ${media.desktop} { > button { min-block-size: var(--form-control-height); flex: 0 1 auto; } }
+  ${media.belowDesktop} { > button { flex: 1 0 auto; } }
 `;
 /** Referral decisions use the same compact list/detail geometry and controls as Payments/Subscribers. */
 export const ReviewForm = styled.form`

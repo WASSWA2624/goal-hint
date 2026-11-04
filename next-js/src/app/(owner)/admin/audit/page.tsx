@@ -21,7 +21,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   try { auditDateBounds({ period, startDate, endDate }); }
   catch { return <RecordBody><VisuallyHidden as="h1">Audit</VisuallyHidden><Notice $tone="error" role="alert">Invalid audit date range. <ButtonLink variant="secondary" href="/admin/audit">Reset filters</ButtonLink></Notice></RecordBody>; }
   const data = db ? await createSubscribers(db).audit(action, { period, startDate, endDate }).catch(() => null) : null;
-  // The report owns the title row (its Export button sits beside the h1 on phones); the error state keeps the same h1.
+  // The report and the error state each provide the page heading.
   return data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} period={period} startDate={startDate} endDate={endDate} />
     : <RecordBody><VisuallyHidden as="h1">Audit</VisuallyHidden><Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></RecordBody>;
 }

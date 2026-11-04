@@ -309,6 +309,8 @@ function createClient(emptySubscribers: boolean) {
       count: async (query?: PaymentQuery) => paymentRows(state.payments, query).length, aggregate: async () => ({ _sum: { amountReceivedUgx: 5000 } }) },
     paymentScreenshot: { findUnique: async ({ where }: { where: { submissionId: string } }) => state.payments.some(row => row.id === where.submissionId && row.screenshot)
       ? { data: fixturePaymentProof } : null },
+    paymentAlertEndpoint: { findMany: async () => [] },
+    paymentReviewEvent: { findMany: async () => [] },
     // No fixture account holds credit; the wallet columns read as a new account's.
     memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = state.accounts.find(item => item.id === query.where.id);
       return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },

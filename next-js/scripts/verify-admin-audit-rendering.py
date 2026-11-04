@@ -24,8 +24,10 @@ def audit_rendering(harness, origin):
     match(r"data-search-bar", html)
     match(r"data-search-filters", html)
     assert re.findall(r'data-audit-event="([^"]+)"', html) == [str(10_000 + index) for index in range(20)]
-    for label in ["First page", "Last page", "Previous", "Next", "Page 1 of 5"]:
-        match(re.escape(label), html)
+    pagination = match(r'<nav\b(?=[^>]*aria-label="Audit pages")[^>]*>([\s\S]*?)</nav>', html)
+    match(r'data-page-count="5"', pagination.group(0))
+    match(r'data-current-page="1"', pagination.group(0))
+    assert re.findall(r'data-pagination-end="([^"]+)"', pagination.group(1)) == ["first", "last"]
     match(r"data-audit-export", html)
     # Historical entries lie outside the default loaded window; the date query must select them first.
     historical = visible_html(harness.request(origin,

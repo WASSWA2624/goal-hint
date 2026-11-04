@@ -99,7 +99,7 @@ def directory_rendering(origin: str) -> None:
     add = [button for button in workspace.all("button") if button.text() == "Grant access / add subscriber"]
     assert len(add) == 1 and add[0].attributes.get("aria-haspopup") == "dialog"
     directory = workspace.one(attribute="data-subscriber-directory")
-    filters = directory.one(attribute="data-subscriber-review-filters")
+    filters = workspace.one(attribute="data-subscriber-review-filters")
     assert filters.attributes.get("role") == "search"
     assert [label.text() for label in filters.all("label")] == ["Search subscribers"]
     search = filters.one(tag="input")
@@ -123,13 +123,14 @@ def directory_rendering(origin: str) -> None:
     selected = next(row for row in rows if row.attributes["data-subscriber-row"] == PRIMARY)
     assert selected.attributes.get("aria-current") == "page"
     count = directory.one(attribute="data-subscriber-count")
-    assert count.attributes.get("aria-live") == "polite" and count.text() == "6 accounts shown · up to 100"
+    assert count.attributes.get("aria-live") == "polite" and count.text() == "6 accounts"
     detail = workspace.one(attribute="data-subscriber-detail")
     assert detail.attributes.get("data-subscriber-presentation") == "compact-dialog"
     summary = detail.one(attribute="data-subscriber-summary")
     stats = summary.one(attribute="data-subscriber-stats")
     assert [term.text() for term in stats.all("dt")] == ["Unlocked devices", "Access periods", "Unlocks · 30 days", "Credit"]
-    actions = summary.one(attribute="data-subscriber-actions").all("button")
+    actions = detail.one(attribute="data-record-footer").one(attribute="data-subscriber-actions").all("button")
+    assert not summary.all(attribute="data-subscriber-actions")
     assert [button.text() for button in actions] == ["Grant access", "Change number", "Block account", "Log out devices"]
     assert all(button.attributes.get("aria-haspopup") == "dialog" and button.attributes.get("aria-expanded") == "false" for button in actions)
     tabs = detail.one(attribute="data-subscriber-tabs")
@@ -139,9 +140,9 @@ def directory_rendering(origin: str) -> None:
     assert not document.all(attribute="data-subscriber-dialog"), "Action dialogs start closed."
     assert not re.search(r"Reset password|Set temporary password|temporary-password", detail.text(), re.I)
     assert not any(control.attributes.get("name") in {"reason", "newPhone", "verifiedBy", "planId", "days"} for control in detail.all("input") + detail.all("select"))
-    filtered = page(origin, {"status": "blocked"}).one(attribute="data-subscriber-directory")
+    filtered = page(origin, {"status": "blocked"}).one(attribute="data-subscriber-workspace")
     assert [row.attributes["data-subscriber-row"] for row in filtered.all(attribute="data-subscriber-row")] == [BLOCKED]
-    assert filtered.one(attribute="data-subscriber-count").text() == "1 account shown · up to 100"
+    assert filtered.one(attribute="data-subscriber-count").text() == "1 account"
     assert filtered.one(attribute="data-search-filters").one(tag="b").text() == "1"
     empty = page(origin, {"search": "NoMatchingSubscriberFixture"}).one(attribute="data-subscriber-directory")
     assert empty.one(attribute="data-subscriber-empty").text() == "No matching subscribers."

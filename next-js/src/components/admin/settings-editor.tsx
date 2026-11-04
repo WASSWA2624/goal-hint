@@ -2,7 +2,6 @@
 
 import { media } from "@/styles/theme";
 
-import { authCopy } from "@/i18n/messages/auth";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -18,7 +17,8 @@ import { defaultMessageTemplates, type MessageTemplateSettings } from "@/domain/
 import { editableSettingFields, isProtectedSettingField, paywallModes, settingLabels, settingsRules, type EditableSettingField,
   type ModeRequirement, type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
 import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, Requirements, type AdminReply } from "./admin-form";
-import { Drawer, FactList, PanelBody, ZoneLabel } from "./desk-styles";
+import { Drawer, FactList, PanelBody } from "./desk-styles";
+import { RecordBack, RecordCard, RecordDetails, RecordFeedback, RecordItem, RecordList, RecordListScroll, RecordRowContent, RecordScroll, useRecordView } from "./record-workspace";
 import { SettingsSupportEditor } from "./settings-support-editor";
 import { SettingsMessageEditor } from "./settings-message-editor";
 import { SettingsCommunityEditor } from "./settings-community-editor";
@@ -26,8 +26,8 @@ import { PaymentAlertControls } from "./payment-alert-controls";
 import type { CommunityLink } from "@/domain/community";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ManagedNote, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
-  RequirementBox, RequirementList, SaveButtons, SaveDock, SavePanel, SectionPanel, SectionTabs, SettingsHint, TwoUp,
-  DesktopOnly, DesktopSettingsTabs, MobileOnly, SettingsColumn, SettingsForm, SettingsGrid, SettingsHeading } from "./settings-styles";
+  RequirementBox, RequirementList, SectionPanel, SettingsHint, TwoUp,
+  DesktopOnly, DesktopSettingItem, MobileOnly, SettingsFooter, SettingsForm, SettingsWorkspace } from "./settings-styles";
 
 type ScalarSettingField = Exclude<EditableSettingField, "supportContacts" | "messageTemplates" | "communityLinks">;
 type Draft = Record<ScalarSettingField, string>;
@@ -40,8 +40,8 @@ const UndoIcon = (props: IconProps) => <Icon {...props}><path d="M9 14 4 9l5-5" 
 const sections = [
   { key: "payments", label: "Payments", Icon: CardIcon }, { key: "support", label: "Support", Icon: ChatIcon },
   { key: "access", label: "Access", Icon: ShieldIcon }, { key: "display", label: "Display", Icon: DocumentIcon },
+  { key: "messages", label: "Messages", Icon: ChatIcon },
 ] as const;
-const desktopSections = [...sections, { key: "messages", label: "Messages", Icon: ChatIcon }] as const;
 const sectionOf: Record<EditableSettingField, Section> = {
   mtnNumber: "payments", mtnName: "payments", mtnMenuShortcut: "payments", airtelNumber: "payments", airtelName: "payments", airtelMenuShortcut: "payments",
   contactPhone: "support", whatsappPhone: "support", trialDays: "access", screenshotRetentionDays: "access", maxUnlockedDevices: "access",
@@ -53,17 +53,10 @@ const phoneFields = new Set<EditableSettingField>(["mtnNumber", "airtelNumber", 
 const shortcutFields = new Set<EditableSettingField>(["mtnMenuShortcut", "airtelMenuShortcut"]);
 const numberFields = new Set<EditableSettingField>(["maxUnlockedDevices", "trialDays", "screenshotRetentionDays", "paymentAlertRepeats"]);
 const modeLabels: Record<PaywallMode, string> = { off: "Off", test: "Test", on: "On" };
-const modeCaptions: Record<PaywallMode, string> = { off: "Payments closed", test: "Testing enabled", on: "Subscriptions open" };
 const modeExplanations: Record<PaywallMode, string> = {
   off: "Payments are closed. Predictions require current access. New trials follow the trial duration setting.",
   test: "Account and payment flows are open for testing. Predictions require current access.",
   on: "Subscriptions are open. Visitors without access see the free view.",
-};
-const desktopModeLabels: Record<PaywallMode, string> = { off: "Subscriptions closed", test: "Testing", on: "Subscriptions open" };
-const desktopModeDescriptions: Record<PaywallMode, string> = {
-  off: "New payments are closed. Members keep valid access; new trials follow the trial setting.",
-  test: "Account and payment flows are open for testing. Predictions still require valid access.",
-  on: "Members can subscribe. Protected predictions require a valid subscription or trial.",
 };
 const requirementLabels: Record<ModeRequirement["key"], string> = {
   plan: "Add an active plan", "payment-number": "Add a payment number and name", contact: "Add a support number",
@@ -110,12 +103,7 @@ function passwordReason(fields: readonly ProtectedSettingField[]) {
 const savedTime = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: publicPolicy.reportingTimeZone,
   dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 
-function focusVisible(id: string) {
-  const desktop = document.getElementById(`desktop-${id}`);
-  (desktop?.getClientRects().length ? desktop : document.getElementById(id))?.focus();
-}
-
-/** Section tabs share one draft and save action; mode changes require a separate confirmation. */
+/** Section navigation shares one draft. Paid-access switches have a separate confirmation. */
 export function SettingsEditor({ initial, username, sessionAuthorized = false }: { initial: SettingsPageData; username: string; sessionAuthorized?: boolean }) {
   const router = useRouter(), inFlight = useRef(false);
   const [view, setView] = useState(initial);
@@ -124,6 +112,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const [messages, setMessages] = useState<MessageTemplateSettings>(() => initial.settings.messageTemplates ?? structuredClone(defaultMessageTemplates));
   const [community, setCommunity] = useState<readonly CommunityLink[]>(initial.settings.communityLinks ?? []);
   const [section, setSection] = useState<Section>("payments");
+  const { detailOpen, openDetail, closeDetail } = useRecordView();
   const [advanced, setAdvanced] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [password, setPassword] = useState("");
@@ -135,6 +124,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const [armed, setArmed] = useState<PaywallMode | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const settings = view.settings;
+  const hasSupportDirectory = settings.supportContacts != null;
   const managed: readonly string[] = view.environmentFields ?? [];
   const savedContacts = settings.supportContacts ?? supportContactsOf(settings);
   const changes = { ...changesOf(draft, settings, managed),
@@ -145,8 +135,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const changed = Object.keys(changes) as EditableSettingField[];
   const needsPassword = !sessionAuthorized && (askPassword || changed.some(isProtectedSettingField));
   const showPassword = needsPassword && changed.length > 0;
-  const missing = [...new Map((["test", "on"] as const).filter(mode => mode !== settings.paywallMode)
-    .flatMap(mode => view.requirements[mode]).map(item => [item.key, item])).values()];
   const summary = changed.length ? `${changed.length} unsaved ${changed.length === 1 ? "change" : "changes"}`
     : settings.updatedAt ? `Saved ${savedTime(settings.updatedAt)} EAT` : "No changes";
   const selectedMode = armed ?? settings.paywallMode;
@@ -156,15 +144,15 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     const key = editableSettingFields.find(field => errors[field]);
     const target = key ? `setting-${key}` : errors.password ? "setting-password" : null;
     if (!target) return;
-    const frame = requestAnimationFrame(() => focusVisible(target));
+    const frame = requestAnimationFrame(() => document.getElementById(target)?.focus());
     return () => cancelAnimationFrame(frame);
   }, [errors]);
 
   useEffect(() => {
     if (busy || !pendingFocus.current) return;
-    focusVisible(pendingFocus.current);
+    document.getElementById(pendingFocus.current)?.focus();
     pendingFocus.current = null;
-  }, [section, armed, busy]);
+  }, [section, armed, busy, detailOpen]);
 
   useEffect(() => {
     const desktop = window.matchMedia(media.desktop.replace("@media ", ""));
@@ -176,8 +164,9 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   }, []);
 
   function update(key: ScalarSettingField, value: string) { setDraft(shown => ({ ...shown, [key]: value })); }
-  function navigate(next: Section, focus?: string) {
+  function navigate(next: Section, focus?: string, trigger?: HTMLElement) {
     if (focus) pendingFocus.current = focus;
+    openDetail(trigger);
     setSection(next); setArmed(null);
   }
   /** A requirement link opens the section and puts the cursor in the field that resolves it. */
@@ -185,7 +174,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   function cancelMode() { pendingFocus.current = `setting-mode-${settings.paywallMode}`; setArmed(null); }
   function undo() { setDraft(draftOf(settings)); setContacts(settings.supportContacts ?? supportContactsOf(settings));
     setCommunity(settings.communityLinks ?? []);
-    setMessages(settings.messageTemplates ?? structuredClone(defaultMessageTemplates)); setErrors({}); setStatus(null); setArmed(null); }
+    setMessages(settings.messageTemplates ?? structuredClone(defaultMessageTemplates)); setErrors({}); setStatus(null); setArmed(null);
+    setPassword(""); setAskPassword(false); }
 
   function accept(reply: AdminReply, message: string, resetForm: boolean) {
     const next = reply.body as unknown as SavedReply;
@@ -210,9 +200,9 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     const nextErrors = body.error === "password-invalid" ? { password: String(body.message) } : replyErrors(reply);
     const first = editableSettingFields.find(key => nextErrors[key]);
     if (first) {
-      setSection(sectionOf[first]);
+      navigate(sectionOf[first]);
       if (shortcutFields.has(first) || first === "maxUnlockedDevices" || first === "screenshotRetentionDays") {
-        setAdvanced(shown => ({ ...shown, [first]: true, ...(first === "maxUnlockedDevices" || first === "screenshotRetentionDays" ? { "desktop-access": true } : {}) }));
+        setAdvanced(shown => ({ ...shown, [shortcutFields.has(first) ? first : "access"]: true }));
       }
     }
     setErrors(nextErrors);
@@ -245,10 +235,9 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     else refuse(reply);
   }
 
-  const field = (key: ScalarSettingField, hinted = false, desktop = false) => {
-    const prefix = desktop ? "desktop-setting" : "setting";
-    const described = [errors[key] && `${prefix}-${key}-error`, hinted && `${prefix}-${key}-hint`].filter(Boolean).join(" ");
-    return { id: `${prefix}-${key}`, value: draft[key], disabled: busy || managed.includes(key), "aria-invalid": errors[key] ? true : undefined,
+  const field = (key: ScalarSettingField, hinted = false) => {
+    const described = [errors[key] && `setting-${key}-error`, hinted && `setting-${key}-hint`].filter(Boolean).join(" ");
+    return { id: `setting-${key}`, value: draft[key], disabled: busy || managed.includes(key), "aria-invalid": errors[key] ? true : undefined,
       "aria-describedby": described || undefined, onChange: (event: { target: { value: string } }) => update(key, event.target.value) };
   };
   const error = (key: EditableSettingField) => errors[key] && <FieldError id={`setting-${key}-error`}>{errors[key]}</FieldError>;
@@ -273,18 +262,14 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     <Drawer $plain open={!!advanced[key]} onToggle={event => { const open = event.currentTarget.open; setAdvanced(shown => shown[key] === open ? shown : { ...shown, [key]: open }); }}>
       <summary>{label}<ChevronDownIcon /></summary><div>{children}</div>
     </Drawer>;
-  const shortcutEditor = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber", desktop = false) => {
-    const prefix = desktop ? "desktop-setting" : "setting";
-    return <DialField>
-      <DialRow><FieldBlock label={desktop ? "Dial code · optional" : "Dial code"}><input {...field(key, true, desktop)} inputMode="tel" autoComplete="off" spellCheck={false} maxLength={settingsRules.shortcutMaxLength} /></FieldBlock>
-        <ActionButton type="button" disabled={busy} onClick={() => update(key, `${draft[key]}{amount}`)}>Add amount</ActionButton></DialRow>
-      {errors[key] && <FieldError id={`${prefix}-${key}-error`}>{errors[key]}</FieldError>}
-      <Hint id={`${prefix}-${key}-hint`}>{changed.includes(number) && !changed.includes(key) && settings[key] ? "This code will clear when the number changes." : "Use a code tested on your phone. Android only."}</Hint>
-    </DialField>;
-  };
   const shortcut = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber") => managed.includes(key)
     ? fact(key, "Dial code", codeShown(key))
-    : <><MobileOnly>{drawer(key, "Dial code · optional", shortcutEditor(key, number))}</MobileOnly><DesktopOnly>{shortcutEditor(key, number, true)}</DesktopOnly></>;
+    : drawer(key, "Dial code · optional", <DialField>
+      <DialRow><FieldBlock label="Dial code"><input {...field(key, true)} inputMode="tel" autoComplete="off" spellCheck={false} maxLength={settingsRules.shortcutMaxLength} /></FieldBlock>
+        <ActionButton type="button" disabled={busy} onClick={() => update(key, `${draft[key]}{amount}`)}>Add amount</ActionButton></DialRow>
+      {error(key)}
+      <Hint id={`setting-${key}-hint`}>{changed.includes(number) && !changed.includes(key) && settings[key] ? "This code will clear when the number changes." : "Use a code tested on your phone. Android only."}</Hint>
+    </DialField>);
   const range = (key: "maxUnlockedDevices" | "trialDays", label: string, hint?: string) => <FieldBlock label={label} description={<>{error(key)}{hint && <Hint id={`setting-${key}-hint`}>{hint}</Hint>}</>}><select {...field(key, !!hint)}>{Array.from({ length: settingsRules[key].max - settingsRules[key].min + 1 }, (_, index) => settingsRules[key].min + index)
       .map(value => <option key={value} value={value}>{key === "trialDays" ? value === 0 ? "Off" : `${value} ${value === 1 ? "day" : "days"}` : value}</option>)}</select></FieldBlock>;
   const network = (id: "mtn" | "airtel", title: string, number: "mtnNumber" | "airtelNumber", name: "mtnName" | "airtelName", code: "mtnMenuShortcut" | "airtelMenuShortcut") => {
@@ -294,27 +279,25 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
         : <>{phone(number, "Phone number")}{text(name, "Registered name", settingsRules.nameMaxLength)}{shortcut(code, number)}</>}
     </section>;
   };
-  const saveButtons = <>
-    <ActionButton type="button" disabled={busy || changed.length === 0} onClick={undo}><UndoIcon />Undo</ActionButton>
-    <ActionButton type="submit" $variant="primary" disabled={busy || changed.length === 0 || (needsPassword && password === "")} data-settings-save>
-      <CheckIcon />Save changes</ActionButton>
-  </>;
-
   return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-settings-editor>
     <h1>Settings</h1>
-    <SettingsHeading><DesktopSettingsTabs as="nav" aria-label="Desktop settings sections" data-settings-desktop-nav>{desktopSections.map(({ key, label, Icon: TabIcon }) =>
-      <button key={key} id={`desktop-settings-tab-${key}`} type="button" aria-current={section === key ? "page" : undefined} aria-controls="settings-section" onClick={() => navigate(key)}>
-        <TabIcon />{label}</button>)}</DesktopSettingsTabs></SettingsHeading>
-    <SettingsGrid>
-      <SettingsColumn>
-        {status && <Notice as="div" $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}
+    <SettingsWorkspace $compact $detailOpen={detailOpen}>
+        {status && <RecordFeedback><Notice as="div" $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}
           {status.list && <Requirements>{status.list.map(item => <li key={item}>{item}</li>)}</Requirements>}
-        </Notice>}
-        <SectionTabs as="nav" aria-label="Settings sections" data-settings-nav>{sections.map(({ key, label, Icon: TabIcon }) => <button key={key} id={`settings-tab-${key}`}
-          type="button" aria-current={(section === "messages" ? "payments" : section) === key ? "page" : undefined} aria-controls="settings-section" onClick={() => navigate(key)}>
-          <TabIcon />{label}
-        </button>)}</SectionTabs>
-        <SectionPanel id="settings-section" tabIndex={-1} aria-label={desktopSections.find(item => item.key === section)?.label ?? "Settings"} data-settings-section={section}>
+        </Notice></RecordFeedback>}
+      <RecordList aria-label="Settings sections">
+        <RecordListScroll data-settings-nav tabIndex={0}>{sections.map(({ key, label, Icon: SectionIcon }) => {
+          const Item = key === "messages" ? DesktopSettingItem : "li";
+          return <Item key={key}><RecordItem type="button" id={`settings-tab-${key}`} aria-current={section === key ? "true" : undefined}
+            aria-controls="settings-section" disabled={busy} onClick={event => navigate(key, undefined, event.currentTarget)}>
+            <RecordRowContent icon={<SectionIcon />} primary={label} />
+          </RecordItem></Item>;
+        })}</RecordListScroll>
+      </RecordList>
+      <RecordDetails>
+        <RecordBack disabled={busy} onClick={event => { setArmed(null); closeDetail(event); }}>Back to settings</RecordBack>
+        <RecordCard><RecordScroll>
+        <SectionPanel id="settings-section" tabIndex={-1} aria-label={sections.find(item => item.key === section)?.label ?? "Settings"} data-settings-section={section}>
           {section === "payments" && <><NetworkGrid>
             {network("mtn", "MTN MoMo", "mtnNumber", "mtnName", "mtnMenuShortcut")}
             {network("airtel", "Airtel Money", "airtelNumber", "airtelName", "airtelMenuShortcut")}
@@ -324,88 +307,65 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
             <FieldBlock label="Foreground sound repeats" description={error("paymentAlertRepeats")}><select {...field("paymentAlertRepeats")}>
               {[1, 2, 3].map(value => <option key={value} value={value}>{value}</option>)}</select></FieldBlock>
           </TwoUp><PaymentAlertControls /></PanelBody></>}
-          {section === "support" && <><MobileOnly><PanelBody>{locked("contactPhone", "whatsappPhone")
-            ? <><ManagedNote><LockIcon />Managed outside this page</ManagedNote>{facts([["contactPhone", "Phone support"], ["whatsappPhone", "WhatsApp"]])}</>
+          {section === "support" && <><MobileOnly><PanelBody>{hasSupportDirectory || locked("contactPhone", "whatsappPhone")
+            ? <><ManagedNote><LockIcon />{hasSupportDirectory ? "Edit the support directory on desktop." : "Managed outside this page"}</ManagedNote>{facts([["contactPhone", "Phone support"], ["whatsappPhone", "WhatsApp"]])}</>
             : <TwoUp>{phone("contactPhone", "Phone support")}{phone("whatsappPhone", "WhatsApp")}</TwoUp>}</PanelBody></MobileOnly>
             <DesktopOnly><SettingsSupportEditor contacts={contacts} disabled={busy} error={errors.supportContacts} onChange={setContacts} /></DesktopOnly>
             <SettingsCommunityEditor value={community} disabled={busy} error={errors.communityLinks} onChange={setCommunity} /></>}
-          {section === "access" && <MobileOnly>
-            <PanelBody>
-              <ModeTiles disabled={busy}><legend>Paid access</legend><div>{paywallModes.map(mode => {
-                const unavailable = mode !== settings.paywallMode && mode !== "off" && view.requirements[mode].length > 0;
-                return <ModeTile key={mode} data-mode-tile $unavailable={unavailable}>
-                  <input id={`setting-mode-${mode}`} type="radio" name="paid-access-mode" value={mode} checked={(armed ?? settings.paywallMode) === mode}
-                    disabled={busy || unavailable} aria-describedby={unavailable ? "settings-requirements" : undefined} data-settings-mode
-                    onChange={() => { setArmed(mode === settings.paywallMode ? null : mode); setStatus(null); }} />
-                  <span><strong>{modeLabels[mode]}</strong>{modeCaptions[mode]}{mode === settings.paywallMode && <em>Current</em>}</span>
-                </ModeTile>;
-              })}</div></ModeTiles>
-              {armed ? <ConfirmBox role="status"><strong>Switch to {modeLabels[armed]}?</strong><p>{modeExplanations[armed]}</p>
-                <div><ActionButton type="button" disabled={busy} onClick={cancelMode}>Cancel</ActionButton>
-                  <ActionButton type="button" $variant="primary" disabled={busy} onClick={() => void confirmMode()}>Confirm switch</ActionButton></div>
-              </ConfirmBox> : <SettingsHint>{modeExplanations[settings.paywallMode]}</SettingsHint>}
-              {missing.length > 0 && <RequirementBox id="settings-requirements"><ZoneLabel>To enable Test or On</ZoneLabel>
-                <RequirementList>{missing.map(({ key }) => <li key={key}><LockIcon />{key === "plan" ? <Link href="/admin/plans">{requirementLabels[key]}</Link>
-                  : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => resolve(key === "contact" ? "contactPhone" : "mtnNumber")}>{requirementLabels[key]}</button>
-                    : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList>
-              </RequirementBox>}
-              <TwoUp>{range("trialDays", authCopy.trialRegistration, "0 disables trials for new accounts.")}
-                <FieldBlock label={"Keep payment proofs after approval · days"} description={<>{error("screenshotRetentionDays")}<Hint id="setting-screenshotRetentionDays-hint">{settingsRules.screenshotRetentionDays.min}–{settingsRules.screenshotRetentionDays.max} days</Hint></>}><input {...field("screenshotRetentionDays", true)} type="number" inputMode="numeric" min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} /></FieldBlock>
-              </TwoUp>
-              {drawer("maxUnlockedDevices", "Advanced", <NarrowField>{range("maxUnlockedDevices", "Grant device limit", "For existing grants. Accounts always have one active session.")}</NarrowField>)}
-            </PanelBody>
-          </MobileOnly>}
-          {section === "access" && <DesktopOnly><PanelBody>
-            <ModeTiles disabled={busy}><legend>Subscription availability</legend><div>{paywallModes.map(mode => <ModeTile key={mode} data-mode-tile $unavailable={false}>
-              <input id={`desktop-setting-mode-${mode}`} type="radio" name="desktop-paid-access-mode" value={mode} checked={selectedMode === mode} disabled={busy}
+          {section === "access" && <PanelBody>
+            <ModeTiles disabled={busy}><legend>Paid access</legend><div>{paywallModes.map(mode => <ModeTile key={mode} data-mode-tile>
+              <input id={`setting-mode-${mode}`} type="radio" name="paid-access-mode" value={mode} checked={selectedMode === mode} disabled={busy}
+                aria-describedby={selectedMode === mode && selectedRequirements.length ? "settings-requirements" : undefined}
                 data-settings-mode onChange={() => { setArmed(mode === settings.paywallMode ? null : mode); setStatus(null); }} />
-              <span><strong>{desktopModeLabels[mode]}</strong>{mode === settings.paywallMode ? <em>Current</em> : mode === "test" ? "Development flows" : mode === "on" ? "Accept subscriptions" : "Pause new payments"}</span>
+              <span><strong>{modeLabels[mode]}</strong>{mode === settings.paywallMode && <em>Current</em>}</span>
             </ModeTile>)}</div></ModeTiles>
-            <SettingsHint>{desktopModeDescriptions[selectedMode]}</SettingsHint>
-            {selectedRequirements.length > 0 && <RequirementBox id="desktop-settings-requirements"><ZoneLabel>Complete before enabling {desktopModeLabels[selectedMode].toLowerCase()}</ZoneLabel>
+            <SettingsHint>{modeExplanations[selectedMode]}</SettingsHint>
+            {selectedRequirements.length > 0 && <RequirementBox id="settings-requirements"><strong>Required for {modeLabels[selectedMode]}</strong>
               <RequirementList>{selectedRequirements.map(({ key }) => <li key={key}><LockIcon />{key === "plan" ? <Link href="/admin/plans">{requirementLabels[key]}</Link>
-                : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => key === "contact" ? navigate("support", "setting-supportContacts") : resolve("mtnNumber")}>{requirementLabels[key]}</button>
+                : key === "payment-number" || key === "contact" ? <button type="button" onClick={() => {
+                  if (key === "payment-number") resolve("mtnNumber");
+                  else if (window.matchMedia(media.desktop.replace("@media ", "")).matches) navigate("support", "setting-supportContacts");
+                  else if (hasSupportDirectory) navigate("support", "settings-section");
+                  else resolve("contactPhone");
+                }}>{requirementLabels[key]}</button>
                   : <span>{requirementLabels[key]}</span>}</li>)}</RequirementList></RequirementBox>}
-            {armed && <ConfirmBox><strong>Switch to {desktopModeLabels[armed].toLowerCase()}?</strong><p>This switch applies immediately after confirmation.</p><div>
+            {armed && <ConfirmBox><strong>Switch to {modeLabels[armed]}?</strong><div>
               <ActionButton type="button" disabled={busy} onClick={cancelMode}>Cancel</ActionButton>
               <ActionButton type="button" $variant="primary" disabled={busy || selectedRequirements.length > 0} onClick={() => void confirmMode()}>Confirm switch</ActionButton>
             </div></ConfirmBox>}
-            <NarrowField><FieldBlock label={"New account free trial"} description={<>{errors.trialDays && <FieldError id="desktop-setting-trialDays-error">{errors.trialDays}</FieldError>}<Hint id="desktop-setting-trialDays-hint">Applies to accounts created after saving.</Hint></>}><select {...field("trialDays", true, true)}>
-              {Array.from({ length: settingsRules.trialDays.max + 1 }, (_, days) => <option key={days} value={days}>{days === 0 ? "No free trial" : `${days} ${days === 1 ? "day" : "days"}`}</option>)}
-            </select></FieldBlock></NarrowField>
-            {drawer("desktop-access", "Advanced access settings", <TwoUp>
-              <FieldBlock label={"Keep approved payment proofs · days"} description={<>{errors.screenshotRetentionDays && <FieldError id="desktop-setting-screenshotRetentionDays-error">{errors.screenshotRetentionDays}</FieldError>}<Hint id="desktop-setting-screenshotRetentionDays-hint">Delete approved screenshots after {draft.screenshotRetentionDays} days.</Hint></>}><input {...field("screenshotRetentionDays", true, true)} type="number" inputMode="numeric"
+            <NarrowField>{range("trialDays", "New account free trial")}</NarrowField>
+            {drawer("access", "Advanced access settings", <TwoUp>
+              <FieldBlock label="Keep approved payment proofs · days" description={error("screenshotRetentionDays")}><input {...field("screenshotRetentionDays")} type="number" inputMode="numeric"
                 min={settingsRules.screenshotRetentionDays.min} max={settingsRules.screenshotRetentionDays.max} /></FieldBlock>
-              <FieldBlock label={"Legacy grant device limit"} description={<>{errors.maxUnlockedDevices && <FieldError id="desktop-setting-maxUnlockedDevices-error">{errors.maxUnlockedDevices}</FieldError>}<Hint id="desktop-setting-maxUnlockedDevices-hint">Applies to legacy grants. Member accounts use one active session.</Hint></>}><select {...field("maxUnlockedDevices", true, true)}>
-                {Array.from({ length: settingsRules.maxUnlockedDevices.max }, (_, index) => index + 1).map(value => <option key={value} value={value}>{value}</option>)}
-              </select></FieldBlock>
+              {range("maxUnlockedDevices", "Legacy grant device limit", "Member accounts use one active session.")}
             </TwoUp>)}
-          </PanelBody></DesktopOnly>}
+          </PanelBody>}
           {section === "display" && <PanelBody>
             <TwoUp><FieldBlock label={"Copied number format"} description={<>{error("copyFormat")}</>}><select {...field("copyFormat")}>
               <option value="international">International · 256 772 123 456</option><option value="local">Local · 0772 123 456</option>
             </select></FieldBlock>
               {text("reviewTime", "Payment review time", settingsRules.reviewTimeMaxLength, "Usually within 30 minutes")}
             </TwoUp>
-            <DesktopOnly><SettingsHint>Number format controls the number copied from desktop payment instructions. Preview: <strong>{draft.copyFormat === "local" ? "0772123456" : "256772123456"}</strong>.<br />
-              Payment review time is an estimate shown to customers; it does not set an automatic processing deadline.</SettingsHint></DesktopOnly>
+            <SettingsHint>Review time is the estimate shown to customers.</SettingsHint>
             <FieldBlock label={"Payment note · optional"} description={<>{error("paymentNote")}<Hint id="setting-paymentNote-hint">{draft.paymentNote.length}/{settingsRules.paymentNoteMaxLength}</Hint></>}><textarea {...field("paymentNote", true)} maxLength={settingsRules.paymentNoteMaxLength} /></FieldBlock>
-            <DesktopOnly><SettingsHint>The optional payment note appears with payment instructions. Automated outgoing messages are configured in Messages.</SettingsHint></DesktopOnly>
           </PanelBody>}
-          {section === "messages" && <><DesktopOnly><SettingsMessageEditor value={messages} disabled={busy} error={errors.messageTemplates} onChange={setMessages} /></DesktopOnly>
-            <MobileOnly><NetworkGrid>{network("mtn", "MTN MoMo", "mtnNumber", "mtnName", "mtnMenuShortcut")}{network("airtel", "Airtel Money", "airtelNumber", "airtelName", "airtelMenuShortcut")}</NetworkGrid></MobileOnly></>}
+          {section === "messages" && <DesktopOnly><SettingsMessageEditor value={messages} disabled={busy} error={errors.messageTemplates} onChange={setMessages} /></DesktopOnly>}
         </SectionPanel>
-      </SettingsColumn>
-      <SavePanel aria-label="Save settings" $phoneHidden={!showPassword}>
-        <ZoneLabel data-save-wide aria-live="polite">{summary}</ZoneLabel>
+        </RecordScroll></RecordCard>
+      </RecordDetails>
+      <SettingsFooter aria-label="Save settings" data-settings-footer>
         {showPassword && <>
           <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
           <div data-setting-password><TextInput label="Confirm your password" id="setting-password" name="password" type="password" autoComplete="current-password" value={password} disabled={busy} required
             hint={passwordReason(changed.filter(isProtectedSettingField))} error={errors.password} onChange={event => setPassword(event.target.value)} /></div>
         </>}
-        <SaveButtons data-save-wide>{saveButtons}</SaveButtons>
-      </SavePanel>
-    </SettingsGrid>
-    <SaveDock><span aria-live="polite">{summary}</span>{saveButtons}</SaveDock>
+        <span aria-live="polite">{summary}</span>
+        <div data-record-actions>
+          <ActionButton type="button" disabled={busy || changed.length === 0} onClick={undo}><UndoIcon />Undo</ActionButton>
+          <ActionButton type="submit" $variant="primary" disabled={busy || changed.length === 0 || (needsPassword && password === "")} data-settings-save>
+            <CheckIcon />Save changes</ActionButton>
+        </div>
+      </SettingsFooter>
+    </SettingsWorkspace>
   </SettingsForm>;
 }

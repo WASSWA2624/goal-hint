@@ -1,7 +1,6 @@
 "use client";
 
 import styled, { css } from "styled-components";
-import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
 import { Panel, Segmented, StatGrid, rowLayout } from "./desk-styles";
 import { RecordDetails, RecordList, RecordWorkspace, RecordDetailHead } from "./record-workspace";
@@ -41,37 +40,11 @@ export const formSurface = css`
 /* Workspace: the directory on the start side, the account on the wide side; phones show one of them at a time. */
 export const WorkspaceTitle = styled(RecordToolbar)``;
 export const DirectoryRoot = styled(RecordList)``;
-/**
- * `$quiet`: nothing to show on a phone (no account, no notice), so the column leaves no gap. The account's parts size to
- * this column, which is narrow at 1024px beside the sidebar and the directory.
- */
-export const AccountColumn = styled(RecordDetails)<{ $quiet: boolean }>`
+export const AccountColumn = styled(RecordDetails)`
   container-type: inline-size;
   ${media.desktop} { grid-template-rows: minmax(0, 1fr); }
-  ${({ $quiet }) => $quiet && css`${media.belowDesktop} { display: none; }`}
 `;
-export const Workspace = styled(RecordWorkspace)<{ $selected: boolean }>`
-  ${media.belowDesktop} {
-    ${({ $selected }) => $selected
-      ? css`> ${DirectoryRoot} { display: none; } > ${WorkspaceTitle} { display: contents; > [data-subscriber-search] { display: none; } }`
-      : css`> ${AccountColumn} { order: 1; } > ${DirectoryRoot} { order: 2; }`}
-  }
-`;
-export const BackLink = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gh-spacing-1);
-  justify-self: start;
-  min-block-size: var(--form-control-height);
-  margin-block: calc(-1 * var(--gh-spacing-1_5)) calc(-1 * var(--gh-spacing-1));
-  padding-inline-end: var(--gh-spacing-2);
-  color: ${({ theme }) => theme.color.link};
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  text-decoration: none;
-  > svg { flex: none; font-size: var(--gh-font-title); }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
-  ${media.desktop} { display: none; }
-`;
+export const Workspace = styled(RecordWorkspace)``;
 export const EmptyAccount = styled(Panel)`
   display: grid;
   align-content: center;

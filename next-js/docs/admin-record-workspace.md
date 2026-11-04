@@ -1,6 +1,6 @@
 # Shared admin record workspace
 
-Payments, Codes, Subscribers, Referral review, Plans and Audit use
+Payments, Codes, Subscribers, Referral review, Plans, Audit and Settings use
 the components in `src/components/admin/record-workspace.tsx`. Edit that module
 to change their shared layout, scrolling, toolbar spacing, headers, row surfaces,
 or action-footer presentation. Screen files supply their own record fields,
@@ -16,14 +16,16 @@ keeping room for the detail pane.
 
 ## Composition
 
-- `RecordWorkspace`: the full-width desktop frame below the existing header.
+- `RecordWorkspace`: the frame below the existing header. The compact layout
+  keeps list and detail footers outside their scrolling content on phones.
 - `RecordToolbar` / `RecordFeedback`: full-width toolbar on the parent surface
-  and operation results. Payments puts its toolbar directly beneath its status
-  tabs. `RecordPrimaryAction` displays a label on desktop and an icon on phones.
+  and operation results. `RecordPrimaryAction` displays a label on desktop and
+  an icon on phones.
 - `RecordList`, `RecordListTools`, `RecordListScroll`, `RecordListFooter`: the
   searchable list with its own scroll surface and bounded status area.
 - `RecordDetails`, `RecordCard`, `RecordScroll`: selected record content with an
-  independent scroll surface. Empty states use the same pane.
+  independent scroll surface. Empty states use the same pane. `RecordBack`
+  returns phone users to the list and restores the opening row and scroll.
 - `RecordDetailHead` / `RecordBody`: compact selected-record heading and content.
 - `RecordFooter`: optional actions outside the details scroll surface. External
   submit buttons use the existing form's ID; forms are never duplicated.
@@ -47,12 +49,15 @@ CSV export still covers the full filtered loaded window.
 
 The fixed two-pane layout starts at 64rem. Primary forms for Codes, Subscribers,
 Referral review and Plans use the shared modal with the same controls on both
-viewports. Mobile record selection uses inline disclosures or a detail screen.
-Referral search queries all matching cases through the owner-only endpoint.
+viewports. Selecting a row on mobile opens one detail view. Referral search
+queries all matching cases through the owner-only endpoint, and updates retain
+the list query so the reviewer can return to it.
 
-Overview, Settings and Analytics use the scrolling workspace layout. Storage-unavailable responses remain readable within the shared
-frame. Authorization, private attachments, API handlers, business services,
-and persistence are not delegated to layout components.
+Settings uses the same list and detail components for section navigation and
+has one draft and save footer. Overview and Analytics use the scrolling
+workspace layout. Storage-unavailable responses remain readable within the
+shared frame. Layout components leave authorization, private attachments, and
+persistence to the existing services and API handlers.
 
 Run `python scripts/verify-owner-payments-rendering.py --serve` from `next-js/`
 for the production acceptance fixture. Its printed synthetic entry establishes

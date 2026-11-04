@@ -296,6 +296,9 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean; $section: AdminSec
       &:has([data-payment-mobile-queue]) { padding-block-end: 0; }
     }
   `}
+  ${media.belowDesktop} {
+    &:has([data-record-compact]) { padding-block: var(--gh-spacing-1) 0; }
+  }
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
 `;

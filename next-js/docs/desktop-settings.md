@@ -1,9 +1,9 @@
 # Desktop settings
 
-The desktop Settings workspace keeps its title and five section switches above
-the form, with Undo, Save changes and save status in a visible footer. Form content
-scrolls independently. The existing mobile heading, four tabs, forms and save dock
-retain their layout; the new management interfaces are desktop only.
+Settings presents one section list and one draft. Desktop shows the selected
+section beside the list. Phones open a section with a Back action. Undo, Save
+changes and save status share a footer. Messages and the structured support
+directory are edited on desktop.
 
 ## Support contacts
 
@@ -18,11 +18,14 @@ payment receiving details retain their environment configuration. Primary capabl
 contacts supply the legacy compact/mobile links and message placeholders. An
 explicit empty list has no fallback. While subscriptions are open, the settings
 service refuses removal of the last usable contact.
+The phone Settings view shows the effective call and WhatsApp numbers when a
+directory is saved. Installations using legacy support settings can still edit
+those fields on phones when they are writable.
 
 ## Access and display
 
-MTN and Airtel payment dial codes remain visible beside their receiving details
-on desktop. The optional mobile dial-code drawers keep their existing layout.
+MTN and Airtel dial-code fields open beside their receiving details on both
+layouts.
 
 Subscriptions closed stops new payments; Testing opens development flows;
 Subscriptions open accepts subscriptions. Protected predictions require valid

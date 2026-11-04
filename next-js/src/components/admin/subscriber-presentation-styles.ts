@@ -46,7 +46,7 @@ export const subscriberPresentation = css`
     [data-subscriber-stats] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   ${media.belowDesktop} {
-    [data-record-list-scroll] { max-block-size: var(--gh-size-96); overflow-y: auto; }
+    &:not([data-record-compact]) [data-record-list-scroll] { max-block-size: var(--gh-size-96); overflow-y: auto; }
     [data-subscriber-review-filters] { gap: var(--gh-spacing-2_5); }
     [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height); font-size: var(--gh-font-section); }
     [data-subscriber-detail] ${RecordBody} { padding: 0; gap: var(--gh-spacing-2_5); }

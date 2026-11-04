@@ -36,8 +36,7 @@ const codeTones = { active: "good", queued: "warning" } as const;
 const paymentTones = { approved: "good", pending: "warning" } as const;
 
 /**
- * One account: who it is, its numbers once, the account actions, then tabs for the records. Destructive removal waits in
- * the last drawer; every action panel returns focus to the control that opened it.
+ * The summary identifies the account, tabs show its records, and account actions return focus to their trigger.
  */
 export function SubscriberDetail({ account, plans, action, onDeleted, back, presentation, network }: {
   account: OwnerSubscriber; plans: readonly SubscriptionPlanView[]; action: CodeAction; onDeleted: () => void;
@@ -106,6 +105,12 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
         : <ActionButton type="submit" form={`${id}-form-${active}`} $variant="primary" disabled={action.busy}>{active === "grant" ? "Grant access manually" : active === "number" ? "Change number and move access" : account.blockedAt ? "Unblock account" : "Block account"}</ActionButton>}</>
         : !erased && tab === "overview" ? <ActionButton type="submit" form={`${id}-note`} disabled={action.busy || !noteDirty}>Save note</ActionButton>
           : !erased && tab === "credit" && creditOpen ? <><ActionButton type="button" disabled={action.busy} onClick={() => setCreditOpen(false)}>Cancel</ActionButton><ActionButton type="submit" form={`${id}-credit`} $variant="primary" disabled={action.busy || !creditReady}>Save correction</ActionButton></> : null;
+  const accountActions = !erased && <QuickActions role="group" aria-label="Account actions" data-subscriber-actions>
+    {task("grant", "Grant access", <GiftIcon />)}
+    {task("number", "Change number", <SwapIcon />)}
+    {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
+    {task("devices", authCopy.logoutDevices, <SignOutIcon />)}
+  </QuickActions>;
   return <DetailCard $compact={dialogMode} data-subscriber-detail={account.id} data-subscriber-presentation={presentation}>
     <RecordScroll>
     {back}
@@ -122,12 +127,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
       </AccountTop>
       <AccountStats $columns={4} data-subscriber-stats><div><dt>Unlocked devices</dt><dd>{account.devices.length}</dd></div><div><dt>Access periods</dt><dd>{account.codes.length}</dd></div>
         <div><dt>Unlocks · 30 days</dt><dd>{account.unlocks}</dd></div><div><dt>Credit</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div></AccountStats>
-      {!erased && <QuickActions role="group" aria-label="Account actions" data-subscriber-actions>
-        {task("grant", "Grant access", <GiftIcon />)}
-        {task("number", "Change number", <SwapIcon />)}
-        {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
-        {task("devices", authCopy.logoutDevices, <SignOutIcon />)}
-      </QuickActions>}
+      {!dialogMode && accountActions}
     </Panel>
     {active && !dialogMode && <ActionPanel id={`${id}-action-panel`} role="region" aria-labelledby={`${id}-action-title`} data-subscriber-action-panel={active}
       onKeyDown={event => { if (event.key === "Escape" && !action.busy && !event.defaultPrevented) { event.preventDefault(); closeAction(); } }}>
@@ -186,12 +186,18 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     </DrawerPanel>
     </RecordBody>
     </RecordScroll>
+    {dialogMode && accountActions && <AccountActionsFooter>{accountActions}</AccountActionsFooter>}
     {desktop && footer && !dialogMode && <RecordFooter data-subscriber-footer-action={removal ?? active ?? tab}><span data-record-summary>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</span>{footer}</RecordFooter>}
     {dialogMode && active && <SubscriberReviewDialog id={`${id}-action-panel`} open title={active === "block" ? account.blockedAt ? "Unblock account" : "Block account" : actionTitles[active]} busy={action.busy} onClose={closeAction} footer={footer}>
       <div data-subscriber-action-dialog={active}>{action.message && <ActionNotices action={action} />}{actionFields}</div>
     </SubscriberReviewDialog>}
   </DetailCard>;
 }
+
+const AccountActionsFooter = styled(RecordFooter)`
+  && { padding-block: 0; }
+  && > [data-subscriber-actions] { padding-inline: 0; }
+`;
 
 function OwnerNote({ account, action, formId, externalActions, onDirtyChange }: { account: OwnerSubscriber; action: CodeAction; formId: string; externalActions: boolean; onDirtyChange: (dirty: boolean) => void }) {
   const [note, setNote] = useState(account.ownerNote ?? "");

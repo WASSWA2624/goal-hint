@@ -47,8 +47,9 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange, traili
 }
 
 /** Use the same identity row for native navigation and local sample selection. */
-export function SubscriberAccountRow({ account, selected, href, onSelect }: {
+export function SubscriberAccountRow({ account, selected, href, onSelect, onAccountClick }: {
   account: SubscriberDirectoryAccount; selected: boolean; href?: string; onSelect?: () => void;
+  onAccountClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }) {
   const networkLabel = account.network === "mtn" ? "MTN network" : account.network === "airtel" ? "Airtel network" : "Network unknown";
   const content = <RecordRowContent
@@ -57,7 +58,7 @@ export function SubscriberAccountRow({ account, selected, href, onSelect }: {
       <Badge data-review-row-status data-subscriber-status={account.status} $tone={account.status === "open" ? "good" : account.status === "blocked" ? "warning" : "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge></>}
     secondary={<span data-review-row-meta>{account.planNames.length ? account.planNames.join(", ") : accessLabels[account.access]} · <span data-subscriber-last-sign-in>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></span></span>} />;
   const attributes = { "data-review-subscriber-row": account.id, "data-subscriber-row": account.id };
-  return href ? <Row {...attributes} as={Link} href={href} prefetch={false} aria-current={selected ? "page" : undefined}>{content}</Row>
+  return href ? <Row {...attributes} as={Link} href={href} prefetch={false} scroll={false} onClick={event => onAccountClick?.(event)} aria-current={selected ? "page" : undefined}>{content}</Row>
     : <Row {...attributes} type="button" aria-current={selected ? "true" : undefined} onClick={onSelect}>{content}</Row>;
 }
 

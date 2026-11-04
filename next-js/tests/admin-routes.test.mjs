@@ -297,12 +297,17 @@ test("owner screenshot is private JPEG with a sandbox and cannot return data wit
 });
 
 test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
-  assert.match(await source("src/components/admin/subscriber-styles.tsx"), /export const CompactForm\s*=\s*styled\.form\b/u,
-    "The shared subscriber form wrapper remains a native HTML form.");
-  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payment-review.tsx","src/components/admin/subscriber-detail.tsx"]){
-    const text=await source(file);
+  const directory = "src/components/admin/";
+  const files = [
+    { name: "code-tools.tsx" },
+    { name: "payment-review.tsx", styles: "payment-styles.tsx", form: "ApprovalForm" },
+    { name: "subscriber-detail.tsx", styles: "subscriber-styles.tsx", form: "CompactForm" },
+  ];
+  for(const { name, styles, form } of files){
+    const file = directory + name, text = await source(file);
+    if (styles) assert.match(await source(directory + styles), new RegExp(`export const ${form}\\s*=\\s*styled\\.form\\b`, "u"));
     const names=["form",...Array.from(text.matchAll(/\b(\w+)\s*=\s*styled\.form\b/gu),match=>match[1]),
-      ...(file.endsWith("subscriber-detail.tsx") ? ["CompactForm"] : [])].join("|");
+      ...(form ? [form] : [])].join("|");
     const forms=[...text.matchAll(new RegExp(`<(?:${names})\\b[^>]*?onSubmit=`,"gu"))];assert.ok(forms.length>0,file);
     for(const [form] of forms)assert.match(form,/method="post"/u,file);
   }

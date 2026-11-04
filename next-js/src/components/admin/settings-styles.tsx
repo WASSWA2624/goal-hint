@@ -5,7 +5,8 @@ import { controlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
-import { DeskColumn, DeskGrid, DeskHead, Panel, Segmented, StickyActions, visuallyHidden } from "./desk-styles";
+import { Panel, visuallyHidden } from "./desk-styles";
+import { RecordFooter, RecordWorkspace } from "./record-workspace";
 
 export const DesktopOnly = styled.div`
   display: none;
@@ -18,40 +19,25 @@ export const MobileOnly = styled.div`
 export const SettingsForm = styled.form`
   > h1 { ${visuallyHidden} }
   ${media.desktop} {
-    display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-3);
+    display: grid; grid-template-rows: minmax(0, 1fr);
     block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--gh-size-7));
     min-block-size: 0; margin-block: calc(-1 * var(--gh-spacing-3)) calc(-1 * var(--gh-spacing-8));
   }
 `;
-export const SettingsHeading = styled(DeskHead)`
-  display: none;
-  ${media.desktop} { display: grid; grid-template-columns: minmax(0, 1fr); min-block-size: var(--form-control-height); }
+export const SettingsWorkspace = styled(RecordWorkspace)`
+  && { grid-template-rows: auto auto minmax(0, 1fr) auto; }
 `;
-export const SettingsGrid = styled(DeskGrid)`
-  ${media.desktop} { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 0; min-block-size: 0; overflow: hidden; }
+
+export const DesktopSettingItem = styled.li`
+  ${media.belowDesktop} { && { display: none; } }
 `;
-export const SettingsColumn = styled(DeskColumn)`
-  ${media.desktop} { display: flex; flex-direction: column; gap: var(--gh-spacing-3); min-block-size: 0; overflow: auto; padding-block-end: var(--gh-spacing-4); scrollbar-gutter: stable; > * { flex: none; } }
-`;
-const SettingsTabs = styled(Segmented)`
-  justify-content: flex-start;
-  min-inline-size: 0;
-  overflow-x: auto;
-  > button { flex: none; min-block-size: var(--form-control-height); white-space: nowrap; }
-  > [aria-current="page"] > svg { color: ${({ theme }) => theme.color.link}; }
-`;
-export const DesktopSettingsTabs = styled(SettingsTabs)``;
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
   outline-offset: var(--gh-size-0_5);
 `;
 
-export const SectionTabs = styled(SettingsTabs)`
-  ${media.desktop} { display: none; }
-`;
-
-/** The one content panel under the tabs; fields size to the panel, not the window, so 1024px with the sidebar still fits. */
+/** Fields respond to the detail pane's width. */
 export const SectionPanel = styled(Panel)`
   container-type: inline-size;
   inline-size: 100%;
@@ -185,18 +171,18 @@ export const ModeTiles = styled.fieldset`
   ${media.desktop} { > div { gap: var(--gh-spacing-2_5); } }
 `;
 /** A whole-tile radio: the native input covers the tile, so clicks, arrows and focus stay native. */
-export const ModeTile = styled.label<{ $unavailable: boolean }>`
+export const ModeTile = styled.label`
   position: relative;
   display: grid;
   min-inline-size: 0;
-  cursor: ${({ $unavailable }) => $unavailable ? "not-allowed" : "pointer"};
+  cursor: pointer;
   > input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: inherit; }
   > span {
     display: grid;
     align-content: start;
     gap: var(--gh-spacing-0_5);
     min-inline-size: 0;
-    min-block-size: var(--gh-size-17);
+    min-block-size: var(--form-control-height);
     padding: var(--gh-spacing-2_25) var(--gh-spacing-2_5);
     border: 0;
     border-radius: ${({ theme }) => theme.radius.surface};
@@ -206,7 +192,6 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
     font-weight: ${({ theme }) => theme.typography.weight.body};
     line-height: var(--gh-leading-caption);
     overflow-wrap: anywhere;
-    ${({ $unavailable }) => $unavailable && css`opacity: var(--gh-opacity-55);`}
   }
   strong { color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-reading); font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   em {
@@ -299,49 +284,23 @@ export const RequirementList = styled.ul`
   ${media.desktop} { li > a, li > button { min-block-size: var(--form-control-height); } }
 `;
 
-/**
- * The desktop footer occupies its own viewport-grid row. On phones only the password part shows in the flow;
- * the existing SaveDock continues to hold mobile actions.
- */
-export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
-  container-type: inline-size;
-  display: grid;
-  gap: var(--gh-spacing-3);
-  padding: var(--gh-spacing-3_5);
-  label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  ${media.belowDesktop} {
-    > [data-save-wide] { display: none; }
-    ${({ $phoneHidden }) => $phoneHidden && css`display: none;`}
+/** The footer shares its action group across widths and keeps any password field above it. */
+export const SettingsFooter = styled(RecordFooter)`
+  && {
+    grid-row: 4;
+    position: static; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+    padding-block: var(--gh-spacing-1);
+    > * { flex: none; }
+    > [data-setting-password] { flex: 1 0 100%; min-inline-size: 0; }
+    > span {
+      flex: 1 1 var(--gh-size-18); min-inline-size: 0;
+      color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary);
+    }
+    > [data-record-actions] {
+      display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--gh-spacing-2);
+      min-inline-size: 0; max-inline-size: 100%;
+      button { white-space: nowrap; }
+    }
+    ${media.desktop} { grid-column: 3; }
   }
-  ${media.desktop} {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--gh-spacing-3) var(--gh-spacing-5);
-    border-radius: ${({ theme }) => theme.radius.none}; padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-start: 0;
-    > [data-save-wide]:first-child { align-self: center; }
-    > [data-save-wide]:last-child { grid-column: 2; grid-row: 1 / span 2; }
-    > [data-setting-password] { max-inline-size: var(--gh-size-120); grid-column: 1; }
-  }
-`;
-export const SaveButtons = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--gh-spacing-2_5);
-  > button { white-space: nowrap; }
-  @container (max-width: ${({ theme }) => theme.viewport[18]}) { grid-template-columns: auto minmax(0, 1fr); }
-`;
-/** Phones: unsaved count, Undo and Save stay in reach at the bottom of the screen while the form scrolls. */
-export const SaveDock = styled(StickyActions)`
-  align-items: center;
-  margin-block-start: var(--gh-spacing-3);
-  background: ${({ theme }) => theme.color.surface};
-  > * { flex: none; }
-  > span {
-    flex: 1 1 auto;
-    min-inline-size: 0;
-    color: ${({ theme }) => theme.color.mutedText};
-    font-size: ${({ theme }) => theme.typography.scale.secondary};
-    line-height: var(--gh-leading-caption);
-    overflow-wrap: anywhere;
-  }
-  > button { padding-inline: var(--gh-spacing-3); white-space: nowrap; }
-  ${media.desktop} { display: none; }
 `;
