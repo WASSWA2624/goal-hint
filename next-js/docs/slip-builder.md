@@ -31,25 +31,18 @@ selected square Compact toolbar treatment, consistent with Matches filters.
 
 ## Responsive criteria layout
 
-The selected Compact toolbar keeps Number of slips, Total odds per slip, and
-Matches per slip visible in the settings section. Odds & probability, Match Date
-& Time, and Markets buttons open the hidden forms in native popup dialogs on
-desktop and mobile. Reset and the primary action remain in the compact toolbar.
+The toolbar keeps Total slips, Total odds per slip, and Matches per slip visible
+in the settings section. Reset and the primary action stay with the filters.
 The settings reuse the Matches search/filter chrome: flat surfaces, quiet borders,
 compact labels, and square controls, with usable touch targets on phones.
 
-From the 1024px desktop breakpoint, the five numeric inputs, three popup
-buttons, Reset and the fixed-width primary action use one wrapping toolbar.
-Wide desktops keep them on the same row; narrower desktops wrap whole groups.
-Each category has an aligned title and subtle vertical divider. Popup groups
-use Edit ranges, Edit window and Automatic/Manual buttons beneath their titles.
-The slip-count field is sized for four digits; the four
-range fields use equal widths accommodating five-digit values and decimal odds.
-These are display widths; validation and generation limits remain shared across
-devices. The next row labels the current Date, Time, Markets and Selection.
-Custom summaries wrap within their row rather than overflowing the page.
-The page heading remains available to assistive technology but takes no visible
-space on desktop or mobile.
+From the 1024px desktop breakpoint, the individual odds and probability
+ranges appear inline, with combined probability when available.
+The date and time inputs use floating From date and time and To date and time
+labels. The date range and daily kickoff times in EAT use the same criteria
+as the separate mobile inputs. The Markets dialog groups each market with
+Automatic and its specific results. The toolbar summary shows selected markets,
+selection mode and whether match reuse is on.
 
 Range controls use associated floating Min/Max labels on the field border on
 both layouts. The labels remain visible with entered values and blank Any
@@ -63,7 +56,8 @@ from 11px on narrow phones to 12px, with 11px count badges. The secondary summar
 scales from 10px to 11px to preserve wrapping on narrow phones.
 Existing label and summary line heights preserve the compact layout. Dialog
 forms and guard messages keep their independent typography. Total slips, Total odds
-and Matches per slip remain visible together; three short dialog buttons share
+and Matches per slip remain visible together. Three short dialog buttons for
+odds and probability, date and time, and markets share
 the next row, followed by Reset and the fixed 208px action. The compact summary
 shows date, time, selected market count and Auto/manual outcomes. Longer custom
 summaries wrap. At tablet widths below desktop, popup buttons and actions share
@@ -74,7 +68,7 @@ native editing size. Mobile steppers use the existing keyboard increment rules;
 desktop mouse steppers remain available. These rules are scoped to the builder;
 shared Best Slips/history spacing is unchanged.
 
-The buttons show counts for their current settings. Odds & probability counts custom
+On mobile the buttons show counts for their current settings. Odds & probability counts custom
 individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date
 range and a custom daily time window, also up to two. Markets shows the number
 of selected market families, starting at four. A range counts once even when
@@ -84,12 +78,15 @@ when zero; Markets always shows its selected-family count.
 Apply validates and retains the current dialog's changes. Cancel and Escape
 discard changes made since that dialog opened. Backdrop clicks leave it open. Native dialog
 behavior contains keyboard focus while open and returns it to the trigger after
-closing. Markets retains multi-result choices and the match-reuse checkbox.
+closing. Deselecting a market clears its specific results. On desktop,
+checking Automatic clears specific results for the selected market.
+The match-reuse checkbox defaults to off and can be enabled explicitly or by
+applying a saved filter.
 
 All fields remain uniquely named and associated with the same native GET form.
 Before JavaScript attaches, dialogs render as visible inline sections so the
 complete form remains usable without JavaScript. Hydration enables the modal
-presentation and the three compact triggers.
+presentation and the responsive controls.
 
 All numeric controls progressively enhance to guarded spinbuttons. Typing,
 pasting and stepping reject signs, exponents, nonnumeric characters, excessive

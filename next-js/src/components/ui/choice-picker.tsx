@@ -60,24 +60,25 @@ const clientReady = () => true;
 const serverReady = () => false;
 
 /** Native disclosure keeps named inputs available to GET forms, including without JavaScript. */
-export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy, inline = false }: {
+export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy, inline = false, clearDisabledSelection = false }: {
   name: string; label: string; automaticLabel: string; automaticHint: string; options: readonly Option[]; selected: readonly string[];
-  onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean;
+  onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean; clearDisabledSelection?: boolean;
 }) {
   const root = useRef<HTMLDetailsElement>(null), panelId = useId(), [open, setOpen] = useState(false);
   const trigger = useRef<HTMLElement>(null), panel = useRef<HTMLFieldSetElement>(null);
   const hydrated = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const inactive = disabled && hydrated;
+  const clearSelection = inline && inactive && clearDisabledSelection;
   const close = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
   useOutsideDismiss({ enabled: open && !inline, root, onDismiss: close });
   useAnchoredPanel({ open: open && !inline, anchor: trigger, panel });
   const summary = selected.length ? options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") : automaticLabel;
-  const choices = options.map((option) => <label key={option.value}><input type="checkbox" name={name} value={option.value} checked={selected.includes(option.value)}
+  const choices = options.map((option) => <label key={option.value}><input type="checkbox" name={name} value={option.value} checked={!clearSelection && selected.includes(option.value)}
     onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value])} />{option.label}</label>);
   if (inline) return <InlineChoices data-choice-inline disabled={inactive} aria-invalid={invalid || undefined}
     {...(describedBy ? { "aria-describedby": describedBy } : {})}>
     <legend><VisuallyHidden>{label}</VisuallyHidden></legend>
-    <label><input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />{automaticLabel}</label>
+    <label><input type="checkbox" checked={!clearSelection && selected.length === 0} onChange={() => onChange([])} />{automaticLabel}</label>
     {choices}
   </InlineChoices>;
   return <Root ref={root} data-disabled={inactive} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {

@@ -374,7 +374,7 @@ def verify_builder_access(origin, directory):
         summary = document.nodes(attr="data-slip-summary-layout")
         assert {node.attrs["data-slip-summary-layout"] for node in summary} == {"mobile", "desktop"}, f"{path}: responsive summaries"
         desktop_summary = next(node for node in summary if node.attrs["data-slip-summary-layout"] == "desktop")
-        assert all(caption in desktop_summary.text for caption in ["Date", "Time", "Markets", "Selection"]), f"{path}: desktop summary identifies each setting"
+        assert all(caption in desktop_summary.text for caption in ["Markets", "Selection", "Match reuse off"]), f"{path}: desktop summary identifies market choices and default reuse"
         desktop_label = {"guest": "Login to build slips", "member": "Subscribe to build slips", "subscriber": label}[viewer]
         account_actions = document.nodes(attr="data-slip-access-action")
         assert len(account_actions) == 1, f"{path}: one account-aware toolbar action without a duplicate below"

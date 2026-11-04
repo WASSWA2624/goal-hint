@@ -36,7 +36,7 @@ import { SavedSlipConfigurations } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
 import { ActionControls, Actions, BuildActionLabel, BuildButton, BuildLink, BuilderEssentials, BuilderHeader, BuilderOptions, BuilderPanel, ClearLink, CriteriaError, CriteriaForm, CriteriaOption, CriteriaOptions, CriteriaSummary, CriteriaTitle, CriteriaTrigger, FieldGroup,
-  Fields, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, BuilderFeedback, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
+  Fields, InlineCriteria, LimitGroups, MarketChoice, MarketChoices, MarketField, MarketsDialog, Note, Results, BuilderFeedback, ReuseRow, SavedFiltersButton, SlipHeading, SlipList, SlipStack, TargetGroups } from "./slip-styles";
 
 export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
@@ -46,6 +46,8 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
+const criteriaGroups = ["limits", "kickoff", "markets"] as const;
+const desktopDialogGroups = ["markets"] as const;
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
 function SlipBuildActionLabel({ locale, restricted, pending = false }: {
   locale: string; restricted: boolean; signedIn: boolean; pending?: boolean;
@@ -143,7 +145,10 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const [selectedMarkets, setSelectedMarkets] = useState(initialMarkets ?? criteria.markets);
   const [outcomes, setOutcomes] = useState(initialOutcomes ?? criteria.outcomes ?? {});
   const [reuse, setReuse] = useState(initialReuse ?? criteria.reuse);
+  const missingKickoff = groupFields.kickoff.find((name) => !draft[name]?.trim());
+  const dialogGroups = desktop ? desktopDialogGroups : criteriaGroups;
   const currentParameters = useMemo(() => {
+    if (desktop && missingKickoff) return null;
     try {
       const parameters = new URLSearchParams();
       for (const field of slipInputFields) parameters.set(field, draft[field] ?? "");
@@ -151,7 +156,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       for (const market of selectedMarkets) if (outcomes[market]?.length) parameters.set(`picks.${market}`, outcomes[market]!.join(","));
       return canonicalSlipConfigurationParameters(parameters.toString(), today);
     } catch { return null; }
-  }, [draft, selectedMarkets, outcomes, reuse, today]);
+  }, [desktop, missingKickoff, draft, selectedMarkets, outcomes, reuse, today]);
   const [activeGroup, setActiveGroup] = useState<CriteriaGroup | null>(() => issueGroup(initialError));
   const snapshot = useRef<{ group: CriteriaGroup; draft: SlipInputs; markets: typeof selectedMarkets; outcomes: typeof outcomes; reuse: boolean } | null>(
     activeGroup ? { group: activeGroup, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse } : null);
@@ -252,8 +257,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       parameters.set("reuse", reuse ? "1" : "0"); parameters.set("build", "1");
     }
     try {
-      const empty = group === "kickoff" && groupFields.kickoff.find((name) => !draft[name]?.trim());
-      if (empty) throw new SlipCriteriaError(empty, empty.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
+      if (group === "kickoff" && missingKickoff) throw new SlipCriteriaError(missingKickoff, missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
       parseSlipCriteria(parameters, today);
       setError((current) => issueGroup(current) === group ? null : current);
       setFeedbackKey((current) => current + 1);
@@ -285,6 +289,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     const configuration = parameters.get("configuration");
     parameters.delete("configuration");
     try {
+      if (desktop && missingKickoff) throw new SlipCriteriaError(missingKickoff, missingKickoff.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
       const next = serializeSlipCriteria(parseSlipCriteria(parameters, today));
       setClearedResult(null);
       if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
@@ -299,7 +304,8 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         const nextError = { code: issue.code, field: issue.field };
         setError(nextError);
         const group = issueGroup(nextError);
-        if (group) openDialog(group); else { snapshot.current = null; setActiveGroup(null); }
+        if (group && dialogGroups.some((dialog) => dialog === group)) openDialog(group);
+        else { snapshot.current = null; setActiveGroup(null); }
       }
       else throw issue;
     }
@@ -330,6 +336,24 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       error={invalid && error ? messages.text(`slips.error.${error.code}`) : undefined}
       onValueChange={value => updateField(name, value)} />;
   }
+  function kickoffField(endpoint: "From" | "To") {
+    const date = `date${endpoint}` as const, time = `time${endpoint}` as const;
+    const value = draft[date] && draft[time] ? `${draft[date]}T${draft[time]}` : "";
+    const invalid = invalidField === date || invalidField === time
+      || endpoint === "To" && (invalidField === "dateFrom" || invalidField === "timeFrom");
+    return <>
+      <input type="hidden" name={date} value={draft[date] ?? ""} />
+      <input type="hidden" name={time} value={draft[time] ?? ""} />
+      <DateTimeField id={`${prefix}-date-time-${endpoint}`} locale={locale} mode="datetime" timeZone={publicPolicy.reportingTimeZone}
+        label={messages.text(`slips.dateTime${endpoint}`)} value={value} required
+        aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined}
+        onValueChange={(value) => {
+          const [day = "", minute = ""] = value.split("T");
+          setDraft((current) => ({ ...current, [date]: day, [time]: minute }));
+          setError((current) => issueGroup(current) === "kickoff" ? null : current);
+        }} />
+    </>;
+  }
   function errorMessage(group: CriteriaGroup | null) {
     return error && errorGroup === group ? <CriteriaError id={errorId} ref={errorRef} tabIndex={-1} role="alert">{messages.text(`slips.error.${error.code}`)}</CriteriaError> : null;
   }
@@ -344,6 +368,20 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;
   const accessRequired = <UnlockPanel locale={locale} signedIn={signedIn} returnTo={action} guestView="login" />;
+  const limitsFields = <LimitGroups>
+    <fieldset><legend>{messages.text("slips.individualOdds")}</legend><Fields>
+      {field("oddsMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMin") })}
+      {field("oddsMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMax") })}
+    </Fields></fieldset>
+    <fieldset><legend>{messages.text("slips.probabilityPercent")}</legend><Fields>
+      {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
+      {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
+    </Fields></fieldset>
+    {showJoint && <fieldset data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
+      {field("totalProbMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
+      {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
+    </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></fieldset>}
+  </LimitGroups>;
 
   return <SlipStack data-slip-builder-page aria-busy={pending} onInputCapture={markInteracted} onClickCapture={markInteracted} onKeyDownCapture={markInteracted}>
     <AppBrandBar locale={locale} showAccount={showAccount} />
@@ -371,26 +409,25 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           </Fields></fieldset>
         </TargetGroups></FieldGroup>
         </BuilderEssentials>
-        {(["limits", "kickoff", "markets"] as const).map((group) => <VisuallyHidden key={group} id={`${prefix}-${group}-summary`}>{summaries[group]}</VisuallyHidden>)}
+        {dialogGroups.map((group) => <VisuallyHidden key={group} id={`${prefix}-${group}-summary`}>{summaries[group]}</VisuallyHidden>)}
+        {desktop ? <>
+          <InlineCriteria data-criteria-field="limits">
+            <VisuallyHidden as="legend">{dialogTitle("limits")}</VisuallyHidden>
+            {limitsFields}
+            {errorMessage("limits")}
+          </InlineCriteria>
+          <InlineCriteria data-criteria-field="kickoff">
+            <VisuallyHidden as="legend">{messages.text("slips.dialog.kickoffTitle")}</VisuallyHidden>
+            <Fields>{kickoffField("From")}{kickoffField("To")}</Fields>
+            {errorMessage("kickoff")}
+          </InlineCriteria>
+        </> : <>
         <CriteriaDialog id={`${prefix}-limits`} group="limits" title={dialogTitle("limits")} open={activeGroup === "limits"}
           onReset={() => resetDialog("limits")} resetLabel={messages.text("slips.reset")}
           onCancel={cancelDialog} onApply={() => applyDialog("limits")} applyLabel={messages.text("slips.dialog.apply")}
           cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle("limits") })}>
-        {errorMessage("limits")}
-        <FieldGroup as="div"><LimitGroups>
-          <fieldset><legend>{messages.text("slips.individualOdds")}</legend><Fields>
-            {field("oddsMin", messages.text("slips.minimum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMin") })}
-            {field("oddsMax", messages.text("slips.maximum"), { ...oddsOptions, "aria-label": messages.text("slips.oddsMax") })}
-          </Fields></fieldset>
-          <fieldset><legend>{messages.text("slips.probabilityPercent")}</legend><Fields>
-            {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
-            {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
-          </Fields></fieldset>
-          {showJoint && <fieldset data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
-            {field("totalProbMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
-            {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
-          </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></fieldset>}
-        </LimitGroups></FieldGroup>
+          {errorMessage("limits")}
+          {limitsFields}
         </CriteriaDialog>
         <CriteriaDialog id={`${prefix}-kickoff`} group="kickoff" title={dialogTitle("kickoff")} open={activeGroup === "kickoff"}
           onReset={() => resetDialog("kickoff")} resetLabel={messages.text("slips.reset")}
@@ -403,39 +440,49 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           {field("timeTo", messages.text("slips.timeTo"), { type: "time", inputMode: undefined, step: 60 })}
         </Fields></FieldGroup>
         </CriteriaDialog>
-        <CriteriaDialog id={`${prefix}-markets`} group="markets" title={dialogTitle("markets")} open={activeGroup === "markets"}
+        </>}
+        <MarketsDialog id={`${prefix}-markets`} group="markets" title={dialogTitle("markets")} open={activeGroup === "markets"}
           onReset={() => resetDialog("markets")} resetLabel={messages.text("slips.reset")}
           onCancel={cancelDialog} onApply={() => applyDialog("markets")} applyLabel={messages.text("slips.dialog.apply")}
           cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle("markets") })}>
         {errorMessage("markets")}
         <FieldGroup data-criteria-field="markets" aria-describedby={invalidMarkets ? errorId : undefined}>
-          <VisuallyHidden as="legend">{messages.text("slips.accordion.markets")}</VisuallyHidden><MarketChoices>
-            {publicPolicy.markets.map((family) => <MarketField key={family}><MarketChoice>
-              <input type="checkbox" name="markets" value={family} checked={selectedMarkets.includes(family)}
-                onChange={() => {
-                  setSelectedMarkets(selectedMarkets.includes(family) ? selectedMarkets.filter((value) => value !== family) : [...selectedMarkets, family]);
-                  setOutcomes((current) => { const next = { ...current }; delete next[family]; return next; });
-                }} aria-invalid={error?.field === "markets" || undefined} />{messages.text(`market.family.${family}`)}
-            </MarketChoice><ChoicePicker inline name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market: messages.text(`market.family.${family}`) })}
-              automaticLabel={messages.text("slips.automatic")} automaticHint={messages.text("slips.automaticHint")}
-              options={marketSelections[family].map((value) => ({ value, label: predictionLabel(messages, value) }))}
-              selected={outcomes[family] ?? []} onChange={(values) => setOutcomes((current) => ({ ...current, [family]: values as readonly MarketSelection[] }))}
-              disabled={!selectedMarkets.includes(family)} invalid={error?.field === "outcomes"} {...(error?.field === "outcomes" ? { describedBy: errorId } : {})} />
-            </MarketField>)}
+          <VisuallyHidden as="legend">{messages.text("slips.accordion.markets")}</VisuallyHidden>
+          {desktop && <Note>{messages.text("slips.marketsHint")}</Note>}
+          <MarketChoices>
+            {publicPolicy.markets.map((family) => {
+              const enabled = selectedMarkets.includes(family), market = messages.text(`market.family.${family}`);
+              return <MarketField key={family}>
+                <MarketChoice>
+                  <input type="checkbox" name="markets" value={family} checked={enabled}
+                    onChange={() => {
+                      setSelectedMarkets((current) => enabled ? current.filter((value) => value !== family) : [...current, family]);
+                      setOutcomes((current) => { const next = { ...current }; delete next[family]; return next; });
+                    }} aria-invalid={error?.field === "markets" || undefined} />{market}
+                </MarketChoice>
+                <ChoicePicker inline clearDisabledSelection={desktop} name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market })}
+                  automaticLabel={messages.text("slips.automatic")} automaticHint={messages.text("slips.automaticHint")}
+                  options={marketSelections[family].map((value) => ({ value, label: predictionLabel(messages, value) }))}
+                  selected={outcomes[family] ?? []}
+                  onChange={(values) => setOutcomes((current) => ({ ...current, [family]: values as readonly MarketSelection[] }))}
+                  disabled={!enabled} invalid={error?.field === "outcomes"} {...(error?.field === "outcomes" ? { describedBy: errorId } : {})} />
+              </MarketField>;
+            })}
           </MarketChoices>
         <ReuseRow>
           <input type="hidden" name="reuse" value="0" />
-          <label><input type="checkbox" name="reuse" value="1" checked={reuse} onChange={(event) => setReuse(event.target.checked)} />{messages.text("slips.reuse")}</label>
+          <label><input type="checkbox" name="reuse" value="1" checked={reuse}
+            aria-describedby={desktop ? `${prefix}-reuse-hint` : undefined} onChange={(event) => setReuse(event.target.checked)} />{messages.text("slips.reuse")}</label>
+          {desktop && <Note id={`${prefix}-reuse-hint`}>{messages.text("slips.reuseHint")}</Note>}
         </ReuseRow>
         </FieldGroup>
-        </CriteriaDialog>
+        </MarketsDialog>
         {errorMessage(null)}
         <BuilderOptions data-slip-builder-options>
         <CriteriaOptions data-slip-criteria-options hidden={!enhanced}>
-          {(["limits", "kickoff", "markets"] as const).map((group) => {
+          {dialogGroups.map((group) => {
             const title = messages.text(group === "kickoff" ? "slips.toolbar.kickoff" : `slips.dialog.${group}`);
-            const desktopLabel = group === "limits" ? messages.text("slips.toolbar.editRanges") : group === "kickoff"
-              ? messages.text("slips.toolbar.editDates") : messages.text(manualMarkets ? "slips.toolbar.manual" : "slips.automatic");
+            const desktopLabel = messages.text(manualMarkets ? "slips.toolbar.manual" : "slips.automatic");
             return <CriteriaOption key={group} data-criteria-option={group} data-toolbar-group={group}>
             <CriteriaTitle data-criteria-title>{title}</CriteriaTitle>
             <CriteriaTrigger type="button" variant="secondary" data-criteria-trigger={group}
@@ -472,11 +519,10 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           <span data-slip-summary-layout="mobile">{dateSummary()} · {timeSummary} · {messages.plural("slips.marketCount", selectedMarkets.length)} · {manualMarkets
             ? messages.text("slips.mobile.manual", { count: messages.number(manualMarkets) }) : messages.text("slips.autoShort")}</span>
           <span data-slip-summary-layout="desktop">
-            <span><strong>{messages.text("slips.summary.dateLabel")}:</strong> {dateSummary()}</span>
-            <span><strong>{messages.text("slips.summary.timeLabel")}:</strong> {timeSummary}</span>
             <span><strong>{messages.text("slips.summary.marketsLabel")}:</strong> {marketCountSummary}</span>
             <span><strong>{messages.text("slips.summary.selectionLabel")}:</strong> {manualMarkets
               ? messages.text("slips.summary.chosenResults", { count: messages.number(manualMarkets) }) : messages.text("slips.automatic")}</span>
+            <span>{messages.text(reuse ? "slips.reuseOn" : "slips.reuseOff")}</span>
           </span>
         </CriteriaSummary>
       </CriteriaForm>

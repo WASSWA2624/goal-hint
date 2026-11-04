@@ -4,7 +4,7 @@ import { useState } from "react";
 import styled from "styled-components";
 import { shortMonths, formatDateEntry, type DateEntryMode } from "@/domain/date-entry";
 import { constrainDatePicker, datePickerParts, datePickerValue, datePickerPartBounds, type DatePickerPart } from "@/domain/date-picker";
-import { dateTimeIntervalRange } from "@/domain/date-time";
+import { dateTimeIntervalRange, localDateTimeValue } from "@/domain/date-time";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaDialog, CriteriaDialogButton } from "./criteria-dialog";
 import { CalendarIcon, CheckIcon, ClockIcon } from "./icons";
@@ -42,7 +42,8 @@ export function DateTimePicker({ id, value, mode, min, max, zone, locale, onCanc
   const [parts, setParts] = useState(() => {
     const now = new Date(), today = `${String(now.getFullYear()).padStart(4, "0")}-${twoDigits(now.getMonth() + 1)}-${twoDigits(now.getDate())}`;
     const time = `${twoDigits(now.getHours())}:${twoDigits(now.getMinutes())}`;
-    return constrainDatePicker(datePickerParts(value || (mode === "time" ? time : mode === "date" ? today : `${today}T${time}`), mode), mode, min, max);
+    const fallback = mode === "time" ? time : mode === "date" ? today : localDateTimeValue(now.getTime(), zone);
+    return constrainDatePicker(datePickerParts(value || fallback, mode), mode, min, max);
   });
   const selected = datePickerValue(parts, mode);
   let error = "";

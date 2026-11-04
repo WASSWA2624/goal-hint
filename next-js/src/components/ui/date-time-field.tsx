@@ -14,7 +14,7 @@ import { DateTimePicker, pickerTitleKey } from "./date-time-picker";
 import { DateEntryControl } from "./date-entry-control";
 
 export type DateTimeFieldProps = Omit<TextInputProps, "type" | "onChange" | "leading" | "trailing"> & {
-  mode?: DateEntryMode; locale?: string; onValueChange?: (value: string) => void;
+  mode?: DateEntryMode; locale?: string; timeZone?: string; onValueChange?: (value: string) => void;
 };
 const subscribe = () => () => {}, browserSnapshot = () => true, serverSnapshot = () => false;
 const Field = styled.div`
@@ -34,9 +34,10 @@ function assignRef(ref: Ref<HTMLInputElement> | undefined, value: HTMLInputEleme
 }
 
 /** Formatted entry and calendar picking share one canonical value and inline validation. */
-export function DateTimeField({ mode = "date", locale, label, title, value, defaultValue, onValueChange, error, hint, min, max,
+export function DateTimeField({ mode = "date", locale, timeZone, label, title, value, defaultValue, onValueChange, error, hint, min, max,
   name, id: suppliedId, ref, className, required, disabled, readOnly, step, onBlur, onInvalid, onFocus, ...props }: DateTimeFieldProps) {
-  const zone = useDeviceTimeZone(), generated = useId(), id = suppliedId ?? generated, m = createMessages(locale);
+  const deviceZone = useDeviceTimeZone(), zone = timeZone ?? deviceZone;
+  const generated = useId(), id = suppliedId ?? generated, m = createMessages(locale);
   const enhanced = useSyncExternalStore(subscribe, browserSnapshot, serverSnapshot);
   const [internal, setInternal] = useState(String(defaultValue ?? ""));
   const source = value === undefined ? internal : String(value ?? "");
