@@ -14,7 +14,7 @@ import type { PaymentNotificationStatus } from "../../domain/payment-notificatio
 import type { Prisma } from "../generated/prisma/client.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 import { paymentDateNotExtracted } from "../../domain/payment-evidence-date.ts";
-import { paymentQueueStatusLabels, type PaymentFilters } from "../../domain/payment-queue-filters.ts";
+import { maximumPaymentQueuePage, paymentQueueStatusLabels, type PaymentFilters } from "../../domain/payment-queue-filters.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 const reference = (row?: { reference: string }) => row ? formatPaymentReference(row.reference) : null;
@@ -71,7 +71,8 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
         const requested = target?.status === "reversed" ? "approved" : target?.status ?? tab;
         const selected = Object.hasOwn(paymentQueueStatusLabels, requested) ? requested : "pending";
         const filters = target ? undefined : options.filters;
-        const page = Math.max(1, Math.min(100000, Math.floor(options.page ?? 1) || 1)), search = (options.search ?? "").trim().slice(0, 100), pageSize = 30;
+        const requestedPage = Math.max(1, Math.min(maximumPaymentQueuePage, Math.floor(options.page ?? 1) || 1));
+        const search = (options.search ?? "").trim().slice(0, 100), pageSize = 30;
         const where = filters ? queueFilter(filters) : statusFilter(selected, !options.filters);
         const normalized = search.toUpperCase().replace(/[^A-Z0-9]/gu, ""), phone = search.replace(/[^0-9]/gu, "");
         if (search) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: [{ reference: { contains: search.toUpperCase().replace(/^P-?/u, "") } },
@@ -79,6 +80,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           ...(normalized ? [{ claimedTxnKey: { contains: normalized } }, { receiptClaims: { some: { OR: [
             { receipt: { transactionKey: { contains: normalized } } }, ...(phone ? [{ payerPhone: { contains: phone } }, { receipt: { senderPhone: { contains: phone } } }] : [])] } } }] : [])] }];
         const total = await tx.paymentSubmission.count({ where });
+        const page = options.filters ? Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize))) : requestedPage;
         const orderStatus = filters ? (filters.statuses.length === 1 ? filters.statuses[0] : undefined) : selected;
         const rows = await tx.paymentSubmission.findMany({ where,
           orderBy: [{ submittedAt: orderStatus && (checkoutOpenStatuses as readonly string[]).includes(orderStatus) ? "asc" : "desc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize,

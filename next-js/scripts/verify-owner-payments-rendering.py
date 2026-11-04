@@ -408,7 +408,7 @@ def payments_rendering(origin):
                 match(r'\bEAT\b', row_text, "Queue timestamps name the dashboard timezone.")
                 match(r'Submitted', row_text, "Legacy rows identify the fallback submission timestamp.")
                 assert row.index("data-ticket-ref") < row.index("data-ticket-phone") < row.index("data-ticket-amount") < row.index("data-ticket-plan") < row.index("data-ticket-time")
-                match(r'data-ticket-chevron', row)
+                no_match(r'data-ticket-chevron', row)
                 no_match(r'Expected|No screenshot', row)
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
             assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
@@ -450,8 +450,7 @@ def payments_queue_rendering(origin):
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
         editor = match(r'<div\b(?=[^>]*data-payments-editor)[^>]*>', html).group(0)
         match(r'data-layout="balanced"', editor)
-        match(r'<div[^>]*>\s*<span data-payment-count[\s\S]*?<nav aria-label="Payment pages"', html,
-              "Queue pagination must be inside a block container so server HTML hydrates as rendered.")
+        no_match(r'data-payment-count|aria-label="Payment pages"', html, "A single page has no summary or pager.")
         assert html.count("data-payment-queue-scroll") == 1
         assert html.count("data-payment-review-scroll") == 1
         no_match(r'data-payment-summary-count|Ready for manual review', html)
@@ -478,7 +477,17 @@ def payment_filters_rendering(origin):
         first, first_ids = queue()
         second, second_ids = queue("?page=2")
         assert len(first_ids) == 30 and len(second_ids) == 2 and not set(first_ids) & set(second_ids)
-        assert "30 of 32 requests" in first and "2 of 32 requests" in second
+        no_match(r'data-payment-count|30 of 32 requests', first)
+        match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-page-count="2"[^>]+data-current-page="1"', first)
+        match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-page-count="2"[^>]+data-current-page="2"', second)
+        assert first.index("data-payment-queue-scroll") < first.index('aria-label="Payment pages"') < first.index('id="payment-review"')
+        assert queue("?page=99")[1] == second_ids, "Out-of-range pages show the last available results."
+        criteria = "status=pending%2Capproved&provider=mtn%2Cairtel&sort=amount&search=256700000118"
+        criteria_html, criteria_ids = queue("?" + criteria)
+        next_html, next_ids = queue("?" + criteria + "&page=2")
+        assert len(criteria_ids) == 30 and len(next_ids) == 3 and not set(criteria_ids) & set(next_ids)
+        match(r'href="/admin/payments\?' + re.escape(criteria.replace("&", "&amp;")) + r'&amp;page=2"', criteria_html)
+        match(r'href="/admin/payments\?' + re.escape(criteria.replace("&", "&amp;")) + r'"', next_html)
         filtered, filtered_ids = queue("?status=remaining,approved&provider=airtel&search=PFILTER0")
         assert filtered_ids == ["00000000-0000-4000-8000-000000000800"]
         match(r'data-ticket-amount[^>]*>UGX 2,000', filtered)

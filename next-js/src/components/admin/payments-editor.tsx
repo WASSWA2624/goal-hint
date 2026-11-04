@@ -2,18 +2,19 @@
 
 import { SearchBar } from "@/components/ui/search-bar";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
+import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { stopReviewSound } from "./payment-alert-sound";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "@/components/navigation/navigation-link";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import { formatPhone } from "@/domain/phone";
-import { defaultPaymentFilters, paymentProviderLabels, paymentQueueStatusLabels, paymentStatusLabels, type PaymentFilters } from "@/domain/payment-queue-filters";
+import { defaultPaymentFilters, maximumPaymentQueuePage, paymentProviderLabels, paymentQueueStatusLabels, paymentStatusLabels, type PaymentFilters } from "@/domain/payment-queue-filters";
 import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
+import { createMessages } from "@/i18n/messages";
 import { CheckField } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { NetworkChip } from "./network-chip";
@@ -22,11 +23,12 @@ import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribe
 import { useAdminRefresh } from "./use-admin-refresh";
 import { paymentSortOptions, readPaymentSort, sortPayments, type PaymentSort } from "./payment-order";
 import { CheckoutReview } from "./checkout-review";
-import { PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueuePanel, QueueSummary, ReviewBack, ReviewNav, ReviewSection,
+import { PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueueFooter, QueuePanel, ReviewBack, ReviewNav, ReviewSection,
   Stepper, TicketItem, TicketTray } from "./payment-styles";
 import { RecordItemTitle, RecordRowContent } from "./record-workspace";
 
 const openStatuses: readonly string[] = checkoutOpenStatuses;
+const paginationLabels = numberedPaginationLabels(createMessages("en"), "Payment pages");
 const ticketDate = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 /** Day and time only: the review header carries the full EAT timestamp. */
 function ticketTime(instant: string) {
@@ -88,6 +90,9 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   const refreshedCount = useRef<number | null>(null);
   const lastHash = useRef<string | null>(null);
   const openedFromQueue = useRef(false);
+  const queueScroll = useRef<HTMLOListElement>(null);
+  const page = queue.page ?? 1, previousPage = useRef(page);
+  const pages = queue.pageSize ? Math.min(maximumPaymentQueuePage, Math.ceil((queue.total ?? 0) / queue.pageSize)) : 0;
   const completedRows = queue.payments.filter(payment => completed[payment.id] === payment.status);
   const payments = sortPayments(queue.payments.filter(payment => completed[payment.id] !== payment.status), sort);
   const selected = payments.find(payment => payment.id === selectedId) ?? payments[0];
@@ -98,8 +103,18 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   const singleStatus = filters.statuses.length === 1 ? filters.statuses[0] : undefined;
   const showsPending = filters.statuses.includes("pending") || filters.statuses.includes("all");
   const filteredStatus = singleStatus !== "pending", filteredProvider = !filters.providers.includes("all");
-  const total = Math.max(payments.length, (queue.total ?? queue.payments.length) - completedRows.length);
+  const showActivity = showsPending && queueChanged;
   const searchParams = paymentParams(filters, sort);
+
+  useEffect(() => {
+    if (previousPage.current === page) return;
+    previousPage.current = page;
+    if (desktop) {
+      if (queueScroll.current) queueScroll.current.scrollTop = 0;
+    } else if (!reviewing) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [desktop, page, reviewing]);
 
   useEffect(() => {
     if (!queueChanged) { refreshedCount.current = null; return; }
@@ -250,11 +265,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
     {(feedback.notice || feedback.message) && <PaymentFeedback id="payment-feedback" tabIndex={-1} aria-label="Payment result"><ActionNotices action={feedback} /></PaymentFeedback>}
     <QueuePanel aria-labelledby="payment-queue-title" $reviewing={reviewing}>
       <h2 id="payment-queue-title" tabIndex={-1}>{singleStatus && singleStatus !== "all" ? `${paymentQueueStatusLabels[singleStatus]} queue` : "Payment queue"}</h2>
-      <QueueSummary><span data-payment-count>{payments.length} of {total} requests</span><span>{sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : singleStatus && openStatuses.includes(singleStatus) ? "Oldest first" : "Newest first"}</span>
-        {queue.page && <nav aria-label="Payment pages">{queue.page > 1 && <Link href={paymentQueueHref(filters, sort, queue.search, queue.page - 1)}>Previous page</Link>}{" "}
-          Page {queue.page}{" "}{queue.page * (queue.pageSize ?? 30) < (queue.total ?? 0) && <Link href={paymentQueueHref(filters, sort, queue.search, queue.page + 1)}>Next page</Link>}</nav>}
-        {showsPending && queueChanged && <span role="status" data-payment-queue-updated>New queue activity</span>}</QueueSummary>
-      {payments.length ? <TicketTray $opened={opened} data-payment-queue-scroll tabIndex={0} aria-label="Payment list">{payments.map(payment => {
+      {payments.length ? <TicketTray ref={queueScroll} $opened={opened} data-payment-queue-scroll tabIndex={0} aria-label="Payment list">{payments.map(payment => {
         const network = payment.final?.network || payment.network;
         const payer = payment.receiptSummary?.payerPhone ?? payment.payerPhone;
         const phone = payer ? `+${formatPhone(payer)}` : "Payer not provided";
@@ -271,10 +282,14 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
               <strong data-ticket-amount title={amount === null ? "No receipt amount" : amountText}>{amountText}</strong></>}
             secondary={<span data-ticket-meta><span title={packageName} data-ticket-plan>{packageName}</span>
               <time dateTime={paidAt ?? payment.submittedAt} title={date} data-ticket-time>{date}</time></span>} />
-          <ChevronRightIcon aria-hidden="true" data-ticket-chevron />
         </TicketItem></li>;
       })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{queue.search || filteredProvider ? "No matching payments" : singleStatus === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
       </QueueEmpty>}
+      {(pages > 1 || showActivity) && <QueueFooter>
+        {pages > 1 && <NumberedPagination compact page={page} pages={pages} labels={paginationLabels} disabled={action.busy}
+          href={target => paymentQueueHref(filters, sort, queue.search, target)} />}
+        {showActivity && <span role="status" data-payment-queue-updated>New queue activity</span>}
+      </QueueFooter>}
     </QueuePanel>
     <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}
       onFocusCapture={event => setReviewFocused(event.target !== event.currentTarget)}

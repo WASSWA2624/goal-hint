@@ -11,6 +11,7 @@ export const paymentStatusLabels = {
 const legacyStatusLabels = { correction: "Correction requested", reconfirm: "Confirmation required", superseded: "Replaced report" } as const;
 export const paymentQueueStatusLabels = { ...paymentStatusLabels, ...legacyStatusLabels };
 export const paymentProviderLabels = { mtn: "MTN MoMo", airtel: "Airtel Money" } as const;
+export const maximumPaymentQueuePage = 100_000;
 
 export type PaymentQueueStatus = keyof typeof paymentQueueStatusLabels;
 export type PaymentProvider = keyof typeof paymentProviderLabels;

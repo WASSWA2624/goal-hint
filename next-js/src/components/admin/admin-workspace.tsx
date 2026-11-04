@@ -101,7 +101,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
       <SidebarResize aria-hidden={collapsed || undefined} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
         aria-label="Resize admin sidebar" aria-controls="admin-sidebar" aria-valuetext={`${sidebarWidth} pixels wide`}
         title="Drag to resize or use arrow keys. Double-click to restore the default width." {...handle} />
-      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"} $overview={current === "overview"}>
+      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"} $section={current}>
         <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace} $joined={current === "analytics"}>{children}</Column>
       </Main>
     </Frame>
@@ -275,19 +275,22 @@ const MenuPopup = styled.nav`
   background: ${({ theme }) => theme.color.surface};
   box-shadow: ${({ theme }) => theme.shadow.popover};
 `;
-const Main = styled.main<{ $fixed: boolean; $joined: boolean; $overview: boolean }>`
+const Main = styled.main<{ $fixed: boolean; $joined: boolean; $section: AdminSection }>`
   min-inline-size: 0;
   padding-block: var(--gh-spacing-3) calc(var(--app-mobile-tab-height) + var(--gh-spacing-5) + env(safe-area-inset-bottom));
   padding-inline: ${contentGutter};
   scroll-margin-block-start: var(--app-header-height);
   &:focus { outline: none; }
   ${media.desktop} { grid-column: 3; padding: ${({ theme }) => `${theme.space.lg} 0 calc(${theme.space.lg} * 2)`}; }
-  ${({ $overview, theme }) => $overview && css`
+  ${({ $section, theme }) => $section === "overview" && css`
     ${media.belowDesktop} { padding-block-start: ${theme.layout.gutter}; }
     ${media.desktop} {
       padding-block-start: ${theme.layout.gutter};
       padding-inline-start: ${theme.layout.gutter};
     }
+  `}
+  ${({ $section }) => $section === "payments" && css`
+    ${media.belowDesktop} { padding-block-start: var(--gh-spacing-1); }
   `}
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}

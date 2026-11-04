@@ -58,8 +58,9 @@ value and confirms success. There is no repeated desktop amount banner or footer
 total. The live queue starts with search, Advanced filters and Sort by, with
 Sort by on a second row on phones. Status and provider checkboxes filter the
 paginated queue, which opens to Pending. Two-line cards open the right review
-pane on desktop or the detail view on mobile. Desktop receipt and decision
-actions are available in the review footer.
+pane on desktop or the detail view on mobile. Numbered pagination appears below
+multi-page results and retains the current search, filters, and sort. Desktop
+receipt and decision actions are available in the review footer.
 
 ## Source and local serving
 

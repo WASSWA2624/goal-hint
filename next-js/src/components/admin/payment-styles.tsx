@@ -71,29 +71,36 @@ export const QueueFilters = styled.div`
   label { min-block-size: var(--form-control-height); min-inline-size: 0; margin: 0; align-items: center; }
   label > input { flex: none; margin: 0; }
 `;
-export const QueueSummary = styled(RecordListFooter)`
-  gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
-  > span + span::before { content: "·"; margin-inline-end: var(--gh-spacing-1_5); }
+export const QueueFooter = styled(RecordListFooter)`
+  display: grid;
   > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  ${media.belowDesktop} { margin-block-start: calc(-1 * var(--gh-spacing-1)); }
 `;
 
 export const TicketTray = styled(RecordListScroll)<{ $opened: boolean }>`
+  gap: 0;
+  > li + li { border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border}; }
   ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] {  background: ${({ theme }) => theme.color.surface}; } }`}
 `;
 export const TicketItem = styled(RecordItem)`
-  && { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  && {
+    min-block-size: var(--form-control-height);
+    border-radius: ${({ theme }) => theme.radius.none};
+    padding-block: var(--gh-spacing-1_5);
+  }
+  [data-record-row-text] { row-gap: 0; }
   [data-record-row-primary], [data-ticket-meta] {
     display: grid; align-items: baseline; gap: var(--gh-spacing-1_5);
   }
   [data-record-row-primary] { grid-template-columns: minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content); }
-  [data-ticket-meta] { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); }
+  [data-ticket-meta] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+    font-size: var(--gh-font-caption);
+    line-height: var(--gh-leading-caption);
+  }
   [data-record-row-primary] > *, [data-ticket-meta] > * {
     min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   [data-ticket-amount], [data-ticket-time] { text-align: end; font-variant-numeric: tabular-nums; }
-  > svg { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-section); }
-  ${media.desktop} { && { grid-template-columns: minmax(0, 1fr); } > svg { display: none; } }
 `;
 export const QueueEmpty = styled(EmptyPanel)`
   ${media.belowDesktop} { ${panelLook} }
