@@ -30,16 +30,15 @@ export function SlipHeaderDate({ publicationDay, publishedAt, locale }: SlipHead
     const instant = utcInstantFromEpochMilliseconds(publishedAt);
     const day = getReportingDate(instant), parts = m.reportingDayParts(day);
     return <PublicationTime data-slip-publication-date dateTime={toUtcIsoString(instant)}>
-      <span data-slip-date-layout="mobile"><span data-slip-weekday>{parts.weekday}</span>{" "}<strong data-slip-generated-at>
-        {parts.day} {parts.month} · {m.reportingTime(instant)} EAT</strong></span>
+      <strong data-slip-date-layout="mobile" data-slip-generated-at>
+        {parts.day} {parts.month} · {m.reportingTime(instant)} EAT</strong>
       <span data-slip-date-layout="desktop">{formatSlipPublicationDate(day, locale)} · {m.reportingTime(instant)} EAT</span>
     </PublicationTime>;
   }
   if (!publicationDay) return null;
   const parts = m.reportingDayParts(publicationDay);
   return <PublicationTime data-slip-publication-date dateTime={publicationDay}>
-    <span data-slip-date-layout="mobile"><span data-slip-weekday>{parts.weekday}</span>{" "}<strong>
-      {parts.day} {parts.month} · EAT</strong></span>
+    <strong data-slip-date-layout="mobile">{parts.day} {parts.month} · EAT</strong>
     <span data-slip-date-layout="desktop">{formatSlipPublicationDate(publicationDay, locale)} · EAT</span>
   </PublicationTime>;
 }

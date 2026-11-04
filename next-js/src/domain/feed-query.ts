@@ -75,11 +75,10 @@ export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100
 export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "desc", probability: "desc" });
 /** Matches screen and Reset defaults; the public API keeps its existing date and sort defaults. */
 export const matchFeedPageDefaults = Object.freeze({
-  dates: Object.freeze({ kind: "last-30-days" }),
+  dates: Object.freeze({ kind: "today" }),
   sort: Object.freeze({ by: "kickoff", direction: "desc" }),
-  summary: "today",
   pageSize: feedQueryRules.pageSize,
-} as const satisfies Pick<FeedQuery, "dates" | "sort" | "summary" | "pageSize">);
+} as const satisfies Pick<FeedQuery, "dates" | "sort" | "pageSize">);
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -296,10 +295,11 @@ export function defaultPagePicks(status: FeedStatus, subscriberOnly = false): Pi
 export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, subscriberOnly = false, { dated = false }: { dated?: boolean } = {}): FeedQuery {
   const has = (key: string) => input instanceof URLSearchParams ? input.has(key) : input[key] !== undefined;
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
-  return { ...query,
-    ...(!dated && !explicitDates ? { summary: query.summary ?? matchFeedPageDefaults.summary } : {}),
+  // A legacy summary-only link now sets the date for the entire view.
+  const { summary, ...scope } = query;
+  return { ...scope,
     pageSize: matchFeedPageDefaults.pageSize,
-    dates: dated || explicitDates ? query.dates : matchFeedPageDefaults.dates,
+    dates: dated || explicitDates ? query.dates : summary ? { kind: summary } : matchFeedPageDefaults.dates,
     sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
     picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly),
   };

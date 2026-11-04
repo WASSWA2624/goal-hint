@@ -7,7 +7,7 @@ import { performanceFeedQuery, selectFeedSummaryResult } from '../src/domain/fee
 import { predictionResults } from '../src/domain/performance-summary.ts';
 import { resetFeedFilters } from '../src/domain/feed-controls.ts';
 
-const today = parseReportingDate('2026-11-03'), asOf = Date.parse(`${today}T10:00:00+03:00`);
+const today = parseReportingDate('2026-11-03');
 test('every Best Slips result chip retains its odds band, selects today and restarts pagination', () => {
   for (const oddsBand of ['1.5-5', '5-10', '10-20', '20-50', '50-100']) for (const status of predictionResults) {
     const applied = { ...defaultBestSlipsQuery(), oddsBand, page: 4 };
@@ -20,10 +20,10 @@ test('every Best Slips result chip retains its odds band, selects today and rest
 });
 
 test('Matches summary links retain their cohort filters and select the actual result before paging', () => {
-  const input = new URLSearchParams('q=Club&country=England&market=total-goals&page=5');
+  const input = new URLSearchParams('q=Club&country=England&market=total-goals&status=finished&tz=Africa%2FKampala&page=5');
   const original = applyFeedPageDefaults(parseFeedQuery(input, { today }), input, true);
   for (const result of predictionResults) {
-    const next = selectFeedSummaryResult(original, result, today, asOf);
+    const next = selectFeedSummaryResult(original, result);
     assert.equal(next.result, result); assert.equal(next.summary, undefined); assert.equal(next.page, 1);
     assert.deepEqual(next.dates, { kind: 'today' }); assert.equal(next.zone, 'Africa/Kampala');
     assert.equal(next.search, original.search); assert.deepEqual(next.countries, original.countries);
@@ -32,24 +32,26 @@ test('Matches summary links retain their cohort filters and select the actual re
     assert.equal(href.searchParams.get('result'), result); assert.equal(href.searchParams.get('when'), 'today');
     const restored = parseFeedQuery(serializeFeedQuery(next, today), { today });
     assert.equal(restored.result, result); assert.deepEqual(restored.dates, next.dates); assert.equal(restored.zone, next.zone);
-    assert.equal(performanceFeedQuery(next, today, asOf).result, undefined, 'summary totals retain all outcomes');
+    assert.deepEqual(performanceFeedQuery(next), { ...original, result, page: 1 });
     assert.equal(resetFeedFilters(next).result, undefined);
   }
 });
 
-test('today result navigation follows EAT across a device-calendar date boundary', () => {
+test('today result navigation retains the browsing zone across a date boundary', () => {
   const localDay = parseReportingDate('2026-12-31'), instant = Date.parse('2026-12-31T22:00:00Z');
   const original = applyFeedPageDefaults(parseFeedQuery({ tz: 'America/New_York' }, { today: localDay }), {});
-  const next = selectFeedSummaryResult(original, 'won', localDay, instant);
-  assert.equal(resolveFeedDates(next, getFeedToday(next, instant)).startDate, '2027-01-01');
+  const next = selectFeedSummaryResult(original, 'won');
+  assert.equal(resolveFeedDates(next, getFeedToday(next, instant)).startDate, localDay);
 });
 
-test('explicit legacy yesterday summaries retain their original day and navigation', () => {
+test('legacy summary-only links open the requested day, with explicit browsing dates taking precedence', () => {
   const input = new URLSearchParams('summary=yesterday');
   const query = applyFeedPageDefaults(parseFeedQuery(input, { today }), input);
-  assert.equal(query.summary, 'yesterday');
-  assert.deepEqual(performanceFeedQuery(query, today, asOf).dates, { kind: 'date', date: '2026-11-02' });
-  assert.deepEqual(selectFeedSummaryResult(query, 'won', today, asOf).dates, { kind: 'yesterday' });
+  assert.equal(query.summary, undefined);
+  assert.deepEqual(query.dates, { kind: 'yesterday' });
+  assert.deepEqual(selectFeedSummaryResult(query, 'won').dates, query.dates);
+  input.set('when', 'last-30-days');
+  assert.deepEqual(applyFeedPageDefaults(parseFeedQuery(input, { today }), input).dates, { kind: 'last-30-days' });
 });
 
 test('invalid result filters fail strictly; All clears the result without changing the date', () => {

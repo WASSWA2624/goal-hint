@@ -47,7 +47,7 @@ export function selectFeedDates(query: FeedQuery, dates: DateSelection, today: R
 
 /** Draft text stays editable; normalization happens once, at submission. */
 export function applyFeedDraft(draft: FeedQuery, today: ReportingDate): FeedQuery {
-  const parameters = serializeFeedQuery({ ...draft, ...(draft.dates.kind !== "last-30-days" ? { summary: undefined } : {}), search: "", page: 1 }, today);
+  const parameters = serializeFeedQuery({ ...draft, summary: undefined, search: "", page: 1 }, today);
   parameters.set("q", draft.search);
   return synchronizeFeedStatusDates(parseFeedQuery(parameters, { today, locale: draft.locale }), today);
 }
@@ -79,7 +79,7 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
 /** Restore every page filter and fifty-item limit, retaining the browsing zone. */
 export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): FeedQuery {
   const reset = { ...query };
-  delete reset.time; delete reset.result;
+  delete reset.time; delete reset.result; delete reset.summary;
   delete reset.interval;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
     picks: defaultPagePicks("all", subscriberOnly),

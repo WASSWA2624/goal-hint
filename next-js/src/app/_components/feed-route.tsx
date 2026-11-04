@@ -65,7 +65,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
         query = synchronized;
       }
       if (includeSummary) {
-        const scope = performanceFeedQuery(query, today, at), href = feedPerformanceApiHref(scope, today);
+        const scope = performanceFeedQuery(query), href = feedPerformanceApiHref(scope, today);
         // Begin the audit alongside the list, before hydration, without delaying cards or HTTP status validation.
         summary = readSummary(serializeFeedQuery(scope, today), { now: () => at })
           .then((reply) => ({ href, reply }), () => ({ href, reply: null }));

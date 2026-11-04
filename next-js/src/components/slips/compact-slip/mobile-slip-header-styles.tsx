@@ -94,7 +94,6 @@ export const MobileHeaderRow = styled.summary`
       display: inline-flex; align-items: baseline; gap: var(--gh-spacing-1_25); min-inline-size: 0; max-inline-size: 100%;
       font-size: var(--gh-font-caption); line-height: var(--gh-leading-compact);
       [data-slip-publication-date] { min-inline-size: 0; font-size: inherit; white-space: normal; }
-      [data-slip-weekday] { font-weight: var(--gh-weight-body); }
       strong { color: ${({ theme }) => theme.color.text}; font-weight: var(--gh-weight-semibold); }
     }
     [data-header-metrics] {

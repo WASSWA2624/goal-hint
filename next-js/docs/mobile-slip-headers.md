@@ -27,10 +27,9 @@ The mobile indicator is a 20px circle with a prominent 3px chevron, visible bord
 centered in a 32px column with balanced edge spacing. The full native summary
 remains the click/tap and keyboard target; no nested button competes with it.
 
-When timestamp metadata exists, the header shows the actual EAT
-weekday followed by a bold date/time, for example Fri **30 Oct · 09:16 EAT**.
-The mobile label omits the year and has no pipe after the slip number; the
-machine-readable timestamp and desktop year remain intact.
+When timestamp metadata exists, the mobile header shows a bold day, month and
+24-hour EAT time, for example **30 Oct · 09:16 EAT**. The timestamp remains
+machine-readable.
 Best slips use the persisted immutable daily snapshot timestamp; builder slips
 use their generation result's `asOf` without changing desktop headers. History
 retains its recorded save timestamp. Date-only records do not invent a clock.

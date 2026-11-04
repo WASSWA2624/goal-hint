@@ -104,13 +104,13 @@ test('legacy daily-time links remain readable; editing their bounds opts into a 
   assert.equal(changed.time, undefined); assert.equal(changed.interval.to, '2026-11-06T18:00');
 });
 
-test('Live, Reset, date navigation and independent today summaries clear incompatible interval bounds', () => {
+test('Live, Reset and date navigation clear interval bounds while the summary retains them', () => {
   const query = parse({ start: sample.from, end: sample.to, tz: zone });
   assert.equal(selectFeedStatus(query, 'live', today).interval, undefined);
   assert.equal(resetFeedFilters(query).interval, undefined); assert.equal(resetFeedFilters(query).pageSize, 50);
   const previous = new URL(feedDateNavigation(query, today).previous.href, 'https://goalhint.com');
   assert.equal(previous.searchParams.has('start'), false);
-  assert.equal(performanceFeedQuery({ ...query, summary: 'today' }, today).interval, undefined);
+  assert.deepEqual(performanceFeedQuery(query).interval, query.interval);
   assert.equal(applyFeedPageDefaults(parse({ pageSize: '100' }), { pageSize: '100' }).pageSize, 50);
   assert.equal(parse({ pageSize: '100' }).pageSize, 100, 'bounded API readers retain their separate limit');
 });

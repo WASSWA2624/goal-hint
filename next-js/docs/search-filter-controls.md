@@ -33,9 +33,11 @@ padding. Their date metadata uses the same secondary text styling. Both retain
 inline dates where space allows and wrap on narrower containers.
 
 `src/components/performance/performance-summary.tsx` is shared by Matches,
-Best Slips and performance reports. The compact heading places “Performance” on the left and the actual reporting day/range on the right
+Best Slips and performance reports. The compact heading places the title on the
+left and the actual reporting day or range on the right
 (for example `MON 02-Nov-2026` or `FRI 30-Oct-2026 – TUE 03-Nov-2026` on Matches).
-The date describes the reporting period independently of the refresh clock.
+Matches defaults to “Today’s performance” and uses a status-specific title for
+Live, Upcoming and Completed. The date describes the applied reporting period.
 There is one date label, with no second date row. Callers own the outer gutter;
 the heading and outer status cards share the same left/right rails. All, Won,
 Lost, Pending, Void and Cancelled use theme colours in three mobile columns

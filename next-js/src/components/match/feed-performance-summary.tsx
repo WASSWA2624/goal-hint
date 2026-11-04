@@ -4,8 +4,8 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { Button } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
-import { checkedPeriodPerformance, feedPerformanceApiHref, performanceFeedQuery, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
-import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { checkedFeedPerformance, feedPerformanceApiHref, performanceFeedQuery, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
+import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
@@ -16,13 +16,15 @@ import { LoadingTheme } from "@/styles/loading-theme";
 
 type Presentation = { query: FeedQuery; data: MatchFeedResponse };
 function summaryLabels({ query, data }: Presentation) {
-  const instant = utcInstantFromEpochMilliseconds(data.asOf), reportingToday = getReportingDate(instant);
-  const summaryDay = query.summary === "yesterday" ? addReportingDays(reportingToday, -1) : reportingToday;
-  const from = query.summary ? summaryDay : parseReportingDate(data.range.from), to = query.summary ? summaryDay : parseReportingDate(data.range.to);
-  const today = query.summary ? reportingToday : getFeedToday(query, instant);
+  const from = parseReportingDate(data.range.from), to = parseReportingDate(data.range.to);
+  const today = getFeedToday(query, data.asOf);
+  const title = query.status === "live" ? "performance.summary.live"
+    : query.status === "scheduled" ? "performance.summary.upcoming"
+    : query.status === "finished" ? "performance.summary.completed"
+    : from === today && to === today ? "performance.summary.today" : "performance.summary.title";
   const messages = createMessages(query.locale);
   const dayLabel = (day: ReportingDate) => `${messages.reportingDayParts(day).weekday.toUpperCase()} ${messages.reportingDateRangeCompact(day, day)}`;
-  return { title: messages.text(from === today && to === today ? "performance.summary.today" : "performance.summary.title"),
+  return { title: messages.text(title),
     period: from === to ? dayLabel(from) : `${dayLabel(from)} – ${dayLabel(to)}` };
 }
 const ignoreResult = () => {};
@@ -40,17 +42,19 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   today: ReportingDate; enabled: boolean; onApply: (query: FeedQuery) => void; initial?: Promise<FeedPerformanceSeed> | undefined;
 }) {
   const seed = initial ? use(initial) : null;
-  const summaryQuery = performanceFeedQuery(query, today, data.asOf), href = feedPerformanceApiHref(summaryQuery, today);
+  const href = feedPerformanceApiHref(performanceFeedQuery(query), today);
   const dispatch = useAppDispatch(), messages = createMessages(query.locale);
   const [attempt, retry] = useState(0);
-  // List pagination/version changes do not change this independently scoped period.
-  const key = `${href}:${data.access.tier}:${data.access.signedIn}`;
+  const key = `${href}:${data.paginationVersion}:${data.total}:${data.access.tier}:${data.access.signedIn}`;
   const [reply, setReply] = useState<Reply | null>(() => {
     if (seed?.href !== href) return null;
-    let counts = null;
-    try { if (seed.reply) counts = checkedPeriodPerformance(seed.reply, data).performance; } catch { /* Changed viewers retry through the current endpoint. */ }
-    return counts ? { key, attempt: 0, counts, asOf: seed.reply!.asOf, refreshAfter: seed.reply!.asOf + 60_000, failed: false }
-      : { key, attempt: 0, counts: null, asOf: data.asOf, refreshAfter: Infinity, failed: true };
+    if (!seed.reply) return { key, attempt: 0, counts: null, asOf: data.asOf, refreshAfter: Infinity, failed: true };
+    try {
+      const checked = checkedFeedPerformance(seed.reply, data);
+      return { key, attempt: 0, counts: checked.performance, asOf: checked.asOf, refreshAfter: checked.asOf + 60_000, failed: false };
+    } catch {
+      return null;
+    }
   });
   const latest = useRef({ query, today, data });
   useEffect(() => { latest.current = { query, today, data }; }, [data, query, today]);
@@ -58,11 +62,11 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   useEffect(() => {
     if (!needsRead) return;
     const controller = new AbortController();
-    const { query: currentQuery, today, data } = latest.current;
-    const query = performanceFeedQuery(currentQuery, today, data.asOf);
+    const { query: currentQuery, today } = latest.current;
+    const query = performanceFeedQuery(currentQuery);
     const request = dispatch(refreshApi.endpoints.feedSummary.initiate({ query, today }, { forceRefetch: true }));
     void consumeRefresh(request, controller.signal).then((value) => {
-      const checked = checkedPeriodPerformance(value, latest.current.data);
+      const checked = checkedFeedPerformance(value, latest.current.data);
       if (!controller.signal.aborted) setReply({ key, attempt, asOf: checked.asOf, refreshAfter: latest.current.data.asOf + 60_000, counts: checked.performance, failed: false });
     }).catch(() => {
       if (!controller.signal.aborted) setReply((previous) => ({ key, attempt, asOf: previous?.key === key ? previous.asOf : latest.current.data.asOf, refreshAfter: Infinity,
@@ -75,7 +79,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   return <Stack $gap="sm" data-feed-performance-state={failed ? "unavailable" : counts ? "ready" : "loading"}>
     <PerformanceSummary counts={summaryCounts} locale={query.locale} kind="matches"
       {...summaryLabels({ query, data })} activeResult={query.result} disabled={!enabled}
-      onResult={(result) => onApply(selectFeedSummaryResult(query, result, today, data.asOf))} showCoverage={false} showAll compactHeader />
+      onResult={(result) => onApply(selectFeedSummaryResult(query, result))} showCoverage={false} showAll compactHeader />
     {failed && <Inline><FeedNote role="status">{messages.text("performance.summary.unavailable")}</FeedNote>
       <Button type="button" variant="secondary" disabled={!enabled} onClick={() => retry((value) => value + 1)}>{messages.text("feed.retry")}</Button>
     </Inline>}

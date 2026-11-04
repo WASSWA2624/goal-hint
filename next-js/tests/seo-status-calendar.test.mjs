@@ -111,7 +111,7 @@ test('Matches page defaults reach the stored read while retaining viewer eligibi
         read: async (input) => { storedQuery = parseFeedQuery(input, { today }); throw new MatchFeedError('rate-limited'); } });
       const rendered = view(await page.Page(props({}, parameters)), 'MatchFeedPage');
       assert.deepEqual(storedQuery, rendered.query, 'The rendered controls and stored read use the same effective query.');
-      assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'last-30-days' });
+      assert.deepEqual(storedQuery.dates, { kind: parameters.when ?? 'today' });
       assert.deepEqual(storedQuery.sort, { by: parameters.sort ?? 'kickoff', direction: 'desc' });
       assert.equal(storedQuery.picks, parameters.picks ?? (tier === 'free' && parameters.status !== 'finished' ? 'all' : 'only'));
       assert.equal(rendered.result.error, 'rate-limited');
@@ -122,9 +122,9 @@ test('Matches page defaults reach the stored read while retaining viewer eligibi
 test('the paginated browsing feed keeps its retry and noindex metadata when a stored read fails', async () => {
   for (const [dated, route, query] of [[false, {}, {}], [false, {}, { page: '2' }], [true, { date: '2026-10-20' }, {}], [false, {}, { when: 'today' }]]) {
     const page = feed({ dated });
-    const parameters = { ...query, picks: 'all', sort: 'kickoff' };
+    const parameters = { ...query, picks: 'all', sort: 'kickoff', country: 'England' };
     const rendered = view(await page.Page(props(route, parameters)), 'MatchFeedPage');
-    // The page's browsing size differs from the public transport size, so these are variants under the current policy.
+    // Filtered variants render the in-page retry without being indexable.
     assert.equal(feedDiscovery(rendered.query, today).eligible, false);
     assert.equal(rendered.result.error, 'unavailable');
     assert.equal((await page.generateMetadata(props(route, parameters))).robots.index, false);
@@ -282,7 +282,7 @@ test('feed summary starts beside the list, streams independently and is never re
     read: async () => { await list; return { records: [], total: 0, coverage: { knownFixtures: 0 } }; },
     readSummary: async (parameters, clock) => {
       summaries++;
-      assert.equal(parameters.get('date'), '2026-10-25', 'Entry performance audits yesterday, not the 30-day list.');
+      assert.equal(parameters.get('when'), 'today', 'Entry performance audits the same day as the list.');
       assert.equal(clock.now(), at);
       await summary; throw new Error('private summary failure');
     } });

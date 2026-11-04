@@ -77,6 +77,7 @@ test("header identity requests are private, deduplicated and refreshed after ano
     responses.shift()(Response.json({ phone: "+256700000002", administrator }));
     await refreshed;
     assert.equal(getAdminSessionSnapshot(), administrator);
+    assert.equal(getSlipSharingSnapshot(), administrator, "verified administrators can share without a subscription");
     assert.equal(getServerAdminSessionSnapshot(), false, "public HTML never includes private admin state");
     assert.equal(updates, before + 2, "role changes notify both headers even when the phone stays the same");
   }
@@ -86,7 +87,7 @@ test("header identity requests are private, deduplicated and refreshed after ano
   responses.shift()(Response.json({ phone: null, administrator: true }));
   await owner;
   assert.equal(getAdminSessionSnapshot(), true, "owner sessions do not require a member phone");
-  assert.equal(getSlipSharingSnapshot(), false, "an administrator role alone is not a member subscription");
+  assert.equal(getSlipSharingSnapshot(), false, "sharing still requires a verified member identity");
   const signedOut = refreshMemberSession();
   await Promise.resolve();
   responses.shift()(Response.json({ phone: null, administrator: false }));

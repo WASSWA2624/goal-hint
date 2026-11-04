@@ -2,8 +2,7 @@ import { z } from "zod";
 import { contentAccessSchema } from "./content-access.ts";
 import { FeedPaginationError, feedPageApiHref } from "./feed-pagination.ts";
 import type { FeedQuery } from "./feed-query.ts";
-import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
-import { publicPolicy } from "./public-policy.ts";
+import type { ReportingDate } from "./calendar.ts";
 import { feedPerformanceSchema, type MatchFeedResponse } from "./match-feed.ts";
 
 export const feedPerformanceReplySchema = z.strictObject({
@@ -31,22 +30,12 @@ export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse):
   return reply;
 }
 
-/** Summary dates are independent from the browsing window on the entry screen. */
-export function performanceFeedQuery(query: FeedQuery, today: ReportingDate, asOf?: number): FeedQuery {
-  const reportingToday = asOf === undefined ? today : getReportingDate(utcInstantFromEpochMilliseconds(asOf));
-  return query.summary ? { ...query, summary: undefined, result: undefined, interval: undefined, zone: publicPolicy.reportingTimeZone, time: null,
-    dates: { kind: "date", date: query.summary === "yesterday" ? addReportingDays(reportingToday, -1) : reportingToday }, status: "all", page: 1 }
-    : { ...query, result: undefined, page: 1 };
-}
-export function checkedPeriodPerformance(value: unknown, data: MatchFeedResponse): FeedPerformanceReply {
-  const parsed = feedPerformanceReplySchema.safeParse(value);
-  if (!parsed.success) throw new FeedPaginationError("invalid-response");
-  if (parsed.data.access.tier !== data.access.tier || parsed.data.access.signedIn !== data.access.signedIn) throw new FeedPaginationError("changed");
-  return parsed.data;
+/** Aggregate the applied cohort across every page. */
+export function performanceFeedQuery(query: FeedQuery): FeedQuery {
+  return { ...query, page: 1 };
 }
 
 /** Drill into the cohort represented by the figures, retaining its other filters. */
-export function selectFeedSummaryResult(query: FeedQuery, result: FeedQuery["result"], today: ReportingDate, asOf: number): FeedQuery {
-  const scope = performanceFeedQuery(query, today, asOf);
-  return { ...scope, dates: query.summary ? { kind: query.summary } : scope.dates, result, page: 1 };
+export function selectFeedSummaryResult(query: FeedQuery, result: FeedQuery["result"]): FeedQuery {
+  return { ...query, result, page: 1 };
 }

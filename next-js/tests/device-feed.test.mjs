@@ -36,9 +36,9 @@ test("Clear filters restores 30-day browsing in the device zone and removes opti
   const original = query("date=2020-02-29&tz=America%2FLos_Angeles&timeFrom=12:00&timeTo=13:00&q=Club");
   const cleared = resetFeedFilters(original);
   assert.equal(cleared.zone, zone); assert.equal(cleared.time, undefined);
-  assert.deepEqual(cleared.dates, { kind: "last-30-days" });
+  assert.deepEqual(cleared.dates, { kind: "today" });
   assert.deepEqual(cleared.sort, { by: "kickoff", direction: "desc" });
-  assert.equal(cleared.summary, "today");
+  assert.equal(cleared.summary, undefined);
   assert.equal(cleared.picks, "only");
-  assert.equal(feedQueryHref(cleared, today), "/en/matches?summary=today&tz=America%2FLos_Angeles&picks=only&when=last-30-days&sort=kickoff");
+  assert.equal(feedQueryHref(cleared, today), "/en/matches?when=today&tz=America%2FLos_Angeles&picks=only&sort=kickoff");
 });

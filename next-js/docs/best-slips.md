@@ -85,8 +85,8 @@ Saved history uses its recorded save time. Date-only metadata never invents a
 publication time. Desktop publication dates include the actual short weekday,
 ordinal day, full month and year, for example Fri, 30th October, 2026, followed
 by the supplied 24-hour EAT time. Thin separators distinguish the number/date
-and summary fields. Mobile uses Compact Rail with the actual EAT weekday and
-bold short-month generation timestamp in the header; see `mobile-slip-headers.md`.
+and summary fields. The mobile header shows a bold day, month and EAT time.
+See `mobile-slip-headers.md`.
 Desktop uses Average probability, followed by Share, the fixed-width slip-status
 badge and the far-right disclosure arrow. Slip and match statuses share the same
 final track, border and inner padding so their badge edges align when expanded.

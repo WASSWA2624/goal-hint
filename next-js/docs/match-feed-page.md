@@ -6,16 +6,17 @@ phone and desktop. Live selects Today in the active browsing zone, removes
 kickoff-time bounds and locks date/time controls until another status is selected.
 Status changes retain compatible filters and mirror past/future relative periods
 for Upcoming and Completed. Wholly incompatible explicit ranges are repaired.
-Matches opens with an empty search, All statuses, Last 30 days, latest kickoff first,
+Matches opens with an empty search, All statuses, Today, latest kickoff first,
 all four markets and no league, country, time, probability or odds constraints.
 Reset restores those choices and the Predictions only default allowed by access,
 in the detected device zone, with fifty matches per page.
 
-The default performance cards report today in EAT under **Today’s performance**,
-independently of the 30-day browsing list. Outcome controls open today's matching
-results with the existing cohort filters and restart pagination. Explicit date
-selections keep their actual reporting period; legacy yesterday summary links
-remain readable. Reset restores today's summary.
+The default list and **Today’s performance** use the same day in the browsing
+zone. Performance counts cover every matching fixture across all pages. Live,
+Upcoming and Completed filters give the summary a status-specific heading and
+show the applied day or date range. Outcome controls keep the other filters and
+restart pagination. Legacy summary-only links use their requested day for both
+sections. Reset restores today’s matches and performance.
 
 The performance title and period align with the card edges and sit closely
 above them. Search and title spacing are compact on mobile and desktop, with a
@@ -77,7 +78,7 @@ cards, exact filtered totals, sorting and pagination load without waiting for th
 full-period settlement audit. `/api/matches/summary` uses the same query and
 entitlement boundary and returns only complete counts, their observation clock,
 cohort version and viewer projection. The client loads this independently, checks
-its request scope and viewer, and offers a separate retry
+the list total, cohort version and viewer, and offers a separate retry
 on failure. Summary loading never marks the list or route as busy. Its separate
 90-second audit budget leaves ordinary list transaction budgets unchanged.
 

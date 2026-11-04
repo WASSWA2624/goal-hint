@@ -25,11 +25,11 @@ test("page defaults select predictions without changing unrestricted API reads",
   }
 });
 
-test("Matches opens with 30 days newest first, today's performance and 50 items", () => {
+test("Matches opens with today newest first and 50 items", () => {
   for (const subscriberOnly of [false, true]) {
     const query = page("", subscriberOnly);
     assert.equal(query.status, "all");
-    assert.deepEqual(query.dates, { kind: "last-30-days" });
+    assert.deepEqual(query.dates, { kind: "today" });
     assert.deepEqual(query.sort, { by: "kickoff", direction: "desc" });
     assert.deepEqual(query.markets, defaultMarkets);
     assert.equal(query.search, "");
@@ -38,9 +38,9 @@ test("Matches opens with 30 days newest first, today's performance and 50 items"
     assert.deepEqual(query.probability, { min: 0, max: 100 });
     assert.equal(query.odds, null);
     assert.equal(query.time, undefined);
-    assert.equal(query.page, 1); assert.equal(query.pageSize, 50); assert.equal(query.summary, "today");
+    assert.equal(query.page, 1); assert.equal(query.pageSize, 50); assert.equal(query.summary, undefined);
     const parameters = serializeFeedQuery(query, today);
-    assert.equal(parameters.get("when"), null);
+    assert.equal(parameters.get("when"), "today");
     assert.equal(parameters.get("sort"), null);
   }
   assert.deepEqual(parse().dates, { kind: "last-30-days" });

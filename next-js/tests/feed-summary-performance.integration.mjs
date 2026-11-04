@@ -19,17 +19,21 @@ test('compact summaries match full stored feed counts and invalidate on genuine 
     const feed = createMatchFeedService(options), summary = createMatchFeedSummaryService(options);
     async function compare(input) {
       const full = await feed.query(input), compact = await summary.query(input);
-      assert.deepEqual(compact.performance, full.performance, JSON.stringify(input));
+      const { cancelled, ...counts } = compact.performance;
+      // The legacy inline aggregate includes cancellations in voids.
+      assert.deepEqual({ ...counts, void: counts.void + cancelled }, full.performance, JSON.stringify(input));
       assert.equal(compact.total, full.total);
       assert.equal(compact.paginationVersion, full.paginationVersion);
       assert.equal(compact.asOf, full.asOf);
       return compact;
     }
     for (const parameters of [{}, { page: '2', pageSize: '1' }, { page: '10000' }, { picks: 'only' },
-      { status: 'scheduled' }, { status: 'finished' }, { prob: '60-100' }, { market: 'total-goals' },
+      { status: 'scheduled' }, { status: 'live' }, { status: 'finished' }, { result: 'pending' }, { result: 'won' },
+      { prob: '60-100' }, { market: 'total-goals' },
       { market: 'match-result', sort: 'probability', dir: 'asc' }, { country: 'Synthetic Country' },
-      { q: 'Synthetic' }, { when: 'next-7-days' }, { tz: 'America/New_York' }]) {
-      await compare(parameters.when ? parameters : { date: '2026-10-09', ...parameters });
+      { q: 'Synthetic' }, { when: 'today' }, { when: 'next-7-days' }, { tz: 'America/New_York' },
+      { start: '2026-10-09T09:00', end: '2026-10-10T17:00', status: 'finished' }]) {
+      await compare(parameters.when || parameters.start ? parameters : { date: '2026-10-09', ...parameters });
     }
     const before = await compare({ date: '2026-10-09', picks: 'only' });
     const state = states[0];

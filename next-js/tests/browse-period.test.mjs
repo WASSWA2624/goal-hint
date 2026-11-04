@@ -2,33 +2,32 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { defaultBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, parseBestSlipsQuery } from '../src/domain/best-slips-query.ts';
-import { applyFeedPageDefaults, parseFeedQuery, feedQueryHref, resolveFeedDates } from '../src/domain/feed-query.ts';
+import { applyFeedPageDefaults, getFeedToday, parseFeedQuery, feedQueryHref, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { selectFeedDates, resetFeedFilters } from '../src/domain/feed-controls.ts';
-import { performanceFeedQuery, checkedPeriodPerformance } from '../src/domain/feed-performance-summary.ts';
+import { performanceFeedQuery, checkedFeedPerformance } from '../src/domain/feed-performance-summary.ts';
 import { singleSlipPage } from '../src/domain/slip-pagination.ts';
 import { createBestSlipsBrowseService } from '../src/server/slips/best-slips-browse.ts';
 
 const today = parseReportingDate('2027-01-01');
-test('Best Slips defaults to today while Matches retains its separate historical browsing defaults', () => {
+test('Best Slips and Matches default to today', () => {
   const slips = defaultBestSlipsQuery();
   assert.equal(slips.summary, undefined);
   assert.deepEqual(resolveBestSlipsDates(slips, today), { from: today, to: today });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(slips), today), slips);
   const matches = applyFeedPageDefaults(parseFeedQuery({}, { today }), {});
-  assert.equal(matches.pageSize, 50); assert.equal(matches.summary, 'today');
+  assert.equal(matches.pageSize, 50); assert.equal(matches.summary, undefined);
   assert.deepEqual(matches.sort, { by: 'kickoff', direction: 'desc' });
   const range = resolveFeedDates(matches, today);
-  assert.equal(range.startDate, '2026-12-03'); assert.equal(range.endDate, today);
-  const summary = performanceFeedQuery(matches, today);
-  assert.deepEqual(summary.dates, { kind: 'date', date: today });
-  assert.equal(summary.zone, 'Africa/Kampala'); assert.equal(summary.summary, undefined);
-  assert.match(feedQueryHref({ ...matches, page: 3 }, today), /summary=today/);
+  assert.equal(range.startDate, today); assert.equal(range.endDate, today);
+  const summary = performanceFeedQuery({ ...matches, page: 3 });
+  assert.deepEqual(summary, matches);
+  assert.match(feedQueryHref({ ...matches, page: 3 }, today), /when=today/);
   const filtered = selectFeedDates(matches, { kind: 'date', date: '2026-10-01' }, today);
-  assert.equal(filtered.summary, undefined); assert.deepEqual(performanceFeedQuery(filtered, today).dates, filtered.dates);
-  assert.equal(resetFeedFilters(filtered).summary, 'today');
-  const deviceDay = parseReportingDate('2026-12-31'), asOf = Date.parse('2026-12-31T22:00:00Z');
-  assert.deepEqual(performanceFeedQuery({ ...matches, zone: 'America/New_York' }, deviceDay, asOf).dates,
-    { kind: 'date', date: '2027-01-01' }, 'Today uses the EAT day even when the visitor is still on the previous date');
+  assert.deepEqual(performanceFeedQuery(filtered).dates, filtered.dates);
+  assert.deepEqual(resetFeedFilters(filtered).dates, { kind: 'today' });
+  const zoned = performanceFeedQuery({ ...matches, zone: 'America/New_York' });
+  const deviceDay = getFeedToday(zoned, Date.parse('2026-12-31T22:00:00Z'));
+  assert.equal(resolveFeedDates(zoned, deviceDay).startDate, '2026-12-31');
 });
 
 test('today slip totals are independent of legacy date requests, result filters and pagination', async () => {
@@ -63,11 +62,14 @@ test('slip pages show at most 20 records, including legacy unpaged daily seeds',
   assert.equal(first.slips.length, 20); assert.equal(first.browse.total, 60); assert.equal(first.browse.query.period, 'today');
 });
 
-test('a yesterday aggregate can differ from the browsing total but never from the viewer access', () => {
+test('a Matches aggregate must match the browsing total, version and viewer', () => {
   const access = { tier: 'free', signedIn: false }, reply = { access, asOf: 1, paginationVersion: 'a'.repeat(64),
     performance: { total: 5, won: 1, lost: 1, pending: 1, void: 1, cancelled: 1, unavailable: 0 } };
-  assert.equal(checkedPeriodPerformance(reply, { total: 200, paginationVersion: 'b'.repeat(64), access }).performance.total, 5);
-  assert.throws(() => checkedPeriodPerformance(reply, { access: { tier: 'full', signedIn: true } }));
+  const view = { total: 5, paginationVersion: reply.paginationVersion, access };
+  assert.equal(checkedFeedPerformance(reply, view).performance.total, 5);
+  assert.throws(() => checkedFeedPerformance(reply, { ...view, total: 200 }));
+  assert.throws(() => checkedFeedPerformance(reply, { ...view, paginationVersion: 'b'.repeat(64) }));
+  assert.throws(() => checkedFeedPerformance(reply, { ...view, access: { tier: 'full', signedIn: true } }));
 });
 
 test('an unavailable today aggregate does not discard a legacy historical page or invent zero statistics', async () => {
