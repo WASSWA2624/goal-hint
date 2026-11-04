@@ -2,6 +2,7 @@
 
 import { createGlobalStyle, css } from "styled-components";
 import { controlMetrics } from "@/components/ui/control-layout";
+import { media } from "./theme";
 import { themeCssVariables } from "./theme-css";
 
 export const GlobalStyle = createGlobalStyle`
@@ -23,6 +24,9 @@ export const GlobalStyle = createGlobalStyle`
 
   /* Keep owner columns and navigation aligned when moving between short and long screens. */
   html:has([data-admin-shell], [data-match-detail]) { scrollbar-gutter: stable; }
+  ${media.desktop} {
+    html:has([data-admin-shell]) { scrollbar-gutter: stable both-edges; scrollbar-width: thin; }
+  }
   /* Match tabs reserve their own space; anchoring a visible footer would move the page instead. */
   html:has([data-match-detail]) { overflow-anchor: none; }
 

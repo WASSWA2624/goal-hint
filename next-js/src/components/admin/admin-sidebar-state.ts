@@ -1,7 +1,9 @@
-import { uiGeometry } from "../../styles/theme-tokens.ts";
+import { geometryTokens, uiGeometry } from "../../styles/theme-tokens.ts";
 
 /** Browser-local workspace geometry; no account or payment data is persisted. */
 export const adminSidebarSize = uiGeometry.sidebar;
+// Reserve both pairs of gutters, the sidebar resize rail, and the right strip.
+const desktopHorizontalSpacing = 4 * Number.parseFloat(geometryTokens.spacing[2]) + 2 * adminSidebarSize.handle;
 export const adminSidebarStorageKey = "goal-hint-admin-sidebar-v1";
 type SidebarPreference = Readonly<{ collapsed: boolean; width: number }>;
 const defaults: SidebarPreference = { collapsed: false, width: adminSidebarSize.default };
@@ -35,7 +37,7 @@ export function getSidebarSnapshot(): string {
   const rootWidth = typeof document === "undefined" ? 0 : document.documentElement.getBoundingClientRect().width;
   // A stable scrollbar gutter can make the rendered root narrower than innerWidth/clientWidth.
   const availableWidth = Number.isFinite(rootWidth) && rootWidth > 0 ? Math.min(window.innerWidth, Math.floor(rootWidth)) : window.innerWidth;
-  const maximum = Math.min(adminSidebarSize.max, Math.max(adminSidebarSize.min, availableWidth - adminSidebarSize.contentMin - adminSidebarSize.handle));
+  const maximum = clampSidebarWidth(availableWidth - adminSidebarSize.contentMin - desktopHorizontalSpacing);
   return `${setting.collapsed ? 1 : 0}:${clampSidebarWidth(setting.width, maximum)}:${maximum}`;
 }
 

@@ -244,8 +244,7 @@ const MenuBar = styled.details`
     gap: var(--gh-spacing-2);
     min-block-size: var(--form-control-height);
     padding-block: var(--gh-spacing-1);
-    padding-inline: ${contentGutter};
-    padding-inline-start: calc(${contentGutter} + ${({ theme }) => theme.space.sm});
+    padding-inline: calc(${contentGutter} + ${({ theme }) => theme.space.sm});
     list-style: none;
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
@@ -282,13 +281,13 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean; $section: AdminSec
   padding-inline: ${contentGutter};
   scroll-margin-block-start: var(--app-header-height);
   &:focus { outline: none; }
-  ${media.desktop} { grid-column: 3; padding: ${({ theme }) => `${theme.space.lg} 0 calc(${theme.space.lg} * 2)`}; }
+  ${media.desktop} {
+    grid-column: 3;
+    padding-block: ${({ theme }) => `${theme.space.lg} calc(${theme.space.lg} * 2)`};
+    padding-inline: ${({ theme }) => theme.layout.gutter};
+  }
   ${({ $section, theme }) => $section === "overview" && css`
-    ${media.belowDesktop} { padding-block-start: ${theme.layout.gutter}; }
-    ${media.desktop} {
-      padding-block-start: ${theme.layout.gutter};
-      padding-inline-start: ${theme.layout.gutter};
-    }
+    padding-block-start: ${theme.layout.gutter};
   `}
   ${({ $section }) => $section === "payments" && css`
     ${media.belowDesktop} {
@@ -300,7 +299,7 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean; $section: AdminSec
     &:has([data-record-compact]) { padding-block: var(--gh-spacing-1) 0; }
   }
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
-  ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
+  ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding-block: 0; overflow: hidden; }`}
 `;
 const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>`
   display: grid;
@@ -312,6 +311,6 @@ const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>
   ${({ $joined }) => $joined && joinedDesktopSections}
   ${({ $fixed }) => $fixed && css`${media.desktop} {
     inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0;
-    &:not(:has(> [data-record-workspace])) { display: block; padding-block: var(--gh-spacing-5); overflow-y: auto; }
+    &:not(:has(> [data-record-workspace], > [data-record-form])) { display: block; padding-block: var(--gh-spacing-5); overflow-y: auto; }
   }`}
 `;

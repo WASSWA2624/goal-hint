@@ -25,12 +25,12 @@ test("SSR sidebar snapshots are stable and browser width caps leave 720px for co
   const originalDocument = globalThis.document;
   try {
     globalThis.window = { innerWidth: 1024, localStorage: { getItem: () => '{"collapsed":false,"width":320}' } };
-    assert.equal(getSidebarSnapshot(), "0:298:298");
+    assert.equal(getSidebarSnapshot(), "0:260:260");
     globalThis.document = { documentElement: { getBoundingClientRect: () => ({ width: 1008.6667 }) } };
-    assert.equal(getSidebarSnapshot(), "0:282:282");
-    assert.ok(1008.6667 - Number(getSidebarSnapshot().split(":")[1]) - adminSidebarSize.handle >= adminSidebarSize.contentMin);
+    assert.equal(getSidebarSnapshot(), "0:244:244");
+    assert.equal(1008 - Number(getSidebarSnapshot().split(":")[1]) - 2 * adminSidebarSize.handle - 4 * 8, adminSidebarSize.contentMin);
     globalThis.document.documentElement.getBoundingClientRect = () => ({ width: 0 });
-    assert.equal(getSidebarSnapshot(), "0:298:298");
+    assert.equal(getSidebarSnapshot(), "0:260:260");
     globalThis.window.innerWidth = 1440;
     assert.equal(getSidebarSnapshot(), "0:320:320");
     globalThis.window.localStorage.getItem = () => { throw new Error("storage unavailable"); };
