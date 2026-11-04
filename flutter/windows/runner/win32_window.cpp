@@ -2,6 +2,7 @@
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <uxtheme.h>
 
 #include "resource.h"
 
@@ -150,6 +151,9 @@ bool Win32Window::Create(const std::wstring& title, const Point& origin,
   }
 
   UpdateTheme(window);
+  // Hide caption artwork while keeping the native controls and window identity.
+  constexpr DWORD caption_flags = WTNCA_NODRAWCAPTION | WTNCA_NODRAWICON;
+  SetWindowThemeNonClientAttributes(window, caption_flags, caption_flags);
 
   return OnCreate();
 }

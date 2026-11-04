@@ -38,8 +38,9 @@ and Android's circular 66dp safe zone are validated during generation. It suppli
 - A Windows ICO with 16, 20, 24, 32, 40, 48, 64, 128 and 256px images. All frames
   use that existing opaque-football variant for contrast on both desktop
   appearances, fitted uniformly to about 90% of the frame instead of the
-  mobile launcher's padded canvas. The exterior stays transparent. Window
-  title and public product/file descriptions use Goal Hint.
+  mobile launcher's padded canvas. The exterior stays transparent. The native
+  title bar shows the system window controls. The window's system name, icon
+  resource, and public product/file descriptions retain Goal Hint branding.
 - A Linux icon installed with the relocatable bundle, a matching desktop entry,
   and Goal Hint GTK application/window names. Its initial rendering surface is
   white; the runner loads the bundled icon.
