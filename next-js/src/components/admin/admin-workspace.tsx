@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
-import { ShellFrame } from "@/components/navigation/shell-styles";
+import { Header, ShellFrame } from "@/components/navigation/shell-styles";
 import { contentGutter, joinedDesktopSections } from "@/components/ui/layout";
 import {
   CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, GridIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
@@ -109,6 +109,13 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
 }
 
 export const AdminShellFrame = styled(ShellFrame)`
+  ${media.desktop} {
+    --app-header-border-width: var(--gh-stroke-thin);
+    > ${Header} {
+      border-block-end: var(--app-header-border-width) solid
+        ${({ theme }) => `color-mix(in srgb, ${theme.header.desktopBackground}, ${theme.header.text})`};
+    }
+  }
   ${media.belowDesktop} {
     --app-header-height: calc(${({ theme }) => theme.header.phoneHeight} + var(--form-control-height) + var(--gh-stroke-thin));
   }
@@ -148,35 +155,31 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
     align-self: start;
     max-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
     overflow-y: auto;
-    padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
+    padding-block: var(--gh-spacing-2);
+    border-inline-start: var(--admin-sidebar-handle-width) solid ${({ theme }) => theme.color.border};
     background: ${({ theme }) => theme.color.surface};
     min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
   }
-  ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
+  ul { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
   li[data-separated] { margin-block-start: var(--gh-spacing-2_5); padding-block-start: var(--gh-spacing-2_5); border-block-start: 0; }
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; max-block-size: 100%; min-block-size: 0; overflow-x: hidden; }`}
   ${media.desktop} {
     overflow-x: hidden;
+    ${WorkspaceNavigationLink} { border-radius: ${({ theme }) => theme.radius.none}; }
     &[data-collapsed="true"] {
-      padding-inline: var(--gh-spacing-1_5);
       [data-sidebar-label], [data-sidebar-caption] { display: none; }
       a { position: relative; justify-content: center; padding-inline: 0; }
     }
   }
 `;
-const adminMenuDivider = css`
-  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.controlBorder};
-`;
 const SidebarHead = styled.div`
-  ${adminMenuDivider}
   display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1);
   min-block-size: var(--form-control-height);
-  margin: calc(-1 * var(--gh-spacing-2)) calc(-1 * var(--gh-spacing-2_5)) var(--gh-spacing-1_5);
+  margin-block: calc(-1 * var(--gh-spacing-2)) var(--gh-spacing-1_5);
   padding-inline: var(--gh-spacing-2_5);
   background: ${({ theme }) => theme.header.background};
   [data-collapsed="true"] & {
     justify-content: center;
-    margin-inline: calc(-1 * var(--gh-spacing-1_5));
     padding-inline: 0;
   }
 `;
@@ -223,7 +226,7 @@ const Caption = styled.p`
 const SectionLink = WorkspaceNavigationLink;
 const MenuBar = styled.details`
   position: relative;
-  ${adminMenuDivider}
+  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.controlBorder};
   ${media.desktop} { display: none; }
   > summary {
     display: flex;
