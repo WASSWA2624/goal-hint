@@ -22,9 +22,9 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
   const now = () => clock, renewals = [];
   const notifications = { ...silentPaymentNotifications, async renewed(renewal) { renewals.push(renewal); return "sent"; } };
   const codes = createAccessCodes({ database: db, config, now, notifications }), sessions = createMemberSessions({ database: db, config, now });
-  const payments = createPayments({ database: db, config, now, environment: null }), subscribers = createSubscribers(db, now, config);
+  const payments = createPayments({ database: db, config, now }), subscribers = createSubscribers(db, now, config);
   const daily = randomUUID(), weekly = randomUUID();
-  await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST", airtelNumber: "256700000902",
+  await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST", airtelEnabled: true, airtelNumber: "256700000902",
     airtelName: "TEST AIRTEL", updatedAt: new Date(clock), updatedBy: "test" } }));
   for (const [id, name, durationDays, priceUgx] of [[daily, "Daily", 1, 1000], [weekly, "Weekly", 7, 5000]]) {
     await db.query(tx => tx.subscriptionPlan.create({ data: { id, name, durationDays, priceUgx, active: true, sortOrder: durationDays, createdAt: new Date(clock), updatedAt: new Date(clock) } }));

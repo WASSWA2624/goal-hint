@@ -27,7 +27,7 @@ export function createPublicBestSlipRoute({ read = readPublicBestSlipDay, access
     if (!view) notFound();
     return <PublicShell locale={locale} current="best-slips" app compact><Stack $gap="md">
       <BestSlipCard view={view} day={day} locale={locale} signedIn={viewer.signedIn} />
-      <TextLink href={`/${locale}`} prefetch={false}>{createMessages(locale).text("bestSlips.title")}</TextLink>
+      <TextLink href={`/${locale}`} contextBack prefetch={false}>{createMessages(locale).text("navigation.back")}</TextLink>
     </Stack></PublicShell>;
   };
 }

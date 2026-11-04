@@ -14,7 +14,7 @@ test("migration preserves legacy offers, evidence, competing claims and previous
   try { fixture = await paidDatabase({ beforeCheckout: async root => {
     for (const [id, phone] of [[a, "256700000111"], [b, "256700000112"]]) await root.query(
       "INSERT INTO MemberAccount (id,phone,createdAt,lastSignInAt) VALUES (?,?,?,?)", [id, phone, at, at]);
-    await root.query("INSERT INTO SubscriptionSettings (id,paywallMode,mtnNumber,mtnName,updatedAt,updatedBy) VALUES (1,'test','256700000901','TEST',?,'test')", [at]);
+    await root.query("INSERT INTO SubscriptionSettings (id,paywallMode,mtnNumber,mtnName,airtelNumber,updatedAt,updatedBy) VALUES (1,'test','256700000901','TEST','256750000902',?,'test')", [at]);
     await root.query("INSERT INTO SubscriptionPlan (id,name,durationDays,priceUgx,active,sortOrder,createdAt,updatedAt) VALUES (?,'Original Weekly',7,5000,TRUE,1,?,?)", [planId, at, at]);
     for (const [id, accountId, reference] of [[pending, a, "ABCD"], [competitor, b, "EFGH"]]) await root.query(
       "INSERT INTO PaymentSubmission (id,reference,source,accountId,planId,planName,durationDays,priceUgx,claimedNetwork,claimedTxnRef,claimedTxnKey,claimedAmountUgx,status,submittedAt,imageSha256) VALUES (?,?,'report',?,?,'Original Weekly',7,5000,'mtn','MIGRATE100','MIGRATE100',5000,'pending',?,?)",
@@ -24,6 +24,12 @@ test("migration preserves legacy offers, evidence, competing claims and previous
   } }); } catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
   t.after(() => fixture.close());
   const { database } = fixture;
+  const settings = await database.query(tx => tx.subscriptionSettings.findUniqueOrThrow({ where: { id: 1 } }));
+  assert.equal(settings.mtnEnabled, true);
+  assert.equal(settings.airtelEnabled, false);
+  const account = await database.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: a } }));
+  assert.equal(account.trialEligibleAt, null);
+  assert.equal(account.trialForfeitedAt, null);
   const first = await database.query(tx => tx.paymentSubmission.findUniqueOrThrow({ where: { id: pending } }));
   assert.equal(first.workflowVersion, 2); assert.equal(first.status, "disputed"); assert.equal(first.reference, "ABCD"); assert.equal(first.source, "report");
   assert.equal(first.priceUgx, 5000); assert.equal(first.planName, "Original Weekly"); assert.equal(first.receivingNumber, "256700000901");

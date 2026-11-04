@@ -23,8 +23,9 @@ export function requestSettingsScenario(request: Request): SettingsScenario {
 function stateFor(scenario: SettingsScenario): State {
   const states = shared.goalHintSettingsFixture ??= new Map();
   const existing = states.get(scenario); if (existing) return existing;
-  const row: Row = { ...defaultSubscriptionSettings, id: 1, mtnNumber: "256700000901", mtnName: "SYNTHETIC MTN PAYEE", mtnMenuShortcut: "*000*{amount}#",
-    airtelNumber: "256700000902", airtelName: "SYNTHETIC AIRTEL PAYEE", airtelMenuShortcut: "*001*{amount}#",
+  const row: Row = { ...defaultSubscriptionSettings, id: 1,
+    mtnEnabled: true, mtnNumber: "256700000901", mtnName: "SYNTHETIC MTN PAYEE", mtnMenuShortcut: "*000*{amount}#",
+    airtelEnabled: true, airtelNumber: "256700000902", airtelName: "SYNTHETIC AIRTEL PAYEE", airtelMenuShortcut: "*001*{amount}#",
     contactPhone: "256700000903", whatsappPhone: "256700000904", reviewTime: "Usually within 30 minutes", paymentNote: "Keep your payment receipt.",
     updatedAt: new Date("2026-10-23T09:00:00Z"), updatedBy: "synthetic-administrator", paymentNumbersChangedAt: null, lastMembersPurgeAt: null };
   if (scenario === "missing") Object.assign(row, { mtnNumber: null, mtnName: null, mtnMenuShortcut: null,

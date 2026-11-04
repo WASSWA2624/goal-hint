@@ -2,10 +2,12 @@
 
 import { AppLoading } from "@/components/navigation/navigation-progress";
 
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
+import { backToWorkflowStep, workflowPage, workflowStep, writeWorkflowStep } from "@/components/navigation/workflow-history";
+import { randomId } from "@/components/ui/random-id";
 import { Button, TextInput } from "@/components/ui/controls";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardIcon, CopyIcon, DialpadIcon, HelpIcon, ImageIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
@@ -21,6 +23,7 @@ import { supportContactsOf, type SupportContactSettings } from "@/domain/support
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { validTopUp, walletRules } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
+import { manualPaymentProvider } from "@/domain/subscription-settings";
 import { resolveLocale } from "@/i18n/locales";
 import { AccountAuthForm } from "./account-auth-form";
 import { MobileMoneyLogo } from "./mobile-money-logo";
@@ -82,18 +85,19 @@ export function SubscribeFlow(props: Parameters<typeof LegacySubscribeFlow>[0]) 
 }
 function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, startWithTopUp = false }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
-  account: { id: string; phone: string } | null; view: PaymentView | null; returnTo: string | null; userAgent: string; startWithTopUp?: boolean;
+  account: { id: string; phone: string; draftScope?: string } | null; view: PaymentView | null; returnTo: string | null; userAgent: string; startWithTopUp?: boolean;
 }) {
   const m = createMessages(locale), router = useRouter(), ids = useId();
   const desktop = useDesktopLayout();
-  const networks = useMemo(() => (["mtn", "airtel"] as const).filter((key) => !!settings[key === "mtn" ? "mtnNumber" : "airtelNumber"]), [settings]);
+  const networks = useMemo(() => (["mtn", "airtel"] as const).filter((key) => manualPaymentProvider(settings, key).reason === null), [settings]);
   const initial = useMemo<PaymentDraft>(() => ({ purpose: startWithTopUp && account ? "topup" : "plan", planId: plans[0]?.id ?? "", topUpAmount: "", payerPhone: account?.phone ?? "256",
     network: networks.find((network) => network === networkForPrefix(account?.phone ?? "")) ?? networks[0] ?? "", transactionId: "", accepted: false }), [account, networks, plans, startWithTopUp]);
   const restored = useSyncExternalStore(subscribeNothing, clientReady, serverReady);
-  const persisted = useSyncExternalStore(subscribeNothing, () => account ? paymentDraftSnapshot(account.id) : null, () => null);
-  const recovered = useMemo(() => account ? readPaymentDraft(account.id, persisted) : null, [account, persisted]);
+  const scope = account?.draftScope ?? account?.id;
+  const persisted = useSyncExternalStore(subscribeNothing, () => scope ? paymentDraftSnapshot(scope) : null, () => null);
+  const recovered = useMemo(() => readPaymentDraft(persisted), [persisted]);
   const [edited, setEdited] = useState<PaymentDraft | null>(null);
-  const draft = useMemo(() => edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
+  const draft = useMemo(() => edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...initial, ...recovered,
     // Only the Add credit link opens a top-up: that screen has no way back to plans, so a saved top-up draft never takes over
     // the plan page (its amount is still there for the next top-up).
     purpose: startWithTopUp && account ? "topup" as const : "plan" as const,
@@ -108,6 +112,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
   const canPaste = useSyncExternalStore(subscribeNothing, clipboardReadable, serverReady), canConfirm = useSyncExternalStore(subscribeNothing, modalDialogs, serverReady);
   const [confirming, setConfirming] = useState(false), [announcement, setAnnouncement] = useState("");
   const [step, setStep] = useState<PaymentStep>(0), [confirmationKey, setConfirmationKey] = useState<string | null>(null);
+  const workflow = useRef<{ id: string; page: string } | null>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null), focusStep = useRef(false), sending = useRef(false);
   const creditRequestKey = useRef<string | null>(null);
   const [methodVisited, setMethodVisited] = useState(false);
@@ -142,7 +147,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
   const focusTarget = useRef<string | null>(null);
   const topUpWaiting = !!topUpStatus && waitingStatuses.includes(topUpStatus.status);
   useApprovalRefresh(!!account && (waiting || topUpWaiting));
-  useEffect(() => { if (restored && account && showForm) savePaymentDraft(account.id, draft); }, [account, draft, restored, showForm]);
+  useEffect(() => { if (restored && scope && showForm) savePaymentDraft(scope, draft); }, [scope, draft, restored, showForm]);
   useEffect(() => {
     if (!focusTarget.current) return;
     const target = document.getElementById(focusTarget.current);
@@ -177,11 +182,31 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     if (Object.keys(values).some((key) => key !== "accepted")) setConfirmationKey(null);
     setDraft((old) => ({ ...old, ...values }));
   };
-  function goToStep(next: PaymentStep) {
-    if (busy) return;
+  function showStep(next: PaymentStep) {
     if (next === 1) setMethodVisited(true);
     setError(""); setConfirmationKey(null); focusStep.current = true; setStep(next);
   }
+  function goToStep(next: PaymentStep) {
+    if (busy) return;
+    if (!workflow.current) {
+      workflow.current = { id: randomId(), page: workflowPage(window.location.href) };
+      writeWorkflowStep(workflow.current.id, step, "replace");
+    }
+    if (next < step && backToWorkflowStep(workflow.current.id, next)) return;
+    writeWorkflowStep(workflow.current.id, next, next < step ? "replace" : "push");
+    showStep(next);
+  }
+  const restoreWizardStep = useEffectEvent((event: PopStateEvent) => {
+    const entry = workflow.current;
+    if (!entry || !showForm || entry.page !== workflowPage(window.location.href)) return;
+    const target = workflowStep(event.state, entry.id, entry.page) ?? 0;
+    setConfirming(false); showStep(target);
+  });
+  useEffect(() => {
+    const onPop = (event: PopStateEvent) => restoreWizardStep(event);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   /** A new manual recipient or package needs its own proof; OCR inference keeps the image it just read. */
   function changePayment(values: Partial<PaymentDraft>) {
     if (busy) return;
@@ -330,7 +355,9 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
     if (screenshot) body.append("image", screenshot, "payment.jpg");
     let failed = false;
     try {
-      const result = await uploadPayment(body); clearPaymentDraft(account.id); trackEvent("payment_submitted");
+      const result = await uploadPayment(body); clearPaymentDraft(scope ?? account.id); trackEvent("payment_submitted");
+      if (workflow.current?.page === workflowPage(window.location.href)) writeWorkflowStep(workflow.current.id, 0, "replace");
+      workflow.current = null;
       setSent({ before: view?.status?.reference ?? null, status: { reference: result.reference, status: "pending", rejectText: null, rejectReason: null,
         planName: credit === null ? plan.name : m.text("credit.topUp"), priceUgx: credit ?? plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null,
         purpose: credit === null ? "plan" : "topup" } });
@@ -518,7 +545,7 @@ function LegacySubscribeFlow({ locale, settings, plans, account, view, returnTo,
       {step === 0 && <>
         <WizardPlans aria-label={m.text("subscribe.wizard.choosePackage")} $columns={1} id="plans">{plans.map((item) => <Plan key={item.id}>
           <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} disabled={busy} onChange={() => changePayment({ planId: item.id })} />
-          <PlanName>{m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice><small>UGX</small> <span>{m.number(item.priceUgx)}</span></PlanPrice>
+          <PlanName>{item.durationDays === 1 ? m.plural("account.remainingHours", 24) : m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice><small>UGX</small> <span>{m.number(item.priceUgx)}</span></PlanPrice>
         </Plan>)}</WizardPlans>
         <WizardActions><Button type="button" disabled={busy || !restored} onClick={() => goToStep(1)}>{m.text("subscribe.wizard.continue")}<ChevronRightIcon /></Button></WizardActions>
         {noScript}

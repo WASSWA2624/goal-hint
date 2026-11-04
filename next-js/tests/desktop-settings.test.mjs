@@ -33,7 +33,7 @@ test("configured support is a fallback until an explicit directory projects its 
   const resolved = configuredSubscriptionSettings({ ...settings, supportContacts: contacts }, identity);
   assert.equal(resolved.contactPhone, contacts[1].phone);
   assert.equal(resolved.whatsappPhone, contacts[1].phone);
-  assert.equal(resolved.mtnNumber, identity.mtnNumber);
+  assert.equal(resolved.mtnNumber, settings.mtnNumber);
   assert.equal(configuredSubscriptionSettings({ ...settings, supportContacts: [] }, identity).contactPhone, null);
 });
 

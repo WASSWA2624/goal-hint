@@ -235,7 +235,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
     await t.test("settings default to off with a 2-day trial and keep the owner's ranges", async () => {
       await app.query("INSERT INTO SubscriptionSettings (id, updatedAt, updatedBy) VALUES (1, ?, 'owner')", [now]);
       const [settings] = await app.query("SELECT * FROM SubscriptionSettings");
-      assert.deepEqual({ ...settings }, { id: 1, paywallMode: "off", mtnNumber: null, mtnName: null, mtnMenuShortcut: null, airtelNumber: null,
+      assert.deepEqual({ ...settings }, { id: 1, paywallMode: "off", mtnEnabled: 0, mtnNumber: null, mtnName: null, mtnMenuShortcut: null, airtelEnabled: 0, airtelNumber: null,
         airtelName: null, airtelMenuShortcut: null, copyFormat: "international", contactPhone: null, whatsappPhone: null, paymentNote: null,
         reviewTime: null, maxUnlockedDevices: 2, trialDays: 2, screenshotRetentionDays: 90, paymentNumbersChangedAt: null,
         lastMembersPurgeAt: null, updatedAt: now, updatedBy: "owner" });
@@ -301,7 +301,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(await dashboard.read(member), null);
     });
 
-    await t.test("settings and plans services keep canonical numbers, the owner password on eight fields, mode requirements and an audit of every change", async () => {
+    await t.test("settings and plans services keep canonical numbers, protected payment fields, mode requirements and an audit of every change", async () => {
       // Re-entry runs the owner login's check and throttle, so the application role also needs the analytics login tables.
       await instance.executeAdmin(["AnalyticsLoginThrottle", "AnalyticsAdminSession"].map((table) =>
         `GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.${table} TO 'members_application'@'127.0.0.1';`).join("\n"));
@@ -444,27 +444,28 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       await refused(app.query("DELETE FROM SubscriptionPlan WHERE id = ?", [daily]), DENIED, "plan delete");
       assert.equal((await plans.list()).length, everyPlan.length);
 
-      // Environment identity is authoritative even while editing non-identity settings or switching modes.
-      const blankIdentity = { mtnNumber: null, mtnName: null, mtnMenuShortcut: null, airtelNumber: null, airtelName: null,
-        airtelMenuShortcut: null, contactPhone: null, whatsappPhone: null };
+      // Environment support fallback cannot replace stored receiving details.
+      const blankIdentity = { contactPhone: null, whatsappPhone: null };
       const identity = { ...blankIdentity, mtnNumber: "256700000910", mtnName: "ENV MTN", airtelNumber: "256700000911",
         airtelName: "ENV AIRTEL", contactPhone: "256700000912", whatsappPhone: "256700000913" };
       const configured = createSettingsService(database, { environment: identity, now });
       const storedBefore = await stored();
-      const managed = await configured.save("owner", { mtnNumber: MTN }, reentry(right));
+      const managed = await configured.save("owner", { contactPhone: CONTACT }, reentry(right));
       assert.equal(managed.status, "invalid");
-      assert.match(managed.errors.mtnNumber, /environment variables/u);
+      assert.match(managed.errors.contactPhone, /environment variables/u);
       const overview = await configured.overview();
-      assert.deepEqual([...overview.environmentFields].sort(), Object.keys(identity).sort());
-      for (const [key, value] of Object.entries(identity)) assert.equal(overview.settings[key], value, key);
+      assert.deepEqual(overview.environmentFields, ["contactPhone", "whatsappPhone"]);
+      assert.equal(overview.settings.mtnNumber, storedBefore.mtnNumber);
+      assert.equal(overview.settings.contactPhone, identity.contactPhone);
       const updated = await configured.save("owner", { trialDays: 1 }, reentry(null));
       assert.equal(updated.status, "saved");
-      for (const [key, value] of Object.entries(identity)) assert.equal(updated.settings[key], value, key);
+      assert.equal(updated.settings.mtnNumber, storedBefore.mtnNumber);
+      assert.equal(updated.settings.whatsappPhone, identity.whatsappPhone);
       assert.equal((await plans.setActive("owner", daily, true)).status, "saved");
       const noIdentity = createSettingsService(database, { environment: blankIdentity, now });
-      assert.deepEqual(keys(await noIdentity.setMode("owner", "test")), ["payment-number", "contact"], "Stored wallet history is never an environment fallback.");
+      assert.deepEqual(keys(await noIdentity.setMode("owner", "test")), ["contact"], "Stored receiving details satisfy the payment requirement independently.");
       assert.equal((await configured.setMode("owner", "test")).status, "saved");
-      assert.equal((await configured.current()).settings.airtelNumber, identity.airtelNumber);
+      assert.equal((await configured.current()).settings.airtelNumber, storedBefore.airtelNumber);
       const storedAfter = await stored();
       for (const key of Object.keys(identity)) assert.equal(storedAfter[key], storedBefore[key], `stored identity preserved: ${key}`);
       assert.equal((await configured.setMode("owner", "off")).status, "saved");

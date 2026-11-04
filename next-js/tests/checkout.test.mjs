@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { checkoutMethodAvailable, checkoutSelectionSchema, receiptInputSchema, fundingAmounts } from "../src/domain/checkout.ts";
+import { defaultSubscriptionSettings, manualPaymentProvider } from "../src/domain/subscription-settings.ts";
 import { createCheckoutHandlers } from "../src/server/members/checkout-http.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { paymentDateNotExtracted, paymentEvidenceDate } from "../src/domain/payment-evidence-date.ts";
@@ -132,13 +133,22 @@ test("funding inputs cap edits and restored choices at spendable balances and pa
 });
 
 test("wallet contributions stay selectable even when the balance cannot cover the package", () => {
-  const balances = { availableWalletUgx: 1000, availableReferralDays: 1 }, providers = { mtnNumber: "256700000123", airtelNumber: null };
+  const balances = { availableWalletUgx: 1000, availableReferralDays: 1 };
+  const providers = { ...defaultSubscriptionSettings, mtnEnabled: true, mtnNumber: "256700000123", mtnName: "TEST MTN" };
   assert.equal(checkoutMethodAvailable("mtn", balances, providers), true);
   assert.equal(checkoutMethodAvailable("airtel", balances, providers), false);
   assert.equal(checkoutMethodAvailable("wallet", balances, providers), true);
   assert.equal(checkoutMethodAvailable("wallet", { ...balances, availableWalletUgx: 0 }, providers), false);
   assert.equal(checkoutMethodAvailable("referral", balances, providers), true);
   assert.equal(checkoutMethodAvailable("referral", { ...balances, availableReferralDays: 0 }, providers), false);
+});
+
+test("manual providers require an enabled flag, a valid number and a registered name", () => {
+  const providers = { ...defaultSubscriptionSettings, airtelEnabled: true, airtelNumber: "0700 000 902", airtelName: " TEST AIRTEL " };
+  assert.deepEqual(manualPaymentProvider(providers, "airtel"), { number: "256700000902", name: "TEST AIRTEL", reason: null });
+  assert.match(manualPaymentProvider({ ...providers, airtelEnabled: false }, "airtel").reason, /disabled/u);
+  assert.match(manualPaymentProvider({ ...providers, airtelName: " " }, "airtel").reason, /incomplete or invalid/u);
+  assert.match(manualPaymentProvider({ ...providers, airtelNumber: "256600000001" }, "airtel").reason, /incomplete or invalid/u);
 });
 
 test("partial wallet funding remains editable and survives provider changes without spending", () => {

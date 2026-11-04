@@ -18,9 +18,8 @@ export function sharedSlipReturnPath(value: unknown): string | null {
   return typeof value === "string" && /^\/s\/[a-f0-9]{32}$/u.test(value) ? value : null;
 }
 
-/** Every draft version shares the prefix, so sign-out also clears a draft an older release left in the tab. */
+/** Purge drafts left behind by older payment forms. */
 export const paymentDraftStoragePrefix = "goal-hint-payment-draft:";
-export const paymentDraftStorageKey = `${paymentDraftStoragePrefix}v2`;
 
 export function memberNextPath(destination: unknown, returnTo: unknown, status?: string): string {
   const query = new URLSearchParams();

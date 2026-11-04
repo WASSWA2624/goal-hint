@@ -439,6 +439,7 @@ export const en = {
   "metadata.paginationTitle": "{title} · Page {page} | Goal Hint",
   "metadata.breadcrumbArchive": "Predictions for {date}",
   "navigation.home": "Goal Hint home",
+  "navigation.back": "Back",
   "navigation.primary": "Main navigation",
   "navigation.footer": "Information",
   "navigation.footerNote": "18+. Estimated probabilities, not guarantees. No betting advice.",

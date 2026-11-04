@@ -5,6 +5,7 @@ import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
 import { createAuthenticatedTestSessions } from "./helpers/member-fixtures.mjs";
 import { createCheckout } from "../src/server/members/checkout.ts";
+import { createSettingsService } from "../src/server/members/settings.ts";
 import { createCheckoutReview } from "../src/server/admin/checkout-review.ts";
 import { createMembersPurge } from "../src/server/members/purge.ts";
 import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
@@ -18,10 +19,12 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
   const { database, config } = fixture;
   let instant = Date.parse("2026-11-01T09:00:00Z"), phone = 100;
   const now = () => instant, at = new Date(instant), planId = randomUUID();
-  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST MTN", airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "test" } }));
+  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test",
+    mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN",
+    airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "test" } }));
   await database.query(tx => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   const sessions = createAuthenticatedTestSessions({ database, config, now });
-  const checkout = createCheckout({ database, config, now, environment: null }), review = createCheckoutReview(database, now);
+  const checkout = createCheckout({ database, config, now }), review = createCheckoutReview(database, now);
   async function member() { const signed = await sessions.signIn(`25670000${String(++phone).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }
   async function fund(who, credit = 0, days = 0) {
     if (credit) { const codes = createAccessCodes({ database, now, notifications: silentPaymentNotifications });
@@ -53,6 +56,44 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     await reviewWarnings(id, claim);
     return act(id, { action: "verify-receipt", ...verification(detail, claim, amountUgx) });
   }
+  await t.test("stored provider settings drive quotes and pending review even as payment destinations change", async () => {
+    const who = await member();
+    const settings = createSettingsService(database, { now, environment: null });
+    const authorized = { password: null, sessionAuthorized: true, confirm: async () => assert.fail() };
+    const mtn = select(), airtel = select({ method: "airtel" });
+    const old = await checkout.quote(who, mtn);
+    const other = await checkout.quote(who, airtel);
+    assert.deepEqual([old.value.recipient, old.value.recipientName, other.value.recipient, other.value.recipientName],
+      ["256700000901", "TEST MTN", "256700000902", "TEST AIRTEL"]);
+    try {
+      const disabled = await settings.save("test", { mtnEnabled: false }, authorized);
+      assert.equal(disabled.status, "saved");
+      assert.equal(disabled.settings.mtnNumber, "256700000901");
+      const blocked = await checkout.quote(who, mtn);
+      assert.deepEqual([blocked.ok, blocked.code], [false, "provider-unavailable"]);
+      assert.match(blocked.message, /disabled/u);
+      assert.equal((await checkout.quote(who, airtel)).ok, true);
+
+      assert.equal((await settings.save("test", { mtnEnabled: true, mtnName: null }, authorized)).status, "saved");
+      assert.match((await checkout.quote(who, mtn)).message, /incomplete or invalid/u);
+      assert.equal((await settings.save("test", { mtnNumber: "0700000904", mtnName: "NEW MTN" }, authorized)).status, "saved");
+      const current = await checkout.quote(who, mtn);
+      assert.deepEqual([current.value.recipient, current.value.recipientName, current.value.priceUgx, current.value.amountToSend, current.value.durationDays],
+        ["256700000904", "NEW MTN", 5000, 5000, 7]);
+      assert.equal((await checkout.confirm(who, mtn, randomUUID(), old.value.quoteKey, true, proof())).code, "quote-changed");
+      const request = await submit(who, mtn);
+      assert.equal(request.status, "pending");
+      assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
+      assert.equal((await settings.save("test", { mtnEnabled: false }, authorized)).status, "saved");
+      assert.equal((await review.detail(request.id)).receivingNumber, "256700000904");
+      assert.equal((await verify(request.id, 5000)).ok, true);
+      assert.equal((await act(request.id, { action: "approve-checkout" })).ok, true);
+      const audit = await database.query(tx => tx.ownerAuditEvent.findFirst({ where: { action: "settings_changed" }, orderBy: { id: "desc" } }));
+      assert.deepEqual(audit.details.changes.mtnEnabled, { from: true, to: false });
+    } finally {
+      assert.equal((await settings.save("test", { mtnEnabled: true, mtnNumber: "0700000901", mtnName: "TEST MTN" }, authorized)).status, "saved");
+    }
+  });
   await t.test("wallet and referral purchases are explicit, immediate and idempotent", async () => {
     const who = await member(); await fund(who, 5000, 3);
     const selection = select({ method: "wallet", walletUgx: 5000, referralDays: 1 }), key = randomUUID();
@@ -283,6 +324,39 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     await codes.manual({ phone: who.phone, durationDays: 2, amountReceivedUgx: 0, note: "Synthetic later manual grant" }, "test");
     const last = await database.query(tx => tx.accessCode.findFirst({ where: { accountId: who.accountId, revokedAt: null }, orderBy: { endsAt: "desc" } }));
     assert.equal(+last.endsAt, +reward.endsAt + 10 * 86_400_000);
+  });
+  await t.test("pending evidence leaves the trial available, and approved paid access forfeits or follows it", async () => {
+    const codes = createAccessCodes({ database, now, notifications: silentPaymentNotifications });
+    for (const method of ["mtn", "airtel"]) {
+      const who = await member(), activateFirst = method === "airtel";
+      await database.query(tx => tx.memberAccount.update({ where: { id: who.accountId }, data: { trialEligibleAt: new Date(now()) } }));
+      const request = await submit(who, select({ method }));
+      assert.equal(request.status, "pending");
+      assert.deepEqual((await codes.subscriptionStatus(who)).trial, { state: "available" });
+      const trial = activateFirst ? await codes.activateTrial(who) : null;
+      if (activateFirst) {
+        assert.equal(trial.state, "active");
+        await database.transaction(async tx => createAccessPeriod(tx, await lockMemberAccount(tx, who.accountId), {
+          source: "referral", planName: "Earned day", durationDays: 1, priceUgx: 0, amountReceivedUgx: 0,
+        }, "test", new Date(now()), { maximum: 2 }));
+        await fund(who, 0, 1);
+        const redemption = await submit(who, select({ purpose: "referral", planId: null, method: "referral", referralDays: 1 }));
+        assert.equal(redemption.status, "approved");
+      }
+      assert.equal((await verify(request.id, 5000)).ok, true);
+      assert.equal((await codes.subscriptionStatus(who)).trial.state, activateFirst ? "active" : "available");
+      assert.equal((await act(request.id, { action: "approve-checkout" })).ok, true);
+      const paid = await database.query(tx => tx.accessCode.findUniqueOrThrow({ where: { paymentSubmissionId: request.id } }));
+      assert.equal(+paid.startsAt, trial ? Date.parse(trial.endsAt) : now());
+      assert.equal(+paid.endsAt - +paid.startsAt, 7 * 86_400_000);
+      if (trial) {
+        const earned = await database.query(tx => tx.accessCode.findMany({ where: { accountId: who.accountId, priceUgx: 0, source: { not: "trial" } }, orderBy: { startsAt: "asc" } }));
+        assert.deepEqual(earned.map(code => [+code.startsAt - +paid.endsAt, +code.endsAt - +code.startsAt]), [[0, 86_400_000], [86_400_000, 86_400_000]]);
+      } else {
+        assert.deepEqual((await codes.subscriptionStatus(who)).trial, { state: "forfeited" });
+        assert.deepEqual(await codes.activateTrial(who), { state: "unavailable" });
+      }
+    }
   });
   await t.test("retention removes closed evidence while preserving disputed and verified-unallocated funds", async () => {
     const closed = await member(), held = await member(), disputed = await member();

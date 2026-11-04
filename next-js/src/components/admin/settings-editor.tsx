@@ -43,7 +43,8 @@ const sections = [
   { key: "messages", label: "Messages", Icon: ChatIcon },
 ] as const;
 const sectionOf: Record<EditableSettingField, Section> = {
-  mtnNumber: "payments", mtnName: "payments", mtnMenuShortcut: "payments", airtelNumber: "payments", airtelName: "payments", airtelMenuShortcut: "payments",
+  mtnEnabled: "payments", mtnNumber: "payments", mtnName: "payments", mtnMenuShortcut: "payments",
+  airtelEnabled: "payments", airtelNumber: "payments", airtelName: "payments", airtelMenuShortcut: "payments",
   contactPhone: "support", whatsappPhone: "support", trialDays: "access", screenshotRetentionDays: "access", maxUnlockedDevices: "access",
   copyFormat: "display", paymentNote: "display", reviewTime: "display",
   supportContacts: "support", messageTemplates: "messages",
@@ -64,8 +65,9 @@ const requirementLabels: Record<ModeRequirement["key"], string> = {
 };
 /** Short names for the password reason line under the field. */
 const protectedNames: Record<ProtectedSettingField, string> = {
-  mtnNumber: "MTN number", mtnName: "MTN registered name", mtnMenuShortcut: "MTN dial code", airtelNumber: "Airtel number",
-  airtelName: "Airtel registered name", airtelMenuShortcut: "Airtel dial code", contactPhone: "support number", whatsappPhone: "WhatsApp number",
+  mtnEnabled: "MTN payment availability", mtnNumber: "MTN number", mtnName: "MTN registered name", mtnMenuShortcut: "MTN dial code",
+  airtelEnabled: "Airtel payment availability", airtelNumber: "Airtel number", airtelName: "Airtel registered name", airtelMenuShortcut: "Airtel dial code",
+  contactPhone: "support number", whatsappPhone: "WhatsApp number",
   supportContacts: "support contacts", messageTemplates: "message templates",
   communityLinks: "community links", paymentAlertsEnabled: "payment alerts",
 };
@@ -79,7 +81,7 @@ function draftOf(settings: SubscriptionSettings): Draft {
 
 /** Normalize before comparison; invalid values still reach the server's field validation. */
 function valueOf(field: ScalarSettingField, text: string): SubscriptionSettings[ScalarSettingField] | string {
-  if (field === "paymentAlertsEnabled") return text === "true";
+  if (field === "paymentAlertsEnabled" || field === "mtnEnabled" || field === "airtelEnabled") return text === "true";
   if (phoneFields.has(field)) return text.trim() === "" ? null : normalizePhone(text) ?? text;
   if (shortcutFields.has(field)) return text.replace(/\s+/gu, "") || null;
   if (numberFields.has(field)) return /^\d+$/u.test(text.trim()) ? Number(text.trim()) : text;
@@ -244,8 +246,6 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const error = (key: EditableSettingField) => errors[key] && <FieldError id={`setting-${key}-error`}>{errors[key]}</FieldError>;
   const shown = (key: EditableSettingField, value?: ReactNode) => value
     ?? (settings[key] ? phoneFields.has(key) ? `+${formatPhone(String(settings[key]))}` : String(settings[key]) : "Not set");
-  const codeShown = (key: "mtnMenuShortcut" | "airtelMenuShortcut") => settings[key]
-    ? <><MobileOnly as="span">Configured</MobileOnly><DesktopOnly as="span">{settings[key]}</DesktopOnly></> : "Not set";
   const badge = <ManagedBadge title="Managed outside this page"><LockIcon />Managed</ManagedBadge>;
   const fact = (key: EditableSettingField, label: string, value?: ReactNode) => <ManagedFact data-settings-managed="true"><div>
     <dt>{label}{badge}</dt><dd>{shown(key, value)}</dd>
@@ -263,9 +263,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     <Drawer $plain open={!!advanced[key]} onToggle={event => { const open = event.currentTarget.open; setAdvanced(shown => shown[key] === open ? shown : { ...shown, [key]: open }); }}>
       <summary>{label}<ChevronDownIcon /></summary><div>{children}</div>
     </Drawer>;
-  const shortcut = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber") => managed.includes(key)
-    ? fact(key, "Dial code", codeShown(key))
-    : drawer(key, "Dial code · optional", <DialField>
+  const shortcut = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber") =>
+    drawer(key, "Dial code · optional", <DialField>
       <DialRow><FieldBlock label="Dial code"><input {...field(key, true)} inputMode="tel" autoComplete="off" spellCheck={false} maxLength={settingsRules.shortcutMaxLength} /></FieldBlock>
         <ActionButton type="button" disabled={busy} onClick={() => update(key, `${draft[key]}{amount}`)}>Add amount</ActionButton></DialRow>
       {error(key)}
@@ -273,11 +272,14 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     </DialField>);
   const range = (key: "maxUnlockedDevices" | "trialDays", label: string, hint?: string) => <FieldBlock label={label} description={<>{error(key)}{hint && <Hint id={`setting-${key}-hint`}>{hint}</Hint>}</>}><select {...field(key, !!hint)}>{Array.from({ length: settingsRules[key].max - settingsRules[key].min + 1 }, (_, index) => settingsRules[key].min + index)
       .map(value => <option key={value} value={value}>{key === "trialDays" ? value === 0 ? "Off" : `${value} ${value === 1 ? "day" : "days"}` : value}</option>)}</select></FieldBlock>;
-  const network = (id: "mtn" | "airtel", title: string, number: "mtnNumber" | "airtelNumber", name: "mtnName" | "airtelName", code: "mtnMenuShortcut" | "airtelMenuShortcut") => {
-    const fixed = locked(number, name, code);
-    return <section aria-labelledby={`settings-network-${id}`}><NetworkTitle id={`settings-network-${id}`}><MobileMoneyLogo network={id} />{title}{fixed && badge}</NetworkTitle>
-      {fixed ? facts([[number, "Phone number"], [name, "Registered name"], [code, "Dial code", codeShown(code)]])
-        : <>{phone(number, "Phone number")}{text(name, "Registered name", settingsRules.nameMaxLength)}{shortcut(code, number)}</>}
+  const network = (id: "mtn" | "airtel", title: string) => {
+    const enabled = `${id}Enabled` as const, number = `${id}Number` as const;
+    const name = `${id}Name` as const, code = `${id}MenuShortcut` as const;
+    return <section aria-labelledby={`settings-network-${id}`}><NetworkTitle id={`settings-network-${id}`}><MobileMoneyLogo network={id} />{title}</NetworkTitle>
+      <FieldBlock label={`Accept ${title} payments`} description={error(enabled)}><select {...field(enabled)}>
+        <option value="false">Disabled</option><option value="true">Enabled</option>
+      </select></FieldBlock>
+      {phone(number, "Phone number")}{text(name, "Registered name", settingsRules.nameMaxLength)}{shortcut(code, number)}
     </section>;
   };
   return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-record-form data-settings-editor>
@@ -301,8 +303,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
         <RecordDetailHead><h2 id="settings-section-heading">{sectionTitle}</h2></RecordDetailHead>
         <SectionPanel id="settings-section" tabIndex={-1} aria-labelledby="settings-section-heading" data-settings-section={section}>
           {section === "payments" && <><NetworkGrid>
-            {network("mtn", "MTN MoMo", "mtnNumber", "mtnName", "mtnMenuShortcut")}
-            {network("airtel", "Airtel Money", "airtelNumber", "airtelName", "airtelMenuShortcut")}
+            {network("mtn", "MTN MoMo")}
+            {network("airtel", "Airtel Money")}
           </NetworkGrid><PanelBody><h2>Payment alerts</h2><TwoUp>
             <FieldBlock label="Outbound payment alerts" description={error("paymentAlertsEnabled")}><select {...field("paymentAlertsEnabled")}>
               <option value="false">Disabled</option><option value="true">Enabled</option></select></FieldBlock>

@@ -12,7 +12,7 @@ import { formatShortDay, formatSubscriptionExpiry } from "@/domain/subscription-
 import { createMessages } from "@/i18n/messages";
 import { AccountActionLink, AccountFine } from "./account-overview";
 import { AccountFacts, AccountPanel } from "./account-workspace";
-import { CopyIcon, GiftIcon, ShareIcon } from "@/components/ui/icons";
+import { ChevronLeftIcon, CopyIcon, GiftIcon, ShareIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
 import { invitationShareAvailable, serverInvitationShareAvailable, shareInvitation, subscribeInvitationShare } from "./invitation-share";
 
@@ -69,7 +69,9 @@ export function AccountReferrals({ locale, summary }: { locale: string; summary:
   const m = createMessages(locale), field = useRef<HTMLInputElement>(null), sharing = useRef(false);
   const [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
   const nativeShare = useSyncExternalStore(subscribeInvitationShare, invitationShareAvailable, serverInvitationShareAvailable);
-  if (!summary) return <AccountPanel title={m.text("account.section.referrals")}><AccountFine role="status">{m.text("referrals.unavailable")}</AccountFine></AccountPanel>;
+  const back = <ButtonLink href={accountSectionHref(locale)} variant="quiet" contextBack prefetch={false} data-context-back>
+    <ChevronLeftIcon />{m.text("navigation.back")}</ButtonLink>;
+  if (!summary) return <AccountPanel title={m.text("account.section.referrals")} actions={back}><AccountFine role="status">{m.text("referrals.unavailable")}</AccountFine></AccountPanel>;
   const { invitation, whatsApp, telegram } = referralInvitation(summary.code, locale), { url } = invitation;
   async function copy() {
     try { await navigator.clipboard.writeText(url); setNotice(m.text("referrals.copied")); }
@@ -84,7 +86,7 @@ export function AccountReferrals({ locale, summary }: { locale: string; summary:
     } finally { sharing.current = false; setBusy(false); }
   }
   return <>
-    <AccountPanel title={<InviteTitle><GiftIcon />{m.text("referrals.invite")}</InviteTitle>} data-account-referrals aria-busy={busy}>
+    <AccountPanel title={<InviteTitle><GiftIcon />{m.text("referrals.invite")}</InviteTitle>} actions={back} data-account-referrals aria-busy={busy}>
       <InviteContent>
         <p>{m.text("referrals.hint")}</p>
         <ShareActions aria-label={m.text("referrals.invite")} role="group" data-invitation-actions>

@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
-import { paymentDraftStoragePrefix } from "@/domain/member-navigation";
 import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
 import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
 import { getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
+import { clearProtectedDrafts } from "./draft-storage";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
 export const MemberPanel = styled(Surface)`
@@ -57,6 +57,6 @@ export function MemberSignOut({ children, logoutAction = "/api/account/sign-out"
       void Promise.race([alerts.clear(), new Promise(resolve => setTimeout(resolve, 1500))])
         .catch(() => {}).finally(() => form.submit());
     }
-    try { for (const key of Object.keys(sessionStorage)) if (key.startsWith(paymentDraftStoragePrefix)) sessionStorage.removeItem(key); } catch { /* Browser storage may be disabled. */ }
+    clearProtectedDrafts();
   }} data-analytics-ignore><Button variant="secondary" {...props} type="submit">{children}</Button></form>;
 }

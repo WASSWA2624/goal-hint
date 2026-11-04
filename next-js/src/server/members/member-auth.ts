@@ -9,7 +9,7 @@ import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, isPasswordHash, verifyPassword } from "../analytics/analytics-password.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
-import { accessCodeTransaction, grantRegistrationTrial, lockMemberAccount } from "./access-codes.ts";
+import { accessCodeTransaction, lockMemberAccount } from "./access-codes.ts";
 import { grantSessionAccess } from "./device-grants.ts";
 import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdentity } from "./member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, verifyMemberAdminCredential } from "./member-admin.ts";
@@ -151,11 +151,10 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         return await accessCodeTransaction<AuthSuccess | AuthFailure>(database, async (tx) => {
           const existing = await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } });
           if (existing) return conflict();
-          const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at } });
+          const account = await tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash, createdAt: at, lastSignInAt: at, trialEligibleAt: at } });
           await ensureReferralCode(tx, { id: account.id, referralCode: null });
           await recordReferralRegistration(tx, config, account, at, referralCode);
-          const trial = await grantRegistrationTrial(tx, account.id, at);
-          return rotate(tx, account, binding, at, trial);
+          return rotate(tx, account, binding, at);
         });
       } catch (error) { if (error instanceof DatabaseOperationError && error.code === "constraint") return conflict(); throw error; }
     },

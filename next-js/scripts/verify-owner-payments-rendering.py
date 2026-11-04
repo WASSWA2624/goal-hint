@@ -144,10 +144,12 @@ def settings_api(origin):
         assert status == 409 and {row["key"] for row in refused["missing"]} == {"payment-number", "contact"}
         assert snapshot("writable") == before, "A refused settings change rolls back its row and audit."
         status, managed = api("managed")
-        assert status == 200 and len(managed["environmentFields"]) == 8
+        assert status == 200 and managed["environmentFields"] == ["contactPhone", "whatsappPhone"]
         before = snapshot("managed")
-        status, refused = api("managed", {"action": "save", "changes": {"mtnNumber": "256700000905"}})
-        assert status == 400 and "mtnNumber" in refused["errors"] and snapshot("managed") == before
+        status, refused = api("managed", {"action": "save", "changes": {"contactPhone": "256700000905"}})
+        assert status == 400 and "contactPhone" in refused["errors"] and snapshot("managed") == before
+        status, saved = api("managed", {"action": "save", "changes": {"mtnEnabled": False}})
+        assert status == 200 and saved["settings"]["mtnEnabled"] is False and saved["settings"]["airtelEnabled"] is True
         status, missing = api("missing")
         assert status == 200 and {item["key"] for item in missing["requirements"]["test"]} == {"plan", "payment-number", "contact"}
         status, refused = api("missing", {"action": "mode", "mode": "on"})
@@ -191,12 +193,9 @@ def settings_rendering(origin):
         no_match(r'type="password"', html)
         text = unescape(re.sub(r'<[^>]+>', " ", html))
         no_match(r'GOAL_HINT_|X-Forwarded-For|X-Real-IP|settingsRules|screenshotRetentionDays|paymentNumbersChangedAt|synthetic-administrator', text)
-        if scenario == "managed":
-            match(r'data-settings-managed="true"', html)
-            for field in re.findall(r'<(?:input|select|textarea)\b(?=[^>]*id="setting-(?:mtn|airtel)[^"]*")[^>]*>', html):
-                match(r'\b(?:disabled|readonly)(?:=""|\s|>)', field, "Managed payment fields must not be editable.", flags=re.IGNORECASE)
-        else:
-            match(r'id="setting-mtnName"', html)
+        for name in ["mtnEnabled", "mtnName", "airtelEnabled", "airtelName"]:
+            control = match(r'<(?:input|select)\b(?=[^>]*id="setting-' + name + r'")[^>]*>', html).group(0)
+            no_match(r'\b(?:disabled|readonly)(?:=""|\s|>)', control)
 
 
 def audit_rendering(origin):

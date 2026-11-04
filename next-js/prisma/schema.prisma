@@ -1670,6 +1670,8 @@ model MemberAccount {
   ownerNote        String?             @db.VarChar(500)
   trialRequestedAt DateTime?           @db.DateTime(3)
   trialDismissedAt DateTime?           @db.DateTime(3)
+  trialEligibleAt  DateTime?           @db.DateTime(3)
+  trialForfeitedAt DateTime?           @db.DateTime(3)
   erasedAt         DateTime?           @db.DateTime(3)
   creditUgx        Int                 @default(0)
   autoRenew        Boolean             @default(false)
@@ -2169,9 +2171,11 @@ model SubscriptionSettings {
   paymentAlertRepeats      Int @default(1) @db.UnsignedTinyInt
   id                      Int       @id @db.UnsignedTinyInt
   paywallMode             String    @default("off") @db.VarChar(8)
+  mtnEnabled              Boolean   @default(false)
   mtnNumber               String?   @db.VarChar(15)
   mtnName                 String?   @db.VarChar(64)
   mtnMenuShortcut         String?   @db.VarChar(60)
+  airtelEnabled           Boolean   @default(false)
   airtelNumber            String?   @db.VarChar(15)
   airtelName              String?   @db.VarChar(64)
   airtelMenuShortcut      String?   @db.VarChar(60)

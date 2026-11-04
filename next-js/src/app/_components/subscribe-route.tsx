@@ -5,6 +5,7 @@ import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { SubscribeFlow, SubscribeIntro, SubscribeLayout } from "@/components/members/subscribe-controls";
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { SubscriptionSummaryCard } from "@/components/members/subscription-summary-card";
+import { FreeTrialControl } from "@/components/members/free-trial-control";
 import { ButtonLink } from "@/components/ui/controls";
 import { memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
@@ -14,7 +15,7 @@ import { publicSubscriptionSettings } from "@/domain/public-subscription-setting
 import { createMessages } from "@/i18n/messages";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
-import { memberCookieName } from "@/server/members/member-sessions";
+import { memberCookieName, memberTokenHash } from "@/server/members/member-sessions";
 import { createPlansService } from "@/server/members/plans";
 import { PublicShell } from "./public-shell";
 
@@ -56,17 +57,20 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
       } catch { unavailable = true; }
     }
     const activeUntil = subscription?.activeUntil ?? null;
+    const trial = subscription?.trial;
     const administrator = !!member && !member.blocked && member.administrator;
+    const draftScope = member ? memberTokenHash(`purchase-progress:${member.tokenHash}`) : "signed-out";
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
       <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
-      {sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}<ApprovalRefresh waiting={false} refreshAt={activeUntil} />
+      {sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}<ApprovalRefresh waiting={false} refreshAt={trial?.state === "active" ? trial.endsAt : activeUntil} />
+      {trial && parameters.add !== "credit" && <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={settings?.trialDays ?? 0} />}
       {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href={adminLandingPath} prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
         : settings?.paywallMode === "off" ? <>{activeUntil && <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={false} returnTo={returnTo} />}<p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
           : member?.blocked ? <p role="status">{m.text("account.refused")}</p>
-            // The URL decides plans or Add credit: moving between them starts the flow afresh (its draft is saved per account).
-            : <SubscribeFlow key={`${member?.tokenHash ?? "signed-out"}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings!)} plans={offers}
-              account={member ? { id: member.accountId, phone: member.phone } : null} view={view} returnTo={returnTo} userAgent={userAgent}
+            // Use a separate, noncredential storage scope for each verified browser session.
+            : <SubscribeFlow key={`${draftScope}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings!)} plans={offers}
+              account={member ? { id: member.accountId, phone: member.phone, draftScope } : null} view={view} returnTo={returnTo} userAgent={userAgent}
               startWithTopUp={parameters.add === "credit"} />}
     </SubscribeLayout></PublicShell>;
   };

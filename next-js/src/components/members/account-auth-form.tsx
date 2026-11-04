@@ -12,7 +12,6 @@ import { AccountCard, AccountCardBody, AccountError, AccountFormFooter, AccountL
 import { AccountFormHeader } from "./account-form-header";
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
-import { FreeTrialNotice, type FreeTrialAccess } from "./free-trial-notice";
 
 export type AccountAuthView = "login" | "register" | "forgot";
 
@@ -21,20 +20,17 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
   const m = createMessages(locale), [phone, setPhone] = useState("256");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [createdTrial, setCreatedTrial] = useState<{ trial: FreeTrialAccess; next: string } | null>(null);
   const base = `/${resolveLocale(locale)}`;
   const href = (next: AccountAuthView) => `${base}/account?${new URLSearchParams({ view: next, ...(returnTo ? { return: returnTo } : {}) })}`;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     try {
-      const result = await accountRequest<{ next: string; trial?: FreeTrialAccess }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
-      if (view === "register" && result.trial) { setPassword(""); setCreatedTrial({ trial: result.trial, next: result.next }); return; }
+      const result = await accountRequest<{ next: string }>(view, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
   if (view === "forgot") return <ForgotPasswordForm locale={locale} returnTo={returnTo} contact={contact} />;
-  if (createdTrial) return <FreeTrialNotice locale={locale} {...createdTrial} />;
   return <AccountCard data-account-auth data-analytics-ignore>
     <AccountFormHeader icon={UserIcon} title={m.text(view === "register" ? "auth.signUp" : "auth.signIn")}
       description={m.text(view === "register" ? "account.registerHelp" : "account.description")}

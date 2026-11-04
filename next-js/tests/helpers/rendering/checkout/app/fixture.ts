@@ -2,10 +2,13 @@ import type { CheckoutEvidenceCheck, CheckoutQuote, CheckoutRequest, CheckoutSel
 import { fundingAmounts } from "@/domain/checkout";
 import { transactionKey } from "@/domain/payment";
 import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
-export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const, mtnNumber: "256700000901", mtnName: "SYNTHETIC MTN PAYEE",
-  airtelNumber: "256700000902", airtelName: "SYNTHETIC AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904" };
-export const plans = [1, 7, 30].map((durationDays, i) => ({ id: `00000000-0000-4000-8000-00000000000${i}`,
-  name: ["Daily", "Weekly", "Monthly"][i]!, priceUgx: [1000, 5000, 20000][i]!, durationDays, active: true, sortOrder: i, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z" }));
+export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const,
+  mtnEnabled: true, mtnNumber: "256700000901", mtnName: "SYNTHETIC MTN PAYEE",
+  airtelEnabled: true, airtelNumber: "256700000902", airtelName: "SYNTHETIC AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904" };
+const packageFixtures = [["Daily", 1, 1000], ["Weekly", 7, 5000], ["Monthly", 30, 20000],
+  ["Quarterly", 90, 50000], ["6 Months", 180, 90000], ["Annual", 365, 150000]] as const;
+export const plans = packageFixtures.map(([name, durationDays, priceUgx], i) => ({ id: `00000000-0000-4000-8000-00000000000${i}`,
+  name, priceUgx, durationDays, active: true, sortOrder: i, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z" }));
 const state = globalThis as typeof globalThis & { checkoutFixture?: CheckoutView; checkoutFixtureImages?: Map<string, string> };
 export function checkEvidence(input: { provider: string; transactionId: string; submissionId?: string | null; imageSha256?: string | null }): CheckoutEvidenceCheck {
   const own = view().requests.find(row => row.method === input.provider && row.receipts.some(receipt => transactionKey(receipt.transactionId) === transactionKey(input.transactionId)));

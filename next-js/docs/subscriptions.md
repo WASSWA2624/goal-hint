@@ -10,7 +10,7 @@ Completed fixtures expose their published predictions, odds, analysis and histor
 
 Unfinished match details retain their basic match header on desktop and mobile, while detailed tabs stay locked. Slip builder preferences remain available, while generation and results require active access. Missing forecasts remain unavailable rather than appearing as a locked published pick. Active prediction-only, odds and probability-range filters are protected to prevent inferring hidden values; public sorting remains available. Server projections remove protected content before HTML, flight data or API responses reach the browser, including after expiry or revocation.
 
-Admin sessions and members with a current approved subscription get the full view. Raw premium caches stay on the server; final responses are private/no-store and vary on Cookie. Subscription sales mode `off` closes purchases and requests without granting public premium access. Existing approved periods still expire normally. New registrations receive one automatic free-trial access period using Admin Settings → Free trial on registration (days). A value of 0 disables new trials. The period starts at registration; ordinary phone verification is still required before the session can use premium access. No trial request or administrator approval is involved.
+Admin sessions and members with current approved access get the full view. Raw premium caches stay on the server. Final responses are private/no-store and vary on Cookie. Subscription sales mode `off` closes purchases and requests without granting public premium access. Existing approved periods still expire normally. New registrations are eligible for one trial after phone verification. The member can select **Activate free trial** in Account or Get access. Activation uses the current duration from Admin Settings → New account free trial. The Off setting pauses activation, and existing trials keep their timestamps. The first approved paid plan closes an unused trial. A paid plan approved during a trial retains its full duration and begins after the trial ends.
 
 Active subscribers' header status bar shows `Expires on [date] at [time]`
 followed by the remaining duration in parentheses. At least 24 hours remaining
@@ -47,15 +47,11 @@ The user can call the administrator if approval is delayed. Optional support-cha
 
 ## Environment configuration
 
-Receiving wallets and support contacts are private server configuration:
+Set the enabled status, receiving number, registered name and optional tested dial code for each wallet in Admin Settings under Payments. Changes use the protected admin save and audit. The checkout rechecks the stored settings when quoting and confirming a purchase. A wallet requires an enabled status, valid mobile number and registered name. Its checkout displays the confirmed transfer amount and payee details. Manual transfers use no provider API credentials.
 
-- `GOAL_HINT_MTN_MOMO_NUMBER`, `GOAL_HINT_MTN_MOMO_NAME`
-- `GOAL_HINT_AIRTEL_MONEY_NUMBER`, `GOAL_HINT_AIRTEL_MONEY_NAME`
-- `GOAL_HINT_CUSTOMER_SUPPORT_NUMBER`, `GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER`
-- Optional verified menu shortcuts: `GOAL_HINT_MTN_MOMO_MENU_SHORTCUT`, `GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT`
-- Payment decision SMS uses `YOOLA_SMS_API_KEY` and optional `YOOLA_SMS_SENDER` in development and production; see [yoola-messaging.md](yoola-messaging.md).
+Older installations that kept receiving details in environment variables must verify and enter those values privately in Admin Settings before accepting transfers with this version. The retired variables are ignored at runtime. Keep real receiving numbers and credentials out of seed data and version control.
 
-Use country-code numbers. Both number and registered name are required for a wallet to appear. Support numbers are separate and never inferred from wallets or the admin allowlist. Admin Settings shows environment-managed identities read-only. Restart after changing environment values. Never seed or commit real credentials or receiving numbers.
+The optional `GOAL_HINT_CUSTOMER_SUPPORT_NUMBER` and `GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER` values remain separate legacy support fallbacks. Use country-code numbers and restart after changing them. Payment decision SMS uses the server-side `YOOLA_SMS_API_KEY` and optional `YOOLA_SMS_SENDER`. [Messaging runbook](yoola-messaging.md)
 
 ## Saved slip history
 

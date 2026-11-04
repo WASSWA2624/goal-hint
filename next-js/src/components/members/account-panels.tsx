@@ -7,9 +7,10 @@ import { Button, ButtonLink } from "@/components/ui/controls";
 import { AccountFacts, AccountPanel, AccountSectionActions, AccountStatus } from "./account-workspace";
 import { AccountActionLink, AccountFine } from "./account-overview";
 import { AccountActivity } from "./account-activity";
+import { FreeTrialControl } from "./free-trial-control";
 
-export function AccountSubscriptionPanel({ locale, subscription, dashboard, now, lastEnd }: {
-  locale: string; subscription: SubscriptionStatus | null; dashboard: AccountDashboard | null; now: number; lastEnd?: Date;
+export function AccountSubscriptionPanel({ locale, subscription, dashboard, now, lastEnd, trialDays = 0 }: {
+  locale: string; subscription: SubscriptionStatus | null; dashboard: AccountDashboard | null; now: number; lastEnd?: Date; trialDays?: number;
 }) {
   const m = createMessages(locale), active = !!subscription?.activeUntil;
   const endsAt = subscription?.activeUntil ? new Date(subscription.activeUntil) : lastEnd;
@@ -30,6 +31,7 @@ export function AccountSubscriptionPanel({ locale, subscription, dashboard, now,
       </dd></div>
       <div><dt>{m.text("account.remainingLabel")}</dt><dd>{remaining}</dd></div>
     </AccountFacts>
+    {subscription?.trial && <FreeTrialControl locale={locale} trial={subscription.trial} days={trialDays} showHistory />}
   </AccountPanel>;
 }
 

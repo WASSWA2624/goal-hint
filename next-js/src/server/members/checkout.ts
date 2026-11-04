@@ -9,16 +9,15 @@ import { formatPaymentReference, parseTransactionId, transactionKey } from "../.
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { checkoutEvidenceWarnings, receiptEvidenceValidation } from "../../domain/checkout-evidence.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
+import { manualPaymentProvider } from "../../domain/subscription-settings.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { PaymentSubmission, Prisma } from "../generated/prisma/client.ts";
 import { accessCodeTransaction, createAccessPeriod, lockMemberAccount, newReference } from "./access-codes.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
-import { configuredSubscriptionSettings, lockSettings } from "./settings.ts";
+import { lockSettings } from "./settings.ts";
 import { appendWalletEntry, lockedCredit } from "./wallet.ts";
-import { getRuntimePolicy } from "../config/runtime-policy.ts";
-import type { SubscriptionIdentity } from "../../domain/subscription-settings.ts";
 import { takeMemberLimit, memberRateRules } from "./rate-limit.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -78,12 +77,12 @@ async function currentMember(tx: Tx, member: MemberIdentity, at: Date) {
     && session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at && !member.administrator ? account : null;
 }
 
-export function createCheckout({ database, config, now = Date.now, environment = getRuntimePolicy().choices.subscriptionIdentity }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number; environment?: SubscriptionIdentity | null;
+export function createCheckout({ database, config, now = Date.now }: {
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
 }) {
   const run = <T>(fn: (tx: Tx, at: Date) => Promise<T>) => accessCodeTransaction(database, tx => fn(tx, new Date(now())));
   async function quote(tx: Tx, selection: CheckoutSelection, at: Date, accountId: string): Promise<Result<CheckoutQuote>> {
-    const settings = configuredSubscriptionSettings(await lockSettings(tx, "checkout", at), environment);
+    const settings = await lockSettings(tx, "checkout", at);
     if (settings.paywallMode === "off") return fail("Subscriptions are not open yet.");
     const balances = await checkoutBalances(tx, accountId);
     const plan = selection.purpose === "plan" && selection.planId ? await tx.subscriptionPlan.findUnique({ where: { id: selection.planId } }) : null;
@@ -98,11 +97,11 @@ export function createCheckout({ database, config, now = Date.now, environment =
     if (selection.method === "wallet" && (selection.purpose !== "plan" || amountToSend !== 0)
       || selection.method === "referral" && selection.purpose !== "referral"
       || ["mtn", "airtel"].includes(selection.method) && amountToSend === 0) return fail("Choose a usable payment method.");
-    const recipient = selection.method === "mtn" ? settings.mtnNumber : selection.method === "airtel" ? settings.airtelNumber : null;
-    if (["mtn", "airtel"].includes(selection.method) && !recipient) return fail("This provider is unavailable. Choose another method.");
+    const provider = selection.method === "mtn" || selection.method === "airtel" ? manualPaymentProvider(settings, selection.method) : null;
+    if (provider?.reason) return fail(provider.reason, "provider-unavailable");
     const value = { ...selection, ...balances, priceUgx, durationDays: plan?.durationDays ?? 0,
       planName: plan?.name ?? (selection.purpose === "referral" ? "Referral days" : "Account credit"), amountToSend,
-      recipient, recipientName: selection.method === "mtn" ? settings.mtnName : selection.method === "airtel" ? settings.airtelName : null };
+      recipient: provider?.number ?? null, recipientName: provider?.name ?? null };
     return { ok: true, value: { ...value, quoteKey: config.key("checkout-quote", JSON.stringify([accountId, value])) } };
   }
 
@@ -121,7 +120,7 @@ export function createCheckout({ database, config, now = Date.now, environment =
     const transactionId = parseTransactionId(input.transactionId), payerPhone = validMobilePhone(input.payerPhone), paidAt = new Date(input.paidAt);
     if (!transactionId || !payerPhone || +paidAt > +at + 300_000 || !["mtn", "airtel"].includes(row.method ?? "")) return fail("Check the transaction details.");
     const provider = row.method!, key = transactionKey(transactionId);
-    const settings = configuredSubscriptionSettings(await lockSettings(tx, "checkout", at), environment);
+    const settings = await lockSettings(tx, "checkout", at);
     const numbers = { mtn: settings.mtnNumber, airtel: settings.airtelNumber, [provider]: row.receivingNumber ?? (provider === "mtn" ? settings.mtnNumber : settings.airtelNumber) };
     const screenshotText = image && typeof input.original.extracted.screenshotText === "string" ? input.original.extracted.screenshotText : "";
     const warnings = checkoutEvidenceWarnings({ text: input.original.text, screenshotText, hasImage: !!image, transactionId, amountUgx: String(input.amountUgx) }, provider as "mtn" | "airtel", numbers);

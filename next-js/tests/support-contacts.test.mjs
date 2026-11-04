@@ -74,9 +74,9 @@ test("public settings expose an explicit payment field list and enabled contact 
   const hidden = contact({ id: "private-number", phone: "256752123456", enabled: false, primary: false });
   const settings = { ...defaultSubscriptionSettings, ...legacy, supportContacts: [hidden, enabled], updatedBy: "private-owner",
     messageTemplates: { private: "owner message source" }, screenshotRetentionDays: 365,
-    mtnNumber: "256782123456", copyFormat: "local", paymentNote: "Use the registered payment name.", reviewTime: "Usually within 30 minutes" };
+    mtnEnabled: true, mtnNumber: "256782123456", mtnName: "TEST MTN", copyFormat: "local", paymentNote: "Use the registered payment name.", reviewTime: "Usually within 30 minutes" };
   const projected = publicSubscriptionSettings(settings);
-  assert.deepEqual(Object.keys(projected).sort(), ["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName", "airtelMenuShortcut",
+  assert.deepEqual(Object.keys(projected).sort(), ["mtnEnabled", "mtnNumber", "mtnName", "mtnMenuShortcut", "airtelEnabled", "airtelNumber", "airtelName", "airtelMenuShortcut",
     "copyFormat", "paymentNote", "reviewTime", "contactPhone", "whatsappPhone", "supportContacts"].sort());
   assert.equal(projected.contactPhone, enabled.phone);
   assert.equal(projected.mtnNumber, settings.mtnNumber);

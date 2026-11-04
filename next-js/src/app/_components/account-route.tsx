@@ -87,6 +87,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
     const activeUntil = subscription?.activeUntil ?? null;
+    const refreshAt = subscription?.trial?.state === "active" ? subscription.trial.endsAt : activeUntil;
     const waiting = (subscription?.paymentPending ?? (!!status && ["pending", "superseded"].includes(status.status)))
       || ["pending", "superseded"].includes(paymentView?.otherStatus?.status ?? "");
     const salesOpen = !!settings && mode !== "off";
@@ -100,7 +101,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const viewPayment = reports ? reports.some((report) => ["pending", "superseded", "rejected", "reversed"].includes(report!.status)) : !!subscription?.paymentPending;
     if (member && !member.blocked) return <PublicShell locale={locale} showAccount workspace>
       <MemberNavigationRecovery />
-      <ApprovalRefresh waiting={waiting || !!dashboard?.activity.some(entry => entry.kind === "payment" && entry.status === "pending")} refreshAt={activeUntil} />
+      <ApprovalRefresh waiting={waiting || !!dashboard?.activity.some(entry => entry.kind === "payment" && entry.status === "pending")} refreshAt={refreshAt} />
       <AccountWorkspace locale={locale} current={section} phone={member.phone} returnTo={returnTo}>
         <AccountPageHead><h1>{messages.text(section === "overview" ? "account.title" : `account.section.${section}`)}</h1>
           {summarySection && subscription && salesOpen && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
@@ -111,7 +112,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
         {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
         {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
         {parameters.status === "devices-signed-out" && <AccountFlash role="status">{messages.text("account.devicesSignedOut")}</AccountFlash>}
-        {summarySection && <AccountSubscriptionPanel locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} {...(last ? { lastEnd: last.endsAt } : {})} />}
+        {summarySection && <AccountSubscriptionPanel key={member.accountId} locale={locale} subscription={subscription} dashboard={dashboard} now={now.getTime()} trialDays={settings?.trialDays ?? 0} {...(last ? { lastEnd: last.endsAt } : {})} />}
         {summarySection && <AccountReferralSummary locale={locale} summary={referrals} returnTo={returnTo} />}
         {section === "referrals" && <><AccountReferrals locale={locale} summary={referrals} /><AccountReferralReviews initial={referralReviews} locale={locale} older={!!referralReviewCursor(parameters.reviewBefore)} /></>}
         {section === "overview" && <>

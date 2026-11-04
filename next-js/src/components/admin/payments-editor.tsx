@@ -9,6 +9,7 @@ import { stopReviewSound } from "./payment-alert-sound";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckIcon, ChevronLeftIcon } from "@/components/ui/icons";
+import { goHistoryBack } from "@/components/navigation/context-history";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import { formatPhone } from "@/domain/phone";
 import { defaultPaymentFilters, maximumPaymentQueuePage, paymentProviderLabels, paymentQueueStatusLabels, paymentStatusLabels, type PaymentFilters } from "@/domain/payment-queue-filters";
@@ -222,7 +223,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
     locationFor(payment.id, push);
   }
   function back() {
-    if (queueOrigin.current) { history.back(); return; }
+    if (queueOrigin.current) { goHistoryBack(); return; }
     setDetailOpen(false); setDirtyId(undefined); locationFor("");
     requestAnimationFrame(() => restoreQueueFocus(selectedKey));
   }

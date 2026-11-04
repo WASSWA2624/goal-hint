@@ -52,8 +52,11 @@ test("member write routes use the shared factories; sign-in and devices enforce 
   }
 });
 
-test("account verification and recovery use the shared auth handler without exposing subscription code redemption or manual trials", async () => {
-  for (const segment of ["code", "verification/confirm", "trial"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
+test("account verification, recovery and trial activation use their protected member handlers", async () => {
+  for (const segment of ["code", "verification/confirm"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
+  const trial = "src/app/api/account/trial/route.ts";
+  assert.ok(memberRoutes.includes(trial));
+  assert.match(await source(trial), /export const POST = createMemberTrialHandler\(\);/);
   for (const action of ["verification", "verify", "forgot", "reset-code", "reset"]) {
     const route = `src/app/api/account/${action}/route.ts`;
     assert.ok(memberRoutes.includes(route));
@@ -219,7 +222,7 @@ test("retired login routes redirect without credential checks or audits; logout 
 const postJson = (route, body, headers = {}) => request(route, "POST", { ...signedIn, ...sameOrigin, "content-type": "application/json", ...headers },
   JSON.stringify(body));
 
-test("Plans and Settings: reads expose managed identity, writes are JSON only, environment edits are refused, and plans cannot be deleted", async () => {
+test("Plans and Settings: reads expose managed support settings, writes are JSON only, and plans cannot be deleted", async () => {
   const plans = await import(pathToFileURL(path.join(root, plansRoute)).href);
   const settings = await import(pathToFileURL(path.join(root, settingsRoute)).href);
   for (const handlers of [plans, settings]) assert.deepEqual(Object.keys(handlers).filter((name) => methods.includes(name)).sort(), ["GET", "POST"]);
@@ -231,8 +234,7 @@ test("Plans and Settings: reads expose managed identity, writes are JSON only, e
   assert.equal(shown.source, "defaults");
   assert.equal(shown.settings.paywallMode, "off", "A missing row reads off.");
   assert.equal(shown.settings.trialDays, 2, "A missing row offers the 2-day trial.");
-  assert.deepEqual([...shown.environmentFields].sort(), ["airtelMenuShortcut", "airtelName", "airtelNumber", "contactPhone",
-    "mtnMenuShortcut", "mtnName", "mtnNumber", "whatsappPhone"]);
+  assert.deepEqual(shown.environmentFields, ["contactPhone", "whatsappPhone"]);
   assert.deepEqual(shown.requirements.test.map(({ key }) => key), ["plan", "payment-number", "contact"]);
   assert.deepEqual(shown.requirements.on.map(({ key }) => key), ["plan", "payment-number", "contact", "privacy", "terms"]);
   assert.equal(shown.diagnostics.address, "unknown", "Raw forwarded headers cannot establish a trusted transport address.");
@@ -246,13 +248,13 @@ test("Plans and Settings: reads expose managed identity, writes are JSON only, e
   const invalid = await plans.POST(postJson(plansRoute, { action: "create", plan: { name: "", durationDays: 0, priceUgx: 50 } }));
   assert.equal(invalid.status, 400); assert.deepEqual(Object.keys((await invalid.json()).errors).sort(), ["durationDays", "name", "priceUgx"]);
   const confirms = calls.confirm.length;
-  const protectedChange = await settings.POST(postJson(settingsRoute, { action: "save", changes: { mtnNumber: "0700 000 001" } }));
+  const protectedChange = await settings.POST(postJson(settingsRoute, { action: "save", changes: { contactPhone: "0700 000 001" } }));
   assert.equal(protectedChange.status, 400);
-  assert.match((await protectedChange.json()).errors.mtnNumber, /environment variables/u);
+  assert.match((await protectedChange.json()).errors.contactPhone, /environment variables/u);
   assert.equal(calls.confirm.length, confirms, "Managed fields are refused before password work.");
-  const wrong = await settings.POST(postJson(settingsRoute, { action: "save", changes: { mtnNumber: "0700 000 001" }, password: "wrong" },
+  const wrong = await settings.POST(postJson(settingsRoute, { action: "save", changes: { contactPhone: "0700 000 001" }, password: "wrong" },
     { "x-forwarded-for": "198.51.100.23" }));
-  assert.equal(wrong.status, 400); assert.match((await wrong.json()).errors.mtnNumber, /environment variables/u);
+  assert.equal(wrong.status, 400); assert.match((await wrong.json()).errors.contactPhone, /environment variables/u);
   assert.equal(calls.confirm.length, confirms, "Supplying a password cannot override environment authority.");
   const unknown = await settings.POST(postJson(settingsRoute, { action: "save", changes: { paywallMode: "on" } }));
   assert.equal(unknown.status, 400, "The mode is never part of a save."); assert.match((await unknown.json()).errors.changes, /Unknown setting/);

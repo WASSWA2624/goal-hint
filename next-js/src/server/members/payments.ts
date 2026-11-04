@@ -4,11 +4,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { formatPaymentReference, parseTransactionId, paymentRules, transactionKey, type PaymentFields, type PaymentStatus, type PaymentView } from "../../domain/payment.ts";
 import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
-import type { SubscriptionIdentity } from "../../domain/subscription-settings.ts";
+import { manualPaymentProvider } from "../../domain/subscription-settings.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
-import { getRuntimePolicy } from "../config/runtime-policy.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { imageDimensions } from "../images/image-format.ts";
 import { lockMemberAccount, newReference } from "./access-codes.ts";
@@ -17,17 +16,15 @@ import { acceptedTerms } from "./member-terms.ts";
 import { walletHistory } from "./wallet.ts";
 import { validTopUp } from "../../domain/wallet.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
-import { configuredSubscriptionSettings, decide, lockSettings } from "./settings.ts";
+import { decide, lockSettings } from "./settings.ts";
 import { enqueueMemberMessage } from "./payment-notification-outbox.ts";
 
 type Outcome = Readonly<{ status: "saved"; reference: string }> | Readonly<{ status: "busy" | "refused" | "invalid" | "duplicate" }>;
 type Bucket = { key: string; count: number; bytes: number };
 export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, call admin with the ID.";
 
-export function createPayments({ database, config, now = Date.now, environment = getRuntimePolicy().choices.subscriptionIdentity }: {
+export function createPayments({ database, config, now = Date.now }: {
   database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
-  /** Explicit null is for isolated historical-storage fixtures only. */
-  environment?: SubscriptionIdentity | null;
 }) {
   async function bucket(tx: Prisma.TransactionClient, purpose: string, value: string, at: Date): Promise<Bucket> {
     const key = config.key(`member-${purpose}`, value), start = new Date(Math.floor(+at / memberRateRules.dayMs) * memberRateRules.dayMs);
@@ -81,10 +78,10 @@ export function createPayments({ database, config, now = Date.now, environment =
           const at = new Date(now()), current = await currentMember(tx, member, at);
           if (!current) return rollback({ status: "refused" });
           // Shares confirmation's global lock, so a simultaneous owner approval cannot slip past this lookup.
-          const settings = configuredSubscriptionSettings(await lockSettings(tx, "system", at), environment);
+          const settings = await lockSettings(tx, "system", at);
           if (settings.paywallMode === "off") return rollback({ status: "refused" });
           const plan = topUp === null && fields.planId ? await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } }) : null;
-          if (topUp === null && !plan?.active || !settings[fields.network === "mtn" ? "mtnNumber" : "airtelNumber"]
+          if (topUp === null && !plan?.active || manualPaymentProvider(settings, fields.network).reason !== null
             || !fields.accepted && !await acceptedTerms(tx, member, at)) return rollback({ status: "invalid" });
           if (await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: `${fields.network}:${key}` }, select: { id: true } })) return rollback({ status: "duplicate" });
           const stored = await bucket(tx, "upload-stored", member.tokenHash, at), site = await bucket(tx, "upload-site", "all", at);

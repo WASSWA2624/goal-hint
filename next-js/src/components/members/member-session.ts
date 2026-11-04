@@ -1,6 +1,7 @@
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { SubscriptionSummary } from "@/domain/subscription-summary";
 import { startRequestDeadline } from "../../domain/request-deadline.ts";
+import { clearProtectedDrafts, purgeLegacyDrafts } from "./draft-storage.ts";
 
 /** Client-only account state. Public page HTML and browser storage never contain it. */
 let phone: string | null = null;
@@ -67,6 +68,7 @@ function scheduleRefresh() {
 /** Desktop and phone headers share one in-flight request, including React's development remounts. */
 export function refreshMemberSession(): Promise<void> {
   if (pending) return pending;
+  purgeLegacyDrafts();
   pending = Promise.resolve().then(async () => {
     const controller = new AbortController(), clearDeadline = startRequestDeadline(controller);
     try {
@@ -77,6 +79,7 @@ export function refreshMemberSession(): Promise<void> {
       const session: unknown = await response.json();
       if (!session || typeof session !== "object" || !("phone" in session) ||
         session.phone !== null && typeof session.phone !== "string") return;
+      if (session.phone === null || phone !== null && phone !== session.phone) clearProtectedDrafts();
       const nextAdministrator = "administrator" in session && session.administrator === true;
       const nextSubscription = readSubscription("subscription" in session ? session.subscription : null);
       confirmedAt = Date.now();

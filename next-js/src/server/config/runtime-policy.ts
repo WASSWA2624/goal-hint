@@ -5,7 +5,6 @@ import { calendarRules } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { normalizePhone } from "../../domain/phone.ts";
-import { menuShortcutPattern } from "../../domain/subscription-settings.ts";
 import { androidAppLinkFingerprints } from "../../domain/slip-app-links.ts";
 import { deepFreeze } from "../shared/deep-freeze.ts";
 import { parseMemberAdminPhones } from "../members/member-admin.ts";
@@ -103,8 +102,6 @@ const enabledByDefault = z.enum(["true", "false"]).transform((value) => value ==
 const disabledFeature = z.literal("false").optional();
 const subscriptionPhone = optional(z.string().max(64).refine((value) => normalizePhone(value) !== null)
   .transform((value) => normalizePhone(value)!));
-const subscriptionName = optional(z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f\u007f]+$/u));
-const subscriptionShortcut = optional(z.string().transform((value) => value.replace(/\s+/gu, "")).pipe(z.string().max(60).regex(menuShortcutPattern)));
 const databaseUrl = optional(z.string().refine((value) => {
   try {
     const url = new URL(value);
@@ -145,12 +142,6 @@ const environmentSchema = z.object({
   GOAL_HINT_ANDROID_PLAY_STORE_BUILD: text.describe("Actual Google Play native build number for update checks."),
   GOAL_HINT_DATABASE_ENABLED: enabled.describe("Use true or false; database integration belongs to prompt 003."),
   GOAL_HINT_TRUSTED_PROXY_CIDRS: text.describe("Comma-separated exact proxy IPs/CIDRs, verified from the actual socket chain. Blank trusts no forwarded address."),
-  GOAL_HINT_MTN_MOMO_NUMBER: subscriptionPhone.describe("Supply the MTN MoMo receiving number with its country code; independent of support numbers."),
-  GOAL_HINT_MTN_MOMO_NAME: subscriptionName.describe("Supply the registered name shown for the MTN MoMo receiving wallet."),
-  GOAL_HINT_MTN_MOMO_MENU_SHORTCUT: subscriptionShortcut.describe("Optional tested MTN menu string; digits, * and # with {amount}. Leave blank when unverified."),
-  GOAL_HINT_AIRTEL_MONEY_NUMBER: subscriptionPhone.describe("Supply the Airtel Money receiving number with its country code; independent of support numbers."),
-  GOAL_HINT_AIRTEL_MONEY_NAME: subscriptionName.describe("Supply the registered name shown for the Airtel Money receiving wallet."),
-  GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT: subscriptionShortcut.describe("Optional tested Airtel menu string; digits, * and # with {amount}. Leave blank when unverified."),
   GOAL_HINT_CUSTOMER_SUPPORT_NUMBER: subscriptionPhone.describe("Supply the customer support call/SMS number separately from receiving wallets."),
   GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER: subscriptionPhone.describe("Supply the customer support WhatsApp number independently, even when it matches the call number."),
   GOAL_HINT_FOOTBALL_ENABLED: enabled.describe("Use true or false; paid calls require approved bounded policy."),
@@ -277,10 +268,6 @@ function assemble(settings: z.output<typeof environmentSchema>) {
     },
     choices: {
       subscriptionIdentity: {
-        mtnNumber: settings.GOAL_HINT_MTN_MOMO_NUMBER, mtnName: settings.GOAL_HINT_MTN_MOMO_NAME,
-        mtnMenuShortcut: settings.GOAL_HINT_MTN_MOMO_MENU_SHORTCUT,
-        airtelNumber: settings.GOAL_HINT_AIRTEL_MONEY_NUMBER, airtelName: settings.GOAL_HINT_AIRTEL_MONEY_NAME,
-        airtelMenuShortcut: settings.GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT,
         contactPhone: settings.GOAL_HINT_CUSTOMER_SUPPORT_NUMBER, whatsappPhone: settings.GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER,
       },
       database: {
@@ -352,7 +339,7 @@ function databaseApprovalRequired(policy: RuntimePolicy, migration = false): boo
 }
 
 // Message-gateway settings retired with one-time codes (068): env files that still carry them keep starting, and nothing reads them.
-const retiredSetting = /^GOAL_HINT_(?:SMS|WHATSAPP)_[A-Z_]+$/u;
+const retiredSetting = /^GOAL_HINT_(?:(?:SMS|WHATSAPP)_[A-Z_]+|(?:MTN_MOMO|AIRTEL_MONEY)_(?:NUMBER|NAME|MENU_SHORTCUT))$/u;
 
 /** Pure parsing for isolated contracts/tests; never mutates env or performs I/O. */
 export function parseRuntimePolicy(env: Environment): RuntimePolicy {
@@ -478,14 +465,6 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
 
 function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   const issues: PolicyIssue[] = [];
-  const identity = policy.choices.subscriptionIdentity;
-  for (const [number, name, numberKey, nameKey, shortcut, shortcutKey] of [
-    [identity.mtnNumber, identity.mtnName, "GOAL_HINT_MTN_MOMO_NUMBER", "GOAL_HINT_MTN_MOMO_NAME", identity.mtnMenuShortcut, "GOAL_HINT_MTN_MOMO_MENU_SHORTCUT"],
-    [identity.airtelNumber, identity.airtelName, "GOAL_HINT_AIRTEL_MONEY_NUMBER", "GOAL_HINT_AIRTEL_MONEY_NAME", identity.airtelMenuShortcut, "GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT"],
-  ] as const) {
-    if (Boolean(number) !== Boolean(name)) issues.push({ field: number ? nameKey : numberKey, reason: "Set each receiving number and its registered name together." });
-    if (shortcut && !number) issues.push({ field: shortcutKey, reason: "A menu shortcut needs its own configured receiving wallet." });
-  }
   if (policy.choices.probabilitySumTolerance !== marketRules.probabilitySumTolerance) {
     issues.push({ field: "GOAL_HINT_PROBABILITY_SUM_TOLERANCE", reason: "Probability sum tolerance must match the approved market rule version; changes require a recorded versioned decision." });
   }

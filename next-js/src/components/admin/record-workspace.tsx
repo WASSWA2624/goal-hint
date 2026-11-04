@@ -1,9 +1,12 @@
 "use client";
 
 import { sectionSurface } from "@/components/ui/filled-surfaces";
+import { goHistoryBack, writeContextHistory } from "@/components/navigation/context-history";
 import { controlRow } from "@/components/ui/control-layout";
 import { ChevronLeftIcon } from "@/components/ui/icons";
-import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { randomId } from "@/components/ui/random-id";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
+import { useEffect, useEffectEvent, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 import styled from "styled-components";
 import { media } from "@/styles/theme";
@@ -13,9 +16,13 @@ import { useHorizontalResize, workspaceResizeRail } from "./workspace-resize";
 
 const { min, detailMin } = uiGeometry.recordList;
 const handleWidth = uiGeometry.sidebar.handle;
+const recordHistoryKey = "goalHintRecordWorkspace";
+const recordParameter = "workspaceRecord";
 
 export function useRecordView({ initiallyOpen = false } = {}) {
   const [detailOpen, setDetailOpen] = useState(initiallyOpen);
+  const desktop = useDesktopLayout();
+  const entry = useRef<{ path: string; id: string } | null>(null);
   const origin = useRef<{ workspace: HTMLElement; trigger: HTMLElement; scrollTop: number } | null>(null);
 
   function openDetail(trigger?: HTMLElement | null) {
@@ -25,6 +32,13 @@ export function useRecordView({ initiallyOpen = false } = {}) {
       origin.current = { workspace, trigger, scrollTop: scroll?.scrollTop ?? 0 };
     }
     if (detailOpen) return;
+    const url = new URL(window.location.href);
+    if (!desktop && url.pathname.startsWith("/admin/")) {
+      const id = randomId();
+      entry.current = { path: url.pathname, id };
+      url.searchParams.set(recordParameter, "1");
+      writeContextHistory({ [recordHistoryKey]: id }, url.pathname + url.search + url.hash, "push");
+    }
     setDetailOpen(true);
     requestAnimationFrame(() => {
       const back = workspace?.querySelector<HTMLButtonElement>("[data-record-back]");
@@ -34,8 +48,7 @@ export function useRecordView({ initiallyOpen = false } = {}) {
     });
   }
 
-  function closeDetail(event?: MouseEvent<HTMLButtonElement>) {
-    const workspace = event?.currentTarget.closest("[data-record-workspace]");
+  function showList(workspace?: Element | null) {
     setDetailOpen(false);
     requestAnimationFrame(() => {
       const from = origin.current;
@@ -46,6 +59,25 @@ export function useRecordView({ initiallyOpen = false } = {}) {
       target.focus({ preventScroll: true });
     });
   }
+
+  function closeDetail(event?: MouseEvent<HTMLButtonElement>) {
+    if (entry.current && entry.current.path === window.location.pathname && window.history.state?.[recordHistoryKey] === entry.current.id) {
+      goHistoryBack();
+      return;
+    }
+    showList(event?.currentTarget.closest("[data-record-workspace]"));
+  }
+
+  const restore = useEffectEvent((event: PopStateEvent) => {
+    if (!entry.current || entry.current.path !== window.location.pathname) return;
+    if (event.state?.[recordHistoryKey] === entry.current.id) setDetailOpen(true);
+    else if (detailOpen) showList();
+  });
+  useEffect(() => {
+    const onPop = (event: PopStateEvent) => restore(event);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   return { detailOpen, openDetail, closeDetail };
 }

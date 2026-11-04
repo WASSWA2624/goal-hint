@@ -8,13 +8,13 @@ import { validMobilePhone } from "../../domain/phone-mobile.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import { paymentReversalReasons, type PaymentReversalDetails, type PaymentReversalReason } from "../../domain/payment-reversal.ts";
 import { chainPeriods, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
-import { activeSubscriptionUntil, type SubscriptionStatus } from "../../domain/subscription-summary.ts";
+import { activeSubscriptionUntil, type SubscriptionStatus, type TrialStatus } from "../../domain/subscription-summary.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { renewalDue, walletRules } from "../../domain/wallet.ts";
 import { auditTextErrors, writeOwnerAudit, type OwnerAuditAction } from "../admin/audit.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
-import type { AccessCode, Prisma } from "../generated/prisma/client.ts";
+import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
 import { grantDevices, liveAccessCode, unlockedDeviceLimit } from "./device-grants.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { decide, lockSettings } from "./settings.ts";
@@ -62,6 +62,10 @@ export type CodeOutcome = Readonly<{ status: "created"; grant: AccessGrant; noti
 export type PaymentApproval = Readonly<{ network: "mtn" | "airtel"; transactionRef: string; amountReceivedUgx: number; planId?: string }>;
 type Snapshot = Readonly<{ planId?: string | null; planName: string; durationDays: number; priceUgx: number; extensionDays?: number }>;
 type Creation = Snapshot & Readonly<{ source: string; paymentSubmissionId?: string; amountReceivedUgx?: number; note?: string; termsVersion?: string | null }>;
+type AccessAccount = Pick<MemberAccount, "id" | "phone" | "trialEligibleAt" | "trialForfeitedAt">;
+type TrialPeriod = Pick<AccessCode, "startsAt" | "endsAt" | "revokedAt">;
+type TrialActivation = Extract<TrialStatus, { state: "active" }> | Readonly<{ state: "disabled" | "unavailable" | "forbidden" }>;
+const paidSources = ["payment", "credit", "renewal"];
 /** Who gets a new period's unlocks: the owner's device cap, and sessions that always get a slot (the submitting one). */
 type Devices = Readonly<{ maximum: number; prefer?: readonly string[]; appendAfterCurrent?: boolean }>;
 
@@ -71,9 +75,12 @@ export async function lockMemberAccount(tx: Prisma.TransactionClient, id: string
 }
 
 /** The account lock serializes confirmation and renewal. */
-export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot & { source?: string }, now: Date, termsVersion: string | null, appendAfterCurrent = false) {
-  const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null,
-    ...(code.source !== "referral" && !appendAfterCurrent ? { source: { not: "referral" } } : {}) }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
+export async function activate(tx: Prisma.TransactionClient, accountId: string, code: Snapshot & { source?: string }, now: Date, termsVersion: string | null,
+  appendAfterCurrent = false, prioritizePaid = false) {
+  const latest = code.source === "trial" ? null : await tx.accessCode.findFirst({ where: { accountId, revokedAt: null,
+    ...(code.source !== "referral" && !appendAfterCurrent ? { source: { not: "referral" } } : {}),
+    ...(prioritizePaid ? { NOT: { source: "payment", priceUgx: 0 } } : {}),
+  }, orderBy: { endsAt: "desc" }, select: { endsAt: true } });
   const startsAt = new Date(Math.max(now.getTime(), latest?.endsAt.getTime() ?? 0));
   return { activatedAt: now, startsAt, endsAt: new Date(startsAt.getTime() + (code.durationDays + (code.extensionDays ?? 0)) * subscriptionDayMs), termsVersion };
 }
@@ -95,38 +102,44 @@ const audit = (tx: Prisma.TransactionClient, accountId: string, id: string, acti
   details: Record<string, unknown> = {}, targetType: "access-code" | "member" | "payment" | "member-session" = "access-code") =>
   writeOwnerAudit(tx, { at, actor, action, accountId, targetType, targetId: id, details });
 
-export async function createAccessPeriod(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: Creation, actor: string, at: Date,
+function trialStatus(account: Pick<AccessAccount, "trialEligibleAt" | "trialForfeitedAt">, trial: TrialPeriod | null | undefined, at: Date): TrialStatus | undefined {
+  if (trial) return { state: !trial.revokedAt && trial.startsAt <= at && trial.endsAt > at ? "active" : "expired",
+    startsAt: trial.startsAt.toISOString(), endsAt: trial.endsAt.toISOString() };
+  if (account.trialForfeitedAt) return { state: "forfeited" };
+  if (account.trialEligibleAt) return { state: "available" };
+}
+
+const readTrial = (tx: Prisma.TransactionClient, accountId: string) => tx.accessCode.findFirst({ where: { accountId, source: "trial" },
+  orderBy: { startsAt: "asc" }, select: { startsAt: true, endsAt: true, revokedAt: true } });
+
+export async function createAccessPeriod(tx: Prisma.TransactionClient, account: AccessAccount, fields: Creation, actor: string, at: Date,
   devices: Devices, exactRewardMs?: number): Promise<AccessGrant> {
   if (!account.phone) throw new Error("An erased account cannot receive access.");
   if (exactRewardMs !== undefined && (fields.source !== "referral" || !Number.isSafeInteger(exactRewardMs) || exactRewardMs <= 0 || exactRewardMs > subscriptionDayMs))
     throw new RangeError("An exact restoration must be a bounded unused earned day.");
+  const paid = fields.priceUgx > 0 && paidSources.includes(fields.source)
+    || fields.source === "manual" && (fields.amountReceivedUgx ?? 0) > 0;
+  const trial = paid && !account.trialForfeitedAt ? trialStatus(account, await readTrial(tx, account.id), at) : undefined;
+  const firstAfterTrial = (trial?.state === "active" || trial?.state === "expired") && !await tx.accessCode.findFirst({
+    where: { accountId: account.id, OR: [{ source: { in: paidSources }, priceUgx: { gt: 0 } }, { source: "manual", amountReceivedUgx: { gt: 0 } }] }, select: { id: true } });
+  // During a trial, keep earned days after paid access so the paid plan follows the trial.
+  const prioritizePaid = trial?.state === "active", appendAfterCurrent = devices.appendAfterCurrent && !prioritizePaid;
   // The code columns stay NOT NULL, so each period keeps a random code's salted hash; the plain code is never kept or shown.
-  const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null, devices.appendAfterCurrent);
+  const salt = newSalt(), reference = newReference(), period = await activate(tx, account.id, fields, at, fields.termsVersion ?? null, appendAfterCurrent, prioritizePaid);
   if (exactRewardMs !== undefined) period.endsAt = new Date(+period.startsAt + exactRewardMs);
   const code = await tx.accessCode.create({ data: { ...fields, ...period, id: randomUUID(), accountId: account.id,
     codeSalt: salt, codeHash: hashCode(salt, generateCode()), reference: reference.slice(2), createdAt: at, createdBy: actor } });
-  if (fields.source !== "referral" && !devices.appendAfterCurrent) await rechainRewardPeriods(tx, account.id, at);
+  if (fields.source !== "referral" && !appendAfterCurrent) await rechainRewardPeriods(tx, account.id, at, prioritizePaid || fields.source === "trial");
+  if (trial?.state === "available") {
+    await tx.memberAccount.update({ where: { id: account.id }, data: { trialForfeitedAt: at } });
+    await audit(tx, account.id, code.id, "trial_forfeited", actor, at, { source: fields.source });
+  } else if (firstAfterTrial) await audit(tx, account.id, code.id, "trial_converted", actor, at, { startsAt: code.startsAt });
   await audit(tx, account.id, code.id, "code_created", actor, at, { source: fields.source, reference, durationDays: code.durationDays,
     extensionDays: code.extensionDays, startsAt: code.startsAt, endsAt: code.endsAt });
   const devicesUnlocked = await grantDevices(tx, { accountId: account.id, codeId: code.id, at, maximum: devices.maximum, prefer: devices.prefer ?? [], actor });
   await audit(tx, account.id, code.id, "access_granted", actor, at, { source: fields.source, devicesUnlocked });
   return { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt, source: fields.source, devicesUnlocked,
     ...(fields.paymentSubmissionId ? { paymentSubmissionId: fields.paymentSubmissionId } : {}) };
-}
-
-/** One configured trial per newly registered account, created in the registration transaction.
- * Existing historical periods are never replaced, extended or used to grant another trial. */
-export async function grantRegistrationTrial(tx: Prisma.TransactionClient, accountId: string, at: Date): Promise<AccessCode | null> {
-  const account = await lockMemberAccount(tx, accountId);
-  if (!account?.phone || account.blockedAt || account.erasedAt) return null;
-  const existing = await tx.accessCode.findFirst({ where: { accountId, source: "trial" }, orderBy: { createdAt: "asc" } });
-  if (existing) return existing;
-  if (await tx.accessCode.count({ where: { accountId } })) return null;
-  const settings = await lockSettings(tx, "registration", at);
-  if (!validDays(settings.trialDays, 7)) return null;
-  const grant = await createAccessPeriod(tx, account, { source: "trial", planName: "Free trial", durationDays: settings.trialDays,
-    priceUgx: 0, amountReceivedUgx: 0 }, "registration", at, { maximum: settings.maxUnlockedDevices });
-  return tx.accessCode.findUniqueOrThrow({ where: { id: grant.id } });
 }
 
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
@@ -164,7 +177,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
     return tx.memberAccount.findUniqueOrThrow({ where: { phone } });
   }
 
-  async function approval(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: PaymentApproval,
+  async function approval(tx: Prisma.TransactionClient, account: AccessAccount, fields: PaymentApproval,
     actor: string, at: Date, submissionId?: string, note?: string): Promise<CodeOutcome> {
     const transactionRef = normalizeTransactionId(fields.transactionRef), key = transactionKey(transactionRef);
     if (!key || transactionRef.length > 40 || !["mtn", "airtel"].includes(fields.network) || !validAmount(fields.amountReceivedUgx)) return invalid();
@@ -257,6 +270,28 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
   }
 
   return Object.freeze({
+    /** A verified member starts a trial once. The same account lock covers the first paid grant. */
+    async activateTrial(member: MemberIdentity): Promise<TrialActivation> {
+      if (member.blocked || member.administrator) return { state: "forbidden" };
+      return codeTransaction<TrialActivation>(database, async (tx, rollback) => {
+        const account = await lockMemberAccount(tx, member.accountId);
+        const at = new Date(now());
+        const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
+        if (!account?.phone || account.phone !== member.phone || !account.passwordHash || !account.phoneVerifiedAt || account.blockedAt || account.erasedAt
+          || session?.accountId !== account.id || !session.authenticatedAt || session.passwordResetAt || session.expiresAt <= at)
+          return rollback({ state: "forbidden" });
+        const status = trialStatus(account, await readTrial(tx, account.id), at);
+        if (status?.state === "active") return status;
+        if (status?.state !== "available") return rollback({ state: "unavailable" });
+        const settings = await lockSettings(tx, "member", at);
+        if (!validDays(settings.trialDays, 7)) return rollback({ state: "disabled" });
+        const grant = await createAccessPeriod(tx, account, { source: "trial", planName: "Free trial", durationDays: settings.trialDays,
+          priceUgx: 0, amountReceivedUgx: 0 }, "member", at, { maximum: settings.maxUnlockedDevices, prefer: [member.tokenHash] });
+        await audit(tx, account.id, grant.id, "trial_activated", "member", at, { startsAt: grant.startsAt, endsAt: grant.endsAt });
+        return { state: "active", startsAt: grant.startsAt.toISOString(), endsAt: grant.endsAt.toISOString() };
+      });
+    },
+
     async manual(input: { phone: string; planId?: string; durationDays?: number; amountReceivedUgx: number; note: string;
       network?: "mtn" | "airtel"; transactionRef?: string }, actor: string): Promise<CodeOutcome> {
       const phone = normalizePhone(input.phone), note = input.note.trim();
@@ -509,7 +544,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (!peek?.autoRenew || !peek.autoRenewPlanId) return false;
         const end = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true, source: true } });
         const at = new Date(now());
-        return !!end && !(end.source === "referral" && end.endsAt > at) && renewalDue(end.endsAt, at, walletRules.renewLeadMs, maxLapseMs)
+        return !!end && end.source !== "trial" && !(end.source === "referral" && end.endsAt > at) && renewalDue(end.endsAt, at, walletRules.renewLeadMs, maxLapseMs)
           && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${accountId}:${+end.endsAt}` }, select: { id: true } });
       });
       if (!due) return "skipped";
@@ -519,7 +554,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (!account || account.blockedAt || account.erasedAt || !account.phone || !account.autoRenew || !account.autoRenewPlanId) return "skipped";
         const at = new Date(now());
         const latest = await tx.accessCode.findFirst({ where: { accountId, revokedAt: null }, orderBy: { endsAt: "desc" }, select: { endsAt: true, source: true } });
-        if (!latest || latest.source === "referral" && latest.endsAt > at
+        if (!latest || latest.source === "trial" || latest.source === "referral" && latest.endsAt > at
           || !renewalDue(latest.endsAt, at, walletRules.renewLeadMs, maxLapseMs) || !await salesOpen(tx)) return "skipped";
         const plan = await tx.subscriptionPlan.findUnique({ where: { id: account.autoRenewPlanId } });
         const balance = await spendableCredit(tx, accountId);
@@ -592,9 +627,9 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         const at = new Date(now());
         const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash }, select: {
           accountId: true, authenticatedAt: true, passwordResetAt: true, expiresAt: true,
-          account: { select: { blockedAt: true, erasedAt: true, creditUgx: true, autoRenew: true,
+          account: { select: { blockedAt: true, erasedAt: true, creditUgx: true, autoRenew: true, trialEligibleAt: true, trialForfeitedAt: true,
             autoRenewPlan: { select: { priceUgx: true, active: true } },
-            codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: { startsAt: "asc" },
+            codes: { where: { OR: [{ revokedAt: null, endsAt: { gt: at } }, { source: "trial" }] }, orderBy: { startsAt: "asc" },
               select: { startsAt: true, endsAt: true, revokedAt: true, source: true } },
             _count: { select: { codes: { where: { revokedAt: null, startsAt: { lte: at }, endsAt: { lte: at } } } } },
             submissions: { orderBy: [{ submittedAt: "desc" }, { id: "desc" }], take: 1, select: { status: true } },
@@ -602,19 +637,21 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         } });
         if (!session || session.accountId !== member.accountId || !session.authenticatedAt || session.passwordResetAt
           || session.expiresAt <= at || session.account.blockedAt || session.account.erasedAt) return null;
-        const { creditUgx, autoRenew, autoRenewPlan } = session.account;
+        const { creditUgx, autoRenew, autoRenewPlan, codes } = session.account;
+        const live = codes.filter(code => !code.revokedAt && code.endsAt > at);
         // Renewal also needs open sales and a period end not yet renewed (a renewal the owner revoked is not bought again);
         // those are read only when the rest would renew.
-        const end = session.account.codes.reduce<Date | null>((latest, code) => !latest || code.endsAt > latest ? code.endsAt : latest, null);
-        const covered = autoRenew && !!autoRenewPlan?.active && creditUgx >= autoRenewPlan.priceUgx && !!end
-          && !session.account.codes.some(code => code.source === "referral" && code.endsAt > at);
-        const renewsFromCredit = covered && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${session.accountId}:${+end!}` }, select: { id: true } })
+        const end = live.reduce<(typeof live)[number] | null>((latest, code) => !latest || code.endsAt > latest.endsAt ? code : latest, null);
+        const covered = autoRenew && !!autoRenewPlan?.active && creditUgx >= autoRenewPlan.priceUgx && !!end && end.source !== "trial"
+          && !live.some(code => code.source === "referral");
+        const renewsFromCredit = covered && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${session.accountId}:${+end.endsAt}` }, select: { id: true } })
           && await salesOpen(tx);
         // The newest report decides, unless an older report of the other purpose still waits (a plan and a top-up may both).
         const paymentPending = ["pending", "superseded"].includes(session.account.submissions[0]?.status ?? "")
           || !!session.account.submissions[0] && await tx.paymentSubmission.count({ where: { accountId: session.accountId, status: "pending" } }) > 0;
-        const activeUntil = activeSubscriptionUntil(session.account.codes, at);
+        const activeUntil = activeSubscriptionUntil(live, at), trial = trialStatus(session.account, codes.find(code => code.source === "trial"), at);
         return { activeUntil, paymentPending, creditUgx, autoRenew, renewsFromCredit,
+          ...(trial ? { trial } : {}),
           ...(!activeUntil && session.account._count.codes > 0 ? { expired: true } : {}) };
       });
     },

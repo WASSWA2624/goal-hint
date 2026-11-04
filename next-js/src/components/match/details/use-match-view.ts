@@ -8,6 +8,7 @@ import { parseMatchDetailsView, serializeMatchView, type MatchSection, type Matc
 import { useDetailDispatch, useDetailSelector } from "@/state/detail-hooks";
 import { detailApi } from "@/state/detail-api";
 import { media } from "@/styles/theme";
+import { writeContextHistory } from "@/components/navigation/context-history";
 
 export type ViewNavigation = "push" | "replace";
 export type ViewUpdate = (change: (current: MatchView) => MatchView, mode?: ViewNavigation) => void;
@@ -25,8 +26,7 @@ export function useMatchView() {
     const query = serializeMatchView(next, new URLSearchParams(window.location.search)).toString();
     const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
     if (url === `${window.location.pathname}${window.location.search}`) return;
-    if (mode === "push") window.history.pushState(null, "", url);
-    else window.history.replaceState(null, "", url);
+    writeContextHistory({}, url, mode);
   }, []);
   const update = useCallback<ViewUpdate>((change, mode = "push") =>
     go(change(parseMatchDetailsView(new URLSearchParams(window.location.search))), mode), [go]);

@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { createMemberAuthFixture as fixture } from "./helpers/member-auth-fixture.mjs";
+import { memberStore } from "./helpers/member-store.mjs";
 import { hashPassword, verifyPassword } from "../src/server/analytics/analytics-password.ts";
-import { grantRegistrationTrial } from "../src/server/members/access-codes.ts";
+import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
 import { createMemberAuthHandler } from "../src/server/members/member-auth-http.ts";
+import { createMemberTrialHandler } from "../src/server/members/member-trial-http.ts";
 import { issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, parseMemberAdminPhones, verifyMemberAdminCredential } from "../src/server/members/member-admin.ts";
 import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
@@ -784,48 +786,70 @@ test("recovery cannot reset administrator environment credentials and requires s
 });
 
 
-test("registration allocates a configured trial atomically and verification unlocks without approval", async () => {
+async function verifyTrialRegistration(f, registered) {
+  await f.service.requestVerification("sms", registered.token, address);
+  return f.service.verifyAccount(f.messages.at(-1).code, registered.token, address);
+}
+
+test("registration, verification and login leave the trial unused until an authenticated POST", async () => {
   const f = fixture({ trialDays: 5 }), registered = await f.service.register(phone, password, browser(), address);
+  const codes = createAccessCodes({ database: f.database, now: f.now });
+  const handler = createMemberTrialHandler(async () => ({ config: { production: false }, settings: { settings: f.settings }, sessions: f.sessionService, codes }));
+  const request = (token, origin = "same-origin") => new Request("https://goal.test/api/account/trial", { method: "POST", headers: {
+    "Sec-Fetch-Site": origin, ...(token ? { Cookie: `goal-hint-member=${token}` } : {}),
+  } });
   assert.equal(registered.requiresVerification, true);
-  assert.deepEqual(registered.trial, { days: 5, startsAt: new Date(f.now()).toISOString(), endsAt: new Date(f.now() + 5 * DAY).toISOString(), active: false });
+  assert.equal(registered.trial, undefined);
+  assert.equal(+f.accounts.get(registered.accountId).trialEligibleAt, f.now());
+  assert.equal(f.accessCodes.size, 0); assert.equal(f.messages.length, 0);
+  assert.equal((await handler(request(registered.token))).status, 403);
+  const verified = await verifyTrialRegistration(f, registered);
+  assert.equal(verified.trial, undefined); assert.equal((await f.sessionService.verify(verified.token)).codeEnteredAt, null);
+  const logged = await f.service.login(phone, password, address);
+  assert.equal((await f.sessionService.verify(logged.token)).codeEnteredAt, null); assert.equal(f.accessCodes.size, 0);
+  assert.equal((await handler(request(logged.token, "cross-site"))).status, 403);
+  assert.equal((await handler(request())).status, 403);
+  f.advance(DAY);
+  f.settings.trialDays = 1;
+  const activated = await handler(request(logged.token));
+  assert.equal(activated.status, 200);
+  assert.deepEqual(await activated.json(), { state: "active", startsAt: new Date(f.now()).toISOString(), endsAt: new Date(f.now() + DAY).toISOString() });
   assert.equal(f.accessCodes.size, 1);
   const period = [...f.accessCodes.values()][0];
-  assert.equal(period.source, "trial"); assert.equal(period.planName, "Free trial"); assert.equal(period.priceUgx, 0); assert.equal(period.amountReceivedUgx, 0);
-  assert.equal(+period.activatedAt, f.now()); assert.equal(+period.startsAt, f.now());
-  assert.equal([...f.sessions.values()][0].codeEnteredAt, null); assert.equal(await f.sessionService.verify(registered.token), null);
-  assert.equal(f.messages.length, 0, "Allocating access sends no verification message");
+  assert.equal(period.source, "trial"); assert.equal(period.priceUgx, 0); assert.equal(period.amountReceivedUgx, 0);
+  assert.equal(+period.activatedAt, f.now()); assert.equal((await f.sessionService.verify(logged.token)).accessCodeId, period.id);
+  assert.equal(f.sent.filter(row => row.action === "trial_activated").length, 1);
+});
+
+test("disabled trials do not start and expiry, re-login and a changed duration cannot restart a trial", async () => {
+  const f = fixture({ trialDays: 0 }), registered = await f.service.register(phone, password, browser(), address);
+  const codes = createAccessCodes({ database: f.database, now: f.now });
+  const verified = await verifyTrialRegistration(f, registered);
+  assert.deepEqual(await codes.activateTrial(await f.sessionService.verify(verified.token)), { state: "disabled" });
+  assert.equal(f.accessCodes.size, 0);
   f.settings.trialDays = 1;
-  await f.service.requestVerification("sms", registered.token, address);
-  const verified = await f.service.verifyAccount(f.messages.at(-1).code, registered.token, address);
-  assert.equal(verified.trial.days, 5, "The original offer is a snapshot"); assert.equal(verified.trial.active, true);
-  const member = await f.sessionService.verify(verified.token);
-  assert.equal(member.accessCodeId, period.id); assert.ok(member.codeEnteredAt); assert.equal(f.accessCodes.size, 1);
-  assert.ok(!f.sent.some(row => ["trial_requested", "trial_sent", "trial_dismissed"].includes(row.action)));
+  assert.equal((await codes.activateTrial(await f.sessionService.verify(verified.token))).state, "active");
+  f.advance(DAY); f.settings.trialDays = 7;
+  const logged = await f.service.login(phone, password, address);
+  const member = await f.sessionService.verify(logged.token);
+  assert.equal(member.codeEnteredAt, null);
+  assert.deepEqual(await codes.activateTrial(member), { state: "unavailable" });
+  assert.equal(f.accessCodes.size, 1);
+  const legacy = fixture(), old = await legacy.authenticate();
+  assert.deepEqual(await createAccessCodes({ database: legacy.database, now: legacy.now }).activateTrial(old.member), { state: "unavailable" });
 });
 
-test("disabled or expired registration trials do not unlock verified sessions", async () => {
-  const disabled = fixture({ trialDays: 0 }), registered = await disabled.service.register(phone, password, browser(), address);
-  assert.equal(registered.trial, undefined); assert.equal(disabled.accessCodes.size, 0);
-  await disabled.service.requestVerification("sms", registered.token, address);
-  const verified = await disabled.service.verifyAccount(disabled.messages.at(-1).code, registered.token, address);
-  assert.equal(verified.trial, undefined); assert.equal((await disabled.sessionService.verify(verified.token)).codeEnteredAt, null);
-  const expired = fixture({ trialDays: 1 }), pending = await expired.service.register(phone, password, browser(), address);
-  expired.advance(DAY);
-  await expired.service.requestVerification("sms", pending.token, address);
-  const afterExpiry = await expired.service.verifyAccount(expired.messages.at(-1).code, pending.token, address);
-  assert.equal(afterExpiry.trial, undefined); assert.equal((await expired.sessionService.verify(afterExpiry.token)).codeEnteredAt, null);
-  assert.equal(expired.accessCodes.size, 1, "Verification cannot restart a trial");
-});
-
-test("concurrent registration and repeated allocation cannot duplicate or extend a trial", async () => {
+test("concurrent registration and repeated activation cannot duplicate or extend a trial", async () => {
   const f = fixture({ trialDays: 3 });
   const results = await Promise.all([f.service.register(phone, password, browser(), address), f.service.register(phone, password, browser(), address)]);
   assert.deepEqual(results.map(result => result.status).sort(), ["authenticated", "conflict"]);
-  const original = [...f.accessCodes.values()][0];
-  f.advance(4 * DAY); f.settings.trialDays = 7;
-  const again = await f.database.transaction(tx => grantRegistrationTrial(tx, original.accountId, new Date(f.now())));
-  assert.equal(again.id, original.id); assert.equal(+again.endsAt, +original.endsAt); assert.equal(f.accessCodes.size, 1);
-  assert.equal((await f.service.login(phone, password, address)).requiresVerification, true); assert.equal(f.accessCodes.size, 1);
+  const verified = await verifyTrialRegistration(f, results.find(result => result.status === "authenticated"));
+  const member = await f.sessionService.verify(verified.token), codes = createAccessCodes({ database: f.database, now: f.now });
+  const [first, duplicate] = await Promise.all([codes.activateTrial(member), codes.activateTrial(member)]);
+  assert.equal(first.state, "active"); assert.deepEqual(duplicate, first);
+  f.advance(1); f.settings.trialDays = 7;
+  assert.deepEqual(await codes.activateTrial(member), first); assert.equal(f.accessCodes.size, 1);
+  assert.equal(f.sent.filter(row => row.action === "trial_activated").length, 1);
 });
 
 test("failed registration rolls back its account, trial, session and audit", async () => {
@@ -835,15 +859,67 @@ test("failed registration rolls back its account, trial, session and audit", asy
   assert.equal(f.accounts.size, 0); assert.equal(f.accessCodes.size, 0); assert.equal(f.sessions.size, 0); assert.equal(f.sent.length, 0);
 });
 
-test("a rolled-back trial reference collision retries registration without duplicating its account or period", async () => {
+test("a rolled-back trial reference collision retries activation without duplicating its period", async () => {
   const f = fixture(), create = f.tx.accessCode.create.bind(f.tx.accessCode);
+  const registered = await f.service.register(phone, password, browser(), address);
+  const verified = await verifyTrialRegistration(f, registered);
   let attempts = 0;
   f.tx.accessCode.create = async query => {
     if (++attempts === 1) throw new DatabaseOperationError("constraint");
     return create(query);
   };
-  const result = await f.service.register(phone, password, browser(), address);
-  assert.equal(result.status, "authenticated"); assert.equal(attempts, 2);
+  const codes = createAccessCodes({ database: f.database, now: f.now });
+  const result = await codes.activateTrial(await f.sessionService.verify(verified.token));
+  assert.equal(result.state, "active"); assert.equal(attempts, 2);
   assert.equal(f.accounts.size, 1); assert.equal(f.accessCodes.size, 1); assert.equal(f.sessions.size, 1);
-  assert.equal([...f.accessCodes.values()][0].accountId, result.accountId);
+  assert.equal([...f.accessCodes.values()][0].accountId, registered.accountId);
+});
+
+test("the first paid grant forfeits an unused trial and a paid grant during a trial preserves the full purchased time", async () => {
+  for (const activateFirst of [false, true]) {
+    const f = fixture({ trialDays: 3 }), registered = await f.service.register(phone, password, browser(), address);
+    const verified = await verifyTrialRegistration(f, registered);
+    const codes = createAccessCodes({ database: f.database, now: f.now }), member = await f.sessionService.verify(verified.token);
+    if (activateFirst) {
+      await f.database.transaction(async tx => {
+        const account = await lockMemberAccount(tx, member.accountId);
+        await createAccessPeriod(tx, account, { source: "payment", planName: "Referral days", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now()), { maximum: 2, appendAfterCurrent: true });
+      });
+      f.advance(DAY / 2);
+      assert.equal((await codes.activateTrial(member)).state, "active");
+    }
+    const starts = f.now(), trialEnd = starts + 3 * DAY;
+    if (activateFirst) await f.database.transaction(async tx => {
+      const account = await lockMemberAccount(tx, member.accountId);
+      await createAccessPeriod(tx, account, { source: "referral", planName: "Earned day", durationDays: 1, priceUgx: 0 }, "test", new Date(f.now()), { maximum: 2 });
+    });
+    f.advance(1);
+    assert.equal(f.accounts.get(member.accountId).trialForfeitedAt, undefined);
+    const paid = await f.database.transaction(async tx => {
+      const account = await lockMemberAccount(tx, member.accountId);
+      const payment = activateFirst ? { source: "payment" } : { source: "manual", amountReceivedUgx: 5_000 };
+      return createAccessPeriod(tx, account, { ...payment, planName: "Weekly", durationDays: 7, priceUgx: 5_000 }, "test", new Date(f.now()), { maximum: 2, appendAfterCurrent: true });
+    });
+    assert.equal(+paid.startsAt, activateFirst ? trialEnd : f.now());
+    assert.equal(+paid.endsAt - +paid.startsAt, 7 * DAY);
+    if (activateFirst) {
+      const earned = [...f.accessCodes.values()].filter(code => code.source !== "trial" && code.priceUgx === 0).sort((a, b) => a.startsAt - b.startsAt);
+      assert.deepEqual(earned.map(code => [+code.startsAt - +paid.endsAt, +code.endsAt - +code.startsAt]), [[0, DAY / 2], [DAY / 2, DAY]]);
+      assert.equal(f.sent.filter(row => row.action === "trial_converted").length, 1);
+      assert.equal((await codes.activateTrial(member)).state, "active");
+    } else {
+      assert.equal(+f.accounts.get(member.accountId).trialForfeitedAt, f.now());
+      assert.equal(f.sent.filter(row => row.action === "trial_forfeited").length, 1);
+      assert.deepEqual(await codes.activateTrial(member), { state: "unavailable" });
+    }
+  }
+});
+
+test("trial expiry does not spend wallet credit through auto-renewal", async () => {
+  const instant = Date.parse("2026-10-27T09:00:00Z"), f = memberStore({ instant, settings: { paywallMode: "test" } });
+  await f.tx.memberAccount.update({ where: { id: f.account.id }, data: { autoRenew: true, autoRenewPlanId: f.plan.id, creditUgx: f.plan.priceUgx } });
+  await f.tx.accessCode.create({ data: { id: randomUUID(), accountId: f.account.id, source: "trial", startsAt: new Date(instant - DAY), endsAt: new Date(instant) } });
+  const codes = createAccessCodes({ database: f.database, now: () => instant });
+  assert.equal(await codes.renewDue(f.account.id), "skipped");
+  assert.equal(f.state.walletEntry.length, 0); assert.equal(f.member.creditUgx, f.plan.priceUgx);
 });

@@ -12,6 +12,7 @@ import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { Hint } from "./admin-form";
 import { ActionNotices, ManualCodeForm, useCodeAction } from "./code-tools";
 import { RecordBack, RecordCard, RecordEmpty, RecordFeedback, RecordScroll } from "./record-workspace";
+import { goHistoryBack } from "@/components/navigation/context-history";
 import { SubscriberDirectory } from "./subscriber-directory";
 import { SubscriberDirectoryFilters } from "./subscriber-directory-parts";
 import { SubscriberDetail } from "./subscriber-detail";
@@ -141,7 +142,7 @@ export function SubscribersWorkspace({ accounts, detail: selected, plans, initia
 
   function backToDirectory() {
     const origin = openedFrom.current, href = accountHref();
-    if (origin?.id === openedId && origin?.url === href) window.history.back();
+    if (origin?.id === openedId && origin?.url === href) goHistoryBack();
     else startNavigation(() => router.replace(href, { scroll: false }));
   }
 

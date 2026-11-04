@@ -35,9 +35,11 @@ export const menuShortcutPattern = /^(?:[0-9*#]|\{amount\})+$/u;
 /** Timestamps are ISO strings, so the same value serves the server, the API and the dashboard form. */
 export type SubscriptionSettings = Readonly<{
   paywallMode: PaywallMode;
+  mtnEnabled: boolean;
   mtnNumber: string | null;
   mtnName: string | null;
   mtnMenuShortcut: string | null;
+  airtelEnabled: boolean;
   airtelNumber: string | null;
   airtelName: string | null;
   airtelMenuShortcut: string | null;
@@ -64,8 +66,8 @@ export type SubscriptionSettings = Readonly<{
 /** What a missing row means: paid access off, no numbers, 2 devices, a 2-day trial and 90-day screenshot retention. */
 export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
   paywallMode: "off",
-  mtnNumber: null, mtnName: null, mtnMenuShortcut: null,
-  airtelNumber: null, airtelName: null, airtelMenuShortcut: null,
+  mtnEnabled: false, mtnNumber: null, mtnName: null, mtnMenuShortcut: null,
+  airtelEnabled: false, airtelNumber: null, airtelName: null, airtelMenuShortcut: null,
   copyFormat: "international",
   contactPhone: null, whatsappPhone: null,
   supportContacts: null, messageTemplates: defaultMessageTemplates,
@@ -78,7 +80,7 @@ export const defaultSubscriptionSettings: SubscriptionSettings = Object.freeze({
 });
 
 /** The fields the Settings form saves; the mode has its own two-tap control. */
-export const editableSettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
+export const editableSettingFields = Object.freeze(["mtnEnabled", "mtnNumber", "mtnName", "mtnMenuShortcut", "airtelEnabled", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "copyFormat", "contactPhone", "whatsappPhone", "paymentNote", "reviewTime", "maxUnlockedDevices", "trialDays",
   "screenshotRetentionDays", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled", "paymentAlertRepeats"] as const);
 export type EditableSettingField = (typeof editableSettingFields)[number];
@@ -90,22 +92,17 @@ export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSetting
  */
 export const identitySettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "contactPhone", "whatsappPhone"] as const);
-export const protectedSettingFields = Object.freeze([...identitySettingFields, "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"] as const);
+export const protectedSettingFields = Object.freeze([...identitySettingFields, "mtnEnabled", "airtelEnabled", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"] as const);
 export type ProtectedSettingField = (typeof protectedSettingFields)[number];
-export type IdentitySettingField = (typeof identitySettingFields)[number];
-export type SubscriptionIdentity = Pick<SubscriptionSettings, IdentitySettingField>;
-export const subscriptionIdentityVariables = Object.freeze({
-  mtnNumber: "GOAL_HINT_MTN_MOMO_NUMBER", mtnName: "GOAL_HINT_MTN_MOMO_NAME", mtnMenuShortcut: "GOAL_HINT_MTN_MOMO_MENU_SHORTCUT",
-  airtelNumber: "GOAL_HINT_AIRTEL_MONEY_NUMBER", airtelName: "GOAL_HINT_AIRTEL_MONEY_NAME", airtelMenuShortcut: "GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT",
-  contactPhone: "GOAL_HINT_CUSTOMER_SUPPORT_NUMBER", whatsappPhone: "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER",
-} as const satisfies Readonly<Record<IdentitySettingField, string>>);
 export const isProtectedSettingField = (field: string): field is ProtectedSettingField =>
   (protectedSettingFields as readonly string[]).includes(field);
 
 export const settingLabels: Readonly<Record<EditableSettingField, string>> = Object.freeze({
+  mtnEnabled: "MTN MoMo payments",
   mtnNumber: "MTN MoMo number",
   mtnName: "MTN registered name",
   mtnMenuShortcut: "MTN menu shortcut",
+  airtelEnabled: "Airtel Money payments",
   airtelNumber: "Airtel Money number",
   airtelName: "Airtel registered name",
   airtelMenuShortcut: "Airtel menu shortcut",
@@ -152,6 +149,19 @@ function text(value: unknown, maximum: number, multiline = false): { value: stri
   return { value: trimmed };
 }
 
+export type ManualPaymentSettings = Pick<SubscriptionSettings, "mtnEnabled" | "mtnNumber" | "mtnName" | "airtelEnabled" | "airtelNumber" | "airtelName">;
+
+export function manualPaymentProvider(settings: ManualPaymentSettings, network: "mtn" | "airtel"):
+  { number: string; name: string; reason: null } | { number: null; name: null; reason: string } {
+  if (!settings[`${network}Enabled`]) return { number: null, name: null, reason: "This payment method is disabled." };
+  const number = validMobilePhone(settings[`${network}Number`]);
+  const name = text(settings[`${network}Name`], settingsRules.nameMaxLength);
+  if (!number || !("value" in name) || !name.value) {
+    return { number: null, name: null, reason: "Receiving details are incomplete or invalid." };
+  }
+  return { number, name: name.value, reason: null };
+}
+
 /**
  * Validate the fields a save sends. Phones become canonical digits (an empty field clears the number), shortcuts lose
  * their spaces, text is trimmed, and whole numbers must sit inside the owner's ranges. Unknown fields are refused.
@@ -167,9 +177,9 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
       const parsed = communityLinksSchema.safeParse(value);
       if (parsed.success) changes[key] = parsed.data;
       else errors[key] = "Use unique, valid HTTPS community destinations; disable empty links.";
-    } else if (key === "paymentAlertsEnabled") {
+    } else if (key === "paymentAlertsEnabled" || key === "mtnEnabled" || key === "airtelEnabled") {
       if (typeof value === "boolean") changes[key] = value;
-      else errors[key] = "Choose whether to enable payment alerts.";
+      else errors[key] = key === "paymentAlertsEnabled" ? "Choose whether to enable payment alerts." : "Choose whether to enable this payment method.";
     } else if (key === "paymentAlertRepeats") {
       if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 3) changes[key] = value;
       else errors[key] = "Choose 1–3 foreground sound repeats.";

@@ -6,7 +6,7 @@ import { createPayments } from "../src/server/members/payments.ts";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
 
 const instant = Date.parse("2026-10-24T12:00:00Z"), at = new Date(instant);
-const settings = { ...defaultSubscriptionSettings, paywallMode: "test", mtnNumber: "256700000901" };
+const settings = { ...defaultSubscriptionSettings, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN" };
 const fields = { planId: "plan", network: "mtn", payerPhone: "256700000101", transactionId: "NEW1234", screenshotAmount: 5000, accepted: false };
 
 // A small in-memory query adapter exercises the service's account, relation and consent filters without a database.
@@ -52,7 +52,7 @@ function fixture({ reports = [], codes = [], accountChange = {}, sessionChange =
     walletEntry: { async findMany() { return []; } },
   };
   const database = { query: run => run(tx), transaction: run => run(tx) };
-  const service = createPayments({ database, config: { key: (purpose, value) => `${purpose}:${value}` }, now: () => instant, environment: null });
+  const service = createPayments({ database, config: { key: (purpose, value) => `${purpose}:${value}` }, now: () => instant });
   return { member, created, service, view: () => service.view(member, settings), submit: (accepted, image = jpeg()) => service.submit(member, { ...fields, accepted }, image) };
 }
 

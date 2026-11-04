@@ -35,14 +35,14 @@ test("atomic reviewer events, endpoint security and retries on real MySQL", { ti
   await database.query(tx => tx.memberSession.update({ where: { tokenHash: admin.hash }, data: { adminPasswordVersion: config.key("admin-password-version", "plain:synthetic admin password only") } }));
   const customer = await member(), registry = createReviewAlertRegistry(database, config, now);
   const planId = randomUUID();
-  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST MTN", updatedAt: at(), updatedBy: "test" } }));
+  await database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN", updatedAt: at(), updatedBy: "test" } }));
   await database.query(tx => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at(), updatedAt: at() } }));
   const registration = { transport: "fcm", subscription: { fid: "T".repeat(22) } };
   await assert.rejects(() => registry.register(customer.hash, registration), error => error.message === authCopy.administratorRequired);
   const endpoint = await registry.register(admin.hash, registration);
   assert.equal((await registry.register(admin.hash, registration)).id, endpoint.id);
   assert.equal(await database.query(tx => tx.paymentAlertEndpoint.count()), 1);
-  const checkout = createCheckout({ database, config, now, environment: null }), review = createCheckoutReview(database, now);
+  const checkout = createCheckout({ database, config, now }), review = createCheckoutReview(database, now);
   const selection = { purpose: "plan", planId, method: "mtn", walletUgx: 0, referralDays: 0, topUpUgx: 0 };
   const proof = { transactionId: "TEST-REVIEW-12345", amountUgx: 5000, payerPhone: "256700000123", paidAt: at().toISOString(), warningsAccepted: true,
     original: { text: "Synthetic receipt for test only", extracted: {} } };

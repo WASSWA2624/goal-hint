@@ -16,7 +16,7 @@ import { memberCookieName } from "../src/server/members/member-sessions.ts";
 import { memberReturnPath } from "../src/domain/member-navigation.ts";
 import { normalizePhone } from "../src/domain/phone.ts";
 
-// Synthetic owner numbers only; real receiving and support identity comes from server environment configuration.
+// Synthetic owner numbers only. Real receiving details are configured in the admin dashboard.
 const OWNER_MTN = "256700000901", OWNER_CONTACT = "256700000902";
 const settingsWith = (fields) => Object.freeze({ ...defaultSubscriptionSettings, ...fields });
 const ready = { activePlans: 1, privacyReleaseReady: true, termsReleaseReady: true };
@@ -176,8 +176,8 @@ test("a changed payment number clears its tested shortcut unless the same save s
   assert.deepEqual([contact.change.protectedChanged, contact.change.paymentNumbersChanged], [["contactPhone"], false]);
 });
 
-test("payment identity, support contacts and message templates are protected", () => {
-  assert.deepEqual([...protectedSettingFields].sort(), ["airtelMenuShortcut", "airtelName", "airtelNumber", "contactPhone", "mtnMenuShortcut", "mtnName",
+test("provider controls, payment identity, support contacts and message templates are protected", () => {
+  assert.deepEqual([...protectedSettingFields].sort(), ["airtelEnabled", "airtelMenuShortcut", "airtelName", "airtelNumber", "contactPhone", "mtnEnabled", "mtnMenuShortcut", "mtnName",
     "mtnNumber", "whatsappPhone", "supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"].sort());
   assert.ok(protectedSettingFields.every((field) => editableSettingFields.includes(field)));
 });
@@ -211,15 +211,16 @@ function scriptedDatabase(script) {
 const row = (fields) => ({ ...defaultSubscriptionSettings, id: 1, paymentNumbersChangedAt: null, lastMembersPurgeAt: null,
   updatedAt: new Date("2026-10-19T07:00:00.000Z"), updatedBy: "owner", ...fields });
 
-test("environment identity overrides stored history and managed updates fail before database or password work", async () => {
-  const { database, state } = scriptedDatabase({ row: row({ mtnNumber: OWNER_MTN, mtnName: "OLD PAYEE", whatsappPhone: OWNER_CONTACT }) });
+test("managed support updates fail before database or password work and payment settings stay stored", async () => {
+  const { database, state } = scriptedDatabase({ row: row({ mtnEnabled: true, mtnNumber: OWNER_MTN, mtnName: "STORED PAYEE", whatsappPhone: OWNER_CONTACT }) });
   const environment = { mtnNumber: "256700000910", mtnName: "ENV PAYEE", airtelNumber: null, airtelName: null,
     mtnMenuShortcut: null, airtelMenuShortcut: null, contactPhone: "256700000911", whatsappPhone: null };
   const service = createSettingsService(database, { environment });
-  assert.deepEqual(service.environmentFields, protectedSettingFields.filter(field => !["supportContacts", "messageTemplates", "communityLinks", "paymentAlertsEnabled"].includes(field)));
+  assert.deepEqual(service.environmentFields, ["contactPhone", "whatsappPhone"]);
   const settings = (await service.current()).settings;
-  for (const [key, value] of Object.entries(environment)) assert.equal(settings[key], value, key);
-  assert.equal(state.row.mtnNumber, OWNER_MTN, "stored history is preserved");
+  assert.deepEqual([settings.mtnEnabled, settings.mtnNumber, settings.mtnName], [true, OWNER_MTN, "STORED PAYEE"]);
+  assert.equal(settings.contactPhone, environment.contactPhone);
+  assert.equal(settings.whatsappPhone, null);
   assert.equal(state.row.whatsappPhone, OWNER_CONTACT, "an absent environment value never falls back to storage");
   const reads = state.reads;
   for (const field of service.environmentFields) {

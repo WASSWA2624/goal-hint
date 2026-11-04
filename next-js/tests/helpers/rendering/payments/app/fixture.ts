@@ -24,8 +24,9 @@ export function updateFixturePayment(scenario: string, action: "approve" | "rese
     if (scenario === "credit") delete state.syntheticCredit;
   }
 }
-export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const, mtnNumber: "256700000901", mtnName: "TEST MTN PAYEE",
-  airtelNumber: "256700000902", airtelName: "TEST AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904",
+export const settings = { ...defaultSubscriptionSettings, paywallMode: "test" as const,
+  mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN PAYEE",
+  airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL PAYEE", contactPhone: "256700000903", whatsappPhone: "256700000904",
   mtnMenuShortcut: "*000*{amount}#", airtelMenuShortcut: "*001*{amount}#", reviewTime: "a synthetic review interval", paymentNote: "Synthetic fixture: never send money." };
 export const plans: SubscriptionPlanView[] = [1, 7, 30].map((days, index) => ({ id: `00000000-0000-4000-8000-00000000000${index}`,
   name: ["Daily", "Weekly", "Monthly"][index]!, durationDays: days, priceUgx: [1000, 5000, 20000][index]!, active: true,

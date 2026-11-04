@@ -5,7 +5,7 @@ import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeRequirements, paywallModes, parseSettingsChanges,
   type CopyFormat, type EditableSettingField, type ModeFacts, type ModeRequirement, type PaywallMode, type ProtectedSettingField,
-  identitySettingFields, type ShortcutField, type SubscriptionIdentity, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
+  type ShortcutField, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
 import { parseSupportContacts } from "../../domain/support-contacts-input.ts";
 import { defaultMessageTemplates, parseMessageTemplates } from "../../domain/message-templates.ts";
@@ -51,8 +51,8 @@ export function settingsFromRow(row: SettingsRow): SubscriptionSettings {
   if (contacts && !contacts.ok || messages && !messages.ok) throw new RangeError("Stored settings contain invalid contacts or message templates.");
   return Object.freeze({
     paywallMode: row.paywallMode as PaywallMode,
-    mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut,
-    airtelNumber: row.airtelNumber, airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut,
+    mtnEnabled: row.mtnEnabled, mtnNumber: row.mtnNumber, mtnName: row.mtnName, mtnMenuShortcut: row.mtnMenuShortcut,
+    airtelEnabled: row.airtelEnabled, airtelNumber: row.airtelNumber, airtelName: row.airtelName, airtelMenuShortcut: row.airtelMenuShortcut,
     copyFormat: row.copyFormat as CopyFormat,
     contactPhone: row.contactPhone, whatsappPhone: row.whatsappPhone,
     supportContacts: contacts?.ok ? contacts.contacts : null,
@@ -123,9 +123,12 @@ export type PasswordReentry = Readonly<{ password: string | null; confirm: (pass
   /** Supplied only by the dashboard guard after verifying an allowlisted member session. Never taken from a request body. */
   sessionAuthorized?: boolean }>;
 
-/** Overlay identity for reads and transaction decisions without changing stored history. Null is for historical fixtures. */
-export function configuredSubscriptionSettings(settings: SubscriptionSettings, environment: SubscriptionIdentity | null): SubscriptionSettings {
-  const configured = environment ? { ...settings, ...environment } : settings;
+const environmentSupportFields = ["contactPhone", "whatsappPhone"] as const;
+type SupportIdentity = Pick<SubscriptionSettings, (typeof environmentSupportFields)[number]>;
+
+/** Retain the configured legacy support fallback. Payment destinations come from the stored settings. */
+export function configuredSubscriptionSettings(settings: SubscriptionSettings, environment: SupportIdentity | null): SubscriptionSettings {
+  const configured = environment ? { ...settings, contactPhone: environment.contactPhone, whatsappPhone: environment.whatsappPhone } : settings;
   if (configured.supportContacts == null) return configured;
   const contacts = supportContactsOf(configured);
   return Object.freeze({ ...configured, contactPhone: contacts.find(contact => contact.calls)?.phone ?? null,
@@ -134,14 +137,12 @@ export function configuredSubscriptionSettings(settings: SubscriptionSettings, e
 
 export function createSettingsService(database: DatabaseRuntime,
   { now = Date.now, readiness = noticeReadiness,
-    // The isolated demo stores editable fictional receiving details in its own row.
-    // Cleared private environment fields must not mask them as managed empty values.
+    // The isolated demo stores its fictional support details in its own row.
     environment = isDevelopmentDemo() ? null : getRuntimePolicy().choices.subscriptionIdentity }: {
     now?: () => number; readiness?: ReleaseReadiness;
-    /** Null uses stored identity in isolated demos/fixtures. Production defaults to environment identity. */
-    environment?: SubscriptionIdentity | null;
+    environment?: SupportIdentity | null;
   } = {}) {
-  const environmentFields = environment ? identitySettingFields : [];
+  const environmentFields = environment ? environmentSupportFields : [];
   const effective = (settings: SubscriptionSettings) => configuredSubscriptionSettings(settings, environment);
   let cached: Readonly<{ state: SettingsState; until: number }> | null = null;
   let lastGood: SubscriptionSettings | null = null;

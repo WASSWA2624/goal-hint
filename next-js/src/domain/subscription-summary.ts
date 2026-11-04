@@ -9,7 +9,10 @@ import type { SubscriptionPeriod } from "./subscription-period.ts";
  */
 export type SubscriptionSummary = Readonly<{ activeUntil: string | null; paymentPending: boolean; canSubscribe: boolean;
   creditUgx: number; autoRenew: boolean; renewsFromCredit: boolean; offer?: SubscriptionOffer; expired?: boolean }>;
-export type SubscriptionStatus = Pick<SubscriptionSummary, "activeUntil" | "paymentPending" | "creditUgx" | "autoRenew" | "renewsFromCredit" | "expired">;
+export type TrialStatus = Readonly<{ state: "available" | "forfeited" }>
+  | (Readonly<{ state: "active" }> | Readonly<{ state: "expired" }>) & Readonly<{ startsAt: string; endsAt: string }>;
+export type SubscriptionStatus = Pick<SubscriptionSummary, "activeUntil" | "paymentPending" | "creditUgx" | "autoRenew" | "renewsFromCredit" | "expired">
+  & Readonly<{ trial?: TrialStatus }>;
 /** An account with no credit or auto-renewal, as older servers and signed-out states report it. */
 export const noCredit = Object.freeze({ creditUgx: 0, autoRenew: false, renewsFromCredit: false });
 type Period = Pick<SubscriptionPeriod, "startsAt" | "endsAt" | "revokedAt">;

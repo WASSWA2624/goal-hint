@@ -1,12 +1,21 @@
 import type { CheckoutSelection, CheckoutView } from "@/domain/checkout";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
+import { decodeDraftProgress, readDraftMemory, readDraftProgress, writeDraftProgress } from "./draft-storage.ts";
 
 export type CheckoutDraft = { requestKey: string; step: 0 | 1 | 2 | 3; purpose: CheckoutSelection["purpose"]; planId: string;
   usePackage?: boolean;
   method: CheckoutSelection["method"] | ""; useWallet: boolean; useReferral: boolean; walletUgx: string; referralDays: string; topUpUgx: string;
   transactionId: string; amountUgx: string; payerPhone: string; paidAt: string; text: string;
   extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null; screenshot?: ScreenshotMetadata | null };
+
+export function restoredCheckoutStep(step: CheckoutDraft["step"], { validPackage, methodAvailable, external, evidencePresent }:
+  { validPackage: boolean; methodAvailable: boolean; external: boolean; evidencePresent: boolean }): CheckoutDraft["step"] {
+  if (!validPackage) return 0;
+  if (step >= 2 && !methodAvailable) return 1;
+  if (step === 3 && external && !evidencePresent) return 2;
+  return step === 2 && !external ? 3 : step;
+}
 
 /** Apply current spendable balances to edits, restored drafts and balance refreshes. */
 export function capCheckoutFunding(draft: CheckoutDraft, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,
@@ -46,38 +55,28 @@ export function chooseCheckoutMethod(draft: CheckoutDraft, method: CheckoutSelec
     useWallet: Number(draft.walletUgx) >= price ? false : draft.useWallet, accepted: false }, balances, plans);
 }
 type Stored = { draft: CheckoutDraft; image: Blob | null };
-const memory = new Map<string, Stored>();
-let queued = Promise.resolve();
-function database(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("goal-hint-checkout", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("drafts");
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+type CheckoutDraftKind = "plan" | "topup";
+const savedMethod = (value: unknown): value is CheckoutDraft["method"] =>
+  value === "" || value === "mtn" || value === "airtel" || value === "wallet" || value === "referral";
+const savedAmount = (value: unknown) => typeof value === "string" && /^\d{0,9}$/u.test(value) ? value : "";
+const isRequestKey = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9-]{36}$/u.test(value);
+
+export function loadCheckoutDraft(scope: string, kind: CheckoutDraftKind, initial: CheckoutDraft): Stored | null {
+  const inMemory = readDraftMemory<Stored>(scope, kind);
+  if (inMemory) return inMemory;
+  const stored = decodeDraftProgress(readDraftProgress(scope, kind));
+  if (!stored || !isRequestKey(stored.requestKey) || typeof stored.planId !== "string" || stored.planId.length > 64 || !savedMethod(stored.method)) return null;
+  const external = stored.method === "mtn" || stored.method === "airtel";
+  return { image: null, draft: { ...initial, requestKey: stored.requestKey, planId: stored.planId,
+    purpose: kind === "topup" ? "topup" : stored.purpose === "referral" ? "referral" : "plan",
+    step: stored.step === 3 ? external ? 2 : 3 : stored.step === 2 || stored.step === 1 ? stored.step : 0,
+    method: stored.method, usePackage: stored.usePackage === true, useWallet: stored.useWallet === true, useReferral: stored.useReferral === true,
+    walletUgx: savedAmount(stored.walletUgx), referralDays: savedAmount(stored.referralDays), topUpUgx: savedAmount(stored.topUpUgx) } };
 }
-export async function loadCheckoutDraft(key: string): Promise<Stored | null> {
-  try {
-    const db = await database();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction("drafts", "readonly"), request = tx.objectStore("drafts").get(key);
-      request.onsuccess = () => resolve(request.result ?? null); request.onerror = () => reject(request.error);
-      tx.oncomplete = () => db.close();
-    });
-  } catch { return memory.get(key) ?? null; }
-}
-export function saveCheckoutDraft(key: string, value: Stored): Promise<boolean> {
-  memory.set(key, value);
-  let saved = true;
-  const operation = queued.then(async () => {
-    try {
-      const db = await database();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction("drafts", "readwrite"); tx.objectStore("drafts").put(value, key);
-        tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => { db.close(); reject(tx.error); };
-      });
-    } catch { saved = false; }
-  });
-  queued = operation;
-  return operation.then(() => saved);
+
+export function saveCheckoutDraft(scope: string, kind: CheckoutDraftKind, value: Stored) {
+  const { requestKey, step, purpose, planId, usePackage, method, useWallet, useReferral, walletUgx, referralDays, topUpUgx, attachingId } = value.draft;
+  // A receipt attachment can resume in memory. Never restore its record ID or evidence from browser storage.
+  writeDraftProgress(scope, kind, attachingId ? null : { requestKey, step, purpose, planId, usePackage,
+    method, useWallet, useReferral, walletUgx, referralDays, topUpUgx }, value);
 }

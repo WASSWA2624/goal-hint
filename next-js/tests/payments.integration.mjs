@@ -21,8 +21,10 @@ test("real MySQL payment transactions, budgets, snapshots, assent and retired tr
   t.after(() => fixture.close());
   let instant = Date.parse("2026-10-19T09:00:00Z"), serial = 100;
   const now = () => instant, at = new Date(instant), planId = randomUUID();
-  const sessions = createMemberSessions({ database, config, now }), payments = createPayments({ database, config, now, environment: null }), codes = createAccessCodes({ database, config, now, notifications: silentPaymentNotifications });
-  await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST MTN", airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "synthetic-owner" } }));
+  const sessions = createMemberSessions({ database, config, now }), payments = createPayments({ database, config, now }), codes = createAccessCodes({ database, config, now, notifications: silentPaymentNotifications });
+  await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test",
+    mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST MTN",
+    airtelEnabled: true, airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "synthetic-owner" } }));
   await database.query((tx) => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   async function member(phone) { const signed = await sessions.signIn(phone ?? `25670000${String(++serial).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }
   const fields = (overrides = {}) => ({ planId, payerPhone: "256700000101", network: "mtn", transactionId: `TEST-${++serial}`, screenshotAmount: 5000, accepted: true, ...overrides });
@@ -149,21 +151,20 @@ test("real MySQL payment transactions, budgets, snapshots, assent and retired tr
     await setBudget("upload-site", "all", { count: 0, bytes: paymentRules.siteBytes - image.length + 1 });
     assert.equal((await payments.submit(who, fields(), image)).status, "busy"); await setBudget("upload-site", "all", { count: 0, bytes: 0 });
   });
-  await t.test("payment submission uses environment wallets even when stored history has different networks", async () => {
-    const environment = { mtnNumber: null, mtnName: null, mtnMenuShortcut: null,
-      airtelNumber: "256700000910", airtelName: "ENV AIRTEL", airtelMenuShortcut: null, contactPhone: null, whatsappPhone: null };
-    const configured = createPayments({ database, config, now, environment });
+  await t.test("legacy payment reports require enabled and complete stored receiving details", async () => {
     const who = await member();
-    await root.query("UPDATE SubscriptionSettings SET airtelNumber = NULL, airtelName = NULL WHERE id = 1");
+    await root.query("UPDATE SubscriptionSettings SET mtnEnabled = FALSE, airtelName = NULL WHERE id = 1");
     try {
-      assert.equal(await configured.begin(who, "unknown", image.length), true);
-      assert.equal((await configured.submit(who, fields({ network: "mtn" }), image)).status, "invalid", "A stale stored wallet cannot accept new reports.");
-      assert.equal((await configured.submit(who, fields({ network: "airtel" }), image)).status, "saved", "An environment-only wallet accepts reports.");
+      assert.equal(await payments.begin(who, "unknown", image.length), true);
+      assert.equal((await payments.submit(who, fields({ network: "mtn" }), image)).status, "invalid", "A disabled provider cannot accept new reports.");
+      assert.equal((await payments.submit(who, fields({ network: "airtel" }), image)).status, "invalid", "An incomplete provider cannot accept new reports.");
+      await root.query("UPDATE SubscriptionSettings SET airtelName = 'TEST AIRTEL' WHERE id = 1");
+      assert.equal((await payments.submit(who, fields({ network: "airtel" }), image)).status, "saved");
       const stored = await database.query((tx) => tx.subscriptionSettings.findUniqueOrThrow({ where: { id: 1 } }));
-      assert.equal(stored.airtelNumber, null, "Submission never overwrites historical settings.");
+      assert.equal(stored.airtelNumber, "256700000902", "Submission never overwrites receiving settings.");
       assert.equal(stored.mtnNumber, "256700000901");
     } finally {
-      await root.query("UPDATE SubscriptionSettings SET airtelNumber = '256700000902', airtelName = 'TEST AIRTEL' WHERE id = 1");
+      await root.query("UPDATE SubscriptionSettings SET mtnEnabled = TRUE, airtelName = 'TEST AIRTEL' WHERE id = 1");
     }
   });
   await t.test("payment views expose no manual trial-request workflow", async () => {

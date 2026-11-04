@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { manualPaymentProvider, type ManualPaymentSettings } from "./subscription-settings.ts";
 
 export const checkoutRules = Object.freeze({ reservationMs: 48 * 3_600_000, pageSize: 30, maximumUgx: 2_000_000_000 });
 export const checkoutOpenStatuses = ["pending", "remaining", "disputed", "correction", "reconfirm"] as const;
@@ -33,8 +34,8 @@ export type CheckoutRequest = { id: string; reference: string; status: string; p
   receipts: { id: string; transactionId: string; amountUgx: number; paidAt: string; verified: boolean; disputed: boolean; withdrawn: boolean }[] };
 export type CheckoutView = { availableWalletUgx: number; availableReferralDays: number; lastMethod: string | null; requests: CheckoutRequest[] };
 export function checkoutMethodAvailable(method: string, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,
-  providers: { mtnNumber: string | null; airtelNumber: string | null }) {
-  return method === "mtn" ? !!providers.mtnNumber : method === "airtel" ? !!providers.airtelNumber
+  providers: ManualPaymentSettings) {
+  return method === "mtn" || method === "airtel" ? manualPaymentProvider(providers, method).reason === null
     : method === "wallet" ? balances.availableWalletUgx > 0 : method === "referral" && balances.availableReferralDays > 0;
 }
 export function fundingAmounts(priceUgx: number, walletUgx: number, externalUgx = 0) {

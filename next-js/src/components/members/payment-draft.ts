@@ -1,32 +1,24 @@
-import { paymentDraftStorageKey } from "@/domain/member-navigation";
-import { normalizeTransactionId } from "@/domain/payment";
 import type { MobileNetwork } from "@/domain/phone";
+import { clearDraftProgress, decodeDraftProgress, readDraftProgress, writeDraftProgress } from "./draft-storage.ts";
 
 /**
- * Keep payment details for retry; the amount comes from the plan, or for a top-up (purpose "topup") from topUpAmount, and
- * screenshots stay in memory.
+ * The legacy form keeps transaction details in component memory. Only package and method choices survive a reload.
  */
 export type PaymentDraft = { purpose: "plan" | "topup"; planId: string; topUpAmount: string; payerPhone: string; network: MobileNetwork | ""; transactionId: string; accepted: boolean };
-const key = (accountId: string) => `${paymentDraftStorageKey}:${accountId}`;
-export function paymentDraftSnapshot(accountId: string): string | null {
-  try { return sessionStorage.getItem(key(accountId)); } catch { return null; }
+export function paymentDraftSnapshot(scope: string): string | null {
+  return readDraftProgress(scope, "legacy");
 }
-export function readPaymentDraft(accountId: string, raw = paymentDraftSnapshot(accountId)): PaymentDraft | null {
-  try {
-    const value: unknown = JSON.parse(raw ?? "null");
-    if (!value || typeof value !== "object") return null;
-    const draft = value as Record<string, unknown>;
-    if (!["planId", "payerPhone", "transactionId"].every((field) => typeof draft[field] === "string" && (draft[field] as string).length <= 64)
-      || !["", "mtn", "airtel"].includes(String(draft.network)) || typeof draft.accepted !== "boolean") return null;
-    // Drafts saved before top-ups existed are plan drafts.
-    const topUpAmount = typeof draft.topUpAmount === "string" && /^\d{0,6}$/u.test(draft.topUpAmount) ? draft.topUpAmount : "";
-    return { purpose: draft.purpose === "topup" ? "topup" : "plan", planId: draft.planId as string, topUpAmount, payerPhone: draft.payerPhone as string,
-      transactionId: normalizeTransactionId(draft.transactionId as string), network: draft.network as PaymentDraft["network"], accepted: draft.accepted };
-  } catch { return null; }
+type PaymentProgress = Pick<PaymentDraft, "purpose" | "planId" | "topUpAmount" | "network">;
+export function readPaymentDraft(raw: string | null): PaymentProgress | null {
+  const draft = decodeDraftProgress(raw);
+  if (!draft || typeof draft.planId !== "string" || draft.planId.length > 64 ||
+    draft.network !== "" && draft.network !== "mtn" && draft.network !== "airtel") return null;
+  const topUpAmount = typeof draft.topUpAmount === "string" && /^\d{0,6}$/u.test(draft.topUpAmount) ? draft.topUpAmount : "";
+  return { purpose: draft.purpose === "topup" ? "topup" : "plan", planId: draft.planId, topUpAmount, network: draft.network };
 }
-export function savePaymentDraft(accountId: string, draft: PaymentDraft) {
-  try { sessionStorage.setItem(key(accountId), JSON.stringify(draft)); } catch { /* The form works with storage disabled. */ }
+export function savePaymentDraft(scope: string, { purpose, planId, topUpAmount, network }: PaymentDraft) {
+  writeDraftProgress(scope, "legacy", { purpose, planId, topUpAmount, network });
 }
-export function clearPaymentDraft(accountId: string) {
-  try { sessionStorage.removeItem(key(accountId)); } catch { /* The form works with storage disabled. */ }
+export function clearPaymentDraft(scope: string) {
+  clearDraftProgress(scope, "legacy");
 }

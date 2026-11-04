@@ -107,14 +107,14 @@ function useBackHref(locale: string) {
 }
 function DesktopBackLink() {
   const { locale, messages } = useStableDetails();
-  return <BackLink href={useBackHref(locale)} prefetch={false}><BackIcon />{messages.text("details.backToPredictions")}</BackLink>;
+  return <BackLink href={useBackHref(locale)} contextBack prefetch={false}><BackIcon />{messages.text("navigation.back")}</BackLink>;
 }
 /** Phone header keeps back navigation and the same account menu as the app shell. */
 function PhoneHeader() {
   const { locale, messages, showAccount } = useStableDetails();
   const backHref = useBackHref(locale);
   return <PhoneBar>
-    <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
+    <RoundLink href={backHref} contextBack prefetch={false} aria-label={messages.text("navigation.back")}><BackIcon /></RoundLink>
     <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><HeaderBrand alt="" /></PhoneHome>
     <AccountLinks locale={locale} showAccount={showAccount === true} />
     <NavigationProgress label={messages.text("navigation.loading")} />

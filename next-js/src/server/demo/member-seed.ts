@@ -20,8 +20,8 @@ export async function seedDemoMember(database: DatabaseRuntime, nowMs = Date.now
     const existingAccount = await tx.memberAccount.findUnique({ where: { id: demoMember.accountId }, select: { id: true } });
     await tx.subscriptionSettings.upsert({ where: { id: 1 }, update: {}, create: {
       id: 1, paywallMode: "on", updatedAt: at, updatedBy: "development-demo",
-      mtnNumber: "256700000080", mtnName: "Goal Hint Demo MTN",
-      airtelNumber: "256700000081", airtelName: "Goal Hint Demo Airtel",
+      mtnEnabled: true, mtnNumber: "256700000080", mtnName: "Goal Hint Demo MTN",
+      airtelEnabled: true, airtelNumber: "256700000081", airtelName: "Goal Hint Demo Airtel",
       contactPhone: "256700000082", whatsappPhone: "256700000082", reviewTime: "Within 5 minutes (demo)",
       paymentNote: "Synthetic development subscription. No payment is required.",
     } });
