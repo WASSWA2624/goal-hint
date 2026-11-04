@@ -165,7 +165,8 @@ and shared spacing above and below. There is no separate gray filter panel.
 
 One **Advanced Filters** dialog owns status/result, combined From/To
 date-times in the device zone, sorting, Predictions only, markets, leagues,
-countries, probability bounds and the existing unavailable-odds explanation.
+countries, probability bounds and inactive odds fields with an on-demand
+availability explanation.
 Each field renders once; desktop and mobile share the same draft and validation.
 Leagues and countries reuse one searchable multi-select with bundled country flags.
 Markets opens expanded with an Any checkbox and a two-column grid. Period and

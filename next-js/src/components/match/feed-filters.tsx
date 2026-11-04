@@ -6,6 +6,7 @@ import { DateTimeField } from "@/components/ui/date-time-field";
 import { FloatingField } from "@/components/ui/floating-field";
 import { SearchBar } from "@/components/ui/search-bar";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { UnavailableField } from "@/components/ui/unavailable-field";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { getDateInTimeZone } from "@/domain/device-calendar";
@@ -130,8 +131,6 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
           </div>
           {live && <Muted data-help>{messages.text("feed.filters.liveToday")}</Muted>}
         </div>
-        <PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={locked}
-          onChange={checked => setDraft(current => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} />
         <div data-fields data-location-fields>{(["leagues", "countries"] as const).map(kind => <SearchableSelect key={kind} label={messages.text(`feed.filters.${kind}`)} name={kind === "leagues" ? "league" : "country"}
           values={draft.query[kind]} options={(kind === "leagues" ? leagueList : countryList).map(option => ({ ...option, icon: <OptionLogo url={option.logoUrl} /> }))}
           maximum={kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries}
@@ -141,11 +140,13 @@ export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = f
           onValuesChange={values => setDraft(current => ({ ...current, query: { ...current.query, [kind]: values } }))} />)}</div>
         <fieldset disabled={locked} aria-label={messages.text("feed.filters.probabilityLabel")} data-probability-fields><div data-fields>
           {probabilityInput("min")}{probabilityInput("max")}
-        </div><Muted data-help>{messages.text("feed.filters.probabilityExplanation")}</Muted></fieldset>
-        <fieldset disabled aria-label={messages.text("feed.filters.oddsUnavailable")} data-odds-fields><div data-fields>
-          <FloatingField label={messages.text("feed.filters.minOdds")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
-          <FloatingField label={messages.text("feed.filters.maxOdds")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
-        </div><Muted data-help>{messages.text("feed.filters.oddsUnavailable")}</Muted></fieldset>
+        </div></fieldset>
+        <fieldset aria-label={messages.text("feed.filters.oddsLabel")} data-odds-fields><div data-fields>
+          <UnavailableField label={messages.text("feed.filters.minOdds")} reason={messages.text("feed.filters.oddsUnavailable")} />
+          <UnavailableField label={messages.text("feed.filters.maxOdds")} reason={messages.text("feed.filters.oddsUnavailable")} />
+        </div></fieldset>
+        <PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={locked}
+          onChange={checked => setDraft(current => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} />
         <MarketsSection data-market-section open={marketsOpen} onToggle={event => setMarketsOpen(event.currentTarget.open)}>
           <summary><span>{messages.text("feed.filters.markets")}</span><span>{allMarkets
             ? messages.text("feed.filters.any") : messages.text("feed.filters.selectedCount", { count: messages.number(draft.query.markets.length) })}</span><ChevronDownIcon aria-hidden="true" /></summary>

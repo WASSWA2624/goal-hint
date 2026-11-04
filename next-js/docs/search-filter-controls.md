@@ -57,10 +57,11 @@ result, From/To date-times, sorting, Predictions only, league/country searchable
 multi-selects and probability live in its Advanced Filters dialog. Match status
 and Sort by share a row, as do Leagues and Countries. Markets opens expanded
 with four choices in two columns and an Any checkbox that selects all four.
+Predictions only sits directly above Markets.
 Period and editable time-zone controls are removed. From/To use the detected
 device zone and define one continuous interval, including the final minute.
-Existing access restrictions, probability guidance and the unavailable-odds
-explanation remain. Min/Max probability and odds fields have their own labels.
+Min/Max probability and odds fields have their own labels. Inactive odds
+fields show the availability explanation on tap, click or keyboard focus.
 Shared selects search from the first character, ignoring case and accents;
 direct partial matches precede football aliases and spelling suggestions.
 Selection takes one activation and persists when searching. Missing applied

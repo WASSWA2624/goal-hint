@@ -762,7 +762,6 @@ export const en = {
   "feed.filters.showing": "Showing",
   "feed.filters.changesReady": "Changes ready to apply",
   "feed.filters.predictionProbability": "Prediction probability",
-  "feed.filters.probabilityExplanation": "Chance of the displayed prediction · 0–100%. Leave a bound blank for Any.",
   "feed.filters.minimumPercent": "Minimum %",
   "feed.filters.maximumPercent": "Maximum %",
   "feed.filters.percentRange": "{min}% - {max}%",
