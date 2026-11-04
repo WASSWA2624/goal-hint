@@ -102,6 +102,7 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       if (!services.sessions) return json({ phone: null, error: "unavailable" }, 503);
       const member = await services.sessions.verify(readCookie(request, memberCookieName(services.config.production)));
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
+      const identity = { phone: member?.phone ?? null, administrator };
       const salesOpen = !!services.settings?.settings && services.settings.settings.paywallMode !== "off";
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
@@ -110,14 +111,16 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
         const offer = !summary.activeUntil && summary.canSubscribe && services.offer ? await services.offer().catch(() => null) : null;
         return offer ? { ...summary, offer } : summary;
       };
-      if (!member || member.blocked || administrator) return json({ phone: member?.phone ?? null, administrator, subscription: await withOffer(subscription) });
-      if (!services.codes) return json({ phone: null, error: "unavailable" }, 503);
+      if (!member || member.blocked || administrator) return json({ ...identity, subscription: await withOffer(subscription) });
+      if (!services.codes) return json({ ...identity, subscription: null });
       // A chain that ended (or ends within the lead) renews from credit on this request when auto-renewal is on.
       try { await services.codes.renewDue(member.accountId, { prefer: [member.tokenHash] }); } catch { /* The summary below still answers. */ }
-      const status = await services.codes.subscriptionStatus(member);
+      const status = await services.codes.subscriptionStatus(member).catch(() => undefined);
+      // An unavailable summary cannot grant access or override verified sign-in state.
+      if (status === undefined) return json({ ...identity, subscription: null });
       // The verified session may have been removed or blocked while its subscription was being read.
       if (!status) return json({ phone: null, administrator: false, subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, ...noCredit } });
-      return json({ phone: member.phone, administrator, subscription: await withOffer({ ...subscription, ...status }) });
+      return json({ ...identity, subscription: await withOffer({ ...subscription, ...status }) });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }
   };
 }

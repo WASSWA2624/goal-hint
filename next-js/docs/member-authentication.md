@@ -66,7 +66,7 @@ All writes require same-origin requests. Responses are private and not cached; c
 | `POST /api/account/reset` | `{password,return?}` with reset-only cookie | New member cookie |
 | `POST /api/account/password` | `{password}` with authenticated member cookie | Fresh current-device cookie; all previous sessions revoked |
 | `POST /api/account/phone` | `{phone,currentPassword}` | Restricted cookie for a changed phone |
-| `GET /api/account/session` | — | Verified phone, otherwise null |
+| `GET /api/account/session` | — | Verified phone and role, plus a subscription summary when available. An unavailable summary is `null`; a revoked or expired session has no verified phone. |
 | `POST /api/account/sign-out` | — | Clear cookie and end session |
 
 `/api/account/sign-in` remains a password-login alias.

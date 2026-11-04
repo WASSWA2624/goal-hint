@@ -51,7 +51,9 @@ test("private subscription summary uses active periods and uninterrupted renewal
     assert.equal(body.phone, f.member.phone);
     assert.equal(f.queries.length, 1, "Navigation loads a compact account projection without devices or payment proof.");
     assert.equal(f.queries[0].where.tokenHash, f.member.tokenHash);
-    assert.equal(f.queries[0].select.account.select.codes.where.revokedAt, null);
+    assert.deepEqual(f.queries[0].select.account.select.codes.where.OR, [
+      { revokedAt: null, endsAt: { gt: new Date(instant) } }, { source: "trial" },
+    ], "Read live access and trial history without loading unrelated expired periods.");
     assert.deepEqual(f.queries[0].select.account.select._count.select.codes.where,
       { revokedAt: null, startsAt: { lte: new Date(instant) }, endsAt: { lte: new Date(instant) } });
   }
@@ -119,12 +121,14 @@ test("subscription details fail closed if the verified session was removed, rese
   }
 });
 
-test("a subscription storage failure does not publish a false unsubscribed state", async () => {
+test("a subscription storage failure keeps verified identity without claiming subscription access", async () => {
   for (const codes of [null, { async subscriptionStatus() { throw new Error("private storage failure"); } }]) {
     const f = subscriptionFixture();
     f.services.codes = codes;
     const response = await f.request();
-    assert.equal(response.status, 503); assert.deepEqual(await response.json(), { phone: null, error: "unavailable" });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("cache-control"), /no-store/u);
+    assert.deepEqual(await response.json(), { phone: f.member.phone, administrator: false, subscription: null });
   }
 });
 

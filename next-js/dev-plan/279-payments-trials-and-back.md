@@ -36,3 +36,9 @@ Use the existing manual checkout, account access periods, and shared web navigat
 ## Local timing
 
 The cold checkout fixture included about 39 seconds of development compilation before hydration began. Warm fixture document requests took 0.39–3.2 seconds under different levels of host load. The first real checkout quote took 2.5 seconds during route compilation, and repeat quotes took 109–263 ms. These measurements characterize local development and leave production performance open.
+
+## Follow-up: Login and Account on a running local demo
+
+- The demo launcher applies migrations at startup. A server left running through the source update reached the new subscription queries with the old schema. A synthetic login succeeded and opened Account, but the private session endpoint returned 503 and the header still showed Login.
+- The running loopback demo received the missing migration after an encrypted checkpoint was authenticated against its source dump. Migration status is current; member, session, payment, access, and wallet counts were unchanged by the migration. Restart the demo launcher after future schema updates so it applies pending migrations before serving the new code.
+- The private session endpoint now returns verified identity when subscription data is temporarily unavailable and marks that summary unknown. It still removes identity when the summary read confirms that the session has since been revoked or expired.
