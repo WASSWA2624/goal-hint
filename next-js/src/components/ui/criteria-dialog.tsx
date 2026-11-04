@@ -129,12 +129,13 @@ export type CriteriaDialogProps = Readonly<{
   children: ReactNode;
   className?: string;
   busy?: boolean;
+  dismissOnEscape?: boolean;
   hideFooter?: boolean;
   applyDisabled?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnEscape = true, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -159,7 +160,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
     onCancel={(event) => {
       if (event.target !== event.currentTarget) return;
       event.preventDefault(); event.stopPropagation();
-      if (!busy) onCancel();
+      if (!busy && dismissOnEscape) onCancel();
     }}
     onKeyDown={(event) => {
       if (!enhanced || !open || !onApply || busy || applyDisabled || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;

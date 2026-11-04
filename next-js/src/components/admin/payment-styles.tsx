@@ -16,11 +16,29 @@ const panelLook = css`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 `;
-const desktopOnly = css`${media.belowDesktop} { display: none; }`;
 const phoneOnly = css`${media.desktop} { display: none; }`;
 
 export const PaymentLayout = styled(RecordWorkspace)`
   --record-list-default: clamp(var(--gh-size-70), 24vw, var(--gh-size-82_5));
+  ${media.belowDesktop} {
+    &[data-payment-mobile-queue] {
+      block-size: max(0px, calc(var(--payment-viewport-height, 100dvh) - var(--app-header-height)
+        - var(--app-mobile-tab-height) - env(safe-area-inset-bottom) - var(--gh-spacing-1)));
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 0;
+      > header { grid-row: 1; padding-block-end: var(--gh-spacing-2); }
+      > [data-record-list-pane] {
+        grid-row: 3; grid-template-rows: minmax(0, 1fr) auto;
+        min-block-size: 0; gap: 0;
+      }
+      [data-payment-queue-scroll] {
+        grid-row: 1; min-block-size: 0; overflow-y: auto; overscroll-behavior-y: contain;
+        scrollbar-width: thin;
+      }
+      [data-payment-queue-footer] { grid-row: 2; padding-block: var(--gh-spacing-1) var(--gh-spacing-0_5); }
+      [data-payment-empty] { grid-row: 1; align-self: start; }
+    }
+  }
 `;
 export const PaymentUnavailable = styled.section`
   display: grid;
@@ -374,14 +392,15 @@ export const RejectDrawer = styled(ZoneDrawer)`
     [data-reject-inline] { display: none; }
   }
 `;
-export const DecisionBar = styled(RecordFooter)<{ $rejecting: boolean }>`
+export const PaymentReviewFooter = styled(RecordFooter)`
+  ${media.desktop} { justify-content: space-between; }
+`;
+export const DecisionBar = styled(PaymentReviewFooter)<{ $rejecting: boolean }>`
   ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
   background: ${({ theme }) => theme.color.surface};
   ${media.belowDesktop} { > button { min-inline-size: 0; padding-inline: var(--gh-spacing-2_5); } }
-  > [data-payment-footer-summary] { ${desktopOnly} }
-  > [data-reject-toggle], > [data-reject-submit] { ${phoneOnly} }
   ${({ $rejecting }) => $rejecting ? css`
-    ${media.belowDesktop} { > [data-payment-approve] { display: none; } }
+    > [data-payment-approve] { display: none; }
   ` : css`> [data-reject-submit] { display: none; }`}
 `;
 /** Danger outline while closed ("Reject"); a plain secondary button while the reject panel is open ("Cancel"). */

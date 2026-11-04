@@ -50,17 +50,18 @@ No private records are loaded and no payment APIs are called. The page is marked
 `noindex, nofollow` and supports desktop windows at least 1024px wide. Mobile
 visitors see a desktop preview notice.
 
-The live Payments screen uses Balanced review: canonical editable payment fields,
-subscriber context, and open checks on the left; the actual uploaded evidence
-on the right. Provider and package controls remain visible. The transaction ID
-has a one-click copy button that copies the current edited or historical
-value and confirms success. There is no repeated desktop amount banner or footer
-total. The live queue starts with search, Advanced filters and Sort by, with
-Sort by on a second row on phones. Status and provider checkboxes filter the
-paginated queue, which opens to Pending. Two-line cards open the right review
-pane on desktop or the detail view on mobile. Numbered pagination appears below
-multi-page results and retains the current search, filters, and sort. Desktop
-receipt and decision actions are available in the review footer.
+The live desktop pane starts with a plain, read-only summary of the payment
+reference, subscriber, package, dates, days, and status. Transaction details
+contain the provider, copyable transaction ID, receipt fields, and screenshot
+preview. The footer separates rejection on the left from approval on the
+right. Rejection opens a dialog over the pane with selectable reasons, an
+explanation field, and an inactive Reject button until a reason is supplied.
+
+The live queue opens to Pending and supports status and provider filters,
+search, and sorting. Numbered pagination retains the current criteria. On
+phones the toolbar and multi-page pager stay in view while the rows scroll.
+Two-line payment rows open the right pane on desktop or the detail view on
+mobile.
 
 ## Source and local serving
 

@@ -15,12 +15,13 @@ import type { OwnerPayment } from "@/domain/owner-members";
 import { media } from "@/styles/theme";
 import { WizardReview } from "../members/payment-wizard";
 import { RecordCard, RecordFooter, RecordScroll } from "./record-workspace";
+import { CheckoutDesktopReview } from "./checkout-desktop-review";
 
 type Receipt = { id: string; provider: string; transactionId: string; verifiedAt: string | null; verifiedBy: string | null;
   amountUgx: number | null; disputed: boolean; senderPhone: string | null; recipient: string | null;
   allocatedSubmissionId: string | null; intendedSubmissionId: string | null; receivedAt: string | null;
   claims: { submissionId: string; submission: { reference: string; accountId: string } }[] };
-type Detail = { revision: number; status: string; walletUgx: number; referralDays: number; receivingNumber: string | null;
+export type CheckoutReviewDetail = { revision: number; status: string; walletUgx: number; referralDays: number; receivingNumber: string | null;
   reservationActive: boolean; reservationUntil: string | null; amountToSend: number; remainingUgx: number; excessUgx: number; verifiedUgx: number;
   claims: { id: string; receipt: Receipt; amountUgx: number; payerPhone: string | null; paidAt: string; original: unknown; corrections: unknown; imageSha256: string | null; withdrawn: boolean; purgedAt: string | null;
     legacyImage: boolean; imageIsLegacy: boolean; validation: ReceiptEvidenceValidation;
@@ -46,39 +47,61 @@ const ReviewFooter = styled(RecordFooter)`
 `;
 const localDate = (value: string) => new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 const receiptFormId = (id: string) => `verify-receipt-${id}`;
-const canVerifyReceipt = (claim: Detail["claims"][number]) => (!claim.receipt.allocatedSubmissionId || !claim.receipt.senderPhone) && !claim.withdrawn;
+const canVerifyCheckoutReceipt = (claim: CheckoutReviewDetail["claims"][number]) => (!claim.receipt.allocatedSubmissionId || !claim.receipt.senderPhone) && !claim.withdrawn;
 
-export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }: {
-  payment: OwnerPayment; nav: ReactNode; busy: boolean; onBusyChange: (busy: boolean) => void; onResolved: () => void;
+export function CheckoutReview({ payment, nav, desktop, hasNext, busy, onBusyChange, onResolved }: {
+  payment: OwnerPayment; nav: ReactNode; desktop: boolean; hasNext: boolean; busy: boolean; onBusyChange: (busy: boolean) => void; onResolved: (approved: boolean) => void;
 }) {
-  const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState("");
-  const [reason, setReason] = useState(""), [notice, setNotice] = useState("");
+  const [record, setRecord] = useState<{ url: string; detail: CheckoutReviewDetail | null }>();
+  const [feedback, setFeedback] = useState({ url: "", error: "", notice: "" });
+  const [shownPayment, setShownPayment] = useState(payment);
+  const [reason, setReason] = useState("");
   const url = `/api/admin/payments/${payment.id}`;
+  const detailUrl = desktop ? `${url}?view=compact` : url;
+  const current = record?.url === detailUrl;
+  const detail = current ? record.detail : null;
+  const { error, notice } = feedback.url === detailUrl ? feedback : { error: "", notice: "" };
+  if (current && shownPayment !== payment) setShownPayment(payment);
+
   async function refresh() {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetch(detailUrl, { cache: "no-store" });
     if (!response.ok) throw new Error("Review is unavailable.");
-    setDetail(await response.json());
+    setRecord({ url: detailUrl, detail: await response.json() });
   }
   useEffect(() => {
-    let alive = true;
-    void fetch(url, { cache: "no-store" }).then(async response => { if (!response.ok) throw new Error("Review unavailable."); const result = await response.json(); if (alive) setDetail(result); }).catch(e => { if (alive) setError(e.message); });
-    return () => { alive = false; };
-  }, [url]);
+    const controller = new AbortController();
+    void fetch(detailUrl, { cache: "no-store", signal: controller.signal }).then(async response => {
+      if (!response.ok) throw new Error("Review unavailable.");
+      const result = await response.json();
+      if (!controller.signal.aborted) setRecord({ url: detailUrl, detail: result });
+    }).catch(e => {
+      if (!controller.signal.aborted) setFeedback({ url: detailUrl, error: e.message, notice: "" });
+    });
+    return () => controller.abort();
+  }, [detailUrl]);
   async function act(body: Record<string, unknown>, advance = false) {
     if (busy || !detail) return;
-    onBusyChange(true); setError(""); setNotice("");
+    onBusyChange(true); setFeedback({ url: detailUrl, error: "", notice: "" });
     try {
       const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, revision: detail.revision }) });
       const result = await response.json();
+      if (response.ok && advance) { onResolved(body.action === "approve-checkout"); return; }
       await refresh();
+      if (result.code === "remaining") { setFeedback({ url: detailUrl, error: "", notice: result.message }); return; }
       if (!response.ok) throw new Error(result.message ?? "Action could not be completed.");
-      setNotice("Saved."); if (advance) onResolved();
-    } catch (e) { setError((e as Error).message); }
+      setFeedback({ url: detailUrl, error: "", notice: "Saved." });
+    } catch (e) { setFeedback({ url: detailUrl, error: (e as Error).message, notice: "" }); }
     finally { onBusyChange(false); }
+  }
+  if (desktop) {
+    const changing = !current && !error;
+    return <CheckoutDesktopReview payment={changing && record ? shownPayment : payment}
+      detail={changing ? record?.detail ?? null : detail} busy={busy || !current} loading={changing}
+      hasNext={hasNext} error={error} notice={notice} act={act} />;
   }
   const pending = detail && (checkoutOpenStatuses as readonly string[]).includes(detail.status);
   const blocked = detail?.claims.some(c => c.receipt.disputed) || detail?.status === "disputed";
-  const receiptForms = detail?.claims.filter(canVerifyReceipt) ?? [];
+  const receiptForms = detail?.claims.filter(canVerifyCheckoutReceipt) ?? [];
   const firstReceipt = receiptForms.find(claim => !claim.receipt.verifiedAt) ?? receiptForms[0];
   const singleReceipt = receiptForms.length === 1;
   return <Review data-checkout-review>
@@ -117,7 +140,7 @@ export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }:
         {claim.receipt.disputed && <p role="alert">Disputed ownership. Contact the payer using the sender number from the actual receiving account. Upload order and claimed phone numbers do not settle ownership.</p>}
         {claim.receipt.verifiedAt && <p>Verified by {claim.receipt.verifiedBy} · {formatUgx(claim.receipt.amountUgx ?? 0)} · sender {claim.receipt.senderPhone ?? "not available"}</p>}
         {claim.receipt.allocatedSubmissionId && <p>Receipt allocated once. Further allocation is blocked.</p>}
-        {canVerifyReceipt(claim) && <form id={receiptFormId(claim.id)} onSubmit={event => {
+        {canVerifyCheckoutReceipt(claim) && <form id={receiptFormId(claim.id)} onSubmit={event => {
           event.preventDefault(); const data = new FormData(event.currentTarget);
           void act({ action: "verify-receipt", receiptId: claim.receipt.id, amountUgx: Number(data.get("amountUgx")), recipient: data.get("recipient"),
             senderPhone: data.get("senderPhone"), receivedAt: new Date(String(data.get("receivedAt"))).toISOString(),

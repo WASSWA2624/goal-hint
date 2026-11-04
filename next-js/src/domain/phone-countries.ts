@@ -1,7 +1,7 @@
 import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/mobile";
 import metadata from "libphonenumber-js/metadata.mobile.json";
 import { iso31661 } from "iso-3166";
-import { normalizePhone, phoneInputMaxLength } from "./phone.ts";
+import { formatPhone, normalizePhone, phoneInputMaxLength } from "./phone.ts";
 
 export type PhoneCountry = Readonly<{ iso2: CountryCode; iso3: string; name: string; callingCode: string; flag: string | null }>;
 export type PhoneValueParts = Readonly<{ country: CountryCode | null; callingCode: string; national: string }>;
@@ -79,6 +79,11 @@ export function formatNationalPhone(parts: PhoneValueParts): string {
   if (!national) return "";
   if (parts.country === "UG" && /^7\d{0,8}$/u.test(national)) return national.replace(/(\d{3})(?=\d)/gu, "$1 ");
   return new AsYouType().input(`+${parts.callingCode}${national}`).slice(parts.callingCode.length + 1).trim();
+}
+
+export function formatInternationalPhone(value: string): string {
+  const parts = splitPhoneValue(value);
+  return parts.callingCode && parts.national ? `+${parts.callingCode} ${formatNationalPhone(parts)}` : `+${formatPhone(value)}`;
 }
 
 /** Only explicit international input is inferred while typing; a national number must not change the chosen country. */

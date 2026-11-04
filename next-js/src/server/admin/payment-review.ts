@@ -15,14 +15,15 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
 import { paymentDateNotExtracted } from "../../domain/payment-evidence-date.ts";
 import { maximumPaymentQueuePage, paymentQueueStatusLabels, type PaymentFilters } from "../../domain/payment-queue-filters.ts";
+import { paymentRejectionReasons as rejectionReasons } from "../../domain/payment-rejection.ts";
 
-export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
+export { rejectionReasons };
 const reference = (row?: { reference: string }) => row ? formatPaymentReference(row.reference) : null;
 const paymentSelect = {
   id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
   claimedAmountUgx: true, screenshotAmountUgx: true, purpose: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
   transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } },
-  workflowVersion: true,
+  workflowVersion: true, decidedAt: true, code: { select: { startsAt: true, endsAt: true } },
   receiptClaims: {
     where: { withdrawn: false }, orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     select: { amountUgx: true, payerPhone: true, paidAt: true, original: true,
@@ -50,6 +51,12 @@ function queueFilter(filters: PaymentFilters): Prisma.PaymentSubmissionWhereInpu
 }
 
 type PaymentRow = Prisma.PaymentSubmissionGetPayload<{ select: typeof paymentSelect }>;
+function relativeTo(row: { id: string; submittedAt: Date }, oldest: boolean, after: boolean): Prisma.PaymentSubmissionWhereInput {
+  return { OR: [
+    { submittedAt: oldest === after ? { gt: row.submittedAt } : { lt: row.submittedAt } },
+    { submittedAt: row.submittedAt, id: after ? { gt: row.id } : { lt: row.id } },
+  ] };
+}
 function receiptSummary(row: PaymentRow) {
   const latest = row.receiptClaims[0];
   const paidAt = latest?.receipt.receivedAt ?? (latest && !paymentDateNotExtracted(latest.original) ? latest.paidAt : null);
@@ -64,7 +71,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
   notifications?: PaymentNotifications;
 } = {}) {
   return {
-    async list(tab = "pending", paymentId?: string, options: { page?: number; search?: string; filters?: PaymentFilters } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
+    async list(tab = "pending", paymentId?: string, options: { page?: number; search?: string; filters?: PaymentFilters; focus?: string } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
       return database.query(async tx => {
         // An old audit event may describe a payment whose status has since changed.
         const target = paymentId ? await tx.paymentSubmission.findUnique({ where: { id: paymentId }, select: paymentSelect }) : null;
@@ -80,25 +87,42 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           ...(normalized ? [{ claimedTxnKey: { contains: normalized } }, { receiptClaims: { some: { OR: [
             { receipt: { transactionKey: { contains: normalized } } }, ...(phone ? [{ payerPhone: { contains: phone } }, { receipt: { senderPhone: { contains: phone } } }] : [])] } } }] : [])] }];
         const total = await tx.paymentSubmission.count({ where });
-        const page = options.filters ? Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize))) : requestedPage;
+        let page = options.filters ? Math.min(requestedPage, Math.max(1, Math.ceil(total / pageSize))) : requestedPage;
         const orderStatus = filters ? (filters.statuses.length === 1 ? filters.statuses[0] : undefined) : selected;
-        const rows = await tx.paymentSubmission.findMany({ where,
-          orderBy: [{ submittedAt: orderStatus && (checkoutOpenStatuses as readonly string[]).includes(orderStatus) ? "asc" : "desc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize,
-          select: paymentSelect });
+        const oldest = !!orderStatus && (checkoutOpenStatuses as readonly string[]).includes(orderStatus);
+        const orderBy: Prisma.PaymentSubmissionOrderByWithRelationInput[] = [{ submittedAt: oldest ? "asc" : "desc" }, { id: "asc" }];
+        const pendingWhere: Prisma.PaymentSubmissionWhereInput = { AND: [where, { status: "pending" }] };
+        const focus = filters && options.focus ? await tx.paymentSubmission.findFirst({
+          where: { AND: [pendingWhere, { id: options.focus }] }, select: { id: true, submittedAt: true },
+        }) : null;
+        if (focus) {
+          const before = await tx.paymentSubmission.count({ where: { AND: [where, relativeTo(focus, oldest, false)] } });
+          page = Math.min(maximumPaymentQueuePage, Math.floor(before / pageSize) + 1);
+        }
+        const rows = await tx.paymentSubmission.findMany({ where, orderBy, take: pageSize, skip: (page - 1) * pageSize, select: paymentSelect });
         // Keep the queue bounded while making the exact historical report available.
         if (target && !rows.some(row => row.id === target.id)) rows.splice(pageSize - 1, rows.length >= pageSize ? 1 : 0, target);
+        const last = rows.at(-1);
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
         const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
-        const [related, payers, pendingCount] = await Promise.all([
+        const [related, payers, pendingCount, nextPending] = await Promise.all([
           keys.length || hashes.length ? tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
             select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }) : [],
           phones.length ? tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }) : [],
           tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } }),
+          filters && last && total > rows.length && filters.statuses.some(status => status === "pending" || status === "all" || status === "reconciliation")
+            ? tx.paymentSubmission.findFirst({ where: { AND: [pendingWhere, relativeTo(last, oldest, true)] }, orderBy, select: { id: true } })
+              .then(next => next ?? tx.paymentSubmission.findFirst({ where: { AND: [pendingWhere, { id: { notIn: rows.map(row => row.id) } }] }, orderBy, select: { id: true } }))
+            : null,
         ]);
-        return { pendingCount, page, pageSize, total, search, ...(paymentId ? { tab: selected, targetFound: !!target } : {}), payments: rows.map(r => ({ id: r.id, workflowVersion: r.workflowVersion, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
+        return { pendingCount, page, pageSize, total, search, ...(paymentId ? { tab: selected, targetFound: !!target } : {}),
+          ...(nextPending ? { nextPendingId: nextPending.id } : {}), ...(focus && rows.some(row => row.id === focus.id) ? { focusId: focus.id } : {}),
+          payments: rows.map(r => ({ id: r.id, workflowVersion: r.workflowVersion, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx,
           purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, accountCreditUgx: r.account.creditUgx, planId: r.planId,
           planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
+          ...(options.filters ? { decidedAt: r.decidedAt?.toISOString() ?? null,
+            ...(r.code ? { accessPeriod: { startsAt: r.code.startsAt.toISOString(), endsAt: r.code.endsAt.toISOString() } } : {}) } : {}),
           ...(r.workflowVersion === 2 ? { receiptSummary: receiptSummary(r) } : {}),
           final: r.transactionRef ? { network: r.network, transactionId: normalizeTransactionId(r.transactionRef), amount: r.amountReceivedUgx } : null,
           checks: paymentChecks({ received: r.amountReceivedUgx, price: r.priceUgx, transactionId: !!r.claimedTxnKey,

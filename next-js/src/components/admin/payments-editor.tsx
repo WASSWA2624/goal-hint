@@ -19,7 +19,7 @@ import { CheckField } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { NetworkChip } from "./network-chip";
 import { PaymentReview, type PaymentRecovery } from "./payment-review";
-import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "./pending-payments";
+import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { paymentSortOptions, readPaymentSort, sortPayments, type PaymentSort } from "./payment-order";
 import { CheckoutReview } from "./checkout-review";
@@ -64,7 +64,7 @@ function FilterChoices<T extends string>({ label, options, selected, onChange }:
 }
 
 function restoreQueueFocus(id?: string) {
-  (document.querySelector<HTMLElement>(`[data-payment-row="${CSS.escape(id ?? "")}"]`) ?? document.getElementById("payment-queue-title"))?.focus();
+  (document.querySelector<HTMLElement>(`[data-payment-row="${CSS.escape(id ?? "")}"]`) ?? document.getElementById("payment-queue-title"))?.focus({ preventScroll: true });
 }
 
 /** Payment decisions share one queue; only the selected report mounts a review form. */
@@ -78,7 +78,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   const action = { ...mutation, busy: mutation.busy || checkoutBusy || refreshing || navigating };
   const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const desktop = useDesktopLayout();
-  const [selectedId, setSelectedId] = useState(initialPaymentId ?? queue.payments[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState<string | null>(initialPaymentId ?? queue.payments[0]?.id ?? "");
   const filtersId = useId(), [filtersOpen, setFiltersOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState(filters);
   const [detailOpen, setDetailOpen] = useState(!!initialPaymentId), [completed, setCompleted] = useState<Record<string, string>>({});
@@ -91,13 +91,18 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   const lastHash = useRef<string | null>(null);
   const openedFromQueue = useRef(false);
   const queueScroll = useRef<HTMLOListElement>(null);
+  const toolbar = useRef<HTMLDivElement>(null);
+  const mobileScroll = useRef(0);
   const page = queue.page ?? 1, previousPage = useRef(page);
   const pages = queue.pageSize ? Math.min(maximumPaymentQueuePage, Math.ceil((queue.total ?? 0) / queue.pageSize)) : 0;
   const completedRows = queue.payments.filter(payment => completed[payment.id] === payment.status);
   const payments = sortPayments(queue.payments.filter(payment => completed[payment.id] !== payment.status), sort);
-  const selected = payments.find(payment => payment.id === selectedId) ?? payments[0];
+  const selected = selectedId === null ? undefined : payments.find(payment => payment.id === selectedId) ?? payments[0];
   const selectedKey = selected?.id, index = selected ? payments.indexOf(selected) : -1;
   const reviewing = detailOpen && !!selected;
+  const nextPending = payments.slice(index + 1).find(payment => payment.status === "pending")
+    ?? payments.slice(0, Math.max(0, index)).find(payment => payment.status === "pending");
+  const nextPagePending = !nextPending && queue.nextPendingId;
   const pendingCount = Math.max(0, queue.pendingCount - completedRows.filter(payment => openStatuses.includes(payment.status)).length);
   const queueChanged = liveCount !== null && liveCount !== pendingCount;
   const singleStatus = filters.statuses.length === 1 ? filters.statuses[0] : undefined;
@@ -109,12 +114,25 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   useEffect(() => {
     if (previousPage.current === page) return;
     previousPage.current = page;
-    if (desktop) {
-      if (queueScroll.current) queueScroll.current.scrollTop = 0;
-    } else if (!reviewing) {
-      window.scrollTo({ top: 0, behavior: "instant" });
-    }
-  }, [desktop, page, reviewing]);
+    mobileScroll.current = 0;
+    if (queueScroll.current) queueScroll.current.scrollTop = 0;
+  }, [page]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport, root = toolbar.current?.closest<HTMLElement>("[data-payments-editor]");
+    if (desktop || reviewing || !viewport || !root) return;
+    const resize = () => {
+      if (viewport.scale === 1 && viewport.height < window.innerHeight)
+        root.style.setProperty("--payment-viewport-height", `${viewport.height}px`);
+      else root.style.removeProperty("--payment-viewport-height");
+    };
+    resize();
+    viewport.addEventListener("resize", resize);
+    return () => {
+      viewport.removeEventListener("resize", resize);
+      root.style.removeProperty("--payment-viewport-height");
+    };
+  }, [desktop, reviewing]);
 
   useEffect(() => {
     if (!queueChanged) { refreshedCount.current = null; return; }
@@ -133,7 +151,10 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
       if (queue.payments.some(payment => payment.id === id)) { setSelectedId(id); setDetailOpen(true); setOpened(true); }
       else if (!id && previous) {
         setDetailOpen(false); setDirtyId(undefined);
-        requestAnimationFrame(() => restoreQueueFocus(previous));
+        requestAnimationFrame(() => {
+          if (queueScroll.current) queueScroll.current.scrollTop = mobileScroll.current;
+          restoreQueueFocus(previous);
+        });
       }
     };
     readHash(); window.addEventListener("hashchange", readHash);
@@ -169,6 +190,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   function locationFor(id: string, push = false) {
     lastHash.current = id;
     const url = new URL(window.location.href);
+    if (url.searchParams.has("focus")) url.search = paymentParams(filters, sort, queue.search, page).toString();
     if (url.searchParams.has("paymentId")) {
       if (id) url.searchParams.set("paymentId", id);
       else url.search = paymentParams(filters, sort, queue.search, queue.page).toString();
@@ -182,7 +204,10 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   function select(payment: OwnerPayment) {
     if (action.busy) return;
     const push = !desktop && !reviewing;
-    if (push) openedFromQueue.current = true;
+    if (push) {
+      openedFromQueue.current = true;
+      mobileScroll.current = queueScroll.current?.scrollTop ?? 0;
+    }
     stopReviewSound();
     focusNext.current = !desktop; setSelectedId(payment.id); setDetailOpen(true); setOpened(true);
     locationFor(payment.id, push);
@@ -198,20 +223,31 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
     setDetailOpen(false); setDirtyId(undefined); locationFor("");
     requestAnimationFrame(() => restoreQueueFocus(selectedKey));
   }
-  function resolved(id: string) {
+  function resolved(id: string, approved = false) {
     stopReviewSound();
     setDirtyId(undefined);
     if (selected) setCompleted(shown => ({ ...shown, [id]: selected.status }));
-    const next = payments.find(payment => payment.id !== id);
+    const desktopApproval = desktop && approved;
+    const next = desktopApproval ? nextPending : payments.find(payment => payment.id !== id);
+    if (desktopApproval && nextPagePending) {
+      const params = paymentParams(filters, sort, queue.search, page);
+      params.set("focus", nextPagePending);
+      void refreshPendingPayments(true);
+      startNavigation(() => router.push(`/admin/payments?${params}`, { scroll: false }));
+      return true;
+    }
     if (!next && !desktop && openedFromQueue.current) { back(); return; }
     focusNext.current = true;
-    setSelectedId(next?.id ?? ""); setDetailOpen(!!next);
+    setSelectedId(next?.id ?? (desktopApproval ? null : "")); setDetailOpen(!!next);
     locationFor(next?.id ?? "");
   }
   function navigate(nextFilters: PaymentFilters, nextSort: PaymentSort, search = queue.search, page?: number) {
     const href = paymentQueueHref(nextFilters, nextSort, search, page);
     if (`${window.location.pathname}${window.location.search}${window.location.hash}` === href) return;
     openedFromQueue.current = false;
+    mobileScroll.current = 0;
+    if (queueScroll.current) queueScroll.current.scrollTop = 0;
+    setSelectedId(current => current ?? "");
     setDetailOpen(false); setDirtyId(undefined); setRefreshMessage("");
     startNavigation(() => router.push(href, { scroll: false }));
   }
@@ -229,10 +265,10 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
     {stepper}
   </ReviewNav>;
 
-  return <PaymentLayout data-payments-editor data-layout="balanced" data-analytics-ignore>
+  return <PaymentLayout data-payments-editor data-payment-mobile-queue={!reviewing || undefined} data-layout="balanced" data-analytics-ignore>
     <PaymentHead $reviewing={reviewing}>
       <h1>Payments</h1>
-      <QueueBar data-admin-toolbar>
+      <QueueBar ref={toolbar} data-admin-toolbar>
         <form action="/admin/payments" method="get" onSubmit={event => {
           event.preventDefault();
           if (!action.busy) navigate(filters, sort, String(new FormData(event.currentTarget).get("search") ?? ""));
@@ -285,7 +321,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
         </TicketItem></li>;
       })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{queue.search || filteredProvider ? "No matching payments" : singleStatus === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
       </QueueEmpty>}
-      {(pages > 1 || showActivity) && <QueueFooter>
+      {(pages > 1 || showActivity) && <QueueFooter data-payment-queue-footer>
         {pages > 1 && <NumberedPagination compact page={page} pages={pages} labels={paginationLabels} disabled={action.busy}
           href={target => paymentQueueHref(filters, sort, queue.search, target)} />}
         {showActivity && <span role="status" data-payment-queue-updated>New queue activity</span>}
@@ -295,9 +331,10 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
       onFocusCapture={event => setReviewFocused(event.target !== event.currentTarget)}
       onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setReviewFocused(false); }}
       onChangeCapture={() => setDirtyId(selectedKey)}>
-      {selected?.workflowVersion === 2 ? <CheckoutReview key={selected.id} payment={selected} nav={nav} busy={action.busy} onBusyChange={setCheckoutBusy}
-        onResolved={() => { resolved(selected.id); refreshAdmin(); }} /> : selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
-        onStart={() => { setRefreshMessage(""); setActionReference(selected.reference); }} onResolved={() => resolved(selected.id)}
+      {selected?.workflowVersion === 2 ? <CheckoutReview key={desktop ? "checkout" : selected.id} payment={selected} nav={nav} desktop={desktop} hasNext={!!(nextPending || queue.nextPendingId)} busy={action.busy} onBusyChange={setCheckoutBusy}
+        onResolved={approved => { if (!resolved(selected.id, approved)) refreshAdmin(); }} /> : selected ? <PaymentReview key={desktop ? "legacy" : selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
+        hasNext={!!(nextPending || queue.nextPendingId)} nextAcrossPages={!!nextPagePending}
+        onStart={() => { setRefreshMessage(""); setActionReference(selected.reference); }} onResolved={approved => resolved(selected.id, approved)}
         onRecovery={value => setRecoveries(shown => ({ ...shown, [selected.id]: value }))} /> : <QueueEmpty data-payment-review-empty><CheckIcon /><strong>No payment selected</strong><span>Choose another status or clear the filters.</span></QueueEmpty>}
     </ReviewSection>
   </PaymentLayout>;

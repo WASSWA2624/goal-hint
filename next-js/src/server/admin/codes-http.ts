@@ -65,7 +65,7 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
       try { if (new URL(request.url).searchParams.has("count")) return json({ pendingCount: await services.database.query(tx => tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } })),
         reviewAlerts: await reviewAlertFeed(services.database, reviewSessionHash(request, services.config), services.config) });
         const id = paymentId(request);
-        if (id && uuid(id)) return json(await createCheckoutReview(services.database).detail(id));
+        if (id && uuid(id)) return json(await createCheckoutReview(services.database).detail(id, new URL(request.url).searchParams.get("view") !== "compact"));
         const params = new URL(request.url).searchParams;
         return json(await createPaymentReview(services.database).list(params.get("tab") ?? "pending", undefined,
           { page: Number(params.get("page") ?? 1), search: params.get("search") ?? "" })); } catch { return storageUnavailable(); }

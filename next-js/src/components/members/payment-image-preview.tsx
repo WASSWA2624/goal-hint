@@ -8,18 +8,22 @@ import { CheckoutDialog } from "./checkout-parts";
 
 /** One private object URL serves the thumbnail and its in-page preview. */
 export function PaymentImagePreview({ image, disabled = false }: { image: Blob; disabled?: boolean }) {
-  const id = useId(), [url, setUrl] = useState(""), [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement>(null);
+  const [url, setUrl] = useState("");
   useEffect(() => {
     const next = URL.createObjectURL(image);
     Promise.resolve().then(() => setUrl(next));
     return () => URL.revokeObjectURL(next);
   }, [image]);
+  return url ? <PaymentScreenshotPreview url={url} disabled={disabled} /> : null;
+}
+
+export function PaymentScreenshotPreview({ url, disabled = false, label = "Preview payment screenshot" }: { url: string; disabled?: boolean; label?: string }) {
+  const id = useId(), [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   function close() { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); }
-  if (!url) return null;
   return <>
-    <Thumbnail ref={trigger} type="button" aria-label="Preview payment screenshot" aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>
-      <FullImage src={url} alt="Payment screenshot thumbnail" />
+    <Thumbnail ref={trigger} type="button" aria-label={label} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>
+      <FullImage src={url} alt="Payment screenshot thumbnail" loading="lazy" />
     </Thumbnail>
     {open && <PreviewDialog id={`${id}-preview`} title="Payment screenshot" open closeLabel="Close screenshot preview" onCancel={close}
       footer={<CriteriaDialogButton onClick={close}>Close preview</CriteriaDialogButton>}>

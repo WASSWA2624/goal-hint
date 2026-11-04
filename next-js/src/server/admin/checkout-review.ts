@@ -8,23 +8,66 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { accessCodeTransaction, lockMemberAccount } from "../members/access-codes.ts";
 import { allocateCheckout, paymentEvent } from "../members/checkout.ts";
 import { lockSettings } from "../members/settings.ts";
+import { paymentRejectionLabels, paymentRejectionReasons, paymentRejectionText } from "../../domain/payment-rejection.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 
 const reason = z.string().trim().min(3).max(500).refine(v => !auditTextErrors({ reason: v }), "Keep personal numbers out of the audit reason.");
 const base = { revision: z.number().int().nonnegative() };
+const receiptVerification = z.object({
+  receiptId: z.uuid(), amountUgx: z.number().int().min(1).max(checkoutRules.maximumUgx),
+  recipient: z.string(), senderPhone: z.string(), receivedAt: z.iso.datetime({ offset: true }),
+  transactionChecked: z.literal(true), recipientChecked: z.literal(true), successfulReceipt: z.literal(true), senderChecked: z.literal(true),
+});
 export const checkoutReviewSchema = z.discriminatedUnion("action", [
-  z.object({ ...base, action: z.literal("verify-receipt"), receiptId: z.uuid(), amountUgx: z.number().int().min(1).max(checkoutRules.maximumUgx),
-    recipient: z.string(), senderPhone: z.string(), receivedAt: z.iso.datetime({ offset: true }),
-    transactionChecked: z.literal(true), recipientChecked: z.literal(true), successfulReceipt: z.literal(true), senderChecked: z.literal(true) }),
-  z.object({ ...base, action: z.literal("approve-checkout") }),
+  receiptVerification.extend({ ...base, action: z.literal("verify-receipt") }),
+  z.object({ ...base, action: z.literal("approve-checkout"), receipts: z.array(receiptVerification).optional() }),
   z.object({ ...base, action: z.literal("review-evidence"), claimId: z.uuid(), warningsChecked: z.literal(true), reason }),
-  z.object({ ...base, action: z.enum(["reject-checkout", "request-correction", "mark-disputed"]), reason }),
+  z.object({ ...base, action: z.enum(["request-correction", "mark-disputed"]), reason }),
+  z.object({ ...base, action: z.literal("reject-checkout"), preset: z.enum(paymentRejectionReasons).optional(),
+    presets: z.array(z.enum(paymentRejectionReasons)).max(paymentRejectionReasons.length).optional(), reason: reason.optional() })
+    .refine(value => value.presets ? !value.preset && !!paymentRejectionText(value.presets, value.reason)
+      : !!value.reason || !!value.preset && value.preset !== "other"),
   z.object({ ...base, action: z.literal("resolve-dispute"), receiptId: z.uuid(), intendedSubmissionId: z.uuid(), reason,
     contactedVerifiedPayer: z.literal(true), ownershipClear: z.literal(true) }),
 ]);
 
+type Verification = z.infer<typeof receiptVerification>;
+
+async function verifyReceipts(tx: Prisma.TransactionClient, row: { id: string; status: string; receivingNumber: string | null; reservationActive: boolean; walletUgx: number; priceUgx: number },
+  verifications: readonly Verification[], actor: string, at: Date) {
+  const ids = verifications.map(item => item.receiptId);
+  const claims = await tx.paymentReceiptClaim.findMany({ where: { submissionId: row.id, receiptId: { in: ids }, withdrawn: false }, include: { receipt: true } });
+  if (claims.length !== ids.length) return "Check the receipts attached to this request.";
+  const byReceipt = new Map(claims.map(claim => [claim.receiptId, claim]));
+  const updates = [];
+  for (const verification of verifications) {
+    const claim = byReceipt.get(verification.receiptId)!;
+    const recipient = validMobilePhone(verification.recipient), senderPhone = verification.senderPhone ? validMobilePhone(verification.senderPhone) : null;
+    const receivedAt = new Date(verification.receivedAt);
+    if (!recipient || recipient !== row.receivingNumber || verification.senderPhone && !senderPhone || +receivedAt > +at + 300_000)
+      return "Check the actual receiving account, sender and payment date.";
+    if (claim.receipt.allocatedSubmissionId && (claim.receipt.amountUgx !== verification.amountUgx || claim.receipt.senderPhone))
+      return "This receipt is already allocated. Its recorded verification cannot be changed.";
+    updates.push({ id: verification.receiptId, amountUgx: verification.amountUgx, recipient, senderPhone, receivedAt });
+  }
+  for (const { id, ...data } of updates) {
+    await tx.paymentReceipt.update({ where: { id }, data: { ...data, verifiedAt: at, verifiedBy: actor } });
+    await paymentEvent(tx, row.id, "receipt_verified", actor, at, undefined, id,
+      { amountUgx: data.amountUgx, transactionChecked: true, recipientChecked: true, successfulReceipt: true, senderChecked: true });
+  }
+  const linked = await tx.paymentReceiptClaim.findMany({ where: { receiptId: { in: ids } }, select: { submissionId: true } });
+  await tx.paymentSubmission.updateMany({ where: { id: { in: linked.map(claim => claim.submissionId) } }, data: { revision: { increment: 1 } } });
+  if (row.status !== "disputed" && (checkoutOpenStatuses as readonly string[]).includes(row.status)) {
+    const receipts = await tx.paymentReceiptClaim.findMany({ where: { submissionId: row.id, withdrawn: false }, select: { receipt: true } });
+    const total = receipts.reduce((sum, c) => sum + (!c.receipt.disputed && c.receipt.verifiedAt && c.receipt.intendedSubmissionId === row.id ? c.receipt.amountUgx ?? 0 : 0), 0);
+    await tx.paymentSubmission.update({ where: { id: row.id },
+      data: { status: row.reservationActive ? total + row.walletUgx < row.priceUgx ? "remaining" : "pending" : "reconfirm" } });
+  }
+}
+
 export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) {
   return {
-    async detail(id: string) {
+    async detail(id: string, includeEvents = true) {
       return database.query(async tx => {
         const row = await tx.paymentSubmission.findUnique({ where: { id }, select: { workflowVersion: true, revision: true, walletUgx: true,
           referralDays: true, receivingNumber: true, reservationActive: true, reservationUntil: true, priceUgx: true, status: true } });
@@ -38,7 +81,7 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
         return { ...row, verifiedUgx, ...fundingAmounts(row.priceUgx, row.walletUgx, verifiedUgx),
           claims: claims.map(({ submission, ...claim }) => ({ ...claim, validation: receiptEvidenceValidation(claim.original, claim.corrections), legacyImage: !!submission.screenshot,
             imageIsLegacy: !!submission.screenshot && claim.imageSha256 === submission.imageSha256 })),
-          events: await tx.paymentEvent.findMany({ where: { submissionId: id }, orderBy: { createdAt: "desc" }, take: 100 }) };
+          events: includeEvents ? await tx.paymentEvent.findMany({ where: { submissionId: id }, orderBy: { createdAt: "desc" }, take: 100 }) : [] };
       });
     },
     async image(id: string, claimId: string) {
@@ -64,7 +107,14 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
         const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id } });
         if (row.status === "approved" && action.action === "approve-checkout") return { ok: true };
         if (row.revision !== action.revision) return { ok: false, message: "Another reviewer changed this request. Refresh and check the latest details." };
-        if (action.action === "approve-checkout") return allocateCheckout(tx, row, at, actor);
+        if (action.action === "approve-checkout") {
+          if (!action.receipts?.length) return allocateCheckout(tx, row, at, actor);
+          if (!(checkoutOpenStatuses as readonly string[]).includes(row.status) || row.status === "disputed")
+            return { ok: false, message: "This request cannot be approved. Check its current status." };
+          const message = await verifyReceipts(tx, row, action.receipts, actor, at);
+          if (message) return { ok: false, message };
+          return allocateCheckout(tx, await tx.paymentSubmission.findUniqueOrThrow({ where: { id } }), at, actor);
+        }
         if (action.action === "review-evidence") {
           if (!(checkoutOpenStatuses as readonly string[]).includes(row.status)) return { ok: false, message: "This request is closed." };
           const claim = await tx.paymentReceiptClaim.findFirst({ where: { id: action.claimId, submissionId: id, withdrawn: false } });
@@ -78,23 +128,8 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
           return { ok: true };
         }
         if (action.action === "verify-receipt") {
-          const claim = await tx.paymentReceiptClaim.findUnique({ where: { submissionId_receiptId: { submissionId: id, receiptId: action.receiptId } }, include: { receipt: true } });
-          const recipient = validMobilePhone(action.recipient), senderPhone = action.senderPhone ? validMobilePhone(action.senderPhone) : null;
-          if (!claim || claim.withdrawn || !recipient || recipient !== row.receivingNumber || action.senderPhone && !senderPhone || Date.parse(action.receivedAt) > +at + 300_000)
-            return { ok: false, message: "Check the actual receiving account, sender and payment date." };
-          if (claim.receipt.allocatedSubmissionId && (claim.receipt.amountUgx !== action.amountUgx || claim.receipt.senderPhone))
-            return { ok: false, message: "This receipt is already allocated. Its recorded verification cannot be changed." };
-          await tx.paymentReceipt.update({ where: { id: action.receiptId }, data: { verifiedAt: at, verifiedBy: actor, amountUgx: action.amountUgx,
-            recipient, senderPhone, receivedAt: new Date(action.receivedAt) } });
-          await paymentEvent(tx, id, "receipt_verified", actor, at, undefined, action.receiptId,
-            { amountUgx: action.amountUgx, transactionChecked: true, recipientChecked: true, successfulReceipt: true, senderChecked: true });
-          const otherClaims = await tx.paymentReceiptClaim.findMany({ where: { receiptId: action.receiptId }, select: { submissionId: true } });
-          await tx.paymentSubmission.updateMany({ where: { id: { in: otherClaims.map(c => c.submissionId) } }, data: { revision: { increment: 1 } } });
-          const receipts = await tx.paymentReceiptClaim.findMany({ where: { submissionId: id, withdrawn: false }, select: { receipt: true } });
-          const total = receipts.reduce((sum, c) => sum + (!c.receipt.disputed && c.receipt.verifiedAt && c.receipt.intendedSubmissionId === id ? c.receipt.amountUgx ?? 0 : 0), 0);
-          if (row.status !== "disputed" && (checkoutOpenStatuses as readonly string[]).includes(row.status)) await tx.paymentSubmission.update({ where: { id },
-            data: { status: row.reservationActive ? total + row.walletUgx < row.priceUgx ? "remaining" : "pending" : "reconfirm" } });
-          return { ok: true };
+          const message = await verifyReceipts(tx, row, [action], actor, at);
+          return message ? { ok: false, message } : { ok: true };
         }
         if (action.action === "resolve-dispute") {
           const receipt = await tx.paymentReceipt.findUnique({ where: { id: action.receiptId }, include: { claims: true } });
@@ -122,9 +157,13 @@ export function createCheckoutReview(database: DatabaseRuntime, now = Date.now) 
         }
         if (!(checkoutOpenStatuses as readonly string[]).includes(row.status)) return { ok: false, message: "This request is closed." };
         const rejected = action.action === "reject-checkout";
-        await tx.paymentSubmission.update({ where: { id }, data: { status: rejected ? "rejected" : "correction", rejectText: action.reason,
-          ...(rejected ? { reservationActive: false, decidedAt: at, decidedBy: actor, rejectReason: "other" } : {}), revision: { increment: 1 } } });
-        await paymentEvent(tx, id, rejected ? "rejected" : "correction_requested", actor, at, action.reason);
+        const presets = rejected ? action.presets : undefined;
+        const preset = rejected ? presets?.[0] ?? action.preset : undefined;
+        const note = presets ? paymentRejectionText(presets, action.reason) ?? undefined
+          : action.reason ?? (preset ? paymentRejectionLabels[preset] : undefined);
+        await tx.paymentSubmission.update({ where: { id }, data: { status: rejected ? "rejected" : "correction", rejectText: note ?? null,
+          ...(rejected ? { reservationActive: false, decidedAt: at, decidedBy: actor, rejectReason: preset ?? "other" } : {}), revision: { increment: 1 } } });
+        await paymentEvent(tx, id, rejected ? "rejected" : "correction_requested", actor, at, note, undefined, presets ? { presets } : preset ? { preset } : undefined);
         return { ok: true };
       });
     },

@@ -25,12 +25,14 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
   const invalidTarget = params.paymentId !== undefined && !paymentId;
   const db = page.services.database;
   const [data, plans] = db ? await Promise.all([
-    createPaymentReview(db).list(undefined, paymentId, { filters, page: Number(params.page ?? 1), search: typeof params.search === "string" ? params.search : "" }).catch(() => null),
+    createPaymentReview(db).list(undefined, paymentId, { filters, page: Number(params.page ?? 1), search: typeof params.search === "string" ? params.search : "",
+      ...(uuid(params.focus) ? { focus: params.focus } : {}) }).catch(() => null),
     plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
   const resolvedFilters = data?.tab ? readPaymentFilters(data.tab, undefined) : filters;
+  const selectedId = paymentId ?? data?.focusId;
   return <AdminFrame {...(data ? { pendingCount: data.pendingCount } : {})}>{invalidTarget || data?.targetFound === false
     ? <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">This payment is unavailable. It may have been removed.</Notice></PaymentUnavailable>
-    : data ? <PaymentsEditor key={paymentId ?? ""} queue={data} filters={resolvedFilters} sort={readPaymentSort(params.sort)} plans={plans} {...(paymentId ? { initialPaymentId: paymentId } : {})} />
+    : data ? <PaymentsEditor key={selectedId ?? ""} queue={data} filters={resolvedFilters} sort={readPaymentSort(params.sort)} plans={plans} {...(selectedId ? { initialPaymentId: selectedId } : {})} />
       : <PaymentUnavailable><h1>Payments</h1><Notice $tone="error">Member storage is unavailable.</Notice></PaymentUnavailable>}</AdminFrame>;
 }

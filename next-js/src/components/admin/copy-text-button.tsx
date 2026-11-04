@@ -9,6 +9,7 @@ type CopyTextButtonProps = {
   value: string;
   label?: string;
   ariaLabel?: string;
+  subject?: string;
   className?: string;
   disabled?: boolean;
   compact?: boolean;
@@ -38,7 +39,7 @@ async function writeClipboard(value: string) {
 }
 
 /** Copies the supplied current value, independently of the containing form. */
-export function CopyTextButton({ value, label = "Copy ID", ariaLabel = "Copy transaction ID", className, disabled, compact = false }: CopyTextButtonProps) {
+export function CopyTextButton({ value, label = "Copy ID", subject = "transaction ID", ariaLabel = `Copy ${subject}`, className, disabled, compact = false }: CopyTextButtonProps) {
   const [feedback, setFeedback] = useState<CopyFeedback | null>(null);
   const attempt = useRef(0);
   // Adjust local feedback when the value changes; no stale "Copied" label survives an edit.
@@ -57,7 +58,7 @@ export function CopyTextButton({ value, label = "Copy ID", ariaLabel = "Copy tra
   }
 
   return <CopyAction type="button" className={className} disabled={disabled || !value} onClick={copy}
-    aria-label={ariaLabel} title={status === "failed" ? "Copy failed. Select and copy the transaction ID manually." : status === "copied" ? "Transaction ID copied" : ariaLabel}
+    aria-label={ariaLabel} title={status === "failed" ? `Copy failed. Select and copy the ${subject} manually.` : status === "copied" ? `${subject.charAt(0).toUpperCase()}${subject.slice(1)} copied` : ariaLabel}
     $compact={compact && status !== "failed"}
     {...(status === "failed" ? { $tone: "danger" as const } : {})} data-copy-text>
     {status === "copied" ? <CheckIcon /> : <CopyIcon />}

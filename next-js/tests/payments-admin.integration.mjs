@@ -32,6 +32,9 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
     const filtered = await review.list(undefined, undefined, { search, filters: { statuses: ["pending", "approved"], providers: ["airtel"] } });
     assert.deepEqual(filtered.payments.map(payment => payment.id), [row.id]);
     assert.equal(filtered.total, 1);
+    assert.equal(filtered.payments[0].decidedAt, stored.decidedAt.toISOString());
+    assert.equal(Date.parse(filtered.payments[0].accessPeriod.startsAt), +first.grant.startsAt);
+    assert.equal(Date.parse(filtered.payments[0].accessPeriod.endsAt), +first.grant.endsAt);
     const pendingOnly = await review.list(undefined, undefined, { search, filters: { statuses: ["pending"], providers: ["all"] } });
     assert.equal(pendingOnly.total, 0);
     const unlocked={...who,codeEnteredAt:new Date(clock)};const next=await report(unlocked,"EDITRENEW");const renewed=await codes.approvePayment(next.id,fields("EDITRENEW"),"owner");assert.equal(+renewed.grant.startsAt,+first.grant.endsAt);assert.equal(renewed.notification,"sent");assert.equal(+notifications.approvals.at(-1).expiresAt,+renewed.grant.endsAt);assert.equal(notifications.approvals.at(-1).phone,who.phone);clock=+first.grant.endsAt+1;

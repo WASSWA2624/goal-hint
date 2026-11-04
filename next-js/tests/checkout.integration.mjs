@@ -39,11 +39,19 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     const detail = await review.detail(id);
     return review.act(id, { revision: detail.revision, ...action }, "reviewer");
   }
+  const verification = (detail, claim, amountUgx) => ({
+    receiptId: claim.receipt.id, amountUgx, recipient: detail.receivingNumber, senderPhone: "256700000123",
+    receivedAt: new Date(now()).toISOString(), transactionChecked: true, recipientChecked: true, successfulReceipt: true, senderChecked: true,
+  });
+  async function reviewWarnings(id, claim) {
+    if (!claim.validation.reviewed) assert.equal((await act(id, {
+      action: "review-evidence", claimId: claim.id, warningsChecked: true, reason: "Checked the original evidence and incoming account records",
+    })).ok, true);
+  }
   async function verify(id, amountUgx, index = 0) {
     const detail = await review.detail(id), claim = detail.claims.find(c => c.amountUgx === amountUgx && !c.receipt.verifiedAt) ?? detail.claims[index];
-    if (!claim.validation.reviewed) assert.equal((await act(id, { action: "review-evidence", claimId: claim.id, warningsChecked: true, reason: "Checked the original evidence and incoming account records" })).ok, true);
-    return act(id, { action: "verify-receipt", receiptId: claim.receipt.id, amountUgx, recipient: detail.receivingNumber, senderPhone: "256700000123",
-      receivedAt: new Date(now()).toISOString(), transactionChecked: true, recipientChecked: true, successfulReceipt: true, senderChecked: true });
+    await reviewWarnings(id, claim);
+    return act(id, { action: "verify-receipt", ...verification(detail, claim, amountUgx) });
   }
   await t.test("wallet and referral purchases are explicit, immediate and idempotent", async () => {
     const who = await member(); await fund(who, 5000, 3);
@@ -150,13 +158,24 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     const who = await member(); await fund(who, 2000, 1);
     const request = await submit(who, select({ walletUgx: 2000, referralDays: 1 }), proof(1000));
     assert.equal(request.status, "pending"); assert.equal((await checkout.read(who)).availableWalletUgx, 0);
-    assert.equal((await verify(request.id, 1000)).ok, true);
-    const short = await act(request.id, { action: "approve-checkout" }); assert.equal(short.ok, false); assert.equal(short.code, "remaining");
+    const initial = await review.detail(request.id);
+    await reviewWarnings(request.id, initial.claims[0]);
+    const short = await act(request.id, { action: "approve-checkout", receipts: [verification(initial, initial.claims[0], 1000)] });
+    assert.equal(short.ok, false); assert.equal(short.code, "remaining");
+    assert.equal((await review.detail(request.id)).verifiedUgx, 1000);
     assert.equal((await checkout.read(who)).requests[0].remainingUgx, 2000);
     assert.equal((await checkout.attach(who, request.id, proof(4000))).ok, true);
-    assert.equal((await verify(request.id, 4000, 1)).ok, true);
+    const attached = await review.detail(request.id);
+    for (const claim of attached.claims) await reviewWarnings(request.id, claim);
     const detail = await review.detail(request.id);
-    const results = await Promise.all([1, 2].map(() => review.act(request.id, { action: "approve-checkout", revision: detail.revision }, "reviewer")));
+    const first = detail.claims.find(claim => claim.amountUgx === 1000), second = detail.claims.find(claim => claim.amountUgx === 4000);
+    const invalid = await act(request.id, { action: "approve-checkout", receipts: [verification(detail, first, 1500), {
+      ...verification(detail, second, 4000), recipient: "256700000999",
+    }] });
+    assert.equal(invalid.ok, false);
+    assert.equal((await review.detail(request.id)).verifiedUgx, 1000, "An invalid second receipt must leave the first receipt intact");
+    const receipts = [verification(detail, second, 4000)];
+    const results = await Promise.all([1, 2].map(() => review.act(request.id, { action: "approve-checkout", revision: detail.revision, receipts }, "reviewer")));
     assert.ok(results.every(r => r.ok), JSON.stringify(results));
     const view = await checkout.read(who); assert.equal(view.availableWalletUgx, 2000); assert.equal(view.requests[0].status, "approved");
     assert.equal(await database.query(tx => tx.accessCode.count({ where: { paymentSubmissionId: request.id } })), 1);
@@ -182,7 +201,12 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
   await t.test("rejection/cancellation release reservations and retain verified unapplied money", async () => {
     const who = await member(); await fund(who, 2000, 2);
     const request = await submit(who, select({ walletUgx: 2000, referralDays: 1 }), proof(3000)); await verify(request.id, 3000);
-    assert.equal((await act(request.id, { action: "reject-checkout", reason: "Correction required in the request" })).ok, true);
+    assert.equal((await act(request.id, { action: "reject-checkout", preset: "other" })).ok, false);
+    assert.equal((await act(request.id, { action: "reject-checkout", presets: [] })).ok, false);
+    assert.equal((await act(request.id, { action: "reject-checkout", presets: ["amount-mismatch", "other"] })).ok, false);
+    assert.equal((await act(request.id, { action: "reject-checkout", presets: ["amount-mismatch", "wrong-number"] })).ok, true);
+    const rejected = await database.query(tx => tx.paymentSubmission.findUniqueOrThrow({ where: { id: request.id }, select: { rejectReason: true, rejectText: true } }));
+    assert.deepEqual(rejected, { rejectReason: "amount-mismatch", rejectText: "Wrong amount · Wrong recipient" });
     assert.equal((await checkout.read(who)).availableWalletUgx, 2000);
     const receipt = (await review.detail(request.id)).claims[0].receipt;
     assert.ok(receipt.verifiedAt); assert.equal(receipt.allocatedSubmissionId, null);

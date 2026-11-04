@@ -5,10 +5,12 @@ export type OwnerPayment = Readonly<{ id: string; reference: string; accountId: 
   workflowVersion?: number;
   network: string; transactionId: string; amount: number; purpose: "plan" | "topup"; planId: string | null; planName: string; durationDays: number | null; price: number;
   submittedAt: string; status: string; hasImage: boolean; accountCreditUgx: number;
+  decidedAt?: string | null;
+  accessPeriod?: Readonly<{ startsAt: string; endsAt: string }>;
   receiptSummary?: Readonly<{ amount: number | null; payerPhone: string | null; paidAt: string | null }>;
   final: Readonly<{ network: string | null; transactionId: string; amount: number | null }> | null; checks: readonly PaymentCheck[] }>;
 export type PaymentQueue = Readonly<{ pendingCount: number; payments: readonly (OwnerPayment & { workflowVersion?: number })[];
-  page?: number; pageSize?: number; total?: number; search?: string }>;
+  page?: number; pageSize?: number; total?: number; search?: string; nextPendingId?: string; focusId?: string }>;
 export type OwnerPaymentSummary = Pick<OwnerPayment, "id" | "reference" | "network" | "amount" | "submittedAt">;
 export type OwnerCode = Readonly<{ id: string; accountId: string; reference: string; phone: string | null; planName: string; source: string; startsAt: string; endsAt: string; status: "revoked" | "queued" | "active" | "expired"; daysLeft: number }>;
 /** An account update that needs the owner's attention; reference is the payment's (P…) or the renewal period's (C…). */

@@ -157,6 +157,7 @@ export function loadPaymentFiltersFixture() {
     ...original, id: `00000000-0000-4000-8000-00000000080${index}`, reference: `FILTER${index}`,
     status: index === 0 ? "remaining" : index === 1 ? "disputed" : index === 2 ? "correction" : "pending",
     claimedNetwork: "airtel", submittedAt: new Date("2026-10-31T12:00:00Z"),
+    ...(index === 1 ? { workflowVersion: 2, receiptClaims: [] } : {}),
     ...(index === 0 ? { workflowVersion: 2, receiptClaims: [{
       amountUgx: 2200, payerPhone: "256700000800", paidAt, original: null,
       receipt: { amountUgx: 2000, senderPhone: "256700000800", receivedAt: paidAt, verifiedAt: at, allocatedSubmissionId: null },
@@ -211,8 +212,8 @@ export function fixtureSnapshot() {
 
 type AccountQuery = { where?: { phone?: string | { in?: string[] } } };
 type OwnedQuery = { where?: { accountId?: string; codeEnteredAt?: unknown } };
-type TextFilter = string | null | { in?: string[]; contains?: string; not?: null };
-type PaymentWhere = { accountId?: string; status?: TextFilter; reference?: TextFilter; payerPhone?: TextFilter;
+type TextFilter = string | null | { in?: string[]; notIn?: string[]; contains?: string; not?: null; lt?: string; gt?: string };
+type PaymentWhere = { id?: TextFilter; submittedAt?: Date | { lt?: Date; gt?: Date }; accountId?: string; status?: TextFilter; reference?: TextFilter; payerPhone?: TextFilter;
   claimedTxnKey?: TextFilter; approvedTxnKey?: TextFilter; imageSha256?: TextFilter; network?: TextFilter; claimedNetwork?: TextFilter;
   transactionRef?: TextFilter; receiptClaims?: { some: { receipt?: { verifiedAt: { not: null }; allocatedSubmissionId: null } } };
   OR?: PaymentWhere[]; AND?: PaymentWhere[] };
@@ -221,11 +222,15 @@ type PaymentQuery = { where?: PaymentWhere; orderBy?: PaymentOrder | PaymentOrde
 function matchesText(value: string | null | undefined, filter: TextFilter | undefined) {
   if (filter === undefined) return true;
   if (filter === null || typeof filter === "string") return (value ?? null) === filter;
-  return value != null && (!filter.in || filter.in.includes(value)) && (filter.contains === undefined || value.includes(filter.contains));
+  return value != null && (!filter.in || filter.in.includes(value)) && !filter.notIn?.includes(value)
+    && (filter.lt === undefined || value < filter.lt) && (filter.gt === undefined || value > filter.gt)
+    && (filter.contains === undefined || value.includes(filter.contains));
 }
 function paymentRows(rows: FixturePayment[], query: PaymentQuery = {}) {
   const matches = (row: FixturePayment, where: PaymentWhere): boolean => (!where.accountId || row.accountId === where.accountId)
-    && (["status", "reference", "payerPhone", "claimedTxnKey", "approvedTxnKey", "imageSha256", "network", "claimedNetwork", "transactionRef"] as const)
+    && (!where.submittedAt || (where.submittedAt instanceof Date ? +row.submittedAt === +where.submittedAt
+      : (!where.submittedAt.lt || row.submittedAt < where.submittedAt.lt) && (!where.submittedAt.gt || row.submittedAt > where.submittedAt.gt)))
+    && (["id", "status", "reference", "payerPhone", "claimedTxnKey", "approvedTxnKey", "imageSha256", "network", "claimedNetwork", "transactionRef"] as const)
       .every(field => matchesText(row[field], where[field]))
     && (!where.receiptClaims || (!!where.receiptClaims.some.receipt && !!row.receiptClaims?.some(claim => claim.receipt.verifiedAt && !claim.receipt.allocatedSubmissionId)))
     && (!where.OR || where.OR.some(condition => matches(row, condition)))
@@ -295,6 +300,7 @@ function createClient(emptySubscribers: boolean) {
         const row = { ...state.plans[index]!, ...data };state.plans[index] = row;return row;
       } },
     paymentSubmission: {
+      findFirst: async (query?: PaymentQuery) => paymentRows(state.payments, { ...query, take: 1 })[0] ?? null,
       findUnique: async ({ where }: { where: { id: string } }) => {
         const row = state.payments.find(payment => payment.id === where.id);
         return row ? { purpose: "plan", ...row, account: { phone: phoneFor(row.accountId), creditUgx: 0 } } : null;

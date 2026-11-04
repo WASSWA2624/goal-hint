@@ -482,6 +482,10 @@ def payment_filters_rendering(origin):
         match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-page-count="2"[^>]+data-current-page="2"', second)
         assert first.index("data-payment-queue-scroll") < first.index('aria-label="Payment pages"') < first.index('id="payment-review"')
         assert queue("?page=99")[1] == second_ids, "Out-of-range pages show the last available results."
+        focused, focused_ids = queue("?focus=" + second_ids[1])
+        assert focused_ids == second_ids
+        match(r'<nav[^>]+aria-label="Payment pages"[^>]+data-current-page="2"', focused)
+        match(r'data-payment-review="' + re.escape(second_ids[1]) + r'"', focused)
         criteria = "status=pending%2Capproved&provider=mtn%2Cairtel&sort=amount&search=256700000118"
         criteria_html, criteria_ids = queue("?" + criteria)
         next_html, next_ids = queue("?" + criteria + "&page=2")
@@ -496,7 +500,8 @@ def payment_filters_rendering(origin):
         assert queue("?status=all&provider=airtel&search=PFILTER")[1] == [
             f"00000000-0000-4000-8000-00000000080{index}" for index in range(5)]
         direct, _ = queue("?paymentId=00000000-0000-4000-8000-000000000801")
-        match(r'data-payment-review="00000000-0000-4000-8000-000000000801"', direct)
+        match(r'data-checkout-review', direct)
+        match(r'PFILTER1', direct)
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 

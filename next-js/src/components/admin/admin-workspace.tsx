@@ -290,7 +290,10 @@ const Main = styled.main<{ $fixed: boolean; $joined: boolean; $section: AdminSec
     }
   `}
   ${({ $section }) => $section === "payments" && css`
-    ${media.belowDesktop} { padding-block-start: var(--gh-spacing-1); }
+    ${media.belowDesktop} {
+      padding-block-start: var(--gh-spacing-1);
+      &:has([data-payment-mobile-queue]) { padding-block-end: 0; }
+    }
   `}
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
