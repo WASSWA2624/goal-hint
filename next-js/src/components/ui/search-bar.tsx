@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ComponentPropsWithRef, type Ref } from "react";
+import { useId, type ComponentPropsWithRef, type ReactNode, type Ref } from "react";
 import styled, { css } from "styled-components";
 import { controlBodyHeight, controlRow } from "./control-layout";
 import { floatingControl, floatingFieldState, floatingLabel, floatingOutline } from "./floating-field-styles";
@@ -17,6 +17,7 @@ export type SearchBarProps = Omit<ComponentPropsWithRef<"input">, "type" | "chil
   submitDisabled?: boolean;
   /** Local actions inside another form use a button instead of submitting that form. */
   onSearch?: () => void;
+  trailingAction?: ReactNode;
   filterButtonRef?: Ref<HTMLButtonElement>;
   filters?: {
     label: string;
@@ -78,9 +79,11 @@ const Submit = styled.button`
   box-sizing: border-box; min-block-size: 0; block-size: 100%; max-block-size: 100%; align-self: stretch;
   min-inline-size: calc(var(--form-control-height) - var(--gh-size-0_5));
   padding: 0 var(--gh-spacing-2_5); margin: 0; border: 0;
-  border-radius: ${({ theme }) => theme.radius.none};
-  border-start-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - var(--gh-stroke-thin)))`};
-  border-end-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - var(--gh-stroke-thin)))`};
+  && {
+    border-radius: ${({ theme }) => theme.radius.none};
+    border-start-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - var(--gh-stroke-thin)))`};
+    border-end-end-radius: ${({ theme }) => `max(0px, calc(${theme.radius.control} - var(--gh-stroke-thin)))`};
+  }
   color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft};
   font: inherit; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-medium);
   white-space: nowrap; cursor: pointer;
@@ -105,7 +108,7 @@ const Filters = styled.button`
 `;
 
 /** The enclosing form owns submission; each screen owns its advanced-filter dialog. */
-export function SearchBar({ label, submitLabel, submitDisabled, onSearch, filters, filterButtonRef, className, onKeyDown, ...input }: SearchBarProps) {
+export function SearchBar({ label, submitLabel, submitDisabled, onSearch, filters, filterButtonRef, trailingAction, className, onKeyDown, ...input }: SearchBarProps) {
   const generated = useId(), id = input.id ?? generated;
   return <Row className={className} data-search-bar data-control-field>
     <Field data-feed-search data-floating-control data-text-field-frame data-search-action={submitLabel ? "" : undefined}>
@@ -126,5 +129,6 @@ export function SearchBar({ label, submitLabel, submitDisabled, onSearch, filter
       aria-expanded={filters.open} disabled={input.disabled} onClick={filters.onOpen} data-search-filters>
       <SlidersIcon aria-hidden="true" /><span>{filters.label}</span>{!!filters.count && <b aria-hidden="true">{filters.count}</b>}
     </Filters>}
+    {trailingAction}
   </Row>;
 }

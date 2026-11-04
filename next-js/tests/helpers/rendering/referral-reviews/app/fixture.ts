@@ -22,6 +22,11 @@ export function memberCases(): MemberReferralReview[] {
 export async function adminWrite(request: Request) {
   const body = await request.json();
   if (body.action === "grants") return Response.json({ grants });
+  if (body.action === "search-cases") {
+    const search = String(body.search ?? "").toLowerCase();
+    return Response.json({ cases: cases().filter(item => (body.status === "all" || item.status === body.status)
+      && [item.reference, item.id, item.holderPhone ?? ""].some(value => value.toLowerCase().includes(search))) });
+  }
   const parsed = referralReviewMutationSchema.safeParse(body); if (!parsed.success) return Response.json({ error: "invalid" }, { status: 400 });
   const input = parsed.data;
   let item: MutableCase | undefined;

@@ -13,6 +13,8 @@ import type { AnalyticsServices } from "../analytics/analytics-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 
 const lookup = z.strictObject({ action: z.literal("grants"), search: z.string().trim().max(60) });
+const caseSearch = z.strictObject({ action: z.literal("search-cases"), status: z.enum(["all", ...referralReviewStatuses]),
+  before: z.string().refine(value => !!referralReviewCursor(value)).optional(), search: z.string().trim().max(60).regex(/^[a-z0-9+(). -]*$/iu) });
 const fail = (status: string) => json({ error: status, message: status === "conflict" ? "This case changed. Refresh and try again."
   : status === "forbidden" ? authCopy.administratorLoginAgain : "Unable to apply this action. Check the case and try again." },
 status === "conflict" ? 409 : status === "forbidden" ? 403 : status === "not-found" ? 404 : 400);
@@ -26,14 +28,20 @@ export function createReferralReviewHandlers({ verify = verifyMemberAdminSession
       const review = create({ database: services.database, config: services.config });
       if (request.method === "GET") {
         const query = new URL(request.url).searchParams;
-        if ([...query.keys()].some(key => !["id", "status", "before"].includes(key)) || query.getAll("id").length > 1 || query.getAll("status").length > 1 || query.getAll("before").length > 1
+        if ([...query.keys()].some(key => !["id", "status", "before"].includes(key) || query.getAll(key).length > 1)
           || query.has("id") && !z.uuid().safeParse(query.get("id")).success
           || query.has("before") && !referralReviewCursor(query.get("before"))
           || query.has("status") && !["all", ...referralReviewStatuses].includes(query.get("status")!)) return fail("invalid");
-        const result = query.has("id") ? await review.detail(admin, query.get("id")!) : await review.list(admin, query.get("status") ?? "all", query.get("before") ?? undefined);
+        const result = query.has("id") ? await review.detail(admin, query.get("id")!)
+          : await review.list(admin, query.get("status") ?? "all", query.get("before") ?? undefined);
         return result ? json(query.has("id") ? { case: result } : { cases: result }) : fail("not-found");
       }
       const read = await readJsonBody(request, 4096); if ("refusal" in read) return read.refusal;
+      if (read.body.action === "search-cases") {
+        const input = caseSearch.safeParse(read.body); if (!input.success) return fail("invalid");
+        const cases = await review.list(admin, input.data.status, input.data.before, input.data.search);
+        return cases ? json({ cases }) : fail("forbidden");
+      }
       if (read.body.action === "grants") {
         const input = lookup.safeParse(read.body); if (!input.success) return fail("invalid");
         const grants = await review.grants(admin, input.data.search);

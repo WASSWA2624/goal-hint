@@ -7,21 +7,22 @@ import { stopReviewSound } from "./payment-alert-sound";
 
 import { FloatingField } from "@/components/ui/floating-field";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import Link from "@/components/navigation/navigation-link";
-import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { formatPhone } from "@/domain/phone";
-import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
+import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { NetworkChip } from "./network-chip";
 import { paymentWarnings, PaymentReview, type PaymentRecovery } from "./payment-review";
-import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
+import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { paymentSortOptions, sortPayments, type PaymentSort } from "./payment-order";
 import { CheckoutReview } from "./checkout-review";
-import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueuePanel, QueueSummary, RefreshSquare, ReviewBack, ReviewNav, ReviewSection,
-  StatusTabs, Stepper, Ticket, TicketAmount, TicketMeta, TicketPhone, TicketPlan, TicketProvider, TicketRef, TicketTime, TicketTray, TicketWarn } from "./payment-styles";
+import { HeadEnd, PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueuePanel, QueueSummary, ReviewBack, ReviewNav, ReviewSection,
+  StatusTabs, Stepper, TicketTray, TicketWarn } from "./payment-styles";
+import { RecordItem, RecordItemTitle, RecordRowContent } from "./record-workspace";
 
 const tabLabels = { pending: "Pending", remaining: "Part-paid", disputed: "Disputed", approved: "Approved", rejected: "Rejected", cancelled: "Cancelled", reconciliation: "Unallocated funds" };
 const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
@@ -45,7 +46,8 @@ function ticketTime(instant: string) {
 export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue: PaymentQueue; plans: readonly SubscriptionPlanView[]; tab: string; initialPaymentId?: string }) {
   const mutation = useCodeAction(), [refreshMessage, setRefreshMessage] = useState("");
   const { refreshing, refresh: refreshAdmin } = useAdminRefresh(setRefreshMessage);
-  const action = { ...mutation, busy: mutation.busy || refreshing };
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const action = { ...mutation, busy: mutation.busy || checkoutBusy || refreshing };
   const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverDesktopSnapshot);
   const [search, setSearch] = useState(queue.search ?? ""), [selectedId, setSelectedId] = useState(initialPaymentId ?? queue.payments[0]?.id ?? "");
@@ -56,7 +58,9 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
   const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(!!initialPaymentId);
   const focusNext = useRef(false), stepFocus = useRef<"previous" | "next" | null>(null);
-  const refreshFocus = useRef<HTMLButtonElement | null>(null);
+  const [dirtyId, setDirtyId] = useState<string>();
+  const [reviewFocused, setReviewFocused] = useState(false);
+  const refreshedCount = useRef<number | null>(null);
   const lastHash = useRef<string | null>(null);
   const query = queue.total === undefined ? searchText(search) : "";
   const payments = sortPayments(queue.payments.filter(payment => !completed.includes(payment.id)
@@ -70,11 +74,12 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   const queueChanged = liveCount !== null && liveCount !== pendingCount;
 
   useEffect(() => {
-    if (action.busy || !refreshFocus.current) return;
-    const button = refreshFocus.current; refreshFocus.current = null;
-    // Disabling a focused button can leave focus on body; respect any new focus chosen during the request.
-    if (button.isConnected && document.activeElement === document.body) button.focus({ preventScroll: true });
-  }, [action.busy]);
+    if (!queueChanged) { refreshedCount.current = null; return; }
+    if (tab !== "pending" || action.busy || !desktop && reviewing || reviewFocused || filtersOpen || dirtyId && dirtyId === selectedKey
+      || refreshedCount.current === liveCount) return;
+    refreshedCount.current = liveCount;
+    refreshAdmin();
+  }, [action.busy, desktop, dirtyId, filtersOpen, liveCount, queueChanged, refreshAdmin, reviewFocused, reviewing, selectedKey, tab]);
 
   useEffect(() => {
     const readHash = () => {
@@ -134,23 +139,17 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
   }
   function back() {
     const id = selected?.id;
-    setDetailOpen(false); locationFor("");
+    setDetailOpen(false); setDirtyId(undefined); locationFor("");
     requestAnimationFrame(() => (document.querySelector<HTMLElement>(`[data-payment-row="${id}"]`) ?? document.getElementById("payment-queue-title"))?.focus());
   }
   function resolved(id: string) {
     stopReviewSound();
+    setDirtyId(undefined);
     setCompleted(shown => [...shown, id]); focusNext.current = true;
     const next = payments.find(payment => payment.id !== id);
     setSelectedId(next?.id ?? ""); setDetailOpen(!!next);
     locationFor(next?.id ?? "");
   }
-  const refresh = (event: MouseEvent<HTMLButtonElement>) => {
-    if (action.busy) return;
-    refreshFocus.current = document.activeElement === event.currentTarget ? event.currentTarget : null;
-    setRefreshMessage("");
-    void refreshPendingPayments(true);
-    refreshAdmin();
-  };
   const feedback = { ...action, notice: action.notice && `${actionReference ? `${actionReference} · ` : ""}${action.notice}`,
     message: refreshMessage || (action.message && `${actionReference ? `${actionReference} · ` : ""}${action.message}`) };
   const stepper = selected && payments.length > 1 && <Stepper role="group" aria-label={`Report ${index + 1} of ${payments.length}`}>
@@ -170,18 +169,11 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
       <h1>Payments</h1>
       <StatusTabs as="nav" aria-label="Payment status">{Object.entries(tabLabels).map(([value, label]) => <Link key={value} href={`/admin/payments?tab=${value}`}
         prefetch={false} aria-current={tab === value ? "page" : undefined} aria-disabled={action.busy || undefined}
-        onClick={event => { if (action.busy) event.preventDefault(); else { setDetailOpen(false); setRefreshMessage(""); } }}>{label}{value === "pending" && ` (${liveCount ?? pendingCount})`}</Link>)}</StatusTabs>
-      <HeadEnd>
-        {desktop && stepper}
-        <RefreshSquare type="button" $changed={queueChanged} aria-label="Refresh queue" title="Refresh queue" disabled={action.busy} onClick={refresh}><ResetIcon /></RefreshSquare>
-      </HeadEnd>
-    </PaymentHead>
-    {(feedback.notice || feedback.message) && <PaymentFeedback id="payment-feedback" tabIndex={-1} aria-label="Payment result"><ActionNotices action={feedback} /></PaymentFeedback>}
-    <QueuePanel aria-labelledby="payment-queue-title" $reviewing={reviewing}>
-      <h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"} queue</h2>
-      <QueueBar>
+        onClick={event => { if (action.busy) event.preventDefault(); else { setDetailOpen(false); setDirtyId(undefined); setRefreshMessage(""); } }}>{label}{value === "pending" && ` (${liveCount ?? pendingCount})`}</Link>)}</StatusTabs>
+      {desktop && stepper && <HeadEnd>{stepper}</HeadEnd>}
+      <QueueBar data-admin-toolbar>
         <form action="/admin/payments" method="get"><input type="hidden" name="tab" value={tab} />
-          <SearchBar id="payment-search" name="search" label="Find a payment" submitLabel="Search all requests"
+          <SearchBar id="payment-search" name="search" label="Find a payment" submitLabel="Search"
             value={search} maxLength={100} disabled={action.busy} autoComplete="off" onChange={event => setSearch(event.target.value)}
             filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen,
               count: Number(provider !== "all") + Number(sort !== "queue"),
@@ -196,26 +188,35 @@ export function PaymentsEditor({ queue, plans, tab, initialPaymentId }: { queue:
           </QueueFilters>
         </AdvancedFilterDialog>}
       </QueueBar>
+    </PaymentHead>
+    {(feedback.notice || feedback.message) && <PaymentFeedback id="payment-feedback" tabIndex={-1} aria-label="Payment result"><ActionNotices action={feedback} /></PaymentFeedback>}
+    <QueuePanel aria-labelledby="payment-queue-title" $reviewing={reviewing}>
+      <h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"} queue</h2>
       <QueueSummary><span data-payment-count>{payments.length} of {queue.total ?? payments.length} requests</span><span>{sort !== "queue" ? paymentSortOptions.find(option => option.value === sort)?.label : tab === "pending" ? "Oldest first" : "Newest first"}</span>
         {queue.page && <nav aria-label="Payment pages">{queue.page > 1 && <Link href={`/admin/payments?tab=${tab}&page=${queue.page - 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Previous page</Link>}{" "}
           Page {queue.page}{" "}{queue.page * (queue.pageSize ?? 30) < (queue.total ?? 0) && <Link href={`/admin/payments?tab=${tab}&page=${queue.page + 1}&search=${encodeURIComponent(queue.search ?? "")}`}>Next page</Link>}</nav>}
-        {queueChanged && <span role="status" data-payment-queue-updated>Queue updated</span>}</QueueSummary>
+        {tab === "pending" && queueChanged && <span role="status" data-payment-queue-updated>New queue activity</span>}</QueueSummary>
       {payments.length ? <TicketTray $opened={opened} data-payment-queue-scroll tabIndex={0} aria-label="Payment list">{payments.map(payment => {
         const warnings = paymentWarnings(payment).length, network = payment.final?.network || payment.network;
-        return <li key={payment.id}><Ticket type="button" aria-current={selected?.id === payment.id ? "true" : undefined} aria-controls="payment-review"
+        return <li key={payment.id}><RecordItem type="button" aria-current={selected?.id === payment.id ? "true" : undefined} aria-controls="payment-review"
           disabled={action.busy} onClick={() => select(payment)} data-payment-row={payment.id}>
-          <TicketProvider><NetworkChip network={network} labelled /></TicketProvider>
-          <TicketRef data-ticket-ref title={payment.reference}>{payment.reference}<span data-ticket-inline-network><NetworkChip network={network} labelled /></span></TicketRef>
-          <TicketAmount data-ticket-amount>{formatUgx(payment.final?.amount ?? payment.amount)}</TicketAmount>
-          <TicketMeta><TicketPhone data-ticket-phone>{payment.payerPhone ? phoneLabel(payment.payerPhone) : "Payer not provided"}</TicketPhone><span data-ticket-separator> · </span><TicketPlan data-ticket-plan title={payment.purpose === "topup" ? "Credit top-up" : `${payment.planName}${payment.durationDays !== null ? ` · ${formatPlanLength(payment.durationDays)}` : ""}`}>{payment.purpose === "topup" ? "Credit top-up" : payment.planName}<span data-ticket-duration>{payment.purpose !== "topup" && payment.durationDays !== null ? ` · ${formatPlanLength(payment.durationDays)}` : ""}</span></TicketPlan></TicketMeta>
-          <TicketTime data-ticket-time>{ticketTime(payment.submittedAt)}<span data-ticket-timezone> EAT</span></TicketTime>
-          {warnings > 0 && <TicketWarn><AlertIcon />{warnings} warning{warnings === 1 ? "" : "s"}</TicketWarn>}
-        </Ticket></li>;
+          <RecordRowContent icon={<NetworkChip network={network} labelled />}
+            primary={<><RecordItemTitle data-ticket-ref>{payment.reference}</RecordItemTitle>
+              <strong data-ticket-amount>{formatUgx(payment.final?.amount ?? payment.amount)}</strong>
+              {warnings > 0 && <TicketWarn><AlertIcon />{warnings} warning{warnings === 1 ? "" : "s"}</TicketWarn>}</>}
+            secondary={<><span data-ticket-phone>{payment.payerPhone ? phoneLabel(payment.payerPhone) : "Payer not provided"}</span>
+              {" · "}<span data-ticket-plan>{payment.purpose === "topup" ? "Credit top-up" : payment.planName}</span>
+              {" · "}<time dateTime={payment.submittedAt} data-ticket-time>{ticketTime(payment.submittedAt)} EAT</time></>} />
+        </RecordItem></li>;
       })}</TicketTray> : <QueueEmpty data-payment-empty><CheckIcon /><strong>{search || provider !== "all" ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</strong>
       </QueueEmpty>}
     </QueuePanel>
-    <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}>
-      {selected?.workflowVersion === 2 ? <CheckoutReview key={selected.id} payment={selected} nav={nav} onResolved={() => { resolved(selected.id); refreshAdmin(); }} /> : selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
+    <ReviewSection id="payment-review" aria-label="Review payment" tabIndex={-1} $reviewing={reviewing}
+      onFocusCapture={event => setReviewFocused(event.target !== event.currentTarget)}
+      onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setReviewFocused(false); }}
+      onChangeCapture={() => setDirtyId(selectedKey)}>
+      {selected?.workflowVersion === 2 ? <CheckoutReview key={selected.id} payment={selected} nav={nav} busy={action.busy} onBusyChange={setCheckoutBusy}
+        onResolved={() => { resolved(selected.id); refreshAdmin(); }} /> : selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
         onStart={() => { setRefreshMessage(""); setActionReference(selected.reference); }} onResolved={() => resolved(selected.id)}
         onRecovery={value => setRecoveries(shown => ({ ...shown, [selected.id]: value }))} /> : <QueueEmpty data-payment-review-empty><CheckIcon /><strong>No payment selected</strong><span>Choose another status or clear the filters.</span></QueueEmpty>}
     </ReviewSection>

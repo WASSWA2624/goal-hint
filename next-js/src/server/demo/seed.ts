@@ -21,7 +21,6 @@ import { seedDemoMember } from "./member-seed.ts";
 import { assertDemoDatabase as assertDemoEnvironment } from "./member.ts";
 import { ensureDemoPublicationQuotes } from "./publication-quotes.ts";
 import { seedDemoWorkspace } from "./workspace-seed.ts";
-import { ensureDemoSourcePairs } from "./source-receipts.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
 import { launchOddsGroup, launchOddsMapping } from "../../domain/odds-markets.ts";
 import { canonicalOddsValues, oddsValuesHash } from "../odds/odds-mysql-store.ts";
@@ -678,11 +677,9 @@ export async function seedDemoDatabase(database: DatabaseRuntime, options: Reado
     const offsets = options.enrich === "current" ? [-1, 0, 1]
       : [...Array.from({ length: 31 }, (_, n) => n), ...Array.from({ length: 29 }, (_, n) => -n - 1)];
     const wanted = options.enrich === "all" ? dates : offsets.map((n) => addReportingDays(today, n)).filter(inRange);
-    await ensureDemoSourcePairs(database, [], nowMs);
     for (const date of wanted) {
       await ensureDemoDates(database, [date], nowMs);
       await ensureDemoPublicationQuotes(database, [date], nowMs);
-      if (date <= today) await ensureDemoSourcePairs(database, [date], nowMs);
       options.onProgress?.(`Demo match details ready: ${date}.`);
     }
     const slipDates = wanted.filter((date) => date <= today);
@@ -696,7 +693,6 @@ export async function seedDemoDatabase(database: DatabaseRuntime, options: Reado
   }
   await seedDemoWorkspace(database);
   await database.query((tx) => tx.$queryRaw`ANALYZE TABLE PredictionCycle,PredictionSchedule,PredictionSet,MarketPrediction,ModelVersion,FixtureResultState,FixtureResult,MarketSettlement,MarketSettlementRevision,FixtureOddsState,FixtureOddsPrice,PredictionQuote,ProviderOddsSnapshot,OddsImportBatch`);
-  if (options.enrich !== false) await database.query((tx) => tx.$queryRaw`ANALYZE TABLE DevelopmentDemoSourcePair`);
   if (options.enrich !== false && options.enrich !== "current") {
     // Ordinary report readers retain one preparation clock. Advancing it after the
     // first aggregate would update live observations and invalidate its cache fill.
@@ -709,15 +705,6 @@ export async function seedDemoDatabase(database: DatabaseRuntime, options: Reado
       throw new Error("The validated default demo performance snapshot is not ready.");
     }
     options.onProgress?.("Demo default performance ready.");
-    options.onProgress?.("Preparing the validated default owner source comparison.");
-    const { createSourceComparisonService } = await import("../comparison/source-comparison-service.ts");
-    const comparison = await createSourceComparisonService({ database,
-      competitionIds: demoFootballCatalog.leagues.map((league) => league.id), clock: warmClock }).read(new URLSearchParams());
-    if (comparison.fixtureCount !== performance.cohort.fixtureCount
-      || (comparison.diagnostic?.replayedFixtures ?? 0) !== comparison.orders.none) {
-      throw new Error("The validated default owner source comparison is not ready.");
-    }
-    options.onProgress?.("Demo default owner source comparison ready.");
     options.onProgress?.("Preparing the validated default match summaries.");
     const { warmDemoFeedSummaries } = await import("./feed-summary.ts");
     await warmDemoFeedSummaries(warmClock, demoFootballCatalog.leagues.map((league) => league.id));

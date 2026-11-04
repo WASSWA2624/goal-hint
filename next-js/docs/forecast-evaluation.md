@@ -366,9 +366,7 @@ is mounted; an `ai-promotion` reference alone cannot activate it
 ([live operations](live-operations.md#forecast-source-order)). A model change needs
 a new evaluation and review.
 
-The private owner page `/admin/forecasts` shows the same matched comparison as a
-diagnostic, with sample counts and intervals and no gate; it is not evaluation
-evidence and authorizes nothing. Exporting sealed receipts into a frozen
+Exporting sealed receipts into a frozen
 prospective dataset for this harness is a follow-up (the dataset still needs a
 trusted authority module that verifies stage seals).
 

@@ -6,19 +6,16 @@ import { RecordBody, RecordHead } from "./record-workspace";
 
 /** Approved Balanced compact presentation, shared by the live workspace and studies. */
 export const subscriberPresentation = css`
-  > ${RecordHead} { display: flex; justify-content: space-between; }
-  > ${RecordHead} > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
-  > ${RecordHead} > button { display: inline-flex; margin-inline-start: auto; }
+  > ${RecordHead}:not([data-admin-toolbar]) { display: flex; justify-content: space-between; }
+  > ${RecordHead}:not([data-admin-toolbar]) > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
+  > ${RecordHead}:not([data-admin-toolbar]) > button { display: inline-flex; margin-inline-start: auto; }
   [data-subscriber-review-filters] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); min-inline-size: 0; padding-block: var(--gh-spacing-0_75); }
   [data-subscriber-review-filters] > :first-child { grid-column: 1 / -1; }
   [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-inline-size: 0; inline-size: 100%; border-radius: ${({ theme }) => theme.radius.control}; }
-  [data-review-subscriber-row] { grid-template-columns: var(--gh-size-7_5) minmax(0, 1fr) auto; gap: var(--gh-spacing-0_75) var(--gh-spacing-2); align-items: center; border-radius: ${({ theme }) => theme.radius.none}; }
-  [data-review-network] { display: grid; place-items: center; grid-column: 1; grid-row: 1 / span 2; inline-size: var(--gh-size-7_5); min-inline-size: 0; }
+  [data-review-network] { display: grid; place-items: center; inline-size: var(--gh-size-7_5); min-inline-size: 0; }
   [data-review-network] > svg { inline-size: var(--gh-size-5_5); block-size: var(--gh-size-5_5); color: ${({ theme }) => theme.color.mutedText}; }
   [data-review-network] [data-payment-logo] { inline-size: var(--gh-size-7); block-size: var(--gh-size-5_5); }
-  [data-review-phone] { grid-column: 2; min-inline-size: 0; font-size: var(--gh-font-body); font-weight: var(--gh-weight-heavy); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  [data-review-row-status] { grid-column: 3; justify-self: end; font-size: var(--gh-font-micro); border-radius: ${({ theme }) => theme.radius.small}; }
-  [data-review-row-meta] { grid-column: 2 / -1; min-inline-size: 0; font-size: var(--gh-font-caption); color: ${({ theme }) => theme.color.mutedText}; overflow-wrap: anywhere; }
+  [data-review-phone] { font-variant-numeric: tabular-nums; }
   [data-subscriber-detail] { container: subscriber-detail / inline-size; }
   [data-subscriber-detail] ${RecordBody} { gap: var(--gh-spacing-2); padding: var(--gh-spacing-3); }
   [data-subscriber-summary] { padding: 0; border: 0; background: ${({ theme }) => theme.color.surface}; }
@@ -43,7 +40,6 @@ export const subscriberPresentation = css`
   [data-subscriber-tab] > div { gap: var(--gh-spacing-2_5); padding: var(--gh-spacing-3); }
 
   ${media.desktop} {
-    [data-review-subscriber-row] { min-block-size: var(--gh-size-15_5); padding: var(--gh-spacing-2_25) var(--gh-spacing-2_5); }
     [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height); }
   }
   @container subscriber-detail (max-width: ${({ theme }) => theme.viewport[30]}) {
@@ -51,7 +47,6 @@ export const subscriberPresentation = css`
   }
   ${media.belowDesktop} {
     [data-record-list-scroll] { max-block-size: var(--gh-size-96); overflow-y: auto; }
-    [data-review-subscriber-row] { min-block-size: var(--gh-size-17); padding: var(--gh-spacing-2_5); }
     [data-subscriber-review-filters] { gap: var(--gh-spacing-2_5); }
     [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height); font-size: var(--gh-font-section); }
     [data-subscriber-detail] ${RecordBody} { padding: 0; gap: var(--gh-spacing-2_5); }

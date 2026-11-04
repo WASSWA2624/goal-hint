@@ -76,10 +76,12 @@ export const mediaTokens = { paper: "#FFFFFF", fallbackFamily: "Arial, sans-seri
 /** Pixel geometry used by browser measurements and persisted workspace preferences. */
 export const uiGeometry: Readonly<{
   sidebar: Readonly<Record<"default" | "min" | "max" | "collapsed" | "handle" | "contentMin", number>>;
+  recordList: Readonly<Record<"min" | "detailMin", number>>;
   countryMenu: Readonly<Record<"edge" | "gap" | "minWidth" | "minHeight" | "preferredSpace" | "maxHeight", number>>;
   tooltip: Readonly<Record<"edge" | "gap" | "clearance", number>>;
 }> = {
   sidebar: { default: 232, min: 192, max: 320, collapsed: 56, handle: 6, contentMin: 720 },
+  recordList: { min: 224, detailMin: 288 },
   countryMenu: { edge: 8, gap: 6, minWidth: 300, minHeight: 80, preferredSpace: 280, maxHeight: 360 },
   tooltip: { edge: 8, gap: 6, clearance: 14 },
 };

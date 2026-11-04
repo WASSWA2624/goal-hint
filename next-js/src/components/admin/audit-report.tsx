@@ -18,9 +18,10 @@ import { publicPolicy } from "@/domain/public-policy";
 import { auditEventLink } from "@/domain/admin-audit-links";
 import { FloatingField } from "./floating-field";
 import { EmptyPanel, Panel, PanelBody, TextAction } from "./desk-styles";
-import { RecordBody, RecordCard, RecordDetailHead, RecordFeedback, RecordFooter, RecordList, RecordListFooter, RecordScroll } from "./record-workspace";
-import { AuditDay, AuditDetails, AuditEvent, AuditFeed, AuditHead, AuditLayout, AuditPager, AuditSummary, AuditTools, EventDetails, EventFacts, EventIcon, EventLink,
-  EventText, EventTime, ExportButton, FilterBody, HeadActions } from "./audit-styles";
+import { RecordBody, RecordCard, RecordDetailHead, RecordDisclosureSummary, RecordFeedback, RecordFooter, RecordList, RecordListFooter, RecordItemTitle, RecordRowContent, RecordScroll } from "./record-workspace";
+import { AuditDay, AuditDetails, AuditEvent, AuditFeed, AuditLayout, AuditPager, AuditSummary, EventDetails, EventFacts, EventIcon, EventLink,
+  EventTime, FilterBody } from "./audit-styles";
+import { RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
 
 const pageSize = 20;
 const categoryIcons = { security: ShieldIcon, accounts: UserIcon, payments: CardIcon, access: GiftIcon,
@@ -107,18 +108,14 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
     } catch { setExportStatus("Export unavailable. Try again."); }
     finally { if (url) { const savedUrl = url; setTimeout(() => URL.revokeObjectURL(savedUrl), 1_000); } }
   }
-  const exportButton = <ExportButton type="button" disabled={!matches.length || pending} onClick={download}
-    data-audit-export title={`Export all ${matches.length} matching events from the loaded activity`}><DownloadIcon />Export CSV</ExportButton>;
-
   return <AuditLayout data-audit-report data-analytics-ignore>
-    <AuditHead><h1>Audit</h1><HeadActions>{exportButton}</HeadActions></AuditHead>
-    {exportStatus && <RecordFeedback><Notice role="status">{exportStatus}</Notice></RecordFeedback>}
-    <RecordList aria-label="Audit activity list">
-      <AuditTools role="search" aria-label="Find audit activity">
+    <RecordToolbar><h1>Audit</h1>
+      <div role="search" aria-label="Find audit activity">
         <SearchBar id="audit-search" label="Search recent activity" value={search} maxLength={160} autoComplete="off" disabled={pending}
           onChange={event => { setSearch(event.target.value); setPageIndex(0); setExportStatus(null); }}
           filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen, count: activeFilters,
-            onOpen: () => { setDraft({ category, action, period, startDate, endDate }); setRangeError(null); setFiltersOpen(true); } }} />
+            onOpen: () => { setDraft({ category, action, period, startDate, endDate }); setRangeError(null); setFiltersOpen(true); } }}
+          trailingAction={<RecordPrimaryAction label="Export CSV" icon={<DownloadIcon />} disabled={!matches.length || pending} onClick={download} data-audit-export />} />
         {period === "custom" && <p data-audit-applied-range>{startDate} – {endDate} · EAT</p>}
         {filtersOpen && <AdvancedFilterDialog id={filtersId} open onCancel={() => setFiltersOpen(false)} closeLabel="Close audit filters"
           onApply={applyFilters}
@@ -140,7 +137,10 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
             {rangeError && <p role="alert">{rangeError}</p>}
           </FilterBody>
         </AdvancedFilterDialog>}
-      </AuditTools>
+      </div>
+    </RecordToolbar>
+    {exportStatus && <RecordFeedback><Notice role="status">{exportStatus}</Notice></RecordFeedback>}
+    <RecordList aria-label="Audit activity list">
       <AuditFeed as="section" id="audit-results" tabIndex={0} aria-label="Audit activity" aria-busy={pending}>
         {matches.length === 0 ? <EmptyPanel data-audit-empty><SearchIcon /><strong>{filtered ? "No matching activity" : "No activity yet"}</strong></EmptyPanel>
           : [...groups].map(([day, events]) => <Fragment key={day}>
@@ -148,14 +148,15 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
             {events.map(row => {
               const kind = auditCategory(row.action), Icon = categoryIcons[kind], reference = auditReference(row), link = auditEventLink(row);
               return <AuditEvent key={row.id} data-audit-event={row.id}>
-                <summary aria-current={selected?.id === row.id ? "true" : undefined} onClick={event => {
+                <RecordDisclosureSummary aria-current={selected?.id === row.id ? "true" : undefined} onClick={event => {
                   setSelectedId(row.id);
                   if (window.matchMedia(media.desktop.replace("@media ", "")).matches) event.preventDefault();
                 }}>
-                  <EventIcon $category={kind}><Icon /></EventIcon>
-                  <EventText><strong>{auditActionLabel(row.action)}</strong><span>{auditActorLabel(row.actor)} · {auditTargetLabel(row.targetType)}</span></EventText>
-                  <EventTime dateTime={row.at}>{timeLabel(row.at)}</EventTime><ChevronDownIcon />
-                </summary>
+                  <RecordRowContent icon={<EventIcon $category={kind}><Icon /></EventIcon>}
+                    primary={<><RecordItemTitle>{auditActionLabel(row.action)}</RecordItemTitle><EventTime dateTime={row.at}>{timeLabel(row.at)}</EventTime></>}
+                    secondary={<>{auditActorLabel(row.actor)} · {auditTargetLabel(row.targetType)}</>} />
+                  <ChevronDownIcon />
+                </RecordDisclosureSummary>
                 <EventDetails data-audit-inline-details>
                   <EventFacts>
                     <Fact label="Category" value={auditCategoryLabel(kind)} /><Fact label="Event reference" value={row.id} />

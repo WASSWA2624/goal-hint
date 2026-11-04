@@ -34,8 +34,10 @@ const Review = styled.article`
 `;
 const localDate = (value: string) => new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
-export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPayment; nav: ReactNode; onResolved: () => void }) {
-  const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }: {
+  payment: OwnerPayment; nav: ReactNode; busy: boolean; onBusyChange: (busy: boolean) => void; onResolved: () => void;
+}) {
+  const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState("");
   const [reason, setReason] = useState(""), [notice, setNotice] = useState("");
   const url = `/api/admin/payments/${payment.id}`;
   async function refresh() {
@@ -50,7 +52,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
   }, [url]);
   async function act(body: Record<string, unknown>, advance = false) {
     if (busy || !detail) return;
-    setBusy(true); setError(""); setNotice("");
+    onBusyChange(true); setError(""); setNotice("");
     try {
       const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, revision: detail.revision }) });
       const result = await response.json();
@@ -58,7 +60,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
       if (!response.ok) throw new Error(result.message ?? "Action could not be completed.");
       setNotice("Saved."); if (advance) onResolved();
     } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
+    finally { onBusyChange(false); }
   }
   const pending = detail && (checkoutOpenStatuses as readonly string[]).includes(detail.status);
   const blocked = detail?.claims.some(c => c.receipt.disputed) || detail?.status === "disputed";

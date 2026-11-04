@@ -1,21 +1,25 @@
 # Shared admin record workspace
 
-Desktop Payments, Codes, Subscribers, Plans, and Audit use
+Payments, Codes, Subscribers, Referral review, Plans and Audit use
 the components in `src/components/admin/record-workspace.tsx`. Edit that module
 to change their shared layout, scrolling, toolbar spacing, headers, row surfaces,
 or action-footer presentation. Screen files supply their own record fields,
 selection state, forms, permissions, and operations.
 
-The menu keeps Overview first, followed by the five record workflows beginning
-with Payments. Settings and Forecast sources follow that group. Analytics stays
+The menu keeps Overview first, followed by the six record workflows beginning
+with Payments. Settings follows that group. Analytics stays
 last in its own separated section. `admin-navigation.ts` declares which pages
-use the fixed record viewport; their shared shell preserves sidebar resizing
-and collapse preferences.
+use the fixed record viewport. The desktop sidebar keeps collapse and resize
+preferences and uses the resize rail as the divider. The list pane has a
+separate rail. Drag it or use the arrow keys to change the list width while
+keeping room for the detail pane.
 
 ## Composition
 
 - `RecordWorkspace`: the full-width desktop frame below the existing header.
-- `RecordHead` / `RecordFeedback`: page controls and operation results.
+- `RecordToolbar` / `RecordFeedback`: full-width toolbar on the parent surface
+  and operation results. Payments puts its toolbar directly beneath its status
+  tabs. `RecordPrimaryAction` displays a label on desktop and an icon on phones.
 - `RecordList`, `RecordListTools`, `RecordListScroll`, `RecordListFooter`: the
   searchable list with its own scroll surface and bounded status area.
 - `RecordDetails`, `RecordCard`, `RecordScroll`: selected record content with an
@@ -23,15 +27,16 @@ and collapse preferences.
 - `RecordDetailHead` / `RecordBody`: compact selected-record heading and content.
 - `RecordFooter`: optional actions outside the details scroll surface. External
   submit buttons use the existing form's ID; forms are never duplicated.
-- `RecordItem`, `RecordItemTitle`, `RecordItemMeta`: common selectable-row parts.
+- `RecordItem` / `RecordRowContent`: shared selectable rows with an optional leading
+  icon or logo, up to three primary fields, and muted supporting metadata.
 
 Use `data-record-actions` for a nested action group, `data-record-icon` for an
 icon-only action, and `data-record-summary` for optional footer context. The
 summary hides on narrow desktop windows. Avoid copying the workspace grid,
 scroll, or footer styles into screen-specific files.
 
-Payments extends these common components for its provider/reference rows and
-payment-specific review zones. Codes retains real manual-grant, extend, and
+Payments reloads the pending queue after its live count changes when review is
+idle. The payment detail uses payment-specific review zones. Codes retains real manual-grant, extend, and
 revoke operations. Plans retains saved-name/price/duration snapshots and reorder
 behavior. Subscribers retains account tabs, access/credit tools, restrictions,
 and guarded removal. Members manage their passwords through the account's own
@@ -40,12 +45,12 @@ CSV export still covers the full filtered loaded window.
 
 ## Responsive and state behavior
 
-The fixed two-pane layout starts at 64rem. Mobile keeps the existing inline
-Codes/Plans forms, subscriber directory/back navigation, and Audit disclosures.
-Responsive branches mount one set of forms and preserve parent-owned drafts.
+The fixed two-pane layout starts at 64rem. Primary forms for Codes, Subscribers,
+Referral review and Plans use the shared modal with the same controls on both
+viewports. Mobile record selection uses inline disclosures or a detail screen.
+Referral search queries all matching cases through the owner-only endpoint.
 
-Overview, Settings, Forecast sources, and Analytics keep their existing layout
-categories. Storage-unavailable responses remain readable within the shared
+Overview, Settings and Analytics use the scrolling workspace layout. Storage-unavailable responses remain readable within the shared
 frame. Authorization, private attachments, API handlers, business services,
 and persistence are not delegated to layout components.
 

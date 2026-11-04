@@ -1,6 +1,7 @@
 "use client";
 
 import { SearchBar } from "@/components/ui/search-bar";
+import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
 
 import { controlRow } from "@/components/ui/control-layout";
 
@@ -13,7 +14,7 @@ import styled, { css } from "styled-components";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { ChevronDownIcon, PlusIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, PlusIcon, TicketIcon } from "@/components/ui/icons";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";
 import { formatPeriodEnd } from "@/domain/subscription-period";
@@ -21,9 +22,10 @@ import { paymentNotificationNotice } from "@/domain/payment-notification";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
 import { ActionButton, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
-import { Drawer, FactList, Panel, RowTitle, TextAction } from "./desk-styles";
-import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordHead, RecordItem,
-  RecordItemMeta, RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordScroll, RecordWorkspace } from "./record-workspace";
+import { FactList, Panel, TextAction } from "./desk-styles";
+import { RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordDisclosureSummary, RecordEmpty, RecordFeedback, RecordFooter, RecordItem,
+  RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordRowContent, RecordScroll, RecordWorkspace } from "./record-workspace";
+import { RecordFormDialog, RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
 import { refreshPendingPayments } from "./pending-payments";
 import { useAdminRefresh } from "./use-admin-refresh";
 import { NetworkChoice } from "./network-choice";
@@ -214,11 +216,12 @@ const RevokeConfirmation = styled.div`
 const codeTone = (status: OwnerCode["status"]) => status === "active" ? "good" : status === "queued" ? "warning" : "muted";
 const codeStatusLabel = { all: "All", active: "Active", queued: "Queued", expired: "Expired", revoked: "Revoked" } as const;
 export type CodesPreview = Readonly<{ variant: string; initialView: "grant" | "details"; request: CodeRequest }>;
-/** Access records use the shared desktop workspace; mobile keeps inline controls and its grant drawer. */
+/** Access records use the shared desktop workspace and mobile disclosures. */
 export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: readonly OwnerCode[]; plans: readonly SubscriptionPlanView[]; preview?: CodesPreview }) {
   const router = useRouter(), desktop = useDesktopLayout(), id = useId(), [grantOpen, setGrantOpen] = useState(preview?.initialView === "grant");
   const [selectedId, setSelectedId] = useState(initialCodes[0]?.id ?? "");
   const [found, setFound] = useState<readonly OwnerCode[] | null>(null), [status, setStatus] = useState("all"), [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false), [draftStatus, setDraftStatus] = useState("all");
   const appliedSearch = useRef({ search: "", status: "all" });
   const request = preview?.request ?? postAdmin;
   const action = useCodeAction(async () => {
@@ -234,7 +237,7 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
   async function find(nextStatus: string) {
     const query = { search, status: nextStatus };
     const reply = await action.send("/api/admin/codes", { action: "search", ...query }, "", false);
-    if (reply.ok && Array.isArray(reply.body.codes)) { appliedSearch.current = query; setFound(reply.body.codes as OwnerCode[]); }
+    if (reply.ok && Array.isArray(reply.body.codes)) { appliedSearch.current = query; setStatus(nextStatus); setFound(reply.body.codes as OwnerCode[]); }
   }
   function select(code: OwnerCode) {
     if (action.busy) return;
@@ -242,49 +245,55 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-codes-detail-scroll]")?.scrollTo({ top: 0 }));
   }
   return <Codes data-codes-workspace data-code-variant={preview?.variant ?? "balanced"} data-analytics-ignore>
-    <RecordHead><h1>Codes</h1><HeaderEnd><ActionButton type="button" disabled={action.busy} onClick={() => setGrantOpen(true)}><PlusIcon />Grant access manually</ActionButton></HeaderEnd></RecordHead>
+    <RecordToolbar><h1>Codes</h1>
+      <form method="post" action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
+        <SearchBar label="Phone or reference" submitLabel="Search" value={search} onChange={e => setSearch(e.target.value)} maxLength={40} autoComplete="off" disabled={action.busy}
+          filters={{ label: "Advanced filters", dialogId: `${id}-filters`, open: filtersOpen, count: Number(status !== "all"),
+            onOpen: () => { setDraftStatus(status); setFiltersOpen(true); } }}
+          trailingAction={<RecordPrimaryAction label="Grant access manually" icon={<PlusIcon />} disabled={action.busy} aria-haspopup="dialog"
+            onClick={() => { action.clearFeedback(); setGrantOpen(true); }} />} />
+      </form>
+      {filtersOpen && <AdvancedFilterDialog id={`${id}-filters`} open closeLabel="Close code filters" onCancel={() => setFiltersOpen(false)}
+        onApply={() => { setFiltersOpen(false); void find(draftStatus); }} onReset={() => setDraftStatus("all")}>
+        <FloatingField label="Status"><select value={draftStatus} onChange={event => setDraftStatus(event.currentTarget.value)}>
+          {Object.entries(codeStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select></FloatingField>
+      </AdvancedFilterDialog>}
+    </RecordToolbar>
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
-    <CodeList aria-label="Code directory">
-      <RecordListTools>
-        <SearchForm method="post" action={preview ? "#" : "/api/admin/codes"} onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
-          <SearchBar label="Phone or reference" submitLabel="Search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Enter phone number or code" maxLength={40} autoComplete="off" disabled={action.busy} />
-          <FloatingField label="Status"><select value={status} disabled={action.busy} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{Object.entries(codeStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FloatingField>
-        </SearchForm>
-      </RecordListTools>
+    <RecordList aria-label="Code directory">
       <RecordListScroll aria-label="Codes" tabIndex={0} data-codes-list-scroll>
         {codes.length === 0 ? <li><RecordEmpty>No matching codes.</RecordEmpty></li> : codes.map(code => {
-          return desktop ? <li key={code.id}><RecordItem aria-current={!grantOpen && selected?.id === code.id ? "true" : undefined} aria-controls={`${id}-detail`} disabled={action.busy} onClick={() => select(code)} data-code-row={code.id}>
-            <RecordItemTitle>{code.reference}</RecordItemTitle><Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge>
-            <RecordItemMeta>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"}</RecordItemMeta>
-          </RecordItem></li> : <CodeRow key={code.id} id={`${id}-${code.id}`} data-code-row={code.id} tabIndex={-1}>
-            <RowTitle>{code.reference}<Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge></RowTitle>
-            <CodeLine>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"}</CodeLine>
-            <MobileCodeDetails open={preview?.initialView === "details" && selected?.id === code.id} data-mobile-code-details><summary>View details<ChevronDownIcon /></summary><CodeFacts code={code} preview={!!preview} />
+          const content = <RecordRowContent icon={<TicketIcon />} primary={<><RecordItemTitle>{code.reference}</RecordItemTitle>
+            <Badge $tone={codeTone(code.status)}>{codeStatusLabel[code.status]}</Badge></>}
+            secondary={<>{code.phone ? `+${formatPhone(code.phone)}` : "Erased account"} · {code.planName}</>} />;
+          return desktop ? <li key={code.id}><RecordItem type="button" aria-current={selected?.id === code.id ? "true" : undefined} aria-controls={`${id}-detail`} disabled={action.busy} onClick={() => select(code)} data-code-row={code.id}>
+            {content}
+          </RecordItem></li> : <li key={code.id} id={`${id}-${code.id}`} data-code-row={code.id} tabIndex={-1}>
+            <MobileCodeDetails open={preview?.initialView === "details" && selected?.id === code.id} data-mobile-code-details>
+              <RecordDisclosureSummary>{content}<ChevronDownIcon /></RecordDisclosureSummary><CodeFacts code={code} preview={!!preview} />
               {code.status !== "revoked" && <CodeActions code={code} action={action} onRevoked={() => document.getElementById(`${id}-${code.id}`)?.focus()} />}</MobileCodeDetails>
-          </CodeRow>;
+          </li>;
         })}
       </RecordListScroll>
       <RecordListFooter>{codes.length} access period{codes.length === 1 ? "" : "s"} · up to 100</RecordListFooter>
-    </CodeList>
-    <CodeDetails id={`${id}-detail`} aria-label="Selected access record">
+    </RecordList>
+    {desktop && <RecordDetails id={`${id}-detail`} aria-label="Selected access record">
       <RecordCard>
         <RecordScroll data-codes-detail-scroll tabIndex={desktop ? 0 : undefined}>
-          <GrantPanel hidden={desktop && !grantOpen}>
-            {desktop && <RecordDetailHead><h2>Grant access manually</h2></RecordDetailHead>}
-            <GrantDrawer data-grant-desktop={desktop} open={grantOpen} onToggle={event => setGrantOpen(event.currentTarget.open)}>
-              <summary><PlusIcon />Grant access manually<ChevronDownIcon /></summary>
-              <div><ManualCodeForm plans={plans} action={action} formId={grantId} externalActions={desktop} /></div>
-            </GrantDrawer>
-          </GrantPanel>
-          {desktop && !grantOpen && (selected ? <>
+          {selected ? <>
             <RecordDetailHead><h2>{selected.reference}</h2><Badge $tone={codeTone(selected.status)}>{codeStatusLabel[selected.status]}</Badge></RecordDetailHead>
             <RecordBody><Panel><CodeFacts code={selected} preview={!!preview} /></Panel><Hint>Revoke ends a period at once; devices stay unlocked only while another period is live.</Hint></RecordBody>
-          </> : <RecordEmpty><h2>Select an access record</h2><p>Find a record or grant access manually.</p></RecordEmpty>)}
+          </> : <RecordEmpty><h2>Select an access record</h2><p>Find a record or grant access manually.</p></RecordEmpty>}
         </RecordScroll>
-        {desktop && (grantOpen ? <RecordFooter><ActionButton type="button" disabled={action.busy} onClick={() => setGrantOpen(false)}>Cancel</ActionButton><ActionButton type="submit" form={grantId} $variant="primary" disabled={action.busy}>Grant access manually</ActionButton></RecordFooter>
-          : selected && selected.status !== "revoked" ? <RecordFooter><CodeActions key={selected.id} code={selected} action={action} /></RecordFooter> : null)}
+        {selected && selected.status !== "revoked" && <RecordFooter><CodeActions key={selected.id} code={selected} action={action} /></RecordFooter>}
       </RecordCard>
-    </CodeDetails>
+    </RecordDetails>}
+    {grantOpen && <RecordFormDialog id={`${id}-grant-dialog`} title="Grant access manually" submitLabel="Grant access" formId={grantId}
+      busy={action.busy} onClose={() => { if (!action.busy) setGrantOpen(false); }}>
+      {action.message && <ActionNotices action={action} />}
+      <ManualCodeForm plans={plans} action={action} formId={grantId} externalActions compact onSaved={() => setGrantOpen(false)} />
+    </RecordFormDialog>}
   </Codes>;
 }
 function CodeFacts({ code, preview }: { code: OwnerCode; preview: boolean }) {
@@ -300,60 +309,9 @@ function CodeFacts({ code, preview }: { code: OwnerCode; preview: boolean }) {
 const Codes = styled(RecordWorkspace)`
   ${codePresentation}
   &[data-code-variant="balanced"] { ${balancedCodePresentation} }
-  ${RecordHead} > h1 { position: static; inline-size: auto; block-size: auto; margin: 0; padding: 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
 `;
-const HeaderEnd = styled.div`margin-inline-start: auto; ${media.belowDesktop} { display: none; }`;
-const CodeList = styled(RecordList)`${media.belowDesktop} { order: 2; }`;
-const CodeDetails = styled(RecordDetails)`${media.belowDesktop} { order: 1; }`;
-const GrantPanel = styled.div`min-inline-size: 0; &[hidden] { display: none; } ${media.belowDesktop} { background: ${({ theme }) => theme.color.surface}; border: 0; border-radius: ${({ theme }) => theme.radius.surface}; }`;
 const Facts = styled(FactList)`padding: var(--gh-spacing-3);`;
 const MobileCodeDetails = styled(PlainDrawer)`
   > summary { min-block-size: var(--form-control-height); }
   > [data-record-actions] { margin-block-start: var(--gh-spacing-3); }
-`;
-const SearchForm = styled.form`
-  display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: var(--gh-spacing-2); min-inline-size: 0;
-  > :first-child { grid-column: 1 / -1; }
-  > button > svg { flex: none; font-size: var(--gh-font-section); }
-  ${media.desktop} { input, select { min-block-size: var(--form-control-height); font-size: var(--gh-font-body); } > button { min-block-size: var(--form-control-height); } }
-
-  ${controlRow}
-`;
-const CodeRow = styled.li`
-  display: grid;
-  gap: var(--gh-spacing-0_5);
-  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
-  > ${CodeTools} { margin-block-start: var(--gh-spacing-2); }
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
-  ${media.desktop} { padding-inline: var(--gh-spacing-4); }
-  @container (min-width: ${({ theme }) => theme.viewport[36]}) {
-    grid-template-columns: minmax(0, 1fr) auto;
-    /* The spare last row takes the height an open confirmation adds, so the three text lines stay together. */
-    grid-template-rows: auto auto auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: var(--gh-spacing-4);
-    > :not(${CodeTools}) { grid-column: 1; }
-    /* A wrapping flex row would size this column to the sum of its parts, confirmation included; a grid does not. */
-    > ${CodeTools} { display: grid; grid-template-columns: auto auto; justify-content: end; grid-column: 2; grid-row: 1 / -1; margin-block-start: 0; }
-    > ${CodeTools} > ${RevokeConfirmation} { grid-column: 1 / -1; justify-self: stretch; }
-  }
-`;
-const CodeLine = styled.p`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  overflow-wrap: anywhere;
-  a {
-    color: ${({ theme }) => theme.color.link};
-    font-size: ${({ theme }) => theme.typography.scale.emphasis};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    font-variant-numeric: tabular-nums;
-    text-decoration: none;
-    ${media.hover} { &:hover { text-decoration: underline; } }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
-    ${media.belowDesktop} { display: inline-flex; align-items: center; min-block-size: ${({ theme }) => theme.control.minHeight}; vertical-align: middle; }
-  }
-`;
-const GrantDrawer = styled(Drawer)`
-  ${media.desktop} { &[data-grant-desktop="true"] > summary { display: none; } > div { padding: var(--gh-spacing-3); } }
-  > div { padding-block-start: var(--gh-spacing-3_5); border-block-start: 0; }
 `;

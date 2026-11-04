@@ -1,7 +1,5 @@
 "use client";
 
-import { controlRow } from "@/components/ui/control-layout";
-
 import styled from "styled-components";
 import { media } from "@/styles/theme";
 import { FieldBlock } from "./admin-form";
@@ -13,14 +11,6 @@ export const ReviewFooter = styled(RecordFooter)`
   > button { min-block-size: var(--form-control-height); flex: 1 1 var(--gh-size-32); }
   ${media.desktop} { > button { min-block-size: var(--form-control-height); flex: 0 1 auto; } }
 `;
-export const ReviewTools = styled.div`
-  display: flex; align-items: end; gap: var(--gh-spacing-2);
-  > [data-floating-field] { flex: 1; min-inline-size: 0; }
-  > button { flex: none; }
-
-  ${controlRow}
-`;
-
 /** Referral decisions use the same compact list/detail geometry and controls as Payments/Subscribers. */
 export const ReviewForm = styled.form`
   display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;

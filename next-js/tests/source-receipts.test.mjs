@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readSourceReceipts } from "../src/server/comparison/source-receipts-read.ts";
 import { evidenceSerialize } from "../src/server/evidence/evidence-input.ts";
 import { resolveFallbackCandidate } from "../src/server/fallback/fallback-resolution.ts";
 import { forecastSourceReceipts, parseForecastSourceReceipts } from "../src/server/fallback/source-receipts.ts";
@@ -87,4 +88,21 @@ test("the archive parser rejects mixed sources, extra keys and incoherent status
   parseForecastSourceReceipts(denied);
   denied.ai.markets = receipts.ai.markets;
   assert.throws(() => parseForecastSourceReceipts(denied), "an unavailable receipt never carries an available market");
+});
+
+test("source receipt reads retain seal, shared job/source-order and per-batch byte-budget checks", async () => {
+  const fixture = fallbackFixture(), receipt = stored(receiptsFor(fixture, fallbackProvider(fixture.expected)));
+  const jobId = "a".repeat(64), revision = { jobId, candidate: { context: { jobId }, audit: { sourceOrder: "provider-first" } } };
+  let sealed = true, bytes = 2000, sources = receipt, calls = 0;
+  const tx = { async $queryRaw() { calls++; return calls % 2 ? [{ bytes: BigInt(bytes), total: 1n }] : [{ jobId, sealed, sources }]; } };
+  assert.equal((await readSourceReceipts(tx, [revision])).get(jobId).order, "provider-first");
+  sealed = false;
+  await assert.rejects(() => readSourceReceipts(tx, [revision]), error => error.code === "unavailable");
+  sealed = true; sources = { ...receipt, order: "ai-first" };
+  await assert.rejects(() => readSourceReceipts(tx, [revision]), error => error.code === "unavailable");
+  calls = 0; sources = receipt; bytes = 2_000_001;
+  await assert.rejects(() => readSourceReceipts(tx, [revision]), error => error.code === "unavailable");
+  assert.equal(calls, 1, "Oversized bodies must be rejected before fetching them");
+  await assert.rejects(() => readSourceReceipts(tx, [{ ...revision, candidate: { ...revision.candidate, context: { jobId: "b".repeat(64) } } }]),
+    error => error.code === "unavailable");
 });

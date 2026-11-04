@@ -282,7 +282,7 @@ def record_workspaces_rendering(origin):
         html = visible_html(request(origin, path).text)
         assert len(re.findall(r'data-record-workspace=', html)) == 1, path
     sidebar = match(r'<(?:nav|aside)\b(?=[^>]*data-admin-sidebar)[^>]*>([\s\S]*?)</(?:nav|aside)>', visible_html(request(origin, "/admin/payments").text)).group(1)
-    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/plans", "/admin/audit", "/admin/settings", "/admin/forecasts", "/analytics"]
+    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/referrals", "/admin/plans", "/admin/audit", "/admin/settings", "/analytics"]
     assert re.findall(r'href="([^"]+)"', sidebar) == expected
 
 
@@ -385,7 +385,8 @@ def payments_rendering(origin):
             badge = match(r'<a\b(?=[^>]*data-admin-payments-link)[^>]*>', html).group(0)
             match(r'href="/admin/payments\?tab=pending"', badge)
             match(r'id="payment-search"', html)
-            match("Refresh queue", html)
+            no_match("Refresh queue", html)
+            assert html.index('aria-label="Payment status"') < html.index('id="payment-search"')
             no_match(r'data-payment-summary-count|Ready for manual review|Review the checks and confirm the received transfer', html,
                      "The removed review-summary banner must not reappear.")
             expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
@@ -444,6 +445,8 @@ def payments_queue_rendering(origin):
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
         editor = match(r'<div\b(?=[^>]*data-payments-editor)[^>]*>', html).group(0)
         match(r'data-layout="balanced"', editor)
+        match(r'<div[^>]*>\s*<span data-payment-count[\s\S]*?<nav aria-label="Payment pages"', html,
+              "Queue pagination must be inside a block container so server HTML hydrates as rendered.")
         assert html.count("data-payment-queue-scroll") == 1
         assert html.count("data-payment-review-scroll") == 1
         no_match(r'data-payment-summary-count|Ready for manual review', html)
@@ -497,8 +500,7 @@ def owner_navigation(origin):
         no_match(r"Password requests|/admin/password-resets|Set temporary password", html)
         assert html.count('href="#main-content"') == 1, f"{path}: one shared shell"
         assert len(re.findall(r"<main(?:\s|>)", html)) == 1, path
-        # Settings has separate desktop and mobile headings; browser checks assert one is visible.
-        assert len(re.findall(r"<h1(?:\s|>)", html)) == (2 if path == "/admin/settings" else 1), path
+        assert len(re.findall(r"<h1(?:\s|>)", html)) == 1, path
         for layout in ["desktop", "mobile"]:
             match(rf'data-responsive-navigation="{layout}"', html, path)
         for destination in ["/en", "/en/matches", "/en/slips", "/en/help",
@@ -508,7 +510,8 @@ def owner_navigation(origin):
             match(rf'href="{re.escape(destination)}"', html, f"{path}: owner destination {destination}")
         signed_out = request(origin, path, headers={"Cookie": ""})
         assert signed_out.status == 307 and "/en/account" in signed_out.headers.get("Location", ""), path
-    assert request(origin, "/admin/password-resets").status == 404, "The retired password-request page is removed."
+    for removed in ["/admin/password-resets", "/admin/forecasts"]:
+        assert request(origin, removed).status == 404, removed
     for path in ["/api/analytics/report?from=2026-10-19&to=2026-10-25", "/api/analytics/live"]:
         status, report = fixture_json(origin, path)
         assert status == 200 and report["generatedAt"]

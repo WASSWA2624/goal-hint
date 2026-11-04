@@ -301,7 +301,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   </>;
 
   return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-settings-editor>
-    <SettingsHeading><h1>Settings</h1><DesktopSettingsTabs as="nav" aria-label="Desktop settings sections" data-settings-desktop-nav>{desktopSections.map(({ key, label, Icon: TabIcon }) =>
+    <h1>Settings</h1>
+    <SettingsHeading><DesktopSettingsTabs as="nav" aria-label="Desktop settings sections" data-settings-desktop-nav>{desktopSections.map(({ key, label, Icon: TabIcon }) =>
       <button key={key} id={`desktop-settings-tab-${key}`} type="button" aria-current={section === key ? "page" : undefined} aria-controls="settings-section" onClick={() => navigate(key)}>
         <TabIcon />{label}</button>)}</DesktopSettingsTabs></SettingsHeading>
     <SettingsGrid>

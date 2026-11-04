@@ -4,7 +4,8 @@ import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
 import { Panel, Segmented, StatGrid, rowLayout } from "./desk-styles";
-import { RecordDetails, RecordHead, RecordList, RecordWorkspace, RecordDetailHead } from "./record-workspace";
+import { RecordDetails, RecordList, RecordWorkspace, RecordDetailHead } from "./record-workspace";
+import { RecordToolbar } from "./record-toolbar";
 
 /** Out of sight but still read: the phone search label, and the h1 while a phone shows one account. */
 export const visuallyHidden = css`
@@ -38,7 +39,7 @@ export const formSurface = css`
 `;
 
 /* Workspace: the directory on the start side, the account on the wide side; phones show one of them at a time. */
-export const WorkspaceTitle = styled(RecordHead)``;
+export const WorkspaceTitle = styled(RecordToolbar)``;
 export const DirectoryRoot = styled(RecordList)``;
 /**
  * `$quiet`: nothing to show on a phone (no account, no notice), so the column leaves no gap. The account's parts size to
@@ -52,7 +53,7 @@ export const AccountColumn = styled(RecordDetails)<{ $quiet: boolean }>`
 export const Workspace = styled(RecordWorkspace)<{ $selected: boolean }>`
   ${media.belowDesktop} {
     ${({ $selected }) => $selected
-      ? css`> ${DirectoryRoot} { display: none; } > ${WorkspaceTitle} { display: contents; > h1 { ${visuallyHidden} } > button { display: none; } }`
+      ? css`> ${DirectoryRoot} { display: none; } > ${WorkspaceTitle} { display: contents; > [data-subscriber-search] { display: none; } }`
       : css`> ${AccountColumn} { order: 1; } > ${DirectoryRoot} { order: 2; }`}
   }
 `;

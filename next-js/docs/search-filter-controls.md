@@ -6,7 +6,7 @@ submission. Omit `submitLabel` for immediate in-list/option filtering. Submitted
 searches use the inset action; `onSearch` handles local searches inside another
 form without submitting that parent, including Enter with IME composition
 protection. `filters` supplies the dialog ID, open state, opener and optional
-applied count; `filterButtonRef` supports focus restoration. Mobile shows only
+applied count. `trailingAction` places the optional primary button after the filter; `filterButtonRef` supports focus restoration. Mobile shows only
 the filter icon; desktop shows its icon and label. All controls use the shared control
 metrics, floating-label primitives, focus styles and theme tokens. The search
 action and input use the field’s inner grid track, overriding the standalone

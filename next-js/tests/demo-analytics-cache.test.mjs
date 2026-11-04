@@ -8,8 +8,7 @@ const program = String.raw`
   import {createPublicResponseCache,publicCacheDescriptor,publicCacheRules} from './src/server/cache/public-cache.ts';
   import {demoAnalyticsCacheDescriptor} from './src/server/demo/analytics-cache.ts';
   const start=Date.parse('2026-10-28T12:00:00Z'),range=validateReportingDateRange('2026-09-29','2026-10-28',31);
-  const original=publicCacheDescriptor({kind:'performance',locale:'en',query:{range},scope:{grant:true},now:start,range,parse:value=>value});
-  const descriptor={...original,tags:[...original.tags,'demo:source-comparison']};
+  const descriptor=publicCacheDescriptor({kind:'performance',locale:'en',query:{range},scope:{grant:true},now:start,range,parse:value=>value});
   const policy=demoAnalyticsCacheDescriptor(descriptor,start);
   if(process.env.NODE_ENV!=='development'||process.env.NEXT_PUBLIC_GOAL_HINT_DEMO==='false'||process.env.EXPECT_DEMO_CACHE==='false'){
     assert.equal(policy,descriptor);assert.equal(policy.lifetimeMs,publicCacheRules.mutableMs);
@@ -28,13 +27,13 @@ const program = String.raw`
     const first=await cache.read(policy,load);at+=30000;versions.set('date:2026-10-28','2');
     const unchanged=await cache.read(policy,load);assert.deepEqual(unchanged,first);assert.equal(unchanged.asOf,start);assert.equal(loads,1);
     at+=900000;assert.deepEqual(await cache.read(policy,load),first);assert.equal(loads,1,'startup validation must leave time to browse the prepared report');
-    for(const tag of ['date:2026-09-29','global:catalog','global:progress','demo:source-comparison']){
+    for(const tag of ['date:2026-09-29','global:catalog','global:progress']){
       at+=1000;versions.set(tag,'2');const value=await cache.read(policy,load);assert.equal(value.asOf,at);
     }
-    assert.equal(loads,5);
+    assert.equal(loads,4);
     const revoked=demoAnalyticsCacheDescriptor(publicCacheDescriptor({kind:'performance',locale:'en',query:{range},scope:{grant:false},now:at,range,parse:value=>value}),at);
-    assert.notEqual(revoked.key,policy.key);await cache.read(revoked,load);assert.equal(loads,6);
-    at+=3600001;await cache.read(policy,load);assert.equal(loads,7);
+    assert.notEqual(revoked.key,policy.key);await cache.read(revoked,load);assert.equal(loads,5);
+    at+=3600001;await cache.read(policy,load);assert.equal(loads,6);
   }
 `;
 for (const environment of [{ NODE_ENV: "development", NEXT_PUBLIC_GOAL_HINT_DEMO: "true" },

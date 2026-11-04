@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { SearchBar } from "@/components/ui/search-bar";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
 import { authCopy } from "@/i18n/messages/auth";
@@ -14,13 +14,13 @@ import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { Badge } from "./admin-form";
 import { FloatingField } from "./floating-field";
-import { RecordItem, RecordItemMeta, RecordItemTitle } from "./record-workspace";
+import { RecordItem, RecordItemTitle, RecordRowContent } from "./record-workspace";
 
 const statusLabels: Readonly<Record<string, string>> = { open: "Open", blocked: "Blocked", erased: "Erased" };
 const accessLabels = { active: "Active access", queued: "Queued access", none: "No current access" } as const;
 
-export function SubscriberDirectoryFilters({ query, plans, onQueryChange }: {
-  query: SubscriberDirectoryQuery; plans: readonly SubscriptionPlanView[]; onQueryChange: (query: SubscriberDirectoryQuery) => void;
+export function SubscriberDirectoryFilters({ query, plans, onQueryChange, trailingAction }: {
+  query: SubscriberDirectoryQuery; plans: readonly SubscriptionPlanView[]; onQueryChange: (query: SubscriberDirectoryQuery) => void; trailingAction?: ReactNode;
 }) {
   const dialogId = useId(), [open, setOpen] = useState(false), [draft, setDraft] = useState(query);
   const filterCount = Number(query.status !== "all") + Number(query.access !== "all") + Number(query.plan !== "all") + Number(query.recent !== "all");
@@ -28,7 +28,7 @@ export function SubscriberDirectoryFilters({ query, plans, onQueryChange }: {
   if (query.plan !== "all" && query.plan !== "none" && !names.includes(query.plan)) names.push(query.plan);
   return <Filters data-subscriber-review-filters data-subscriber-search role="search" aria-label="Search and filter subscribers">
     <SearchBar label="Search subscribers" value={query.search} onChange={event => onQueryChange({ ...query, search: event.currentTarget.value })}
-      placeholder="Phone, package, code or note" maxLength={120} autoComplete="off"
+      placeholder="Phone, package, code or note" maxLength={120} autoComplete="off" trailingAction={trailingAction}
       filters={{ label: "Advanced filters", dialogId, open, count: filterCount, onOpen: () => { setDraft(query); setOpen(true); } }} />
     {open && <AdvancedFilterDialog id={dialogId} open onCancel={() => setOpen(false)} closeLabel="Close subscriber filters"
       onApply={() => { onQueryChange({ ...draft, search: query.search }); setOpen(false); }}
@@ -51,12 +51,11 @@ export function SubscriberAccountRow({ account, selected, href, onSelect }: {
   account: SubscriberDirectoryAccount; selected: boolean; href?: string; onSelect?: () => void;
 }) {
   const networkLabel = account.network === "mtn" ? "MTN network" : account.network === "airtel" ? "Airtel network" : "Network unknown";
-  const content = <>
-    <span data-review-network role="img" aria-label={networkLabel} title={networkLabel}>{account.network ? <MobileMoneyLogo network={account.network} /> : <GlobeIcon />}</span>
-    <RecordItemTitle data-review-phone>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</RecordItemTitle>
-    <Badge data-review-row-status data-subscriber-status={account.status} $tone={account.status === "open" ? "good" : account.status === "blocked" ? "warning" : "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge>
-    <RecordItemMeta data-review-row-meta>{account.planNames.length ? account.planNames.join(", ") : accessLabels[account.access]} · <span data-subscriber-last-sign-in>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></span></RecordItemMeta>
-  </>;
+  const content = <RecordRowContent
+    icon={<span data-review-network role="img" aria-label={networkLabel} title={networkLabel}>{account.network ? <MobileMoneyLogo network={account.network} /> : <GlobeIcon />}</span>}
+    primary={<><RecordItemTitle data-review-phone>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</RecordItemTitle>
+      <Badge data-review-row-status data-subscriber-status={account.status} $tone={account.status === "open" ? "good" : account.status === "blocked" ? "warning" : "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge></>}
+    secondary={<span data-review-row-meta>{account.planNames.length ? account.planNames.join(", ") : accessLabels[account.access]} · <span data-subscriber-last-sign-in>{authCopy.lastLogin} <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></span></span>} />;
   const attributes = { "data-review-subscriber-row": account.id, "data-subscriber-row": account.id };
   return href ? <Row {...attributes} as={Link} href={href} prefetch={false} aria-current={selected ? "page" : undefined}>{content}</Row>
     : <Row {...attributes} type="button" aria-current={selected ? "true" : undefined} onClick={onSelect}>{content}</Row>;
@@ -67,6 +66,6 @@ const FilterFields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2_5) var(--gh-spacing-2); min-inline-size: 0;
 `;
 const Row = styled(RecordItem)`
-  grid-template-columns: var(--gh-size-7_5) minmax(0, 1fr) auto; align-items: center; text-decoration: none;
+  text-decoration: none;
   &[aria-current="page"] { background: ${({ theme }) => theme.color.brandSoft}; box-shadow: none; }
 `;

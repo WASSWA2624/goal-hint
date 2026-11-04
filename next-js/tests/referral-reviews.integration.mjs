@@ -202,4 +202,20 @@ test("referral review accounting, permissions, concurrency, appeal and privacy o
     assert.equal(scrubbed.appealStatement, null); assert.ok(scrubbed.purgedAt);
     assert.ok(await f.database.query(tx => tx.referralReviewEvent.count({ where: { caseId: row.id } })));
   });
+
+  await t.test("case search matches older records by reference, phone and ID before applying the page limit", async () => {
+    const holder = await actor(), row = await open((await grant(holder)).id);
+    const later = new Date(time + HOUR), unrelated = await actor();
+    await f.database.query(tx => tx.referralReviewCase.createMany({ data: Array.from({ length: referralReviewRules.pageSize }, () => ({
+      id: randomUUID(), grantId: randomUUID(), referralId: randomUUID(), accountId: unrelated.accountId,
+      reason: "duplicate-award", status: "open", openedAt: later, updatedAt: later,
+    })) }));
+    assert.ok(!(await reviews.list(admin, "open")).some(item => item.id === row.id));
+    for (const search of [row.reference, holder.phone, row.id.slice(0, 8)]) {
+      assert.deepEqual((await reviews.list(admin, "open", undefined, search)).map(item => item.id), [row.id]);
+      assert.deepEqual(await reviews.list(admin, "reversed", undefined, search), []);
+      assert.equal(await reviews.list(holder, "open", undefined, search), null);
+    }
+    assert.deepEqual(await reviews.list(admin, "open", `${row.updatedAt}_${row.id}`, row.reference), []);
+  });
 });

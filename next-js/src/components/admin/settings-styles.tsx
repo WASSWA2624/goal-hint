@@ -5,11 +5,8 @@ import { controlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
-import { DeskColumn, DeskGrid, DeskHead, Panel, Segmented, StickyActions } from "./desk-styles";
+import { DeskColumn, DeskGrid, DeskHead, Panel, Segmented, StickyActions, visuallyHidden } from "./desk-styles";
 
-export const MobileSettingsHead = styled(DeskHead)`
-  ${media.desktop} { display: none; }
-`;
 export const DesktopOnly = styled.div`
   display: none;
   ${media.desktop} { display: block; min-inline-size: 0; }
@@ -19,6 +16,7 @@ export const MobileOnly = styled.div`
 `;
 /** Desktop owns its scroll area, leaving both navigation and the save footer in view. */
 export const SettingsForm = styled.form`
+  > h1 { ${visuallyHidden} }
   ${media.desktop} {
     display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--gh-spacing-3);
     block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--gh-size-7));
@@ -27,7 +25,7 @@ export const SettingsForm = styled.form`
 `;
 export const SettingsHeading = styled(DeskHead)`
   display: none;
-  ${media.desktop} { display: flex; flex-wrap: nowrap; gap: var(--gh-spacing-6); min-block-size: var(--gh-size-11); > h1 { flex: none; } }
+  ${media.desktop} { display: grid; grid-template-columns: minmax(0, 1fr); min-block-size: var(--form-control-height); }
 `;
 export const SettingsGrid = styled(DeskGrid)`
   ${media.desktop} { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 0; min-block-size: 0; overflow: hidden; }
@@ -35,43 +33,29 @@ export const SettingsGrid = styled(DeskGrid)`
 export const SettingsColumn = styled(DeskColumn)`
   ${media.desktop} { display: flex; flex-direction: column; gap: var(--gh-spacing-3); min-block-size: 0; overflow: auto; padding-block-end: var(--gh-spacing-4); scrollbar-gutter: stable; > * { flex: none; } }
 `;
-export const DesktopSettingsTabs = styled(Segmented)`
-  min-inline-size: 0; overflow-x: auto; border-radius: ${({ theme }) => theme.radius.control};
-  > button { flex: none; white-space: nowrap; border-radius: ${({ theme }) => theme.radius.control}; }
+const SettingsTabs = styled(Segmented)`
+  justify-content: flex-start;
+  min-inline-size: 0;
+  overflow-x: auto;
+  > button { flex: none; min-block-size: var(--form-control-height); white-space: nowrap; }
   > [aria-current="page"] > svg { color: ${({ theme }) => theme.color.link}; }
 `;
+export const DesktopSettingsTabs = styled(SettingsTabs)``;
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
   outline-offset: var(--gh-size-0_5);
 `;
 
-/** Section switches: four equal icon-over-label cells on phones, one row sized to its labels from desktop up. */
-export const SectionTabs = styled(Segmented)`
-  > [aria-current="page"] > svg { color: ${({ theme }) => theme.color.link}; }
-  ${media.belowDesktop} {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    overflow: hidden;
-    > button {
-      flex-direction: column;
-      gap: var(--gh-spacing-1);
-      min-inline-size: 0;
-      min-block-size: var(--gh-size-14_5);
-      padding: var(--gh-spacing-1_5) var(--gh-spacing-1);
-      font-size: ${({ theme }) => theme.typography.scale.secondary};
-      line-height: var(--gh-leading-control);
-      white-space: normal;
-      overflow-wrap: anywhere;
-    }
-    > button > svg { font-size: var(--gh-font-title); }
-  }
+export const SectionTabs = styled(SettingsTabs)`
   ${media.desktop} { display: none; }
 `;
 
 /** The one content panel under the tabs; fields size to the panel, not the window, so 1024px with the sidebar still fits. */
 export const SectionPanel = styled(Panel)`
   container-type: inline-size;
+  inline-size: 100%;
+  text-align: start;
   &:focus { outline: none; }
   &:focus-visible { ${focusRing} }
   label:not([data-mode-tile]), legend {
@@ -79,6 +63,7 @@ export const SectionPanel = styled(Panel)`
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
   input, select, textarea { font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  input:not([type="checkbox"], [type="radio"]), select, textarea { inline-size: 100%; min-inline-size: 0; }
   dd { font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
 `;
 

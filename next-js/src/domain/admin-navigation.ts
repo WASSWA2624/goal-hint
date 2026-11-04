@@ -11,7 +11,6 @@ export const adminSections = [
   { key: "plans", href: "/admin/plans", label: "Plans", layout: "record" },
   { key: "audit", href: "/admin/audit", label: "Audit", layout: "record" },
   { key: "settings", href: "/admin/settings", label: "Settings" },
-  { key: "forecasts", href: "/admin/forecasts", label: "Forecast sources" },
   { key: "analytics", href: "/analytics", label: "Analytics" },
 ] as const;
 

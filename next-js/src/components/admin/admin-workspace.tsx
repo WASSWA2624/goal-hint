@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
 import { joinedDesktopSections } from "@/components/ui/layout";
 import {
-  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, GridIcon, LayersIcon, ListIcon, ResetIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
+  CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, GridIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { adminSections, isRecordAdminSection, type AdminSection } from "@/domain/admin-navigation";
@@ -13,11 +13,12 @@ import { media } from "@/styles/theme";
 import { WorkspaceNavigationLink } from "@/components/ui/workspace-navigation";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { watchPendingPaymentTitle } from "./pending-title";
-import { adminSidebarSize, clampSidebarWidth, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
+import { adminSidebarSize, getServerSidebarSnapshot, getSidebarSnapshot, saveSidebarPreference, setSidebarPreference, subscribeSidebarPreference } from "./admin-sidebar-state";
+import { useHorizontalResize, workspaceResizeRail } from "./workspace-resize";
 
 const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
   overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, referrals: GiftIcon,
-  plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, forecasts: ChartIcon, analytics: ChartIcon,
+  plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, analytics: ChartIcon,
 };
 
 function SectionLinks({ current, onNavigate, collapsed = false }: { current: AdminSection; onNavigate?: () => void; collapsed?: boolean }) {
@@ -70,16 +71,10 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
   const sidebarSnapshot = useSyncExternalStore(subscribeSidebarPreference, getSidebarSnapshot, getServerSidebarSnapshot);
   const [collapsedValue, widthValue, maximumValue] = sidebarSnapshot.split(":").map(Number);
   const collapsed = collapsedValue === 1, sidebarWidth = widthValue!, sidebarMaximum = maximumValue!;
-  const [resizing, setResizing] = useState(false);
-  const drag = useRef<{ pointerId: number; x: number; width: number } | null>(null);
-  const sidebarStyle = { "--admin-sidebar-width": `${collapsed ? adminSidebarSize.collapsed : sidebarWidth}px`, "--admin-sidebar-handle-width": `${collapsed ? 0 : adminSidebarSize.handle}px` } as CSSProperties;
-  function finishResize(event: PointerEvent<HTMLDivElement>) {
-    if (drag.current?.pointerId !== event.pointerId) return;
-    drag.current = null;
-    setResizing(false);
-    saveSidebarPreference();
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  }
+  const { handle, resizing } = useHorizontalResize({ width: sidebarWidth, min: adminSidebarSize.min, max: sidebarMaximum,
+    defaultWidth: adminSidebarSize.default, onChange: (width, persist) => setSidebarPreference({ width }, persist),
+    onDragEnd: saveSidebarPreference });
+  const sidebarStyle = { "--admin-sidebar-width": `${collapsed ? adminSidebarSize.collapsed : sidebarWidth}px`, "--admin-sidebar-handle-width": `${adminSidebarSize.handle}px` } as CSSProperties;
   useEffect(() => {
     if (pendingCount !== undefined) seedPendingPayments(pendingCount);
   }, [pendingCount]);
@@ -91,39 +86,15 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
       <Sidebar id="admin-sidebar" data-admin-sidebar data-collapsed={collapsed} aria-label="Admin sections" $fixed={recordWorkspace}>
         <SidebarHead>
           <Caption data-sidebar-caption>Admin</Caption>
-          <SidebarControls>
-            {!collapsed && <SidebarButton type="button" aria-label="Reset sidebar width" title="Reset sidebar width" onClick={() => setSidebarPreference({ width: adminSidebarSize.default })}><ResetIcon /></SidebarButton>}
-            <SidebarButton type="button" data-sidebar-toggle aria-controls="admin-sidebar" aria-expanded={!collapsed}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              onClick={() => setSidebarPreference({ collapsed: !collapsed })}>{collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}</SidebarButton>
-          </SidebarControls>
+          <SidebarButton type="button" data-sidebar-toggle aria-controls="admin-sidebar" aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setSidebarPreference({ collapsed: !collapsed })}>{collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}</SidebarButton>
         </SidebarHead>
         <SectionLinks current={current} collapsed={collapsed} />
       </Sidebar>
-      <SidebarResize hidden={collapsed} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
-        aria-label="Resize admin sidebar" aria-orientation="vertical" aria-controls="admin-sidebar"
-        aria-valuemin={adminSidebarSize.min} aria-valuemax={sidebarMaximum} aria-valuenow={sidebarWidth} aria-valuetext={`${sidebarWidth} pixels wide`}
-        title="Drag to resize; use arrow keys or double-click to reset"
-        onDoubleClick={() => setSidebarPreference({ width: adminSidebarSize.default })}
-        onPointerDown={event => {
-          if (event.button !== 0) return;
-          event.preventDefault(); event.currentTarget.focus({ preventScroll: true });
-          event.currentTarget.setPointerCapture(event.pointerId);
-          drag.current = { pointerId: event.pointerId, x: event.clientX, width: sidebarWidth };
-          setResizing(true);
-        }}
-        onPointerMove={event => {
-          const active = drag.current;
-          if (active?.pointerId === event.pointerId) setSidebarPreference({ width: clampSidebarWidth(active.width + event.clientX - active.x, sidebarMaximum) }, false);
-        }}
-        onPointerUp={finishResize} onPointerCancel={finishResize} onLostPointerCapture={finishResize}
-        onKeyDown={event => {
-          const increment = event.shiftKey ? 32 : 8;
-          const width = event.key === "ArrowLeft" ? sidebarWidth - increment : event.key === "ArrowRight" ? sidebarWidth + increment
-            : event.key === "Home" ? adminSidebarSize.min : event.key === "End" ? sidebarMaximum : event.key === "Enter" ? adminSidebarSize.default : null;
-          if (width === null) return;
-          event.preventDefault(); setSidebarPreference({ width: clampSidebarWidth(width, sidebarMaximum) });
-        }} />
+      <SidebarResize aria-hidden={collapsed || undefined} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
+        aria-label="Resize admin sidebar" aria-controls="admin-sidebar" aria-valuetext={`${sidebarWidth} pixels wide`}
+        title="Drag to resize or use arrow keys. Double-click to restore the default width." {...handle} />
       <SectionMenu current={current} />
       <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"}>
         <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace} $joined={current === "analytics"}>{children}</Column>
@@ -169,6 +140,7 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
     overflow-y: auto;
     padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
     background: ${({ theme }) => theme.color.surface};
+    border-inline-start: var(--gh-size-1) solid ${({ theme }) => theme.header.background};
     min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
   }
   ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
@@ -185,9 +157,7 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
 `;
 const SidebarHead = styled.div`
   display: flex; align-items: center; justify-content: space-between; min-block-size: var(--gh-size-8); gap: var(--gh-spacing-1); margin-block-end: var(--gh-spacing-1_5);
-`;
-const SidebarControls = styled.div`
-  display: flex; align-items: center; gap: var(--gh-spacing-0_5); margin-inline-start: auto;
+  [data-collapsed="true"] & { justify-content: center; }
 `;
 const SidebarButton = styled.button`
   display: grid; place-items: center; inline-size: var(--form-control-height); block-size: var(--form-control-height); padding: 0;
@@ -201,11 +171,8 @@ const SidebarResize = styled.div<{ $fixed: boolean }>`
   ${media.desktop} {
     display: block; position: sticky; inset-block-start: var(--app-header-height, var(--gh-size-12)); align-self: start;
     block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); min-inline-size: 0;
-    background: ${({ theme }) => theme.color.surface}; border-inline: 0;
-    cursor: col-resize; touch-action: none;
-    &:hover, &:focus-visible { background: ${({ theme }) => theme.color.brandSoft};  }
-    &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
-    &[hidden] { display: none; }
+    ${workspaceResizeRail}
+    &[aria-hidden="true"] { pointer-events: none; cursor: default; }
   }
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; }`}
 `;

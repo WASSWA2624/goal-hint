@@ -135,7 +135,7 @@ export function createReferralReviews({ database, config, now = Date.now, adminP
   const save = async (tx: Tx, row: CaseRow) => ({ status: "saved" as const, case: await detail(tx, row) });
 
   return Object.freeze({
-    async list(admin: MemberIdentity, status?: string, before?: string): Promise<readonly ReferralReviewCase[] | null> {
+    async list(admin: MemberIdentity, status?: string, before?: string, search = ""): Promise<readonly ReferralReviewCase[] | null> {
       const selectedStatus = status === "all" ? undefined : status;
       if (selectedStatus && !referralReviewStatuses.includes(selectedStatus as ReferralReviewStatus)) return [];
       const cursor = referralReviewCursor(before);
@@ -143,8 +143,30 @@ export function createReferralReviews({ database, config, now = Date.now, adminP
       return accessCodeTransaction(database, async tx => {
         await lockAccounts(tx, [admin.accountId]);
         if (!await authorized(tx, admin, new Date(now()), true)) return null;
-        const rows = await tx.referralReviewCase.findMany({ where: { ...(selectedStatus ? { status: selectedStatus } : {}), ...(cursor ? {
-          OR: [{ updatedAt: { lt: cursor.at } }, { updatedAt: cursor.at, id: { lt: cursor.id } }] } : {}) },
+        const conditions: Prisma.ReferralReviewCaseWhereInput[] = [];
+        if (cursor) conditions.push({ OR: [{ updatedAt: { lt: cursor.at } }, { updatedAt: cursor.at, id: { lt: cursor.id } }] });
+        if (search) {
+          const phone = normalizePhone(search);
+          const account = phone ? await tx.memberAccount.findUnique({ where: { phone }, select: { id: true } }) : null;
+          const reference = search.toUpperCase().replace(/^C-/u, "");
+          const grantMatches: Prisma.AccessCodeWhereInput[] = [];
+          if (account) grantMatches.push({ accountId: account.id });
+          if (/^[A-Z0-9]{1,4}$/u.test(reference)) grantMatches.push({ reference: { startsWith: reference } });
+          const grants = grantMatches.length ? await tx.accessCode.findMany({
+            where: { source: "referral", OR: grantMatches }, select: { id: true },
+          }) : [];
+          const matches: Prisma.ReferralReviewCaseWhereInput[] = [];
+          if (/^[a-f0-9-]+$/iu.test(search)) {
+            const prefix = { startsWith: search.toLowerCase() };
+            matches.push({ id: prefix }, { grantId: prefix });
+          }
+          if (grants.length) matches.push({ grantId: { in: grants.map(grant => grant.id) } });
+          if (account) matches.push({ accountId: account.id }, { reversal: { is: { holderAccountId: account.id } } });
+          if (!matches.length) return [];
+          conditions.push({ OR: matches });
+        }
+        const rows = await tx.referralReviewCase.findMany({ where: {
+          ...(selectedStatus ? { status: selectedStatus } : {}), AND: conditions },
           orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: referralReviewRules.pageSize });
         return Promise.all(rows.map(row => detail(tx, row)));
       });

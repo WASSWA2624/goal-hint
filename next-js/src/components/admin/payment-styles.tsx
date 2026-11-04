@@ -6,7 +6,7 @@ import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
 import { DeskHeadEnd, Drawer, EmptyPanel, Segmented, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopBalancedReview } from "./payment-balanced-styles";
-import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordListTools, RecordWorkspace } from "./record-workspace";
+import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordList, RecordListFooter, RecordListScroll, RecordWorkspace } from "./record-workspace";
 
 /**
  * Compact desktop queue beside a persistent review. Phones keep the queue-to-review flow.
@@ -16,14 +16,11 @@ const panelLook = css`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 `;
-const focusRing = css`
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: var(--gh-size-0_5); }
-`;
 const desktopOnly = css`${media.belowDesktop} { display: none; }`;
 const phoneOnly = css`${media.desktop} { display: none; }`;
 
 export const PaymentLayout = styled(RecordWorkspace)`
-  ${media.desktop} { grid-template-columns: clamp(var(--gh-size-70), 24vw, var(--gh-size-82_5)) minmax(0, 1fr); }
+  --record-list-default: clamp(var(--gh-size-70), 24vw, var(--gh-size-82_5));
 `;
 export const PaymentUnavailable = styled.section`
   display: grid;
@@ -36,9 +33,10 @@ export const PaymentUnavailable = styled.section`
 
 /** On phones the review replaces the title row; the h1 stays for assistive technology. */
 export const PaymentHead = styled(RecordHead)<{ $reviewing: boolean }>`
+  background: transparent;
   ${media.belowDesktop} {
     gap: var(--gh-spacing-3);
-    > nav { order: 3; flex: 1 1 100%; }
+    > nav { flex: 1 1 100%; }
     ${({ $reviewing }) => $reviewing && css`
       min-block-size: 0;
       h1 { ${visuallyHidden} }
@@ -64,23 +62,6 @@ export const PaymentFeedback = styled(RecordFeedback)`
   scroll-margin-block-start: calc(var(--app-header-content-height, var(--gh-size-16)) + var(--gh-spacing-4));
 `;
 
-export const RefreshSquare = styled.button<{ $changed: boolean }>`
-  display: grid;
-  place-items: center;
-  inline-size: var(--form-control-height);
-  block-size: var(--form-control-height);
-  padding: 0;
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.control};
-  color: ${({ theme }) => theme.color.link};
-  background: ${({ theme }) => theme.color.surface};
-  cursor: pointer;
-  > svg { font-size: var(--gh-font-title); }
-  ${({ theme, $changed }) => $changed && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; `}
-  &:disabled { cursor: not-allowed; opacity: var(--gh-opacity-55); }
-  ${focusRing}
-`;
-
 /** Desktop: a panel with the toolbar above the ticket tray. Phones: the parts sit straight on the page. */
 export const QueuePanel = styled(RecordList)<{ $reviewing: boolean }>`
   ${media.belowDesktop} {
@@ -89,13 +70,14 @@ export const QueuePanel = styled(RecordList)<{ $reviewing: boolean }>`
   }
   > h2 { ${visuallyHidden} }
 `;
-export const QueueBar = styled(RecordListTools)`
-  ${media.belowDesktop} { display: flex; flex-wrap: wrap; gap: var(--gh-spacing-2); padding: 0; border: 0; > :first-child { flex-basis: 100%; max-inline-size: none; } }
+export const QueueBar = styled.div`
+  flex: 1 0 100%;
+  min-inline-size: 0;
 `;
 export const QueueFilters = styled.div`
   display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
 `;
-export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
+export const QueueSummary = styled(RecordListFooter)`
   gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
   > span + span::before { content: "·"; margin-inline-end: var(--gh-spacing-1_5); }
   > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
@@ -105,75 +87,15 @@ export const QueueSummary = styled(RecordListFooter).attrs({ as: "p" })`
 export const TicketTray = styled(RecordListScroll)<{ $opened: boolean }>`
   ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] {  background: ${({ theme }) => theme.color.surface}; } }`}
 `;
-export const Ticket = styled(RecordItem)`
-  ${media.belowDesktop} {
-    align-content: start; align-items: baseline; gap: var(--gh-spacing-0_5) var(--gh-spacing-3); min-block-size: var(--gh-size-16);
-    ${panelLook}
-    &[aria-current="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
-  }
-  ${media.desktop} {
-    grid-template-columns: var(--gh-size-7_5) minmax(0, 1fr) auto;
-    align-items: start;
-    gap: var(--gh-spacing-1) var(--gh-spacing-2_5);
-    padding: var(--gh-spacing-3);
-  }
-`;
-export const TicketProvider = styled.span`
-  display: none;
-  ${media.desktop} {
-    display: grid; place-items: start center; grid-column: 1; grid-row: 1; align-self: start; min-block-size: 0;
-    [data-payment-logo="mtn"] { inline-size: var(--gh-size-7_5); block-size: var(--gh-size-4_5); }
-    [data-payment-logo="airtel"] { inline-size: var(--gh-size-5_75); block-size: var(--gh-size-5_75); }
-  }
-`;
-export const TicketPhone = styled.span`
-  ${media.desktop} { grid-column: 2; grid-row: 2; white-space: nowrap; font-size: var(--gh-font-secondary); font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-`;
-export const TicketPlan = styled.span`
-  ${media.belowDesktop} { > [data-ticket-duration] { display: none; } }
-  ${media.desktop} { grid-column: 3; grid-row: 2; justify-self: end; max-inline-size: var(--gh-size-28); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; font-size: var(--gh-font-caption); > [data-ticket-duration] { display: none; } }
-`;
-export const TicketRef = styled.span`
-  display: flex;
-  align-items: center;
-  gap: var(--gh-spacing-2);
-  min-inline-size: 0;
-  font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  overflow-wrap: anywhere;
-  ${media.desktop} { display: block; grid-column: 2; grid-row: 1; align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--gh-font-secondary); > [data-ticket-inline-network] { display: none; } }
-`;
-export const TicketAmount = styled.span`
-  font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  font-variant-numeric: tabular-nums;
-  text-align: end;
-  white-space: nowrap;
-  ${media.desktop} { grid-column: 3; grid-row: 1; font-size: var(--gh-font-secondary); }
-`;
-export const TicketMeta = styled.span`
-  min-inline-size: 0;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-  ${media.desktop} { display: contents; > [data-ticket-separator] { display: none; } }
-`;
-export const TicketTime = styled(TicketMeta)`
-  text-align: end;
-  white-space: nowrap;
-  ${media.belowDesktop} { > [data-ticket-timezone] { display: none; } }
-  ${media.desktop} { display: block; grid-column: 2 / -1; grid-row: 3; justify-self: start; text-align: start; font-size: var(--gh-font-caption); }
-`;
 export const TicketWarn = styled.span`
-  grid-column: 1 / -1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--gh-spacing-1_5);
-  margin-block-start: var(--gh-spacing-1);
   color: ${({ theme }) => theme.color.outcome.pending.text};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > svg { flex: none; font-size: var(--gh-font-emphasis); }
-  ${media.desktop} { grid-column: 2 / -1; grid-row: 4; font-size: var(--gh-font-caption); margin: 0; }
+
 `;
 export const QueueEmpty = styled(EmptyPanel)`
   ${media.belowDesktop} { ${panelLook} }

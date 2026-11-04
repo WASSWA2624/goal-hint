@@ -40,9 +40,8 @@ source, policy/evidence versions and exact internal quote snapshot. Reads do not
 rerank it after price updates. Replays reuse original stages and perform no new
 paid attempt or clock renewal.
 
-Private `/admin/forecasts` comparisons remain descriptive diagnostics on matched
-settled observations. Their existence is neither a qualified prospective cohort
-nor demonstrated improvement. Provider and AI measurements remain separate.
+Provider and AI measurements remain separate.
+
 
 ## Verification and activation limits
 

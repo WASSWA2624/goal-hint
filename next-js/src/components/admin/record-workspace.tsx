@@ -2,23 +2,68 @@
 
 import { sectionSurface } from "@/components/ui/filled-surfaces";
 import { controlRow } from "@/components/ui/control-layout";
+import { useEffect, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type ReactNode } from "react";
 
 import styled from "styled-components";
 import { media } from "@/styles/theme";
+import { uiGeometry } from "@/styles/theme-tokens";
 import { EmptyPanel, StickyActions, visuallyHidden } from "./desk-styles";
+import { useHorizontalResize, workspaceResizeRail } from "./workspace-resize";
+
+const { min, detailMin } = uiGeometry.recordList;
+const handleWidth = uiGeometry.sidebar.handle;
+
+function RecordLayout({ children, style, ...props }: ComponentPropsWithoutRef<"div">) {
+  const root = useRef<HTMLDivElement>(null);
+  const [listWidth, setListWidth] = useState<number>();
+  const [bounds, setBounds] = useState({ width: min, max: min });
+  const { handle, resizing } = useHorizontalResize({ ...bounds, min, onChange: width => setListWidth(width) });
+  useEffect(() => {
+    const workspace = root.current;
+    const list = workspace?.querySelector<HTMLElement>(":scope > [data-record-list-pane]");
+    if (!workspace || !list) return;
+    const measure = () => {
+      const width = Math.round(list.getBoundingClientRect().width);
+      const max = Math.max(min, Math.floor(workspace.getBoundingClientRect().width) - detailMin - handleWidth);
+      setBounds(previous => previous.width === width && previous.max === max ? previous : { width, max });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(workspace);
+    observer.observe(list);
+    measure();
+    return () => observer.disconnect();
+  }, []);
+  return <div {...props} ref={root} data-record-resizing={resizing || undefined}
+    style={{ ...style, "--record-list-width": listWidth === undefined ? undefined : `${listWidth}px` } as CSSProperties}>
+    {children}
+    <RecordListResize data-record-list-resize role="separator" tabIndex={0} aria-label="Resize record list" {...handle} />
+  </div>;
+}
+
+const RecordListResize = styled.div`
+  display: none;
+  ${media.desktop} {
+    display: block; grid-column: 2; grid-row: 3; min-inline-size: 0;
+    ${workspaceResizeRail}
+    border-inline-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.controlBorder};
+  }
+`;
 
 /** Shared geometry for record screens. Forms, selection and permissions stay with each screen. */
-export const RecordWorkspace = styled.div.attrs<{ "data-record-workspace"?: string }>({ "data-record-workspace": "" })`
+export const RecordWorkspace = styled(RecordLayout).attrs<{ "data-record-workspace"?: string }>({ "data-record-workspace": "" })`
+  --record-list-default: clamp(var(--gh-size-88), 30vw, var(--gh-size-104));
   display: grid;
   gap: var(--gh-spacing-3);
   min-inline-size: 0;
   > * { min-inline-size: 0; }
   ${media.desktop} {
-    grid-template-columns: clamp(var(--gh-size-88), 30vw, var(--gh-size-104)) minmax(0, 1fr);
+    grid-template-columns: clamp(${min}px, var(--record-list-width, var(--record-list-default)), calc(100% - ${detailMin + handleWidth}px))
+      ${handleWidth}px minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     min-block-size: 0;
     gap: 0;
     overflow: hidden;
+    &[data-record-resizing="true"], &[data-record-resizing="true"] * { cursor: col-resize !important; user-select: none; }
   }
 `;
 export const RecordHead = styled.header`
@@ -41,13 +86,12 @@ export const RecordFeedback = styled.div`
   > p + p { margin-block-start: var(--gh-spacing-2); }
   ${media.desktop} { grid-column: 1 / -1; grid-row: 2; padding: var(--gh-spacing-2) var(--gh-spacing-4); border-block-end: 0; }
 `;
-export const RecordList = styled.section`
+export const RecordList = styled.section.attrs<{ "data-record-list-pane"?: string }>({ "data-record-list-pane": "" })`
   position: relative; display: grid; min-inline-size: 0; gap: var(--gh-spacing-3);
   > h2[data-record-list-title] { ${visuallyHidden} }
   ${media.desktop} {
     grid-column: 1; grid-row: 3; grid-template-rows: auto minmax(0, 1fr) auto;
     min-block-size: 0; gap: 0; overflow: hidden;
-    border-inline-end: 0;
     background: ${({ theme }) => theme.color.surface};
   }
 `;
@@ -83,7 +127,7 @@ export const RecordListFooter = styled.div`
 `;
 export const RecordDetails = styled.section`
   display: grid; min-inline-size: 0;
-  ${media.desktop} { grid-column: 2; grid-row: 3; min-block-size: 0; overflow: hidden; }
+  ${media.desktop} { grid-column: 3; grid-row: 3; min-block-size: 0; overflow: hidden; }
 `;
 export const RecordCard = styled.article`
   display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
@@ -147,9 +191,49 @@ export const RecordItem = styled.button`
   &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   ${media.hover} { &:hover:not(:disabled):not([aria-current="true"]) { background: ${({ theme }) => theme.color.rowHover}; } }
   ${media.desktop} { min-block-size: var(--gh-size-13_5); padding: var(--gh-spacing-2) var(--gh-spacing-2_5); border: 0; border-block-end: 0; border-radius: ${({ theme }) => theme.radius.none}; font-size: var(--gh-font-body); }
+  &:has(> [data-record-row-content]) { display: block; }
 `;
 export const RecordItemTitle = styled.span`min-inline-size: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere;`;
 export const RecordItemMeta = styled.span`min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); overflow-wrap: anywhere;`;
+export const RecordDisclosureSummary = styled(RecordItem).attrs({ as: "summary" })`
+  && { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; list-style: none; }
+  &::-webkit-details-marker { display: none; }
+  > svg { font-size: var(--gh-font-section); color: ${({ theme }) => theme.color.mutedText}; }
+  details[open] > & > svg { transform: rotate(180deg); }
+  ${media.desktop} {
+    && { grid-template-columns: minmax(0, 1fr); }
+    > svg { display: none; }
+  }
+`;
+
+const RowContent = styled.span`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--gh-spacing-2);
+  min-inline-size: 0;
+  &:has(> [data-record-row-icon]) { grid-template-columns: var(--gh-size-7_5) minmax(0, 1fr); }
+  > [data-record-row-icon] {
+    display: grid; place-items: center; min-block-size: var(--gh-size-6);
+    color: ${({ theme }) => theme.color.link};
+    > svg { font-size: var(--gh-font-section); }
+    > * { max-inline-size: 100%; }
+    [data-payment-logo] { max-inline-size: var(--gh-size-7_5); }
+  }
+  > [data-record-row-text] { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; }
+  [data-record-row-primary] { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--gh-spacing-2); min-inline-size: 0; }
+`;
+
+/** Shared inner layout for buttons, links and native disclosure summaries. */
+export function RecordRowContent({ icon, primary, secondary }: { icon?: ReactNode; primary: ReactNode; secondary?: ReactNode }) {
+  return <RowContent data-record-row-content>
+    {icon && <span data-record-row-icon>{icon}</span>}
+    <span data-record-row-text>
+      <span data-record-row-primary>{primary}</span>
+      {secondary && <RecordItemMeta>{secondary}</RecordItemMeta>}
+    </span>
+  </RowContent>;
+}
 export const RecordEmpty = styled(EmptyPanel)`${media.desktop} { padding: var(--gh-spacing-7) var(--gh-spacing-5); }`;
 export const RecordDesktop = styled.div`${media.belowDesktop} { display: none; }`;
 export const RecordMobile = styled.div`${media.desktop} { display: none; }`;

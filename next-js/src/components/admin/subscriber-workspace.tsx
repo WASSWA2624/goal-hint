@@ -8,13 +8,14 @@ import { ChevronLeftIcon, UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import type { OwnerSubscriber } from "@/domain/owner-members";
 import { emptySubscriberDirectoryQuery, parseSubscriberDirectoryQuery, type SubscriberDirectoryAccount, type SubscriberDirectoryQuery } from "@/domain/subscriber-directory";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import { ActionButton, Hint } from "./admin-form";
+import { Hint } from "./admin-form";
 import { ActionNotices, ManualCodeForm, useCodeAction } from "./code-tools";
 import { RecordCard, RecordEmpty, RecordFeedback, RecordScroll } from "./record-workspace";
 import { SubscriberDirectory } from "./subscriber-directory";
+import { SubscriberDirectoryFilters } from "./subscriber-directory-parts";
 import { SubscriberDetail } from "./subscriber-detail";
 import { subscriberPresentation } from "./subscriber-presentation-styles";
-import { SubscriberReviewDialog } from "./subscriber-review-dialog";
+import { RecordFormDialog, RecordPrimaryAction } from "./record-toolbar";
 import { AccountColumn, BackLink, Workspace, WorkspaceTitle } from "./subscriber-styles";
 
 type Props = {
@@ -108,9 +109,11 @@ export function SubscribersWorkspace({ accounts, detail: selected, plans, initia
   const selectedNetwork = listed.find(account => account.id === detail?.id)?.network ?? null;
 
   return <LiveWorkspace $selected={!!detail && selectedExplicitly} data-subscriber-workspace data-analytics-ignore>
-    <WorkspaceTitle><h1>Subscribers</h1><ActionButton type="button" disabled={action.busy} aria-haspopup="dialog" onClick={() => { action.clearFeedback(); setAdding(true); }}><UserPlusIcon />Grant access / add subscriber</ActionButton></WorkspaceTitle>
+    <WorkspaceTitle><h1>Subscribers</h1><SubscriberDirectoryFilters query={query} plans={plans} onQueryChange={changeQuery}
+      trailingAction={<RecordPrimaryAction label="Grant access / add subscriber" icon={<UserPlusIcon />} disabled={action.busy} aria-haspopup="dialog"
+        onClick={() => { action.clearFeedback(); setAdding(true); }} />} /></WorkspaceTitle>
     {(action.notice || action.message) && <RecordFeedback><ActionNotices action={action} /></RecordFeedback>}
-    <SubscriberDirectory accounts={listed.filter(account => account.id !== deletedId)} selectedId={detail?.id ?? null} query={query} plans={plans} loading={loading} error={error}
+    <SubscriberDirectory accounts={listed.filter(account => account.id !== deletedId)} selectedId={detail?.id ?? null} query={query} loading={loading} error={error}
       adminPhone={adminPhone} onQueryChange={changeQuery} accountHref={accountHref} onRetry={() => { void loadDirectory(); }} />
     <AccountColumn $quiet={!detail || !selectedExplicitly}>
       {detail ? <SubscriberDetail key={detail.id} account={detail} plans={plans} action={action} presentation="compact-dialog" network={selectedNetwork}
@@ -118,11 +121,11 @@ export function SubscribersWorkspace({ accounts, detail: selected, plans, initia
         onDeleted={() => { setDeletedId(detail.id); router.replace(accountHref(), { scroll: false }); }} />
         : <RecordCard><RecordScroll><RecordEmpty><UserIcon /><h2>Select an account</h2><p>Choose a matching subscriber to manage their access and details.</p></RecordEmpty></RecordScroll></RecordCard>}
     </AccountColumn>
-    <SubscriberReviewDialog open={adding} title="Grant access / add subscriber" busy={action.busy} onClose={() => { if (!action.busy) setAdding(false); }}
-      footer={<><ActionButton type="button" disabled={action.busy} onClick={() => setAdding(false)}>Cancel</ActionButton><ActionButton type="submit" form={formId} $variant="primary" disabled={action.busy}>Grant access</ActionButton></>}>
+    {adding && <RecordFormDialog id={`${id}-grant-dialog`} title="Grant access / add subscriber" submitLabel="Grant access" formId={formId}
+      busy={action.busy} onClose={() => { if (!action.busy) setAdding(false); }}>
       <Hint as="p">A new number creates an account with access.</Hint>
       {action.message && <ActionNotices action={action} />}<ManualCodeForm formId={formId} plans={plans} action={action} externalActions compact onSaved={() => setAdding(false)} />
-    </SubscriberReviewDialog>
+    </RecordFormDialog>}
   </LiveWorkspace>;
 }
 

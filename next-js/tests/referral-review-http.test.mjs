@@ -50,12 +50,12 @@ test("administrator review transport re-verifies current identity and validates 
   const context = request => ({ request, owner: { username: "member-admin:test" }, services: { database: {}, config: { production: false } } });
   const denied = createReferralReviewHandlers({ verify: async () => null, create: () => { assert.fail("No review service for stale admin"); } });
   assert.equal((await denied.GET(context(request("/api/admin/referral-reviews")))).status, 403);
-  let writes = 0;
+  let writes = 0, searchArgs;
   const handlers = createReferralReviewHandlers({ verify: async () => ({ ...member, administrator: true }), create: () => ({
-    async list() { return [safeCase]; }, async detail() { return null; }, async grants() { return []; },
+    async list(...args) { searchArgs = args; return [safeCase]; }, async detail() { return null; }, async grants() { return []; },
     async mutate(_admin, input) { writes++; assert.equal(input.grantId, grantId); return { status: "saved", case: safeCase }; },
   }) });
-  for (const query of ["status=unknown", "id=invalid", "before=bad", "accountId=foreign", "status=all&status=open"])
+  for (const query of ["status=unknown", "id=invalid", "before=bad", "accountId=foreign", "status=all&status=open", "search=256700000001"])
     assert.equal((await handlers.GET(context(request(`/api/admin/referral-reviews?${query}`)))).status, 400);
   const valid = { action: "create", requestId: id, grantId, reason: "duplicate-award", summary: "Corroborated technical duplicate", evidenceRef: "support:TEST-7", evidenceConfirmed: true };
   for (const body of [{ ...valid, evidenceConfirmed: false }, { ...valid, accountId: "foreign" }, { ...valid, reason: "same-ip" }])
@@ -64,4 +64,10 @@ test("administrator review transport re-verifies current identity and validates 
   const saved = await handlers.POST(context(request("/api/admin/referral-reviews", valid)));
   assert.equal(saved.status, 200); assert.match(saved.headers.get("cache-control"), /no-store/u); assert.equal(writes, 1);
   assert.equal((await handlers.POST(context(request("/api/admin/referral-reviews", { action: "grants", search: "256700000001" })))).status, 200);
+  const search = { action: "search-cases", status: "reversed", before: `${safeCase.updatedAt}_${id}`, search: " +256700000001 " };
+  const result = await handlers.POST(context(request("/api/admin/referral-reviews", search)));
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { cases: [safeCase] });
+  assert.deepEqual(searchArgs.slice(1), [search.status, search.before, search.search.trim()]);
+  assert.equal((await handlers.POST(context(request("/api/admin/referral-reviews", { ...search, before: "invalid" })))).status, 400);
 });

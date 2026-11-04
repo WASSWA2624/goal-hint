@@ -12,7 +12,7 @@ Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/own
 | Decision | Effect |
 | --- | --- |
 | **OpenAI and API-Football (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. Research stays disabled. |
-| **Provider baseline with optional AI shadow** | API-Football supplies validated provider groups; every AI family remains private, including provider outages. Both original forecasts are sealed for private diagnostics (`/admin/forecasts`). A source-order/reference configuration cannot bypass the independent publication guard; AI-first startup remains unavailable pending a verified frozen promotion binding. |
+| **Provider baseline with optional AI shadow** | API-Football supplies validated provider groups; every AI family remains private, including provider outages. Both original forecasts are sealed for private evaluation. A source-order/reference configuration cannot bypass the independent publication guard; AI-first startup remains unavailable pending a verified frozen promotion binding. |
 | **Publish now, provisional** | Forecasts are published before shadow qualification (047) and release gates (048/049). Every API-Football forecast carries the existing *Provisional estimate* label, and no accuracy claim is made. |
 | **All available competitions** | `GOAL_HINT_COMPETITION_IDS` lists every league with a current season on the plan (`npm run live:competitions`). |
 | **Local only** | Production scope may run in development mode **only** against a loopback database. Remote or hosted targets still need `NODE_ENV=production` and verified TLS. |
