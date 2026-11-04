@@ -16,7 +16,7 @@ import { resolveLocale } from "@/i18n/locales";
 import { FallbackStyleProvider } from "@/styles/provider";
 import {
   DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HomeLink,
-  ShellFrame, SkipLink, TabBar,
+  PublicShellFrame, SkipLink, TabBar,
   WorkspaceHeaderContent,
 } from "@/components/navigation/shell-styles";
 
@@ -48,7 +48,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const ContentHeader = workspace ? WorkspaceHeaderContent : HeaderContent;
 
   return (
-    <FallbackStyleProvider><ShellFrame>
+    <FallbackStyleProvider><PublicShellFrame $workspace={workspace}>
       {app && <MemberNavigationRecovery />}
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header $app={app}>
@@ -90,6 +90,6 @@ export async function PublicShell({ children, locale, current, today: reportingD
       <TabBar aria-label={messages.text("navigation.tabs")}>
         <SessionNavigation mobile destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
       </TabBar>
-    </ShellFrame></FallbackStyleProvider>
+    </PublicShellFrame></FallbackStyleProvider>
   );
 }

@@ -15,14 +15,17 @@ import { DeskHead, Panel, PanelBody, PanelHead, StatGrid } from "@/components/ad
 
 const Frame = styled.div`
   min-inline-size: 0;
-  ${media.desktop} { display: grid; grid-template-columns: var(--gh-size-58) minmax(0, 1fr); align-items: stretch; }
+  ${media.desktop} {
+    --account-workspace-height: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--app-workspace-bottom-band, 0px));
+    display: grid; grid-template-columns: var(--gh-size-58) minmax(0, 1fr); align-items: stretch;
+  }
 `;
 const Sidebar = styled.aside`
   display: none;
   ${media.desktop} {
     display: flex; flex-direction: column; gap: var(--gh-spacing-1_5); align-self: start; position: sticky;
-    inset-block-start: var(--app-header-height, var(--gh-size-12)); min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)));
-    max-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); overflow-y: auto;
+    inset-block-start: var(--app-header-height, var(--gh-size-12)); min-block-size: var(--account-workspace-height);
+    max-block-size: var(--account-workspace-height); overflow-y: auto;
     padding: var(--gh-spacing-2) var(--gh-spacing-2_5); background: ${({ theme }) => theme.color.surface}; border-inline-end: 0;
   }
   > h2 { display: flex; align-items: center; min-block-size: var(--gh-size-8); margin: 0; padding-inline: var(--gh-spacing-2_5);
@@ -57,7 +60,7 @@ const Content = styled.article`
   min-inline-size: 0; padding: ${({ theme }) => `${theme.space.md} 0 ${theme.space.lg}`}; display: grid; align-content: start; gap: ${({ theme }) => theme.space.md}; overflow-wrap: anywhere;
   font-family: ${({ theme }) => theme.typography.family}; font-size: ${({ theme }) => theme.typography.scale.body};
   line-height: ${({ theme }) => theme.typography.lineHeight.body};
-  ${media.desktop} { padding: ${({ theme }) => `${theme.space.lg} 0 ${theme.space.xl}`}; min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12))); }
+  ${media.desktop} { padding: ${({ theme }) => `${theme.space.lg} 0 ${theme.space.xl}`}; min-block-size: var(--account-workspace-height); }
   h1 { margin: 0; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   p { margin: 0; }
 `;
