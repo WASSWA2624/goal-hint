@@ -49,19 +49,43 @@ async function verifyUnifiedMatchFilters(page) {
     await reset.click(); assert(!(await apply.isDisabled()), 'Reset restores a valid draft');
     const original = await from.inputValue();
     assert(page.url() === before, 'Draft editing does not navigate');
-    await dialog.getByRole('button', { name: 'Choose date', exact: true }).first().click();
-    const picker = page.getByRole('dialog', { name: 'Choose date', exact: true });
+    await dialog.getByRole('button', { name: 'Choose date and time', exact: true }).first().click();
+    const picker = page.getByRole('dialog', { name: 'Choose date and time', exact: true });
     await picker.waitFor();
-    assert(await picker.getByRole('listbox').count() === 5, 'Date-time offers day/month/year/hour/minute columns');
+    const pickerLayout = await picker.evaluate(node => {
+      const columns = [...node.querySelectorAll('[data-scroll-picker-column]')];
+      const controlHeight = parseFloat(getComputedStyle(node).getPropertyValue('--form-control-height'));
+      const top = columns[0].getBoundingClientRect().top;
+      return {
+        labels: columns.map(column => column.dataset.scrollPickerColumn).join(','),
+        aligned: columns.every(column => Math.abs(column.getBoundingClientRect().top - top) < 1),
+        fits: node.scrollWidth <= node.clientWidth,
+        height: node.getBoundingClientRect().height,
+        chrome: [...node.querySelectorAll(':scope > header, :scope > footer')].map(region => region.getBoundingClientRect().height - controlHeight),
+      };
+    });
+    assert(pickerLayout.labels === 'Day,Month,Year,Hour,Minute' && pickerLayout.aligned && pickerLayout.fits, 'Five date-time columns fit on one row in order');
+    assert(pickerLayout.height < 400 && pickerLayout.chrome.every(padding => padding <= 8), 'Picker uses compact header and footer spacing');
+    assert(await picker.locator('header h2 svg').count() === 1, 'Picker title has an icon');
     const day = picker.getByRole('listbox', { name: 'Day', exact: true });
-    const selectedDay = Number(await day.getByRole('option', { selected: true }).innerText());
-    await picker.getByRole('button', { name: 'Next Day', exact: true }).click();
-    assert(Number(await day.getByRole('option', { selected: true }).innerText()) === selectedDay + 1, 'Down arrow moves one day');
+    const month = picker.getByRole('listbox', { name: 'Month', exact: true });
+    const year = picker.getByRole('listbox', { name: 'Year', exact: true });
+    const selected = wheel => wheel.getByRole('option', { selected: true }).innerText();
+    const initialYear = await selected(year);
+    await month.press('Home');
+    await month.press('ArrowUp');
+    assert(await selected(month) === 'DEC', 'Keyboard wraps January backward to December');
+    await picker.getByRole('button', { name: 'Next Month', exact: true }).click();
+    assert(await selected(month) === 'JAN' && await selected(year) === initialYear, 'Month arrow wraps without changing year');
+    await day.press('Home');
     await picker.getByRole('button', { name: 'Previous Day', exact: true }).click();
-    await day.focus(); await page.keyboard.press('ArrowDown');
-    assert(Number(await day.getByRole('option', { selected: true }).innerText()) === selectedDay + 1, 'Keyboard steps the column');
-    await day.hover(); await page.mouse.wheel(0, 80);
-    await page.waitForFunction(value => Number(document.querySelector('[data-scroll-picker-column="Day"] [aria-selected="true"]')?.textContent) > value, selectedDay + 1);
+    assert(await selected(day) === '31', 'Day arrow wraps backward to the last day');
+    await day.hover();
+    const rowHeight = (await day.boundingBox()).height / 3;
+    await page.mouse.wheel(0, rowHeight);
+    await page.waitForFunction(() => document.querySelector('[data-scroll-picker-column="Day"] [aria-selected="true"]')?.textContent === '01');
+    await page.mouse.wheel(0, -rowHeight);
+    await page.waitForFunction(() => document.querySelector('[data-scroll-picker-column="Day"] [aria-selected="true"]')?.textContent === '31');
     const yearRows = await picker.locator('[data-scroll-picker-column="Year"] [role="option"]').count();
     assert(yearRows <= 12, 'Year wheel virtualizes its long range');
     assert((await picker.getByRole('listbox', { name: 'Month', exact: true }).getByRole('option', { selected: true }).innerText()).length === 3, 'Month labels use three letters');
@@ -104,6 +128,13 @@ async function verifyUnifiedMatchFilters(page) {
   const gallery = page.locator('[data-date-gallery]');
   await gallery.getByRole('button', { name: 'Choose date', exact: true }).first().click();
   let picker = page.getByRole('dialog', { name: 'Choose date', exact: true });
+  assert(await picker.getByRole('listbox').count() === 3, 'Date-only mode has three columns');
+  assert(await picker.getByRole('button', { name: 'Previous Year', exact: true }).isDisabled(), 'Year stops at its lower bound');
+  const restrictedDay = picker.getByRole('listbox', { name: 'Day', exact: true });
+  await picker.getByRole('button', { name: 'Next Day', exact: true }).click();
+  assert(await restrictedDay.getByRole('option', { selected: true }).innerText() === '30', 'Restricted day wheel wraps within the allowed dates');
+  assert(await restrictedDay.getByRole('option').count() === 2, 'Repeated options are announced only once');
+  await picker.getByRole('button', { name: 'Previous Day', exact: true }).click();
   await picker.getByRole('button', { name: 'Next Month', exact: true }).click();
   assert(await picker.getByRole('listbox', { name: 'Day', exact: true }).getByRole('option', { selected: true }).innerText() === '28', 'January 31 clamps to February 28');
   await picker.getByRole('button', { name: 'Use selection', exact: true }).click();
@@ -111,6 +142,10 @@ async function verifyUnifiedMatchFilters(page) {
   await gallery.getByRole('button', { name: 'Choose time', exact: true }).click();
   picker = page.getByRole('dialog', { name: 'Choose time', exact: true });
   assert(await picker.getByRole('listbox').count() === 2, 'Time-only mode has hour and minute columns');
+  const minute = picker.getByRole('listbox', { name: 'Minute', exact: true });
+  await minute.press('End');
+  assert(await picker.getByRole('button', { name: 'Next Minute', exact: true }).isDisabled(), 'Minute stops at 59');
+  await minute.press('Home');
   await picker.getByRole('button', { name: 'Next Minute', exact: true }).click();
   await picker.getByRole('button', { name: 'Use selection', exact: true }).click();
   await gallery.getByRole('combobox', { name: /^Example choice/u }).click();
@@ -118,6 +153,7 @@ async function verifyUnifiedMatchFilters(page) {
   assert((await gallery.getByRole('combobox', { name: /^Example choice/u }).getAttribute('aria-label')).includes('Second choice'), 'Shared single-select commits on one click');
   await gallery.getByRole('button', { name: 'Submit dates' }).click();
   assert(JSON.parse(await gallery.locator('[data-saved-date]').innerText()).date === '2026-02-28', 'Formatted dates submit canonical civil values');
+  assert(JSON.parse(await gallery.locator('[data-saved-date]').innerText()).time === '14:01', 'Time-only picker submits the stepped minute');
   assert(JSON.parse(await gallery.locator('[data-saved-date]').innerText()).receivedAt === '2026-01-04T14:05', 'Uncontrolled payment-style date-time defaults submit canonical values');
   assert(errors.length === 0, errors.join('; '));
   return { passed: results.length, results, gallery: 'passed', pageErrors: errors };

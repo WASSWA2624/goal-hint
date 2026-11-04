@@ -9,7 +9,7 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { TextInput, type TextInputProps } from "./controls";
 import { FloatingField } from "./floating-field";
 import { CalendarIcon, ClockIcon } from "./icons";
-import { DateTimePicker } from "./date-time-picker";
+import { DateTimePicker, pickerTitleKey } from "./date-time-picker";
 
 export type DateTimeFieldProps = Omit<TextInputProps, "type" | "onChange" | "leading" | "trailing"> & {
   mode?: DateEntryMode; locale?: string; onValueChange?: (value: string) => void;
@@ -88,7 +88,7 @@ export function DateTimeField({ mode = "date", locale, label, title, value, defa
   return <Field className={className} data-date-time-field={mode}>
     {name && <input type="hidden" name={name} value={canonical} disabled={disabled} />}
     <FloatingField label={label} hint={hint} error={show ? <span role="alert">{error || message}</span> : undefined}
-      trailing={<PickerButton type="button" aria-label={m.text(mode === "time" ? "dateField.chooseTime" : "dateField.chooseDate")}
+      trailing={<PickerButton type="button" aria-label={m.text(pickerTitleKey[mode])}
         aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={disabled || readOnly} onClick={() => setPickerOpen(true)}>
         {mode === "time" ? <ClockIcon /> : <CalendarIcon />}</PickerButton>}>
       <input {...props} ref={element => { input.current = element; assignRef(ref, element); }} id={id} type="text" value={text}

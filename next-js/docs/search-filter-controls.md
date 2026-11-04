@@ -78,11 +78,12 @@ The native GET fallback retains successful fields before hydration.
 
 `DateTimeField` is the shared date, date-time and time-only editor for public,
 analytics and admin forms. Dates display as `04-JAN-2026`; optional time uses
-24-hour `HH:mm`. Form values remain ISO civil dates/local minutes. Its picker
-uses scrollable Day, Month and Year columns, plus Hour/Minute where applicable.
-Touch, mouse-wheel and keyboard selection share bounded, virtualized columns;
-up/down arrows move each column by one step, with disabled boundary actions.
-Changing months clamps invalid days; caller min/max bounds narrow each column.
+24-hour `HH:mm`. Form values remain ISO civil dates/local minutes. The compact
+picker places Day, Month, Year, Hour and Minute in one row on every viewport.
+Date-only and time-only fields show their relevant columns. Day and Month cycle
+through their allowed values with touch, wheel, keyboard and arrow input. The
+remaining columns stop at their bounds. Changing months clamps invalid days,
+and caller min/max bounds narrow each column.
 Cancel discards the picker draft; Use selection commits it. Inline validation
 rejects impossible dates, clock values, bounds and nonexistent DST minutes.
 Native inputs remain available without JavaScript.
@@ -100,8 +101,8 @@ omits Showing/matches from its count. See [Matches presentation](match-feed-page
 Build `python scripts/verify-app-loading-rendering.py --serve`, open its local
 `/en/matches` URL and run `playwright-cli run-code --filename
 scripts/verify-unified-match-filters.js`. The shared check covers light/dark
-at 320, 390, 1024 and 1440px: formatted entry, inline validation, bounded
-date/time wheels and arrows, draft reset/cancel, live country search, single-click
+at 320, 390, 1024 and 1440px: formatted entry, inline validation, compact wheel
+layout, day/month wrapping, draft reset/cancel, live country search, single-click
 selection, Markets disclosure, applied criteria, fifty-record pages and mobile
 typography. The fixture also verifies date-only/time-only and uncontrolled form
 values. Run `scripts/verify-match-filter-touch.js` through the same CLI for touch

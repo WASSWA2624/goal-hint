@@ -6,19 +6,30 @@ import { shortMonths, formatDateEntry, type DateEntryMode } from "@/domain/date-
 import { constrainDatePicker, datePickerParts, datePickerValue, datePickerPartBounds, type DatePickerPart } from "@/domain/date-picker";
 import { dateTimeIntervalRange } from "@/domain/date-time";
 import { createMessages } from "@/i18n/messages";
-import { CriteriaDialog } from "./criteria-dialog";
+import { CriteriaDialog, CriteriaDialogButton } from "./criteria-dialog";
+import { CalendarIcon, CheckIcon, ClockIcon } from "./icons";
 import { ScrollPickerColumn } from "./scroll-picker-column";
 
-const Columns = styled.div`
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gh-spacing-1);
-  [data-scroll-picker-column]:nth-last-child(-n+2) { min-inline-size: 0; }
-  &[data-mode="time"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+export const pickerTitleKey = {
+  date: "dateField.chooseDate",
+  datetime: "dateField.chooseDateTime",
+  time: "dateField.chooseTime",
+} as const;
+
+const PickerDialog = styled(CriteriaDialog)<{ $mode: DateEntryMode }>`
+  && { inline-size: min(${({ $mode }) => $mode === "datetime" ? "var(--gh-size-96)" : $mode === "date" ? "var(--gh-size-72)" : "var(--gh-size-64)"}, calc(100vw - var(--gh-size-6))); }
+  > header, > footer { padding-block: var(--gh-spacing-1); }
+  > div { padding-block: var(--gh-spacing-2); }
 `;
-const TimeColumns = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-1); margin-block-start: var(--gh-spacing-2);
+const Title = styled.span`
+  display: inline-flex; align-items: center; gap: var(--gh-spacing-1_5);
+  > svg { flex: none; inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); color: ${({ theme }) => theme.color.link}; }
+`;
+const Columns = styled.div`
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--gh-spacing-1);
 `;
 const Preview = styled.p`
-  margin: 0 0 var(--gh-spacing-3); text-align: center; font-size: var(--gh-font-body); font-variant-numeric: tabular-nums;
+  margin: 0 0 var(--gh-spacing-2); text-align: center; font-size: var(--gh-font-body); font-weight: var(--gh-weight-medium); font-variant-numeric: tabular-nums;
 `;
 const ErrorMessage = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: var(--gh-font-secondary); margin-block-end: 0;`;
 const twoDigits = (value: number) => String(value).padStart(2, "0");
@@ -42,18 +53,27 @@ export function DateTimePicker({ id, value, mode, min, max, zone, locale, onCanc
   const column = (part: DatePickerPart) => {
     const [minimum, maximum] = datePickerPartBounds(parts, part, mode, min, max);
     return <ScrollPickerColumn key={part} label={m.text(`dateField.${part}Label`)} value={parts[part]} minimum={minimum} maximum={maximum}
+      wrap={part === "day" || part === "month"}
       previousLabel={m.text("dateField.previous", { part: m.text(`dateField.${part}Label`) })} nextLabel={m.text("dateField.next", { part: m.text(`dateField.${part}Label`) })}
       format={part === "month" ? value => shortMonths[value - 1]! : part === "year" ? value => String(value).padStart(4, "0") : twoDigits}
       onChange={value => setParts(current => constrainDatePicker({ ...current, [part]: value }, mode, min, max))} />;
   };
-  return <CriteriaDialog id={id} open title={m.text(mode === "time" ? "dateField.chooseTime" : "dateField.chooseDate")}
-    onCancel={onCancel} closeLabel={m.text("feed.filters.close")} cancelLabel={m.text("feed.filters.cancel")}
-    applyLabel={m.text("dateField.useSelection")} applyDisabled={!!error} onApply={() => { if (!error) onApply(selected); }}>
+  return <PickerDialog $mode={mode} id={id} open
+    title={<Title>{mode === "time" ? <ClockIcon /> : <CalendarIcon />}{m.text(pickerTitleKey[mode])}</Title>}
+    onCancel={onCancel} closeLabel={m.text("feed.filters.close")}
+    footer={<>
+      <CriteriaDialogButton type="button" variant="quiet" onClick={onCancel}>{m.text("feed.filters.cancel")}</CriteriaDialogButton>
+      <CriteriaDialogButton type="button" disabled={!!error} onClick={() => onApply(selected)}>
+        <CheckIcon />{m.text("dateField.useSelection")}
+      </CriteriaDialogButton>
+    </>}>
     <div data-date-time-picker={mode}>
       <Preview aria-live="polite">{formatDateEntry(selected, mode)}</Preview>
-      <Columns data-mode={mode}>{mode === "time" ? <>{column("hour")}{column("minute")}</> : <>{column("day")}{column("month")}{column("year")}</>}</Columns>
-      {mode === "datetime" && <TimeColumns>{column("hour")}{column("minute")}</TimeColumns>}
+      <Columns>
+        {mode !== "time" && <>{column("day")}{column("month")}{column("year")}</>}
+        {mode !== "date" && <>{column("hour")}{column("minute")}</>}
+      </Columns>
       {error && <ErrorMessage role="alert">{error}</ErrorMessage>}
     </div>
-  </CriteriaDialog>;
+  </PickerDialog>;
 }

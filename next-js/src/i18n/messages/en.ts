@@ -700,6 +700,7 @@ export const en = {
   "dateField.nonexistent": "This time does not exist in your device time zone.",
   "dateField.check": "Check this value.",
   "dateField.chooseDate": "Choose date",
+  "dateField.chooseDateTime": "Choose date and time",
   "dateField.chooseTime": "Choose time",
   "dateField.useSelection": "Use selection",
   "dateField.dayLabel": "Day",
