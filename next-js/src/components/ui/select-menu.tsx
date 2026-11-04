@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { CheckIcon, ChevronDownIcon } from "./icons";
 import { controlBodyHeight } from "./control-layout";
 import { focusRing } from "./filter-chrome";
@@ -38,7 +38,7 @@ const Trigger = styled.button`
   > [data-select-label] { ${floatingLabel} ${raisedFloatingLabel} max-inline-size: calc(100% - var(--gh-size-10)); }
   &:focus-within > [data-select-label] { color: ${({ theme }) => theme.color.link}; }
 `;
-const Options = styled.ul`
+const Options = styled.ul<{ $inline?: boolean }>`
   ${anchoredPanel}
   z-index: var(--gh-layer-tooltip);
   display: grid; gap: var(--gh-spacing-0_5); inline-size: max(100%, var(--gh-size-44));
@@ -57,11 +57,17 @@ const Options = styled.ul`
       font-weight: ${({ theme }) => theme.typography.weight.bold};
       > svg { visibility: visible; }
     }
-    &[data-active="true"] { background: ${({ theme }) => theme.color.brandSoft}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+    &[data-active="true"] { background: ${({ theme }) => theme.color.brandSoft}; }
     &[data-active="true"]:not([aria-selected="true"]) { background: ${({ theme }) => theme.color.rowHover}; }
     &[aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
   }
+  ${({ $inline }) => $inline && css`
+    position: static; inline-size: 100%; max-inline-size: 100%; max-block-size: none;
+    overflow: visible; padding: 0; box-shadow: none;
+  `}
 `;
+
+export { Root as SelectMenuRoot, Trigger as SelectMenuTrigger, Options as SelectMenuOptions };
 
 /** Single-choice menu with themed options, keyboard navigation and selection committed only on activation. */
 export function SelectMenu({ value, options, label, onValueChange, onOptionSelect, className, disabled = false, ...attributes }: SelectMenuProps) {
@@ -140,8 +146,8 @@ export function SelectMenu({ value, options, label, onValueChange, onOptionSelec
     {open && <Options ref={panel} id={id} role="listbox" aria-label={label} data-select-options>
       {options.map((option, index) => <li key={option.value} id={`${id}-${index}`} role="option" aria-selected={option.value === value}
         aria-disabled={option.disabled || undefined} data-active={!option.disabled && active?.value === option.value || undefined}
-        onMouseDown={(event) => event.preventDefault()}
-        onPointerMove={() => { if (!option.disabled) setActiveValue(option.value); }}
+        onPointerDown={(event) => event.preventDefault()}
+        onPointerMove={(event) => { if (event.pointerType === "mouse" && !option.disabled) setActiveValue(option.value); }}
         onClick={() => { if (!option.disabled) { choose(option); trigger.current?.focus({ preventScroll: true }); } }}>
         <span>{option.label}</span><CheckIcon />
       </li>)}

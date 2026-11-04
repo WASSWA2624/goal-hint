@@ -1,87 +1,124 @@
 /* eslint-disable @typescript-eslint/no-unused-vars -- Playwright CLI evaluates this function through run-code --filename. */
-/** Run against a local feed or app-loading production rendering fixture. */
+/** Run against scripts/verify-app-loading-rendering.py --serve (synthetic 55-match cohort). */
 async function verifyUnifiedMatchFilters(page) {
   const origin = new URL(page.url()).origin;
   if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(origin).hostname)) throw new Error("Use a local acceptance fixture.");
-  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const assert = (value, message) => { if (!value) throw new Error(message); };
   const results = [], errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  for (const mode of ["light", "dark"]) for (const width of [320, 390, 768, 1024, 1440]) {
+  async function ready() {
+    await page.locator('[data-feed-filters] [data-criteria-dialog][data-enhanced="true"]').waitFor({ state: "attached" });
+    await page.locator('[data-feed-performance-state="ready"]').waitFor({ state: "attached" });
+    await page.evaluate(() => document.fonts.ready);
+  }
+  for (const mode of ["light", "dark"]) for (const width of [320, 390, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${origin}/en/matches?when=today&picks=all`);
     await page.evaluate(value => localStorage.setItem("goal-hint-theme", value), mode);
-    await page.reload();
-    const form = page.locator("[data-feed-filters]"), opener = form.locator("[data-search-filters]");
-    const dialog = form.locator("[data-criteria-dialog]");
-    await dialog.locator("[data-feed-status]").waitFor({ state: "attached" });
-    await page.waitForFunction(() => document.querySelector('[data-feed-filters] [data-criteria-dialog]')?.getAttribute('data-enhanced') === 'true');
-    assert(await dialog.count() === 1, "Exactly one dialog serves every viewport");
-    assert(await form.locator('input[type="date"]').count() === 2 && await form.locator('input[type="time"]').count() === 2, "Date/time fields are never duplicated");
-    assert(await form.locator('select:not(dialog select)').count() === 0, "All filter selectors are inside the dialog");
-    assert(!(await dialog.isVisible()), "Filters start closed");
-    const before = page.url();
-    await opener.click(); await dialog.waitFor({ state: "visible" });
-    assert(await page.getByRole("dialog", { name: "Advanced Filters", exact: true }).count() === 1, "Dialog has the shared branded heading");
-    assert(await dialog.locator('header img').count() === 1, "The dialog reuses the brand mark");
-    const reset = dialog.getByRole("button", { name: "Reset Filters", exact: true });
-    const apply = dialog.getByRole("button", { name: "Apply Filters", exact: true });
-    assert(await dialog.locator('footer button').count() === 2, "Only Reset Filters and Apply Filters are in the footer");
-    const resetBox = await reset.boundingBox(), applyBox = await apply.boundingBox();
-    assert(resetBox.x < applyBox.x && Math.abs(resetBox.y - applyBox.y) < 1, "Reset stays left and Apply stays right");
-    await dialog.locator('[data-feed-status]').selectOption("live");
-    assert(await dialog.locator('[data-feed-period]').isDisabled(), "Live locks the period");
-    assert(await dialog.locator('input[type="date"]').first().isDisabled(), "Live locks custom dates");
-    assert(page.url() === before, "Editing does not apply filters");
-    await page.keyboard.press("Escape"); await dialog.waitFor({ state: "hidden" });
-    assert(await opener.evaluate(node => node === document.activeElement), "Dismissal restores opener focus");
-    await opener.click();
-    assert(await dialog.locator('[data-feed-status]').inputValue() === "all", "Dismissal rolls back the draft");
-    const dates = dialog.locator('input[type="date"]');
-    await dates.first().fill("2099-01-01");
-    assert(await apply.isDisabled(), "Invalid date ranges cannot apply");
-    await reset.click();
-    assert(await dialog.isVisible() && page.url() === before, "Reset is a draft edit and keeps the dialog open");
-    assert(!(await apply.isDisabled()), "Reset restores a valid draft");
-    const geometry = await dialog.evaluate(node => {
-      const body = node.querySelector('[data-feed-dialog]').parentElement, footer = node.querySelector('footer');
-      const top = footer.getBoundingClientRect().top;
-      body.scrollTop = body.scrollHeight;
-      return { footerStable: Math.abs(footer.getBoundingClientRect().top - top) < 1,
-        overflow: node.scrollWidth > node.clientWidth + 1, background: getComputedStyle(node).backgroundColor,
-        fieldHeight: document.querySelector('[data-feed-search]').getBoundingClientRect().height,
-        actionHeight: footer.querySelector('button').getBoundingClientRect().height };
-    });
-    assert(geometry.footerStable && !geometry.overflow, "The body scrolls without moving the footer or overflowing");
-    assert(geometry.fieldHeight === geometry.actionHeight, "Search and footer buttons share the control height");
-    await page.screenshot({ path: `output/playwright/match-filters-${mode}-${width}.png` });
-    await page.keyboard.press("Escape");
-    const count = page.locator('[data-match-count]');
-    const visibleCount = await count.innerText();
-    assert(width >= 1024 ? /^Showing .* matches$/.test(visibleCount) : !/Showing|matches/.test(visibleCount), "Result count uses the viewport's concise wording");
-    const publication = page.locator('[data-prediction-publication]');
-    if (await publication.count()) {
-      const pattern = width < 1024 ? /^\d{2}-\d{2}-\d{4} \d{2}:\d{2} .+$/ : /^[A-Z]{3} \d{2}-[A-Za-z]{3}-\d{4} - \d{2}:\d{2} .+$/;
-      assert(pattern.test(await publication.innerText()), "Publication label follows the viewport's compact format");
+    await page.reload(); await ready();
+    const form = page.locator('[data-feed-filters]'), opener = form.locator('[data-search-filters]');
+    const dialog = page.getByRole('dialog', { name: 'Advanced Filters', exact: true });
+    assert(await page.locator('[data-fixture-id]').count() === 50, 'First page shows fifty available matches');
+    assert(/1–50 of 55/u.test(await page.locator('[data-match-count]').innerText()), 'Count reflects fifty of fifty-five');
+    if (width < 1024) {
+      const typography = await page.locator('[data-fixture-id]').first().evaluate(node => {
+        const name = node.querySelector('[data-team-name], [data-ledger-home] [data-ledger-name]');
+        const score = node.querySelector('[data-score-home]'), logo = node.querySelector('[data-ledger-teams] [data-team-logo]');
+        return { name: getComputedStyle(name).fontWeight, score: getComputedStyle(score).fontWeight,
+          font: parseFloat(getComputedStyle(name).fontSize), logo: logo.getBoundingClientRect().height };
+      });
+      assert(typography.name === '500' && typography.score === '500' && typography.font === typography.logo, `Mobile typography: ${JSON.stringify(typography)}`);
     }
-    const header = await page.locator('[data-results-header]').evaluate(node => {
-      const bounds = node.getBoundingClientRect(), title = node.querySelector('h2').getBoundingClientRect();
-      const time = node.querySelector('time')?.getClientRects()[0];
-      return { inset: title.left - bounds.left, inline: !time || Math.abs(time.top - title.top) <= 3 };
-    });
-    assert(header.inset >= 8 && header.inline, "The header has inner padding and starts the compact date beside its title");
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "The page fits the viewport");
-    await page.screenshot({ path: `output/playwright/match-header-${mode}-${width}.png` });
-    // Apply and search each update the URL only when explicitly submitted.
     await opener.click();
-    await dialog.locator('[data-feed-status]').selectOption("scheduled");
-    await dialog.locator('[data-feed-period]').selectOption("next-7-days");
+    const apply = dialog.getByRole('button', { name: 'Apply Filters', exact: true });
+    const reset = dialog.getByRole('button', { name: 'Reset Filters', exact: true });
+    assert(await dialog.locator('[data-date-time-input="datetime"]').count() === 2, 'Exactly two combined date-time editors');
+    assert(await dialog.locator('[data-feed-period],select[name="tz"]').count() === 0, 'Period and editable zone removed');
+    const from = dialog.getByRole('textbox', { name: 'From', exact: true }), to = dialog.getByRole('textbox', { name: 'To', exact: true });
+    assert(/^\d{2}-[A-Z]{3}-\d{4} \d{2}:\d{2}$/u.test(await from.inputValue()), 'Day-first abbreviated date and 24-hour time');
+    const before = page.url();
+    await from.fill('0');
+    assert(await dialog.getByRole('alert').count() === 0 && await from.inputValue() === '0', 'Leading zero stays editable without premature error');
+    await to.focus(); assert(await from.getAttribute('aria-invalid') === 'true', 'Incomplete value is explained inline on blur');
+    await from.fill('31-APR-2026 09:00'); assert(await from.getAttribute('aria-invalid') === 'true', 'Impossible calendar date rejected');
+    await from.fill('07-JAN-2026 09:00'); await to.fill('06-JAN-2026 17:00');
+    assert(await apply.isDisabled() && await to.getAttribute('aria-invalid') === 'true', 'Reversed interval fails under affected field');
+    await from.fill('04-JAN-2026 09:00');
+    await dialog.getByRole('textbox', { name: 'Min probability (%)', exact: true }).fill('101');
+    assert(await apply.isDisabled(), 'Probability bounds prevent application');
+    await reset.click(); assert(!(await apply.isDisabled()), 'Reset restores a valid draft');
+    const original = await from.inputValue();
+    assert(page.url() === before, 'Draft editing does not navigate');
+    await dialog.getByRole('button', { name: 'Choose date', exact: true }).first().click();
+    const picker = page.getByRole('dialog', { name: 'Choose date', exact: true });
+    await picker.waitFor();
+    assert(await picker.getByRole('listbox').count() === 5, 'Date-time offers day/month/year/hour/minute columns');
+    const day = picker.getByRole('listbox', { name: 'Day', exact: true });
+    const selectedDay = Number(await day.getByRole('option', { selected: true }).innerText());
+    await picker.getByRole('button', { name: 'Next Day', exact: true }).click();
+    assert(Number(await day.getByRole('option', { selected: true }).innerText()) === selectedDay + 1, 'Down arrow moves one day');
+    await picker.getByRole('button', { name: 'Previous Day', exact: true }).click();
+    await day.focus(); await page.keyboard.press('ArrowDown');
+    assert(Number(await day.getByRole('option', { selected: true }).innerText()) === selectedDay + 1, 'Keyboard steps the column');
+    await day.hover(); await page.mouse.wheel(0, 80);
+    await page.waitForFunction(value => Number(document.querySelector('[data-scroll-picker-column="Day"] [aria-selected="true"]')?.textContent) > value, selectedDay + 1);
+    const yearRows = await picker.locator('[data-scroll-picker-column="Year"] [role="option"]').count();
+    assert(yearRows <= 12, 'Year wheel virtualizes its long range');
+    assert((await picker.getByRole('listbox', { name: 'Month', exact: true }).getByRole('option', { selected: true }).innerText()).length === 3, 'Month labels use three letters');
+    await page.screenshot({ path: `output/playwright/date-time-picker-${mode}-${width}.png` });
+    await page.keyboard.press('Escape');
+    assert(await dialog.isVisible() && await from.inputValue() === original, 'Picker cancellation preserves field and outer dialog');
+    const countries = dialog.locator('[data-searchable-select]').filter({ has: page.getByRole('button', { name: /^Countries:/u }) });
+    await countries.locator('[data-select-trigger]').click();
+    const search = countries.getByRole('combobox'); await search.fill('E');
+    assert(await countries.getByRole('option', { name: 'Egypt', exact: true }).isVisible(), 'E immediately finds Egypt');
+    await search.fill('eG');
+    const egypt = countries.getByRole('option', { name: 'Egypt', exact: true });
+    await egypt.click(); assert(await egypt.getAttribute('aria-selected') === 'true', 'A single click selects Egypt');
+    await search.fill('France'); await search.fill('eg');
+    assert(await egypt.getAttribute('aria-selected') === 'true', 'Selection persists across live searches');
+    await search.press('Escape'); assert(await dialog.isVisible(), 'Search Escape closes only its own popup');
+    const markets = dialog.locator('[data-market-section]');
+    assert(!(await markets.getAttribute('open')), 'Markets starts collapsed');
+    assert(await markets.evaluate(node => node === node.parentElement.lastElementChild), 'Markets is the bottom section');
+    await markets.locator('summary').click(); await markets.getByRole('checkbox').first().uncheck();
+    assert(await markets.getByRole('checkbox', { checked: true }).count() === 3, 'Markets supports multiple checkbox selections');
+    await from.fill('04-JAN-2026 09:00'); await to.fill('06-JAN-2026 17:00');
+    const geometry = await dialog.evaluate(node => ({ overflow: node.scrollWidth > node.clientWidth + 1,
+      background: getComputedStyle(node).backgroundColor, height: node.getBoundingClientRect().height }));
+    assert(!geometry.overflow, 'Dialog fits the viewport');
+    await page.screenshot({ path: `output/playwright/match-filters-${mode}-${width}.png` });
     await apply.click();
-    await page.waitForURL(url => url.searchParams.get("status") === "scheduled" && url.searchParams.get("when") === "next-7-days");
-    await form.locator('input[name="q"]').fill("Arsenal");
-    await form.locator('[data-feed-search-submit]').click();
-    await page.waitForURL(url => url.searchParams.get("q") === "Arsenal" && url.searchParams.get("status") === "scheduled");
-    results.push({ mode, width, ...geometry, publication: await publication.count() > 0 });
+    await page.waitForURL(url => url.searchParams.get('start') === '2026-01-04T09:00' && url.searchParams.get('end') === '2026-01-06T17:00' && url.searchParams.get('country') === 'Egypt');
+    await ready(); await opener.click();
+    assert(await from.inputValue() === '04-JAN-2026 09:00' && await to.inputValue() === '06-JAN-2026 17:00', 'Reopening prefills applied dates');
+    assert((await countries.locator('[data-select-trigger]').innerText()).includes('Egypt'), 'Reopening prefills applied country');
+    await page.keyboard.press('Escape');
+    await page.goto(`${origin}/en/matches?when=today&picks=all&page=2`); await ready();
+    assert(await page.locator('[data-fixture-id]').count() === 5 && /51–55 of 55/u.test(await page.locator('[data-match-count]').innerText()), 'Second page shows the remaining five');
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Page has no horizontal overflow');
+    results.push({ mode, width, ...geometry });
   }
-  assert(errors.length === 0, errors.join("; "));
-  return { passed: results.length, results, pageErrors: errors };
+  // Date-only and standalone-time reuse, including successful form values and real leap-day clamping.
+  await page.goto(origin); await page.locator('[data-date-gallery] [data-date-time-input]').first().waitFor();
+  const gallery = page.locator('[data-date-gallery]');
+  await gallery.getByRole('button', { name: 'Choose date', exact: true }).first().click();
+  let picker = page.getByRole('dialog', { name: 'Choose date', exact: true });
+  await picker.getByRole('button', { name: 'Next Month', exact: true }).click();
+  assert(await picker.getByRole('listbox', { name: 'Day', exact: true }).getByRole('option', { selected: true }).innerText() === '28', 'January 31 clamps to February 28');
+  await picker.getByRole('button', { name: 'Use selection', exact: true }).click();
+  assert(await gallery.getByRole('textbox', { name: 'Report date', exact: true }).inputValue() === '28-FEB-2026', 'Date-only picker commits formatted date');
+  await gallery.getByRole('button', { name: 'Choose time', exact: true }).click();
+  picker = page.getByRole('dialog', { name: 'Choose time', exact: true });
+  assert(await picker.getByRole('listbox').count() === 2, 'Time-only mode has hour and minute columns');
+  await picker.getByRole('button', { name: 'Next Minute', exact: true }).click();
+  await picker.getByRole('button', { name: 'Use selection', exact: true }).click();
+  await gallery.getByRole('combobox', { name: /^Example choice/u }).click();
+  await gallery.getByRole('option', { name: 'Second choice', exact: true }).click();
+  assert((await gallery.getByRole('combobox', { name: /^Example choice/u }).getAttribute('aria-label')).includes('Second choice'), 'Shared single-select commits on one click');
+  await gallery.getByRole('button', { name: 'Submit dates' }).click();
+  assert(JSON.parse(await gallery.locator('[data-saved-date]').innerText()).date === '2026-02-28', 'Formatted dates submit canonical civil values');
+  assert(JSON.parse(await gallery.locator('[data-saved-date]').innerText()).receivedAt === '2026-01-04T14:05', 'Uncontrolled payment-style date-time defaults submit canonical values');
+  assert(errors.length === 0, errors.join('; '));
+  return { passed: results.length, results, gallery: 'passed', pageErrors: errors };
 }

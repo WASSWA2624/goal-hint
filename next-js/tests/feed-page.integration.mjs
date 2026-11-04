@@ -200,6 +200,29 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
       if (phase === 'complete') { run.completed = run.total; run.terminal = run.total; }
       captured[name] = scenario;
     }
+    await t.test('continuous local date-time bounds include intervening nights and the final minute', async () => {
+      const rowsFor = (date, minutes) => minutes.map((minute, index) => {
+        const suffix = Number(date.slice(-2)) * 100 + index;
+        const row = catalogFixture(10_000 + suffix, { homeId: 30_000 + suffix * 2, awayId: 30_001 + suffix * 2,
+          kickoff: new Date(`${date}T${minute}:00+03:00`).toISOString() });
+        row.teams.home.name = `RangeSpec Home ${suffix}`; row.teams.away.name = `RangeSpec Away ${suffix}`;
+        return row;
+      });
+      assert.equal((await importDate('2026-10-12', rowsFor('2026-10-12', ['08:59', ...Array.from({ length: 60 }, (_, index) => `12:${String(index).padStart(2, '0')}`)]))).status, 'complete');
+      const middle = rowsFor('2026-10-13', ['00:00', '05:00', '23:59']);
+      assert.equal((await importDate('2026-10-13', middle)).status, 'complete');
+      assert.equal((await importDate('2026-10-14', rowsFor('2026-10-14', ['17:00', '17:01']))).status, 'complete');
+      const query = parseFeedQuery({ start: '2026-10-12T09:00', end: '2026-10-14T17:00', tz: 'Africa/Kampala', q: 'RangeSpec', picks: 'all' }, { today });
+      const first = await loadMatchFeedPage(query, today, { now: () => PUBLICATION_NOW }, read, fullAccess);
+      const second = await loadMatchFeedPage({ ...query, page: 2 }, today, { now: () => PUBLICATION_NOW }, read, fullAccess);
+      assert.equal(first.error, null); assert.equal(second.error, null);
+      assert.equal(first.data.total, 64); assert.equal(first.data.records.length, 50); assert.equal(second.data.records.length, 14);
+      const selected = [...first.data.records, ...second.data.records];
+      for (const fixture of middle) assert.ok(selected.some(record => record.kickoffAt === Date.parse(fixture.fixture.date)));
+      assert.ok(selected.some(record => record.kickoffAt === Date.parse('2026-10-14T17:00:00+03:00')));
+      assert.ok(selected.every(record => record.kickoffAt >= Date.parse('2026-10-12T09:00:00+03:00') && record.kickoffAt < Date.parse('2026-10-14T17:01:00+03:00')));
+    });
+
     // Captured SQL projections and explicitly synthetic presentation variants remain test-only.
     await saveScenarios(t, captured);
   }, { migrationTimeoutMs: 180_000 });
@@ -223,6 +246,13 @@ test('pagination detects genuine cohort changes and supplies consistent multi-pa
     }
     const pages = [];
     for (let page = 1; page <= 4; page++) pages.push(await capture('pagination', page));
+    await t.test('fifty-item pages cover all available records without overlap or gaps', async () => {
+      const first = await service.query({ date: today, q: 'Pagination', pageSize: '50' });
+      const second = await service.query({ date: today, q: 'Pagination', pageSize: '50', page: '2' });
+      assert.equal(first.records.length, 50); assert.equal(first.total, 95); assert.equal(first.nextPage, 2);
+      assert.equal(second.records.length, 45); assert.equal(second.nextPage, null);
+      assert.equal(new Set([...first.records, ...second.records].map(record => record.fixtureId)).size, 95);
+    });
     assert.deepEqual(pages.map(page=>page.records.length), [30,30,30,5]);
     assert.equal(new Set(pages.map(page=>page.paginationVersion)).size,1);
     let loaded = initialLoadedFeed(pages[0]); for (const page of pages.slice(1)) loaded = appendFeedPage(loaded,page);

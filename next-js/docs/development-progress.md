@@ -5609,3 +5609,18 @@ The preview uses sample navigation/content without live records or account
 state. Scripts, results and captures are ignored under
 `output/playwright/desktop-shell-*`. The owned preview and browser were closed.
 See [plan 189](../dev-plan/189-distinct-desktop-shell-backgrounds.md).
+
+## Shared date/time and Matches filter inputs — 4 November 2026
+
+The shared formatted editor and bounded scroll picker now serve date-entry
+forms across public, admin and analytics screens. Picker columns include
+one-step arrows, touch/mouse scrolling and keyboard controls, with cancellable
+drafts and inline validation. Matches combines From/To date-times into one
+continuous device-zone interval, removes period/zone fields, uses immediate
+searchable league/country selects and moves Markets into a bottom disclosure.
+Applied filters prefill when reopening. Matches shows up to fifty records per
+page; mobile team names/scores are lighter and logos follow name font height.
+
+Targeted unit, genuine MySQL, type/lint/theme, production rendering and
+light/dark desktop/mobile browser checks passed. Details and fixture limits:
+[plan 270](../dev-plan/270-shared-date-time-and-match-filter-inputs.md).

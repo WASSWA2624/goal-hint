@@ -1,10 +1,12 @@
 "use client";
 
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import { TextInput, type TextInputProps } from "@/components/ui/controls";
+import type { TextInputProps } from "@/components/ui/controls";
 import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { ChevronRightIcon, ResetIcon } from "@/components/ui/icons";
@@ -21,7 +23,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
   type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
-import { guardSlipDateTime, guardSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
+import { guardSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { slipPageSize } from "@/domain/slip-pagination";
@@ -29,7 +31,7 @@ import { SlipCard } from "./slip-card";
 import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
-import { SlipInputWarning, SlipNumericInput } from "./slip-numeric-input";
+import { SlipNumericInput } from "./slip-numeric-input";
 import { SavedSlipConfigurations } from "./saved-slip-configurations";
 import { canonicalSlipConfigurationParameters, slipConfigurationCriteria, slipConfigurationHref, slipConfigurationIdSchema, type SlipConfiguration } from "@/domain/slip-configurations";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
@@ -137,9 +139,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   const resetCriteria = { ...defaultSlipCriteria(today), timeFrom: fullDayKickoffTime.from, timeTo: fullDayKickoffTime.to };
   const resetDraft = criteriaDraft(resetCriteria);
   const [draft, setDraft] = useState(() => criteriaDraft(criteria, initialInputs));
-  const [inputWarning, setInputWarning] = useState<{ field: SlipDateTimeField; message: string } | null>(null);
   const [feedbackKey, setFeedbackKey] = useState(0);
-  const warningAnchor = useRef<HTMLInputElement>(null);
   const [selectedMarkets, setSelectedMarkets] = useState(initialMarkets ?? criteria.markets);
   const [outcomes, setOutcomes] = useState(initialOutcomes ?? criteria.outcomes ?? {});
   const [reuse, setReuse] = useState(initialReuse ?? criteria.reuse);
@@ -165,7 +165,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     const day = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
     const next = slipConfigurationCriteria(configuration.parameters, day);
     setDraft(criteriaDraft(next)); setSelectedMarkets(next.markets); setOutcomes(next.outcomes ?? {}); setReuse(next.reuse);
-    setError(null); setInputWarning(null); setFeedbackKey(value => value + 1);
+    setError(null); setFeedbackKey(value => value + 1);
     snapshot.current = null; setActiveGroup(null); setSelectedConfiguration(configuration.id); setClearedResult(receivedResult);
     // Keep the management dialog open and replace the generation URL without a server build/read.
     window.history.replaceState(null, "", slipConfigurationHref(configuration, locale, day));
@@ -228,12 +228,12 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     return group === "markets" ? selectedMarkets.length !== publicPolicy.markets.length || manualMarkets > 0 || reuse : criteriaCounts[group] > 0;
   }
   function openDialog(group: CriteriaGroup) {
-    setInputWarning(null); setFeedbackKey((current) => current + 1);
+    setFeedbackKey((current) => current + 1);
     snapshot.current = { group, draft: { ...draft }, markets: selectedMarkets, outcomes, reuse };
     setActiveGroup(group);
   }
   function cancelDialog() {
-    setInputWarning(null); setFeedbackKey((current) => current + 1);
+    setFeedbackKey((current) => current + 1);
     const previous = snapshot.current;
     if (previous) {
       if (previous.group === "markets") { setSelectedMarkets(previous.markets); setOutcomes(previous.outcomes); setReuse(previous.reuse); }
@@ -256,7 +256,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       if (empty) throw new SlipCriteriaError(empty, empty.startsWith("time") ? "invalid-time-range" : "invalid-date-range");
       parseSlipCriteria(parameters, today);
       setError((current) => issueGroup(current) === group ? null : current);
-      setInputWarning(null); setFeedbackKey((current) => current + 1);
+      setFeedbackKey((current) => current + 1);
       snapshot.current = null; setActiveGroup(null);
     } catch (issue) {
       if (!(issue instanceof SlipCriteriaError)) throw issue;
@@ -264,7 +264,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     }
   }
   function reset() {
-    setInputWarning(null); setFeedbackKey((current) => current + 1);
+    setFeedbackKey((current) => current + 1);
     setDraft(resetDraft); setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse);
     setError(null); snapshot.current = null; setActiveGroup(null);
     setSelectedConfiguration(null);
@@ -272,7 +272,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
     if (window.location.search) startTransition(() => router.push(`${action}?${serializeSlipCriteria(resetCriteria)}`, { scroll: false }));
   }
   function resetDialog(group: CriteriaGroup) {
-    setInputWarning(null); setFeedbackKey((current) => current + 1);
+    setFeedbackKey((current) => current + 1);
     if (group === "markets") { setSelectedMarkets(resetCriteria.markets); setOutcomes(resetCriteria.outcomes ?? {}); setReuse(resetCriteria.reuse); }
     else setDraft((current) => ({ ...current, ...Object.fromEntries(groupFields[group].map((name) => [name, resetDraft[name]])) }));
     setError((current) => issueGroup(current) === group ? null : current);
@@ -288,7 +288,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       const next = serializeSlipCriteria(parseSlipCriteria(parameters, today));
       setClearedResult(null);
       if (slipConfigurationIdSchema.safeParse(configuration).success) next.set("configuration", configuration!);
-      next.set("build", "1"); setError(null); setInputWarning(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
+      next.set("build", "1"); setError(null); setFeedbackKey((current) => current + 1); trackEvent("slip_build");
       const href = `${action}?${next}`;
       startTransition(() => {
         if (`${window.location.pathname}${window.location.search}` === href) router.refresh();
@@ -311,10 +311,6 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       || isDateTimeField(name) && current.field.toString().startsWith(name.startsWith("date") ? "date" : "time")
       || isNumericRange(name) && current.field.toString().replace(/(?:Min|Max)$/u, "") === name.replace(/(?:Min|Max)$/u, "")) ? null : current);
   }
-  function warnDateTime(name: SlipDateTimeField, element: HTMLInputElement, message?: string) {
-    warningAnchor.current = element;
-    setInputWarning({ field: name, message: message ?? messages.text(name.startsWith("date") ? "slips.error.invalid-date-range" : "slips.error.invalid-time-range") });
-  }
   function field(name: typeof slipInputFields[number], label: TextInputProps["label"], options: Omit<TextInputProps, "label" | "name"> = {}) {
     const invalid = error?.field === name || (error?.field === "dateFrom" && name === "dateTo")
       || (error?.field === "timeFrom" && name === "timeTo")
@@ -322,45 +318,17 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       || (error?.field === "probMin" && name === "probMax") || (error?.field === "totalProbMin" && name === "totalProbMax") || (error?.field === "teamsMin" && name === "teamsMax");
     const shared = { name, id: `${prefix}-${name}`, label,
       placeholder: isNumericRange(name) ? messages.text("slips.any") : undefined,
-      "aria-invalid": invalid || undefined, "aria-describedby": invalid ? errorId : undefined, ...options };
+      "aria-invalid": invalid || undefined, "aria-describedby": invalid && !isDateTimeField(name) ? errorId : undefined, ...options };
     if (!isDateTimeField(name)) return <SlipNumericInput {...shared} field={name as SlipNumericField} locale={locale}
       feedbackKey={feedbackKey}
       value={draft[name] ?? ""} onValueChange={(value) => updateField(name, value)}
       onCommit={(value) => slipNumberRangeIssue(name, { ...draft, [name]: value }, resetDraft) ? messages.text("slips.guard.range") : undefined} />;
-    const date = name.startsWith("date"), warningId = `${prefix}-${name}-warning`;
-    const warning = inputWarning?.field === name ? inputWarning.message : null;
+    const date = name.startsWith("date");
     const bounds = date ? name === "dateFrom" ? { min: "0001-01-01", max: "9999-12-31" } : slipDateBounds("dateTo", draft)
-      : { min: name === "timeTo" ? draft.timeFrom || fullDayKickoffTime.from : fullDayKickoffTime.from,
-        max: fullDayKickoffTime.to };
-    return <><TextInput {...shared} {...bounds} required value={draft[name] ?? ""}
-      aria-invalid={invalid || Boolean(warning) || undefined}
-      aria-describedby={[invalid && errorId, warning && warningId].filter(Boolean).join(" ") || undefined}
-      onKeyDown={(event) => {
-        if (event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing || event.key.length !== 1) return;
-        if (!(date ? /[\d/.-]/u : /[\d:apm\s.]/iu).test(event.key)) {
-          event.preventDefault(); warnDateTime(name, event.currentTarget, messages.text(date ? "slips.guard.date" : "slips.guard.time"));
-        }
-      }}
-      onPaste={(event) => {
-        event.preventDefault();
-        const value = event.clipboardData.getData("text").trim(), checked = guardSlipDateTime(name, value, draft, true, name.endsWith("To"));
-        if (!checked.accepted) { warnDateTime(name, event.currentTarget); return; }
-        updateField(name, checked.value); setInputWarning(null);
-      }}
-      onChange={(event) => {
-        const element = event.currentTarget, value = element.value;
-        const checked = guardSlipDateTime(name, value, draft, false, false);
-        if (!checked.accepted) { warnDateTime(name, element); element.value = draft[name] ?? ""; return; }
-        updateField(name, checked.value); setInputWarning(null);
-      }}
-      onBlur={(event) => {
-        const element = event.currentTarget;
-        const checked = guardSlipDateTime(name, element.value, draft, true);
-        if (!checked.accepted || element.validity.badInput) warnDateTime(name, element);
-        else setInputWarning(null);
-      }} />
-      <SlipInputWarning id={warningId} message={warning} anchorRef={warningAnchor} />
-    </>;
+      : { min: name === "timeTo" ? draft.timeFrom || fullDayKickoffTime.from : fullDayKickoffTime.from, max: fullDayKickoffTime.to };
+    return <DateTimeField {...shared} locale={locale} mode={date ? "date" : "time"} {...bounds} required value={draft[name] ?? ""}
+      error={invalid && error ? messages.text(`slips.error.${error.code}`) : undefined}
+      onValueChange={value => updateField(name, value)} />;
   }
   function errorMessage(group: CriteriaGroup | null) {
     return error && errorGroup === group ? <CriteriaError id={errorId} ref={errorRef} tabIndex={-1} role="alert">{messages.text(`slips.error.${error.code}`)}</CriteriaError> : null;
@@ -426,7 +394,6 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
           onReset={() => resetDialog("kickoff")} resetLabel={messages.text("slips.reset")}
           onCancel={cancelDialog} onApply={() => applyDialog("kickoff")} applyLabel={messages.text("slips.dialog.apply")}
           cancelLabel={messages.text("slips.dialog.cancel")} closeLabel={messages.text("slips.dialog.close", { section: dialogTitle("kickoff") })}>
-        {errorMessage("kickoff")}
         <FieldGroup data-criteria-field="kickoff"><VisuallyHidden as="legend">{dialogTitle("kickoff")}</VisuallyHidden><Fields data-kickoff-fields>
           {field("dateFrom", messages.text("slips.dateFrom"), { type: "date", inputMode: undefined })}
           {field("dateTo", messages.text("slips.dateTo"), { type: "date", inputMode: undefined })}

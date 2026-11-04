@@ -13,6 +13,7 @@ export const teamStackStyles = css`
   min-inline-size: 0;
   padding: var(--gh-spacing-2);
   color: ${({ theme }) => theme.color.text};
+  font-family: ${({ theme }) => theme.typography.family};
   font-size: var(--gh-font-body);
   line-height: var(--gh-leading-label);
   overflow-wrap: anywhere;
@@ -27,7 +28,7 @@ export const teamStackStyles = css`
     gap: var(--gh-spacing-1_25);
     min-inline-size: 0;
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: var(--gh-font-caption);
+    font-size: var(--gh-font-secondary);
     line-height: var(--gh-leading-label);
   }
   &:not([data-numbered]) [data-ledger-meta] { grid-template-columns: max-content max-content minmax(0, 1fr); grid-template-areas: "date clock league"; }
@@ -35,8 +36,8 @@ export const teamStackStyles = css`
     grid-area: number; display: grid; place-items: center; align-self: center;
     inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); padding: 0;
     color: ${({ theme }) => theme.color.link}; font-size: min(var(--gh-font-section), calc(var(--gh-font-displaySmall) / var(--match-number-digits, 1)));
-    background: color-mix(in srgb, var(--match-surface, ${({ theme }) => theme.color.surface}) 96%, ${({ theme }) => theme.color.accent.blue.text});
-    font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: var(--gh-leading-solid);
+    background: ${({ theme }) => theme.color.brandSoft};
+    font-weight: var(--gh-weight-bold); line-height: var(--gh-leading-solid);
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }
   [data-ledger-competition], [data-ledger-league] {
@@ -64,8 +65,8 @@ export const teamStackStyles = css`
     min-inline-size: 0;
     margin: 0;
     padding-inline-end: var(--gh-spacing-3);
-    --gh-logo-size: var(--gh-size-4_5);
-    --gh-logo-font: var(--gh-size-2_25);
+    --gh-logo-size: var(--gh-font-body);
+    --gh-logo-font: var(--gh-font-caption);
   }
   [data-ledger-teams]:has([data-score]) {
     grid-template-columns: minmax(0, 1fr) max-content;
@@ -80,14 +81,14 @@ export const teamStackStyles = css`
   [data-ledger-away] { grid-row: 2; }
   [data-ledger-teams] [data-team-name], [data-ledger-teams] [data-ledger-name] {
     flex: 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    font-size: var(--gh-font-emphasis); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-label);
+    font-size: var(--gh-font-body); font-weight: var(--gh-weight-medium); line-height: var(--gh-leading-label);
   }
   [data-ledger-versus] { display: none; }
   [data-ledger-teams] > [data-match-state], [data-ledger-teams] [data-score] { display: contents; }
   [data-stack-progress]:empty { display: none; }
   [data-ledger-teams] [data-score-home], [data-ledger-teams] [data-score-away] {
     grid-column: 2; align-self: center; justify-self: end;
-    font-size: var(--gh-font-section); font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: var(--gh-leading-control);
+    font-size: var(--gh-font-section); font-weight: var(--gh-weight-medium); line-height: var(--gh-leading-control);
     font-variant-numeric: tabular-nums;
   }
   [data-ledger-teams] [data-score-home] { grid-row: 1; }

@@ -1,6 +1,7 @@
 "use client";
 
-import { FloatingField } from "@/components/ui/floating-field";
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 
 import Link from "@/components/navigation/navigation-link";
 import dynamic from "next/dynamic";
@@ -37,12 +38,12 @@ export function DateRangePicker({ query, today, from, to, onChange, disabled = f
   return <RangeFieldset aria-label={messages.text("feed.date.range")} disabled={disabled}>
     <RangeLegend>{messages.text("feed.date.title")}</RangeLegend>
     <RangeFields data-range="dates">
-      <FloatingField label={<><span>{messages.text("feed.date.from")}</span></>}><input type="date" value={from}
+      <DateTimeField label={messages.text("feed.date.from")} value={from}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
-        onChange={(event) => onChange(event.target.value, to)} /></FloatingField>
-      <FloatingField label={<><span>{messages.text("feed.date.to")}</span></>}><input type="date" value={to} min={from || undefined} max={maximumTo}
+        onValueChange={value => onChange(value, to)} />
+      <DateTimeField label={messages.text("feed.date.to")} value={to} min={from || undefined} max={maximumTo}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
-        onChange={(event) => onChange(from, event.target.value)} /></FloatingField>
+        onValueChange={value => onChange(from, value)} />
       {invalid && <RangeHelp id={`${id}-error`} role="alert">{messages.text("feed.date.tooLong")}</RangeHelp>}
     </RangeFields>
   </RangeFieldset>;

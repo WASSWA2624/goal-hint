@@ -1,7 +1,7 @@
 # Pagination and Back restoration
 
 Prompt 034 enhances ordinary feed pagination with explicit Load more. The initial
-HTML contains approximately 50 cards and crawlable numbered page links.
+HTML contains up to 50 cards and crawlable numbered page links.
 Every page URL preserves validated filters, selected-market order and page size,
 and pins the resolved reporting date/range so following a link across midnight
 does not silently switch cohorts. Direct later-page visits are independent of
@@ -50,7 +50,7 @@ If it changes again during the reads, the previous list remains and retry is
 available. Whole fixture snapshots never move to an older `dataVersion`; equal
 versions retain the accepted whole snapshot. No independent market merge occurs.
 
-At most ten pages remain appended at once (normally 300 cards; at most 1,000 for
+At most ten pages remain appended at once (normally 500 cards; at most 1,000 for
 the allowed page-size limit). Numbered page navigation continues beyond that
 bound. Legacy responses without a marker use direct numbered links.
 

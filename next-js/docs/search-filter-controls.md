@@ -52,22 +52,40 @@ muted inset rule while keyboard focus keeps its stronger outline.
 ## Match search and filters
 
 `FeedFilters` owns one validated draft shared by mobile and desktop. Status or
-result, period, custom dates, time bounds, display zone, sorting, Predictions
-only, markets, league/country checklists and probability all live in its one
-Advanced Filters dialog. Existing access restrictions and the unavailable-odds
-explanation remain. Fields are not cloned for different layouts or dialog
-sections. The common searchable checklist preserves missing selected choices
-and uses bundled country flags.
+result, From/To date-times, sorting, Predictions only, league/country searchable
+multi-selects and probability live in its Advanced Filters dialog. Markets is
+a collapsible checkbox section at the bottom, with at least one selection.
+Period and editable time-zone controls are removed. From/To use the detected
+device zone and define one continuous interval, including the final minute.
+Existing access restrictions, probability guidance and the unavailable-odds
+explanation remain. Min/Max probability and odds fields have their own labels.
+Shared selects search from the first character, ignoring case and accents;
+direct partial matches precede football aliases and spelling suggestions.
+Selection takes one activation and persists when searching. Missing applied
+choices remain selectable, and countries use bundled flags.
 
 Only search and its adjacent filter button remain outside. Search submits on
 Enter or the inset action; typing and dialog edits make no match requests.
 Apply Filters commits the complete draft and closes the dialog. Reset Filters
-restores the configured defaults in the draft, retaining zone and page size.
+restores the configured defaults in the draft, including fifty matches per page.
 Closing discards changes and restores focus to the opener. Invalid ranges and
-probabilities disable Apply. Live synchronizes Today and disables date/time
+probabilities disable Apply; validation appears beneath the affected input.
+Incomplete date text is retained while typing, with format guidance on blur.
+Every open prefills the applied criteria in the device zone. Live synchronizes Today and disables date/time
 controls. The shared dialog body scrolls while its header and footer stay
 visible. Both themes and fine/coarse pointer heights use the existing tokens.
-The native GET fallback retains the same inline field tree before hydration.
+The native GET fallback retains successful fields before hydration.
+
+`DateTimeField` is the shared date, date-time and time-only editor for public,
+analytics and admin forms. Dates display as `04-JAN-2026`; optional time uses
+24-hour `HH:mm`. Form values remain ISO civil dates/local minutes. Its picker
+uses scrollable Day, Month and Year columns, plus Hour/Minute where applicable.
+Touch, mouse-wheel and keyboard selection share bounded, virtualized columns;
+up/down arrows move each column by one step, with disabled boundary actions.
+Changing months clamps invalid days; caller min/max bounds narrow each column.
+Cancel discards the picker draft; Use selection commits it. Inline validation
+rejects impossible dates, clock values, bounds and nonexistent DST minutes.
+Native inputs remain available without JavaScript.
 
 `FeedSurface` keeps the previous successful result during navigation and labels
 retained results after failures. [Pagination and restoration](pagination-navigation.md)
@@ -82,7 +100,11 @@ omits Showing/matches from its count. See [Matches presentation](match-feed-page
 Build `python scripts/verify-app-loading-rendering.py --serve`, open its local
 `/en/matches` URL and run `playwright-cli run-code --filename
 scripts/verify-unified-match-filters.js`. The shared check covers light/dark
-at 320, 390, 768, 1024 and 1440px: unique fields, footer alignment, draft reset,
-invalid ranges, dismissal/focus, URL application/search and compact counts.
-The script's screenshots go to ignored `output/playwright/`. Use
+at 320, 390, 1024 and 1440px: formatted entry, inline validation, bounded
+date/time wheels and arrows, draft reset/cancel, live country search, single-click
+selection, Markets disclosure, applied criteria, fifty-record pages and mobile
+typography. The fixture also verifies date-only/time-only and uncontrolled form
+values. Run `scripts/verify-match-filter-touch.js` through the same CLI for touch
+swipes, one-tap selection and cross-zone prefill. Screenshots go to ignored
+`output/playwright/`. Use
 `scripts/verify-search-performance.mjs` for the shared search/performance checks.

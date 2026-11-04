@@ -34,7 +34,7 @@ export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse):
 /** Summary dates are independent from the browsing window on the entry screen. */
 export function performanceFeedQuery(query: FeedQuery, today: ReportingDate, asOf?: number): FeedQuery {
   const reportingToday = asOf === undefined ? today : getReportingDate(utcInstantFromEpochMilliseconds(asOf));
-  return query.summary ? { ...query, summary: undefined, result: undefined, zone: publicPolicy.reportingTimeZone, time: null,
+  return query.summary ? { ...query, summary: undefined, result: undefined, interval: undefined, zone: publicPolicy.reportingTimeZone, time: null,
     dates: { kind: "date", date: query.summary === "yesterday" ? addReportingDays(reportingToday, -1) : reportingToday }, status: "all", page: 1 }
     : { ...query, result: undefined, page: 1 };
 }

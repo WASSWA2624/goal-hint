@@ -1,6 +1,7 @@
 "use client";
 
-import { FloatingField } from "@/components/ui/floating-field";
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 
 import { useId } from "react";
 import type { FeedQuery } from "@/domain/feed-query";
@@ -20,12 +21,12 @@ export function FeedTimeFilter({ query, from, to, onChange, disabled = false }: 
   return <RangeFieldset aria-label={messages.text("feed.time.range")} disabled={disabled}>
     <RangeLegend>{messages.text("feed.time.title")}</RangeLegend>
     <RangeFields>
-      <FloatingField label={<><span>{messages.text("feed.time.from")}</span></>}><input type="time" step="60" value={fromTime} title={zone}
+      <DateTimeField mode="time" label={messages.text("feed.time.from")} step="60" value={from} title={zone}
         aria-describedby={descriptionId} aria-invalid={invalid || undefined}
-        onChange={(event) => onChange(event.target.value || fullDayKickoffTime.from, toTime)} /></FloatingField>
-      <FloatingField label={<><span>{messages.text("feed.time.to")}</span></>}><input type="time" step="60" value={toTime} min={fromTime} title={zone}
+        onValueChange={value => onChange(value, toTime)} />
+      <DateTimeField mode="time" label={messages.text("feed.time.to")} step="60" value={to} min={fromTime} title={zone}
         aria-describedby={descriptionId} aria-invalid={invalid || undefined}
-        onChange={(event) => onChange(fromTime, event.target.value || fullDayKickoffTime.to)} /></FloatingField>
+        onValueChange={value => onChange(fromTime, value)} />
       <RangeHint id={`${id}-zone`}>{messages.text("feed.time.zone", { zone })}</RangeHint>
       {invalid && <RangeHelp id={`${id}-error`} role="alert">{messages.text("feed.time.invalid")}</RangeHelp>}
     </RangeFields>

@@ -58,5 +58,5 @@ test('invalid result filters fail strictly; All clears the result without changi
   assert.equal(parseFeedQuery({ result: 'all' }, { today }).result, undefined);
   const parameters = { pageSize: '100' }, apiQuery = parseFeedQuery(parameters, { today });
   assert.equal(apiQuery.pageSize, 100, 'the transport still supports bounded batch readers');
-  assert.equal(applyFeedPageDefaults(apiQuery, parameters).pageSize, 20, 'the interface always shows one 20-item page');
+  assert.equal(applyFeedPageDefaults(apiQuery, parameters).pageSize, 50, 'the interface always shows one 50-item page');
 });

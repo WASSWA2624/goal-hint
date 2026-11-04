@@ -21,18 +21,28 @@ export const DialogContent = styled.div`
   legend { margin-block-end: var(--gh-spacing-2); padding: 0; font-size: var(--gh-font-body); font-weight: var(--gh-weight-medium); }
   [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2_5); }
   [data-full] { grid-column: 1 / -1; }
+  [data-date-time-fields] { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2_5); }
+  ${media.desktop} { [data-date-time-fields] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   [data-subsection] { margin-block-start: var(--gh-spacing-3); }
+  [data-probability-fields] label, [data-odds-fields] label { font-size: var(--gh-font-secondary); }
   label[data-choice] { display: flex; align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--form-control-height); font-size: var(--gh-font-body); cursor: pointer; }
   input[type="checkbox"] { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
   [data-options] { max-block-size: var(--gh-size-45); overflow-y: auto; overscroll-behavior: contain; }
   [data-help] { margin-block-start: var(--gh-spacing-1_75); color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); line-height: var(--gh-leading-compact); }
 `;
 
-export const FilterError = styled.p.attrs({ role: "alert", tabIndex: -1 })`
-  margin: 0;
-  color: ${({ theme }) => theme.color.outcome.incorrect.text};
-  font-size: var(--gh-font-body);
-  line-height: var(--gh-leading-compact);
+export const MarketsSection = styled.details`
+  min-inline-size: 0; border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+  > summary {
+    display: flex; align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--form-control-height);
+    list-style: none; cursor: pointer; font-size: var(--gh-font-body); font-weight: var(--gh-weight-medium);
+    &::-webkit-details-marker { display: none; }
+    > span:nth-child(2) { margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-body); }
+    > svg { flex: none; color: ${({ theme }) => theme.color.link}; transition: transform var(--gh-duration-fast) var(--gh-easing); }
+    &:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; }
+  }
+  &[open] > summary > svg { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { > summary > svg { transition: none; } }
 `;
 
 export const Muted = styled.p`

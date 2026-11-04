@@ -277,3 +277,25 @@ production rendering/loading checks and eight light/dark browser combinations
 passed. A live API read confirmed today's twenty pending matches. See
 [plan 269](dev-plan/269-matches-today-performance-and-spacing.md) for the live
 development restart and fixture limitations. Hosted deployment is separate.
+
+## 270 Shared date/time picker and Matches filters — 4 November 2026
+
+**Completed:** Reusable date/date-time/time-only entry displays 04-JAN-2026
+with optional 24-hour time. Bounded, virtualized picker columns support touch,
+wheel, keyboard and one-step up/down arrows. Calendar changes clamp invalid
+days and picker drafts commit only on confirmation. Public, analytics and admin
+date-entry forms share this component, including canonical native form values.
+
+Matches uses continuous From/To intervals in the device zone, inline validation,
+searchable league/country multi-selects and a bottom Markets disclosure. Period
+and editable zone fields are removed; applied criteria prefill on opening.
+Legacy URLs remain readable. Matches defaults to fifty items per page; mobile
+names/scores use lighter weights and team logos match the name font height.
+
+156 targeted unit checks, genuine disposable MySQL interval/pagination checks,
+application types, focused lint, theme contract, scoped production rendering,
+eight light/dark browser combinations and touch/device-zone checks passed.
+The JavaScript-disabled date-time GET fallback also passed.
+See [plan 270](dev-plan/270-shared-date-time-and-match-filter-inputs.md) for the
+resolved synthetic fixture/setup failures and verification scope. Hosted
+rollout is separate.

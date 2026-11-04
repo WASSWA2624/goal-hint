@@ -3,11 +3,11 @@ import {
   addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type ReportingDate, type ReportingDateRange,
 } from "./calendar.ts";
 import { getDateInTimeZone, getDayBoundsInTimeZone, validTimeZone } from "./device-calendar.ts";
+import { dateTimeIntervalRange, parseLocalDateTime, type DateTimeInterval } from "./date-time.ts";
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { predictionResults, type PredictionResult } from "./performance-summary.ts";
-import { browseRules } from "./browse-period.ts";
 import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
@@ -44,6 +44,8 @@ export type FeedQuery = Readonly<{
   zone?: string | null;
   /** Local kickoff minutes and IANA device zone; absent means all times. */
   time?: KickoffTimeFilter | null;
+  /** One continuous local date-time interval, resolved in zone; independent of legacy daily time windows. */
+  interval?: DateTimeInterval | undefined;
   /** Canonical competition IDs, sorted; empty means every league. */
   leagues: string[];
   /** Canonical competition country names, sorted; empty means every country. */
@@ -76,7 +78,8 @@ export const matchFeedPageDefaults = Object.freeze({
   dates: Object.freeze({ kind: "last-30-days" }),
   sort: Object.freeze({ by: "kickoff", direction: "desc" }),
   summary: "today",
-} as const satisfies Pick<FeedQuery, "dates" | "sort" | "summary">);
+  pageSize: feedQueryRules.pageSize,
+} as const satisfies Pick<FeedQuery, "dates" | "sort" | "summary" | "pageSize">);
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),
@@ -86,7 +89,7 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["result", "summary", "date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
+const keys = new Set(["result", "summary", "date", "from", "to", "when", "start", "end", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
 export const feedQueryKeys: ReadonlySet<string> = keys;
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
@@ -175,7 +178,7 @@ export function isAnyProbability(range: ProbabilityRange): boolean {
   return range.min === anyProbability.min && range.max === anyProbability.max;
 }
 
-type FeedCalendarQuery = Partial<Pick<FeedQuery, "zone" | "time">>;
+type FeedCalendarQuery = Partial<Pick<FeedQuery, "zone" | "time" | "interval">>;
 export function getFeedToday(query: FeedCalendarQuery, asOf: number): ReportingDate {
   const zone = query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone;
   if (!validTimeZone(zone)) fail();
@@ -186,6 +189,7 @@ export function getFeedToday(query: FeedCalendarQuery, asOf: number): ReportingD
 export function resolveFeedDates(query: Pick<FeedQuery, "dates"> & FeedCalendarQuery, today: ReportingDate, asOf?: number): ReportingDateRange {
   const zone = query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone;
   if (!validTimeZone(zone)) fail();
+  if (query.interval) return dateTimeIntervalRange(query.interval, zone, feedQueryRules.maximumDays);
   const localToday = asOf === undefined ? today : getFeedToday(query, asOf);
   const dates = query.dates;
   let range: ReportingDateRange;
@@ -229,8 +233,14 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const from = get("from");
   const to = get("to");
   const when = get("when");
+  const start = get("start"), end = get("end");
+  const interval = start === undefined && end === undefined ? undefined : { from: parseLocalDateTime(start), to: parseLocalDateTime(end) };
   let dates: DateSelection;
-  if (context.routeDate !== undefined) {
+  if (interval) {
+    if (context.routeDate !== undefined || [date, from, to, when, get("timeFrom"), get("timeTo")].some(value => value !== undefined)) fail();
+    const first = parseReportingDate(interval.from.slice(0, 10)), last = parseReportingDate(interval.to.slice(0, 10));
+    dates = first === last ? { kind: "date", date: first } : { kind: "range", from: first, to: last };
+  } else if (context.routeDate !== undefined) {
     if (date !== undefined || from !== undefined || when !== undefined) fail();
     const start = parseReportingDate(context.routeDate);
     dates = to === undefined ? { kind: "date", date: start } : { kind: "range", from: start, to: parseReportingDate(to) };
@@ -251,7 +261,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const time = (bounds.from === "" && bounds.to === "") || isAnyKickoffTime(bounds) ? null
     : { ...bounds, zone: zone ?? "" };
   if (time && !validKickoffTime(time)) fail();
-  resolveFeedDates({ dates, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}) }, context.today, context.asOf);
+  resolveFeedDates({ dates, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}) }, context.today, context.asOf);
   const rawSearch = get("q") ?? "";
   if (rawSearch.length > feedQueryRules.maximumSearchLength || /[\u0000-\u001f\u007f]/u.test(rawSearch)) fail();
   const search = rawSearch.normalize("NFC").trim().replace(/\s+/gu, " ");
@@ -265,7 +275,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const by = get("sort") ?? "kickoff", direction = get("dir");
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
-    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResult } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}),
+    locale: resolveLocale(context.locale), ...(summary ? { summary } : {}), ...(result && result !== "all" ? { result: result as PredictionResult } : {}), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}), ...(interval ? { interval } : {}),
     leagues, countries, status: parseFeedStatus(get("status")), markets,
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
@@ -288,7 +298,7 @@ export function applyFeedPageDefaults(query: FeedQuery, input: FeedParameters, s
   const explicitDates = query.dates.kind === "date" || query.dates.kind === "range" || ["date", "from", "to", "when"].some(has);
   return { ...query,
     ...(!dated && !explicitDates ? { summary: query.summary ?? matchFeedPageDefaults.summary } : {}),
-    pageSize: browseRules.pageSize,
+    pageSize: matchFeedPageDefaults.pageSize,
     dates: dated || explicitDates ? query.dates : matchFeedPageDefaults.dates,
     sort: dated || has("sort") || has("dir") ? query.sort : matchFeedPageDefaults.sort,
     picks: has("picks") ? query.picks : defaultPagePicks(query.status, subscriberOnly),
@@ -307,7 +317,13 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   const dates = query.dates;
   if (query.summary) result.set("summary", query.summary);
   if (query.result) result.set("result", query.result);
-  if (dates.kind === "date") result.set("date", dates.date);
+  if (query.interval) {
+    if (query.time) fail();
+    const range = dateTimeIntervalRange(query.interval, query.zone ?? publicPolicy.reportingTimeZone, feedQueryRules.maximumDays);
+    if (dates.kind !== "date" && dates.kind !== "range" || (dates.kind === "date" ? dates.date !== range.startDate || dates.date !== range.endDate
+      : dates.from !== range.startDate || dates.to !== range.endDate)) fail();
+    result.set("start", query.interval.from); result.set("end", query.interval.to);
+  } else if (dates.kind === "date") result.set("date", dates.date);
   else if (dates.kind === "range") { result.set("from", dates.from); result.set("to", dates.to); }
   else if (dates.kind !== defaultFeedDatePreset) result.set("when", dates.kind);
   if (query.time) {
@@ -358,7 +374,7 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   if (query.picks === "all") parameters.set("picks", "all");
   const dates = query.dates;
   let path = `/${resolveLocale(query.locale)}`;
-  if (dates.kind === "date" || dates.kind === "range") {
+  if (!query.interval && (dates.kind === "date" || dates.kind === "range")) {
     path += `/predictions/${dates.kind === "date" ? dates.date : dates.from}`;
     parameters.delete("date"); parameters.delete("from");
   } else {
@@ -385,10 +401,10 @@ export function pinnedDateSelection(range: ReportingDateRange): DateSelection {
 
 /** Filters that narrow the cohort (dates and order excluded). */
 /** Choices made inside the filter panel itself: leagues, countries, markets, probability and odds. */
-export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds" | "time">>): number {
+export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds" | "time" | "interval">>): number {
   return query.leagues.length + query.countries.length +
     Number(!isAnyMarkets(query.markets)) + Number(!isAnyProbability(query.probability)) +
-    Number(!isAnyOdds(query.odds ?? null)) + Number(!isAnyKickoffTime(query.time));
+    Number(!isAnyOdds(query.odds ?? null)) + Number(!!query.interval || !isAnyKickoffTime(query.time));
 }
 
 export function activeFeedFilterCount(query: FeedQuery): number {

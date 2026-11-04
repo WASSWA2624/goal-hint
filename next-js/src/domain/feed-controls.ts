@@ -13,17 +13,18 @@ const completedPeriods: Partial<Record<FeedDatePreset, FeedDatePreset>> = {
 export function synchronizeFeedStatusDates(query: FeedQuery, today: ReportingDate): FeedQuery {
   const range = resolveFeedDates(query, today);
   if (query.status === "live") {
-    const changed = range.startDate !== today || range.endDate !== today || !!query.time;
-    if (query.dates.kind === "today" && !query.time) return query;
+    const changed = range.startDate !== today || range.endDate !== today || !!query.time || !!query.interval;
+    if (query.dates.kind === "today" && !query.time && !query.interval) return query;
     const synchronized = { ...query, dates: { kind: "today" as const }, page: changed ? 1 : query.page };
     delete synchronized.time;
+    delete synchronized.interval;
     return synchronized;
   }
   if (query.status === "scheduled" && range.endDate < today) {
-    return { ...query, dates: { kind: "next-30-days" }, page: 1 };
+    return { ...query, interval: undefined, dates: { kind: "next-30-days" }, page: 1 };
   }
   if (query.status === "finished" && range.startDate > today) {
-    return { ...query, dates: { kind: defaultFeedDatePreset }, page: 1 };
+    return { ...query, interval: undefined, dates: { kind: defaultFeedDatePreset }, page: 1 };
   }
   return query;
 }
@@ -36,12 +37,12 @@ export function selectFeedStatus(query: FeedQuery, status: FeedStatus, today: Re
     if (period) dates = { kind: period };
   }
   const { result: _result, ...scope } = query; void _result;
-  return synchronizeFeedStatusDates({ ...scope, summary: undefined, status, dates, page: 1 }, today);
+  return synchronizeFeedStatusDates({ ...scope, ...(dates !== query.dates ? { interval: undefined } : {}), summary: undefined, status, dates, page: 1 }, today);
 }
 
 /** Live stays on Today until the visitor chooses another status. */
 export function selectFeedDates(query: FeedQuery, dates: DateSelection, today: ReportingDate): FeedQuery {
-  return synchronizeFeedStatusDates({ ...query, summary: undefined, dates, page: 1 }, today);
+  return synchronizeFeedStatusDates({ ...query, summary: undefined, interval: undefined, dates, page: 1 }, today);
 }
 
 /** Draft text stays editable; normalization happens once, at submission. */
@@ -64,7 +65,7 @@ export type FeedFilterSection = "dates" | "leagues" | "countries" | "markets" | 
 export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSection): FeedQuery {
   switch (section) {
     case "dates": {
-      const reset = { ...draft, dates: matchFeedPageDefaults.dates, page: 1 };
+      const reset = { ...draft, interval: undefined, dates: matchFeedPageDefaults.dates, page: 1 };
       delete reset.time;
       return reset;
     }
@@ -75,10 +76,11 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
   }
 }
 
-/** Restore every filter, retaining the browsing zone and page size. */
+/** Restore every page filter and fifty-item limit, retaining the browsing zone. */
 export function resetFeedFilters(query: FeedQuery, subscriberOnly = false): FeedQuery {
   const reset = { ...query };
   delete reset.time; delete reset.result;
+  delete reset.interval;
   return { ...reset, ...matchFeedPageDefaults, status: "all", search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null,
     picks: defaultPagePicks("all", subscriberOnly),
     page: 1 };

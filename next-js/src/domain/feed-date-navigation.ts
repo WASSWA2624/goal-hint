@@ -4,7 +4,7 @@ import { feedDatePresets, feedQueryHref, resolveFeedDates, type DateSelection, t
 /** Date links retain the applied query but restart its page position. Previous/next open the adjacent single day. */
 export function feedDateNavigation(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
-  const href = (dates: DateSelection) => feedQueryHref({ ...query, dates, page: 1 }, today);
+  const href = (dates: DateSelection) => feedQueryHref({ ...query, interval: undefined, dates, page: 1 }, today);
   const adjacent = (date: ReportingDate, offset: number) => {
     try {
       const target = addReportingDays(date, offset);

@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonModes, reportParameters, type AnalyticsFilterKey,
   type AnalyticsReport, type AnalyticsSummary, type BreakdownKey, type BreakdownRow, type ComparisonMode,
@@ -303,18 +305,20 @@ function FilterControls({ selection, compare, filters, today, report, onSelectio
   onAddFilter: (key: AnalyticsFilterKey, value: string, label: string) => void; onRemoveFilter: (key: AnalyticsFilterKey) => void; exportHref: string;
 }) {
   const [dimension, setDimension] = useState<AnalyticsFilterKey | "">("");
-  const fromInput = useRef<HTMLInputElement>(null), toInput = useRef<HTMLInputElement>(null);
-  const [customError, setCustomError] = useState<string | null>(null);
   const options = dimension ? filterOptions(report, dimension) : [];
-
-  function applyCustom() {
+  const source = `${selection.preset}:${selection.from}:${selection.to}`;
+  const [edit, setEdit] = useState<{ source: string; from: string; to: string } | null>(null);
+  const custom = edit?.source === source ? edit : selection;
+  const [customError, setCustomError] = useState<{ field: "from" | "to"; message: string } | null>(null);
+  function applyCustom(field: "from" | "to", value: string) {
+    const next = { from: custom.from, to: custom.to, [field]: value }; setEdit({ ...next, source }); setCustomError(null);
+    if (!next.from || !next.to) return;
     try {
-      const from = parseReportingDate(fromInput.current?.value), to = parseReportingDate(toInput.current?.value);
-      if (from > to) { setCustomError("The start date must be on or before the end date."); return; }
-      if (rangeDays({ from, to }) > analyticsRules.maximumRangeDays) { setCustomError("Choose at most three years."); return; }
-      setCustomError(null);
+      const from = parseReportingDate(next.from), to = parseReportingDate(next.to);
+      if (from > to) { setCustomError({ field, message: "The start date must be on or before the end date." }); return; }
+      if (rangeDays({ from, to }) > analyticsRules.maximumRangeDays) { setCustomError({ field, message: "Choose at most three years." }); return; }
       onSelection({ preset: "custom", from, to });
-    } catch { setCustomError("Enter both dates."); }
+    } catch { /* Incomplete text is explained by the shared date field on blur. */ }
   }
 
   return (
@@ -327,8 +331,8 @@ function FilterControls({ selection, compare, filters, today, report, onSelectio
           <option value="custom">Custom range…</option>
         </select></Field>
       {selection.preset === "custom" && <>
-        <Field label={"From"}><input ref={fromInput} type="date" defaultValue={selection.from} max={today} onChange={applyCustom} /></Field>
-        <Field label={"To"}><input ref={toInput} type="date" defaultValue={selection.to} max={today} onChange={applyCustom} /></Field>
+        <DateTimeField label="From" required value={custom.from} max={today} error={customError?.field === "from" ? customError.message : undefined} onValueChange={value => applyCustom("from", value)} />
+        <DateTimeField label="To" required value={custom.to} min={custom.from || undefined} max={today} error={customError?.field === "to" ? customError.message : undefined} onValueChange={value => applyCustom("to", value)} />
       </>}
       <Field label={"Compare with"}><select value={compare} onChange={(event) => onCompare(event.target.value as ComparisonMode)}>
           <option value="previous">Previous period</option>
@@ -347,7 +351,6 @@ function FilterControls({ selection, compare, filters, today, report, onSelectio
           {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select></Field>}
       <ToolButton as="a" href={exportHref} download $variant="secondary" style={{ marginInlineStart: "auto" }}>Export summary CSV</ToolButton>
-      {customError && <Notice $tone="error" role="alert" style={{ inlineSize: "100%" }}>{customError}</Notice>}
       <Chips aria-label="Active segments">
         {(Object.entries(filters) as [AnalyticsFilterKey, Filters[AnalyticsFilterKey]][]).map(([key, filter]) => filter && <Chip key={key}>
           <span>{analyticsFilterLabels[key]}: <strong>{filter.label}</strong></span>

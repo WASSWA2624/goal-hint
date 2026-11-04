@@ -132,10 +132,11 @@ export type CriteriaDialogProps = Readonly<{
   dismissOnBackdrop?: boolean;
   dismissOnEscape?: boolean;
   hideFooter?: boolean;
+  applyDisabled?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, dismissOnEscape = true, hideFooter = false, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, dismissOnEscape = true, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -157,15 +158,16 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
 
   return <Dialog id={id} ref={root} className={className} open={enhanced ? undefined : true}
     aria-labelledby={titleId} aria-busy={busy} data-criteria-dialog="" data-slip-criteria-group={group} data-enhanced={enhanced ? "true" : "false"}
-    onCancel={(event) => { event.preventDefault(); if (dismissOnEscape) onCancel(); }}
+    onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); event.stopPropagation(); if (dismissOnEscape) onCancel(); }}
     onClick={(event) => {
       if (!dismissOnBackdrop || event.target !== event.currentTarget || !enhanced) return;
       const bounds = event.currentTarget.getBoundingClientRect();
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onCancel();
     }}
     onKeyDown={(event) => {
-      if (!enhanced || !open || !onApply || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;
+      if (!enhanced || !open || !onApply || applyDisabled || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;
       const target = event.target;
+      if (target instanceof Element && target.closest("dialog") !== event.currentTarget) return;
       if (!(target instanceof HTMLInputElement) || ["button", "submit", "reset"].includes(target.type)) return;
       event.preventDefault(); onApply();
     }}>
@@ -175,7 +177,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
       {footer ?? <>
         {onReset && <CriteriaDialogButton type="button" variant="secondary" data-dialog-reset disabled={busy} onClick={onReset}>{resetLabel}</CriteriaDialogButton>}
         <CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={onCancel}>{cancelLabel}</CriteriaDialogButton>
-        <CriteriaDialogButton type="button" disabled={busy} onClick={onApply}>{applyLabel}</CriteriaDialogButton>
+        <CriteriaDialogButton type="button" disabled={busy || applyDisabled} onClick={onApply}>{applyLabel}</CriteriaDialogButton>
       </>}
     </Actions>}
   </Dialog>;

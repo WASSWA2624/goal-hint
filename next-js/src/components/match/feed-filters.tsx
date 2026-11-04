@@ -1,204 +1,162 @@
 "use client";
 
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AdvancedFilterDialog } from "@/components/ui/advanced-filter-dialog";
+import { DateTimeField } from "@/components/ui/date-time-field";
 import { FloatingField } from "@/components/ui/floating-field";
 import { SearchBar } from "@/components/ui/search-bar";
-import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { countryFlagAsset } from "@/domain/country-flag";
-import { searchFilterOptions } from "@/domain/filter-option-search";
-import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters, selectFeedDates, selectFeedStatus } from "@/domain/feed-controls";
-import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
-import { defaultPagePicks, feedDatePresets, feedQueryHref, feedQueryRules, formatProbabilityValue, matchFeedPageDefaults, panelFilterCount, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
-import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ChevronDownIcon } from "@/components/ui/icons";
+import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { getDateInTimeZone } from "@/domain/device-calendar";
+import { resetFeedFilters, selectFeedStatus } from "@/domain/feed-controls";
+import { compileFeedFilterDraft, feedFilterDraft, feedFilterDraftIssues, type FeedFilterDraft } from "@/domain/feed-filter-draft";
+import { countryOptions, leagueOptions } from "@/domain/feed-presentation";
+import { defaultPagePicks, feedQueryRules, matchFeedPageDefaults, panelFilterCount, serializeFeedQuery, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { matchesHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { draftChanged, queryApplied } from "@/state/feed";
-import { useAppDispatch, useAppSelector } from "@/state/hooks";
+import { useAppDispatch } from "@/state/hooks";
 import { PicksOnlyFilter } from "./feed-controls";
-import { FeedPeriodSelect, FeedStatusSelect } from "./feed-query-selects";
+import { FeedStatusSelect } from "./feed-query-selects";
 import { feedSortOptions } from "./feed-header";
 import { OptionLogo } from "./filter-parts";
-import { DialogContent, FilterError, Muted, Panel } from "./feed-filter-styles";
+import { DialogContent, MarketsSection, Muted, Panel } from "./feed-filter-styles";
 
-type Messages = ReturnType<typeof createMessages>;
-type Draft = {
-  query: FeedQuery;
-  dates: { from: string; to: string };
-  times: { from: string; to: string };
-  probability: { min: string; max: string };
-};
-function fromQuery(query: FeedQuery, today: ReportingDate): Draft {
-  const range = resolveFeedDates(query, today);
-  return { query, dates: { from: range.startDate, to: range.endDate },
-    times: { from: query.time?.from ?? fullDayKickoffTime.from, to: query.time?.to ?? fullDayKickoffTime.to },
-    probability: { min: query.probability.min === 0 ? "" : formatProbabilityValue(query.probability.min),
-      max: query.probability.max === 100 ? "" : formatProbabilityValue(query.probability.max) } };
-}
-function compile(draft: Draft, today: ReportingDate, zone: string): FeedQuery | null {
-  try {
-    const probability = parseProbabilityInputs(draft.probability);
-    if (!probability) return null;
-    const from = parseReportingDate(draft.dates.from), to = parseReportingDate(draft.dates.to), original = resolveFeedDates(draft.query, today);
-    const dates: FeedQuery["dates"] = from === original.startDate && to === original.endDate ? draft.query.dates
-      : from === to ? { kind: "date", date: from } : { kind: "range", from, to };
-    const time = isAnyKickoffTime(draft.times) ? null : { ...draft.times, zone };
-    if (time && !validKickoffTime(time)) return null;
-    return applyFeedDraft({ ...draft.query, dates, time, probability, page: 1 }, today);
-  } catch { return null; }
-}
-
-/** The same searchable checklist handles leagues and countries, including retained missing choices. */
-const OptionChecklist = memo(function OptionChecklist({ kind, options, selected, onChange, messages }: {
-  kind: "leagues" | "countries"; options: readonly FilterOption[]; selected: readonly string[];
-  onChange: (values: string[]) => void; messages: Messages;
-}) {
-  const [search, setSearch] = useState(""), similarId = useId();
-  const label = messages.text(`feed.filters.${kind}`), maximum = kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries;
-  const available = useMemo(() => [...options, ...selected.filter((value) => !options.some((option) => option.value === value)).map((value) => ({
-    value, label: value, detail: null, logoUrl: kind === "countries" ? countryFlagAsset(value) : null, fixtures: 0,
-  }))], [kind, options, selected]);
-  const { exact, similar } = useMemo(() => searchFilterOptions(available, search), [available, search]);
-  const optionRow = (option: FilterOption, isSimilar = false) => <label data-choice key={option.value}>
-    <input type="checkbox" name={kind === "leagues" ? "league" : "country"} value={option.value} checked={selected.includes(option.value)}
-      disabled={!selected.includes(option.value) && selected.length >= maximum} aria-describedby={isSimilar ? similarId : undefined}
-      onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value].sort())} />
-    <OptionLogo url={option.logoUrl} /><span>{option.label}{option.detail && <small> · {option.detail}</small>}</span>
-  </label>;
-  return <fieldset><legend>{label}</legend>
-    <SearchBar label={messages.text("feed.filters.findOption", { label })} data-option-search value={search}
-      placeholder={messages.text("feed.filters.findOption", { label })} onChange={(event) => setSearch(event.target.value)}
-      onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
-    <label data-choice><input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
-      {messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.allCountries")}</label>
-    <div data-options>{exact.map((option) => optionRow(option))}
-      {similar.length > 0 && <><Muted id={similarId}>{messages.text("feed.search.similar")}</Muted>{similar.map((option) => optionRow(option, true))}</>}
-    </div>
-    {exact.length === 0 && similar.length === 0 && <Muted>{messages.text(options.length === 0 ? "feed.filters.noOptions" : "feed.filters.noOptionMatches")}</Muted>}
-  </fieldset>;
-});
-
-/** One form, draft and dialog field tree serves every viewport. */
+/** One applied draft and shared field tree serve every viewport. */
 export function FeedFilters({ query, today, leagues, onApply, subscriberOnly = false, pending = false }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (next: FeedQuery) => void;
   subscriberOnly?: boolean; pending?: boolean;
 }) {
   const messages = createMessages(query.locale), prefix = useId(), dispatch = useAppDispatch();
-  const stored = useAppSelector((state) => state.feed.draft), applied = useAppSelector((state) => state.feed.query);
-  const [draft, setDraft] = useState(() => fromQuery(feedQueryHref(applied, today) === feedQueryHref(query, today) ? stored : query, today));
-  const [open, setOpen] = useState(false), [version, setVersion] = useState(0), [issue, setIssue] = useState<string | null>(null);
-  const snapshot = useRef<Draft | null>(null), errorRef = useRef<HTMLParagraphElement>(null);
-  const deviceZone = useDeviceTimeZone(), zone = draft.query.zone ?? draft.query.time?.zone ?? deviceZone;
-  const complete = useMemo(() => compile(draft, today, zone), [draft, today, zone]);
+  const deviceZone = useDeviceTimeZone();
+  const [draft, setDraft] = useState(() => feedFilterDraft(query, today, deviceZone));
+  const [open, setOpen] = useState(false), [marketsOpen, setMarketsOpen] = useState(false);
+  const [lastDate, setLastDate] = useState<"from" | "to">("to"), [lastProbability, setLastProbability] = useState<"min" | "max">("max");
+  const [probabilityFocus, setProbabilityFocus] = useState<"min" | "max" | null>(null);
+  const snapshot = useRef<FeedFilterDraft | null>(null), form = useRef<HTMLFormElement>(null);
+  const complete = useMemo(() => compileFeedFilterDraft(draft, today), [draft, today]);
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   useEffect(() => { if (complete) dispatch(draftChanged(complete)); }, [complete, dispatch]);
-  useEffect(() => { if (issue) errorRef.current?.focus(); }, [issue]);
-  const leagueList = useMemo(() => leagueOptions(leagues, messages.text("match.competitionUnknown")), [leagues, messages]);
+  if (draft.zone !== deviceZone) setDraft({ ...feedFilterDraft(compileFeedFilterDraft(draft, today) ?? draft.query, today, deviceZone), probability: draft.probability });
+  const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
-  const changeLeagues = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, leagues: values } })), []);
-  const changeCountries = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, countries: values } })), []);
-  const currentRange = resolveFeedDates(draft.query, today);
-  const period = (feedDatePresets as readonly string[]).includes(draft.query.dates.kind)
-    && draft.dates.from === currentRange.startDate && draft.dates.to === currentRange.endDate ? draft.query.dates.kind : "custom";
   const count = panelFilterCount(query) + Number(query.status !== "all") + Number(!!query.result)
     + Number(query.dates.kind !== matchFeedPageDefaults.dates.kind)
     + Number(query.picks !== defaultPagePicks(query.status, subscriberOnly))
     + Number(query.sort.by !== matchFeedPageDefaults.sort.by || query.sort.direction !== matchFeedPageDefaults.sort.direction);
   const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
-  const errorId = `${prefix}-error`;
+  const issues = feedFilterDraftIssues(draft);
+  const dateError = issues.range === "order" ? messages.text(lastDate === "from" ? "feed.filters.fromAfterTo" : "feed.filters.toBeforeFrom")
+    : issues.range === "maximum" ? messages.text("feed.filters.rangeLimit", { days: messages.number(feedQueryRules.maximumDays) }) : undefined;
+  function probabilityError(field: "min" | "max") {
+    if (field === "min" ? issues.minInvalid : issues.maxInvalid) {
+      if (probabilityFocus === field && /^\d*\.$/u.test(draft.probability[field])) return undefined;
+      return messages.text("feed.filters.invalidProbability");
+    }
+    return issues.probabilityOrder && lastProbability === field ? messages.text(field === "min" ? "feed.filters.minAboveMax" : "feed.filters.maxBelowMin") : undefined;
+  }
+  function openFilters() {
+    snapshot.current = draft;
+    setDraft(feedFilterDraft({ ...query, search: draft.query.search }, today, deviceZone));
+    setMarketsOpen(false); setOpen(true);
+  }
   function cancel() {
     if (snapshot.current) setDraft(snapshot.current);
-    snapshot.current = null; setIssue(null); setOpen(false);
+    snapshot.current = null; setOpen(false);
   }
   function apply() {
-    if (!complete) { setIssue(messages.text("feed.invalidQuery")); return; }
-    snapshot.current = null; setIssue(null); setOpen(false); onApply(complete);
+    const valid = form.current?.checkValidity();
+    if (!complete || !valid) return;
+    snapshot.current = null; setOpen(false); onApply(complete);
   }
   function reset() {
-    setDraft(fromQuery(resetFeedFilters(draft.query, subscriberOnly), today));
-    setIssue(null); setVersion((value) => value + 1);
+    const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), deviceZone);
+    setDraft(feedFilterDraft(resetFeedFilters({ ...draft.query, zone: deviceZone }, subscriberOnly), day, deviceZone));
+    setMarketsOpen(false);
   }
-  const input = (label: string, name: string | undefined, value: string, change: (value: string) => void, type = "text", disabled = false) =>
-    <FloatingField label={label}><input type={type} name={name} value={value} disabled={disabled}
-      placeholder={messages.text("feed.filters.any")} inputMode={type === "text" ? "decimal" : undefined} autoComplete="off"
-      step={type === "time" ? 60 : undefined} aria-invalid={!!issue || undefined} aria-describedby={issue ? errorId : undefined}
-      onChange={(event) => change(event.target.value)} /></FloatingField>;
-  // Retain native GET navigation. Actual fields own their names; hidden values preserve the remaining query choices.
+  const probabilityInput = (field: "min" | "max") => <FloatingField label={messages.text(field === "min" ? "feed.filters.minProbability" : "feed.filters.maxProbability")}
+    error={probabilityError(field)}><input value={draft.probability[field]} inputMode="decimal" autoComplete="off"
+      onFocus={() => setProbabilityFocus(field)} onBlur={() => setProbabilityFocus(null)}
+      onChange={event => { const value = event.target.value; setLastProbability(field); setDraft(current => ({ ...current, probability: { ...current.probability, [field]: value } })); }} /></FloatingField>;
   const native = useMemo(() => {
-    const parameters = serializeFeedQuery({ ...query, search: "", page: 1 }, today);
-    for (const key of ["q", "date", "from", "to", "when", "timeFrom", "timeTo", "tz", "status", "result", "league", "country", "market"]) parameters.delete(key);
-    if (query.result) parameters.set("status", query.status);
-    parameters.set("picks", query.picks);
-    parameters.set("sort", query.sort.by); parameters.set("dir", query.sort.direction);
+    const parameters = serializeFeedQuery({ ...(complete ?? query), search: "", page: 1 }, today);
+    for (const key of ["q", "date", "from", "to", "when", "start", "end", "timeFrom", "timeTo", "tz", "status", "result", "league", "country", "market"]) parameters.delete(key);
+    if (draft.query.result) parameters.set("status", draft.query.status);
+    parameters.set("picks", draft.query.picks);
+    parameters.set("sort", draft.query.sort.by); parameters.set("dir", draft.query.sort.direction);
     return [...parameters];
-  }, [query, today]);
-  return <Panel data-feed-filters action={matchesHref(query.locale)} method="get" aria-label={messages.text("feed.filters.form")} aria-busy={pending}
-    onReset={(event) => { event.preventDefault(); reset(); }} onSubmit={(event) => { event.preventDefault(); apply(); }}>
+  }, [complete, draft.query, query, today]);
+  return <Panel ref={form} data-feed-filters action={matchesHref(query.locale)} method="get" aria-label={messages.text("feed.filters.form")} aria-busy={pending}
+    onReset={event => { event.preventDefault(); reset(); }} onSubmit={event => { event.preventDefault(); apply(); }}>
     {native.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+    <input type="hidden" name="tz" value={draft.zone} />
     <SearchBar name="q" maxLength={feedQueryRules.maximumSearchLength} value={draft.query.search} autoComplete="off"
       label={messages.text("feed.filters.search")} submitLabel={messages.text("feed.search.submit")}
       filters={{ label: messages.text("feed.filters.toggle"), accessibleLabel: count ? messages.plural("feed.filters.toggleCount", count) : messages.text("feed.filters.toggle"),
-        count, dialogId: `${prefix}-filters`, open, onOpen: () => { snapshot.current = draft; setIssue(null); setOpen(true); } }}
-      onChange={(event) => { const search = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, search } })); }} />
+        count, dialogId: `${prefix}-filters`, open, onOpen: openFilters }}
+      onChange={event => { const search = event.target.value; setDraft(current => ({ ...current, query: { ...current.query, search } })); }} />
     <AdvancedFilterDialog id={`${prefix}-filters`} open={open} locale={query.locale} onCancel={cancel}
-      closeLabel={messages.text("feed.filters.close")} onApply={apply} onReset={reset} applyDisabled={!complete}>
+      closeLabel={messages.text("feed.filters.close")} onApply={apply} onReset={reset} applyDisabled={!complete || pending}>
       <DialogContent data-feed-dialog>
-        {!complete && <FilterError id={errorId} ref={errorRef}>{issue ?? messages.text("feed.invalidQuery")}</FilterError>}
         <fieldset><legend>{messages.text("feed.filters.matchDateTime")}</legend><div data-fields>
-          <FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={draft.query.result}
-            onResultChange={(result) => setDraft((current) => ({ ...current, query: { ...current.query, result, page: 1 } }))}
-            onChange={(status) => { setDraft((current) => {
-              const next = fromQuery(selectFeedStatus(current.query, status, today), today);
-              return { ...current, query: next.query, dates: next.dates, times: next.times };
-            }); setIssue(null); }} />
-          <FeedPeriodSelect name="period" locale={query.locale} value={period} disabled={live} onChange={(value) => {
-            if (value === "custom") { setDraft((current) => ({ ...current, query: { ...current.query, dates: { kind: "range", from: currentRange.startDate, to: currentRange.endDate } } })); return; }
-            const kind = feedDatePresets.find((preset) => preset === value);
-            if (kind) setDraft((current) => {
-              const next = selectFeedDates(current.query, { kind }, today), range = resolveFeedDates(next, today);
-              return { ...current, query: next, dates: { from: range.startDate, to: range.endDate } };
-            });
-          }} />
-          {input(messages.text("feed.date.from"), "from", draft.dates.from, (from) => setDraft((current) => ({ ...current, dates: { ...current.dates, from } })), "date", live)}
-          {input(messages.text("feed.date.to"), "to", draft.dates.to, (to) => setDraft((current) => ({ ...current, dates: { ...current.dates, to } })), "date", live)}
-          {input(messages.text("feed.time.from"), "timeFrom", draft.times.from, (from) => setDraft((current) => ({ ...current, times: { ...current.times, from: from || fullDayKickoffTime.from } })), "time", live)}
-          {input(messages.text("feed.time.to"), "timeTo", draft.times.to, (to) => setDraft((current) => ({ ...current, times: { ...current.times, to: to || fullDayKickoffTime.to } })), "time", live)}
-          <FloatingField data-full label={messages.text("feed.filters.timezone")}><select name="tz" value={zone} onChange={(event) => {
-            const zone = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, zone } }));
-          }}>{[...new Set([publicPolicy.reportingTimeZone, deviceZone, zone])].map((value) => <option key={value} value={value}>{value}</option>)}</select></FloatingField>
+          <div data-full><FeedStatusSelect name="status" locale={query.locale} value={draft.query.status} result={draft.query.result}
+            onResultChange={result => setDraft(current => ({ ...current, query: { ...current.query, result, page: 1 } }))}
+            onChange={status => { setDraft(current => {
+              const compiled = compileFeedFilterDraft(current, today) ?? current.query;
+              const base = status === "live" ? { ...compiled, interval: undefined, time: null, zone: deviceZone } : compiled;
+              const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), base.zone ?? deviceZone);
+              return feedFilterDraft(selectFeedStatus(base, status, day), day, deviceZone);
+            }); }} /></div>
+          <div data-full data-date-time-fields>
+            <DateTimeField mode="datetime" locale={query.locale} name="start" label={messages.text("feed.filters.from")} required value={draft.dateTimes.from} disabled={live}
+              min="1000-01-01T00:00" error={lastDate === "from" ? dateError : undefined}
+              onValueChange={from => { setLastDate("from"); setDraft(current => ({ ...current, dateTimes: { ...current.dateTimes, from } })); }} />
+            <DateTimeField mode="datetime" locale={query.locale} name="end" label={messages.text("feed.filters.to")} required value={draft.dateTimes.to} disabled={live}
+              min="1000-01-01T00:00" error={lastDate === "to" ? dateError : undefined}
+              onValueChange={to => { setLastDate("to"); setDraft(current => ({ ...current, dateTimes: { ...current.dateTimes, to } })); }} />
+          </div>
         </div>{live && <Muted data-help>{messages.text("feed.filters.liveToday")}</Muted>}</fieldset>
         <fieldset><legend>{messages.text("feed.sort.label")}</legend><div data-fields>
-          <FloatingField data-full label={messages.text("feed.sort.label")}><select value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={(event) => {
-            const sort = feedSortOptions.find((value) => `${value.by}-${value.direction}` === event.target.value);
-            if (sort) setDraft((current) => ({ ...current, query: { ...current.query, sort } }));
-          }}>{feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
+          <FloatingField data-full label={messages.text("feed.sort.label")}><select value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={event => {
+            const sort = feedSortOptions.find(value => `${value.by}-${value.direction}` === event.target.value);
+            if (sort) setDraft(current => ({ ...current, query: { ...current.query, sort } }));
+          }}>{feedSortOptions.map(sort => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
             {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
           </option>)}</select></FloatingField>
         </div><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={locked}
-          onChange={(checked) => setDraft((current) => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} /></fieldset>
-        <fieldset><legend>{messages.text("feed.filters.markets")}</legend>{publicPolicy.markets.map((family) => {
-          const selected = draft.query.markets.includes(family), last = selected && draft.query.markets.length === 1;
-          return <label data-choice key={family}>
-            {last && <input type="hidden" name="market" value={family} />}
-            <input type="checkbox" name="market" value={family} checked={selected} disabled={last}
-              title={last ? messages.text("feed.filters.oneMarket") : undefined}
-              onChange={() => setDraft((current) => ({ ...current, query: { ...current.query, markets: selected
-                ? current.query.markets.filter((market) => market !== family) : [...current.query.markets, family] } }))} />{messages.text(`market.family.${family}`)}
-          </label>;
-        })}</fieldset>
-        <OptionChecklist key={`leagues-${version}`} kind="leagues" options={leagueList} selected={draft.query.leagues} onChange={changeLeagues} messages={messages} />
-        <OptionChecklist key={`countries-${version}`} kind="countries" options={countryList} selected={draft.query.countries} onChange={changeCountries} messages={messages} />
-        <fieldset disabled={locked}><legend>{messages.text("feed.filters.probabilityLabel")} %</legend><div data-fields>
-          {input(messages.text("feed.filters.min"), undefined, draft.probability.min, (min) => setDraft((current) => ({ ...current, probability: { ...current.probability, min } })))}
-          {input(messages.text("feed.filters.max"), undefined, draft.probability.max, (max) => setDraft((current) => ({ ...current, probability: { ...current.probability, max } })))}
+          onChange={checked => setDraft(current => ({ ...current, query: { ...current.query, picks: checked ? "only" : "all" } }))} /></fieldset>
+        {(["leagues", "countries"] as const).map(kind => <SearchableSelect key={kind} label={messages.text(`feed.filters.${kind}`)} name={kind === "leagues" ? "league" : "country"}
+          values={draft.query[kind]} options={(kind === "leagues" ? leagueList : countryList).map(option => ({ ...option, icon: <OptionLogo url={option.logoUrl} /> }))}
+          maximum={kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries}
+          allLabel={messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.allCountries")}
+          searchLabel={messages.text("feed.filters.findOption", { label: messages.text(`feed.filters.${kind}`) })}
+          emptyLabel={messages.text("feed.filters.noOptionMatches")}
+          onValuesChange={values => setDraft(current => ({ ...current, query: { ...current.query, [kind]: values } }))} />)}
+        <fieldset disabled={locked} aria-label={messages.text("feed.filters.probabilityLabel")} data-probability-fields><div data-fields>
+          {probabilityInput("min")}{probabilityInput("max")}
         </div><Muted data-help>{messages.text("feed.filters.probabilityExplanation")}</Muted></fieldset>
-        <fieldset disabled><legend>{messages.text("feed.filters.oddsUnavailable")}</legend><div data-fields>
-          <FloatingField label={messages.text("feed.filters.min")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
-          <FloatingField label={messages.text("feed.filters.max")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
-        </div></fieldset>
+        <fieldset disabled aria-label={messages.text("feed.filters.oddsUnavailable")} data-odds-fields><div data-fields>
+          <FloatingField label={messages.text("feed.filters.minOdds")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
+          <FloatingField label={messages.text("feed.filters.maxOdds")}><input placeholder={messages.text("feed.filters.any")} disabled /></FloatingField>
+        </div><Muted data-help>{messages.text("feed.filters.oddsUnavailable")}</Muted></fieldset>
+        <MarketsSection data-market-section open={marketsOpen} onToggle={event => setMarketsOpen(event.currentTarget.open)}>
+          <summary><span>{messages.text("feed.filters.markets")}</span><span>{draft.query.markets.length === publicPolicy.markets.length
+            ? messages.text("feed.filters.any") : messages.text("feed.filters.selectedCount", { count: messages.number(draft.query.markets.length) })}</span><ChevronDownIcon aria-hidden="true" /></summary>
+          <fieldset aria-label={messages.text("feed.filters.markets")}>{publicPolicy.markets.map(family => {
+            const selected = draft.query.markets.includes(family), last = selected && draft.query.markets.length === 1;
+            return <label data-choice key={family}>
+              {last && <input type="hidden" name="market" value={family} />}
+              <input type="checkbox" name="market" value={family} checked={selected} disabled={last}
+                title={last ? messages.text("feed.filters.oneMarket") : undefined}
+                onChange={() => setDraft(current => ({ ...current, query: { ...current.query, markets: selected
+                  ? current.query.markets.filter(market => market !== family) : [...current.query.markets, family] } }))} />{messages.text(`market.family.${family}`)}
+            </label>;
+          })}</fieldset>
+        </MarketsSection>
       </DialogContent>
     </AdvancedFilterDialog>
   </Panel>;

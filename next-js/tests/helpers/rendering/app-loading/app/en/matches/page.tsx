@@ -1,7 +1,7 @@
 import { createFeedRoute } from "@/app/_components/feed-route";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { parseFeedQuery, resolveFeedDates } from "@/domain/feed-query";
-import { storedMatchFeedResponseSchema } from "@/domain/match-feed";
+import { parseFeedQuery } from "@/domain/feed-query";
+import { feedFixture } from "../../feed-fixture";
 import { feedPerformanceReplySchema } from "@/domain/feed-performance-summary";
 import scenarios from "../../scenarios.json";
 
@@ -13,13 +13,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const at = utcInstantFromEpochMilliseconds(Date.now()), today = getReportingDate(at);
   const route = createFeedRoute({ instant: async () => at, policy: () => ({ deployment: "staging", index: false }),
     document: async () => true, resolveAccess: async () => ({ tier: "full", signedIn: false, mode: "off" }),
-    read: async parameters => {
-      const query = parseFeedQuery(parameters, { today }), range = resolveFeedDates(query, today);
-      const { access, ...stored } = scenarios.feed;
-      void access;
-      return storedMatchFeedResponseSchema.parse({ ...stored, today, asOf: at, range: { from: range.startDate, to: range.endDate, ...range.window },
-        records: stored.records.map(record => ({ ...record, kickoffAt: at + 3_600_000 })) });
-    },
+    read: async parameters => feedFixture(parseFeedQuery(parameters, { today })),
     readSummary: async () => {
       await new Promise(resolve => setTimeout(resolve, 1_800));
       if (fail === "1") throw new Error("Synthetic summary outage");

@@ -15,7 +15,7 @@ test('Best Slips defaults to today while Matches retains its separate historical
   assert.deepEqual(resolveBestSlipsDates(slips, today), { from: today, to: today });
   assert.deepEqual(parseBestSlipsQuery(serializeBestSlipsQuery(slips), today), slips);
   const matches = applyFeedPageDefaults(parseFeedQuery({}, { today }), {});
-  assert.equal(matches.pageSize, 20); assert.equal(matches.summary, 'today');
+  assert.equal(matches.pageSize, 50); assert.equal(matches.summary, 'today');
   assert.deepEqual(matches.sort, { by: 'kickoff', direction: 'desc' });
   const range = resolveFeedDates(matches, today);
   assert.equal(range.startDate, '2026-12-03'); assert.equal(range.endDate, today);

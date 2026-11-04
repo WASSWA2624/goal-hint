@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 import { media } from "@/styles/theme";
 
 import { Fragment, useId, useMemo, useState, useTransition } from "react";
@@ -132,8 +134,8 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
               {auditPeriods.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select></FloatingField>
             {draft.period === "custom" && <>
-              <FloatingField label="Start date"><input id="audit-start-date" type="date" required value={draft.startDate} max={draft.endDate || undefined} onChange={event => setDraft(current => ({ ...current, startDate: event.target.value }))} /></FloatingField>
-              <FloatingField label="End date"><input id="audit-end-date" type="date" required value={draft.endDate} min={draft.startDate || undefined} onChange={event => setDraft(current => ({ ...current, endDate: event.target.value }))} /></FloatingField>
+              <DateTimeField label="Start date" id="audit-start-date" required value={draft.startDate} max={draft.endDate || undefined} onValueChange={startDate => setDraft(current => ({ ...current, startDate }))} />
+              <DateTimeField label="End date" id="audit-end-date" required value={draft.endDate} min={draft.startDate || undefined} onValueChange={endDate => setDraft(current => ({ ...current, endDate }))} />
             </>}
             {rangeError && <p role="alert">{rangeError}</p>}
           </FilterBody>

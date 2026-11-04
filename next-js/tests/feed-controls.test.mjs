@@ -30,12 +30,12 @@ test('native GET controls and canonical URLs produce the same applied query', ()
   assert.throws(() => applyFeedDraft({ ...query, markets: [] }, today));
   assert.throws(() => applyFeedDraft({ ...query, probability: { min: 80, max: 20 } }, today));
 });
-test('Clear filters resets status, dates and limits while retaining the browsing zone and page size', () => {
+test('Clear filters resets status, dates and limits while retaining the browsing zone and restoring fifty per page', () => {
   for (const dates of [{ date: today }, { from: today, to: '2026-10-15' }, { when: 'today' }, { when: 'tomorrow' }, { when: 'next-30-days' }]) {
     const query = parseFeedQuery({ ...dates, q: 'team', league: 'league-a,league-b', country: 'Spain', status: 'live', market: 'total-goals,both-teams-to-score',
       prob: '60-100', timeFrom: '12:00', timeTo: '18:00', tz: 'Africa/Kampala', picks: 'only', sort: 'probability', dir: 'asc', page: '3', pageSize: '40' }, { today });
     const reset = resetFeedFilters(query);
-    assert.deepEqual(reset.dates, { kind: 'last-30-days' }); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
+    assert.deepEqual(reset.dates, { kind: 'last-30-days' }); assert.equal(reset.pageSize, 50); assert.equal(reset.page, 1);
     assert.equal(reset.time, undefined); assert.equal(reset.zone, query.zone);
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'all', 'Live and Completed are filters on the unified Matches page');

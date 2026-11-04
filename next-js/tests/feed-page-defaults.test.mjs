@@ -25,7 +25,7 @@ test("page defaults select predictions without changing unrestricted API reads",
   }
 });
 
-test("Matches opens with 30 days newest first, today's performance and 20 items", () => {
+test("Matches opens with 30 days newest first, today's performance and 50 items", () => {
   for (const subscriberOnly of [false, true]) {
     const query = page("", subscriberOnly);
     assert.equal(query.status, "all");
@@ -38,7 +38,7 @@ test("Matches opens with 30 days newest first, today's performance and 20 items"
     assert.deepEqual(query.probability, { min: 0, max: 100 });
     assert.equal(query.odds, null);
     assert.equal(query.time, undefined);
-    assert.equal(query.page, 1); assert.equal(query.pageSize, 20); assert.equal(query.summary, "today");
+    assert.equal(query.page, 1); assert.equal(query.pageSize, 50); assert.equal(query.summary, "today");
     const parameters = serializeFeedQuery(query, today);
     assert.equal(parameters.get("when"), null);
     assert.equal(parameters.get("sort"), null);

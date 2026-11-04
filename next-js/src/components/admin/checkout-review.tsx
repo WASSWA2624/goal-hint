@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 import { FloatingField } from "@/components/ui/floating-field";
 import { useEffect, useState, type ReactNode } from "react";
 import styled from "styled-components";
@@ -104,7 +106,7 @@ export function CheckoutReview({ payment, nav, onResolved }: { payment: OwnerPay
           <TextInput name="amountUgx" label="Actual incoming amount (UGX)" required inputMode="numeric" defaultValue={claim.receipt.amountUgx ?? claim.amountUgx} />
           <TextInput name="recipient" label="Receiving number from provider records" required defaultValue={claim.receipt.recipient ?? detail.receivingNumber ?? ""} />
           <TextInput name="senderPhone" label="Sender number from receiving account (if available)" defaultValue={claim.receipt.senderPhone ?? ""} />
-          <TextInput name="receivedAt" label="Actual payment date and time (local)" type="datetime-local" required defaultValue={claim.receipt.receivedAt ? localDate(claim.receipt.receivedAt) : dateNotExtracted(claim.original) ? "" : localDate(claim.paidAt)} />
+          <DateTimeField name="receivedAt" label="Actual payment date and time (local)" mode="datetime" required defaultValue={claim.receipt.receivedAt ? localDate(claim.receipt.receivedAt) : dateNotExtracted(claim.original) ? "" : localDate(claim.paidAt)} />
           <label><input type="checkbox" name="transactionChecked" required /> Transaction ID matches the incoming transfer</label>
           <label><input type="checkbox" name="recipientChecked" required /> Correct receiving MTN/Airtel account</label>
           <label><input type="checkbox" name="successfulReceipt" required /> Funds successfully received; amount checked</label>

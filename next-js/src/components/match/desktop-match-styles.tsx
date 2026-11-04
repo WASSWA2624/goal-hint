@@ -9,7 +9,8 @@ export const desktopMatchBaseStyles = css`
     position: relative; display: grid; grid-template-columns: var(--desktop-columns);
     grid-template-rows: minmax(var(--gh-size-5), auto); align-items: center; column-gap: var(--gh-spacing-2);
     min-inline-size: 0; min-block-size: var(--gh-size-9); padding: var(--gh-spacing-1) var(--gh-spacing-3);
-    color: ${({ theme }) => theme.color.text}; font-size: var(--gh-font-secondary); line-height: var(--gh-size-5);
+    color: ${({ theme }) => theme.color.text}; font-family: ${({ theme }) => theme.typography.family};
+    font-size: var(--gh-font-body); line-height: var(--gh-leading-label);
     white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums;
   }
   [data-desktop-row] > * { min-inline-size: 0; }
@@ -30,7 +31,7 @@ export const desktopMatchBaseStyles = css`
   [data-row-teams] {
     display: flex; align-items: center; justify-content: flex-end;
     min-inline-size: 0; gap: var(--gh-spacing-1_25); margin: 0; font-size: var(--gh-font-body); line-height: var(--gh-size-5);
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    font-weight: var(--gh-weight-semibold);
   }
   [data-home], [data-away] { display: flex; flex: 0 1 auto; align-items: center; min-inline-size: 0; max-inline-size: calc(50% - var(--gh-size-3)); gap: var(--gh-spacing-1); }
   [data-home] { justify-content: flex-end; }

@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimeField } from "@/components/ui/date-time-field";
+
 import { Suspense, use, type ReactNode } from "react";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { LoadingTheme } from "@/styles/loading-theme";
@@ -13,7 +15,7 @@ import { isMarketSelection } from "@/domain/markets";
 import { parseReportingDate } from "@/domain/calendar";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { marketName, pickLabel } from "@/components/match/details/labels";
-import { Button, ButtonLink, SelectInput, TextInput, TextLink } from "@/components/ui/controls";
+import { Button, ButtonLink, SelectInput, TextLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, DesktopInset, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
@@ -141,8 +143,8 @@ export function PerformanceDashboard({ locale, filters, report, history, reportP
     <DesktopInset><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></DesktopInset>
     <PerformanceFilterPanel><Stack $gap="sm">
       <PerformanceFilters action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
-        <TextInput label={m.text("performance.from")} name="from" type="date" required defaultValue={filters.from} />
-        <TextInput label={m.text("performance.to")} name="to" type="date" required defaultValue={filters.to} />
+        <DateTimeField label={m.text("performance.from")} name="from" required defaultValue={filters.from} />
+        <DateTimeField label={m.text("performance.to")} name="to" required defaultValue={filters.to} />
         <SelectInput label={m.text("performance.market")} name="market" defaultValue={filters.market}>
           <option value="all">{m.text("performance.allMarkets")}</option>
           {(["match-result", "double-chance", "total-goals", "both-teams-to-score"] as const).map((family) => <option key={family} value={family}>{marketName(m, family)}</option>)}

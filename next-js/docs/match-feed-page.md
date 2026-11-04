@@ -9,7 +9,7 @@ for Upcoming and Completed. Wholly incompatible explicit ranges are repaired.
 Matches opens with an empty search, All statuses, Last 30 days, latest kickoff first,
 all four markets and no league, country, time, probability or odds constraints.
 Reset restores those choices and the Predictions only default allowed by access,
-while retaining the browsing zone and page size.
+in the detected device zone, with fifty matches per page.
 
 The default performance cards report today in EAT under **Today’s performance**,
 independently of the 30-day browsing list. Outcome controls open today's matching
@@ -23,10 +23,14 @@ separate gap before the Matches/Predictions results header. That header reuses
 the match-card frame tokens and joins the first card without a gap or doubled
 divider. Controls retain their shared height and both theme palettes.
 
-The period selector includes Last 30/7/3 days, Yesterday, Today, Tomorrow,
-Next 3/7/30 days and Custom. The native GET form's `period` field is validated
-only by the page route, replaces older applied dates, and redirects to canonical
-parameters. Stored API query validation stays unchanged. Direct stale Live links,
+The dialog uses From/To date-times rather than a period or time-zone selector.
+Dates display as `04-JAN-2026` with 24-hour time and scrolling date/time columns.
+New `start`/`end` URL parameters define a continuous device-zone interval;
+the final selected minute is included. SQL, caches and pagination use its exact
+UTC bounds. Invalid/reversed ranges and nonexistent DST minutes fail inline;
+repeated DST endpoint minutes include both occurrences. Legacy date/preset and
+daily time-window URLs remain readable. The native GET form's legacy `period`
+field remains validated by the page route and redirects to canonical parameters. Direct stale Live links,
 including dated archive links, redirect to the current filtered Matches view
 before reading records. Other historical archive routes remain available.
 
@@ -45,7 +49,7 @@ An idle retry of a failed read at the same URL uses `router.refresh()`.
 Results navigation destinations. The Matches page defaults to kickoff
 descending; dated archive routes retain their named dates and kickoff/fixture-ID
 order. Stored API defaults remain Last 30 days and kickoff descending. The first
-page shows twenty matches. Validated URL variants retain the
+page shows up to fifty matches. Validated URL variants retain the
 existing selected market, filters, sorting and bounded page-size contract.
 
 `server/matches/public-feed.ts` composes the same database, configured competition
@@ -159,11 +163,13 @@ Desktop uses the shell header. Both viewports render the same `FeedFilters`:
 one search row and its Advanced filters button, with transparent surroundings
 and shared spacing above and below. There is no separate gray filter panel.
 
-One branded **Advanced Filters** dialog owns status/result, period, custom
-dates, kickoff times, display zone, sorting, Predictions only, markets, leagues,
+One branded **Advanced Filters** dialog owns status/result, combined From/To
+date-times in the device zone, sorting, Predictions only, markets, leagues,
 countries, probability bounds and the existing unavailable-odds explanation.
 Each field renders once; desktop and mobile share the same draft and validation.
-Leagues and countries reuse one searchable checklist with bundled country flags.
+Leagues and countries reuse one searchable multi-select with bundled country flags.
+Markets uses a collapsible checkbox section at the bottom. Period and editable
+zone fields are removed. Dates use the shared formatted editor and scroll picker.
 Live selects Today and disables incompatible date/time fields. Invalid or
 incomplete drafts remain editable and disable Apply.
 
@@ -173,8 +179,8 @@ mark, theme surfaces, modal focus handling and exactly two footer actions:
 scrolls independently of the header and footer. Reset edits only the draft;
 Apply commits the complete validated query and closes the dialog. Escape,
 backdrop dismissal and the close button restore the opening draft and opener
-focus. Reset restores the configured Matches defaults while retaining the
-browsing zone and page size. Payment, subscriber and audit search screens reuse
+focus. Reset restores the configured Matches defaults in the device zone,
+including fifty records per page. Payment, subscriber and audit search screens reuse
 this dialog chrome around their existing fields and cancellation behavior.
 Without JavaScript the same dialog fields remain inline for native GET search.
 
@@ -184,8 +190,8 @@ as `WED 28-Oct-2026 - 00:56 EAT` on desktop, or **Matches** with
 the Performance header's title size, medium weight, metadata styling and padding. The timestamp is the latest stored prediction publication among
 the displayed records, including gated forecasts; its tooltip states that scope.
 It is omitted when no visible prediction has a publication, independently of
-kickoff and feed-read time. Desktop shows `Showing 1–20 of 600 matches`; mobile
-shows `1–20 of 600`, with the timestamp beside the title and natural wrapping on narrow screens. Counts follow
+kickoff and feed-read time. Desktop shows `Showing 1–50 of 600 matches`; mobile
+shows `1–50 of 600`, with the timestamp beside the title and natural wrapping on narrow screens. Counts follow
 filtering, accumulated pagination, retained projections and live refresh. Match
 rows retain their kickoff dates; redundant kickoff-day dividers are removed.
 
