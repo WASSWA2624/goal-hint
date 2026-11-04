@@ -175,7 +175,7 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
 const SidebarHead = styled.div`
   display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1);
   min-block-size: var(--form-control-height);
-  margin-block: calc(-1 * var(--gh-spacing-2)) var(--gh-spacing-1_5);
+  margin-block-start: calc(-1 * var(--gh-spacing-2));
   padding-inline: var(--gh-spacing-2_5);
   background: ${({ theme }) => theme.header.background};
   [data-collapsed="true"] & {
@@ -270,7 +270,7 @@ const MenuPopup = styled.nav`
   inset-block-start: 100%;
   max-block-size: calc(100dvh - var(--app-header-height) - var(--app-mobile-tab-height) - env(safe-area-inset-bottom));
   overflow-y: auto;
-  padding: var(--gh-spacing-1_5) var(--gh-spacing-2) var(--gh-spacing-2_5);
+  padding: 0 var(--gh-spacing-2) var(--gh-spacing-2_5);
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   box-shadow: ${({ theme }) => theme.shadow.popover};
