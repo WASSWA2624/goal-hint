@@ -120,6 +120,7 @@ export const AdminShellFrame = styled(ShellFrame)`
     }
   }
   ${media.belowDesktop} {
+    --app-content-gutter: var(--app-shell-edge-inset);
     --app-header-height: calc(${({ theme }) => theme.header.phoneHeight} + var(--form-control-height) + var(--gh-stroke-thin));
   }
 `;

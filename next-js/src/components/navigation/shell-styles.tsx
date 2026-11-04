@@ -28,6 +28,8 @@ const headerFocus = css`
 
 export const ShellFrame = styled.div.attrs<{ "data-app-shell"?: string }>({ "data-app-shell": "" })`
   --app-content-gutter: 0px;
+  --app-shell-gutter: ${({ theme }) => theme.layout.gutter};
+  --app-shell-edge-inset: calc(var(--app-shell-gutter) - var(--app-shell-outer-gutter, var(--app-shell-gutter)));
   --app-mobile-tab-height: ${mobileTabHeight};
   --app-header-height: ${({ theme }) => theme.header.phoneHeight};
   --app-header-border-width: ${({ theme }) => theme.border.width};
@@ -36,7 +38,7 @@ export const ShellFrame = styled.div.attrs<{ "data-app-shell"?: string }>({ "dat
   flex-direction: column;
   min-block-size: 100dvh;
   min-inline-size: 0;
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  padding-inline: var(--app-shell-outer-gutter, var(--app-shell-gutter));
 
   > main { flex: 1; }
   ${media.desktop} { --app-header-height: ${({ theme }) => theme.header.desktopHeight}; }
@@ -330,15 +332,19 @@ export const Footer = styled.footer.attrs<{ "data-app-footer"?: string }>({ "dat
   ${desktop} { padding-block: var(--gh-spacing-3_5); font-size: var(--gh-font-body); }
 `;
 
-/** Public and member pages use the existing outer gutter for the header-colored frame. */
+/** Public and member bands fill the browser gutter or form the window's content edge. */
 export const PublicShellFrame = styled(ShellFrame)<{ $workspace: boolean }>`
-  --public-frame-band: ${({ theme }) => theme.layout.gutter};
+  --public-frame-band: var(--app-shell-gutter);
   --public-frame-surface: ${({ theme }) => theme.header.background};
   background-image: linear-gradient(to right,
     var(--public-frame-surface) var(--public-frame-band),
     transparent var(--public-frame-band) calc(100% - var(--public-frame-band)),
     var(--public-frame-surface) calc(100% - var(--public-frame-band)));
-  > main { padding-inline: var(--public-frame-band); }
+  > main {
+    border-inline: var(--app-shell-edge-inset) solid var(--public-frame-surface);
+    padding-inline: var(--public-frame-band);
+  }
+  > ${Header}, > ${Footer} { padding-inline: var(--app-shell-edge-inset); }
   > ${Footer}, > ${TabBar} { background: var(--public-frame-surface); }
   ${media.belowDesktop} { --app-phone-header-outset: var(--public-frame-band); }
   ${desktop} {

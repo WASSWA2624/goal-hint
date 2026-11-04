@@ -14,6 +14,7 @@ export const GlobalStyle = createGlobalStyle<{ $windowsHost: boolean }>`
   html {
     ${({ theme }) => themeCssVariables(theme)}
     ${controlMetrics}
+    ${({ $windowsHost }) => $windowsHost && css`--app-shell-outer-gutter: 0px;`}
     color-scheme: ${({ theme }) => theme.mode};
     font-size: 100%;
     -webkit-text-size-adjust: 100%;
