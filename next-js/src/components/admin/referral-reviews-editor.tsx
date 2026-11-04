@@ -116,7 +116,7 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
         {selected.status === "appealed" && <><ActionButton type="button" disabled={busy} onClick={() => { setConfirmed(false); setDecision("uphold"); }}>Uphold decision</ActionButton>
           <ActionButton type="button" disabled={busy} onClick={() => { setConfirmed(false); setDecision("restore"); }}>Restore reversed time</ActionButton></>}
       </ReviewFooter></RecordCard> : <RecordBody><p>Select a case or create one to review an earned grant.</p></RecordBody>}</RecordDetails>
-    {create && <CriteriaDialog id={`${id}-create`} title="New referral case" open onCancel={close} closeLabel="Close new case" busy={busy} dismissOnBackdrop={false}
+    {create && <CriteriaDialog id={`${id}-create`} title="New referral case" open onCancel={close} closeLabel="Close new case" busy={busy}
       footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={close}>Cancel</CriteriaDialogButton>
         <CriteriaDialogButton type="submit" form={`${id}-form`} disabled={busy || !confirmed || !draft.grantId}>Create case</CriteriaDialogButton></>}>
       <ReviewForm id={`${id}-form`} method="post" action={endpoint} onSubmit={saveCreate}>
@@ -131,7 +131,7 @@ export function ReferralReviewsEditor({ initial }: { initial: readonly ReferralR
         <CheckField><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />Corroborated evidence is recorded.</CheckField><Hint>{policy}</Hint>
         {error && <FieldError role="alert">{error}</FieldError>}
       </ReviewForm></CriteriaDialog>}
-    {decision && selected && <CriteriaDialog id={`${id}-decision`} title={decisionLabel[decision]} open onCancel={close} closeLabel="Close decision" busy={busy} dismissOnBackdrop={false}
+    {decision && selected && <CriteriaDialog id={`${id}-decision`} title={decisionLabel[decision]} open onCancel={close} closeLabel="Close decision" busy={busy}
       footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={close}>Cancel</CriteriaDialogButton>
         <CriteriaDialogButton type="button" disabled={busy || needsEvidence && !confirmed} onClick={decide}>{decisionLabel[decision]}</CriteriaDialogButton></>}>
       <ReviewForm as="div"><p>{decision === "confirm" ? "Only the unused part of this exact earned grant will be removed. Consumed time, paid access and other rewards stay intact."

@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type Ref } from "react";
 import styled from "styled-components";
-import { dateEntryFormat, formatDateEntry, parseDateEntry, type DateEntryMode } from "@/domain/date-entry";
+import { dateEntryFormat, formatDateEntry, type DateEntryMode } from "@/domain/date-entry";
+import { normalizeDateEntryParts, parseDateEntryParts, splitDateEntry, type DateEntryParts } from "@/domain/date-entry-segments";
 import { dateTimeIntervalRange } from "@/domain/date-time";
 import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
@@ -10,6 +11,7 @@ import { TextInput, type TextInputProps } from "./controls";
 import { FloatingField } from "./floating-field";
 import { CalendarIcon, ClockIcon } from "./icons";
 import { DateTimePicker, pickerTitleKey } from "./date-time-picker";
+import { DateEntryControl } from "./date-entry-control";
 
 export type DateTimeFieldProps = Omit<TextInputProps, "type" | "onChange" | "leading" | "trailing"> & {
   mode?: DateEntryMode; locale?: string; onValueChange?: (value: string) => void;
@@ -17,7 +19,6 @@ export type DateTimeFieldProps = Omit<TextInputProps, "type" | "onChange" | "lea
 const subscribe = () => () => {}, browserSnapshot = () => true, serverSnapshot = () => false;
 const Field = styled.div`
   position: relative; min-inline-size: 0; max-inline-size: 100%;
-  && [data-floating-control][data-field-trailing="true"] > input { padding-inline-end: var(--gh-size-11); }
 `;
 const PickerButton = styled.button`
   display: grid; place-items: center; min-inline-size: 0; min-block-size: 0; inline-size: var(--gh-size-8);
@@ -39,12 +40,12 @@ export function DateTimeField({ mode = "date", locale, label, title, value, defa
   const enhanced = useSyncExternalStore(subscribe, browserSnapshot, serverSnapshot);
   const [internal, setInternal] = useState(String(defaultValue ?? ""));
   const source = value === undefined ? internal : String(value ?? "");
-  const [edit, setEdit] = useState<{ source: string; text: string } | null>(null);
+  const [edit, setEdit] = useState<{ source: string; parts: DateEntryParts } | null>(null);
   const [focused, setFocused] = useState(false), [touched, setTouched] = useState(false), [attempted, setAttempted] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const text = edit?.source === source ? edit.text : formatDateEntry(source, mode);
-  const parsed = parseDateEntry(text, mode), format = dateEntryFormat(mode);
+  const parts = edit?.source === source ? edit.parts : splitDateEntry(source, mode);
+  const parsed = parseDateEntryParts(parts, mode), format = dateEntryFormat(mode);
   const issue = parsed.issue === "empty" && !required ? null : parsed.issue;
   let message = issue ? m.text(issue === "day" ? "dateField.day" : issue === "month" ? "dateField.month"
     : issue === "time" ? "dateField.time" : issue === "date" ? "dateField.date" : "dateField.format", { format }) : "";
@@ -69,15 +70,15 @@ export function DateTimeField({ mode = "date", locale, label, title, value, defa
     form?.addEventListener("reset", reset);
     return () => form?.removeEventListener("reset", reset);
   }, [defaultValue, enhanced]);
-  function change(raw: string, normalize = false) {
+  function change(parts: DateEntryParts) {
     setAttempted(false);
-    const checked = parseDateEntry(raw, mode);
+    const checked = parseDateEntryParts(parts, mode);
     let next = checked.value;
     if (checked.issue || min !== undefined && next < String(min) || max !== undefined && next > String(max)) next = "";
     if (next && mode === "datetime") {
       try { dateTimeIntervalRange({ from: next, to: next }, zone); } catch { next = ""; }
     }
-    setEdit({ source: next, text: normalize && next ? formatDateEntry(next, mode) : raw });
+    setEdit({ source: next, parts });
     if (value === undefined) setInternal(next);
     if (next !== source) onValueChange?.(next);
   }
@@ -91,16 +92,15 @@ export function DateTimeField({ mode = "date", locale, label, title, value, defa
       trailing={<PickerButton type="button" aria-label={m.text(pickerTitleKey[mode])}
         aria-haspopup="dialog" aria-expanded={pickerOpen} disabled={disabled || readOnly} onClick={() => setPickerOpen(true)}>
         {mode === "time" ? <ClockIcon /> : <CalendarIcon />}</PickerButton>}>
-      <input {...props} ref={element => { input.current = element; assignRef(ref, element); }} id={id} type="text" value={text}
-        data-date-time-input={mode} required={required} disabled={disabled} readOnly={readOnly} autoComplete="off" spellCheck={false}
-        autoCapitalize="characters" inputMode={mode === "time" ? "numeric" : "text"} title={title ?? `${format}${mode === "datetime" ? ` · ${zone}` : ""}`}
-        aria-invalid={show || props["aria-invalid"] || undefined} maxLength={mode === "datetime" ? 24 : mode === "date" ? 16 : 5}
-        onFocus={event => { setFocused(true); onFocus?.(event); }} onChange={event => change(event.target.value)}
-        onBlur={event => { setFocused(false); setTouched(true); if (!message && parsed.value) setEdit({ source, text: formatDateEntry(parsed.value, mode) }); onBlur?.(event); }}
+      <DateEntryControl {...props} ref={element => { input.current = element; assignRef(ref, element); }} id={id} mode={mode} locale={locale}
+        parts={parts} value={Object.values(parts).join("")} required={required} disabled={disabled} readOnly={readOnly}
+        title={title ?? `${format}${mode === "datetime" ? ` · ${zone}` : ""}`} aria-invalid={show || props["aria-invalid"] || undefined}
+        onFocus={event => { setFocused(true); onFocus?.(event); }} onPartsChange={change}
+        onBlur={event => { setFocused(false); setTouched(true); setEdit({ source, parts: normalizeDateEntryParts(parts) }); onBlur?.(event); }}
         onInvalid={event => { event.preventDefault(); setTouched(true); setAttempted(true); onInvalid?.(event); }} />
     </FloatingField>
     {pickerOpen && <DateTimePicker id={`${id}-picker`} value={canonical} mode={mode} locale={locale} zone={zone}
       min={min === undefined ? undefined : String(min)} max={max === undefined ? undefined : String(max)}
-      onCancel={() => setPickerOpen(false)} onApply={value => { change(value, true); setPickerOpen(false); }} />}
+      onCancel={() => setPickerOpen(false)} onApply={value => { change(splitDateEntry(value, mode)); setPickerOpen(false); }} />}
   </Field>;
 }

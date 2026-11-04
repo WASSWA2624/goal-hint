@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
 import { checkedPeriodPerformance, feedPerformanceApiHref, performanceFeedQuery, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
-import { publicPolicy } from "@/domain/public-policy";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
@@ -21,10 +20,10 @@ function summaryLabels({ query, data }: Presentation) {
   const summaryDay = query.summary === "yesterday" ? addReportingDays(reportingToday, -1) : reportingToday;
   const from = query.summary ? summaryDay : parseReportingDate(data.range.from), to = query.summary ? summaryDay : parseReportingDate(data.range.to);
   const today = query.summary ? reportingToday : getFeedToday(query, instant);
-  const messages = createMessages(query.locale, undefined, query.summary ? publicPolicy.reportingTimeZone
-    : query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
+  const messages = createMessages(query.locale);
+  const dayLabel = (day: ReportingDate) => `${messages.reportingDayParts(day).weekday.toUpperCase()} ${messages.reportingDateRangeCompact(day, day)}`;
   return { title: messages.text(from === today && to === today ? "performance.summary.today" : "performance.summary.title"),
-    period: `${messages.reportingDateRangeCompact(from, to)} · ${messages.timeZone(instant)}` };
+    period: from === to ? dayLabel(from) : `${dayLabel(from)} – ${dayLabel(to)}` };
 }
 const ignoreResult = () => {};
 

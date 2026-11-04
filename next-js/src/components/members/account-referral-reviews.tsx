@@ -61,7 +61,7 @@ export function AccountReferralReviews({ initial, locale = "en", older = false }
     </li>)}</Cases>}
     {older && <AccountActionLink href={accountSectionHref(locale, "referrals")} prefetch={false}>Latest reviews</AccountActionLink>}
     {cases.length === referralReviewRules.pageSize && <AccountActionLink href={`${accountSectionHref(locale, "referrals")}&reviewBefore=${encodeURIComponent(`${cases.at(-1)!.updatedAt}_${cases.at(-1)!.id}`)}`} prefetch={false}>Older reviews</AccountActionLink>}
-    {selected && <CriteriaDialog id={`${id}-appeal`} title="Appeal reward review" open onCancel={() => { if (!busy) setSelected(null); }} closeLabel="Close appeal" busy={busy} dismissOnBackdrop={false}
+    {selected && <CriteriaDialog id={`${id}-appeal`} title="Appeal reward review" open onCancel={() => { if (!busy) setSelected(null); }} closeLabel="Close appeal" busy={busy}
       footer={<><CriteriaDialogButton type="button" variant="secondary" disabled={busy} onClick={() => setSelected(null)}>Cancel</CriteriaDialogButton>
         <CriteriaDialogButton type="submit" form={`${id}-form`} disabled={busy || statement.trim().length < 3}>Send appeal</CriteriaDialogButton></>}>
       <form id={`${id}-form`} method="post" action="/api/account/referral-reviews" onSubmit={submit}>

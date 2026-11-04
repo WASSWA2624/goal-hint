@@ -3,6 +3,7 @@ import test from 'node:test';
 import { dateEntryFormat, formatDateEntry, parseDateEntry, shortMonths } from '../src/domain/date-entry.ts';
 import { searchFilterOptions } from '../src/domain/filter-option-search.ts';
 import { constrainDatePicker, datePickerPartBounds, datePickerParts, datePickerValue, daysInPickerMonth } from '../src/domain/date-picker.ts';
+import { changeDateEntryPart, normalizeDateEntryParts, parseDateEntryParts, splitDateEntry } from '../src/domain/date-entry-segments.ts';
 
 test('scroll columns clamp leap days and narrow every column at the allowed boundaries', () => {
   const january = datePickerParts('2026-01-31T23:59', 'datetime');
@@ -37,7 +38,7 @@ test('partial edits including a leading zero do not become invalid completed dat
   for (const text of ['0', '04', '04-', '04-J', '04-JAN-2']) assert.equal(parseDateEntry(text, 'date').issue, 'incomplete');
   assert.equal(parseDateEntry('00', 'date').issue, 'day');
   assert.equal(parseDateEntry('32-JAN-2026', 'date').issue, 'day');
-  assert.equal(parseDateEntry('04-01-2026', 'date').issue, 'month');
+  assert.equal(parseDateEntry('04-13-2026', 'date').issue, 'month');
   assert.equal(parseDateEntry('04-XYZ-2026', 'date').issue, 'month');
   assert.equal(parseDateEntry('31-APR-2026', 'date').issue, 'date');
   assert.equal(parseDateEntry('29-FEB-2026', 'date').issue, 'date');
@@ -46,12 +47,25 @@ test('partial edits including a leading zero do not become invalid completed dat
 
 test('ISO paste and compact entry normalize without accepting impossible clock values', () => {
   assert.equal(parseDateEntry('2026-01-04', 'date').value, '2026-01-04');
+  assert.equal(parseDateEntry('04-5-2026 14:30', 'datetime').value, '2026-05-04T14:30');
   assert.equal(parseDateEntry('04JAN2026 1430', 'datetime').value, '2026-01-04T14:30');
   assert.equal(parseDateEntry('04-JAN-2026 00:00', 'datetime').value, '2026-01-04T00:00');
   assert.equal(parseDateEntry('04-JAN-2026 23:59', 'datetime').value, '2026-01-04T23:59');
   assert.equal(parseDateEntry('04-JAN-2026 24:00', 'datetime').issue, 'time');
   assert.equal(parseDateEntry('04-JAN-2026 12:60', 'datetime').issue, 'time');
   assert.equal(parseDateEntry('04-JAN-2026', 'datetime').issue, 'incomplete');
+});
+
+test('segmented editing rejects impossible values and normalizes numeric months', () => {
+  const parts = splitDateEntry('2028-02-29T14:05', 'datetime');
+  for (const [part, value] of [['day', '30'], ['day', '00'], ['month', '13'], ['month', 'XY'], ['year', '0000'], ['hour', '24'], ['minute', '60']]) {
+    assert.equal(changeDateEntryPart(parts, part, value), null, `${part} ${value}`);
+  }
+  assert.equal(parseDateEntryParts(changeDateEntryPart(parts, 'day', '0'), 'datetime').issue, 'incomplete');
+  assert.equal(parseDateEntryParts(changeDateEntryPart(parts, 'year', '2027'), 'datetime').value, '2027-02-28T14:05');
+  const may = changeDateEntryPart(parts, 'month', '5');
+  assert.equal(parseDateEntryParts(may, 'datetime').value, '2028-05-29T14:05');
+  assert.equal(normalizeDateEntryParts(may).month, 'MAY');
 });
 
 test('country and league searches respond from the first character and retain useful partial matches', () => {

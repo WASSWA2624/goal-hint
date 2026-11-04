@@ -116,7 +116,7 @@ const Card = styled.article`
   }
   ${wideTable} { grid-template-columns: ${matchTableColumns.full}; }
   /* Touch taps would otherwise leave a stuck tint after returning to the list. */
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  ${media.hover} { &:hover { background: var(--match-card-hover, ${({ theme }) => theme.color.rowHover}); } }
 `;
 
 const MobileUnlockArea = styled.div`

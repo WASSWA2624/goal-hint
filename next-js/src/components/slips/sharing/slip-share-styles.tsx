@@ -5,7 +5,7 @@ import { media } from "@/styles/theme";
 import { Button } from "@/components/ui/controls";
 import { textFieldSurface } from "@/components/ui/filled-surfaces";
 import { slipHeaderActionFrame } from "../slip-disclosure-styles";
-import { dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "@/components/ui/dialog-surfaces";
+import { dialogChromePadding, dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "@/components/ui/dialog-surfaces";
 
 export const ShareTrigger = styled(Button)`
   && { min-block-size: var(--slip-header-action-size, var(--gh-size-7)); block-size: var(--slip-header-action-size, var(--gh-size-7)); min-inline-size: 0; padding: var(--gh-spacing-0_75) var(--gh-spacing-1_75); gap: var(--gh-spacing-1_25); border-radius: ${({ theme }) => theme.radius.control};
@@ -36,7 +36,7 @@ export const Drawer = styled.dialog`
 export const DrawerHeader = styled.header`
   ${dialogHeaderSurface}
   display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); flex: none;
-  padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-end: 0;
+  ${dialogChromePadding} border-block-end: 0;
   h2 { font-size: var(--gh-font-reading); line-height: var(--gh-leading-label); margin: 0; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 
@@ -66,7 +66,7 @@ export const DrawerBody = styled.div`
 
 export const DrawerFooter = styled.footer`
   ${dialogFooterSurface}
-  flex: none; padding: var(--gh-spacing-3) var(--gh-spacing-4); border-block-start: 0;
+  ${dialogChromePadding} flex: none; border-block-start: 0;
   [data-share-actions] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gh-spacing-2); }
   [data-share-secondary] { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--gh-spacing-1_5); margin-block-end: var(--gh-spacing-2_25); }
   [data-share-primary] { inline-size: 100%; }

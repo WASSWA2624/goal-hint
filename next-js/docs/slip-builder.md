@@ -81,8 +81,8 @@ of selected market families, starting at four. A range counts once even when
 both its minimum and maximum are changed. Limits and date/time hide their count
 when zero; Markets always shows its selected-family count.
 
-Apply validates and retains the current dialog's changes. Cancel, Escape and
-backdrop dismissal discard changes made since that dialog opened. Native dialog
+Apply validates and retains the current dialog's changes. Cancel and Escape
+discard changes made since that dialog opened. Backdrop clicks leave it open. Native dialog
 behavior contains keyboard focus while open and returns it to the trigger after
 closing. Markets retains multi-result choices and the match-reuse checkbox.
 

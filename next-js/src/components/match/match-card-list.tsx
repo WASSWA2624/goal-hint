@@ -15,6 +15,7 @@ export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & {
 
 const Board = styled.div<{ $indexLength: number }>`
   min-inline-size: 0;
+  --match-card-hover: ${({ theme }) => `color-mix(in srgb, ${theme.color.rowHover} 30%, ${theme.color.surface})`};
   /* Root-relative tracks stay identical across bold header digits and regular row digits. */
   ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(var(--gh-size-6), calc(${$indexLength} * var(--gh-size-2) + var(--gh-size-0_5)));`}
   ${media.desktop} {
@@ -45,7 +46,7 @@ const List = styled.ul`
   > li > :is(article, [data-desktop-row]) {
     border-radius: ${({ theme }) => theme.radius.none};
     background: ${({ theme }) => theme.color.surface};
-    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+    ${media.hover} { &:hover { background: var(--match-card-hover); } }
   }
   > li > article > [data-match-open], > li > [data-desktop-row] > [data-match-analysis-link] { border-radius: inherit; }
   ${media.belowDesktop} {

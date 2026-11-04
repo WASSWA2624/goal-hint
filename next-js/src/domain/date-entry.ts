@@ -6,6 +6,11 @@ export type DateEntryIssue = "empty" | "incomplete" | "day" | "month" | "date" |
 export const shortMonths = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 export const dateEntryFormat = (mode: DateEntryMode) => mode === "time" ? "HH:mm" : mode === "datetime" ? "DD-MMM-YYYY HH:mm" : "DD-MMM-YYYY";
 
+/** A numeric month and its three-letter label describe the same civil month. */
+export function dateEntryMonth(value: string): number {
+  return /^\d{1,2}$/u.test(value) ? Number(value) : shortMonths.indexOf(value.toUpperCase() as typeof shortMonths[number]) + 1;
+}
+
 /** Form values stay canonical while visible dates use one browser-independent format. */
 export function formatDateEntry(value: string, mode: DateEntryMode): string {
   if (!value || mode === "time") return value;
@@ -29,17 +34,18 @@ export function parseDateEntry(text: string, mode: DateEntryMode): Readonly<{ va
     try { return { value: mode === "datetime" ? parseLocalDateTime(raw) : parseReportingDate(raw), issue: null }; }
     catch { return invalid("date"); }
   }
-  const match = /^(\d{1,2})[- ]?([A-Z]{3})[- ]?(\d{4})(?:[ T]?(\d{1,2}):?(\d{2}))?$/u.exec(raw);
+  const match = /^(\d{1,2})[- ]?([A-Z]{3})[- ]?(\d{4})(?:[ T]?(\d{1,2}):?(\d{2}))?$/u.exec(raw)
+    ?? /^(\d{1,2})[- ](\d{1,2})[- ](\d{4})(?:[ T]?(\d{1,2}):?(\d{2}))?$/u.exec(raw);
   if (!match) {
     const day = /^(\d{2})/u.exec(raw), month = /^\d{1,2}[- ]?([A-Z]+)/u.exec(raw);
     if (day && (Number(day[1]) < 1 || Number(day[1]) > 31)) return invalid("day");
     if (/^\d{1,2}[- ]\d/u.test(raw) || month && !shortMonths.some(value => value.startsWith(month[1]!))) return invalid("month");
     return invalid(raw.length < (mode === "datetime" ? 17 : 11) ? "incomplete" : "date");
   }
-  const month = shortMonths.indexOf(match[2] as typeof shortMonths[number]);
-  if (month < 0) return invalid("month");
+  const month = dateEntryMonth(match[2]!);
+  if (month < 1 || month > 12) return invalid("month");
   if (Number(match[1]) < 1 || Number(match[1]) > 31) return invalid("day");
-  const date = `${match[3]}-${String(month + 1).padStart(2, "0")}-${match[1]!.padStart(2, "0")}`;
+  const date = `${match[3]}-${String(month).padStart(2, "0")}-${match[1]!.padStart(2, "0")}`;
   try { parseReportingDate(date); } catch { return invalid("date"); }
   if (mode === "date") return match[4] ? invalid("date") : { value: date, issue: null };
   if (!match[4] || !match[5]) return invalid("incomplete");

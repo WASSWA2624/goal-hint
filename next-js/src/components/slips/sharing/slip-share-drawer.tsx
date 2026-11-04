@@ -130,12 +130,7 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
   }
 
   return <Drawer id={id} ref={dialog} aria-labelledby={`${id}-title`} data-slip-share-drawer
-    onCancel={(event) => { event.preventDefault(); onClose(); }}
-    onClick={(event) => {
-      if (event.target !== event.currentTarget) return;
-      const box = event.currentTarget.getBoundingClientRect();
-      if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) onClose();
-    }}>
+    onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <DrawerHeader><h2 id={`${id}-title`}>{m.text("slipShare.title")}</h2>
       <DrawerButton type="button" variant="quiet" aria-label={m.text("slipShare.close")} onClick={onClose}><CloseIcon /></DrawerButton></DrawerHeader>
     <DrawerBody aria-busy={!prepared && !error}>

@@ -29,7 +29,7 @@ export function FloatingField({ label, children, action, leading, trailing, hint
     <Frame ref={frame} data-floating-filled={filled} onInput={event => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) setDraft(event.target.value);
     }} data-floating-control data-field-action={!!action} data-field-leading={!!leading} data-field-trailing={!!trailing}>
-      <label htmlFor={id} title={typeof label === "string" ? label : undefined}>{label}</label>
+      <label id={`${id}-label`} htmlFor={id} title={typeof label === "string" ? label : undefined}>{label}</label>
       <FloatingOutline label={label} />
       {leading && <span data-field-leading aria-hidden="true">{leading}</span>}
       {/* A blank placeholder supports CSS state detection; the label supplies all visible text. */}

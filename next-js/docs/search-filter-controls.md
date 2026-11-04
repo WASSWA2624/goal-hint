@@ -14,9 +14,10 @@ control minimum so their bounds stay inside the field on every screen size.
 
 Matches, admin payments/codes/subscribers/audit/plans/referral lookup, market
 search and league/country/phone-country option search use this component.
-Matches, payment, subscriber and audit advanced filters reuse the branded
-`AdvancedFilterDialog`, with Reset Filters on the footer left and Apply Filters
-on the right. Close, Escape and backdrop dismissal cancel the draft.
+Matches, payment, subscriber and audit advanced filters reuse
+`AdvancedFilterDialog`, with a sliders icon and compact header and footer.
+Reset Filters sits on the left and Apply Filters on the right. Close and Escape
+cancel the draft. Backdrop clicks leave the modal open.
 Button fills, hover/press states, visible keyboard focus, disabled states and
 reduced motion use shared tokens. The search action keeps its accessible name
 and uses an icon in narrow desktop fields, leaving more space to type. No
@@ -33,8 +34,8 @@ inline dates where space allows and wrap on narrower containers.
 
 `src/components/performance/performance-summary.tsx` is shared by Matches,
 Best Slips and performance reports. The compact heading places “Performance” on the left and the actual reporting day/range on the right
-(for example `02-Nov-2026 · EAT` or
-`30-Oct – 03-Nov-2026 · EAT`). A refresh timestamp is not a reporting period.
+(for example `MON 02-Nov-2026` or `FRI 30-Oct-2026 – TUE 03-Nov-2026` on Matches).
+The date describes the reporting period independently of the refresh clock.
 There is one date label, with no second date row. Callers own the outer gutter;
 the heading and outer status cards share the same left/right rails. All, Won,
 Lost, Pending, Void and Cancelled use theme colours in three mobile columns
@@ -53,8 +54,9 @@ muted inset rule while keyboard focus keeps its stronger outline.
 
 `FeedFilters` owns one validated draft shared by mobile and desktop. Status or
 result, From/To date-times, sorting, Predictions only, league/country searchable
-multi-selects and probability live in its Advanced Filters dialog. Markets is
-a collapsible checkbox section at the bottom, with at least one selection.
+multi-selects and probability live in its Advanced Filters dialog. Match status
+and Sort by share a row, as do Leagues and Countries. Markets opens expanded
+with four choices in two columns and an Any checkbox that selects all four.
 Period and editable time-zone controls are removed. From/To use the detected
 device zone and define one continuous interval, including the final minute.
 Existing access restrictions, probability guidance and the unavailable-odds
@@ -77,8 +79,10 @@ visible. Both themes and fine/coarse pointer heights use the existing tokens.
 The native GET fallback retains successful fields before hydration.
 
 `DateTimeField` is the shared date, date-time and time-only editor for public,
-analytics and admin forms. Dates display as `04-JAN-2026`; optional time uses
-24-hour `HH:mm`. Form values remain ISO civil dates/local minutes. The compact
+analytics and admin forms. Editable segments enforce calendar and clock values.
+Fixed separators display dates as `04-JAN-2026` and optional time as `HH:mm`.
+Numeric months become three-letter abbreviations on blur. Full dates can be
+pasted into any segment. Form values remain ISO civil dates/local minutes. The compact
 picker places Day, Month, Year, Hour and Minute in one row on every viewport.
 Date-only and time-only fields show their relevant columns. Day and Month cycle
 through their allowed values with touch, wheel, keyboard and arrow input. The

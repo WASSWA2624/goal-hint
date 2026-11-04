@@ -19,7 +19,7 @@ export const desktopMatchBaseStyles = css`
   [data-desktop-row]:has(> [data-row-analysis]) { cursor: pointer; }
   [data-desktop-row] :is(a:not([data-row-analysis]), button, input, select, textarea) { position: relative; z-index: var(--gh-layer-raised); }
   @media (hover: hover) {
-    [data-desktop-row]:has(> [data-row-analysis]):hover { background: ${({ theme }) => theme.color.rowHover}; }
+    [data-desktop-row]:has(> [data-row-analysis]):hover { background: var(--match-card-hover, ${({ theme }) => theme.color.rowHover}); }
   }
   [data-desktop-row]:focus-visible { outline: var(--gh-stroke-strong) solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
   [data-row-time] { white-space: normal; overflow-wrap: anywhere; }

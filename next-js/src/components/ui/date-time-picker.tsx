@@ -18,7 +18,6 @@ export const pickerTitleKey = {
 
 const PickerDialog = styled(CriteriaDialog)<{ $mode: DateEntryMode }>`
   && { inline-size: min(${({ $mode }) => $mode === "datetime" ? "var(--gh-size-96)" : $mode === "date" ? "var(--gh-size-72)" : "var(--gh-size-64)"}, calc(100vw - var(--gh-size-6))); }
-  > header, > footer { padding-block: var(--gh-spacing-1); }
   > div { padding-block: var(--gh-spacing-2); }
 `;
 const Title = styled.span`

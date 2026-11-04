@@ -15,5 +15,8 @@ export const dialogFooterSurface = css`
   background: ${({ theme }) => theme.dialog.footerBackground};
 `;
 
+/** Compact chrome leaves the shared control height available to each action. */
+export const dialogChromePadding = css`padding: var(--gh-spacing-1) var(--gh-spacing-3);`;
+
 /** Filter bodies share the content canvas; headers and footers provide separation. */
 export const filterDialogSurface = dialogSurface;

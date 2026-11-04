@@ -15,16 +15,17 @@ export const Panel = styled.form`
 
 export const DialogContent = styled.div`
   display: grid;
-  gap: var(--gh-spacing-4);
+  gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
   fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
-  legend { margin-block-end: var(--gh-spacing-2); padding: 0; font-size: var(--gh-font-body); font-weight: var(--gh-weight-medium); }
-  [data-fields] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2_5); }
+  [data-fields], [data-market-choices] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--gh-spacing-2_5); }
+  && [data-status-sort-fields] [data-floating-control] > select {
+    font-size: var(--gh-font-body); padding-inline-end: var(--gh-spacing-4); text-overflow: ellipsis;
+  }
   [data-full] { grid-column: 1 / -1; }
-  [data-date-time-fields] { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-2_5); }
-  ${media.desktop} { [data-date-time-fields] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  [data-subsection] { margin-block-start: var(--gh-spacing-3); }
+  [data-date-time-fields] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--gh-size-48)), 1fr)); gap: var(--gh-spacing-2_5); }
   [data-probability-fields] label, [data-odds-fields] label { font-size: var(--gh-font-secondary); }
+  && [data-probability-fields] label { max-inline-size: calc(100% - var(--gh-size-3)); }
   label[data-choice] { display: flex; align-items: center; gap: var(--gh-spacing-2); min-block-size: var(--form-control-height); font-size: var(--gh-font-body); cursor: pointer; }
   input[type="checkbox"] { flex: none; inline-size: var(--gh-size-4); block-size: var(--gh-size-4); margin: 0; accent-color: ${({ theme }) => theme.color.brand}; ${focusRing} }
   [data-options] { max-block-size: var(--gh-size-45); overflow-y: auto; overscroll-behavior: contain; }

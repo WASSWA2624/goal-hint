@@ -5,7 +5,7 @@ import styled from "styled-components";
 import { CloseIcon } from "@/components/ui/icons";
 import { ActionButton } from "./admin-form";
 import { formSurface } from "./subscriber-styles";
-import { dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "@/components/ui/dialog-surfaces";
+import { dialogChromePadding, dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "@/components/ui/dialog-surfaces";
 
 type SubscriberReviewDialogProps = {
   open: boolean;
@@ -34,12 +34,7 @@ export function SubscriberReviewDialog({ open, title, onClose, children, footer,
   }, [open]);
   if (!open) return null;
   return <Dialog id={dialogId} ref={root} aria-labelledby={`${dialogId}-title`} aria-busy={busy} data-subscriber-dialog
-    onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}
-    onClick={event => {
-      if (busy || event.target !== event.currentTarget) return;
-      const bounds = event.currentTarget.getBoundingClientRect();
-      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
-    }}>
+    onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
     <Header><h2 id={`${dialogId}-title`}>{title}</h2><CloseButton type="button" aria-label="Close dialog" disabled={busy} onClick={onClose}><CloseIcon /></CloseButton></Header>
     <Body>{children}</Body>
     {footer && <Footer>{footer}</Footer>}
@@ -57,7 +52,8 @@ const Dialog = styled.dialog`
 `;
 const Header = styled.header`
   ${dialogHeaderSurface}
-  display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
+  ${dialogChromePadding}
+  display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--gh-spacing-3);
   border-block-end: 0;
   h2 { margin: 0; min-inline-size: 0; font-size: var(--gh-font-section); overflow-wrap: anywhere; }
 `;
@@ -73,7 +69,8 @@ const Body = styled.div`
 `;
 const Footer = styled.footer`
   ${dialogFooterSurface}
-  display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2); padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
+  ${dialogChromePadding}
+  display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2);
   border-block-start: 0;
   > button { min-block-size: var(--form-control-height); }
   @media (pointer: coarse) { > button { min-block-size: var(--form-control-height); } }

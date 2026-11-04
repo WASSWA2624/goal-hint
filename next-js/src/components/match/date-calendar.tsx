@@ -160,7 +160,7 @@ export function DateCalendar({ locale, today, from, to, onApply, onClose }: {
     : start === end ? <>{messages.reportingDate(start)}<small>{messages.text("feed.calendar.limit")}</small></>
     : <>{messages.reportingDateSpan(start, end)} · {messages.plural("feed.calendar.days", spanDays(start, end))}<small>{messages.text("feed.calendar.limit")}</small></>;
   return <>
-    <SheetScrim aria-hidden="true" onClick={onClose} />
+    <SheetScrim aria-hidden="true" />
     <Frame ref={sheet} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={(event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
       else keepFocusInSheet(event);

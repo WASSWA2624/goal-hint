@@ -4,15 +4,14 @@ import type { ReactNode } from "react";
 import styled from "styled-components";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { BrandMark } from "./brand";
+import { SlidersIcon } from "./icons";
 import { CriteriaDialog, CriteriaDialogButton } from "./criteria-dialog";
 
 const Title = styled.span`
   display: inline-flex;
   align-items: center;
   gap: var(--gh-spacing-2);
-  > span { padding: 0; }
-  img { inline-size: var(--gh-size-6); block-size: var(--gh-size-6); }
+  > svg { flex: none; inline-size: var(--gh-size-5); block-size: var(--gh-size-5); color: ${({ theme }) => theme.color.link}; }
 `;
 
 const ResetButton = styled(CriteriaDialogButton)`
@@ -22,7 +21,7 @@ const ResetButton = styled(CriteriaDialogButton)`
   }
 `;
 
-/** Shared branding and footer actions; each screen retains its own filter fields and draft. */
+/** Shared heading and footer actions for screen-specific filter drafts. */
 export function AdvancedFilterDialog({ locale, onReset, onApply, applyDisabled = false, children, ...props }: {
   id: string; open: boolean; onCancel: () => void; closeLabel: string;
   locale?: string; onReset: () => void; onApply: () => void; applyDisabled?: boolean;
@@ -30,7 +29,7 @@ export function AdvancedFilterDialog({ locale, onReset, onApply, applyDisabled =
 }) {
   const messages = createMessages(locale);
   return <CriteriaDialog {...props} onApply={onApply}
-    title={<Title><BrandMark alt="" />{messages.text("feed.filters.dialogTitle")}</Title>}
+    title={<Title><SlidersIcon />{messages.text("feed.filters.dialogTitle")}</Title>}
     footer={<>
       <ResetButton type="button" variant="secondary" data-dialog-reset onClick={onReset}>
         {messages.text("feed.filters.resetFilters")}

@@ -161,7 +161,7 @@ export function MobileFeedDateFilter({ query, today, onApply }: {
       <CalendarIcon /><span>{label}</span><ChevronDownIcon />
     </Trigger>
     {open && <>
-      <SheetScrim aria-hidden="true" onClick={close} />
+      <SheetScrim aria-hidden="true" />
       <Frame ref={sheet} id={id} data-mobile-date-editor role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} tabIndex={-1}
         onKeyDown={(event) => {
           if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }

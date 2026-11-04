@@ -11,7 +11,7 @@ import { Button, TextInput, focusTreatment } from "@/components/ui/controls";
 import { CriteriaDialog, type CriteriaDialogProps } from "@/components/ui/criteria-dialog";
 
 export function CheckoutDialog(props: CriteriaDialogProps) {
-  return <CriteriaDialog {...props} dismissOnBackdrop={false} dismissOnEscape={false} />;
+  return <CriteriaDialog {...props} />;
 }
 
 export const CheckoutPanel = styled.section`

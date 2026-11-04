@@ -4,7 +4,7 @@ import { useEffect, useRef, useSyncExternalStore, type ReactNode, type Ref } fro
 import styled from "styled-components";
 import { Button } from "./controls";
 import { CloseIcon } from "./icons";
-import { dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
+import { dialogChromePadding, dialogFooterSurface, dialogHeaderSurface, dialogSurface } from "./dialog-surfaces";
 import { controlRow } from "./control-layout";
 
 const subscribe = () => () => {};
@@ -54,7 +54,7 @@ const Header = styled.header`
   align-items: center;
   gap: var(--gh-spacing-2_5);
   min-inline-size: 0;
-  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
+  ${dialogChromePadding}
   border-block-end: 0;
 
   > h2 { margin: 0; font-size: var(--gh-font-section); line-height: var(--gh-leading-label); font-weight: ${({ theme }) => theme.typography.weight.bold}; }
@@ -96,7 +96,7 @@ const Actions = styled.footer`
   align-items: center;
   justify-content: flex-end;
   gap: var(--gh-spacing-2);
-  padding: var(--gh-spacing-2_5) var(--gh-spacing-3);
+  ${dialogChromePadding}
   border-block-start: 0;
 
   ${controlRow}
@@ -107,7 +107,7 @@ const Actions = styled.footer`
 export const CriteriaDialogButton = styled(Button)`
   && {
     min-block-size: var(--form-control-height);
-    padding: var(--gh-spacing-1_5) var(--gh-spacing-3);
+    padding: var(--gh-spacing-1) var(--gh-spacing-2_5);
     border-radius: ${({ theme }) => theme.radius.control};
     font-size: var(--gh-font-body);
     line-height: var(--gh-leading-label);
@@ -129,14 +129,12 @@ export type CriteriaDialogProps = Readonly<{
   children: ReactNode;
   className?: string;
   busy?: boolean;
-  dismissOnBackdrop?: boolean;
-  dismissOnEscape?: boolean;
   hideFooter?: boolean;
   applyDisabled?: boolean;
 } & ResetAction & DialogActions>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, dismissOnBackdrop = true, dismissOnEscape = true, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, closeButtonRef, resetLabel, children, className, busy = false, hideFooter = false, applyDisabled = false, footer }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -158,14 +156,13 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onRe
 
   return <Dialog id={id} ref={root} className={className} open={enhanced ? undefined : true}
     aria-labelledby={titleId} aria-busy={busy} data-criteria-dialog="" data-slip-criteria-group={group} data-enhanced={enhanced ? "true" : "false"}
-    onCancel={(event) => { if (event.target !== event.currentTarget) return; event.preventDefault(); event.stopPropagation(); if (dismissOnEscape) onCancel(); }}
-    onClick={(event) => {
-      if (!dismissOnBackdrop || event.target !== event.currentTarget || !enhanced) return;
-      const bounds = event.currentTarget.getBoundingClientRect();
-      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onCancel();
+    onCancel={(event) => {
+      if (event.target !== event.currentTarget) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!busy) onCancel();
     }}
     onKeyDown={(event) => {
-      if (!enhanced || !open || !onApply || applyDisabled || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;
+      if (!enhanced || !open || !onApply || busy || applyDisabled || event.defaultPrevented || event.nativeEvent.isComposing || event.key !== "Enter") return;
       const target = event.target;
       if (target instanceof Element && target.closest("dialog") !== event.currentTarget) return;
       if (!(target instanceof HTMLInputElement) || ["button", "submit", "reset"].includes(target.type)) return;

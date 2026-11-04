@@ -163,23 +163,22 @@ Desktop uses the shell header. Both viewports render the same `FeedFilters`:
 one search row and its Advanced filters button, with transparent surroundings
 and shared spacing above and below. There is no separate gray filter panel.
 
-One branded **Advanced Filters** dialog owns status/result, combined From/To
+One **Advanced Filters** dialog owns status/result, combined From/To
 date-times in the device zone, sorting, Predictions only, markets, leagues,
 countries, probability bounds and the existing unavailable-odds explanation.
 Each field renders once; desktop and mobile share the same draft and validation.
 Leagues and countries reuse one searchable multi-select with bundled country flags.
-Markets uses a collapsible checkbox section at the bottom. Period and editable
-zone fields are removed. Dates use the shared formatted editor and scroll picker.
+Markets opens expanded with an Any checkbox and a two-column grid. Period and
+editable zone fields are removed. Dates use the shared segmented editor and scroll picker.
 Live selects Today and disables incompatible date/time fields. Invalid or
 incomplete drafts remain editable and disable Apply.
 
-The shared `AdvancedFilterDialog` wraps `CriteriaDialog` with the existing brand
-mark, theme surfaces, modal focus handling and exactly two footer actions:
-**Reset Filters** on the left and **Apply Filters** on the right. The body
-scrolls independently of the header and footer. Reset edits only the draft;
-Apply commits the complete validated query and closes the dialog. Escape,
-backdrop dismissal and the close button restore the opening draft and opener
-focus. Reset restores the configured Matches defaults in the device zone,
+The shared `AdvancedFilterDialog` wraps `CriteriaDialog` with a sliders icon,
+compact theme surfaces and modal focus handling. **Reset Filters** sits on the
+left and **Apply Filters** on the right. The body scrolls independently of the
+header and footer. Reset edits the draft. Apply commits a valid query and
+closes the dialog. Escape and Close restore the opening draft and opener focus.
+Backdrop clicks leave the modal open. Reset restores the configured defaults in the device zone,
 including fifty records per page. Payment, subscriber and audit search screens reuse
 this dialog chrome around their existing fields and cancellation behavior.
 Without JavaScript the same dialog fields remain inline for native GET search.

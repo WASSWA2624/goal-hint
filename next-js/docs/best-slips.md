@@ -15,8 +15,8 @@ Best Slips places Advanced filters beside the performance cards on desktop,
 matching the card row's height, and below them on mobile. The shared dialog
 contains Slip date, custom From/To dates when selected, and Total odds. Date
 and odds edits remain local until Apply Filters, which restarts pagination.
-Reset Filters restores the default draft; closing, Escape or backdrop dismissal
-discards it and restores focus. Custom dates must be valid, ordered and span no
+Reset Filters restores the default draft. Close and Escape discard the draft
+and restore focus. Backdrop clicks leave the modal open. Custom dates must be valid, ordered and span no
 more than 366 inclusive days. Result cards retain their existing cohort drilldowns.
 
 One tinted information bar retains the first visible publication date on the

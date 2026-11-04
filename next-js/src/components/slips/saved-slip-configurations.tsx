@@ -193,7 +193,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, applied
       onClick={() => { if (selected) { onLoad(selected); close(); } }}>{m.text("slipConfigs.use")}</CriteriaDialogButton>
   </>;
   return <><SavedDialog id={id} title={m.text("slipConfigs.title")} open onCancel={close} closeLabel={m.text("slipConfigs.close")}
-    dismissOnBackdrop={false} closeButtonRef={closeButton} busy={busy} footer={footer} {...(editor && !desktop ? { onApply: apply } : {})}>
+    closeButtonRef={closeButton} busy={busy} footer={footer} {...(editor && !desktop ? { onApply: apply } : {})}>
     <Content data-saved-slip-configurations data-analytics-ignore aria-busy={loading || busy}>
       <SelectInput ref={chooseField} label={m.text("slipConfigs.choose")} value={selection ?? ""} disabled={disabled || !!editor || !configurations.length}
         hint={m.text("slipConfigs.count", { count: m.number(configurations.length), maximum: m.number(slipConfigurationRules.maximum) })}
@@ -221,7 +221,7 @@ export function SavedSlipConfigurations({ id, locale, currentParameters, applied
     </Content>
   </SavedDialog>
   {nestedEditor && <EditorDialog id={`${id}-editor`} title={editorTitle} open busy={busy}
-    dismissOnBackdrop={false} onCancel={cancelEditor} closeLabel={m.text("slipConfigs.cancel")} footer={editorActions} onApply={apply}>
+    onCancel={cancelEditor} closeLabel={m.text("slipConfigs.cancel")} footer={editorActions} onApply={apply}>
     <Content data-configuration-editor={editor.action} data-analytics-ignore>{editorFields}</Content>
   </EditorDialog>}
   </>;

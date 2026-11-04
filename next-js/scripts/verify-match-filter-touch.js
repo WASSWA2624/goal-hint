@@ -9,8 +9,8 @@ async function verifyMatchFilterTouch(page) {
     await phone.evaluate(() => localStorage.setItem('goal-hint-theme', 'dark')); await phone.reload();
     const gallery = phone.locator('[data-date-gallery]');
     await gallery.locator('[data-date-time-input]').first().waitFor();
-    const received = gallery.getByRole('textbox', { name: 'Received at', exact: true });
-    await received.fill('31-JAN-2026 14:05');
+    const received = gallery.getByRole('group', { name: 'Received at', exact: true });
+    await received.getByRole('textbox', { name: 'Day', exact: true }).fill('31');
     await gallery.getByRole('button', { name: 'Choose date and time', exact: true }).tap();
     const picker = phone.getByRole('dialog', { name: 'Choose date and time', exact: true });
     const aligned = await picker.locator('[data-scroll-picker-column]').evaluateAll(columns => {
@@ -43,12 +43,13 @@ async function verifyMatchFilterTouch(page) {
     await hourStep.tap();
     await phone.screenshot({ path: 'output/playwright/date-time-picker-touch-dark-390.png' });
     await picker.getByRole('button', { name: 'Use selection', exact: true }).tap();
-    assert(await received.inputValue() === '01-JAN-2026 15:05', 'Wrapped date and stepped hour commit together');
+    assert(await gallery.locator('input[name="receivedAt"]').inputValue() === '2026-01-01T15:05', 'Wrapped date and stepped hour commit together');
     await phone.goto(`${origin}/en/matches?start=2026-11-04T09%3A00&end=2026-11-06T17%3A00&tz=Africa%2FKampala&picks=all`);
     await phone.locator('[data-criteria-dialog][data-enhanced="true"]').waitFor({ state: 'attached' });
     await phone.locator('[data-search-filters]').tap();
     const dialog = phone.getByRole('dialog', { name: 'Advanced Filters', exact: true });
-    assert(await dialog.getByRole('textbox', { name: 'From', exact: true }).inputValue() === '04-NOV-2026 01:00', 'Applied interval prefills in detected New York device zone');
+    assert(await dialog.getByRole('group', { name: 'From Date and Time', exact: true }).evaluate(node =>
+      [...node.children].map(child => child.value ?? child.textContent).join('')) === '04-NOV-2026 01:00', 'Applied interval prefills in detected New York device zone');
     const countries = dialog.locator('[data-searchable-select]').filter({ has: phone.getByRole('button', { name: /^Countries:/ }) });
     await countries.locator('[data-select-trigger]').tap(); await countries.getByRole('combobox').fill('E');
     await countries.getByRole('option', { name: 'Egypt', exact: true }).tap();
