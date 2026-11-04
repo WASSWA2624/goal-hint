@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
-import { DeskHead } from "@/components/admin/desk-styles";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { createSubscribers } from "@/server/admin/subscribers";
 import { readSubscriberDirectory } from "@/server/admin/subscriber-directory";
@@ -23,5 +23,5 @@ export default async function AdminSubscribersPage({ searchParams }: { searchPar
   const data = db && accounts ? await Promise.all([accounts, plansServiceFor(db).list(), detail])
     .then(([accounts, plans, detail]) => ({ accounts, plans, detail })).catch(() => null) : null;
   return data ? <SubscribersEditor accounts={data.accounts} detail={data.detail} plans={data.plans} initialQuery={query} selectedExplicitly={!!id} />
-    : <><DeskHead><h1>Subscribers</h1></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>;
+    : <><VisuallyHidden as="h1">Subscribers</VisuallyHidden><Notice $tone="error">Member storage is unavailable.</Notice></>;
 }

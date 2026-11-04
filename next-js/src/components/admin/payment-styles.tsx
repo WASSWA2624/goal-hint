@@ -27,19 +27,17 @@ export const PaymentUnavailable = styled.section`
   align-content: start;
   gap: var(--gh-spacing-4);
   min-inline-size: 0;
-  padding: var(--gh-spacing-5);
-  ${media.desktop} { > h1 { ${visuallyHidden} } }
+  > h1 { ${visuallyHidden} }
 `;
 
-/** On phones the review replaces the title row; the h1 stays for assistive technology. */
+/** The phone review shows its own navigation instead of the status tabs. */
 export const PaymentHead = styled(RecordHead)<{ $reviewing: boolean }>`
   background: transparent;
   ${media.belowDesktop} {
-    gap: var(--gh-spacing-3);
+    padding-inline: 0;
     > nav { flex: 1 1 100%; }
     ${({ $reviewing }) => $reviewing && css`
       min-block-size: 0;
-      h1 { ${visuallyHidden} }
       > :not(h1) { display: none; }
     `}
   }

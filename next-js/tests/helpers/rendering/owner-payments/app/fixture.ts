@@ -93,7 +93,7 @@ function initialState(): FixtureState {
 /** State belongs only to this isolated Next process. It never connects to business storage or a messaging provider. */
 export function fixtureState(): FixtureState { return fixtureGlobal.goalHintOwnerFixture ??= initialState(); }
 export function resetFixture() { fixtureGlobal.goalHintOwnerFixture = initialState(); }
-/** One refused account-update SMS for the pending report: the Overview shows its notice panel only with this opt-in data. */
+/** One refused account-update SMS for the pending report: the Overview counts it only with this opt-in data. */
 export function loadNoticesFixture() {
   const state = fixtureState(), attempted = new Date("2026-10-23T09:35:00Z");
   state.notices = [{ id: "00000000-0000-4000-8000-000000000500", accountId, targetType: "payment", decision: "rejected", targetId: paymentId, status: "failed",

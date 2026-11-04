@@ -13,6 +13,14 @@ const refused = (): NoticeAction => ({ status: "refused", message: "This message
 const interrupted = (row: PaymentNotificationOutbox, at: Date) => row.status === "dispatching" && row.startedAt !== null && +row.startedAt <= +at - paymentNoticeRules.interruptedAfterMs;
 const unconfirmed = (row: PaymentNotificationOutbox, at: Date) => ["failed", "uncertain"].includes(row.status) || interrupted(row, at);
 
+function attentionWhere(at: Date): Prisma.PaymentNotificationOutboxWhereInput {
+  return { OR: [
+    { status: { in: ["failed", "uncertain", "unsupported", "unavailable", "skipped"] } },
+    { status: "queued", createdAt: { lte: new Date(+at - paymentNoticeRules.stuckAfterMs) } },
+    { status: "dispatching", startedAt: { lte: new Date(+at - paymentNoticeRules.interruptedAfterMs) } },
+  ] };
+}
+
 /** Owner inspection and explicit reconciliation only. Reading or changing a notice never contacts the SMS gateway. */
 export function createPaymentNoticeAdmin(database: DatabaseRuntime, now = Date.now) {
   async function change(id: string, actor: string, action: "resend" | "dismiss"): Promise<NoticeAction> {
@@ -39,14 +47,14 @@ export function createPaymentNoticeAdmin(database: DatabaseRuntime, now = Date.n
   return Object.freeze({
     resend: (id: string, actor: string) => change(id, actor, "resend"),
     dismiss: (id: string, actor: string) => change(id, actor, "dismiss"),
+    attentionCount(): Promise<number> {
+      const where = attentionWhere(new Date(now()));
+      return database.query(tx => tx.paymentNotificationOutbox.count({ where }));
+    },
     async attention(): Promise<readonly OwnerNotice[]> {
       const at = new Date(now());
       return database.query(async tx => {
-        const where: Prisma.PaymentNotificationOutboxWhereInput = { OR: [
-          { status: { in: ["failed", "uncertain", "unsupported", "unavailable", "skipped"] } },
-          { status: "queued", createdAt: { lte: new Date(+at - paymentNoticeRules.stuckAfterMs) } },
-          { status: "dispatching", startedAt: { lte: new Date(+at - paymentNoticeRules.interruptedAfterMs) } },
-        ] };
+        const where = attentionWhere(at);
         const rows = await tx.paymentNotificationOutbox.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50,
           include: { account: { select: { phone: true } } } });
         const paymentIds = rows.filter(row => row.targetType === "payment").map(row => row.targetId);

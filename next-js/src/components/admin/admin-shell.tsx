@@ -4,13 +4,13 @@ import type { ComponentProps } from "react";
 import { HeaderBrand } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
-import { DesktopNav, Header, HeaderActions, HomeLink, ShellFrame, SkipLink, TabBar } from "@/components/navigation/shell-styles";
+import { DesktopNav, Header, HeaderActions, HomeLink, SkipLink, TabBar } from "@/components/navigation/shell-styles";
 import { ResponsiveNavigation } from "@/components/navigation/responsive-navigation";
 import { dashboardDestination, navigationDestinations } from "@/components/navigation/navigation-destinations";
 import { getShellDate } from "@/app/_components/shell-time";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
-import { AdminHeaderContent, AdminMark, AdminWorkspace } from "./admin-workspace";
+import { AdminHeaderContent, AdminMark, AdminSectionMenu, AdminShellFrame, AdminWorkspace } from "./admin-workspace";
 
 /**
  * The owner layout keeps its header and section navigation mounted across admin and analytics routes.
@@ -20,7 +20,7 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
   const messages = createMessages("en");
   const destinations = [...navigationDestinations(await getShellDate(), "en"), dashboardDestination(messages.text("navigation.dashboard"))];
   return (
-    <ShellFrame data-admin-shell>
+    <AdminShellFrame data-admin-shell>
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header>
         <AdminHeaderContent>
@@ -33,12 +33,13 @@ export async function AdminShell({ username, ...props }: ComponentProps<typeof A
           </DesktopNav>
           <HeaderActions><AccountLinks locale="en" administratorName={username} /></HeaderActions>
         </AdminHeaderContent>
+        <AdminSectionMenu {...(props.current ? { initialSection: props.current } : {})} />
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
       <AdminWorkspace {...props} />
       <TabBar aria-label={messages.text("navigation.tabs")}>
         <ResponsiveNavigation mobile destinations={destinations} current="dashboard" moreLabel={messages.text("navigation.more")} />
       </TabBar>
-    </ShellFrame>
+    </AdminShellFrame>
   );
 }

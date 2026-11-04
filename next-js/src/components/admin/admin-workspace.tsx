@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { usePathname } from "next/navigation";
-import { joinedDesktopSections } from "@/components/ui/layout";
+import { ShellFrame } from "@/components/navigation/shell-styles";
+import { contentGutter, joinedDesktopSections } from "@/components/ui/layout";
 import {
   CardIcon, ChartIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, GridIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
@@ -35,21 +36,27 @@ function SectionLinks({ current, onNavigate, collapsed = false }: { current: Adm
   </ul>;
 }
 
+function useAdminSection(initialSection?: AdminSection) {
+  const pathname = usePathname();
+  return { pathname, current: adminSections.find(section => section.href === pathname)?.key ?? initialSection ?? "overview" };
+}
+
 /** Phones and tablets: the current section names the menu; the list opens below it and closes on a choice, Escape or a tap outside. */
-function SectionMenu({ current }: { current: AdminSection }) {
+export function AdminSectionMenu({ initialSection }: { initialSection?: AdminSection }) {
+  const { current } = useAdminSection(initialSection);
   const root = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
   const dismiss = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
   const label = adminSections.find(({ key }) => key === current)?.label ?? "Admin";
-  return <MenuBar ref={root} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {
+  return <MenuBar data-admin-section-menu ref={root} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {
     if (event.key !== "Escape" || !root.current?.open) return;
     event.preventDefault();
     dismiss();
     root.current.querySelector("summary")?.focus({ preventScroll: true });
   }}>
     <summary aria-expanded={open}>
-      <ListIcon /><small>Section</small><strong>{label}</strong><ChevronDownIcon />
+      <ListIcon /><span><small>Section</small><strong>{label}</strong></span><ChevronDownIcon />
     </summary>
     <MenuPopup aria-label="Admin sections">
       <SectionLinks current={current} onNavigate={dismiss} />
@@ -64,8 +71,7 @@ function SectionMenu({ current }: { current: AdminSection }) {
 export function AdminWorkspace({ current: initialSection, children, pendingCount }: {
   current?: AdminSection; children: ReactNode; pendingCount?: number;
 }) {
-  const pathname = usePathname();
-  const current = adminSections.find(section => section.href === pathname)?.key ?? initialSection ?? "overview";
+  const { pathname, current } = useAdminSection(initialSection);
   const recordWorkspace = isRecordAdminSection(current);
   const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, () => pendingCount ?? null);
   const sidebarSnapshot = useSyncExternalStore(subscribeSidebarPreference, getSidebarSnapshot, getServerSidebarSnapshot);
@@ -95,7 +101,6 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
       <SidebarResize aria-hidden={collapsed || undefined} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
         aria-label="Resize admin sidebar" aria-controls="admin-sidebar" aria-valuetext={`${sidebarWidth} pixels wide`}
         title="Drag to resize or use arrow keys. Double-click to restore the default width." {...handle} />
-      <SectionMenu current={current} />
       <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"}>
         <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace} $joined={current === "analytics"}>{children}</Column>
       </Main>
@@ -103,6 +108,11 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
   );
 }
 
+export const AdminShellFrame = styled(ShellFrame)`
+  ${media.belowDesktop} {
+    --app-header-height: calc(${({ theme }) => theme.header.phoneHeight} + var(--form-control-height) + var(--gh-stroke-thin));
+  }
+`;
 export { WorkspaceHeaderContent as AdminHeaderContent } from "@/components/navigation/shell-styles";
 export const AdminMark = styled.span`
   display: none;
@@ -140,7 +150,6 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
     overflow-y: auto;
     padding: var(--gh-spacing-2) var(--gh-spacing-2_5);
     background: ${({ theme }) => theme.color.surface};
-    border-inline-start: var(--gh-size-1) solid ${({ theme }) => theme.header.background};
     min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
   }
   ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
@@ -155,7 +164,11 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
     }
   }
 `;
+const adminMenuDivider = css`
+  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.controlBorder};
+`;
 const SidebarHead = styled.div`
+  ${adminMenuDivider}
   display: flex; align-items: center; justify-content: space-between; gap: var(--gh-spacing-1);
   min-block-size: var(--form-control-height);
   margin: calc(-1 * var(--gh-spacing-2)) calc(-1 * var(--gh-spacing-2_5)) var(--gh-spacing-1_5);
@@ -210,30 +223,31 @@ const Caption = styled.p`
 const SectionLink = WorkspaceNavigationLink;
 const MenuBar = styled.details`
   position: relative;
-  z-index: var(--gh-layer-toolbar);
-  background: ${({ theme }) => theme.color.surface};
-  border-block-end: 0;
+  ${adminMenuDivider}
   ${media.desktop} { display: none; }
   > summary {
     display: flex;
     align-items: center;
     gap: var(--gh-spacing-2);
-    min-block-size: var(--gh-size-12);
-    padding: 0 var(--gh-spacing-4);
+    min-block-size: var(--form-control-height);
+    padding-block: var(--gh-spacing-1);
+    padding-inline: ${contentGutter};
+    padding-inline-start: calc(${contentGutter} + ${({ theme }) => theme.space.sm});
     list-style: none;
     cursor: pointer;
     &::-webkit-details-marker { display: none; }
-    > svg { flex: none; font-size: var(--gh-font-title); color: ${({ theme }) => theme.color.mutedText}; }
+    > svg { flex: none; font-size: var(--gh-font-title); color: ${({ theme }) => theme.header.accent}; }
     > svg:last-child { margin-inline-start: auto; transition: transform ${({ theme }) => theme.motion.disclosure} ${({ theme }) => theme.motion.easing}; }
+    > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--gh-spacing-2); }
     small {
-      color: ${({ theme }) => theme.color.mutedText};
+      color: ${({ theme }) => theme.header.mutedText};
       font-size: ${({ theme }) => theme.typography.scale.caption};
       font-weight: ${({ theme }) => theme.typography.weight.heavy};
       letter-spacing: var(--gh-tracking-uppercase);
       text-transform: uppercase;
     }
     strong { font-size: var(--gh-font-reading); }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: calc(-1 * var(--gh-size-0_75)); }
   }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
   @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
@@ -242,18 +256,20 @@ const MenuPopup = styled.nav`
   position: absolute;
   inset-inline: 0;
   inset-block-start: 100%;
-  max-block-size: calc(100dvh - var(--gh-size-28));
+  max-block-size: calc(100dvh - var(--app-header-height) - var(--app-mobile-tab-height) - env(safe-area-inset-bottom));
   overflow-y: auto;
   padding: var(--gh-spacing-1_5) var(--gh-spacing-2) var(--gh-spacing-2_5);
+  color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border-block-end: 0;
   box-shadow: ${({ theme }) => theme.shadow.popover};
   ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
   li[data-separated] { margin-block-start: var(--gh-spacing-1_5); padding-block-start: var(--gh-spacing-1_5); border-block-start: 0; }
 `;
 const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
   min-inline-size: 0;
-  padding: var(--gh-spacing-5) var(--gh-spacing-4) calc(var(--gh-spacing-10) + var(--gh-size-14) + var(--gh-spacing-0_25) + env(safe-area-inset-bottom));
+  padding-block: var(--gh-spacing-3) calc(var(--app-mobile-tab-height) + var(--gh-spacing-5) + env(safe-area-inset-bottom));
+  padding-inline: ${contentGutter};
+  scroll-margin-block-start: var(--app-header-height);
   &:focus { outline: none; }
   ${media.desktop} { grid-column: 3; padding: ${({ theme }) => `${theme.space.lg} 0 calc(${theme.space.lg} * 2)`}; }
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
@@ -264,13 +280,11 @@ const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>
   gap: var(--gh-spacing-4);
   align-content: start;
   min-inline-size: 0;
-  max-inline-size: ${({ $wide }) => $wide ? "100%" : "var(--gh-size-304)"};
-  margin-inline: auto;
-  ${media.desktop} { inline-size: 100%; max-inline-size: none; }
+  inline-size: 100%;
   ${({ $wide }) => !$wide && css`${media.desktop} { gap: var(--gh-spacing-5); }`}
   ${({ $joined }) => $joined && joinedDesktopSections}
   ${({ $fixed }) => $fixed && css`${media.desktop} {
     inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0;
-    &:not(:has(> [data-record-workspace])) { display: block; padding: var(--gh-spacing-5); overflow-y: auto; }
+    &:not(:has(> [data-record-workspace])) { display: block; padding-block: var(--gh-spacing-5); overflow-y: auto; }
   }`}
 `;

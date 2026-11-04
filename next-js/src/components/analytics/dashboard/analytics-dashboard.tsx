@@ -202,7 +202,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
   return (
     <>
         <PageTitle>
-          <h1>Visitor analytics</h1>
+          <VisuallyHidden as="h1">Visitor analytics</VisuallyHidden>
           <p>{formatRange(selection)} · East Africa Time{report ? ` · updated ${new Date(report.generatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
           <p aria-live="polite" title="Distinct visitors active in the last five minutes"><LiveVisitorCount /> live</p>
         </PageTitle>

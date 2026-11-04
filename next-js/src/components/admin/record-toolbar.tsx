@@ -5,7 +5,6 @@ import styled from "styled-components";
 import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
-import { visuallyHidden } from "./desk-styles";
 import { RecordHead } from "./record-workspace";
 
 export const RecordToolbar = styled(RecordHead).attrs<{ "data-admin-toolbar"?: string }>({ "data-admin-toolbar": "" })`
@@ -13,7 +12,6 @@ export const RecordToolbar = styled(RecordHead).attrs<{ "data-admin-toolbar"?: s
   grid-template-columns: minmax(0, 1fr);
   padding-inline: 0;
   background: transparent;
-  > h1 { ${visuallyHidden} }
   ${media.desktop} { padding-inline: ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 

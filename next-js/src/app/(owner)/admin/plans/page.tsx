@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { PlansEditor } from "@/components/admin/plans-editor";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
@@ -17,10 +17,10 @@ export default async function AdminPlansPage({ searchParams }: { searchParams: P
   const params = await searchParams, planId = uuid(params.planId) ? params.planId : undefined;
   const plans = database ? await plansServiceFor(database).list().catch(() => null) : null;
   if (plans && params.planId !== undefined && (!planId || !plans.some(plan => plan.id === planId))) {
-    return <><DeskHead><h1>Plans</h1></DeskHead><Notice $tone="error">This plan is unavailable.</Notice></>;
+    return <><VisuallyHidden as="h1">Plans</VisuallyHidden><Notice $tone="error">This plan is unavailable.</Notice></>;
   }
   return plans ? <PlansEditor key={planId ?? "all"} initialPlans={plans} {...(planId ? { initialSelectedId: planId } : {})} /> : <div>
-    <DeskHead><DeskTitle><h1>Plans</h1><p>Length and price of each paid period</p></DeskTitle></DeskHead>
+    <VisuallyHidden as="h1">Plans</VisuallyHidden>
     <Notice $tone="error" role="alert">Plans are unavailable because the database cannot be read. Try again shortly.</Notice>
   </div>;
 }

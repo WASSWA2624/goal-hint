@@ -71,12 +71,11 @@ export const RecordHead = styled.header`
   position: relative;
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2_5) var(--gh-spacing-4);
   min-inline-size: 0; padding-inline: ${({ theme }) => theme.layout.sectionPadding};
-  h1 { font-size: var(--gh-font-page); }
+  > h1 { ${visuallyHidden} }
   ${media.desktop} {
     grid-column: 1 / -1; min-block-size: var(--gh-size-12); padding: var(--gh-spacing-1) ${({ theme }) => theme.layout.sectionPadding};
     border-block-end: 0;
     ${sectionSurface}
-    > h1 { ${visuallyHidden} }
     button, nav { border-radius: ${({ theme }) => theme.radius.control}; }
   }
 `;

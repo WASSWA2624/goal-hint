@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { CodesEditor } from "@/components/admin/code-tools";
-import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
@@ -15,5 +15,5 @@ export default async function AdminCodesPage({ searchParams }: { searchParams: P
     createPaymentReview(db).codes().catch(() => null), plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
   return data ? <CodesEditor initialCodes={data} plans={plans} />
-    : <div><DeskHead><DeskTitle><h1>Codes</h1></DeskTitle></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></div>;
+    : <><VisuallyHidden as="h1">Codes</VisuallyHidden><Notice $tone="error">Member storage is unavailable.</Notice></>;
 }

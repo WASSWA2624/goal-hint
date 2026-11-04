@@ -465,26 +465,20 @@ def payments_queue_rendering(origin):
 
 
 def overview_notices(origin):
-    """The Overview lists SMS notices to check only when some exist; acceptance is never shown as receipt or the text sent."""
-    html = visible_html(request(origin, "/admin").text)
-    for label in ["SMS notices to check", "data-payment-notices", "Send again"]:
-        assert label not in html, label
-    fixture_json(origin, "/api/fixture/payments", {"scenario": "notices"})
-    try:
+    """The overview shows a count without exposing the payment queue or notice records."""
+    def verify(count):
         response = request(origin, "/admin")
         assert response.status == 200
         html = visible_html(response.text)
-        match(r"<dt>SMS notices to check</dt><dd>1</dd>", html)
-        panel = match(r'<section\b[^>]*data-payment-notices[^>]*>([\s\S]*?)</section>', html).group(1)
-        for label in ["SMS notices", "PTEST", "Payment decision", "Not confirmed", "View subscriber", "Send again", "Dismiss",
-                "The member may receive this notice twice"]:
-            assert label in panel, label
-        match(r'href="/admin/subscribers\?accountId=00000000-0000-4000-8000-000000000100"', panel)
-        for leaked in ["Your account has been updated", "Log in to view"]:
-            assert leaked not in html, leaked
-        for claim in ["proof of receipt", "delivered", "received"]:
-            assert claim not in panel, claim
-        assert html.count("data-payment-notices") == 1
+        match(r'Message notices to check</dt><dd>' + str(count) + r'</dd>', html)
+        for removed in ["Payment queue", "data-payment-notices", "View subscriber", "Send again", "Payment numbers updated",
+                        "How totals are calculated", "PTEST", "Your account has been updated", "Log in to view"]:
+            assert removed not in html, removed
+
+    verify(0)
+    fixture_json(origin, "/api/fixture/payments", {"scenario": "notices"})
+    try:
+        verify(1)
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
@@ -538,7 +532,8 @@ def main():
         record_workspaces_rendering(server.origin)
         overview_notices(server.origin)
         subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Save note","Delete or erase"]),("/admin/audit",["Audit"])]:
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue this week","Revenue this month","Pending payments","Trials this week",
+            "Upload alerts this week","Credit held by members","Message notices to check"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Save note","Delete or erase"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)
