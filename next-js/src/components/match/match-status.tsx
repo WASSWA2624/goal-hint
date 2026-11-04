@@ -11,10 +11,15 @@ import type { OutcomeTone } from "@/styles/theme";
 import { MatchClockText } from "./score-presentation";
 
 const Label = styled(StatusBadge)`
-  --status-ink: ${({ theme }) => theme.color.mutedText};
-  --status-fill: ${({ theme }) => theme.color.surfaceMuted};
+  --status-ink: ${({ theme }) => theme.color.outcome.unavailable.text};
+  --status-fill: ${({ theme }) => theme.color.outcome.unavailable.background};
+  box-shadow: inset 0 0 0 var(--gh-stroke-thin) color-mix(in srgb, var(--status-ink) 40%, var(--status-fill));
   gap: var(--gh-spacing-1_5); font-size: var(--gh-font-body);
+  &[data-match-status="upcoming"] { --status-ink: ${({ theme }) => theme.color.accent.blue.text}; --status-fill: ${({ theme }) => theme.color.accent.blue.soft}; }
   &[data-match-status="live"] { --status-ink: ${({ theme }) => theme.color.live.text}; --status-fill: ${({ theme }) => theme.color.live.soft}; }
+  &[data-match-status="postponed"] {
+    --status-ink: ${({ theme }) => theme.color.accent.orange.text}; --status-fill: ${({ theme }) => theme.color.accent.orange.soft};
+  }
   &[data-match-status="correct"] { --status-ink: ${({ theme }) => theme.color.outcome.correct.text}; --status-fill: ${({ theme }) => theme.color.outcome.correct.background}; }
   &[data-match-status="incorrect"] { --status-ink: ${({ theme }) => theme.color.outcome.incorrect.text}; --status-fill: ${({ theme }) => theme.color.outcome.incorrect.background}; }
   &[data-match-status="pending"] { --status-ink: ${({ theme }) => theme.color.outcome.pending.text}; --status-fill: ${({ theme }) => theme.color.outcome.pending.background}; }

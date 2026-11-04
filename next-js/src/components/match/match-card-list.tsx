@@ -34,27 +34,25 @@ const List = styled.ul`
   margin: 0;
   list-style: none;
   min-inline-size: 0;
+  border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
 
   > li { display: grid; min-inline-size: 0; }
-  > li:has(> article:only-child), > li:has(> [data-desktop-row]:only-child) {
-    border: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
-    border-block-start: 0;
-    border-radius: ${({ theme }) => theme.radius.none};
-    &:first-child {
-      border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid ${({ theme }) => theme.phoneCardFrame.separator};
-    }
-    > article, > [data-desktop-row] {
-      border-radius: inherit;
-      background: ${({ theme }) => theme.color.surface};
-      ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-    }
-    > article > a, [data-match-analysis-link] { border-radius: inherit; }
+  /* A row owns the separator even when its contents change layout or include a wrapper. */
+  > li ~ li {
+    border-block-start: ${({ theme }) => theme.phoneCardFrame.ruleWidth} solid
+      ${({ theme }) => `color-mix(in srgb, ${theme.phoneCardFrame.separator}, ${theme.color.controlBorder} 40%)`};
   }
+  > li > :is(article, [data-desktop-row]) {
+    border-radius: ${({ theme }) => theme.radius.none};
+    background: ${({ theme }) => theme.color.surface};
+    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  }
+  > li > article > [data-match-open], > li > [data-desktop-row] > [data-match-analysis-link] { border-radius: inherit; }
   ${media.belowDesktop} {
     /* Keep every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll; the item shares the card's phone-frame tokens. */
     > li { container-type: inline-size; content-visibility: auto; contain-intrinsic-block-size: auto var(--gh-size-28); }
-    > li:has(> article:only-child) { box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
+    > li:has(> article) { box-shadow: ${({ theme }) => theme.phoneCardFrame.shadow}; }
   }
 
   ${media.desktop} {
