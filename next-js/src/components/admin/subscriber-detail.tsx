@@ -111,24 +111,32 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
     {task("block", account.blockedAt ? "Unblock account" : "Block account", account.blockedAt ? <ShieldIcon /> : <BanIcon />)}
     {task("devices", authCopy.logoutDevices, <SignOutIcon />)}
   </QuickActions>;
+  const summary = <Panel aria-label="Subscriber account" data-subscriber-summary>
+    <AccountTop>
+      <div>
+        <h2>{dialogMode && network && <MobileMoneyLogo network={network} />}{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</h2>
+        <MetaLine>{authCopy.lastLogin} {formatPeriodEnd(new Date(account.lastSignInAt))}</MetaLine>
+        {account.blockedReason && <BlockedNote role="note">Blocked: {account.blockedReason}</BlockedNote>}
+      </div>
+      <Badges>
+        <Badge $tone={erased ? "muted" : account.blockedAt ? "warning" : "good"}>{erased ? "Erased" : account.blockedAt ? "Blocked" : "Open"}</Badge>
+        <Badge $tone={access === "Active access" ? "good" : "muted"}>{access}</Badge>
+      </Badges>
+    </AccountTop>
+    <AccountStats $columns={4} data-subscriber-stats>
+      <div><dt>Unlocked devices</dt><dd>{account.devices.length}</dd></div>
+      <div><dt>Access periods</dt><dd>{account.codes.length}</dd></div>
+      <div><dt>Unlocks · 30 days</dt><dd>{account.unlocks}</dd></div>
+      <div><dt>Credit</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div>
+    </AccountStats>
+    {!dialogMode && accountActions}
+  </Panel>;
   return <DetailCard $compact={dialogMode} data-subscriber-detail={account.id} data-subscriber-presentation={presentation}>
     <RecordScroll>
     {back}
+    {!action.localOnly && summary}
     <RecordBody>
-    <Panel aria-label="Subscriber account" data-subscriber-summary>
-      <AccountTop>
-        <div>
-          <h2>{dialogMode && network && <MobileMoneyLogo network={network} />}{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</h2>
-          <MetaLine>{authCopy.lastLogin} {formatPeriodEnd(new Date(account.lastSignInAt))}</MetaLine>
-          {account.blockedReason && <BlockedNote role="note">Blocked: {account.blockedReason}</BlockedNote>}
-        </div>
-        <Badges><Badge $tone={erased ? "muted" : account.blockedAt ? "warning" : "good"}>{erased ? "Erased" : account.blockedAt ? "Blocked" : "Open"}</Badge>
-          <Badge $tone={access === "Active access" ? "good" : "muted"}>{access}</Badge></Badges>
-      </AccountTop>
-      <AccountStats $columns={4} data-subscriber-stats><div><dt>Unlocked devices</dt><dd>{account.devices.length}</dd></div><div><dt>Access periods</dt><dd>{account.codes.length}</dd></div>
-        <div><dt>Unlocks · 30 days</dt><dd>{account.unlocks}</dd></div><div><dt>Credit</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div></AccountStats>
-      {!dialogMode && accountActions}
-    </Panel>
+    {action.localOnly && summary}
     {active && !dialogMode && <ActionPanel id={`${id}-action-panel`} role="region" aria-labelledby={`${id}-action-title`} data-subscriber-action-panel={active}
       onKeyDown={event => { if (event.key === "Escape" && !action.busy && !event.defaultPrevented) { event.preventDefault(); closeAction(); } }}>
       <PanelHead><h2 id={`${id}-action-title`} tabIndex={-1} ref={heading}>{active === "block" ? account.blockedAt ? "Unblock account" : "Block account" : actionTitles[active]}</h2>
@@ -195,8 +203,9 @@ export function SubscriberDetail({ account, plans, action, onDeleted, back, pres
 }
 
 const AccountActionsFooter = styled(RecordFooter)`
-  && { padding-block: 0; }
   && > [data-subscriber-actions] { padding-inline: 0; }
+  ${media.desktop} { && > [data-subscriber-actions] { padding-block: 0; } }
+  ${media.belowDesktop} { && { padding-block: 0; } }
 `;
 
 function OwnerNote({ account, action, formId, externalActions, onDirtyChange }: { account: OwnerSubscriber; action: CodeAction; formId: string; externalActions: boolean; onDirtyChange: (dirty: boolean) => void }) {
@@ -260,11 +269,7 @@ function ConfirmedRemoval({ kind, account, action, onSaved, formId, externalActi
 /** Only the optional review presentation compresses summary and action geometry. */
 const DetailCard = styled(RecordCard)<{ $compact: boolean }>`
   ${({ $compact }) => $compact && css`
-    border-radius: ${({ theme }) => theme.radius.surface};
-    ${RecordBody} { gap: var(--gh-spacing-2); padding: var(--gh-spacing-2_5); }
-    [data-subscriber-summary] { border-radius: ${({ theme }) => theme.radius.surface}; }
     ${AccountTop} {
-      padding: var(--gh-spacing-2) var(--gh-spacing-2_5); gap: var(--gh-spacing-1_5) var(--gh-spacing-3); min-block-size: 0;
       h2 { display: flex; align-items: center; gap: var(--gh-spacing-2); font-size: var(--gh-font-section); }
       [data-payment-logo] { inline-size: var(--gh-size-7); block-size: var(--gh-size-5); }
       ${MetaLine} { font-size: var(--gh-font-caption); }

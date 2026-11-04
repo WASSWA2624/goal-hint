@@ -22,7 +22,7 @@ import { paymentNotificationNotice } from "@/domain/payment-notification";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
 import { ActionButton, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
-import { FactList, TextAction } from "./desk-styles";
+import { FactList } from "./desk-styles";
 import { RecordBack, RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordFooter, RecordItem,
   RecordItemTitle, RecordList, RecordListFooter, RecordListScroll, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
 import { RecordFormDialog, RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
@@ -172,7 +172,7 @@ export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; acti
   }
   return <CodeTools role="group" aria-label={`Actions for ${code.reference}`} data-record-actions>
     {code.source !== "referral" && <ActionButton type="button" disabled={locked} aria-haspopup="dialog" onClick={() => open("extend")}>Extend</ActionButton>}
-    <TextAction type="button" $tone="danger" disabled={locked} aria-haspopup="dialog" onClick={() => open("revoke")}>Revoke</TextAction>
+    <DangerButton type="button" disabled={locked} aria-haspopup="dialog" onClick={() => open("revoke")}>Revoke</DangerButton>
     {operation === "extend" && <RecordFormDialog id={`${id}-extend`} title="Extend access" submitLabel="Extend" formId={`${id}-days`} busy={action.busy} onClose={close}>
       <form id={`${id}-days`} method="post" action={action.localOnly ? "#" : "/api/admin/codes"} onSubmit={event => {
         event.preventDefault(); void save({ action: "extend", days: Number(new FormData(event.currentTarget).get("days")) });

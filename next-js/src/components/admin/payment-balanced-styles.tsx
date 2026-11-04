@@ -36,20 +36,13 @@ export const TransactionControl = styled.div`
 /** The approved 01 layout changes desktop geometry; phones retain their panel flow. */
 export const desktopBalancedReview = css`
   ${media.desktop} {
-    [data-payment-head] {
-      display: flex; flex-wrap: nowrap; align-items: start; gap: var(--gh-spacing-3);
-      min-block-size: 0; padding: var(--gh-spacing-5);
-      border: 0; background: transparent;
-      > [data-payment-logo] { flex: none; margin-block-start: var(--gh-spacing-0_5); }
-      [data-review-meta] { font-size: var(--gh-font-secondary); }
-    }
     [data-payment-zones] {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       grid-template-areas: "decision proof" "checks proof";
       align-items: start;
       gap: var(--gh-spacing-4);
-      padding: 0 var(--gh-spacing-5) var(--gh-spacing-5);
+      padding: var(--gh-spacing-3) ${({ theme }) => theme.layout.sectionPadding};
       min-inline-size: 0;
       > [data-payment-zone] {
         min-inline-size: 0; padding: var(--gh-spacing-4);
@@ -83,14 +76,10 @@ export const desktopBalancedReview = css`
       [data-payment-sms] > div { padding-block: var(--gh-spacing-2_5) 0; }
       [data-payment-zone="proof"] > div { max-inline-size: 100%; }
     }
-    > [data-decision-bar] {
-      padding: var(--gh-spacing-2_5) var(--gh-spacing-5);
-    }
   }
   @media (min-width: ${({ theme }) => theme.viewport[64]}) and (max-width: ${({ theme }) => theme.viewport[89.99]}) {
-    [data-payment-head] { padding: var(--gh-spacing-4); }
     [data-payment-zones] {
-      gap: var(--gh-spacing-3); padding: 0 var(--gh-spacing-4) var(--gh-spacing-4);
+      gap: var(--gh-spacing-3);
       > [data-payment-zone] { padding: var(--gh-spacing-3); }
       [data-payment-confirmation-fields], [data-payment-plan-fields] { grid-template-columns: minmax(0, 1fr); }
       [data-payment-facts] > div { grid-template-columns: minmax(0, 1fr); }

@@ -264,13 +264,7 @@ const EditForm = styled.form`
   display: grid;
   gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  margin-block-start: var(--gh-spacing-1_5);
-  padding: var(--gh-spacing-3);
-  background: ${({ theme }) => theme.color.page};
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.surface};
-  ${media.desktop} { padding: var(--gh-spacing-3_5); }
-  @container (min-width: ${({ theme }) => theme.viewport[34]}) { grid-column: 1 / -1; }
+  ${media.belowDesktop} { padding: var(--gh-spacing-3) ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 /** Two columns with the name across both; the edit form puts all three side by side in a wide list. */
 const Fields = styled.div<{ $edit: boolean }>`

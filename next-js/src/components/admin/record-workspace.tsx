@@ -217,7 +217,7 @@ export const RecordDetails = styled.section.attrs<{ "data-record-details"?: stri
 `;
 export const RecordCard = styled.article.attrs<{ "data-record-card"?: string }>({ "data-record-card": "" })`
   display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
-  border-radius: ${({ theme }) => theme.radius.surface};
+  border-radius: ${({ theme }) => theme.radius.none};
   ${media.desktop} {
     grid-template-rows: minmax(0, 1fr) auto; gap: 0; block-size: 100%; min-block-size: 0;
     overflow: hidden; border: 0; background: ${({ theme }) => theme.color.surfaceMuted};
@@ -234,15 +234,14 @@ export const RecordScroll = styled.div.attrs<{ "data-record-detail-scroll"?: str
     scroll-padding-block: var(--gh-spacing-4);
   }
 `;
-export const RecordDetailHead = styled.header`
+export const RecordDetailHead = styled.header.attrs<{ "data-record-detail-head"?: string }>({ "data-record-detail-head": "" })`
   ${sectionSurface}
-  padding-inline: ${({ theme }) => theme.layout.sectionPadding};
+  padding: var(--gh-spacing-1) ${({ theme }) => theme.layout.sectionPadding};
+  border-block-end: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-1) var(--gh-spacing-2_5); min-inline-size: 0;
   h2 { min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--gh-font-subheading); }
   ${media.desktop} {
     min-block-size: var(--gh-size-11); padding: var(--gh-spacing-1_5) ${({ theme }) => theme.layout.sectionPadding};
-    border-block-end: 0;
-    ${sectionSurface}
     a, button { min-block-size: var(--form-control-height); }
   }
 `;
@@ -252,10 +251,12 @@ export const RecordBody = styled.div`
 `;
 export const RecordFooter = styled(StickyActions).attrs<{ "data-record-footer"?: string }>({ "data-record-footer": "" })`
   margin-inline: 0; padding-inline: ${({ theme }) => theme.layout.sectionPadding};
+  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
   ${media.desktop} {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2);
-    position: static; min-inline-size: 0; margin: 0; padding: var(--gh-spacing-1_5) ${({ theme }) => theme.layout.sectionPadding};
-    border: 0; border-block-start: 0;
+    position: static; min-inline-size: 0; margin: 0;
+    padding: var(--gh-spacing-1) ${({ theme }) => theme.layout.sectionPadding} var(--gh-spacing-2);
+    border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     ${sectionSurface}
     > * { flex: 0 1 auto; }
     > button, > a, [data-record-actions] button, [data-record-actions] a { min-inline-size: 0; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2_5); border-radius: ${({ theme }) => theme.radius.control}; font-size: var(--gh-font-body); }

@@ -16,12 +16,12 @@ import { publicPolicy } from "@/domain/public-policy";
 import { auditEventLink } from "@/domain/admin-audit-links";
 import { createMessages } from "@/i18n/messages";
 import { FloatingField } from "./floating-field";
-import { EmptyPanel, TextAction } from "./desk-styles";
+import { EmptyPanel } from "./desk-styles";
 import { RecordBack, RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordItem, RecordList,
   RecordListFooter, RecordItemTitle, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
-import { AuditDay, AuditEvents, AuditFeed, AuditSummary, EventFacts, EventIcon, EventLink,
+import { AuditDay, AuditEvents, AuditFeed, EventFacts, EventIcon, EventLink,
   EventTime, FilterBody } from "./audit-styles";
-import { RecordToolbar } from "./record-toolbar";
+import { RecordPrimaryAction, RecordToolbar } from "./record-toolbar";
 
 const pageSize = 20;
 const paginationLabels = numberedPaginationLabels(createMessages("en"), "Audit pages");
@@ -116,7 +116,8 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
           onChange={event => { setSearch(event.target.value); setPageIndex(0); setExportStatus(null); }}
           filters={{ label: "Advanced filters", dialogId: filtersId, open: filtersOpen, count: activeFilters,
             onOpen: () => { setDraft({ category, action, period, startDate, endDate }); setRangeError(null); setFiltersOpen(true); } }}
-          />
+          trailingAction={<RecordPrimaryAction label="Export CSV" icon={<DownloadIcon />} disabled={!matches.length || pending}
+            onClick={download} data-audit-export />} />
         {period === "custom" && <p data-audit-applied-range>{startDate} – {endDate} · EAT</p>}
         {filtersOpen && <AdvancedFilterDialog id={filtersId} open onCancel={() => setFiltersOpen(false)} closeLabel="Close audit filters"
           onApply={applyFilters}
@@ -164,16 +165,9 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
             </AuditEvents>
           </div>)}
       </AuditFeed>
-      <RecordListFooter>
-        <AuditSummary>
-          <div>
-            <b aria-live="polite" data-audit-count>{matches.length} {matches.length === 1 ? "event" : "events"}</b>
-            <span>Up to 100 recent {action || period !== "all" ? "matching " : ""}events · EAT</span>
-          </div>
-          <TextAction type="button" disabled={!matches.length || pending} onClick={download} data-audit-export><DownloadIcon />Export CSV</TextAction>
-        </AuditSummary>
-        {pageCount > 1 && <NumberedPagination compact page={currentPage + 1} pages={pageCount} labels={paginationLabels} disabled={pending} onPage={paginate} />}
-      </RecordListFooter>
+      {pageCount > 1 && <RecordListFooter>
+        <NumberedPagination compact page={currentPage + 1} pages={pageCount} labels={paginationLabels} disabled={pending} onPage={paginate} />
+      </RecordListFooter>}
     </RecordList>
     <RecordDetails id="audit-record-detail" aria-label="Selected audit event">
       <RecordBack onClick={closeDetail} disabled={pending}>Back to audit</RecordBack>

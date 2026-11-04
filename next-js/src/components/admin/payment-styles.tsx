@@ -164,9 +164,6 @@ export const ReviewCard = styled(RecordCard)`
 `;
 export const ReviewHead = styled(RecordDetailHead)`
   ${media.belowDesktop} {
-    padding: 0;
-    border: 0;
-    background: transparent;
     > [data-review-link] { padding-inline-start: 0; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-medium); }
   }
 `;
@@ -204,7 +201,7 @@ const zoneBody = css`
 export const ReviewZones = styled.div`
   display: grid;
   min-inline-size: 0;
-  ${media.belowDesktop} { gap: var(--gh-spacing-3); }
+  ${media.belowDesktop} { gap: var(--gh-spacing-3); padding-inline: ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 export const ProofZone = styled.section`
   ${zoneBody}
@@ -288,7 +285,6 @@ export const PaymentReviewFooter = styled(RecordFooter)`
     inset-inline: ${({ theme }) => theme.layout.gutter};
     gap: var(--gh-spacing-2);
     padding: var(--payment-review-footer-padding) ${contentGutter};
-    border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     > button { flex: 0 1 auto; min-inline-size: 0; padding-inline: var(--gh-spacing-2_5); }
     &:has([data-payment-more-actions]) {
       gap: var(--gh-spacing-1);
@@ -296,7 +292,6 @@ export const PaymentReviewFooter = styled(RecordFooter)`
     }
   }
 `;
-export const DecisionBar = styled(PaymentReviewFooter)`background: ${({ theme }) => theme.color.surface};`;
 export const CopyRow = styled.dd`
   && { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 var(--gh-spacing-2); }
   > span { overflow-wrap: anywhere; }

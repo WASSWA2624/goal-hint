@@ -23,7 +23,7 @@ import { PaymentAccountSummary, PaymentFacts } from "./payment-account-summary";
 import { DrawerNote, TextAction, ZoneLabel } from "./desk-styles";
 import { NetworkChip } from "./network-chip";
 import { PaymentReviewScroll, ReviewSectionHead, TransactionControl } from "./payment-balanced-styles";
-import { ApprovalForm, CheckList, CopyRow, DecisionBar, DecisionPanel, DecisionZone, ExpectedZone, PaymentWarnings,
+import { ApprovalForm, CheckList, CopyRow, PaymentReviewFooter, DecisionPanel, DecisionZone, ExpectedZone, PaymentWarnings,
   ProofZone, ReviewCard, ReviewHead, ReviewZones, ShieldMark,
   ZoneDrawer } from "./payment-styles";
 
@@ -165,7 +165,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
       </ExpectedZone>}
     </ReviewZones>
     </PaymentReviewScroll>
-    {(pending || canReverse || canRecover) && <DecisionBar data-decision-bar>
+    {(pending || canReverse || canRecover) && <PaymentReviewFooter data-decision-bar>
       {pending && <>
       <DangerButton type="button" aria-haspopup="dialog" disabled={action.busy} onClick={() => {
         action.clearFeedback(); setRejecting(true);
@@ -178,7 +178,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
       {canRecover && <ActionButton type="button" aria-haspopup="dialog" disabled={action.busy} onClick={() => {
         action.clearFeedback(); setDialog("recovery");
       }}>Grant access to the real payer</ActionButton>}
-    </DecisionBar>}
+    </PaymentReviewFooter>}
     {pending && rejecting && <PaymentRejectionDialog busy={action.busy} error={action.message} canDeleteImage={p.hasImage}
       onCancel={() => { action.clearFeedback(); setRejecting(false); }}
       onReject={({ presets, text, deleteImage }) => {

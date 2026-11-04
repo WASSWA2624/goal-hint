@@ -8,7 +8,7 @@ test("record workflows follow Payments, followed by other tools and separate Ana
   assert.equal(new Set(adminSections.map(item => item.href)).size, adminSections.length);
 });
 
-test("only the six approved record screens use the fixed list/detail workspace", () => {
-  assert.deepEqual(adminSections.filter(item => isRecordAdminSection(item.key)).map(item => item.key), ["payments", "codes", "subscribers", "referrals", "plans", "audit"]);
-  for (const key of ["overview", "settings", "analytics"]) assert.equal(isRecordAdminSection(key), false);
+test("record screens and Settings use the fixed list/detail workspace", () => {
+  assert.deepEqual(adminSections.filter(item => isRecordAdminSection(item.key)).map(item => item.key), ["payments", "codes", "subscribers", "referrals", "plans", "audit", "settings"]);
+  for (const key of ["overview", "analytics"]) assert.equal(isRecordAdminSection(key), false);
 });

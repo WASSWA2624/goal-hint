@@ -8,7 +8,9 @@ import { filledTableRows } from "@/components/ui/filled-surfaces";
 import styled, { css, keyframes } from "styled-components";
 import { media } from "@/styles/theme";
 import { mobileFilterPanel } from "@/components/ui/filter-chrome";
-import { desktopContentPadding, desktopSectionFrame } from "@/components/ui/layout";
+import { desktopSectionFrame } from "@/components/ui/layout";
+
+const analyticsInset = css`padding-inline: ${({ theme }) => theme.layout.sectionPadding};`;
 
 export const Shell = styled.div`
   min-block-size: 100dvh;
@@ -111,14 +113,21 @@ export const Main = styled.main`
   ${media.desktop} { gap: var(--gh-spacing-5); padding: var(--gh-spacing-6) var(--gh-spacing-6) var(--gh-spacing-16); }
 `;
 export const PageTitle = styled.div`
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--gh-spacing-1) var(--gh-spacing-4);
-  h1 { font-size: var(--gh-font-heading); }
+  gap: var(--gh-spacing-2);
+  ${analyticsInset}
   p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
-  ${media.desktop} { padding-inline: var(--gh-spacing-4); h1 { font-size: var(--gh-font-feature); } }
+  p:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  p:last-of-type { white-space: nowrap; font-variant-numeric: tabular-nums; }
+`;
+export const ReportUpdated = styled.p`
+  ${analyticsInset}
+  padding-block: var(--gh-spacing-1);
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  text-align: end;
 `;
 export const Notice = styled.p<{ $tone?: "warning" | "error" | "info" }>`
   padding: var(--gh-spacing-2_5) var(--gh-spacing-3_5);
@@ -143,7 +152,6 @@ export const FilterBar = styled.section`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
-  ${desktopContentPadding(true)}
   ${media.belowDesktop} { position: static; }
 
   ${controlRow}
@@ -224,11 +232,12 @@ export const Card = styled.div`
   align-content: start;
   gap: var(--gh-spacing-1);
   min-inline-size: 0;
-  padding: var(--gh-spacing-3) var(--gh-spacing-3_5);
+  padding-block: var(--gh-spacing-3);
+  ${analyticsInset}
   background: ${({ theme }) => theme.color.surface};
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; font-weight: var(--gh-weight-semibold); }
   dd { margin: 0; }
-  ${media.desktop} { padding: var(--gh-spacing-4) var(--gh-spacing-4_5); }
+  ${media.desktop} { padding-block: var(--gh-spacing-4); }
 `;
 export const CardValue = styled.dd`
   font-size: var(--gh-font-page);
@@ -246,15 +255,15 @@ export const Panel = styled.section<{ $busy?: boolean }>`
   align-content: start;
   gap: var(--gh-spacing-3);
   min-inline-size: 0;
-  padding: var(--gh-spacing-3_5);
+  padding-block: var(--gh-spacing-3_5);
+  ${analyticsInset}
   background: ${({ theme }) => theme.color.surface};
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
   ${desktopSectionFrame}
   transition: opacity ${({ theme }) => theme.motion.fast} ${({ theme }) => theme.motion.easing};
   opacity: ${({ theme, $busy }) => ($busy ? theme.opacity[55] : 1)};
-  ${media.desktop} { padding: var(--gh-spacing-4_5) var(--gh-spacing-5); }
-  ${desktopContentPadding(true)}
+  ${media.desktop} { padding-block: var(--gh-spacing-4_5); }
 `;
 export const PanelHeader = styled.div`
   display: flex;

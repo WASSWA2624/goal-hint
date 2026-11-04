@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 import shutil
 
-from lib.rendering import Server, build_fixture, create_fixture, environment, match, parse_args, visible_html
+from lib.rendering import Server, build_fixture, create_fixture, environment, match, no_match, parse_args, visible_html
 from lib.runtime import ROOT, main_guard
 
 
@@ -28,7 +28,8 @@ def audit_rendering(harness, origin):
     match(r'data-page-count="5"', pagination.group(0))
     match(r'data-current-page="1"', pagination.group(0))
     assert re.findall(r'data-pagination-end="([^"]+)"', pagination.group(1)) == ["first", "last"]
-    match(r"data-audit-export", html)
+    assert html.index("data-audit-export") < html.index("data-record-list-footer")
+    no_match(r"data-audit-count|Up to 100 recent", html)
     # Historical entries lie outside the default loaded window; the date query must select them first.
     historical = visible_html(harness.request(origin,
         "/admin/audit?period=custom&startDate=2025-01-15&endDate=2025-01-15").text)

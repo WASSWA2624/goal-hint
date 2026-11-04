@@ -20,10 +20,11 @@ import { CopyTextButton } from "./copy-text-button";
 import { NetworkChip } from "./network-chip";
 import { PaymentAccountSummary, PaymentFacts } from "./payment-account-summary";
 import { PaymentActionDialog, PaymentActionMenu, PaymentDialogCancel, type PaymentAction } from "./payment-action-dialog";
+import { PaymentReviewScroll } from "./payment-balanced-styles";
 import { paymentReceiptChecks } from "./payment-receipt-checks";
 import { PaymentRejectionDialog } from "./payment-rejection-dialog";
-import { PaymentReviewFooter } from "./payment-styles";
-import { RecordCard, RecordScroll } from "./record-workspace";
+import { PaymentReviewFooter, ReviewHead } from "./payment-styles";
+import { RecordBody, RecordCard } from "./record-workspace";
 
 type Claim = CheckoutReviewDetail["claims"][number];
 type Act = (body: Record<string, unknown>, advance?: boolean) => Promise<boolean>;
@@ -33,14 +34,11 @@ const openStatuses: readonly string[] = checkoutOpenStatuses;
 const phone = (value: string | null) => value ? formatInternationalPhone(value) : "";
 const receiptForm = (id: string) => `checkout-verify-${id}`;
 
-const Body = styled(RecordScroll)`
-  gap: var(--gh-spacing-3); padding: var(--gh-spacing-3) var(--gh-spacing-4);
+const Body = styled(RecordBody)`
   h3, p { margin: 0; }
   h3 { font-size: var(--gh-font-section); font-weight: var(--gh-weight-medium); }
   form { display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; }
-  ${media.belowDesktop} {
-    display: grid; align-content: start; min-inline-size: 0; padding: 0;
-  }
+  ${media.belowDesktop} { padding-inline: ${({ theme }) => theme.layout.sectionPadding}; }
 `;
 const Identity = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0;
@@ -56,8 +54,6 @@ const Receipt = styled.section`
 `;
 const Transactions = styled.section`
   display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
-  padding-block-start: var(--gh-spacing-3);
-  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
 `;
 const Fields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -249,10 +245,11 @@ export function CheckoutReviewView({ payment, detail, busy, loading, hasNext, er
   }
 
   return <RecordCard data-checkout-review data-compact-checkout-review aria-busy={loading || undefined}>
-    <Body>
-      <PaymentAccountSummary payment={payment} status={detail?.status ?? payment.status} busy={busy} />
-      {error && !rejecting && !receiptDialog && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-      {detail && <>
+    <PaymentReviewScroll data-payment-review-scroll tabIndex={0} aria-label="Payment details">
+      <ReviewHead data-payment-head><PaymentAccountSummary payment={payment} status={detail?.status ?? payment.status} busy={busy} /></ReviewHead>
+      <Body>
+        {error && !rejecting && !receiptDialog && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
+        {detail &&
         <Transactions aria-label="Transaction details"><h3>Transaction details</h3>
         <PaymentFacts aria-label="Funding and days">
           {!topUp && payment.planId && <div><dt>Package price</dt><dd>{formatUgx(payment.price)}</dd></div>}
@@ -266,9 +263,9 @@ export function CheckoutReviewView({ payment, detail, busy, loading, hasNext, er
         {claims.map(claim => <ReceiptDetails key={`${claim.id}:${detail.revision}`} claim={claim} detail={detail} url={url} showLegacy={claim === legacyImageClaim}
           busy={busy} editable={editing(claim)} exception={exception} act={act}
           onAmount={amount => setAmounts(current => ({ ...current, [claim.id]: amount }))} />)}
-        </Transactions>
-      </>}
-    </Body>
+        </Transactions>}
+      </Body>
+    </PaymentReviewScroll>
     {(pending || receiptActions.length > 0) && <PaymentReviewFooter>
       {pending && <Button variant="quiet" aria-haspopup="dialog" disabled={busy} onClick={() => setRejectingId(payment.id)}>Reject with reason</Button>}
       <PaymentActionMenu actions={receiptActions} busy={busy} compact={pending} />

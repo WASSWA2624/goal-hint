@@ -179,7 +179,8 @@ def settings_rendering(origin):
         response = request(origin, "/admin/settings?fixture=" + scenario)
         html = visible_html(response.text)
         assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
-        match(r'data-settings-editor', html)
+        match(r'<form\b(?=[^>]*data-record-form)[^>]*data-settings-editor', html)
+        match(r'<h2 id="settings-section-heading">Payments</h2>', html)
         navigation = match(r'<ol\b[^>]*data-settings-nav[^>]*>([\s\S]*?)</ol>', html).group(1)
         assert re.findall(r'id="settings-tab-([^"]+)"', navigation) == ["payments", "support", "access", "display", "messages"]
         assert len(re.findall(r'aria-current="true"', navigation)) == 1
@@ -212,12 +213,13 @@ def audit_rendering(origin):
         for control in ["audit-search"]:
             match(rf'id="{control}"', html)
         match(r'data-search-filters', html)
-        match(r'data-audit-count', html)
         export = match(r'<button\b(?=[^>]*data-audit-export)[^>]*>', html).group(0)
         assert len(re.findall(r'<button\b(?=[^>]*data-audit-export)', html)) == 1, "One shared export control covers all matching events."
+        toolbar = match(r'<header\b(?=[^>]*data-admin-toolbar)[^>]*>([\s\S]*?)</header>', html).group(1)
+        match(r'data-audit-export', toolbar)
         found = re.findall(r'<button\b[^>]*data-audit-event="([^"]+)"', html)
         assert found == ids, (action, found)
-        assert html.index('data-record-list-footer') < html.index('data-audit-export'), "Export belongs with the results."
+        no_match(r'data-record-list-footer|data-audit-count|Up to 100 recent', html, "A single page needs no pager or result summary.")
         no_match(r'data-audit-inline-details', html, "The inspector is the only event detail view.")
         if not ids:
             match(r'data-audit-empty', html)
@@ -234,7 +236,6 @@ def audit_rendering(origin):
         text = unescape(re.sub(r'<[^>]+>', " ", html))
         no_match("f" * 64, text, "Device/session hashes must not appear in the audit interface.")
         if not action:
-            match(r'\b100\b', text, "The audit window limit should be visible.")
             match(r'payment[\s\S]*approv|approv[\s\S]*payment', summary_text["2"], flags=re.IGNORECASE)
             match(r'\bAdmin(?:istrator)?\b', summary_text["7"], flags=re.IGNORECASE)
             match(r'\bSystem\b', summary_text["12"], flags=re.IGNORECASE)

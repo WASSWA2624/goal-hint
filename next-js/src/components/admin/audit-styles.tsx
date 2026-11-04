@@ -10,14 +10,6 @@ export const FilterBody = styled.div`
   > p[role="alert"] { color: ${({ theme }) => theme.color.outcome.incorrect.text}; margin: 0; }
 `;
 
-export const AuditSummary = styled.div`
-  inline-size: 100%;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-0_5) var(--gh-spacing-2_5); min-inline-size: 0;
-  b { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > div { display: grid; gap: var(--gh-spacing-0_5); min-inline-size: 0; }
-  > button { margin-inline-start: auto; }
-`;
-
 export const AuditFeed = styled(RecordListScroll)`
   scroll-margin-block-start: calc(var(--app-header-height, var(--gh-size-16)) + var(--gh-spacing-4));
   > * + * { border-block-start: 0; }

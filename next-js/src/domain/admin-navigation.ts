@@ -10,11 +10,11 @@ export const adminSections = [
   { key: "referrals", href: "/admin/referrals", label: "Referral review", layout: "record" },
   { key: "plans", href: "/admin/plans", label: "Plans", layout: "record" },
   { key: "audit", href: "/admin/audit", label: "Audit", layout: "record" },
-  { key: "settings", href: "/admin/settings", label: "Settings" },
+  { key: "settings", href: "/admin/settings", label: "Settings", layout: "record" },
   { key: "analytics", href: "/analytics", label: "Analytics" },
 ] as const;
 
 export type AdminSection = (typeof adminSections)[number]["key"];
 
-/** The viewport-bound list/detail pattern is reserved for individual record workflows. */
+/** The viewport-bound layout serves record workflows and the settings section list. */
 export const isRecordAdminSection = (section: AdminSection): boolean => adminSections.some(item => item.key === section && "layout" in item && item.layout === "record");

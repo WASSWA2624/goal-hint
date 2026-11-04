@@ -5,7 +5,7 @@ import { controlRow } from "@/components/ui/control-layout";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
-import { Panel, visuallyHidden } from "./desk-styles";
+import { visuallyHidden } from "./desk-styles";
 import { RecordFooter, RecordWorkspace } from "./record-workspace";
 
 export const DesktopOnly = styled.div`
@@ -20,12 +20,14 @@ export const SettingsForm = styled.form`
   > h1 { ${visuallyHidden} }
   ${media.desktop} {
     display: grid; grid-template-rows: minmax(0, 1fr);
-    block-size: calc(100dvh - var(--app-header-height, var(--gh-size-12)) - var(--gh-size-7));
-    min-block-size: 0; margin-block: calc(-1 * var(--gh-spacing-3)) calc(-1 * var(--gh-spacing-8));
+    min-block-size: 0;
   }
 `;
 export const SettingsWorkspace = styled(RecordWorkspace)`
   && { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  ${media.desktop} {
+    && > [data-record-list-pane], && > [data-record-list-resize] { grid-row: 3 / -1; }
+  }
 `;
 
 export const DesktopSettingItem = styled.li`
@@ -38,9 +40,10 @@ const focusRing = css`
 `;
 
 /** Fields respond to the detail pane's width. */
-export const SectionPanel = styled(Panel)`
+export const SectionPanel = styled.section`
   container-type: inline-size;
   inline-size: 100%;
+  min-inline-size: 0;
   text-align: start;
   &:focus { outline: none; }
   &:focus-visible { ${focusRing} }
@@ -289,7 +292,6 @@ export const SettingsFooter = styled(RecordFooter)`
   && {
     grid-row: 4;
     position: static; flex-wrap: wrap; align-items: center; justify-content: flex-end;
-    padding-block: var(--gh-spacing-1);
     > * { flex: none; }
     > [data-setting-password] { flex: 1 0 100%; min-inline-size: 0; }
     > span {
@@ -301,6 +303,7 @@ export const SettingsFooter = styled(RecordFooter)`
       min-inline-size: 0; max-inline-size: 100%;
       button { white-space: nowrap; }
     }
+    ${media.belowDesktop} { padding-block: var(--gh-spacing-1); }
     ${media.desktop} { grid-column: 3; }
   }
 `;

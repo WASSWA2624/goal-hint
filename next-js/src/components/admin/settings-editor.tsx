@@ -18,7 +18,7 @@ import { editableSettingFields, isProtectedSettingField, paywallModes, settingLa
   type ModeRequirement, type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
 import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, Requirements, type AdminReply } from "./admin-form";
 import { Drawer, FactList, PanelBody } from "./desk-styles";
-import { RecordBack, RecordCard, RecordDetails, RecordFeedback, RecordItem, RecordList, RecordListScroll, RecordRowContent, RecordScroll, useRecordView } from "./record-workspace";
+import { RecordBack, RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordItem, RecordList, RecordListScroll, RecordRowContent, RecordScroll, useRecordView } from "./record-workspace";
 import { SettingsSupportEditor } from "./settings-support-editor";
 import { SettingsMessageEditor } from "./settings-message-editor";
 import { SettingsCommunityEditor } from "./settings-community-editor";
@@ -139,6 +139,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     : settings.updatedAt ? `Saved ${savedTime(settings.updatedAt)} EAT` : "No changes";
   const selectedMode = armed ?? settings.paywallMode;
   const selectedRequirements = selectedMode === "off" ? [] : view.requirements[selectedMode];
+  const sectionTitle = sections.find(item => item.key === section)?.label ?? "Settings";
 
   useEffect(() => {
     const key = editableSettingFields.find(field => errors[field]);
@@ -279,7 +280,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
         : <>{phone(number, "Phone number")}{text(name, "Registered name", settingsRules.nameMaxLength)}{shortcut(code, number)}</>}
     </section>;
   };
-  return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-settings-editor>
+  return <SettingsForm onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-record-form data-settings-editor>
     <h1>Settings</h1>
     <SettingsWorkspace $compact $detailOpen={detailOpen}>
         {status && <RecordFeedback><Notice as="div" $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}
@@ -296,8 +297,9 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
       </RecordList>
       <RecordDetails>
         <RecordBack disabled={busy} onClick={event => { setArmed(null); closeDetail(event); }}>Back to settings</RecordBack>
-        <RecordCard><RecordScroll>
-        <SectionPanel id="settings-section" tabIndex={-1} aria-label={sections.find(item => item.key === section)?.label ?? "Settings"} data-settings-section={section}>
+        <RecordCard><RecordScroll key={section} tabIndex={0}>
+        <RecordDetailHead><h2 id="settings-section-heading">{sectionTitle}</h2></RecordDetailHead>
+        <SectionPanel id="settings-section" tabIndex={-1} aria-labelledby="settings-section-heading" data-settings-section={section}>
           {section === "payments" && <><NetworkGrid>
             {network("mtn", "MTN MoMo", "mtnNumber", "mtnName", "mtnMenuShortcut")}
             {network("airtel", "Airtel Money", "airtelNumber", "airtelName", "airtelMenuShortcut")}

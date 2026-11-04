@@ -26,9 +26,10 @@ keeping room for the detail pane.
 - `RecordDetails`, `RecordCard`, `RecordScroll`: selected record content with an
   independent scroll surface. Empty states use the same pane. `RecordBack`
   returns phone users to the list and restores the opening row and scroll.
-- `RecordDetailHead` / `RecordBody`: compact selected-record heading and content.
-- `RecordFooter`: optional actions outside the details scroll surface. External
-  submit buttons use the existing form's ID; forms are never duplicated.
+- `RecordDetailHead` / `RecordBody`: a full-width, square heading band and
+  separately inset content.
+- `RecordFooter`: a matching square band for optional actions outside the
+  detail scroll surface. External submit buttons use the existing form's ID.
 - `RecordItem` / `RecordRowContent`: shared selectable rows with an optional leading
   icon or logo, up to three primary fields, and muted supporting metadata.
 
@@ -42,8 +43,9 @@ idle. The payment detail uses payment-specific review zones. Codes retains real 
 revoke operations. Plans retains saved-name/price/duration snapshots and reorder
 behavior. Subscribers retains account tabs, access/credit tools, restrictions,
 and guarded removal. Members manage their passwords through the account's own
-recovery and change-password flows. Audit is read-only and uses existing related-record links;
-CSV export still covers the full filtered loaded window.
+recovery and change-password flows. Audit offers related-record links in the
+detail footer and CSV export beside Advanced filters. Export covers all matches
+in the loaded window.
 
 ## Responsive and state behavior
 
@@ -53,8 +55,9 @@ viewports. Selecting a row on mobile opens one detail view. Referral search
 queries all matching cases through the owner-only endpoint, and updates retain
 the list query so the reviewer can return to it.
 
-Settings uses the same list and detail components for section navigation and
-has one draft and save footer. Overview and Analytics use the scrolling
+Settings uses the fixed desktop viewport for section navigation and has one
+draft and bottom save footer. The list divider extends through the footer row.
+Overview and Analytics use the scrolling
 workspace layout. Storage-unavailable responses remain readable within the
 shared frame. Layout components leave authorization, private attachments, and
 persistence to the existing services and API handlers.

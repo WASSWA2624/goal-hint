@@ -9,6 +9,7 @@ import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonM
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
 import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analytics-datasets";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
+import { publicPolicy } from "@/domain/public-policy";
 import { authCopy } from "@/i18n/messages/auth";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { AppLoading } from "@/components/navigation/navigation-progress";
@@ -16,7 +17,7 @@ import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from 
 import { DataTable } from "./data-table";
 import { getLiveReportSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, subscribeLiveReport } from "./live-report";
 import { Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, LiveList,
-  Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Tab, Tabs, ToolButton,
+  Muted, Notice, PageTitle, Panel, PanelHeader, ReportUpdated, SegmentButton, Segmented, SeriesTable, SettingsRow, Tab, Tabs, ToolButton,
   WidePanel } from "./dashboard-styles";
 
 type Filters = Partial<Record<AnalyticsFilterKey, Readonly<{ value: string; label: string }>>>;
@@ -26,6 +27,7 @@ type Settings = Readonly<{ retention: { retentionDays: number; source: string; l
   collecting: boolean; geoSource: string; browserExcluded: boolean }>;
 
 const integer = new Intl.NumberFormat("en");
+const updatedTime = new Intl.DateTimeFormat("en-GB", { timeZone: publicPolicy.reportingTimeZone, hour: "2-digit", minute: "2-digit" });
 const count = (value: number) => integer.format(Math.round(value));
 const axisCount = (value: number) => value >= 10_000 ? new Intl.NumberFormat("en", { notation: "compact" }).format(value) : count(value);
 
@@ -199,12 +201,13 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
   const compareLabel = (report?.query.compare ?? compare) === "year" ? "last year" : "previous period";
   const exportHref = (dataset: string) => `/api/analytics/export?dataset=${dataset}&${parameters}`;
   const empty = report !== null && report.summary.visits === 0 && report.summary.pageviews === 0;
+  const rangeLabel = `${formatRange(selection)} · EAT`;
 
   return (
     <>
         <PageTitle>
           <VisuallyHidden as="h1">Visitor analytics</VisuallyHidden>
-          <p>{formatRange(selection)} · East Africa Time{report ? ` · updated ${new Date(report.generatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+          <p title={rangeLabel}>{rangeLabel}</p>
           <p aria-live="polite" title="Distinct visitors active in the last five minutes"><LiveVisitorCount /> live</p>
         </PageTitle>
         <FilterControls selection={selection} compare={compare} filters={filters} today={today} report={report}
@@ -228,6 +231,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
             })}
             <Card><dt>Live now</dt><CardValue><LiveVisitorCount /></CardValue><Delta $tone="neutral">Active in the last 5 minutes</Delta></Card>
           </Cards>
+          <ReportUpdated>Updated <time dateTime={report.generatedAt}>{updatedTime.format(new Date(report.generatedAt))} EAT</time></ReportUpdated>
           {empty ? <Panel>
             <EmptyChart>
               No visits recorded for {formatRange(selection)}{Object.keys(filters).length ? " with these filters" : ""}. {authCopy.analyticsExcluded}

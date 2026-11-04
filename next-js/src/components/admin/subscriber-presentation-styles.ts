@@ -17,9 +17,9 @@ export const subscriberPresentation = css`
   [data-review-network] [data-payment-logo] { inline-size: var(--gh-size-7); block-size: var(--gh-size-5_5); }
   [data-review-phone] { font-variant-numeric: tabular-nums; }
   [data-subscriber-detail] { container: subscriber-detail / inline-size; }
-  [data-subscriber-detail] ${RecordBody} { gap: var(--gh-spacing-2); padding: var(--gh-spacing-3); }
+  [data-subscriber-detail] ${RecordBody} { gap: var(--gh-spacing-2); }
   [data-subscriber-summary] { padding: 0; border: 0; background: ${({ theme }) => theme.color.surface}; }
-  [data-subscriber-summary] > header { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--gh-spacing-1_5) var(--gh-spacing-2_5); padding: var(--gh-spacing-2_5) var(--gh-spacing-3); min-block-size: 0; }
+  [data-subscriber-summary] > header { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--gh-spacing-1_5) var(--gh-spacing-2_5); }
   [data-subscriber-summary] > header h2 { display: flex; align-items: center; gap: var(--gh-spacing-2); margin: 0; font-size: var(--gh-font-subheading); line-height: var(--gh-leading-caption); }
   [data-subscriber-summary] > header > div { min-inline-size: 0; }
   [data-subscriber-summary] > header p { margin: 0; font-size: var(--gh-font-caption); }
@@ -41,6 +41,10 @@ export const subscriberPresentation = css`
 
   ${media.desktop} {
     [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height); }
+    &[data-subscriber-workspace] [data-subscriber-summary] { background: transparent; }
+    &[data-subscriber-workspace] [data-subscriber-stats] { margin: var(--gh-spacing-3) ${({ theme }) => theme.layout.sectionPadding} 0; }
+    &:not([data-subscriber-workspace]) [data-subscriber-detail] ${RecordBody} { padding: var(--gh-spacing-3); }
+    &:not([data-subscriber-workspace]) [data-subscriber-summary] > header { padding: var(--gh-spacing-2_5) var(--gh-spacing-3); min-block-size: 0; }
   }
   @container subscriber-detail (max-width: ${({ theme }) => theme.viewport[30]}) {
     [data-subscriber-stats] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -50,6 +54,7 @@ export const subscriberPresentation = css`
     [data-subscriber-review-filters] { gap: var(--gh-spacing-2_5); }
     [data-subscriber-review-filters] input, [data-subscriber-review-filters] select { min-block-size: var(--form-control-height); font-size: var(--gh-font-section); }
     [data-subscriber-detail] ${RecordBody} { padding: 0; gap: var(--gh-spacing-2_5); }
+    &[data-subscriber-workspace] [data-subscriber-summary] { margin-block-end: var(--gh-spacing-2_5); }
     [data-subscriber-summary] > header { padding: var(--gh-spacing-2_5); align-items: start; }
     [data-subscriber-stats] > div { padding: var(--gh-spacing-1_75) var(--gh-spacing-2_25); }
     [data-subscriber-actions] { gap: var(--gh-spacing-1_25); padding: var(--gh-spacing-2); }
