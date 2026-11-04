@@ -22,11 +22,11 @@ export function OverviewReport({ report }: { report?: Report }) {
   const value = report?.value;
   const metrics: Metric[] = [
     { label: "Pending payments", value: value?.pending, icon: CardIcon, href: report && "/admin/payments", attention: !!value?.pending },
+    { label: "Upload alerts this week", value: value?.busy, icon: ImageIcon, href: report?.uploadAlertsHref, attention: !!value?.busy },
     { label: "Active paid subscribers", value: value?.active, icon: UserIcon },
     { label: "Revenue this week", value: value && formatUgx(value.weekRevenue), icon: ChartIcon },
     { label: "Revenue this month", value: value && formatUgx(value.monthRevenue), icon: CalendarIcon },
     { label: "Trials this week", value: value?.trials, icon: UserPlusIcon },
-    { label: "Upload alerts this week", value: value?.busy, icon: ImageIcon, href: report?.uploadAlertsHref, attention: !!value?.busy },
     { label: "Credit held by members", value: value && formatUgx(value.creditHeld), icon: CardIcon },
     { label: "Message notices to check", value: report && (report.noticeCount ?? "Unavailable"), icon: BellIcon, attention: !!report?.noticeCount },
   ];
@@ -64,7 +64,6 @@ const MetricGrid = styled.dl`
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--gh-spacing-3);
   }
-  ${media.desktop} { margin-inline-start: var(--gh-spacing-2); }
 `;
 
 const MetricIcon = styled.span`

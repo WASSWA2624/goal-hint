@@ -23,17 +23,17 @@ const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
 };
 
 function SectionLinks({ current, onNavigate, collapsed = false }: { current: AdminSection; onNavigate?: () => void; collapsed?: boolean }) {
-  return <ul>
+  return <SectionList>
     {adminSections.map(({ key, href, label }) => {
       const Icon = sectionIcons[key];
-      return <li key={key} data-separated={key === "settings" || key === "analytics" || undefined}>
+      return <li key={key}>
         <SectionLink href={href} prefetch={false} title={label} aria-label={collapsed ? label : undefined}
           aria-current={key === current ? "page" : undefined} {...(onNavigate ? { onClick: onNavigate } : {})}>
           <Icon /><span data-sidebar-label>{label}</span>
         </SectionLink>
       </li>;
     })}
-  </ul>;
+  </SectionList>;
 }
 
 function useAdminSection(initialSection?: AdminSection) {
@@ -101,7 +101,7 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
       <SidebarResize aria-hidden={collapsed || undefined} $fixed={recordWorkspace} data-sidebar-resize role="separator" tabIndex={collapsed ? -1 : 0}
         aria-label="Resize admin sidebar" aria-controls="admin-sidebar" aria-valuetext={`${sidebarWidth} pixels wide`}
         title="Drag to resize or use arrow keys. Double-click to restore the default width." {...handle} />
-      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"}>
+      <Main id="main-content" tabIndex={-1} $fixed={recordWorkspace} $joined={current === "analytics"} $overview={current === "overview"}>
         <Column $wide={current === "analytics" || recordWorkspace} $fixed={recordWorkspace} $joined={current === "analytics"}>{children}</Column>
       </Main>
     </Frame>
@@ -163,12 +163,9 @@ const Sidebar = styled.nav<{ $fixed: boolean }>`
     background: ${({ theme }) => theme.color.surface};
     min-block-size: calc(100dvh - var(--app-header-height, var(--gh-size-16)));
   }
-  ul { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
-  li[data-separated] { margin-block-start: var(--gh-spacing-2_5); padding-block-start: var(--gh-spacing-2_5); border-block-start: 0; }
   ${({ $fixed }) => $fixed && css`${media.desktop} { position: static; block-size: 100%; max-block-size: 100%; min-block-size: 0; overflow-x: hidden; }`}
   ${media.desktop} {
     overflow-x: hidden;
-    ${WorkspaceNavigationLink} { border-radius: ${({ theme }) => theme.radius.none}; }
     &[data-collapsed="true"] {
       [data-sidebar-label], [data-sidebar-caption] { display: none; }
       a { position: relative; justify-content: center; padding-inline: 0; }
@@ -226,7 +223,16 @@ const Caption = styled.p`
   letter-spacing: var(--gh-tracking-uppercase);
   text-transform: uppercase;
 `;
-const SectionLink = WorkspaceNavigationLink;
+const SectionList = styled.ul`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`;
+const SectionLink = styled(WorkspaceNavigationLink)`
+  border-radius: ${({ theme }) => theme.radius.none};
+`;
 const MenuBar = styled.details`
   position: relative;
   border-block-start: var(--gh-stroke-thin) solid var(--admin-header-divider-color);
@@ -268,16 +274,21 @@ const MenuPopup = styled.nav`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   box-shadow: ${({ theme }) => theme.shadow.popover};
-  ul { display: grid; gap: var(--gh-spacing-0_5); margin: 0; padding: 0; list-style: none; }
-  li[data-separated] { margin-block-start: var(--gh-spacing-1_5); padding-block-start: var(--gh-spacing-1_5); border-block-start: 0; }
 `;
-const Main = styled.main<{ $fixed: boolean; $joined: boolean }>`
+const Main = styled.main<{ $fixed: boolean; $joined: boolean; $overview: boolean }>`
   min-inline-size: 0;
   padding-block: var(--gh-spacing-3) calc(var(--app-mobile-tab-height) + var(--gh-spacing-5) + env(safe-area-inset-bottom));
   padding-inline: ${contentGutter};
   scroll-margin-block-start: var(--app-header-height);
   &:focus { outline: none; }
   ${media.desktop} { grid-column: 3; padding: ${({ theme }) => `${theme.space.lg} 0 calc(${theme.space.lg} * 2)`}; }
+  ${({ $overview, theme }) => $overview && css`
+    ${media.belowDesktop} { padding-block-start: ${theme.layout.gutter}; }
+    ${media.desktop} {
+      padding-block-start: ${theme.layout.gutter};
+      padding-inline-start: ${theme.layout.gutter};
+    }
+  `}
   ${({ $joined }) => $joined && css`${media.desktop} { padding-block-start: 0; }`}
   ${({ $fixed }) => $fixed && css`${media.desktop} { display: grid; min-block-size: 0; padding: 0; overflow: hidden; }`}
 `;
