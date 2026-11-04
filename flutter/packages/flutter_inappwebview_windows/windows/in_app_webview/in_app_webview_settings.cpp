@@ -30,6 +30,7 @@ namespace flutter_inappwebview_plugin
     incognito = get_fl_map_value(encodableMap, "incognito", incognito);
     trustedOrigin = get_fl_map_value(encodableMap, "trustedOrigin", trustedOrigin);
     javaScriptBridgeEnabled = get_fl_map_value(encodableMap, "javaScriptBridgeEnabled", javaScriptBridgeEnabled);
+    statusBarEnabled = get_fl_map_value(encodableMap, "statusBarEnabled", statusBarEnabled);
   }
 
   flutter::EncodableMap InAppWebViewSettings::toEncodableMap() const
@@ -48,6 +49,7 @@ namespace flutter_inappwebview_plugin
       {"incognito", incognito},
       {"trustedOrigin", trustedOrigin},
       {"javaScriptBridgeEnabled", javaScriptBridgeEnabled},
+      {"statusBarEnabled", statusBarEnabled},
     };
   }
 
@@ -73,6 +75,10 @@ namespace flutter_inappwebview_plugin
         BOOL areDefaultContextMenusEnabled;
         if (SUCCEEDED(settings->get_AreDefaultContextMenusEnabled(&areDefaultContextMenusEnabled))) {
           settingsMap["disableContextMenu"] = !(bool)areDefaultContextMenusEnabled;
+        }
+        BOOL realStatusBarEnabled;
+        if (SUCCEEDED(settings->get_IsStatusBarEnabled(&realStatusBarEnabled))) {
+          settingsMap["statusBarEnabled"] = (bool)realStatusBarEnabled;
         }
 
         wil::com_ptr<ICoreWebView2Settings2> settings2;

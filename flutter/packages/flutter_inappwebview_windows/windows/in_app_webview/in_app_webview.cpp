@@ -204,6 +204,7 @@ namespace flutter_inappwebview_plugin
       webView2Settings->put_IsZoomControlEnabled(settings->supportZoom);
       webView2Settings->put_AreDevToolsEnabled(settings->isInspectable);
       webView2Settings->put_AreDefaultContextMenusEnabled(!settings->disableContextMenu);
+      webView2Settings->put_IsStatusBarEnabled(settings->statusBarEnabled);
 
       wil::com_ptr<ICoreWebView2Settings2> webView2Settings2;
       if (succeededOrLog(webView2Settings->QueryInterface(IID_PPV_ARGS(&webView2Settings2)))) {

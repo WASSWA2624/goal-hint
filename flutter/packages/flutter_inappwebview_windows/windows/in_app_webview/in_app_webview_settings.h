@@ -26,6 +26,7 @@ namespace flutter_inappwebview_plugin
     bool incognito = false;
     std::string trustedOrigin;
     bool javaScriptBridgeEnabled = true;
+    bool statusBarEnabled = true;
 
     InAppWebViewSettings();
     InAppWebViewSettings(const flutter::EncodableMap& encodableMap);

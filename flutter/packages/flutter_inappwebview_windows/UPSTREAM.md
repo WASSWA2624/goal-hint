@@ -36,7 +36,9 @@ editing a developer's Pub cache or generated build output.
   compare the full HTTP(S) scheme, host, and effective port. It rejects credentials
   and malformed/unsafe schemes; there are no hostname prefix/suffix checks.
 - `windows/in_app_webview/in_app_webview_settings.{h,cpp}` accepts the optional
-  `trustedOrigin` and `javaScriptBridgeEnabled` creation settings.
+  `trustedOrigin`, `javaScriptBridgeEnabled`, and `statusBarEnabled` creation
+  settings. The Windows shell disables WebView2's status bar, which otherwise
+  shows a URL over the application when hovering over a link.
 - `windows/in_app_webview/in_app_webview.cpp` cancels off-origin/unsafe main-frame
   and frame navigation before loading when a trusted origin is configured.
   Cancelled main-frame destinations reach the existing Dart navigation delegate

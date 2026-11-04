@@ -461,7 +461,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   }
 }
 
-/// Extra keys are handled only by the pinned Windows native security patch.
+/// Extra keys are handled by the pinned Windows native integration.
 class _ShellWebViewSettings extends InAppWebViewSettings {
   _ShellWebViewSettings(this.origin, String browserAgent)
     : super(
@@ -480,5 +480,6 @@ class _ShellWebViewSettings extends InAppWebViewSettings {
     ...super.toMap(),
     'trustedOrigin': origin.toString(),
     'javaScriptBridgeEnabled': false,
+    'statusBarEnabled': false,
   };
 }
