@@ -46,7 +46,7 @@ const PhoneBar = styled.div`
   gap: var(--gh-spacing-1);
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: calc(-1 * var(--gh-spacing-2_5));
-  margin-inline: calc(-1 * ${contentGutter});
+  margin-inline: calc(-1 * (${contentGutter} + var(--app-phone-header-outset, 0px)));
   padding-inline: ${contentGutter};
   ${compactHeaderSurface}
   @media (max-width: ${({ theme }) => theme.viewport[23.6875]}) {

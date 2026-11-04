@@ -2,6 +2,7 @@
 
 import { useContext, useSyncExternalStore, type ReactNode } from "react";
 import { ThemeContext, ThemeProvider } from "styled-components";
+import { nativeAppIdentity } from "@/domain/app-downloads";
 import { GlobalStyle } from "./global-style";
 import { StyledComponentsRegistry } from "./registry";
 import { darkTheme, isGoalHintTheme, lightTheme } from "./theme";
@@ -15,6 +16,7 @@ export function StyleProvider({ children }: { children: ReactNode }) {
   const resolved = useSyncExternalStore<ThemeMode | null>(subscribeThemePreference, getThemeSnapshot, () => null);
   const mode = resolved ?? getServerThemeSnapshot();
   const theme = mode === "dark" ? darkTheme : lightTheme;
+  const windowsHost = resolved !== null && nativeAppIdentity(navigator.userAgent)?.platform === "windows";
   return (
     <StyledComponentsRegistry>
       <ThemeProvider theme={theme}>
@@ -23,7 +25,7 @@ export function StyleProvider({ children }: { children: ReactNode }) {
           <meta name="color-scheme" content={mode} />
           <meta name="theme-color" content={theme.header.background} />
         </>}
-        <GlobalStyle />
+        <GlobalStyle $windowsHost={windowsHost} />
         {children}
       </ThemeProvider>
     </StyledComponentsRegistry>

@@ -311,6 +311,11 @@ const Column = styled.div<{ $wide: boolean; $fixed: boolean; $joined: boolean }>
   ${({ $joined }) => $joined && joinedDesktopSections}
   ${({ $fixed }) => $fixed && css`${media.desktop} {
     inline-size: 100%; min-block-size: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 0;
+    > [data-record-workspace], > [data-record-form] > [data-record-workspace] {
+      /* Keep the outer inset available to the detail bands without moving the toolbar or list. */
+      --record-pane-end-inset: ${({ theme }) => theme.layout.gutter};
+      margin-inline-end: calc(-1 * var(--record-pane-end-inset));
+    }
     &:not(:has(> [data-record-workspace], > [data-record-form])) { display: block; padding-block: var(--gh-spacing-5); overflow-y: auto; }
   }`}
 `;

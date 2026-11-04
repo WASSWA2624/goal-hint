@@ -19,7 +19,7 @@ const Group = styled.div`
   display: grid;
   min-inline-size: 0;
   margin-block-start: calc(-1 * var(--gh-spacing-2));
-  margin-inline: calc(-1 * ${contentGutter});
+  margin-inline: calc(-1 * (${contentGutter} + var(--app-phone-header-outset, 0px)));
   ${media.desktop} { display: none; }
 `;
 const Bar = styled.div`

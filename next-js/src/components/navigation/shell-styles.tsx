@@ -330,17 +330,19 @@ export const Footer = styled.footer.attrs<{ "data-app-footer"?: string }>({ "dat
   ${desktop} { padding-block: var(--gh-spacing-3_5); font-size: var(--gh-font-body); }
 `;
 
-/** Desktop public and member pages use the existing outer gutter for the header-colored frame. */
+/** Public and member pages use the existing outer gutter for the header-colored frame. */
 export const PublicShellFrame = styled(ShellFrame)<{ $workspace: boolean }>`
+  --public-frame-band: ${({ theme }) => theme.layout.gutter};
+  --public-frame-surface: ${({ theme }) => theme.header.background};
+  background-image: linear-gradient(to right,
+    var(--public-frame-surface) var(--public-frame-band),
+    transparent var(--public-frame-band) calc(100% - var(--public-frame-band)),
+    var(--public-frame-surface) calc(100% - var(--public-frame-band)));
+  > main { padding-inline: var(--public-frame-band); }
+  > ${Footer}, > ${TabBar} { background: var(--public-frame-surface); }
+  ${media.belowDesktop} { --app-phone-header-outset: var(--public-frame-band); }
   ${desktop} {
-    --public-frame-band: ${({ theme }) => theme.layout.gutter};
     --public-frame-surface: ${({ theme }) => theme.header.desktopBackground};
-    background-image: linear-gradient(to right,
-      var(--public-frame-surface) var(--public-frame-band),
-      transparent var(--public-frame-band) calc(100% - var(--public-frame-band)),
-      var(--public-frame-surface) calc(100% - var(--public-frame-band)));
-    > main { padding-inline: var(--public-frame-band); }
-    > ${Footer} { background: var(--public-frame-surface); }
     ${({ $workspace }) => $workspace && css`
       --app-workspace-bottom-band: var(--public-frame-band);
       border-block-end: var(--app-workspace-bottom-band) solid var(--public-frame-surface);

@@ -61,7 +61,8 @@ function RecordLayout({ children, style, ...props }: ComponentPropsWithoutRef<"d
     if (!workspace || !list) return;
     const measure = () => {
       const width = Math.round(list.getBoundingClientRect().width);
-      const max = Math.max(min, Math.floor(workspace.getBoundingClientRect().width) - detailMin - handleWidth);
+      const inset = Number.parseFloat(getComputedStyle(workspace).paddingInlineEnd);
+      const max = Math.max(min, Math.floor(workspace.getBoundingClientRect().width - inset) - detailMin - handleWidth);
       setBounds(previous => previous.width === width && previous.max === max ? previous : { width, max });
     };
     const observer = new ResizeObserver(measure);
@@ -149,7 +150,9 @@ export const RecordWorkspace = styled(RecordLayout).attrs<{
     grid-template-rows: auto auto minmax(0, 1fr);
     min-block-size: 0;
     gap: 0;
+    padding-inline-end: var(--record-pane-end-inset, 0px);
     overflow: hidden;
+    > :is([data-record-details], [data-record-footer]) { margin-inline-end: calc(-1 * var(--record-pane-end-inset, 0px)); }
     &[data-record-resizing="true"], &[data-record-resizing="true"] * { cursor: col-resize !important; user-select: none; }
   }
 `;
@@ -229,9 +232,13 @@ export const RecordScroll = styled.div.attrs<{ "data-record-detail-scroll"?: str
   display: contents;
   ${media.desktop} {
     display: grid; align-content: start; min-inline-size: 0; min-block-size: 0;
+    grid-template-columns: minmax(0, 1fr) var(--record-pane-end-inset, 0px);
     overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin;
     scrollbar-color: ${({ theme }) => theme.color.controlBorder} transparent;
     scroll-padding-block: var(--gh-spacing-4);
+    > * { grid-column: 1; }
+    > [data-record-detail-head] { grid-column: 1 / -1; }
+    > * > [data-record-detail-head] { margin-inline-end: calc(-1 * var(--record-pane-end-inset, 0px)); }
   }
 `;
 export const RecordDetailHead = styled.header.attrs<{ "data-record-detail-head"?: string }>({ "data-record-detail-head": "" })`
@@ -242,6 +249,7 @@ export const RecordDetailHead = styled.header.attrs<{ "data-record-detail-head"?
   h2 { min-inline-size: 0; overflow-wrap: anywhere; font-size: var(--gh-font-subheading); }
   ${media.desktop} {
     min-block-size: var(--gh-size-11); padding: var(--gh-spacing-1_5) ${({ theme }) => theme.layout.sectionPadding};
+    padding-inline-end: calc(${({ theme }) => theme.layout.sectionPadding} + var(--record-pane-end-inset, 0px));
     a, button { min-block-size: var(--form-control-height); }
   }
 `;
@@ -256,6 +264,7 @@ export const RecordFooter = styled(StickyActions).attrs<{ "data-record-footer"?:
     display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-2);
     position: static; min-inline-size: 0; margin: 0;
     padding: var(--gh-spacing-1) ${({ theme }) => theme.layout.sectionPadding} var(--gh-spacing-2);
+    padding-inline-end: calc(${({ theme }) => theme.layout.sectionPadding} + var(--record-pane-end-inset, 0px));
     border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
     ${sectionSurface}
     > * { flex: 0 1 auto; }
