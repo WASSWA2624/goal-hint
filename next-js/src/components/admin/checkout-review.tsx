@@ -12,8 +12,9 @@ import { checkoutLabels, checkoutOpenStatuses } from "@/domain/checkout";
 import { paymentDateNotExtracted as dateNotExtracted } from "@/domain/payment-evidence-date";
 import type { ReceiptEvidenceValidation } from "@/domain/checkout-evidence";
 import type { OwnerPayment } from "@/domain/owner-members";
-import { CheckoutActions } from "../members/checkout-parts";
+import { media } from "@/styles/theme";
 import { WizardReview } from "../members/payment-wizard";
+import { RecordCard, RecordFooter, RecordScroll } from "./record-workspace";
 
 type Receipt = { id: string; provider: string; transactionId: string; verifiedAt: string | null; verifiedBy: string | null;
   amountUgx: number | null; disputed: boolean; senderPhone: string | null; recipient: string | null;
@@ -25,14 +26,27 @@ type Detail = { revision: number; status: string; walletUgx: number; referralDay
     legacyImage: boolean; imageIsLegacy: boolean; validation: ReceiptEvidenceValidation;
     evidence: { id: string; createdAt: string }[] }[];
   events: { id: string; action: string; actor: string; reason: string | null; createdAt: string }[] };
-const Review = styled.article`
-  display: grid; gap: var(--gh-spacing-3_5); padding: var(--gh-spacing-4); min-inline-size: 0; overflow-y: auto; align-content: start;
+const Review = styled(RecordCard)`
+  ${media.belowDesktop} { gap: 0; }
+`;
+const ReviewBody = styled(RecordScroll)`
+  display: grid; gap: var(--gh-spacing-3_5); padding: var(--gh-spacing-4); min-inline-size: 0; align-content: start;
   h2, h3, p { margin: 0; } form { display: grid; gap: var(--gh-spacing-2_5); min-inline-size: 0; }
   fieldset { min-inline-size: 0; margin: 0; padding: var(--gh-spacing-3); border: 0; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--gh-font-body); }
   textarea { inline-size: 100%; resize: vertical; } label { overflow-wrap: anywhere; }
+  ${media.desktop} { [data-checkout-single-receipt] { display: none; } }
+`;
+const ReviewFooter = styled(RecordFooter)`
+  ${media.belowDesktop} {
+    position: static; flex-wrap: wrap; padding-inline: var(--gh-spacing-4);
+    > * { flex: 0 1 auto; }
+    > [data-checkout-receipt-action], &[data-receipt-only] { display: none; }
+  }
 `;
 const localDate = (value: string) => new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+const receiptFormId = (id: string) => `verify-receipt-${id}`;
+const canVerifyReceipt = (claim: Detail["claims"][number]) => (!claim.receipt.allocatedSubmissionId || !claim.receipt.senderPhone) && !claim.withdrawn;
 
 export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }: {
   payment: OwnerPayment; nav: ReactNode; busy: boolean; onBusyChange: (busy: boolean) => void; onResolved: () => void;
@@ -64,7 +78,11 @@ export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }:
   }
   const pending = detail && (checkoutOpenStatuses as readonly string[]).includes(detail.status);
   const blocked = detail?.claims.some(c => c.receipt.disputed) || detail?.status === "disputed";
+  const receiptForms = detail?.claims.filter(canVerifyReceipt) ?? [];
+  const firstReceipt = receiptForms.find(claim => !claim.receipt.verifiedAt) ?? receiptForms[0];
+  const singleReceipt = receiptForms.length === 1;
   return <Review data-checkout-review>
+    <ReviewBody>
     {nav}<h2>{payment.reference} · {payment.planName}</h2>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!detail ? <p>Loading receipt records…</p> : <>
@@ -99,7 +117,7 @@ export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }:
         {claim.receipt.disputed && <p role="alert">Disputed ownership. Contact the payer using the sender number from the actual receiving account. Upload order and claimed phone numbers do not settle ownership.</p>}
         {claim.receipt.verifiedAt && <p>Verified by {claim.receipt.verifiedBy} · {formatUgx(claim.receipt.amountUgx ?? 0)} · sender {claim.receipt.senderPhone ?? "not available"}</p>}
         {claim.receipt.allocatedSubmissionId && <p>Receipt allocated once. Further allocation is blocked.</p>}
-        {(!claim.receipt.allocatedSubmissionId || !claim.receipt.senderPhone) && !claim.withdrawn && <form onSubmit={event => {
+        {canVerifyReceipt(claim) && <form id={receiptFormId(claim.id)} onSubmit={event => {
           event.preventDefault(); const data = new FormData(event.currentTarget);
           void act({ action: "verify-receipt", receiptId: claim.receipt.id, amountUgx: Number(data.get("amountUgx")), recipient: data.get("recipient"),
             senderPhone: data.get("senderPhone"), receivedAt: new Date(String(data.get("receivedAt"))).toISOString(),
@@ -113,7 +131,7 @@ export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }:
           <label><input type="checkbox" name="recipientChecked" required /> Correct receiving MTN/Airtel account</label>
           <label><input type="checkbox" name="successfulReceipt" required /> Funds successfully received; amount checked</label>
           <label><input type="checkbox" name="senderChecked" required /> Sender details checked where available</label>
-          <Button disabled={busy} type="submit">Record receipt verification</Button>
+          <Button disabled={busy} type="submit" data-checkout-single-receipt={singleReceipt || undefined}>Record receipt verification</Button>
         </form>}
         {claim.receipt.disputed && <form onSubmit={event => {
           event.preventDefault(); const data = new FormData(event.currentTarget);
@@ -128,16 +146,21 @@ export function CheckoutReview({ payment, nav, busy, onBusyChange, onResolved }:
           <Button variant="secondary" disabled={busy} type="submit">Record ownership resolution</Button>
         </form>}
       </fieldset>)}
+      {pending && <FloatingField label="Reason / correction"><textarea value={reason} maxLength={500} rows={2} onChange={event => setReason(event.target.value)} /></FloatingField>}
+      <details><summary>Audit history</summary><ul>{detail.events.map(e => <li key={e.id}>{formatPeriodEnd(new Date(e.createdAt))} EAT · {e.actor} · {e.action}{e.reason ? ` · ${e.reason}` : ""}</li>)}</ul></details>
+    </>}
+    </ReviewBody>
+    {detail && (pending || firstReceipt) && <ReviewFooter data-receipt-only={!pending || undefined}>
+      {firstReceipt && (singleReceipt
+        ? <Button variant="secondary" type="submit" form={receiptFormId(firstReceipt.id)} disabled={busy} data-checkout-receipt-action>Record receipt verification</Button>
+        : <Button variant="secondary" type="button" disabled={busy} data-checkout-receipt-action
+          onClick={() => document.getElementById(receiptFormId(firstReceipt.id))?.querySelector<HTMLInputElement>("input")?.focus()}>Review receipts</Button>)}
       {pending && <>
-        <Button disabled={busy || blocked || detail.claims.some(c => !c.withdrawn && !c.validation.reviewed) || detail.remainingUgx > 0 || !detail.reservationActive} onClick={() => void act({ action: "approve-checkout" }, true)}>Approve and next</Button>
-        <FloatingField label={"Reason / correction"}><textarea value={reason} maxLength={500} rows={2} onChange={event => setReason(event.target.value)} /></FloatingField>
-        <CheckoutActions>
           <Button variant="secondary" disabled={busy || reason.trim().length < 3} onClick={() => void act({ action: "request-correction", reason })}>Request correction</Button>
           <Button variant="secondary" disabled={busy || reason.trim().length < 3} onClick={() => void act({ action: "mark-disputed", reason })}>Mark disputed</Button>
           <Button variant="quiet" disabled={busy || reason.trim().length < 3} onClick={() => void act({ action: "reject-checkout", reason }, true)}>Reject with reason</Button>
-        </CheckoutActions>
+          <Button disabled={busy || blocked || detail.claims.some(c => !c.withdrawn && !c.validation.reviewed) || detail.remainingUgx > 0 || !detail.reservationActive} onClick={() => void act({ action: "approve-checkout" }, true)}>Approve and next</Button>
       </>}
-      <details><summary>Audit history</summary><ul>{detail.events.map(e => <li key={e.id}>{formatPeriodEnd(new Date(e.createdAt))} EAT · {e.actor} · {e.action}{e.reason ? ` · ${e.reason}` : ""}</li>)}</ul></details>
-    </>}
+    </ReviewFooter>}
   </Review>;
 }

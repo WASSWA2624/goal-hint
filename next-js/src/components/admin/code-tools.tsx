@@ -87,7 +87,7 @@ export function useCodeAction(onChanged?: () => Promise<void>, options?: CodeAct
 export type CodeAction = ReturnType<typeof useCodeAction>;
 /** The last action's outcome; a duplicate transaction ID links the earlier payment. */
 export function ActionNotices({ action }: { action: CodeAction }) {
-  return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <Link href={`/admin/payments?tab=approved#${action.duplicateId}`} prefetch={false}>Earlier payment</Link></>}</Notice>}</>;
+  return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <Link href={`/admin/payments?paymentId=${encodeURIComponent(action.duplicateId)}`} prefetch={false}>Earlier payment</Link></>}</Notice>}</>;
 }
 export function PlanField({ plans, value, allowCustom = true, onValueChange, disabled }: { plans: readonly SubscriptionPlanView[]; value?: string; allowCustom?: boolean; onValueChange?: (value: string) => void; disabled?: boolean }) {
   return <FieldBlock label={"Plan"}><select name="planId" defaultValue={value ?? plans[0]?.id ?? ""} disabled={disabled} onChange={event => onValueChange?.(event.currentTarget.value)}>{allowCustom && <option value="">Custom days</option>}

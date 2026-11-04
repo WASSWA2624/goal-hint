@@ -55,9 +55,11 @@ subscriber context, and open checks on the left; the actual uploaded evidence
 on the right. Provider and package controls remain visible. The transaction ID
 has a one-click copy button that copies the current edited or historical
 value and confirms success. There is no repeated desktop amount banner or footer
-total. The desktop navigator remains beside Refresh queue and provider artwork
-aligns with references. Mobile queue/review navigation and payment services
-retain their existing behavior.
+total. The live queue starts with search, Advanced filters and Sort by, with
+Sort by on a second row on phones. Status and provider checkboxes filter the
+paginated queue, which opens to Pending. Two-line cards open the right review
+pane on desktop or the detail view on mobile. Desktop receipt and decision
+actions are available in the review footer.
 
 ## Source and local serving
 

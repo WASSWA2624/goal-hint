@@ -28,6 +28,12 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   await t.test("edited values persist; renewal carries entitlement with no further code entry",async()=>{
     const who=await member(), row=await report(who,"EDITOLD"); const first=await codes.approvePayment(row.id,fields("EDIT-NEW",{network:"airtel",amountReceivedUgx:6000}),"owner");assert.equal(first.status,"created");assert.equal(+first.grant.startsAt,clock);assert.equal(first.grant.devicesUnlocked,1);
     const stored=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:row.id}}));assert.equal(stored.transactionRef,"EDITNEW");assert.equal(stored.network,"airtel");assert.equal(stored.amountReceivedUgx,6000);
+    const search = "EDITOLD";
+    const filtered = await review.list(undefined, undefined, { search, filters: { statuses: ["pending", "approved"], providers: ["airtel"] } });
+    assert.deepEqual(filtered.payments.map(payment => payment.id), [row.id]);
+    assert.equal(filtered.total, 1);
+    const pendingOnly = await review.list(undefined, undefined, { search, filters: { statuses: ["pending"], providers: ["all"] } });
+    assert.equal(pendingOnly.total, 0);
     const unlocked={...who,codeEnteredAt:new Date(clock)};const next=await report(unlocked,"EDITRENEW");const renewed=await codes.approvePayment(next.id,fields("EDITRENEW"),"owner");assert.equal(+renewed.grant.startsAt,+first.grant.endsAt);assert.equal(renewed.notification,"sent");assert.equal(+notifications.approvals.at(-1).expiresAt,+renewed.grant.endsAt);assert.equal(notifications.approvals.at(-1).phone,who.phone);clock=+first.grant.endsAt+1;
     const view=await codes.accountView(unlocked);assert.ok(view.codes.some(c=>+c.startsAt<=clock&&+c.endsAt>clock));assert.ok(!("ready" in renewed));
     const list=await review.codes();assert.equal(list.find(c=>c.id===first.grant.id).planName,"Weekly");assert.ok(!JSON.stringify(list).includes("codeHash"));

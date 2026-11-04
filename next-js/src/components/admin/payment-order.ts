@@ -21,13 +21,16 @@ export const paymentSortOptions = [
 ] as const;
 
 export type PaymentSort = typeof paymentSortOptions[number]["value"];
+export function readPaymentSort(value: unknown): PaymentSort {
+  return paymentSortOptions.find(option => option.value === value)?.value ?? "queue";
+}
 
 type SortValue = string | number | null;
 type Comparator = (left: OwnerPayment, right: OwnerPayment) => number;
 const collator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 const text = (value: string | null | undefined) => value?.trim() || null;
 const number = (value: number | null) => value !== null && Number.isFinite(value) ? value : null;
-const phone = (payment: OwnerPayment) => text(payment.payerPhone) || text(payment.accountPhone);
+const phone = (payment: OwnerPayment) => text(payment.receiptSummary?.payerPhone ?? payment.payerPhone) || text(payment.accountPhone);
 
 /** Missing values stay below known values in either direction; equal values keep queue order. */
 function orderBy(read: (payment: OwnerPayment) => SortValue, direction: 1 | -1 = 1): Comparator {
@@ -40,8 +43,8 @@ function orderBy(read: (payment: OwnerPayment) => SortValue, direction: 1 | -1 =
 }
 
 const fields = {
-  date: (payment: OwnerPayment) => number(Date.parse(payment.submittedAt)),
-  amount: (payment: OwnerPayment) => number(payment.final?.amount ?? payment.amount),
+  date: (payment: OwnerPayment) => number(Date.parse(payment.receiptSummary?.paidAt ?? payment.submittedAt)),
+  amount: (payment: OwnerPayment) => number(payment.receiptSummary ? payment.receiptSummary.amount : payment.final?.amount ?? payment.amount),
   reference: (payment: OwnerPayment) => text(payment.reference),
   transaction: (payment: OwnerPayment) => text(payment.final?.transactionId) || text(payment.transactionId),
   phone: (payment: OwnerPayment) => phone(payment)?.replace(/\D/gu, "") || null,

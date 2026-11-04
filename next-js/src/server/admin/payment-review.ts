@@ -13,6 +13,8 @@ import { createQueuedPaymentNotifications } from "../members/payment-notificatio
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { checkoutOpenStatuses } from "../../domain/checkout.ts";
+import { paymentDateNotExtracted } from "../../domain/payment-evidence-date.ts";
+import { paymentQueueStatusLabels, type PaymentFilters } from "../../domain/payment-queue-filters.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 const reference = (row?: { reference: string }) => row ? formatPaymentReference(row.reference) : null;
@@ -21,28 +23,65 @@ const paymentSelect = {
   claimedAmountUgx: true, screenshotAmountUgx: true, purpose: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
   transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true, creditUgx: true } }, screenshot: { select: { submissionId: true } },
   workflowVersion: true,
+  receiptClaims: {
+    where: { withdrawn: false }, orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    select: { amountUgx: true, payerPhone: true, paidAt: true, original: true,
+      receipt: { select: { amountUgx: true, senderPhone: true, receivedAt: true } } },
+  },
 } as const satisfies Prisma.PaymentSubmissionSelect;
+
+function statusFilter(status: string, openQueue = false): Prisma.PaymentSubmissionWhereInput {
+  if (status === "reconciliation") return { receiptClaims: { some: { receipt: { verifiedAt: { not: null }, allocatedSubmissionId: null } } } };
+  if (status === "approved") return { status: { in: ["approved", "reversed"] } };
+  if (openQueue && status === "pending") return { status: { in: [...checkoutOpenStatuses] } };
+  return { status };
+}
+
+function queueFilter(filters: PaymentFilters): Prisma.PaymentSubmissionWhereInput {
+  const statuses = filters.statuses.includes("all") ? [] : filters.statuses.map(status => statusFilter(status));
+  const providers = filters.providers.filter(provider => provider !== "all");
+  return {
+    ...(statuses.length === 1 ? statuses[0] : statuses.length ? { OR: statuses } : {}),
+    ...(providers.length && !filters.providers.includes("all") ? { AND: [{ OR: [
+      { transactionRef: { not: null }, network: { in: providers } },
+      { OR: [{ transactionRef: null }, { network: null }, { network: "" }], claimedNetwork: { in: providers } },
+    ] }] } : {}),
+  };
+}
+
+type PaymentRow = Prisma.PaymentSubmissionGetPayload<{ select: typeof paymentSelect }>;
+function receiptSummary(row: PaymentRow) {
+  const latest = row.receiptClaims[0];
+  const paidAt = latest?.receipt.receivedAt ?? (latest && !paymentDateNotExtracted(latest.original) ? latest.paidAt : null);
+  return {
+    amount: latest ? row.receiptClaims.reduce((sum, claim) => sum + (claim.receipt.amountUgx ?? claim.amountUgx), 0) : null,
+    payerPhone: latest?.receipt.senderPhone ?? latest?.payerPhone ?? row.payerPhone,
+    paidAt: paidAt?.toISOString() ?? null,
+  };
+}
+
 export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createQueuedPaymentNotifications(database) }: {
   notifications?: PaymentNotifications;
 } = {}) {
   return {
-    async list(tab = "pending", paymentId?: string, options: { page?: number; search?: string } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
+    async list(tab = "pending", paymentId?: string, options: { page?: number; search?: string; filters?: PaymentFilters } = {}): Promise<PaymentQueue & Readonly<{ tab?: string; targetFound?: boolean }>> {
       return database.query(async tx => {
         // An old audit event may describe a payment whose status has since changed.
         const target = paymentId ? await tx.paymentSubmission.findUnique({ where: { id: paymentId }, select: paymentSelect }) : null;
         const requested = target?.status === "reversed" ? "approved" : target?.status ?? tab;
-        const selected = ["pending", "remaining", "disputed", "correction", "reconfirm", "approved", "rejected", "cancelled", "superseded", "reconciliation"].includes(requested) ? requested : "pending";
+        const selected = Object.hasOwn(paymentQueueStatusLabels, requested) ? requested : "pending";
+        const filters = target ? undefined : options.filters;
         const page = Math.max(1, Math.min(100000, Math.floor(options.page ?? 1) || 1)), search = (options.search ?? "").trim().slice(0, 100), pageSize = 30;
-        const where: Prisma.PaymentSubmissionWhereInput = selected === "reconciliation" ? { receiptClaims: { some: { receipt: { verifiedAt: { not: null }, allocatedSubmissionId: null } } } }
-          : { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected === "pending" ? { in: [...checkoutOpenStatuses] } : selected };
+        const where = filters ? queueFilter(filters) : statusFilter(selected, !options.filters);
         const normalized = search.toUpperCase().replace(/[^A-Z0-9]/gu, ""), phone = search.replace(/[^0-9]/gu, "");
-        if (search) where.OR = [{ reference: { contains: search.toUpperCase().replace(/^P-?/u, "") } },
+        if (search) where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: [{ reference: { contains: search.toUpperCase().replace(/^P-?/u, "") } },
           ...(phone ? [{ payerPhone: { contains: phone } }] : []),
           ...(normalized ? [{ claimedTxnKey: { contains: normalized } }, { receiptClaims: { some: { OR: [
-            { receipt: { transactionKey: { contains: normalized } } }, ...(phone ? [{ payerPhone: { contains: phone } }] : [])] } } }] : [])];
+            { receipt: { transactionKey: { contains: normalized } } }, ...(phone ? [{ payerPhone: { contains: phone } }, { receipt: { senderPhone: { contains: phone } } }] : [])] } } }] : [])] }];
         const total = await tx.paymentSubmission.count({ where });
+        const orderStatus = filters ? (filters.statuses.length === 1 ? filters.statuses[0] : undefined) : selected;
         const rows = await tx.paymentSubmission.findMany({ where,
-          orderBy: [{ submittedAt: (checkoutOpenStatuses as readonly string[]).includes(selected) ? "asc" : "desc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize,
+          orderBy: [{ submittedAt: orderStatus && (checkoutOpenStatuses as readonly string[]).includes(orderStatus) ? "asc" : "desc" }, { id: "asc" }], take: pageSize, skip: (page - 1) * pageSize,
           select: paymentSelect });
         // Keep the queue bounded while making the exact historical report available.
         if (target && !rows.some(row => row.id === target.id)) rows.splice(pageSize - 1, rows.length >= pageSize ? 1 : 0, target);
@@ -58,6 +97,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx,
           purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, accountCreditUgx: r.account.creditUgx, planId: r.planId,
           planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
+          ...(r.workflowVersion === 2 ? { receiptSummary: receiptSummary(r) } : {}),
           final: r.transactionRef ? { network: r.network, transactionId: normalizeTransactionId(r.transactionRef), amount: r.amountReceivedUgx } : null,
           checks: paymentChecks({ received: r.amountReceivedUgx, price: r.priceUgx, transactionId: !!r.claimedTxnKey,
             approved: r.claimedTxnKey ? reference(related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)) : null,

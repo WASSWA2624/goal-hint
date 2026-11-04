@@ -205,12 +205,15 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
       </DecisionZone>
     </ReviewZones>
     </PaymentReviewScroll>
-    {pending && <DecisionBar $rejecting={rejecting} data-decision-bar>
-      <span data-payment-footer-summary data-record-summary>Confirm funds before approving</span>
+    {(pending || desktop && p.hasImage) && <DecisionBar $rejecting={rejecting} data-decision-bar>
+      {pending && <span data-payment-footer-summary data-record-summary>Confirm funds before approving</span>}
+      {desktop && p.hasImage && <ActionButton as="a" href={screenshot} target="_blank" rel="noopener noreferrer">View receipt</ActionButton>}
+      {pending && <>
       <RejectToggle type="button" $open={rejecting} aria-expanded={rejecting} aria-controls={rejectId} disabled={action.busy} onClick={toggleReject}
         data-reject-toggle>{rejecting ? "Cancel" : <><CloseIcon />Reject</>}</RejectToggle>
       <ActionButton type="submit" form={approvalId} $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : topUp ? "Approve top-up" : "Approve payment"}</ActionButton>
       <DangerButton type="submit" form={`${rejectId}-form`} disabled={action.busy} data-reject-submit><CloseIcon />Reject payment</DangerButton>
+      </>}
     </DecisionBar>}
   </ReviewCard>;
 }

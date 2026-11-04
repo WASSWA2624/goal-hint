@@ -4,9 +4,9 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { ActionButton } from "./admin-form";
-import { DeskHeadEnd, Drawer, EmptyPanel, Segmented, TextAction, visuallyHidden } from "./desk-styles";
+import { Drawer, EmptyPanel, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopBalancedReview } from "./payment-balanced-styles";
-import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordList, RecordListFooter, RecordListScroll, RecordWorkspace } from "./record-workspace";
+import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordWorkspace } from "./record-workspace";
 
 /**
  * Compact desktop queue beside a persistent review. Phones keep the queue-to-review flow.
@@ -30,32 +30,17 @@ export const PaymentUnavailable = styled.section`
   > h1 { ${visuallyHidden} }
 `;
 
-/** The phone review shows its own navigation instead of the status tabs. */
+/** The phone review shows its own navigation instead of the queue toolbar. */
 export const PaymentHead = styled(RecordHead)<{ $reviewing: boolean }>`
   background: transparent;
   ${media.belowDesktop} {
     padding-inline: 0;
-    > nav { flex: 1 1 100%; }
     ${({ $reviewing }) => $reviewing && css`
       min-block-size: 0;
       > :not(h1) { display: none; }
     `}
   }
 `;
-export const HeadEnd = styled(DeskHeadEnd)``;
-
-/** Four equal status tabs on phones, wrapping long labels instead of scrolling. */
-export const StatusTabs = styled(Segmented)`
-  flex-wrap: wrap;
-  overflow-x: visible;
-  && > a[aria-disabled="true"] { cursor: not-allowed; opacity: var(--gh-opacity-60); }
-  ${media.belowDesktop} {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    && > a { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1); font-size: var(--gh-font-secondary); line-height: var(--gh-leading-control); text-align: center; white-space: normal; }
-  }
-`;
-
 export const PaymentFeedback = styled(RecordFeedback)`
   scroll-margin-block-start: calc(var(--app-header-content-height, var(--gh-size-16)) + var(--gh-spacing-4));
 `;
@@ -71,9 +56,20 @@ export const QueuePanel = styled(RecordList)<{ $reviewing: boolean }>`
 export const QueueBar = styled.div`
   flex: 1 0 100%;
   min-inline-size: 0;
+  > form {
+    display: grid; gap: var(--gh-spacing-1_5); min-inline-size: 0;
+    ${media.desktop} { grid-template-columns: minmax(0, 1fr) max-content; }
+  }
 `;
 export const QueueFilters = styled.div`
-  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
+  display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
+  > fieldset {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--gh-spacing-3); min-inline-size: 0; margin: 0; padding: 0; border: 0;
+  }
+  legend { padding: 0; color: ${({ theme }) => theme.color.text}; font-weight: var(--gh-weight-bold); }
+  label { min-block-size: var(--form-control-height); min-inline-size: 0; margin: 0; align-items: center; }
+  label > input { flex: none; margin: 0; }
 `;
 export const QueueSummary = styled(RecordListFooter)`
   gap: var(--gh-spacing-0_5) var(--gh-spacing-1_5);
@@ -85,15 +81,19 @@ export const QueueSummary = styled(RecordListFooter)`
 export const TicketTray = styled(RecordListScroll)<{ $opened: boolean }>`
   ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] {  background: ${({ theme }) => theme.color.surface}; } }`}
 `;
-export const TicketWarn = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gh-spacing-1_5);
-  color: ${({ theme }) => theme.color.outcome.pending.text};
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  > svg { flex: none; font-size: var(--gh-font-emphasis); }
-
+export const TicketItem = styled(RecordItem)`
+  && { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  [data-record-row-primary], [data-ticket-meta] {
+    display: grid; align-items: baseline; gap: var(--gh-spacing-1_5);
+  }
+  [data-record-row-primary] { grid-template-columns: minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content); }
+  [data-ticket-meta] { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); }
+  [data-record-row-primary] > *, [data-ticket-meta] > * {
+    min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  [data-ticket-amount], [data-ticket-time] { text-align: end; font-variant-numeric: tabular-nums; }
+  > svg { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-section); }
+  ${media.desktop} { && { grid-template-columns: minmax(0, 1fr); } > svg { display: none; } }
 `;
 export const QueueEmpty = styled(EmptyPanel)`
   ${media.belowDesktop} { ${panelLook} }
@@ -145,7 +145,7 @@ export const ReviewNav = styled.div`
   justify-content: space-between;
   gap: var(--gh-spacing-2);
   margin-block: calc(-1 * var(--gh-spacing-1_5)) var(--gh-spacing-1_5);
-  ${media.desktop} { order: 9; flex: 0 0 auto; margin: 0 0 0 auto; > [data-review-back] { display: none; } }
+  ${media.desktop} { display: none; }
 `;
 export const ReviewBack = styled(TextAction)`
   gap: var(--gh-spacing-1);

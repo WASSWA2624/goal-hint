@@ -28,11 +28,13 @@ export type FixtureAccount = { id: string; phone: string | null; blockedAt: Date
 export type FixtureCode = { id: string; accountId: string; reference: string; planName: string; durationDays: number;
   extensionDays: number; startsAt: Date; endsAt: Date; revokedAt: Date | null; source: string; createdAt: Date; paymentSubmissionId?: string };
 type FixtureDevice = { accountId: string; createdAt: Date; lastSeenAt: Date; expiresAt: Date; unlocked: boolean };
+type FixtureReceiptClaim = { amountUgx: number; payerPhone: string; paidAt: Date; original: null;
+  receipt: { amountUgx: number | null; senderPhone: string | null; receivedAt: Date | null; verifiedAt: Date | null; allocatedSubmissionId: string | null } };
 type FixturePayment = { id: string; reference: string; accountId: string; payerPhone: string | null; claimedNetwork: string;
   claimedTxnRef: string | null; claimedTxnKey: string | null; claimedAmountUgx: number; amountReceivedUgx: number | null; planId: string;
   planName: string; durationDays: number; priceUgx: number; submittedAt: Date; status: string; imageSha256: string | null;
   screenshot: { submissionId: string } | null; transactionRef: string | null; approvedTxnKey?: string | null; network?: string | null;
-  rejectReason?: string | null; rejectText?: string | null };
+  rejectReason?: string | null; rejectText?: string | null; workflowVersion?: number; receiptClaims?: FixtureReceiptClaim[] };
 type FixtureAudit = { id: bigint; at: Date; actor: string; action: string; accountId: string | null;
   targetType: string; targetId: string; details: Record<string, unknown> };
 /** An account-update SMS outbox row: delivery state only, never the number or the message text. */
@@ -147,6 +149,20 @@ export function loadPaymentsQueueFixture() {
       screenshot: null, imageSha256: null };
   }));
 }
+export function loadPaymentFiltersFixture() {
+  loadPaymentsQueueFixture();
+  const state = fixtureState(), original = state.payments[0]!;
+  const paidAt = new Date("2026-10-20T08:27:00Z");
+  state.payments.push(...Array.from({ length: 5 }, (_, index): FixturePayment => ({
+    ...original, id: `00000000-0000-4000-8000-00000000080${index}`, reference: `FILTER${index}`,
+    status: index === 0 ? "remaining" : index === 1 ? "disputed" : index === 2 ? "correction" : "pending",
+    claimedNetwork: "airtel", submittedAt: new Date("2026-10-31T12:00:00Z"),
+    ...(index === 0 ? { workflowVersion: 2, receiptClaims: [{
+      amountUgx: 2200, payerPhone: "256700000800", paidAt, original: null,
+      receipt: { amountUgx: 2000, senderPhone: "256700000800", receivedAt: paidAt, verifiedAt: at, allocatedSubmissionId: null },
+    }] } : {}),
+  })));
+}
 export function fixtureAccountForPhone(phone: string): FixtureAccount {
   const state = fixtureState(), existing = state.accounts.find(row => row.phone === phone);
   if (existing) return existing;
@@ -195,17 +211,25 @@ export function fixtureSnapshot() {
 
 type AccountQuery = { where?: { phone?: string | { in?: string[] } } };
 type OwnedQuery = { where?: { accountId?: string; codeEnteredAt?: unknown } };
-type PaymentWhere = { accountId?: string; status?: string | { in: string[] }; claimedTxnKey?: { in: string[] };
-  approvedTxnKey?: { in: string[] }; imageSha256?: { in: string[] }; OR?: PaymentWhere[] };
+type TextFilter = string | null | { in?: string[]; contains?: string; not?: null };
+type PaymentWhere = { accountId?: string; status?: TextFilter; reference?: TextFilter; payerPhone?: TextFilter;
+  claimedTxnKey?: TextFilter; approvedTxnKey?: TextFilter; imageSha256?: TextFilter; network?: TextFilter; claimedNetwork?: TextFilter;
+  transactionRef?: TextFilter; receiptClaims?: { some: { receipt?: { verifiedAt: { not: null }; allocatedSubmissionId: null } } };
+  OR?: PaymentWhere[]; AND?: PaymentWhere[] };
 type PaymentOrder = { submittedAt?: "asc" | "desc"; id?: "asc" | "desc" };
-type PaymentQuery = { where?: PaymentWhere; orderBy?: PaymentOrder | PaymentOrder[]; take?: number };
+type PaymentQuery = { where?: PaymentWhere; orderBy?: PaymentOrder | PaymentOrder[]; take?: number; skip?: number };
+function matchesText(value: string | null | undefined, filter: TextFilter | undefined) {
+  if (filter === undefined) return true;
+  if (filter === null || typeof filter === "string") return (value ?? null) === filter;
+  return value != null && (!filter.in || filter.in.includes(value)) && (filter.contains === undefined || value.includes(filter.contains));
+}
 function paymentRows(rows: FixturePayment[], query: PaymentQuery = {}) {
   const matches = (row: FixturePayment, where: PaymentWhere): boolean => (!where.accountId || row.accountId === where.accountId)
-    && (!where.status || (typeof where.status === "string" ? row.status === where.status : where.status.in.includes(row.status)))
-    && (!where.claimedTxnKey || row.claimedTxnKey !== null && where.claimedTxnKey.in.includes(row.claimedTxnKey))
-    && (!where.approvedTxnKey || !!row.approvedTxnKey && where.approvedTxnKey.in.includes(row.approvedTxnKey))
-    && (!where.imageSha256 || row.imageSha256 !== null && where.imageSha256.in.includes(row.imageSha256))
-    && (!where.OR || where.OR.some(condition => matches(row, condition)));
+    && (["status", "reference", "payerPhone", "claimedTxnKey", "approvedTxnKey", "imageSha256", "network", "claimedNetwork", "transactionRef"] as const)
+      .every(field => matchesText(row[field], where[field]))
+    && (!where.receiptClaims || (!!where.receiptClaims.some.receipt && !!row.receiptClaims?.some(claim => claim.receipt.verifiedAt && !claim.receipt.allocatedSubmissionId)))
+    && (!where.OR || where.OR.some(condition => matches(row, condition)))
+    && (!where.AND || where.AND.every(condition => matches(row, condition)));
   const matching = rows.filter(row => matches(row, query.where ?? {}));
   const orders = Array.isArray(query.orderBy) ? query.orderBy : query.orderBy ? [query.orderBy] : [];
   if (query.orderBy) matching.sort((a, b) => {
@@ -216,7 +240,7 @@ function paymentRows(rows: FixturePayment[], query: PaymentQuery = {}) {
     }
     return 0;
   });
-  return query.take === undefined ? matching : matching.slice(0, query.take);
+  return query.take === undefined ? matching : matching.slice(query.skip ?? 0, (query.skip ?? 0) + query.take);
 }
 type AuditQuery = { where?: { action?: string; accountId?: string | { in: string[] }; at?: { gte?: Date; lte?: Date }; id?: { in: bigint[] } };
   take?: number; select?: Partial<Record<keyof FixtureAudit, boolean>> };
@@ -270,7 +294,12 @@ function createClient(emptySubscribers: boolean) {
         const index = state.plans.findIndex(plan => plan.id === where.id);if (index < 0) throw new Error("Synthetic plan not found.");
         const row = { ...state.plans[index]!, ...data };state.plans[index] = row;return row;
       } },
-    paymentSubmission: { findMany: async (query?: PaymentQuery) => paymentRows(state.payments, query).map(row => ({ purpose: "plan", ...row, account: { phone: phoneFor(row.accountId), creditUgx: 0 } })),
+    paymentSubmission: {
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const row = state.payments.find(payment => payment.id === where.id);
+        return row ? { purpose: "plan", ...row, account: { phone: phoneFor(row.accountId), creditUgx: 0 } } : null;
+      },
+      findMany: async (query?: PaymentQuery) => paymentRows(state.payments, query).map(row => ({ purpose: "plan", ...row, account: { phone: phoneFor(row.accountId), creditUgx: 0 } })),
       count: async (query?: PaymentQuery) => paymentRows(state.payments, query).length, aggregate: async () => ({ _sum: { amountReceivedUgx: 5000 } }) },
     paymentScreenshot: { findUnique: async ({ where }: { where: { submissionId: string } }) => state.payments.some(row => row.id === where.submissionId && row.screenshot)
       ? { data: fixturePaymentProof } : null },

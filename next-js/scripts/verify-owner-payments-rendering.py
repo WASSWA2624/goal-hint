@@ -386,7 +386,9 @@ def payments_rendering(origin):
             match(r'href="/admin/payments\?tab=pending"', badge)
             match(r'id="payment-search"', html)
             no_match("Refresh queue", html)
-            assert html.index('aria-label="Payment status"') < html.index('id="payment-search"')
+            no_match(r'aria-label="Payment status"', html)
+            toolbar = html.split('data-admin-toolbar', 1)[1]
+            assert toolbar.index('id="payment-search"') < toolbar.index('data-search-filters') < toolbar.index('aria-label="Sort by: Queue order"')
             no_match(r'data-payment-summary-count|Ready for manual review|Review the checks and confirm the received transfer', html,
                      "The removed review-summary banner must not reappear.")
             expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
@@ -404,6 +406,9 @@ def payments_rendering(origin):
                 match(r'\b\d{1,2}\s+Oct\b', row_text, "Queue entries include the submission date.")
                 match(r'\b\d{2}:\d{2}\b', row_text, "Queue entries include the submission time.")
                 match(r'\bEAT\b', row_text, "Queue timestamps name the dashboard timezone.")
+                match(r'Submitted', row_text, "Legacy rows identify the fallback submission timestamp.")
+                assert row.index("data-ticket-ref") < row.index("data-ticket-phone") < row.index("data-ticket-amount") < row.index("data-ticket-plan") < row.index("data-ticket-time")
+                match(r'data-ticket-chevron', row)
                 no_match(r'Expected|No screenshot', row)
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
             assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
@@ -417,7 +422,7 @@ def payments_rendering(origin):
                 assert "256 700 000 118" in first_row and "4,500" in first_row
                 assert "256 700 000 101" not in first_row, "Queue identifies the payer, not the subscriber account."
                 approve = match(r'<button\b(?=[^>]*data-payment-approve)[^>]*>', html).group(0)
-                no_match(r'\bdisabled(?:=""|\s|>)', approve)
+                match(r'\bdisabled(?:=""|\s|>)', approve, "Approval requires checking the incoming transfer and covering the package price.")
                 for field, value in [("payment-confirmed-id", "TEST1234"), ("payment-confirmed-amount", "4500")]:
                     control = match(rf'<input\b(?=[^>]*id="{field}")[^>]*>', html).group(0)
                     match(rf'value="{value}"', control, "Reported values prefill the editable approval fields.")
@@ -460,6 +465,29 @@ def payments_queue_rendering(origin):
         assert {row["planName"] for row in queue["payments"]} == {"Weekly", "Monthly", "Daily"}
         match(r'href="/admin/payments\?tab=pending"', html)
         assert request(origin, "/admin/payments?fixture=queue", headers={"Cookie": ""}).status == 307
+    finally:
+        fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
+
+
+def payment_filters_rendering(origin):
+    assert fixture_json(origin, "/api/fixture/payments", {"scenario": "filters"})[0] == 200
+    try:
+        def queue(query=""):
+            html = visible_html(request(origin, "/admin/payments" + query).text)
+            return html, re.findall(r'data-payment-row="([^"]+)"', html)
+        first, first_ids = queue()
+        second, second_ids = queue("?page=2")
+        assert len(first_ids) == 30 and len(second_ids) == 2 and not set(first_ids) & set(second_ids)
+        assert "30 of 32 requests" in first and "2 of 32 requests" in second
+        filtered, filtered_ids = queue("?status=remaining,approved&provider=airtel&search=PFILTER0")
+        assert filtered_ids == ["00000000-0000-4000-8000-000000000800"]
+        match(r'data-ticket-amount[^>]*>UGX 2,000', filtered)
+        match(r'dateTime="2026-10-20T08:27:00.000Z"[^>]*>20 Oct, 11:27 EAT', filtered)
+        assert queue("?status=reconciliation")[1] == filtered_ids
+        assert queue("?status=all&provider=airtel&search=PFILTER")[1] == [
+            f"00000000-0000-4000-8000-00000000080{index}" for index in range(5)]
+        direct, _ = queue("?paymentId=00000000-0000-4000-8000-000000000801")
+        match(r'data-payment-review="00000000-0000-4000-8000-000000000801"', direct)
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
@@ -569,6 +597,7 @@ def main():
         plans_api(server.origin)
         payments_rendering(server.origin)
         payments_queue_rendering(server.origin)
+        payment_filters_rendering(server.origin)
         payments_api(server.origin)
         print("PASS all eight owner routes and regular navigation; five shared record workspaces; removed admin password workflow; subscriber actions, Plans create/edit/order/activation, Settings saves/modes, read-only audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
