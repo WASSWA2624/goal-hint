@@ -109,11 +109,14 @@ export function AdminWorkspace({ current: initialSection, children, pendingCount
 }
 
 export const AdminShellFrame = styled(ShellFrame)`
+  --admin-header-divider-surface: ${({ theme }) => theme.header.background};
+  --admin-header-divider-color: ${({ theme }) =>
+    `color-mix(in srgb, var(--admin-header-divider-surface), ${theme.header.text} ${theme.opacity[30]! * 100}%)`};
   ${media.desktop} {
+    --admin-header-divider-surface: ${({ theme }) => theme.header.desktopBackground};
     --app-header-border-width: var(--gh-stroke-thin);
     > ${Header} {
-      border-block-end: var(--app-header-border-width) solid
-        ${({ theme }) => `color-mix(in srgb, ${theme.header.desktopBackground}, ${theme.header.text})`};
+      border-block-end: var(--app-header-border-width) solid var(--admin-header-divider-color);
     }
   }
   ${media.belowDesktop} {
@@ -226,7 +229,7 @@ const Caption = styled.p`
 const SectionLink = WorkspaceNavigationLink;
 const MenuBar = styled.details`
   position: relative;
-  border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.controlBorder};
+  border-block-start: var(--gh-stroke-thin) solid var(--admin-header-divider-color);
   ${media.desktop} { display: none; }
   > summary {
     display: flex;
