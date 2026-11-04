@@ -12,6 +12,7 @@ import type { OwnerPayment } from "@/domain/owner-members";
 import { paymentDateNotExtracted } from "@/domain/payment-evidence-date";
 import { formatInternationalPhone } from "@/domain/phone-countries";
 import { formatUgx } from "@/domain/subscription-plans";
+import { media } from "@/styles/theme";
 import { CheckField } from "./admin-form";
 import type { CheckoutReviewDetail } from "./checkout-review";
 import { CopyTextButton } from "./copy-text-button";
@@ -34,10 +35,13 @@ const Body = styled(RecordScroll)`
   h3, p { margin: 0; }
   h3 { font-size: var(--gh-font-section); font-weight: var(--gh-weight-medium); }
   form { display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; }
+  ${media.belowDesktop} {
+    display: grid; align-content: start; min-inline-size: 0; padding: 0;
+  }
 `;
 const Identity = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2); min-inline-size: 0;
-  > span { overflow-wrap: anywhere; }
+  > span, > strong { min-inline-size: 0; overflow-wrap: anywhere; }
   > strong { font-weight: var(--gh-weight-medium); }
 `;
 const Receipt = styled.section`
@@ -55,6 +59,9 @@ const Transactions = styled.section`
 const Fields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gh-spacing-2); min-inline-size: 0;
+  @media (max-width: ${({ theme }) => theme.viewport[22.5]}) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `;
 const Checklist = styled(Fields)`column-gap: var(--gh-spacing-3); row-gap: 0;`;
 const Previews = styled.div`
@@ -161,7 +168,7 @@ function ReceiptDetails({ claim, detail, url, showLegacy, editable, canEdit, exc
   </Receipt>;
 }
 
-export function CheckoutDesktopReview({ payment, detail, busy, loading, hasNext, error, notice, act }: {
+export function CheckoutReviewView({ payment, detail, busy, loading, hasNext, error, notice, act }: {
   payment: OwnerPayment; detail: CheckoutReviewDetail | null; busy: boolean; loading: boolean; hasNext: boolean; error: string; notice: string; act: Act;
 }) {
   const [rejectingId, setRejectingId] = useState<string | null>(null);

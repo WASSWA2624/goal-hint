@@ -389,8 +389,8 @@ def payments_rendering(origin):
             no_match(r'aria-label="Payment status"', html)
             toolbar = html.split('data-admin-toolbar', 1)[1]
             assert toolbar.index('id="payment-search"') < toolbar.index('data-search-filters') < toolbar.index('aria-label="Sort by: Queue order"')
-            no_match(r'data-payment-summary-count|Ready for manual review|Review the checks and confirm the received transfer', html,
-                     "The removed review-summary banner must not reappear.")
+            no_match(r'data-payment-summary-count|Ready for manual review|Review the checks and confirm the received transfer|data-payment-step', html,
+                     "The removed summary banner and review stepper must not reappear.")
             expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
             assert re.findall(r'data-payment-row="([^"]+)"', html) == expected, tab
             rows = re.findall(r'<button\b[^>]*data-payment-row="[^"]+"[^>]*>([\s\S]*?)</button>', html)
@@ -416,8 +416,9 @@ def payments_rendering(origin):
             if tab == "superseded":
                 match("AIR2026102301", html, "The replaced report's review prefills its reported transaction ID.")
             if tab in ["pending", "invalid"]:
-                for value in ["7 days", "TEST1234", "Expected payment", "UGX 5,000", "Reported amount: UGX 4,500"]:
+                for value in ["Purchased days", "TEST1234", "Amount deposited", "Package price", "UGX 5,000"]:
                     match(value, html)
+                no_match(r'Expected payment|Reported amount:', html, "The receipt form shows the deposit only once.")
                 first_row = unescape(re.sub(r'<[^>]+>', " ", rows[0]))
                 assert "256 700 000 118" in first_row and "4,500" in first_row
                 assert "256 700 000 101" not in first_row, "Queue identifies the payer, not the subscriber account."
@@ -428,12 +429,11 @@ def payments_rendering(origin):
                     match(rf'value="{value}"', control, "Reported values prefill the editable approval fields.")
                     match(r'\brequired(?:=""|\s|>)', control)
                 no_match(r'payment-wallet-confirmed|Verify in your wallet|Received in my wallet', html)
-                for label in ["Paste wallet SMS", "Change network or plan", "Reject"]:
+                for label in ["Paste wallet SMS", "Edit provider or package"]:
                     disclosure = match(rf'<details\b([^>]*)>\s*<summary[^>]*>(?:(?!</summary>)[\s\S])*{label}', html)
                     no_match(r'\bopen(?:=""|\s|$)', disclosure.group(1))
-                warning = "Payer has its own Goal Hint account"
-                assert html.count(warning) == 1, "Warnings stay visible without being repeated inside checks."
-                match(r'aria-label="Payment warnings"', html)
+                assert html.count('aria-label="Payment warnings"') == 1, "Warnings have one visible region."
+                match(r'<button\b(?=[^>]*aria-haspopup="dialog")[^>]*>(?:(?!</button>)[\s\S])*Reject with reason', html)
                 no_match(r'No screenshot available', html)
             no_match(r'data-payment-trials|Free trial requests|Grant free trial', html)
             no_match(r'<img\b[^>]*src="/api/admin/payments/', html, "The first report in these tab fixtures has no image.")
@@ -502,6 +502,9 @@ def payment_filters_rendering(origin):
         direct, _ = queue("?paymentId=00000000-0000-4000-8000-000000000801")
         match(r'data-checkout-review', direct)
         match(r'PFILTER1', direct)
+        assert direct.index('data-admin-section-menu') < direct.index('data-review-back') < direct.index('data-payment-account-summary')
+        match(r'Back to payments', direct)
+        no_match(r'data-payment-step|Previous report|Next report', direct)
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 

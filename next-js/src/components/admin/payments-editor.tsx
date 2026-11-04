@@ -8,7 +8,7 @@ import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { stopReviewSound } from "./payment-alert-sound";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronLeftIcon } from "@/components/ui/icons";
 import { checkoutOpenStatuses } from "@/domain/checkout";
 import { formatPhone } from "@/domain/phone";
 import { defaultPaymentFilters, maximumPaymentQueuePage, paymentProviderLabels, paymentQueueStatusLabels, paymentStatusLabels, type PaymentFilters } from "@/domain/payment-queue-filters";
@@ -23,8 +23,8 @@ import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPe
 import { useAdminRefresh } from "./use-admin-refresh";
 import { paymentSortOptions, readPaymentSort, sortPayments, type PaymentSort } from "./payment-order";
 import { CheckoutReview } from "./checkout-review";
-import { PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueueFooter, QueuePanel, ReviewBack, ReviewNav, ReviewSection,
-  Stepper, TicketItem, TicketTray } from "./payment-styles";
+import { PaymentFeedback, PaymentHead, PaymentLayout, QueueBar, QueueEmpty, QueueFilters, QueueFooter, QueuePanel, ReviewBack, ReviewSection,
+  TicketItem, TicketTray } from "./payment-styles";
 import { RecordItemTitle, RecordRowContent } from "./record-workspace";
 
 const openStatuses: readonly string[] = checkoutOpenStatuses;
@@ -84,7 +84,7 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   const [detailOpen, setDetailOpen] = useState(!!initialPaymentId), [completed, setCompleted] = useState<Record<string, string>>({});
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
   const [actionReference, setActionReference] = useState(""), [opened, setOpened] = useState(!!initialPaymentId);
-  const focusNext = useRef(false), stepFocus = useRef<"previous" | "next" | null>(null);
+  const focusNext = useRef(false), backButton = useRef<HTMLButtonElement>(null);
   const [dirtyId, setDirtyId] = useState<string>();
   const [reviewFocused, setReviewFocused] = useState(false);
   const refreshedCount = useRef<number | null>(null);
@@ -166,16 +166,10 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   }, [queue.payments]);
 
   useEffect(() => {
-    // Keep keyboard focus on the same step button, or the other one at the end of the queue.
-    if (stepFocus.current) {
-      const direction = stepFocus.current; stepFocus.current = null;
-      const target = document.querySelector<HTMLButtonElement>(`[data-payment-step="${direction}"]:not(:disabled)`) ?? document.querySelector<HTMLButtonElement>("[data-payment-step]:not(:disabled)");
-      (target ?? document.getElementById("payment-review"))?.focus({ preventScroll: true });
-      return;
-    }
     if (!focusNext.current) return;
     focusNext.current = false;
-    const target = document.getElementById(selectedKey ? "payment-review" : "payment-queue-title");
+    const target = !desktop && detailOpen && backButton.current
+      ? backButton.current : document.getElementById(selectedKey ? "payment-review" : "payment-queue-title");
     target?.focus({ preventScroll: true });
     if (!desktop) target?.scrollIntoView({ block: "start" });
   }, [selectedKey, detailOpen, desktop]);
@@ -212,12 +206,6 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
     focusNext.current = !desktop; setSelectedId(payment.id); setDetailOpen(true); setOpened(true);
     locationFor(payment.id, push);
   }
-  function step(direction: "previous" | "next") {
-    const target = payments[index + (direction === "next" ? 1 : -1)];
-    if (action.busy || !target) return;
-    stepFocus.current = direction; setSelectedId(target.id); setDetailOpen(true);
-    locationFor(target.id);
-  }
   function back() {
     if (openedFromQueue.current) { history.back(); return; }
     setDetailOpen(false); setDirtyId(undefined); locationFor("");
@@ -253,21 +241,13 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
   }
   const feedback = { ...action, notice: action.notice && `${actionReference ? `${actionReference} · ` : ""}${action.notice}`,
     message: refreshMessage || (action.message && `${actionReference ? `${actionReference} · ` : ""}${action.message}`) };
-  const stepper = selected && payments.length > 1 && <Stepper role="group" aria-label={`Report ${index + 1} of ${payments.length}`}>
-    <button type="button" aria-label={index > 0 ? `Previous report, ${payments[index - 1]!.reference}` : "Previous report"} disabled={action.busy || index <= 0}
-      onClick={() => step("previous")} data-payment-step="previous"><ChevronLeftIcon /></button>
-    <span aria-hidden="true">{index + 1} of {payments.length}</span>
-    <button type="button" aria-label={index < payments.length - 1 ? `Next report, ${payments[index + 1]!.reference}` : "Next report"} disabled={action.busy || index >= payments.length - 1}
-      onClick={() => step("next")} data-payment-step="next"><ChevronRightIcon /></button>
-  </Stepper>;
-  const nav = !desktop && selected && <ReviewNav>
-    <ReviewBack type="button" disabled={action.busy} onClick={back} data-review-back><ChevronLeftIcon />All payments</ReviewBack>
-    {stepper}
-  </ReviewNav>;
 
   return <PaymentLayout data-payments-editor data-payment-mobile-queue={!reviewing || undefined} data-layout="balanced" data-analytics-ignore>
     <PaymentHead $reviewing={reviewing}>
       <h1>Payments</h1>
+      {reviewing && <ReviewBack ref={backButton} type="button" disabled={action.busy} onClick={back} data-review-back>
+        <ChevronLeftIcon />Back to payments
+      </ReviewBack>}
       <QueueBar ref={toolbar} data-admin-toolbar>
         <form action="/admin/payments" method="get" onSubmit={event => {
           event.preventDefault();
@@ -331,8 +311,8 @@ export function PaymentsEditor({ queue, plans, filters, sort, initialPaymentId }
       onFocusCapture={event => setReviewFocused(event.target !== event.currentTarget)}
       onBlurCapture={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setReviewFocused(false); }}
       onChangeCapture={() => setDirtyId(selectedKey)}>
-      {selected?.workflowVersion === 2 ? <CheckoutReview key={desktop ? "checkout" : selected.id} payment={selected} nav={nav} desktop={desktop} hasNext={!!(nextPending || queue.nextPendingId)} busy={action.busy} onBusyChange={setCheckoutBusy}
-        onResolved={approved => { if (!resolved(selected.id, approved)) refreshAdmin(); }} /> : selected ? <PaymentReview key={desktop ? "legacy" : selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]} nav={nav}
+      {selected?.workflowVersion === 2 ? <CheckoutReview key={desktop ? "checkout" : selected.id} payment={selected} hasNext={desktop && !!(nextPending || queue.nextPendingId)} busy={action.busy} onBusyChange={setCheckoutBusy}
+        onResolved={approved => { if (!resolved(selected.id, approved)) refreshAdmin(); }} /> : selected ? <PaymentReview key={desktop ? "legacy" : selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]}
         hasNext={!!(nextPending || queue.nextPendingId)} nextAcrossPages={!!nextPagePending}
         onStart={() => { setRefreshMessage(""); setActionReference(selected.reference); }} onResolved={approved => resolved(selected.id, approved)}
         onRecovery={value => setRecoveries(shown => ({ ...shown, [selected.id]: value }))} /> : <QueueEmpty data-payment-review-empty><CheckIcon /><strong>No payment selected</strong><span>Choose another status or clear the filters.</span></QueueEmpty>}

@@ -5,17 +5,20 @@ import styled from "styled-components";
 import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { AlertIcon } from "@/components/ui/icons";
 import { paymentRejectionLabels, paymentRejectionMaxLength, paymentRejectionReasons, paymentRejectionText, type PaymentRejectionReason } from "@/domain/payment-rejection";
+import { media } from "@/styles/theme";
 import { CheckField, DangerButton, FieldBlock, FormStack } from "./admin-form";
 
 const Anchor = styled.div`display: contents;`;
 const Dialog = styled(CriteriaDialog)`
-  &&[data-enhanced="true"] {
-    inset: auto;
-    left: var(--rejection-x, 50%);
-    top: var(--rejection-y, 50%);
-    transform: translate(-50%, -50%);
-    margin: 0;
-    max-inline-size: calc(var(--rejection-width, 100vw) - var(--gh-size-6));
+  ${media.desktop} {
+    &&[data-enhanced="true"] {
+      inset: auto;
+      left: var(--rejection-x, 50%);
+      top: var(--rejection-y, 50%);
+      transform: translate(-50%, -50%);
+      margin: 0;
+      max-inline-size: calc(var(--rejection-width, 100vw) - var(--gh-size-6));
+    }
   }
   header h2 {
     display: flex;

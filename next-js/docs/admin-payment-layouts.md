@@ -58,10 +58,11 @@ right. Rejection opens a dialog over the pane with selectable reasons, an
 explanation field, and an inactive Reject button until a reason is supplied.
 
 The live queue opens to Pending and supports status and provider filters,
-search, and sorting. Numbered pagination retains the current criteria. On
-phones the toolbar and multi-page pager stay in view while the rows scroll.
-Two-line payment rows open the right pane on desktop or the detail view on
-mobile.
+search, and sorting. Compact numbered pagination retains the current criteria.
+On phones the toolbar and pager stay in view while the rows scroll. Two-line
+payment rows open the right pane on desktop or a compact review on mobile.
+Back to payments sits just below the mobile admin menu. Both layouts use the
+same receipt preview and rejection dialog.
 
 ## Source and local serving
 

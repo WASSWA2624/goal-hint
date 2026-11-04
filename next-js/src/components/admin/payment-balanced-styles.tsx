@@ -7,6 +7,7 @@ import { media } from "@/styles/theme";
 import { RecordScroll } from "./record-workspace";
 
 export const PaymentReviewScroll = styled(RecordScroll)`
+  ${media.belowDesktop} { display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; }
   ${media.desktop} { grid-auto-rows: max-content; }
 `;
 

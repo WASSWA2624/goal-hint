@@ -3,7 +3,6 @@
 
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
-import { ActionButton } from "./admin-form";
 import { Drawer, EmptyPanel, TextAction, visuallyHidden } from "./desk-styles";
 import { desktopBalancedReview } from "./payment-balanced-styles";
 import { RecordCard, RecordDetailHead, RecordDetails, RecordFeedback, RecordFooter, RecordHead, RecordItem, RecordList, RecordListFooter, RecordListScroll, RecordWorkspace } from "./record-workspace";
@@ -16,7 +15,6 @@ const panelLook = css`
   border: 0;
   border-radius: ${({ theme }) => theme.radius.surface};
 `;
-const phoneOnly = css`${media.desktop} { display: none; }`;
 
 export const PaymentLayout = styled(RecordWorkspace)`
   --record-list-default: clamp(var(--gh-size-70), 24vw, var(--gh-size-82_5));
@@ -35,9 +33,10 @@ export const PaymentLayout = styled(RecordWorkspace)`
         grid-row: 1; min-block-size: 0; overflow-y: auto; overscroll-behavior-y: contain;
         scrollbar-width: thin;
       }
-      [data-payment-queue-footer] { grid-row: 2; padding-block: var(--gh-spacing-1) var(--gh-spacing-0_5); }
+      [data-payment-queue-footer] { grid-row: 2; }
       [data-payment-empty] { grid-row: 1; align-self: start; }
     }
+    &:not([data-payment-mobile-queue]) { gap: var(--gh-spacing-2); }
   }
 `;
 export const PaymentUnavailable = styled.section`
@@ -55,7 +54,7 @@ export const PaymentHead = styled(RecordHead)<{ $reviewing: boolean }>`
     padding-inline: 0;
     ${({ $reviewing }) => $reviewing && css`
       min-block-size: 0;
-      > :not(h1) { display: none; }
+      > [data-admin-toolbar] { display: none; }
     `}
   }
 `;
@@ -90,7 +89,14 @@ export const QueueFilters = styled.div`
   label > input { flex: none; margin: 0; }
 `;
 export const QueueFooter = styled(RecordListFooter)`
-  display: grid;
+  display: grid; row-gap: 0;
+  ${media.desktop} { padding-block: 0; }
+  /* Inset the visible button faces inside the shared pointer targets. */
+  [data-numbered-pagination] :is([data-pagination-end], [data-pagination-page], [data-pagination-scroll]) {
+    padding-block: var(--gh-spacing-1);
+    background-clip: content-box;
+    &:focus-visible { outline-offset: calc(-1 * var(--gh-spacing-1_5)); }
+  }
   > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 
@@ -132,79 +138,32 @@ export const ReviewSection = styled(RecordDetails)<{ $reviewing: boolean }>`
 
 /* ---------------- Review ---------------- */
 
-/** Phones: a bare stack (the zones are panels); desktop: one panel with a header row over the zones. Facts are dense 13px. */
 export const ReviewCard = styled(RecordCard)`
-  dl > div { padding-block: var(--gh-spacing-2); }
   dd { font-size: ${({ theme }) => theme.typography.scale.body}; }
+  ${media.belowDesktop} {
+    gap: var(--gh-spacing-2);
+    [data-payment-zone] {
+      padding-block-start: var(--gh-spacing-3);
+      border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+    }
+    h3 { margin: 0; font-size: var(--gh-font-section); font-weight: var(--gh-weight-medium); letter-spacing: normal; text-transform: none; }
+  }
   ${desktopBalancedReview}
 `;
 export const ReviewHead = styled(RecordDetailHead)`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  ${media.belowDesktop} { gap: var(--gh-spacing-0_5) var(--gh-spacing-2_5); }
-  min-inline-size: 0;
-  > h2 {
-    flex: 1 1 100%;
-    ${media.belowDesktop} { font-size: var(--gh-font-heading); }
-    line-height: var(--gh-leading-compact);
-    font-variant-numeric: tabular-nums;
-    overflow-wrap: anywhere;
-    scroll-margin-block-start: calc(var(--app-header-content-height, var(--gh-size-16)) + var(--gh-spacing-4));
+  ${media.belowDesktop} {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    > [data-review-link] { padding-inline-start: 0; font-size: var(--gh-font-secondary); font-weight: var(--gh-weight-medium); }
   }
-  > [data-review-meta] { order: 3; }
-  > [data-review-badge] { order: 4; }
-  > [data-review-link] { order: 5; flex: 0 0 100%; justify-content: flex-start; margin-inline-start: calc(-1 * var(--gh-spacing-1)); }
-  ${media.desktop} {
-    > h2 { flex: 0 1 auto; }
-    > [data-review-badge] { order: 1; margin-inline-start: calc(-1 * var(--gh-spacing-1_5)); }
-    > [data-review-meta] { order: 2; }
-    > [data-review-link] { order: 3; flex: 0 0 auto; margin-inline-start: 0; }
-  }
-`;
-export const ReviewNav = styled.div`
-  order: -1;
-  display: flex;
-  flex: 1 1 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gh-spacing-2);
-  margin-block: calc(-1 * var(--gh-spacing-1_5)) var(--gh-spacing-1_5);
-  ${media.desktop} { display: none; }
 `;
 export const ReviewBack = styled(TextAction)`
   gap: var(--gh-spacing-1);
   padding-inline: 0 var(--gh-spacing-2);
-`;
-export const Stepper = styled.div`
-  display: inline-flex;
-  align-items: center;
-  margin-inline-start: auto;
-  ${panelLook}
-  > button {
-    display: grid;
-    place-items: center;
-    inline-size: var(--form-control-height);
-    block-size: var(--form-control-height);
-    padding: 0;
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.surface};
-    color: ${({ theme }) => theme.color.link};
-    background: none;
-    cursor: pointer;
-    > svg { font-size: var(--gh-font-title); }
-    &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
-    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: calc(-1 * var(--gh-size-0_5)); }
-    ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
-  }
-  > span { padding: 0 var(--gh-spacing-0_5); font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  ${media.desktop} { border-radius: ${({ theme }) => theme.radius.control}; > button { border-radius: ${({ theme }) => theme.radius.control}; } > span { padding-inline: var(--gh-spacing-1); font-size: var(--gh-font-secondary); } }
-`;
-export const ReviewMeta = styled.span`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: ${({ theme }) => theme.typography.scale.body};
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  scroll-margin-block-start: var(--app-header-height);
+  font-weight: var(--gh-weight-medium);
+  ${media.desktop} { display: none; }
 `;
 
 const statusTone = (status: string) => status === "pending" ? "pending" : status === "approved" ? "correct" : status === "rejected" ? "incorrect" : "void";
@@ -230,91 +189,29 @@ const zoneBody = css`
   min-inline-size: 0;
   padding: ${zonePadding};
 `;
-/**
- * Desktop: proof, expected payment and decision side by side (decision drops under the other two below 73rem, where the
- * sidebar leaves too little width). Phones: no box of its own, so each zone is a panel in the review stack and the decision
- * bar can stick to the bottom of the screen for the whole review.
- */
-export const ReviewZones = styled.div<{ $proof: boolean }>`
+export const ReviewZones = styled.div`
+  display: grid;
   min-inline-size: 0;
-  ${media.belowDesktop} { display: contents; }
-  ${media.desktop} {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    > * { min-inline-size: 0; }
-    > * + * { border-inline-start: 0; }
-    ${({ $proof }) => $proof && css`> :last-child { grid-column: 1 / -1; border-inline-start: 0; border-block-start: 0; }`}
-  }
-  @media (min-width: ${({ theme }) => theme.viewport[73]}) {
-    ${({ $proof }) => $proof && css`
-      grid-template-columns: minmax(var(--gh-size-64), 1.15fr) minmax(var(--gh-size-60), 1fr) minmax(var(--gh-size-68), var(--gh-size-80));
-      > :last-child { grid-column: auto; border-inline-start: 0; border-block-start: 0; }
-      > :first-child { border-end-start-radius: ${({ theme }) => theme.radius.surface}; }
-    `}
-  }
+  ${media.belowDesktop} { gap: var(--gh-spacing-3); }
 `;
 export const ProofZone = styled.section`
   ${zoneBody}
-  justify-items: center;
+  justify-items: start;
   background: ${({ theme }) => theme.color.surfaceMuted};
   > p:first-child { justify-self: start; }
   ${media.belowDesktop} {
     gap: var(--gh-spacing-2);
+    padding-inline: 0;
     padding-block-end: 0;
-    border: 0;
-    border-radius: ${({ theme }) => theme.radius.surface};
+    background: transparent;
   }
   ${media.desktop} { padding: var(--gh-spacing-4) var(--gh-spacing-4_5) var(--gh-spacing-4_5); }
 `;
-export const ProofFrame = styled.div<{ $clipped: boolean }>`
-  inline-size: 100%;
-  max-inline-size: var(--gh-size-75);
-  min-inline-size: 0;
-  ${media.belowDesktop} {
-    max-inline-size: var(--gh-size-70);
-    ${({ $clipped }) => $clipped && css`
-      max-block-size: var(--gh-size-46);
-      overflow: hidden;
-      mask-image: linear-gradient(currentColor 72%, transparent);
-    `}
-  }
-`;
-export const ProofImage = styled.img`
-  display: block;
-  inline-size: 100%;
-  block-size: auto;
-  border: 0;
-  border-radius: ${({ theme }) => theme.radius.surface};
-  background: ${({ theme }) => theme.color.surface};
-  ${media.desktop} { inline-size: auto; max-inline-size: 100%; max-block-size: var(--gh-size-120); margin-inline: auto; object-fit: contain; }
-`;
-/** Phones show "Open full size" once the clipped screenshot is enlarged (or when nothing is clipped). */
-export const ProofActions = styled.div<{ $hideLink: boolean }>`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0 var(--gh-spacing-4);
-  ${media.belowDesktop} { > a { ${({ $hideLink }) => $hideLink && css`display: none;`} } }
-`;
-export const ProofToggle = styled(TextAction)`font-size: ${({ theme }) => theme.typography.scale.body}; ${phoneOnly}`;
-
 export const ExpectedZone = styled.section`
   ${zoneBody}
-  ${media.belowDesktop} { ${panelLook} }
+  ${media.belowDesktop} { padding-inline: 0; padding-block-end: 0; }
   ${media.desktop} { padding: var(--gh-spacing-4) var(--gh-spacing-4_5) var(--gh-spacing-4_5); }
   > dl { border-block-start: 0; }
-`;
-export const BigAmount = styled.div`
-  display: grid;
-  gap: var(--gh-spacing-0_5);
-  min-inline-size: 0;
-  > strong { font-size: var(--gh-font-display); line-height: var(--gh-leading-control); font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: var(--gh-tracking-compact); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  > span { color: ${({ theme }) => theme.color.outcome.pending.text}; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  ${media.desktop} { > strong { font-size: var(--gh-font-displayLarge); } }
-`;
-export const NetworkValue = styled.dd`
-  && { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--gh-spacing-1_5); }
 `;
 export const PaymentWarnings = styled.div`
   display: grid;
@@ -338,22 +235,14 @@ export const CheckList = styled.ul`
   > li[data-tone="good"] > svg { color: ${({ theme }) => theme.color.outcome.correct.text}; }
 `;
 
-/** A drawer inside a zone: hairline above, flush with the zone's text; on phones it spans the panel edge to edge. */
+/** A disclosure aligned with the receipt fields. */
 export const ZoneDrawer = styled(Drawer)`
   border-block-end: 0;
   border-block-start: 0;
   &:last-child { border-block-end: 0; }
-  > summary { min-block-size: var(--form-control-height); padding: 0 ${zonePadding}; }
+  > summary { min-block-size: var(--form-control-height); padding: 0; }
   > summary > svg:last-child { color: ${({ theme }) => theme.color.mutedText}; }
-  > div { padding: var(--gh-spacing-0_5) ${zonePadding} var(--gh-size-3_5); }
-  ${media.belowDesktop} {
-    margin-inline: -${zonePadding};
-    &:last-child { margin-block-end: -${zonePadding}; }
-  }
-  ${media.desktop} {
-    > summary { padding-inline: 0; }
-    > div { padding-inline: 0; }
-  }
+  > div { padding: var(--gh-spacing-0_5) 0 var(--gh-size-3_5); }
 `;
 export const ShieldMark = styled.span<{ $clear: boolean }>`
   display: inline-flex;
@@ -361,56 +250,34 @@ export const ShieldMark = styled.span<{ $clear: boolean }>`
   > svg { font-size: var(--gh-font-title); }
 `;
 
-/** Desktop: the decision column; phones: no box, so its panels and the decision bar join the review stack. */
 export const DecisionZone = styled.div`
+  display: grid;
+  align-content: start;
   min-inline-size: 0;
-  ${media.belowDesktop} { display: contents; }
   ${media.desktop} {
-    display: grid;
-    align-content: start;
     gap: var(--gh-spacing-3);
     padding: var(--gh-spacing-4) var(--gh-spacing-4_5) var(--gh-spacing-4_5);
-    > [data-decision-bar] { order: 1; }
-    > [data-reject] { order: 2; }
   }
 `;
 const decisionPanel = css`
   ${zoneBody}
-  ${media.belowDesktop} { ${panelLook} }
-  ${media.desktop} { padding: 0; }
+  padding: 0;
+  gap: var(--gh-spacing-2);
 `;
 export const DecisionPanel = styled.div`${decisionPanel}`;
 export const ApprovalForm = styled.form`${decisionPanel}`;
 
-/** Phones: its own panel, shown only while open (the decision bar opens it). Desktop: a danger drawer under Approve. */
-export const RejectDrawer = styled(ZoneDrawer)`
+export const PaymentReviewFooter = styled(RecordFooter)`
+  justify-content: space-between;
   ${media.belowDesktop} {
-    margin: 0;
-    ${panelLook}
-    &:last-child { margin: 0; }
-    &:not([open]) { display: none; }
-    [data-reject-inline] { display: none; }
+    inset-block-end: calc(var(--app-mobile-tab-height) + env(safe-area-inset-bottom));
+    gap: var(--gh-spacing-2);
+    padding: var(--gh-spacing-1_5) 0;
+    border-block-start: var(--gh-stroke-thin) solid ${({ theme }) => theme.color.border};
+    > button { flex: 0 1 auto; min-inline-size: 0; padding-inline: var(--gh-spacing-2_5); }
   }
 `;
-export const PaymentReviewFooter = styled(RecordFooter)`
-  ${media.desktop} { justify-content: space-between; }
-`;
-export const DecisionBar = styled(PaymentReviewFooter)<{ $rejecting: boolean }>`
-  ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
-  background: ${({ theme }) => theme.color.surface};
-  ${media.belowDesktop} { > button { min-inline-size: 0; padding-inline: var(--gh-spacing-2_5); } }
-  ${({ $rejecting }) => $rejecting ? css`
-    > [data-payment-approve] { display: none; }
-  ` : css`> [data-reject-submit] { display: none; }`}
-`;
-/** Danger outline while closed ("Reject"); a plain secondary button while the reject panel is open ("Cancel"). */
-export const RejectToggle = styled(ActionButton)<{ $open: boolean }>`
-  ${({ theme, $open }) => !$open && css`
-    color: ${theme.color.outcome.incorrect.text};
-    background: ${theme.color.outcome.incorrect.background};
-
-  `}
-`;
+export const DecisionBar = styled(PaymentReviewFooter)`background: ${({ theme }) => theme.color.surface};`;
 export const CopyRow = styled.dd`
   && { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 var(--gh-spacing-2); }
   > span { overflow-wrap: anywhere; }
