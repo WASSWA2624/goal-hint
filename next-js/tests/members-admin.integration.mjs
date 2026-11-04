@@ -40,7 +40,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
    priceUgx:0,amountReceivedUgx:0,createdAt:trialAt,createdBy:"system:registration",activatedAt:trialAt,startsAt:trialAt,endsAt:new Date(clock+2*DAY)}}));
   clock=Date.parse("2026-11-05T21:30:00Z");await manual(await member(),2000);clock=base;
   await db.query(tx=>tx.ownerAuditEvent.create({data:{at:new Date(base),actor:"system",action:"uploads_busy",targetType:"payment",targetId:"ceiling",details:{}}}));
-  const v=await members.overview();assert.equal(v.weekRevenue,15000);assert.equal(v.monthRevenue,17000);assert.equal(v.active,4);assert.equal(v.trials,1);assert.equal(v.busy,1);assert.equal(v.paymentNumbersChangedAt,new Date(base).toISOString());
+  const v=await members.overview();assert.equal(v.weekRevenue,15000);assert.equal(v.monthRevenue,17000);assert.equal(v.active,4);assert.equal(v.trials,1);assert.equal(v.busy,1);assert.equal(v.creditHeld,2000);assert.equal(v.creditOwed,0);
  });
  await t.test("unlock counts, notes, blocking and erasure preserve accounting while removing personal data",async()=>{
   const who=await member();await manual(who);const accepted=await sessions.signIn(who.phone,"unknown");assert.ok(await sessions.verify(accepted.token));

@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AdminFrame } from "@/app/_components/admin-frame";
+import { getShellInstant } from "@/app/_components/shell-time";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
-import { OverviewReport } from "@/components/admin/owner-reports";
+import { OverviewLoading, OverviewReport } from "@/components/admin/owner-reports";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { createSubscribers } from "@/server/admin/subscribers";
+import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
+import { createSubscribers, revenueBounds } from "@/server/admin/subscribers";
 import { createPaymentNoticeAdmin } from "@/server/admin/payment-notices";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
+import type { DatabaseRuntime } from "@/server/database/client";
+import { LoadingTheme } from "@/styles/loading-theme";
 
 export const metadata: Metadata = { title: "Admin · Goal Hint" };
 
@@ -15,14 +20,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const page = await adminPageGate(searchParams);
   if (!page.owner) redirectToAccountLogin();
   const { database } = page.services;
-  const [value, noticeCount] = database ? await Promise.all([
-    createSubscribers(database).overview().catch(() => null),
-    createPaymentNoticeAdmin(database).attentionCount().catch(() => null),
-  ]) : [null, null];
-  return (
-    <AdminFrame {...(value ? { pendingCount: value.pending } : {})}>
-      <VisuallyHidden as="h1">Overview</VisuallyHidden>
-      {value ? <OverviewReport value={value} noticeCount={noticeCount} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
-    </AdminFrame>
-  );
+  return <>
+    <VisuallyHidden as="h1">Overview</VisuallyHidden>
+    <LoadingTheme>
+      <Suspense fallback={<OverviewLoading />}>
+        {database ? <OverviewMetrics database={database} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
+      </Suspense>
+    </LoadingTheme>
+  </>;
+}
+
+async function OverviewMetrics({ database }: { database: DatabaseRuntime }) {
+  const now = await getShellInstant();
+  const [value, noticeCount] = await Promise.all([
+    createSubscribers(database, () => now).overview().catch(() => null),
+    createPaymentNoticeAdmin(database, () => now).attentionCount().catch(() => null),
+  ]);
+  if (!value) return <Notice $tone="error">Member storage is unavailable.</Notice>;
+  const dates = revenueBounds(now);
+  const auditQuery = new URLSearchParams({ action: "uploads_busy", period: "custom",
+    startDate: getReportingDate(utcInstantFromEpochMilliseconds(+dates.week)),
+    endDate: getReportingDate(now) });
+  return <AdminFrame pendingCount={value.pending}>
+    <OverviewReport report={{ value, noticeCount, uploadAlertsHref: `/admin/audit?${auditQuery}` }} />
+  </AdminFrame>;
 }

@@ -471,6 +471,9 @@ def overview_notices(origin):
         assert response.status == 200
         html = visible_html(response.text)
         match(r'Message notices to check</dt><dd>' + str(count) + r'</dd>', html)
+        match(r'<a\b[^>]*href="/admin/payments"[^>]*>Pending payments<', html)
+        match(r'<a\b[^>]*href="/admin/audit\?action=uploads_busy&amp;period=custom'
+              r'&amp;startDate=\d{4}-\d{2}-\d{2}&amp;endDate=\d{4}-\d{2}-\d{2}"[^>]*>Upload alerts this week<', html)
         for removed in ["Payment queue", "data-payment-notices", "View subscriber", "Send again", "Payment numbers updated",
                         "How totals are calculated", "PTEST", "Your account has been updated", "Log in to view"]:
             assert removed not in html, removed

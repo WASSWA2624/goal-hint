@@ -40,29 +40,31 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, con
           tx.paymentSubmission.aggregate({ where: countedPaymentWhere({ gte: since, lte: at }), _sum: { amountReceivedUgx: true } }),
           tx.accessCode.aggregate({ where: countedManualWhere({ gte: since, lte: at }), _sum: { amountReceivedUgx: true } }),
         ]); return (payments._sum.amountReceivedUgx ?? 0) + (manual._sum.amountReceivedUgx ?? 0); }
-        const [pending, active, weekRevenue, monthRevenue, trials, busy, settings] = await Promise.all([
+        const weeklyRevenue = revenue(bounds.week);
+        const [pending, active, weekRevenue, monthRevenue, trials, busy, credit] = await Promise.all([
           tx.paymentSubmission.count({ where: { status: { in: [...checkoutOpenStatuses] } } }),
-          tx.$queryRaw<{ total: bigint }[]>`WITH RECURSIVE PaidCodes AS (
-            SELECT c.id, c.replacedById FROM AccessCode c LEFT JOIN PaymentSubmission p ON p.id = c.paymentSubmissionId
+          // Trace payment ancestry only for currently active periods, using the replacement index for each preceding period.
+          tx.$queryRaw<{ total: bigint }[]>`WITH RECURSIVE ActiveLineage AS (
+            SELECT c.id, c.accountId FROM AccessCode c JOIN MemberAccount a ON a.id = c.accountId
+            WHERE c.revokedAt IS NULL AND c.startsAt <= ${at} AND c.endsAt > ${at}
+              AND a.blockedAt IS NULL AND a.erasedAt IS NULL
+            UNION DISTINCT
+            SELECT prior.id, l.accountId FROM AccessCode prior JOIN ActiveLineage l ON prior.replacedById = l.id
+          ) SELECT COUNT(DISTINCT l.accountId) AS total FROM ActiveLineage l JOIN AccessCode c ON c.id = l.id
+            LEFT JOIN PaymentSubmission p ON p.id = c.paymentSubmissionId
             WHERE (c.source = 'payment' AND p.status = 'approved' AND p.reversedAt IS NULL)
               OR (c.source = 'manual' AND c.amountReceivedUgx > 0)
-              OR (c.source IN ('credit', 'renewal') AND c.priceUgx > 0)
-            UNION DISTINCT SELECT c.id, c.replacedById FROM AccessCode c JOIN PaidCodes p ON c.id = p.replacedById
-          ) SELECT COUNT(DISTINCT c.accountId) AS total FROM PaidCodes p JOIN AccessCode c ON c.id = p.id
-            JOIN MemberAccount a ON a.id = c.accountId WHERE c.revokedAt IS NULL AND c.startsAt <= ${at} AND c.endsAt > ${at}
-              AND a.blockedAt IS NULL AND a.erasedAt IS NULL`,
-          revenue(bounds.week), revenue(bounds.month),
+              OR (c.source IN ('credit', 'renewal') AND c.priceUgx > 0)`,
+          weeklyRevenue, +bounds.week === +bounds.month ? weeklyRevenue : revenue(bounds.month),
           tx.accessCode.count({ where: { source: "trial", createdAt: { gte: bounds.week, lte: at } } }),
           tx.ownerAuditEvent.count({ where: { action: "uploads_busy", at: { gte: bounds.week, lte: at } } }),
-          tx.subscriptionSettings.findUnique({ where: { id: 1 }, select: { paymentNumbersChangedAt: true } }),
+          tx.$queryRaw<{ held: Prisma.Decimal | null; owed: Prisma.Decimal | null }[]>`
+            SELECT SUM(CASE WHEN creditUgx > 0 THEN creditUgx ELSE 0 END) AS held,
+              SUM(CASE WHEN creditUgx < 0 THEN -creditUgx ELSE 0 END) AS owed
+            FROM MemberAccount WHERE erasedAt IS NULL AND creditUgx <> 0`,
         ]);
-        // Revenue stays cash: approved payments already include top-ups and overpayments, so spending credit is never counted again.
-        const [held, owed] = await Promise.all([
-          tx.memberAccount.aggregate({ where: { erasedAt: null, creditUgx: { gt: 0 } }, _sum: { creditUgx: true } }),
-          tx.memberAccount.aggregate({ where: { erasedAt: null, creditUgx: { lt: 0 } }, _sum: { creditUgx: true } }),
-        ]);
-        return { pending, active: Number(active[0]?.total ?? 0), weekRevenue, monthRevenue, trials, busy, paymentNumbersChangedAt: settings?.paymentNumbersChangedAt?.toISOString() ?? null,
-          creditHeld: held._sum.creditUgx ?? 0, creditOwed: -(owed._sum.creditUgx ?? 0) };
+        return { pending, active: Number(active[0]?.total ?? 0), weekRevenue, monthRevenue, trials, busy,
+          creditHeld: Number(credit[0]?.held ?? 0), creditOwed: Number(credit[0]?.owed ?? 0) };
       });
     },
     async search(input = ""): Promise<readonly OwnerAccount[]> {

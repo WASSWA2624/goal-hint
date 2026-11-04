@@ -248,6 +248,7 @@ function createClient(emptySubscribers: boolean) {
       const sql = parts.join("?");
       if (sql.includes("FROM SubscriptionPlan")) return state.plans.filter(plan => !values.length || plan.id === values[0]).map(({ id }) => ({ id }));
       if (sql.includes("FROM SubscriptionSettings")) return [{ id: 1 }];
+      if (sql.includes("AS held")) return [{ held: null, owed: null }];
       return [{ total: 1n }];
     },
     memberSession: { findMany: async (query?: OwnedQuery) => ownedRows(state.devices, query).filter(row => !query?.where?.codeEnteredAt || row.unlocked),

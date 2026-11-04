@@ -15,7 +15,7 @@ export type OwnerNotice = Readonly<{ id: string; accountId: string; phone: strin
   channel?: "sms" | "whatsapp"; lastError: string | null; attempts: number; createdAt: string; attemptedAt: string | null }>;
 
 /** creditHeld is all positive balances (credit members may still spend); creditOwed the negative ones after reversals. */
-export type OwnerOverview = Readonly<{ pending: number; active: number; weekRevenue: number; monthRevenue: number; trials: number; busy: number; paymentNumbersChangedAt: string | null;
+export type OwnerOverview = Readonly<{ pending: number; active: number; weekRevenue: number; monthRevenue: number; trials: number; busy: number;
   creditHeld: number; creditOwed: number }>;
 export type OwnerAccount = Readonly<{ id: string; phone: string | null; status: string; lastSignInAt: string }>;
 export type OwnerSubscriber = Readonly<{ id: string; phone: string | null; blockedAt: string | null; blockedReason: string | null; ownerNote: string | null; erasedAt: string | null; lastSignInAt: string;
