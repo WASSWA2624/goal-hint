@@ -26,7 +26,7 @@ import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCrit
 import { guardSlipNumber, slipDateBounds, slipNumberRangeIssue, type SlipDateTimeField, type SlipNumericField } from "@/domain/slip-input-guards";
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
-import { slipPageSize } from "@/domain/slip-pagination";
+import { compareSlipDisplayProbability, slipPageSize } from "@/domain/slip-pagination";
 import { SlipCard } from "./slip-card";
 import { SlipLoading } from "./slip-loading";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
@@ -335,9 +335,11 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   }
   const oddsOptions = { min: slipBuilderRules.minimumOddsHundredths / 100, step: "0.01" };
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
-  const pageCount = Math.ceil((data?.slips.length ?? 0) / slipPageSize);
+  const slips = data?.slips;
+  const pageCount = Math.ceil((slips?.length ?? 0) / slipPageSize);
   const page = Math.min(pagination.page, Math.max(1, pageCount)), offset = (page - 1) * slipPageSize;
-  const shownSlips = useMemo(() => data?.slips.slice(offset, offset + slipPageSize) ?? [], [data?.slips, offset]);
+  const orderedSlips = useMemo(() => slips ? [...slips].sort(compareSlipDisplayProbability) : [], [slips]);
+  const shownSlips = useMemo(() => orderedSlips.slice(offset, offset + slipPageSize), [orderedSlips, offset]);
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
   const timeSummary = draft.timeFrom === fullDayKickoffTime.from && draft.timeTo === fullDayKickoffTime.to
     ? messages.text("slips.summary.allDay") : `${range("timeFrom", "timeTo")} EAT`;

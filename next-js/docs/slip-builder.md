@@ -270,6 +270,9 @@ calibration or correlation evidence. `createStoredSlipBuild` accepts that
 optional binding. The production reader supplies none; the displayed independence
 estimate does not qualify a model or enable model-dependent ranking and filters.
 
+The builder displays generated slips by descending average match probability
+before pagination. Equal averages keep their generation order.
+
 `boundJointSlipModel` resolves the request-time binding for the stored reader and
 the page's capability check. The page offers combined bounds only with verified
 current support, or when a supplied bound needs to remain editable or be cleared.

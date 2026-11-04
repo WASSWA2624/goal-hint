@@ -64,6 +64,10 @@ compatibility and ranking, while the UI displays the average only. Average match
 probability remains a description of the individual forecasts, not a joint
 probability estimate.
 
+The daily browse list orders the selected odds band by average match probability
+from highest to lowest before pagination. Equal averages follow publication rank.
+The published rank still identifies each slip’s canonical link.
+
 Each available slip initially shows only its summary. Clicking the summary or
 pressing Enter/Space expands the matches; repeating the action collapses them.
 On desktop the existing account/subscription status bar explains which slips

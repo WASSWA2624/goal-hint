@@ -11,7 +11,7 @@ import { liveRecord, now, today as dayString } from './helpers/live-refresh-fixt
 
 const today = parseReportingDate(dayString), free = { tier: 'free', signedIn: false, mode: 'off' }, full = { tier: 'full', signedIn: true, mode: 'off' };
 const uuid = (number) => `20000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
-function fixture(days = 1, daily = 4, replacementCycles = false) {
+function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank = () => ({ averageProbability: 0.7, totalOdds: '4.00' })) {
   const publications = [], slips = [], legs = [], outcomes = new Map(), reads = [], resultBatches = [], source = liveRecord();
   let corrupt = false;
   for (let dateIndex = 0; dateIndex < days; dateIndex++) {
@@ -24,9 +24,10 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
     for (let index = 0; index < daily; index++) {
       const rank = index + 1, identity = dateIndex * 100 + rank, fixtureId = uuid(identity), forecast = {
         cycleId: uuid(100000 + identity), revisionId: uuid(200000 + identity), publishedAt: publishedAt - 1000 };
-      const snapshot = { slip: { id: `private-original-${identity}`, totalOdds: '4.00', averageProbability: 0.7, oddsBasis: 'bookmaker',
+      const { averageProbability, totalOdds } = valuesForRank(rank);
+      const snapshot = { slip: { id: `private-original-${identity}`, totalOdds, averageProbability, oddsBasis: 'bookmaker',
         selections: [{ fixtureId, kickoffAt: publishedAt + 3600_000, homeTeam: source.homeTeam, awayTeam: source.awayTeam,
-          competition: source.competition, family: 'match-result', selection: 'home-win', probability: 0.7, odds: '4.00', oddsBasis: 'bookmaker', forecast }] },
+          competition: source.competition, family: 'match-result', selection: 'home-win', probability: averageProbability, odds: totalOdds, oddsBasis: 'bookmaker', forecast }] },
         estimatedProbability: 0.65 };
       const id = evidenceFingerprint({ publicationId, rank, snapshot });
       slips.push({ id, publicationId, rank, snapshotJson: snapshot });
@@ -42,6 +43,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
       if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(now) }];
       if (sql.text.includes('FROM DailySlipPublication')) {
         const dates = sql.values.filter(value => value instanceof Date);
+        if (sql.text.includes('WHERE eatDate=')) return publications.filter(row => +row.eatDate === +dates[0]).map(row => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
         let rows = publications.filter((row) => +row.publishedAt <= +dates[0]);
         if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[1] && +row.eatDate <= +dates[2]);
         else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +dates[1]);
@@ -49,7 +51,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false) {
       }
       if (sql.text.includes('FROM PublishedSlip')) return slips.filter((row) => sql.values.includes(row.publicationId))
         .sort((a, b) => a.publicationId.localeCompare(b.publicationId) || a.rank - b.rank)
-        .slice(0, sql.values.at(-1)).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
+        .slice(0, sql.text.includes('LIMIT') ? sql.values.at(-1) : undefined).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       assert.fail(sql.text);
     },
   };
@@ -98,6 +100,21 @@ test('publication browsing filters original outcomes before pagination and retai
   assert.equal(pending.slips[0].publishedAt, Date.parse(`${today}T00:00:01+03:00`));
   const future = await f.store.browse(query({ period: 'next7' }), today);
   assert.equal(future.browse.total, 0); assert.equal(future.state, 'generated');
+});
+
+test('daily pages order by card probability across different odds and keep the canonical ranks', async () => {
+  const { store } = fixture(1, 25, false, rank => ({ averageProbability: rank > 20 ? 0.9 : 0.7, totalOdds: rank % 2 === 0 ? '4.80' : '2.75' }));
+  const first = await store.browse(query({ period: 'today' }), today);
+  const second = await store.browse(query({ period: 'today', page: '2' }), today);
+  const canonical = await store.day(today);
+  const ranks = canonical.slips.map(view => view.rank);
+  assert.deepEqual(first.slips.map(view => view.rank), [...ranks.slice(20), ...ranks.slice(0, 15)]);
+  assert.deepEqual(second.slips.map(view => view.rank), ranks.slice(15, 20));
+  assert.equal(first.browse.total, 25);
+  assert.equal(first.browse.version, second.browse.version);
+  assert.equal(first.slips[0].id, canonical.slips[20].id);
+  const won = await store.browse(query({ period: 'today', status: 'won' }), today);
+  assert.deepEqual(won.slips.map(view => view.rank), [21, 25, 1, 5, 9, 13, 17]);
 });
 
 test('void, cancelled and pending progress categories filter before pagination with one whole-period denominator', async () => {

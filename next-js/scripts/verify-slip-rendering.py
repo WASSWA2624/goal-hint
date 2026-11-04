@@ -460,7 +460,7 @@ def verify_best_slips(origin, directory):
                 assert len(content.nodes("li", "data-slip-selection")) == 2, "Expanding reveals the original matches"
                 for selection in content.nodes("a", "data-fixture-id"):
                     verify_clean_ledger_selection(selection, f"Best Slips {scenario}")
-        assert averages == sorted(averages), "Displayed means do not reorder the existing joint-probability ranking"
+        assert averages == sorted(averages, reverse=True), "Best Slips displays the highest average match probability first"
         statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status" and "data-best-slips-access" not in node.attrs]
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
         assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"

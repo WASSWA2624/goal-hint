@@ -53,13 +53,17 @@ function page(number, changes = {}) {
       version: 'stable', from: '2026-12-03', to: today }, ...changes };
 }
 test('slip pages show at most 20 records, including legacy unpaged daily seeds', () => {
-  const input = page(3, { slips: Array.from({ length: 60 }, (_, index) => ({ id: `id-${index}` })) });
+  const input = page(3, { slips: Array.from({ length: 60 }, (_, index) => ({ id: `id-${index}`, averageProbability: index / 100 })) });
   const selected = singleSlipPage(input);
   assert.equal(selected.slips.length, 20); assert.equal(selected.browse.firstPage, 3);
+  assert.equal(selected.slips[0].id, 'id-0', 'Already paginated responses retain the server order');
   assert.equal(selected.browse.total, 300); assert.equal(input.slips.length, 60);
   const { browse, ...legacy } = input; void browse;
   const first = singleSlipPage(legacy);
   assert.equal(first.slips.length, 20); assert.equal(first.browse.total, 60); assert.equal(first.browse.query.period, 'today');
+  assert.equal(first.slips[0].id, 'id-59');
+  assert.equal(first.slips.at(-1).id, 'id-40');
+  assert.equal(input.slips[0].id, 'id-0', 'Display sorting leaves the source untouched');
 });
 
 test('a Matches aggregate must match the browsing total, version and viewer', () => {

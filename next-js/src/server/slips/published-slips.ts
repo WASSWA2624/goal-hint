@@ -11,6 +11,7 @@ import { completedSlipFixtureIds, indexSlipResults, slipCompleted, slipSnapshotO
 import { slipStatusCategory } from "../../domain/slip-status.ts";
 import { summarizeSlipPerformance } from "../../domain/slip-performance.ts";
 import { slipMatchStatesFromResults } from "../../domain/slip-match-state.ts";
+import { compareSlipDisplayProbability } from "../../domain/slip-pagination.ts";
 import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCriteria } from "../../domain/slip-builder.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -214,6 +215,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
     async browse(input: BestSlipsQuery, today: ReportingDate, completedOnly = false): Promise<BestSlipsResult> {
       const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), today), dates = resolveBestSlipsDates(query, today);
       const cursor = query.cursor === undefined ? null : parseBestSlipsCursor(query.cursor), allDates = query.period === "all";
+      // A daily view fits in one batch. Archive traversal follows publication date and rank.
+      const dailyView = dates.from !== null && dates.from === dates.to;
       return transaction(async (tx) => {
         const asOf = await databaseTime(tx);
         const scope = allDates ? cursor ? Prisma.sql`AND eatDate<=${new Date(`${cursor.day}T00:00:00Z`)}` : Prisma.empty
@@ -262,7 +265,8 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           const results = await resolveResults(tx, snapshots.flatMap((snapshot) => snapshot.slip.selections), asOf);
           const resultsFor = indexSlipResults(results);
           const ordered = rows.map((row, index) => ({ row, snapshot: snapshots[index]!, parent: parents.get(row.publicationId)! }))
-            .sort((left, right) => right.parent.day.localeCompare(left.parent.day) || publicRank(left.parent, left.row.rank) - publicRank(right.parent, right.row.rank));
+            .sort((left, right) => (dailyView ? compareSlipDisplayProbability(left.snapshot.slip, right.snapshot.slip) : 0)
+              || right.parent.day.localeCompare(left.parent.day) || publicRank(left.parent, left.row.rank) - publicRank(right.parent, right.row.rank));
           for (const { row, snapshot, parent } of ordered) {
             const band = bestSlipOddsBandFor(snapshot.slip.totalOdds);
             verifyPublishedOdds(parent, snapshot.slip.totalOdds);
