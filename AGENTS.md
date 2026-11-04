@@ -29,6 +29,8 @@
 
 ## Git workflow
 
+- Start each chat by checking Git status, linked worktrees, and active sessions
+  for this repo. Coordinate file ownership before editing overlapping paths.
 - After executing each prompt, commit the intended changes and push them to GitHub.
 - Consolidate branch work into `main`, verify the integrated result, and push `main`.
 - After verifying their work is included in `main`, delete all other local and
