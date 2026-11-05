@@ -1,10 +1,11 @@
 import type { CheckoutSelection, CheckoutView } from "@/domain/checkout";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
+import { manualPaymentProvider, type ManualPaymentSettings } from "../../domain/subscription-settings.ts";
 import { decodeDraftProgress, readDraftMemory, readDraftProgress, writeDraftProgress } from "./draft-storage.ts";
 
 export type CheckoutDraft = { requestKey: string; step: 0 | 1 | 2 | 3; purpose: CheckoutSelection["purpose"]; planId: string;
-  usePackage?: boolean;
+  usePackage?: boolean; mobileMethod?: "mtn" | "airtel" | undefined;
   method: CheckoutSelection["method"] | ""; useWallet: boolean; useReferral: boolean; walletUgx: string; referralDays: string; topUpUgx: string;
   transactionId: string; amountUgx: string; payerPhone: string; paidAt: string; text: string;
   extracted: Record<string, string | number | null>; originalText: string; accepted: boolean; attachingId: string | null; screenshot?: ScreenshotMetadata | null };
@@ -17,12 +18,22 @@ export function restoredCheckoutStep(step: CheckoutDraft["step"], { validPackage
   return step === 2 && !external ? 3 : step;
 }
 
+/** Only preselect a transfer provider before evidence entry; wallet spending remains explicit. */
+export function withCheckoutProvider(draft: CheckoutDraft, settings: ManualPaymentSettings, lastMethod: string | null): CheckoutDraft {
+  if (draft.step >= 2 || draft.attachingId) return draft;
+  const provider = [draft.method, draft.mobileMethod, lastMethod, "mtn", "airtel"].find(
+    (method): method is "mtn" | "airtel" => (method === "mtn" || method === "airtel") && !manualPaymentProvider(settings, method).reason);
+  const method = draft.method === "wallet" || draft.method === "referral" ? draft.method : provider ?? "";
+  return method === draft.method && provider === draft.mobileMethod ? draft
+    : { ...draft, method, mobileMethod: provider, accepted: false };
+}
+
 /** Apply current spendable balances to edits, restored drafts and balance refreshes. */
 export function capCheckoutFunding(draft: CheckoutDraft, balances: Pick<CheckoutView, "availableWalletUgx" | "availableReferralDays">,
   plans: readonly Pick<SubscriptionPlanView, "id" | "priceUgx">[]): CheckoutDraft {
   const usePackage = draft.usePackage ?? draft.purpose !== "referral";
-  const useWallet = usePackage && (draft.useWallet ?? Number(draft.walletUgx) > 0);
-  const useReferral = draft.useReferral ?? Number(draft.referralDays) > 0;
+  const useWallet = usePackage && balances.availableWalletUgx > 0 && (draft.useWallet ?? Number(draft.walletUgx) > 0);
+  const useReferral = balances.availableReferralDays > 0 && (draft.useReferral ?? Number(draft.referralDays) > 0);
   const purpose = draft.purpose === "topup" ? "topup" : usePackage ? "plan" : "referral";
   const price = purpose === "plan" ? plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0 : 0;
   const cap = (value: string, maximum: number) => value.trim() === "" ? "" : String(Math.min(maximum, Math.max(0, Math.floor(Number(value) || 0))));
@@ -51,7 +62,7 @@ export function chooseCheckoutMethod(draft: CheckoutDraft, method: CheckoutSelec
   if (method === "referral") return capCheckoutFunding({ ...draft, useReferral: selected,
     referralDays: selected ? String(Math.min(365, balances.availableReferralDays)) : "0", accepted: false }, balances, plans);
   const walletUgx = Number(draft.walletUgx) >= price ? "0" : draft.walletUgx;
-  return capCheckoutFunding({ ...draft, purpose: draft.purpose === "topup" ? "topup" : "plan", usePackage: true, method, walletUgx,
+  return capCheckoutFunding({ ...draft, purpose: draft.purpose === "topup" ? "topup" : "plan", usePackage: true, method, mobileMethod: method, walletUgx,
     useWallet: Number(draft.walletUgx) >= price ? false : draft.useWallet, accepted: false }, balances, plans);
 }
 type Stored = { draft: CheckoutDraft; image: Blob | null };
@@ -70,13 +81,14 @@ export function loadCheckoutDraft(scope: string, kind: CheckoutDraftKind, initia
   return { image: null, draft: { ...initial, requestKey: stored.requestKey, planId: stored.planId,
     purpose: kind === "topup" ? "topup" : stored.purpose === "referral" ? "referral" : "plan",
     step: stored.step === 3 ? external ? 2 : 3 : stored.step === 2 || stored.step === 1 ? stored.step : 0,
-    method: stored.method, usePackage: stored.usePackage === true, useWallet: stored.useWallet === true, useReferral: stored.useReferral === true,
+    method: stored.method, mobileMethod: stored.mobileMethod === "mtn" || stored.mobileMethod === "airtel" ? stored.mobileMethod : undefined,
+    usePackage: stored.usePackage === true, useWallet: stored.useWallet === true, useReferral: stored.useReferral === true,
     walletUgx: savedAmount(stored.walletUgx), referralDays: savedAmount(stored.referralDays), topUpUgx: savedAmount(stored.topUpUgx) } };
 }
 
 export function saveCheckoutDraft(scope: string, kind: CheckoutDraftKind, value: Stored) {
-  const { requestKey, step, purpose, planId, usePackage, method, useWallet, useReferral, walletUgx, referralDays, topUpUgx, attachingId } = value.draft;
+  const { requestKey, step, purpose, planId, usePackage, method, mobileMethod, useWallet, useReferral, walletUgx, referralDays, topUpUgx, attachingId } = value.draft;
   // A receipt attachment can resume in memory. Never restore its record ID or evidence from browser storage.
   writeDraftProgress(scope, kind, attachingId ? null : { requestKey, step, purpose, planId, usePackage,
-    method, useWallet, useReferral, walletUgx, referralDays, topUpUgx }, value);
+    method, mobileMethod, useWallet, useReferral, walletUgx, referralDays, topUpUgx }, value);
 }

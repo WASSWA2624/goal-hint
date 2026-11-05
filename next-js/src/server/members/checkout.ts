@@ -223,7 +223,11 @@ export function createCheckout({ database, config, now = Date.now }: {
         if (!await currentMember(tx, member, at)) return null;
         await expire(tx, member.accountId, at);
         const rows = await tx.paymentSubmission.findMany({ where: { accountId: member.accountId, workflowVersion: 2 }, orderBy: [{ submittedAt: "desc" }, { id: "desc" }], take: 20 });
-        const last = await tx.paymentSubmission.findFirst({ where: { accountId: member.accountId, status: "approved" }, orderBy: { decidedAt: "desc" }, select: { method: true, network: true } });
+        const last = await tx.paymentSubmission.findFirst({
+          where: { accountId: member.accountId, purpose: "plan", status: "approved", reversedAt: null,
+            OR: [{ method: { in: ["mtn", "airtel"] } }, { method: null, network: { in: ["mtn", "airtel"] } }] },
+          orderBy: [{ decidedAt: "desc" }, { submittedAt: "desc" }, { id: "desc" }], select: { method: true, network: true },
+        });
         return { ...await checkoutBalances(tx, member.accountId), lastMethod: last?.method ?? last?.network ?? null, requests: await Promise.all(rows.map(r => requestView(tx, r))) };
       });
     },

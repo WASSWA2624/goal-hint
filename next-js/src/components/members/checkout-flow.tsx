@@ -2,7 +2,7 @@
 
 import { AppLoading } from "@/components/navigation/navigation-progress";
 import { backToWorkflowStep, workflowPage, workflowStep, writeWorkflowStep } from "@/components/navigation/workflow-history";
-import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useCallback, useEffect, useEffectEvent, useId, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InputControl } from "@/components/ui/controls";
 import { FloatingField } from "@/components/ui/floating-field";
@@ -10,11 +10,11 @@ import { AmountInput } from "@/components/ui/amount-input";
 import { CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { randomId } from "@/components/ui/random-id";
-import { CardIcon, CheckIcon, ClipboardIcon, CloseIcon, CopyIcon } from "@/components/ui/icons";
+import { CheckIcon, ClipboardIcon, CloseIcon, CopyIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { checkoutLabels, checkoutMethodAvailable, checkoutOpenStatuses, duplicateReceiptMessage, fundingAmounts, type CheckoutEvidenceCheck, type CheckoutQuote, type CheckoutRequest, type CheckoutSelection, type CheckoutView } from "@/domain/checkout";
 import type { ScreenshotMetadata } from "@/domain/payment-screenshot";
-import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
+import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { PublicSubscriptionSettings } from "@/domain/public-subscription-settings";
 import { manualPaymentProvider } from "@/domain/subscription-settings";
 import { paymentEvidence } from "@/domain/payment-sms";
@@ -26,20 +26,22 @@ import { normalizeTransactionId } from "@/domain/payment";
 import { localUgandaPhone } from "@/domain/phone";
 import { formatNationalPhone, splitPhoneValue } from "@/domain/phone-countries";
 import { refreshMemberSession } from "./member-session";
-import { PaymentWizard, WizardActions, WizardNotice, WizardPlans, WizardReview } from "./payment-wizard";
-import { Plan, PlanName, PlanPrice } from "./subscribe-styles";
-import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutFundingFields, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
+import { PaymentWizard, WizardActions, WizardNotice, WizardReview } from "./payment-wizard";
+import { PackageSelection } from "./package-selection";
+import { CheckoutMessageField, CheckoutTransactionFields } from "./checkout-details-styles";
+import { CheckoutPay, CheckoutPayTransfer } from "./checkout-pay";
+import { EarnedDaysRedemption } from "./checkout-pay-styles";
+import { CheckoutActions, CheckoutChoices, CheckoutDialog, CheckoutFundingInput, CheckoutMessage, CheckoutPanel, CheckoutPayee, CheckoutPaySummary, CheckoutProviderMark, CheckoutSupport, FundingBreakdown } from "./checkout-parts";
 import { PaymentScreenshot, screenshotDigest } from "./payment-screenshot";
 import { PaymentImagePreview } from "./payment-image-preview";
 import { PaymentEvidenceWarning } from "./payment-evidence-warning";
 import { sendCheckout as send } from "./checkout-client";
 import { MobileMoneyLogo } from "./mobile-money-logo";
-import { capCheckoutFunding, chooseCheckoutMethod, chooseCheckoutPackage, loadCheckoutDraft, restoredCheckoutStep, saveCheckoutDraft, type CheckoutDraft } from "./checkout-draft";
-import { CheckoutReferralChoice } from "./checkout-referral-choice";
+import { capCheckoutFunding, chooseCheckoutMethod, chooseCheckoutPackage, loadCheckoutDraft, restoredCheckoutStep, saveCheckoutDraft, withCheckoutProvider, type CheckoutDraft } from "./checkout-draft";
 import { clearProtectedDrafts } from "./draft-storage";
 
 const emptyView: CheckoutView = { availableWalletUgx: 0, availableReferralDays: 0, lastMethod: null, requests: [] };
-const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Referral days" };
+const methodNames = { mtn: "MTN Mobile Money", airtel: "Airtel Money", wallet: "Wallet balance", referral: "Earned days" };
 type DisplayedQuote = { selectionKey: string; quote: CheckoutQuote };
 const localDate = (date = new Date()) => new Date(+date - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 function formatReviewPhone(value: string) {
@@ -47,9 +49,10 @@ function formatReviewPhone(value: string) {
   return `+${parts.callingCode} ${formatNationalPhone(parts)}`.trim();
 }
 
-export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false }: {
+export function CheckoutFlow({ locale, settings, plans, account, initialView, topUp = false, noticeBeforeCheckout }: {
   locale: string; settings: PublicSubscriptionSettings; plans: readonly SubscriptionPlanView[];
   account: { id: string; phone: string; draftScope?: string }; initialView: CheckoutView; topUp?: boolean;
+  noticeBeforeCheckout?: ReactNode;
 }) {
   const router = useRouter(), [view, setView] = useState(initialView ?? emptyView);
   const initial = (): CheckoutDraft => ({ requestKey: "", step: 0, purpose: topUp ? "topup" : "plan", planId: plans[0]?.id ?? "",
@@ -70,8 +73,14 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const scope = account.draftScope ?? account.id, kind = topUp ? "topup" : "plan";
   const page = useRef("");
   const selectedPlanPrice = plans.find(plan => plan.id === draft.planId)?.priceUgx ?? 0;
-  const walletMaximum = Math.min(view.availableWalletUgx, selectedPlanPrice);
   const networkAvailable = (method: string) => checkoutMethodAvailable(method, view, settings);
+  const normalizeDraft = useCallback((value: CheckoutDraft, balances = view) => {
+    // Package and earned-day redemption are separate choices before evidence entry.
+    const purchase = value.step === 0 && !topUp && !value.attachingId ? chooseCheckoutPackage(value, true, balances, plans) : value;
+    const separated = purchase.step <= 1 && purchase.purpose === "plan" && (purchase.useReferral || Number(purchase.referralDays) > 0)
+      ? { ...purchase, useReferral: false, referralDays: "0", accepted: false } : purchase;
+    return withCheckoutProvider(capCheckoutFunding(separated, balances, plans), settings, balances.lastMethod);
+  }, [plans, settings, topUp, view]);
   function validStep(target: CheckoutDraft["step"], value: CheckoutDraft, screenshot: Blob | null) {
     const attaching = !!value.attachingId && view.requests.some(r => r.id === value.attachingId &&
       (checkoutOpenStatuses as readonly string[]).includes(r.status));
@@ -98,14 +107,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
         restored = { ...previous, step, ...(previous.method && !networkAvailable(previous.method) && !previous.attachingId ? { method: "" as const } : {}) };
         setImage(stored.image);
       }
-    } else {
-      const method = view.lastMethod;
-      if (method && Object.hasOwn(methodNames, method) && networkAvailable(method) && (!topUp || method === "mtn" || method === "airtel")) {
-        restored = chooseCheckoutMethod(start, method as CheckoutSelection["method"], true, view, plans);
-      }
     }
     writeWorkflowStep(restored.requestKey, restored.step, "replace");
-    setDraft(restored);
+    setDraft(normalizeDraft(restored));
     setLoaded(true);
   });
   useEffect(() => {
@@ -121,7 +125,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     if (step === 0 && draft.attachingId) { setShowNew(false); resetCheckout(); }
     else {
       if (target !== step || entryStep === null) writeWorkflowStep(draft.requestKey, step, "replace");
-      setDraft(current => ({ ...current, step, accepted: false }));
+      setDraft(current => normalizeDraft({ ...current, step, accepted: false }));
     }
     setWarningDialog(null); setNotice(null); setError("");
   });
@@ -133,7 +137,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   async function refresh() {
     const response = await fetch("/api/account/checkout", { cache: "no-store", credentials: "same-origin" });
     if (!response.ok) throw new Error("Status could not refresh. Your request is kept.");
-    const next: CheckoutView = await response.json(); setView(next); setDraft(current => capCheckoutFunding(current, next, plans));
+    const next: CheckoutView = await response.json(); setView(next); setDraft(current => normalizeDraft(current, next));
     if (next.requests.some(r => r.status === "approved")) { void refreshMemberSession(); router.refresh(); }
     return next;
   }
@@ -143,13 +147,13 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       if (!alive) return;
       if (r.status === 401 || r.status === 403) { clearProtectedDrafts(); void refreshMemberSession(); router.refresh(); return; }
       if (!r.ok) return; const next: CheckoutView = await r.json();
-      if (alive) { setView(next); setDraft(current => capCheckoutFunding(current, next, plans)); void refreshMemberSession(); }
+      if (alive) { setView(next); setDraft(current => normalizeDraft(current, next)); void refreshMemberSession(); }
     }).catch(() => {}); };
     const timer = setInterval(update, 20_000); window.addEventListener("focus", update); window.addEventListener("online", update);
     document.addEventListener("visibilitychange", update);
     return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", update); window.removeEventListener("online", update); document.removeEventListener("visibilitychange", update); };
-  }, [plans, router]);
-  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => capCheckoutFunding({ ...d, ...values, accepted: values.accepted ?? false }, view, plans)); setError(""); };
+  }, [normalizeDraft, router]);
+  const update = (values: Partial<CheckoutDraft>) => { setDraft(d => normalizeDraft({ ...d, ...values, accepted: values.accepted ?? false })); setError(""); };
   function goTo(step: CheckoutDraft["step"], mode: "push" | "replace" = "push") {
     if (page.current !== workflowPage(window.location.href)) return;
     writeWorkflowStep(draft.requestKey, step, mode);
@@ -159,15 +163,12 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
     if (!backToWorkflowStep(draft.requestKey, step)) goTo(step, "replace");
   }
   function resetCheckout() {
-    const start = { ...initial(), requestKey: randomId() };
+    const start = normalizeDraft({ ...initial(), requestKey: randomId() });
     if (page.current === workflowPage(window.location.href)) writeWorkflowStep(start.requestKey, 0, "replace");
     setDraft(start); setImage(null); setQuote(null);
   }
   const chooseMethod = (method: CheckoutSelection["method"], selected: boolean) => {
-    setDraft(current => chooseCheckoutMethod(current, method, selected, view, plans)); setError("");
-  };
-  const choosePackage = (selected: boolean) => {
-    setDraft(current => chooseCheckoutPackage(current, selected, view, plans)); setError("");
+    setDraft(current => normalizeDraft(chooseCheckoutMethod(current, method, selected, view, plans))); setError("");
   };
   const selection = (): CheckoutSelection => ({ purpose: draft.purpose, planId: draft.purpose === "plan" ? draft.planId : null,
     method: draft.method as CheckoutSelection["method"], walletUgx: Number(draft.walletUgx), referralDays: Number(draft.referralDays), topUpUgx: Number(draft.topUpUgx) });
@@ -191,17 +192,17 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       .finally(() => { if (alive) setFinishedQuote(reviewQuoteKey); });
     return () => { alive = false; };
   }, [reviewQuoteKey, selectionKey]);
-  useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded, draft.step]);
+  useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded, draft.step, draft.purpose]);
   async function next() {
     setError("");
     if (draft.step === 0) {
-      if (!topUp && draft.purpose === "referral" && (!draft.useReferral || Number(draft.referralDays) < 1)) {
-        setError("Choose a package or select at least one available referral day to redeem."); return;
+      if (!topUp && !plans.some(plan => plan.id === draft.planId)) {
+        setError("Choose an available package to continue."); return;
       }
       goTo(1); return;
     }
     if (!draft.method) { setError(draft.useWallet ? `Choose MTN or Airtel to pay the remaining ${formatUgx(selectedPlanPrice - Number(draft.walletUgx))}.` : "Choose a payment method."); return; }
-    if (draft.purpose === "referral" && Number(draft.referralDays) < 1) { setError("Choose at least one available referral day."); return; }
+    if (draft.purpose === "referral" && Number(draft.referralDays) < 1) { setError("Choose at least one available earned day."); return; }
     setBusy(true);
     try {
       const value = await send<CheckoutQuote>({ action: "quote", selection: selection() });
@@ -332,6 +333,8 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   const active = view.requests.filter(r => (checkoutOpenStatuses as readonly string[]).includes(r.status));
   const visibleRequests = view.requests.slice(0, 5);
   const showForm = loaded && (showNew || active.length === 0 || !!attaching);
+  const packageStep = !topUp && draft.step === 0;
+  const payStep = !topUp && draft.step === 1;
   const summary = effectiveQuote && <FundingBreakdown quote={effectiveQuote} {...(external && draft.amountUgx !== "" ? { reportedUgx: Number(draft.amountUgx) + (attaching?.verifiedUgx ?? 0) } : {})} />;
   function startReceipt(request: CheckoutRequest) {
     setQuote(null); setShowNew(true); setImage(null);
@@ -341,6 +344,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       method: request.method as CheckoutDraft["method"], attachingId: request.id });
   }
   return <>
+    {loaded && (!showForm || !packageStep && !payStep && draft.step !== 2) && noticeBeforeCheckout}
     <AppLoading active={!loaded || busy || readingActive || !!reviewQuoteKey && finishedQuote !== reviewQuoteKey} />
     {warningDialog && <PaymentEvidenceWarning warnings={warningDialog.warnings} onCancel={() => setWarningDialog(null)}
       {...(!attaching ? { onChangeMethod: () => { setWarningDialog(null); goBack(1); } } : {})}
@@ -369,7 +373,7 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
             const walletUgx = Math.min(request.walletUgx, view.availableWalletUgx), referralDays = Math.min(request.referralDays, view.availableReferralDays);
             try { await send({ action: "reconfirm", id: request.id, walletUgx, referralDays, amountToSend: request.priceUgx - walletUgx, confirmed: true }); await refresh(); }
             catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-          }}>{["rejected", "cancelled", "superseded"].includes(request.status) ? "Resubmit" : "Confirm"} {formatUgx(Math.min(request.walletUgx, view.availableWalletUgx))} wallet + {Math.min(request.referralDays, view.availableReferralDays)} referral days; cash {formatUgx(request.priceUgx - Math.min(request.walletUgx, view.availableWalletUgx))}</Button>}
+          }}>{["rejected", "cancelled", "superseded"].includes(request.status) ? "Resubmit" : "Confirm"} {formatUgx(Math.min(request.walletUgx, view.availableWalletUgx))} wallet + {Math.min(request.referralDays, view.availableReferralDays)} earned days; cash {formatUgx(request.priceUgx - Math.min(request.walletUgx, view.availableWalletUgx))}</Button>}
           {(checkoutOpenStatuses as readonly string[]).includes(request.status) && <Button variant="quiet" disabled={busy} onClick={async () => { setBusy(true); try { await send({ action: "cancel", id: request.id }); await refresh(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>Cancel request</Button>}
         </>}
         {["rejected", "cancelled", "approved"].includes(request.status) && <Button variant="secondary" onClick={() => { setShowNew(true); resetCheckout(); }}>Start another purchase</Button>}
@@ -385,51 +389,41 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
       <p>{error || notice?.message}</p>
     </CheckoutDialog>}
     {!loaded && <p role="status">Restoring checkout…</p>}
-    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={["Package", "Pay", "Details", "Review"]} hideTitle title={["Choose package", "Choose Payment Methods", "Payment details", "Review payment"][draft.step]!} headingRef={heading}>
+    {showForm && <PaymentWizard locale={locale} step={draft.step} totalSteps={4} inlineLabels labels={["Package", "Pay", "Details", "Review"]}
+      variant={packageStep ? "package" : payStep ? "pay" : draft.step === 2 ? "details" : "default"} hideTitle={!packageStep && !(payStep && draft.purpose === "referral")}
+      title={["Choose your package", draft.purpose === "referral" ? "Redeem earned days" : "Pay for your package", "Payment details", "Review payment"][draft.step]!} headingRef={heading}>
       {draft.step === 0 && <>
-        {topUp ? <AmountInput label="Wallet top-up (UGX)" value={draft.topUpUgx} onValueChange={topUpUgx => update({ topUpUgx })} />
-          : <>
-            <CheckoutChoices><VisuallyHidden as="legend">Access options</VisuallyHidden>
-              <label><input type="checkbox" name="checkout-buy-package" checked={draft.purpose === "plan"} disabled={busy} onChange={event => choosePackage(event.target.checked)} />
-                <CardIcon /><span data-method-text>Buy a package</span></label>
-              <CheckoutReferralChoice locale={locale} availableDays={view.availableReferralDays} checked={draft.useReferral} disabled={busy} onChange={selected => chooseMethod("referral", selected)} />
-            </CheckoutChoices>
-            {draft.purpose === "plan" && <WizardPlans $columns={1} aria-label="Packages">{plans.map(plan => <Plan key={plan.id}><input type="radio" name="checkout-package" checked={draft.planId === plan.id} onChange={() => update({ planId: plan.id })} />
-              <PlanName>{plan.name} · {formatPlanLength(plan.durationDays)}</PlanName><PlanPrice>{formatUgx(plan.priceUgx)}</PlanPrice></Plan>)}</WizardPlans>}
-            {draft.useReferral && view.availableReferralDays > 0 && <CheckoutFundingFields><CheckoutFundingInput label="Referral days to redeem" maxLabel="Use max referral days" disabled={busy}
-              maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays, useReferral: true })} /></CheckoutFundingFields>}
-          </>}
-        <WizardActions><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
+        {topUp ? <><AmountInput label="Wallet top-up (UGX)" value={draft.topUpUgx} onValueChange={topUpUgx => update({ topUpUgx })} />
+          <WizardActions><Button disabled={busy} onClick={next}>Next</Button></WizardActions></>
+          : <PackageSelection plans={plans} selectedPlanId={draft.planId} disabled={busy} onSelect={planId => update({ planId })} onContinue={() => void next()} />}
       </>}
-      {draft.step === 1 && <>
-        <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(["mtn", "airtel", "wallet"] as const).filter(method => topUp ? method !== "wallet" : draft.purpose === "plan").map(method => {
-          const unavailable = method === "wallet" ? null : manualPaymentProvider(settings, method).reason;
-          return <label key={method}>
-          <input type={method === "wallet" ? "checkbox" : "radio"} name={method === "wallet" ? "checkout-wallet" : "checkout-method"}
-            checked={method === "wallet" ? draft.useWallet : draft.method === method} disabled={busy || !networkAvailable(method)}
-            onChange={event => chooseMethod(method, event.target.checked)} />
-          {method === "mtn" || method === "airtel" ? <CheckoutProviderMark><MobileMoneyLogo network={method} /></CheckoutProviderMark> : <CardIcon />}
-          <span data-method-text>{methodNames[method]}{method === "wallet" && <small>{formatUgx(view.availableWalletUgx)}</small>}
-            {unavailable && <small>{unavailable}</small>}</span>
-        </label>; })}
-          {!topUp && <CheckoutReferralChoice locale={locale} availableDays={view.availableReferralDays} checked={draft.useReferral} disabled={busy} onChange={selected => chooseMethod("referral", selected)} />}
-        </CheckoutChoices>
-        {!topUp && (draft.method || draft.useWallet || draft.useReferral) && <CheckoutFundingFields>
-          {draft.purpose === "plan" && <CheckoutFundingInput label="Wallet to use (UGX)" maxLabel="Use max wallet amount" disabled={busy}
-            maximum={walletMaximum} value={draft.walletUgx} onValueChange={walletUgx => update({ walletUgx, useWallet: true })} />}
-          {view.availableReferralDays > 0 && <CheckoutFundingInput label={`Referral days${draft.method === "referral" ? " to redeem" : " to add"}`} maxLabel="Use max referral days" disabled={busy}
-            maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays, useReferral: true })} />}
-        </CheckoutFundingFields>}
+      {draft.step === 1 && (topUp ? <>
+        <CheckoutChoices><VisuallyHidden as="legend">Payment method</VisuallyHidden>{(["mtn", "airtel"] as const).map(method =>
+          <label key={method}><input type="radio" name="checkout-method" checked={draft.method === method} disabled={busy || !networkAvailable(method)}
+            onChange={() => chooseMethod(method, true)} /><CheckoutProviderMark><MobileMoneyLogo network={method} /></CheckoutProviderMark>
+            <span data-method-text>{methodNames[method]}{manualPaymentProvider(settings, method).reason && <small>{manualPaymentProvider(settings, method).reason}</small>}</span></label>)}</CheckoutChoices>
         <PaymentDestination selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
         <WizardActions><Button variant="secondary" onClick={() => goBack(0)}>Back</Button><Button disabled={busy} onClick={next}>Next</Button></WizardActions>
-      </>}
+      </> : draft.purpose === "referral" ? <EarnedDaysRedemption data-earned-days-redemption>
+        <p>{view.availableReferralDays} earned days available. Redeem them for access without a Mobile Money payment.</p>
+        <CheckoutFundingInput label="Earned days to redeem" maxLabel="Use max earned days" disabled={busy || view.availableReferralDays === 0}
+          maximum={Math.min(365, view.availableReferralDays)} value={draft.referralDays} onValueChange={referralDays => update({ referralDays, useReferral: true })} />
+        <PaymentDestination selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
+        <WizardActions><Button variant="secondary" disabled={busy} onClick={() => update({ purpose: "plan", usePackage: true, useReferral: false, referralDays: "0", method: "" })}>Back to Pay</Button>
+          <Button disabled={busy || Number(draft.referralDays) < 1} onClick={next}>Review redemption</Button></WizardActions>
+      </EarnedDaysRedemption> : <CheckoutPay plan={plans.find(plan => plan.id === draft.planId)} settings={settings} method={draft.method} useWallet={draft.useWallet}
+        walletUgx={Number(draft.walletUgx)} availableWalletUgx={view.availableWalletUgx} availableEarnedDays={view.availableReferralDays}
+        lastProvider={view.lastMethod} disabled={busy} onMethodChange={chooseMethod} onChangePackage={() => goBack(0)} onContinue={() => void next()}
+        onRedeem={() => update({ purpose: "referral", usePackage: false, method: "referral", useWallet: false, walletUgx: "0", useReferral: true, referralDays: String(Math.min(365, view.availableReferralDays)) })}>
+        <PaymentDestination redesigned availableWalletUgx={view.availableWalletUgx} selection={selection()} settings={settings} plans={plans} quoteEpoch={quoteEpoch} displayed={payQuote} onError={setError} />
+      </CheckoutPay>)}
       {draft.step === 2 && <form onSubmit={review} noValidate style={{ display: "grid", gap: "var(--gh-spacing-3)" }}>
         {external && <>
           <WizardNotice id={`${evidenceId}-requirement`}>Message or screenshot required.</WizardNotice>
-          <FloatingField label={`Transaction message${screenshotReady ? " (optional)" : ""}`}
+          <CheckoutMessageField label={`Transaction message${screenshotReady ? " (optional)" : ""}`}
             action={<>{draft.text.length > 0 && <Button variant="quiet" aria-label="Clear transaction message" disabled={busy || readingActive} onClick={clearMessage}><CloseIcon />Clear</Button>}
               <Button variant="quiet" disabled={busy || readingActive} onClick={() => void pasteMessage()}><ClipboardIcon />Paste</Button></>}>
-            <CheckoutMessage ref={messageInput} id={`${evidenceId}-message`} rows={3} maxLength={12000} disabled={readingActive} required={!screenshotReady}
+            <CheckoutMessage ref={messageInput} id={`${evidenceId}-message`} rows={2} maxLength={12000} disabled={readingActive} required={!screenshotReady}
               aria-describedby={`${evidenceId}-requirement`} placeholder="Enter or paste the payment message"
               value={draft.text} onChange={e => update({ text: e.target.value })}
               onPaste={event => { event.preventDefault(); if (!busy && !readingActive) pasteTransactionMessage(event.clipboardData.getData("text/plain")); }}
@@ -437,16 +431,18 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
                 if (event.relatedTarget instanceof Node && event.currentTarget.parentElement?.querySelector("[data-field-action]")?.contains(event.relatedTarget)) return;
                 if (draft.text && draft.text !== draft.originalText) extract(draft.text);
               }} />
-          </FloatingField>
+          </CheckoutMessageField>
           <PaymentScreenshot image={image} metadata={draft.screenshot ?? null} provider={receiptProvider} optional={!!draft.text.trim()}
             submissionId={attaching?.id ?? null} disabled={busy} requirementId={`${evidenceId}-requirement`} onBusyChange={setReadingActive}
             onPasteMessage={() => messageInput.current?.focus()} onAccept={(screenshot, metadata, text) => { setImage(screenshot); extract(text, true, metadata); }}
             onRemove={() => { setImage(null); setReading(""); update({ screenshot: null,
               extracted: Object.fromEntries(Object.entries(draft.extracted).filter(([name]) => !name.startsWith("screenshot"))) }); }} />
           {reading && <VisuallyHidden role="status">{reading}</VisuallyHidden>}
-          <FloatingField label="Transaction ID"><InputControl $invalid={false} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
-            value={draft.transactionId} onChange={e => update({ transactionId: normalizeTransactionId(e.target.value) })} /></FloatingField>
-          <AmountInput label="Amount paid (UGX)" required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => update({ amountUgx })} />
+          <CheckoutTransactionFields>
+            <FloatingField label="Transaction ID"><InputControl $invalid={false} required disabled={readingActive} maxLength={40} autoComplete="off" autoCapitalize="characters" spellCheck={false}
+              value={draft.transactionId} onChange={e => update({ transactionId: normalizeTransactionId(e.target.value) })} /></FloatingField>
+            <AmountInput label="Amount paid (UGX)" required disabled={readingActive} value={draft.amountUgx} onValueChange={amountUgx => update({ amountUgx })} />
+          </CheckoutTransactionFields>
           <PhoneInput label="Number used to pay" formatValue required disabled={readingActive} value={draft.payerPhone} onValueChange={payerPhone => update({ payerPhone })} />
         </>}
         <WizardActions><Button variant="secondary" disabled={busy || readingActive} onClick={() => { if (attaching) resetCheckout(); else goBack(1); }}>Back</Button>
@@ -471,8 +467,9 @@ export function CheckoutFlow({ locale, settings, plans, account, initialView, to
   </>;
 }
 
-function PaymentDestination({ selection, settings, plans, quoteEpoch, displayed, onError }: { selection: CheckoutSelection; settings: PublicSubscriptionSettings;
-  plans: readonly SubscriptionPlanView[]; quoteEpoch: number; displayed: RefObject<DisplayedQuote | null>; onError: (message: string) => void }) {
+function PaymentDestination({ selection, settings, plans, quoteEpoch, displayed, onError, redesigned = false, availableWalletUgx = 0 }: { selection: CheckoutSelection; settings: PublicSubscriptionSettings;
+  plans: readonly SubscriptionPlanView[]; quoteEpoch: number; displayed: RefObject<DisplayedQuote | null>; onError: (message: string) => void;
+  redesigned?: boolean; availableWalletUgx?: number }) {
   const [result, setResult] = useState<{ identity: string; quote: CheckoutQuote } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
@@ -484,9 +481,10 @@ function PaymentDestination({ selection, settings, plans, quoteEpoch, displayed,
   const identity = JSON.stringify([selectionKey, priceUgx, plan?.durationDays, provider, quoteEpoch]);
   const canQuote = !!selection.method && (selection.purpose !== "referral" || selection.referralDays > 0)
     && (selection.purpose !== "topup" || selection.topUpUgx > 0);
-  // Keep the estimate visible while the server verifies the transfer details.
+  // Swap current server-provided provider values in place while the quote is revalidated.
+  // Next still requires a matching confirmed quote; no old-provider details survive a switch.
   const preview = { ...selection, priceUgx, durationDays: plan?.durationDays ?? 0, ...fundingAmounts(priceUgx, selection.walletUgx),
-    recipient: null, recipientName: null };
+    recipient: redesigned ? provider?.number ?? null : null, recipientName: redesigned ? provider?.name ?? null : null };
   const current = result?.identity === identity && failed !== identity ? result.quote : null;
   const quote = current ?? preview;
   useEffect(() => {
@@ -500,11 +498,15 @@ function PaymentDestination({ selection, settings, plans, quoteEpoch, displayed,
     return () => { alive = false; clearTimeout(timer); displayed.current = null; };
   }, [selectionKey, identity, canQuote, displayed, onError]);
   const copied = copiedNumber === quote.recipient && !!quote.recipient;
-  return <div data-payment-destination aria-busy={canQuote && !current && failed !== identity}><CheckoutPaySummary quote={quote} />
+  const pending = canQuote && !current && failed !== identity;
+  const copy = () => { if (quote.recipient) void navigator.clipboard.writeText(quote.recipient).then(() => setCopiedNumber(quote.recipient)).catch(() => onError("Select and copy the receiving number.")); };
+  if (redesigned) return <><AppLoading active={pending} /><CheckoutPayTransfer quote={quote} availableWalletUgx={availableWalletUgx}
+    pending={pending} failed={failed === identity} copied={copied} onCopy={copy} /></>;
+  return <div data-payment-destination aria-busy={pending}><AppLoading active={pending} /><CheckoutPaySummary quote={quote} />
     {quote.recipient && (quote.method === "mtn" || quote.method === "airtel") && <CheckoutPayee>
       <div><CheckoutProviderMark><MobileMoneyLogo network={quote.method} /></CheckoutProviderMark><strong>{localUgandaPhone(quote.recipient)}</strong>
         <Button type="button" variant="quiet" aria-label={copied ? "Number copied" : `Copy ${methodNames[quote.method]} receiving number`} title={copied ? "Copied" : "Copy number"}
-          onClick={() => { void navigator.clipboard.writeText(quote.recipient!).then(() => setCopiedNumber(quote.recipient)).catch(() => onError("Select and copy the receiving number.")); }}>{copied ? <CheckIcon /> : <CopyIcon />}</Button></div>
+          onClick={copy}>{copied ? <CheckIcon /> : <CopyIcon />}</Button></div>
       <small>{quote.recipientName}</small>
       <small>Use {methodNames[quote.method]} on your phone to send {formatUgx(quote.amountToSend)}. Check the registered name before confirming the transfer.</small>
     </CheckoutPayee>}

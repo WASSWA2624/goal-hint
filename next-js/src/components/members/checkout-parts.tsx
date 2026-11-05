@@ -42,13 +42,6 @@ export const CheckoutProviderMark = styled.span`
   inline-size: var(--gh-size-7_5); block-size: var(--gh-size-6);
   [data-payment-logo] { inline-size: var(--gh-size-7_5); block-size: var(--gh-size-6); }
 `;
-export const CheckoutFundingFields = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); min-inline-size: 0;
-  > * { min-inline-size: 0; }
-  > :only-child { grid-column: 1 / -1; }
-  label { font-size: var(--gh-font-body); line-height: var(--gh-size-4_5); }
-  input { padding-inline-end: var(--gh-spacing-14); }
-`;
 const MaxButton = styled(Button)`
   && { min-inline-size: var(--gh-size-10); padding: 0 var(--gh-spacing-2); font-size: var(--gh-font-secondary); line-height: var(--gh-size-4_5); border-radius: ${({ theme }) => theme.radius.none}; }
 `;
@@ -87,14 +80,14 @@ export const CheckoutMessage = styled.textarea`
   ${focusTreatment}
 `;
 export const CheckoutScreenshot = styled.div`
-  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0; padding: var(--gh-spacing-2_5);
+  display: grid; gap: var(--gh-spacing-2); min-inline-size: 0;
   border: 0; border-radius: ${({ theme }) => theme.radius.control};
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gh-spacing-2); }
   button { min-block-size: var(--form-control-height); padding: var(--gh-spacing-1_5) var(--gh-spacing-2_5); font-size: var(--gh-font-body); }
   svg { inline-size: var(--gh-size-4_5); block-size: var(--gh-size-4_5); }
   p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-body); line-height: var(--gh-size-4_5); }
-  [data-screenshot-preview] { display: flex; flex-wrap: nowrap; justify-content: space-between; }
+  [data-screenshot-actions] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gh-spacing-2); }
+  [data-screenshot-actions] > button { inline-size: 100%; min-inline-size: 0; }
+  [data-screenshot-preview] { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--gh-spacing-2); }
   [data-screenshot-preview] > button:last-child { flex: none; min-block-size: var(--form-control-height); padding: var(--gh-spacing-1) var(--gh-spacing-2); }
   ${focusTreatment}
 `;
@@ -108,9 +101,9 @@ export type CheckoutPayPreview = Pick<CheckoutQuote, "purpose" | "method" | "wal
 export function CheckoutPaySummary({ quote: q }: { quote: CheckoutPayPreview }) {
   const days = `${q.durationDays} ${q.durationDays === 1 ? "day" : "days"}`;
   return <PayLine data-pay-summary>
-    <p>{q.purpose === "referral" ? <>Redeem <strong>{q.referralDays} referral {q.referralDays === 1 ? "day" : "days"}</strong> · UGX 0 due</>
+    <p>{q.purpose === "referral" ? <>Redeem <strong>{q.referralDays} earned {q.referralDays === 1 ? "day" : "days"}</strong> · UGX 0 due</>
       : <>{q.purpose === "topup" ? "Top up" : q.method === "wallet" ? "Use wallet" : "Pay"}{" "}<strong>{formatUgx(q.method === "wallet" ? q.walletUgx : q.amountToSend)}</strong>
-        {q.durationDays > 0 && <> · {days}</>}{q.referralDays > 0 && <> + {q.referralDays} referral {q.referralDays === 1 ? "day" : "days"}</>}</>}
+        {q.durationDays > 0 && <> · {days}</>}{q.referralDays > 0 && <> + {q.referralDays} earned {q.referralDays === 1 ? "day" : "days"}</>}</>}
     </p>
     {q.walletUgx > 0 && q.amountToSend > 0 && <small>Package {formatUgx(q.priceUgx)} · wallet {formatUgx(q.walletUgx)}</small>}
   </PayLine>;
@@ -119,10 +112,10 @@ export function FundingBreakdown({ quote: q, reportedUgx }: { quote: Pick<Checko
   const amounts = fundingAmounts(q.priceUgx, q.walletUgx, reportedUgx ?? 0);
   return <div data-funding-breakdown>
     <WizardReview>
-      {q.purpose === "referral" ? <div><dt>Referral days</dt><dd>{q.referralDays} {q.referralDays === 1 ? "day" : "days"}</dd></div> : <>
+      {q.purpose === "referral" ? <div><dt>Earned days</dt><dd>{q.referralDays} {q.referralDays === 1 ? "day" : "days"}</dd></div> : <>
         <div><dt>{q.purpose === "topup" ? "Wallet top-up" : "Package price"}</dt><dd>{q.planName} · {formatUgx(q.priceUgx)}</dd></div>
         {q.walletUgx > 0 && <div><dt>Wallet contribution</dt><dd>{formatUgx(q.walletUgx)}</dd></div>}
-        {q.durationDays > 0 && <div><dt>Access time</dt><dd>{q.durationDays} purchased {q.durationDays === 1 ? "day" : "days"}{q.referralDays > 0 ? ` + ${q.referralDays} referral ${q.referralDays === 1 ? "day" : "days"}` : ""}</dd></div>}
+        {q.durationDays > 0 && <div><dt>Access time</dt><dd>{q.durationDays} purchased {q.durationDays === 1 ? "day" : "days"}{q.referralDays > 0 ? ` + ${q.referralDays} earned ${q.referralDays === 1 ? "day" : "days"}` : ""}</dd></div>}
       </>}
       <div><dt>{q.amountToSend > 0 ? "Amount to send" : "Cash due"}</dt><dd><strong>{formatUgx(q.amountToSend)}</strong></dd></div>
       {reportedUgx !== undefined && <div><dt>Amount paid</dt><dd>{formatUgx(reportedUgx)}</dd></div>}

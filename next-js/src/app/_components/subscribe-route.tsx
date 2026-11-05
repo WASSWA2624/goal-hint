@@ -60,10 +60,13 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const trial = subscription?.trial;
     const administrator = !!member && !member.blocked && member.administrator;
     const draftScope = member ? memberTokenHash(`purchase-progress:${member.tokenHash}`) : "signed-out";
+    const checkoutAvailable = member && !member.blocked && !administrator && !unavailable && settings?.paywallMode !== "off" && view?.checkout;
+    const trialNotice = trial && parameters.add !== "credit"
+      ? <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={settings?.trialDays ?? 0} /> : null;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
       <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
       {sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}<ApprovalRefresh waiting={false} refreshAt={trial?.state === "active" ? trial.endsAt : activeUntil} />
-      {trial && parameters.add !== "credit" && <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={settings?.trialDays ?? 0} />}
+      {!checkoutAvailable && trialNotice}
       {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href={adminLandingPath} prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
         : settings?.paywallMode === "off" ? <>{activeUntil && <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={false} returnTo={returnTo} />}<p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
@@ -71,7 +74,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
             // Use a separate, noncredential storage scope for each verified browser session.
             : <SubscribeFlow key={`${draftScope}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={publicSubscriptionSettings(settings!)} plans={offers}
               account={member ? { id: member.accountId, phone: member.phone, draftScope } : null} view={view} returnTo={returnTo} userAgent={userAgent}
-              startWithTopUp={parameters.add === "credit"} />}
+              startWithTopUp={parameters.add === "credit"} noticeBeforeCheckout={trialNotice} />}
     </SubscribeLayout></PublicShell>;
   };
 }
