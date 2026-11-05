@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/ui/controls";
 import { DesktopContent, Inline, PageHeading, Stack, MutedText } from "@/components/ui/layout";
 import { publicPolicy } from "@/domain/public-policy";
 import { sharedSlipPath } from "@/domain/shared-slips";
+import { bestSlipsHref } from "@/domain/navigation";
 import { readSharedSlipLanding } from "@/server/slips/shared-slips";
 import { pageMetadata } from "@/server/seo/metadata";
 import { createMessages } from "@/i18n/messages";
@@ -18,7 +19,7 @@ export const sharedSlipMetadata = pageMetadata({ title: `${m.text("slipShare.sha
 export function SharedSlipMissing() {
   return <PublicShell locale={locale} current="slips" app compact><DesktopContent><Stack $gap="md">
     <PageHeading>{m.text("slipShare.notFoundTitle")}</PageHeading><p>{m.text("slipShare.notFoundDescription")}</p>
-    <ButtonLink href="/en" prefetch={false}>{m.text("bestSlips.title")}</ButtonLink>
+    <ButtonLink href={bestSlipsHref(locale)} prefetch={false}>{m.text("bestSlips.title")}</ButtonLink>
   </Stack></DesktopContent></PublicShell>;
 }
 
@@ -39,7 +40,7 @@ export function createSharedSlipRoute(read = readSharedSlipLanding) {
           <ButtonLink variant="secondary" href={`/en/subscribe?${new URLSearchParams({ return: path! })}`} prefetch={false}>{m.text("slipShare.getAccess")}</ButtonLink>
         </Inline></> : <><p role="status">{m.text("slipShare.unavailable")}</p><ButtonLink href={`/s/${encodeURIComponent(id)}`} prefetch={false}>{m.text("slipShare.retry")}</ButtonLink></>}
       <Inline><ButtonLink href="/en/slips" variant="secondary" prefetch={false}>{m.text("slipShare.buildOwn")}</ButtonLink>
-        <ButtonLink href="/en" variant="secondary" prefetch={false}>{m.text("bestSlips.title")}</ButtonLink></Inline>
+        <ButtonLink href={bestSlipsHref(locale)} variant="secondary" prefetch={false}>{m.text("bestSlips.title")}</ButtonLink></Inline>
     </Stack></DesktopContent></PublicShell>;
   };
 }

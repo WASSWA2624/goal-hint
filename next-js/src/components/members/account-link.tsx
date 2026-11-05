@@ -11,7 +11,7 @@ import { DownloadHeaderLink } from "@/components/downloads/download-header-link"
 import { compactHeaderControl, compactHeaderIconControl } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { createMessages } from "@/i18n/messages";
-import { resolveLocale } from "@/i18n/locales";
+import { memberAuthPath } from "@/domain/member-navigation";
 import { formatPhone } from "@/domain/phone";
 import { accountSectionHref, type AccountSection } from "@/domain/account-navigation";
 import { accountSectionIcons } from "./account-navigation";
@@ -174,14 +174,13 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   const administrator = useSyncExternalStore(subscribeMemberSession, getAdminSessionSnapshot, getServerAdminSessionSnapshot);
   useEffect(() => { void refreshMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
-  const base = `/${resolveLocale(locale)}/account`;
   const adminIdentity = administratorName ?? (administrator ? messages.text("navigation.dashboard") : undefined);
   return <Actions data-account-actions>
     {(administratorName || administrator) && <AdminPaymentsLink />}
     <DownloadHeaderLink locale={locale} />
     {phone || adminIdentity ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(adminIdentity ? { administratorName: adminIdentity } : {})} /></> : <>
-      <AuthLink href={`${base}?view=login`} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("auth.signIn")}</span></AuthLink>
-      <AuthLink href={`${base}?view=register`} prefetch={false} $primary aria-label={messages.text("auth.signUp")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("auth.signUp")}</span></AuthLink>
+      <AuthLink href={memberAuthPath("login")} prefetch={false} data-header-auth="login"><SignInIcon /><span>{messages.text("auth.signIn")}</span></AuthLink>
+      <AuthLink href={memberAuthPath("register")} prefetch={false} $primary aria-label={messages.text("auth.signUp")} data-header-auth="register"><UserPlusIcon /><span>{messages.text("auth.signUp")}</span></AuthLink>
       <ThemeToggle locale={locale} />
     </>}
   </Actions>;

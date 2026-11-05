@@ -92,8 +92,8 @@ def verify(origin):
             for leg in slip.get("preview", []):
                 assert leg["fixture"].get("forecast") is None
                 if leg["pick"] is not None: assert leg["fixture"]["status"] in COMPLETED
-    home = read("/en")
-    assert "data-subscriber-panel" not in home, "Unexpected access section beneath filters."
+    best_slips = read("/en/best-slips")
+    assert "data-subscriber-panel" not in best_slips, "Unexpected access section beneath filters."
     upcoming = read("/api/matches?when=next-7-days&status=scheduled&pageSize=100", wire=True)
     free_access(upcoming)
     assert upcoming["records"], "No upcoming fixture available; gate verification is incomplete."

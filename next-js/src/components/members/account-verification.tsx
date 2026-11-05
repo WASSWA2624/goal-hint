@@ -8,7 +8,7 @@ import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/i
 import { messageChannels, supportedMessageChannels, type MessageChannel } from "@/domain/member-verification";
 import { normalizePhone } from "@/domain/phone";
 import { parseVerificationCode } from "@/domain/verification-code";
-import { resolveLocale } from "@/i18n/locales";
+import { memberAuthPath } from "@/domain/member-navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { AccountFormSupport, type AdminContact } from "./admin-contact";
@@ -38,7 +38,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
   const channels = canonicalPhone ? supportedMessageChannels(canonicalPhone) : messageChannels;
   const selectedChannel = channel && channels.includes(channel) ? channel : channels.includes("sms") ? "sms" : channels[0] ?? "";
   const sendLabel = selectedChannel ? m.text("account.sendCodeBy", { channel: selectedChannel === "sms" ? "SMS" : "WhatsApp" }) : m.text("account.sendCode");
-  const loginHref = `/${resolveLocale(locale)}/account?${new URLSearchParams({ view: "login", ...(returnTo ? { return: returnTo } : {}) })}`;
+  const loginHref = memberAuthPath("login", returnTo);
   const returnBody = returnTo ? { return: returnTo } : {};
   function updateCode(value: string) { codeRevision.current++; setCode(value); setInvalidCode(false); setError(""); }
   const changePhone = (value: string) => {
@@ -141,7 +141,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
           {m.text(step === "delivery" ? "account.alreadyHaveCode" : recovery ? "account.changeCodeDeliveryNumber" : "account.changeCodeDelivery")}
         </AccountTextButton>
         {recovery ? <AccountLink href={loginHref} prefetch={false}>{m.text("auth.backToSignIn")}</AccountLink>
-          : <MemberSignOut disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>}
+          : <MemberSignOut logoutAction="/api/account/sign-out?destination=login" disabled={!!busy} variant="quiet">{m.text("auth.backToSignIn")}</MemberSignOut>}
       </AccountSecondaryActions>
       <AccountFormSupport locale={locale} contact={contact} />
     </AccountCardBody>

@@ -1,7 +1,7 @@
 import "server-only";
 import type { MetadataRoute } from "next";
 import { canonicalUrl, discoveryRules, sitemapIndexXml, sitemapPage } from "../../domain/discovery.ts";
-import { informationPages } from "../../domain/navigation.ts";
+import { bestSlipsHref, homeHref, informationHref, informationPages } from "../../domain/navigation.ts";
 import { ownerPagePaths } from "../../domain/private-paths.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 import { informationPublicationReady } from "./metadata.ts";
@@ -48,7 +48,7 @@ export function createDiscoveryRoutes({ policy = getDiscoveryPolicy, reader = re
     },
     async sitemap(): Promise<MetadataRoute.Sitemap> {
       if (!policy().index) return [];
-      return ["/en", "/en/matches", ...informationPages.filter(informationPublicationReady).map(page => `/en/${page}`)].map(path => ({ url: canonicalUrl(path) }));
+      return [homeHref(), bestSlipsHref(), ...informationPages.filter(informationPublicationReady).map(page => informationHref(page))].map(path => ({ url: canonicalUrl(path) }));
     },
     matchIds: () => ids("matches"), dateIds: () => ids("dates"),
     matches: (props: { id: Promise<string> }) => shard("matches", props),

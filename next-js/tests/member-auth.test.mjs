@@ -112,7 +112,7 @@ test("configured admin numbers require the environment password and land on the 
   const request = new Request("https://goal.test/api/account/login", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
     body: JSON.stringify({ phone, password: "configured admin password", return: "/en/subscribe" }) });
   const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(request);
-  assert.equal(response.status, 200); assert.equal((await response.json()).next, "/admin/payments");
+  assert.equal(response.status, 200); assert.equal((await response.json()).next, "/admin");
 });
 
 test("private administrator password fallback works without hashing on each read and yields only opaque session metadata", async () => {
@@ -624,7 +624,7 @@ test("HTTP login reports when another device was signed out and rejects its stal
   const login = token => createMemberAuthHandler("login", source)(authRequest("login", { phone, password }, token));
   const first = await login();
   assert.equal(first.status, 200); const firstBody = await first.json();
-  assert.equal(firstBody.next, "/en"); assert.equal(firstBody.otherDeviceSignedOut, false);
+  assert.equal(firstBody.next, "/en/matches"); assert.equal(firstBody.otherDeviceSignedOut, false);
   const firstToken = responseToken(first), sameBrowser = await login(firstToken);
   assert.equal((await sameBrowser.json()).otherDeviceSignedOut, false);
   f.advance(1);
@@ -644,12 +644,12 @@ test("successful login goes home while administrator and restricted sessions kee
     { return: "/en/slips", destination: "subscribe" }, { return: "https://evil.test", destination: "subscribe" },
     { return: "//evil.test", destination: "https://evil.test" }];
   const outcomes = [
-    { flags: {}, next: "/en" },
-    { flags: { requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen" },
-    { flags: { requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen" },
-    { flags: { administrator: true }, next: "/admin/payments" },
-    { flags: { administrator: true, requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen" },
-    { flags: { administrator: true, requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen" },
+    { flags: {}, next: "/en/matches" },
+    { flags: { requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen%2Fmatches" },
+    { flags: { requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen%2Fmatches" },
+    { flags: { administrator: true }, next: "/admin" },
+    { flags: { administrator: true, requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen%2Fmatches" },
+    { flags: { administrator: true, requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen%2Fmatches" },
   ];
   for (const destination of destinations) for (const { flags, next } of outcomes) {
     const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
@@ -679,6 +679,36 @@ test("failed login never returns a completion destination or session cookie", as
   }
 });
 
+test("authentication preserves shared-slip journeys through restricted steps and limits payment review returns to administrators", async () => {
+  const shared = `/s/${"a".repeat(32)}`, review = "/admin/payments?paymentId=7d444840-9dc0-4f60-9b18-050fc43b8813";
+  const token = "j".repeat(43);
+  for (const action of ["login", "register", "verify", "reset"]) {
+    for (const flags of [{}, { requiresVerification: true }, { requiresPasswordChange: true }]) {
+      const result = { status: "authenticated", token, phone, ...flags };
+      const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics" } },
+        sessions: { async verify() { return null; } }, auth: {
+          async login() { return result; }, async register() { return result; }, async verifyAccount() { return result; }, async resetPassword() { return result; },
+        } });
+      const body = action === "verify" ? { code: "123456" } : action === "reset" ? { password } : { phone, password };
+      const response = await createMemberAuthHandler(action, source)(authRequest(action, { ...body, return: shared }));
+      assert.equal(response.status, 200);
+      const next = (await response.json()).next;
+      if (flags.requiresVerification || flags.requiresPasswordChange) {
+        const url = new URL(next, "https://goal-hint.test");
+        assert.equal(url.pathname, "/en/account");
+        assert.equal(url.searchParams.get("view"), flags.requiresVerification ? "verify" : "new-password");
+        assert.equal(url.searchParams.get("return"), shared);
+      } else assert.equal(next, shared);
+    }
+  }
+  for (const administrator of [false, true]) for (const destination of [review, `${review}&action=approve`, "https://other.test"]) {
+    const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } },
+      sessions: { async verify() { return null; } }, auth: { async login() { return { status: "authenticated", token, phone, administrator }; } } });
+    const response = await createMemberAuthHandler("login", source)(authRequest("login", { phone, password, return: destination }));
+    assert.equal((await response.json()).next, administrator ? destination === review ? review : "/admin" : "/en/matches");
+  }
+});
+
 test("HTTP registration, channel selection, verification and reset codes set restricted HttpOnly cookies", async () => {
   const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService });
   const handle = (action, body, token) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
@@ -686,14 +716,14 @@ test("HTTP registration, channel selection, verification and reset codes set res
   assert.equal(registration.status, 200);
   const registrationBody = await registration.json(), verifyPage = new URL(registrationBody.next, "https://goal.test");
   assert.equal(registrationBody.requiresVerification, true); assert.equal(verifyPage.pathname, "/en/account");
-  assert.equal(verifyPage.searchParams.get("view"), "verify"); assert.equal(verifyPage.searchParams.get("return"), "/en");
+  assert.equal(verifyPage.searchParams.get("view"), "verify"); assert.equal(verifyPage.searchParams.get("return"), "/en/matches");
   const pendingToken = responseToken(registration); assert.ok(pendingToken); assert.equal(await f.sessionService.verify(pendingToken), null);
   assert.match(registration.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
   const request = await handle("verification", { channel: "whatsapp" }, pendingToken);
   assert.equal(request.status, 200); assert.equal(request.headers.get("set-cookie"), null);
   assert.ok(!JSON.stringify(await request.json()).includes(f.messages[0].code));
   const verification = await handle("verify", { code: f.messages[0].code, return: verifyPage.searchParams.get("return") }, pendingToken);
-  assert.equal(verification.status, 200); assert.equal((await verification.json()).next, "/en");
+  assert.equal(verification.status, 200); assert.equal((await verification.json()).next, "/en/matches");
   assert.ok(await f.sessionService.verify(responseToken(verification)));
   const forgot = await handle("forgot", { phone, channel: "sms" });
   assert.equal(forgot.status, 200); assert.equal(forgot.headers.get("set-cookie"), null);
@@ -702,7 +732,7 @@ test("HTTP registration, channel selection, verification and reset codes set res
   const resetToken = responseToken(reset); assert.equal(await f.sessionService.verify(resetToken), null);
   assert.match(reset.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax; Max-Age=900/u);
   const completed = await handle("reset", { password: "replacement HTTP password" }, resetToken);
-  assert.equal(completed.status, 200); assert.equal((await completed.json()).next, "/en");
+  assert.equal(completed.status, 200); assert.equal((await completed.json()).next, "/en/matches");
   const completedToken = responseToken(completed);
   assert.ok(completedToken); assert.notEqual(completedToken, resetToken);
   assert.equal((await f.sessionService.verify(completedToken)).phone, phone);
@@ -719,7 +749,7 @@ test("signup completion goes home while keeping pending accounts restricted", as
       const response = await createMemberAuthHandler("register", source)(authRequest("register", { phone, password, ...(returnTo ? { return: returnTo } : {}) }));
       assert.equal(response.status, 200);
       const result = await response.json();
-      assert.equal(result.next, requiresVerification ? "/en/account?view=verify&return=%2Fen" : "/en");
+      assert.equal(result.next, requiresVerification ? "/en/account?view=verify&return=%2Fen%2Fmatches" : "/en/matches");
       assert.equal(result.requiresVerification, requiresVerification ? true : undefined);
       assert.equal(responseToken(response), token);
       assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
@@ -734,7 +764,7 @@ test("successful verification goes home regardless of the supplied return destin
   for (const returnTo of [undefined, "/en", "/en/matches", "/en/slips", "/en/matches/example/home-away", "/en/account",
     "https://evil.test", "//evil.test", "/en?phone=256700000001", "/en/matches/example/%2f", "/en/../admin"]) {
     const response = await createMemberAuthHandler("verify", source)(authRequest("verify", { code: "123456", ...(returnTo ? { return: returnTo } : {}) }, token));
-    assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en");
+    assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en/matches");
     assert.equal(responseToken(response), token);
     assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
   }
@@ -747,7 +777,7 @@ test("successful password reset goes home regardless of the supplied return dest
   for (const returnTo of [undefined, "/en", "/en/matches", "/en/slips", "/en/matches/example/home-away", "/en/account",
     "https://evil.test", "//evil.test", "/en?phone=256700000001", "/en/matches/example/%2f", "/en/../admin"]) {
     const response = await createMemberAuthHandler("reset", source)(authRequest("reset", { password: "new HTTP password", ...(returnTo ? { return: returnTo } : {}) }, token));
-    assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en");
+    assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en/matches");
     assert.equal(responseToken(response), token);
     assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
   }

@@ -5,8 +5,15 @@ import { inspectAppLayout } from "./verify-layout-bounds.mjs";
 export async function verifyAuthenticationForms(page, { origin, widths = [320, 390, 768, 1024, 1440], captureDirectory } = {}) {
   assert.ok(["localhost", "127.0.0.1"].includes(new URL(origin).hostname), "Use the local member fixture");
   const open = async (query) => {
+    // Forced server scenarios must agree with the private header's session read.
+    // Otherwise the production recovery guard correctly rejects the stale HTML.
+    await page.context().clearCookies();
+    const state = new URLSearchParams(query).get("state");
+    const token = state === "active" ? "a" : state === "unverified" ? "v" : state === "password-reset" ? "r" : null;
+    if (token) await page.context().addCookies([{ name: "goal-hint-member", value: token.repeat(43), url: origin }]);
+    if (state === "active") await page.context().addCookies([{ name: "member-fixture-subscription", value: "active", url: origin }]);
     await page.goto(`${origin}/en/account?${query}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    assert.equal(await page.locator('meta[name="description"]').getAttribute("content"), "Isolated member acceptance fixture.");
+    assert.equal(await page.locator('meta[name="description"]').first().getAttribute("content"), "Isolated member acceptance fixture.");
     await page.locator("[data-account-auth], [data-account-sign-in]").waitFor();
     await page.locator('meta[name="color-scheme"]').waitFor({ state: "attached" });
   };

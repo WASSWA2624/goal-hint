@@ -11,16 +11,10 @@ import { AccountFormSupport, type AdminContact } from "./admin-contact";
 import { AccountFormHeader } from "./account-form-header";
 import { LockIcon } from "@/components/ui/icons";
 import { MemberForm } from "./member-controls";
+import { accountRequest } from "./account-request";
 import { AccountCard, AccountCardBody, AccountError, AccountFormColumn, AccountLink, AccountNote, AccountPrimary } from "./account-styles";
 
-/** Private request data stays in the request body and in component memory only. */
-export async function accountRequest<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`/api/account/${path}`, { method: "POST", credentials: "same-origin", cache: "no-store",
-    headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
-  const result = await response.json() as T & { message?: string };
-  if (!response.ok) throw new Error(result.message ?? "Unable to complete this request. Please try again.");
-  return result;
-}
+export { accountRequest } from "./account-request";
 
 export function PasswordInput({ label, name = "password", value, onChange, current = false, hint, disabled = false, placeholder }: {
   label: string; name?: string; value: string; onChange: (value: string) => void; current?: boolean; hint?: string; disabled?: boolean; placeholder?: string;

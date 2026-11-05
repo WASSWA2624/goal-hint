@@ -1,6 +1,7 @@
 import { activeFeedFilterCount, defaultFeedDatePreset, defaultSortDirection, pinnedDateSelection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
+import { homeHref } from "./navigation-paths.ts";
 
 export type DiscoveryPolicy = Readonly<{ deployment: "development" | "staging" | "production"; index: boolean }>;
 export function resolveDiscoveryPolicy(input: { deployment?: string | undefined; runtime?: string | undefined; releaseVerified: boolean }): DiscoveryPolicy {
@@ -48,16 +49,16 @@ export function matchPageIndexable(fixture: { forecast: { markets: readonly unkn
 
 export function websiteStructuredData() {
   return { "@context": "https://schema.org", "@type": "WebSite", name: publicPolicy.name,
-    url: canonicalUrl("/en"), inLanguage: "en" };
+    url: canonicalUrl(homeHref()), inLanguage: "en" };
 }
 
 /** Home-page identity: the WebSite plus the Organization that publishes it, with a crawlable square logo. */
 export function homeStructuredData() {
-  const { "@context": context, ...website } = websiteStructuredData(), organization = `${canonicalUrl("/en")}#organization`;
+  const { "@context": context, ...website } = websiteStructuredData(), home = canonicalUrl(homeHref()), organization = `${home}#organization`;
   return { "@context": context, "@graph": [
-    { "@type": "Organization", "@id": organization, name: publicPolicy.name, url: canonicalUrl("/en"),
+    { "@type": "Organization", "@id": organization, name: publicPolicy.name, url: home,
       logo: canonicalUrl("/brand/goal-hint-app-icon-512.png") },
-    { ...website, "@id": `${canonicalUrl("/en")}#website`, publisher: { "@id": organization } },
+    { ...website, "@id": `${home}#website`, publisher: { "@id": organization } },
   ] };
 }
 

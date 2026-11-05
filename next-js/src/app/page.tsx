@@ -1,6 +1,7 @@
-import { permanentRedirect } from "next/navigation";
-import { homeHref } from "@/domain/navigation";
+import { redirectHomeQuery } from "@/server/seo/home-query";
 
-export default function RootPage() {
-  permanentRedirect(homeHref());
+export default async function RootPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  redirectHomeQuery("en", await searchParams);
 }

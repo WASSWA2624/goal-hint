@@ -15,6 +15,7 @@ const listeners = new Set<() => void>();
 
 export const getMemberSessionSnapshot = (): string | null => phone;
 export const getServerMemberSessionSnapshot = (): null => null;
+export const hasConfirmedMemberSession = (): boolean => confirmedAt !== null;
 export const getAdminSessionSnapshot = (): boolean => administrator;
 export const getServerAdminSessionSnapshot = (): false => false;
 export const getSubscriptionSnapshot = (): SubscriptionSummary | null => subscription;

@@ -90,19 +90,23 @@ def verify(origin, cases, *, staging):
 
     root = anonymous("/")
     assert root.status == 308
-    assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
+    assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en/matches"
     checks += 1
     for query in ["", "?page=2", "?date=2026-10-09&status=finished", "?league=39&league=40"]:
         for host, destination in [(None, origin), ("www.goalhint.com", fixed)]:
             response = anonymous("/" + query, {"host": host} if host else None)
             assert response.status == 308
-            assert urljoin(origin, response.headers.get("location")) == destination + "/en" + query
+            assert urljoin(origin, response.headers.get("location")) == destination + "/en/matches" + query
             checks += 1
     www = anonymous("/en/predictions/2026-10-09?page=2", {"host": "www.goalhint.com"})
     assert www.status == 308
     assert www.headers.get("location") == fixed + "/en/predictions/2026-10-09?page=2"
     checks += 1
-    home = page("/en", "/en", not staging)
+    locale_home = anonymous("/en")
+    assert locale_home.status == 308
+    assert urljoin(origin, locale_home.headers.get("location")) == origin + "/en/matches"
+    checks += 1
+    home = page("/en/best-slips", "/en/best-slips", not staging)
     for path in ["/en", "/en/predictions/2026-10-09?page=2"]:
         separator = "&" if "?" in path else "?"
         shared = anonymous(path + separator + "utm_source=search&gclid=click")
@@ -121,11 +125,6 @@ def verify(origin, cases, *, staging):
         assert [day - days[0] for day in days] == [timedelta(0), timedelta(days=1), timedelta(days=2)], links
     else:
         no_match(r'id="browse-predictions"', home)
-    structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', home).group(1))
-    graph = {node["@type"]: node for node in structured["@graph"]}
-    assert graph["WebSite"]["url"] == fixed + "/en" and graph["Organization"]["url"] == fixed + "/en"
-    assert graph["WebSite"]["publisher"] == {"@id": graph["Organization"]["@id"]}
-    checks += 1
     archive = "/en/predictions/2026-10-09"
     first = page(archive, archive, not staging)
     second = page(archive + "?page=2", archive + "?page=2", not staging)
@@ -134,6 +133,11 @@ def verify(origin, cases, *, staging):
     match("Page 2", second)
     checks += 1
     feed = page("/en/matches", "/en/matches", not staging)
+    structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', feed).group(1))
+    graph = {node["@type"]: node for node in structured["@graph"]}
+    assert graph["WebSite"]["url"] == fixed + "/en/matches" and graph["Organization"]["url"] == fixed + "/en/matches"
+    assert graph["WebSite"]["publisher"] == {"@id": graph["Organization"]["@id"]}
+    checks += 1
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", feed)
     match(r'href="/en/matches\?page=2"', visible_html(feed, comments=False))
     for query in ["page=2", "q=Discovery+Home+1", "when=next-7-days", "page=10000"]:
@@ -206,7 +210,7 @@ def verify(origin, cases, *, staging):
         match(r"Sitemap: https://goalhint\.com/sitemap-index\.xml", robots)
         index = locations(index_response.text)
         assert index == [fixed + "/sitemap.xml", fixed + "/sitemap-matches-0.xml", fixed + "/sitemap-archive-0.xml"]
-        assert locations(sitemap) == [fixed + "/en", fixed + "/en/matches", fixed + "/en/help", fixed + "/en/contact"]
+        assert locations(sitemap) == [fixed + "/en/matches", fixed + "/en/best-slips", fixed + "/en/help", fixed + "/en/contact"]
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
         assert locations(dates) == [fixed + archive]
         for row in cases["matches"]:

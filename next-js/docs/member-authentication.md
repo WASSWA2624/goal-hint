@@ -1,10 +1,14 @@
 # Member account authentication
 
-Registration requires a supported phone number and a password of 8–128 characters. Numbers are canonicalized with their country code; passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. Registration creates a restricted cookie and a single trial access period using the duration in Admin Settings; zero days disables new trials. The period starts at registration. The signup notice shows its expiry and guides the member to phone verification. Password login for an unverified number resumes verification. Pending cookies cannot access protected member content, payment submissions, profile changes, or administrator pages.
+Registration requires a supported phone number and a password of 8–128 characters. Numbers are canonicalized with their country code; passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. Registration creates a restricted cookie; password login for an unverified number resumes verification. Pending cookies cannot access protected member content, payment submissions, profile changes, or administrator pages. Verified members can explicitly start one trial for the duration configured in Admin Settings; registration and login do not start or extend it.
 
 Phone fields throughout the app share a country selector with flags and a separate national-number input. Countries can be searched by name, abbreviation or calling code; requests still submit the canonical full number, including the selected country code.
 
-Verification shows one step at a time: choose SMS or WhatsApp, then enter the delivered six-digit code. The code step shows only the registered number's last three digits. Contact support and Back to log in stay visible side by side on small screens. Existing-code entry and returning to delivery selection support resuming or requesting another code. Completing signup, member login, account verification or password reset redirects to the home page (`/en`), including flows begun from protected content or Subscribe. Pending verification and password-change sessions finish their required step before reaching home. Signed-in profile changes retain their existing destinations.
+Verification shows one step at a time: choose SMS or WhatsApp, then enter the delivered six-digit code. The code step shows only the registered number's last three digits. Contact support and Back to log in stay visible side by side on small screens. Existing-code entry and returning to delivery selection support resuming or requesting another code. Completing signup, member login, account verification or password reset redirects to Matches (`/en/matches`), including ordinary flows begun from protected content or Subscribe; canonical shared-slip journeys return to that slip. Pending verification and password-change sessions finish their required step before reaching home. Signed-in profile changes retain their existing destinations.
+
+Login and Register use the canonical Account URLs. A signed-out Subscribe visit redirects to Login; verification-only and reset-only sessions resume their required Account form. Pricing and subscription availability do not decide whether someone is signed in. Failed session reads show the existing unavailable message instead of treating the visitor as signed out. An authenticated member opening Login/Register goes to Matches (or their shared slip); the plain Account URL still opens their account workspace. Verification's Back to login clears the restricted session and returns to Login, while ordinary logout returns to Matches.
+
+Account writes have a bounded request deadline, retain inline server errors, and handle non-JSON proxy failures without navigating to a malformed URL. They are never automatically retried. Identity changes observed on tab focus or page restoration refresh private page content as well as the header.
 
 ## Password changes and recovery
 
@@ -45,7 +49,7 @@ Production and development delivery setup, country/channel coverage and server-o
 
 ## Administrator access
 
-Everyone signs in at `/en/account?view=login`. The server determines the role after checking the phone number and password: administrators go to `/admin`; ordinary users go to `/en`. Verification and password-change requirements finish before either destination. A signed-in administrator visiting an account page goes directly to the dashboard. Unauthenticated `/admin/*` and `/analytics` pages redirect to the shared form.
+Everyone signs in at `/en/account?view=login`. The server determines the role after checking the phone number and password: administrators go to Overview at `/admin`; ordinary users go to Matches at `/en/matches`. Verification and password-change requirements finish before either destination. A signed-in administrator visiting an account page goes directly to the dashboard. Validated payment-review links retain their selected payment destination. Unauthenticated `/admin/*` and `/analytics` pages redirect to the shared form.
 
 Configure server-only `GOAL_HINT_ADMIN_PHONES` as a JSON array of canonical numbers, and `GOAL_HINT_ADMIN_PASSWORD_HASH` (preferred) or `GOAL_HINT_ADMIN_PASSWORD`. Generate a scrypt hash with `npm run analytics:hash-password`. `GOAL_HINT_ANALYTICS_SECRET` must be a strong private secret in production. Configured admin numbers authenticate with the environment credential. Public registration and member recovery cannot provision/reset an administrator. Removing a configured number or rotating its credential withdraws existing admin access.
 
@@ -67,7 +71,7 @@ All writes require same-origin requests. Responses are private and not cached; c
 | `POST /api/account/password` | `{password}` with authenticated member cookie | Fresh current-device cookie; all previous sessions revoked |
 | `POST /api/account/phone` | `{phone,currentPassword}` | Restricted cookie for a changed phone |
 | `GET /api/account/session` | — | Verified phone and role, plus a subscription summary when available. An unavailable summary is `null`; a revoked or expired session has no verified phone. |
-| `POST /api/account/sign-out` | — | Clear cookie and end session |
+| `POST /api/account/sign-out` | Optional fixed `?destination=login` for leaving verification | Clear cookies and end session; Matches by default, Login for that fixed intent |
 
 `/api/account/sign-in` remains a password-login alias.
 

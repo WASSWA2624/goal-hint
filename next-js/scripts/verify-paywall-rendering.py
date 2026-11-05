@@ -167,7 +167,7 @@ def main():
                     if not signed_in:
                         assert parse_qs(destination.query).get("view") == ["login"], (viewer, "Slip Builder guests open login")
                 checks += 1
-            for path, extra in [("/en", {}), ("/en?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:
+            for path, extra in [("/en/best-slips", {}), ("/en/best-slips?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:
                 response = request(server.origin, path, headers={**headers, **extra})
                 assert response.status == 200, (viewer, path, response.status)
                 assert "no-store" in response.headers.get("Cache-Control", ""), path

@@ -1,13 +1,14 @@
 import "server-only";
 
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { SubscribeFlow, SubscribeIntro, SubscribeLayout } from "@/components/members/subscribe-controls";
 import { ApprovalRefresh } from "@/components/members/payment-status";
 import { SubscriptionSummaryCard } from "@/components/members/subscription-summary-card";
 import { FreeTrialControl } from "@/components/members/free-trial-control";
 import { ButtonLink } from "@/components/ui/controls";
-import { memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
+import { memberAuthPath, memberReturnPath, sharedSlipReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { SubscriptionStatus } from "@/domain/subscription-summary";
@@ -17,6 +18,7 @@ import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { memberCookieName, memberTokenHash } from "@/server/members/member-sessions";
 import { createPlansService } from "@/server/members/plans";
+import { readMemberPageSession } from "@/server/members/member-page-session";
 import { PublicShell } from "./public-shell";
 
 async function readPlans() {
@@ -29,13 +31,22 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
   return async function SubscribeRoute({ locale, searchParams }: {
     locale: string; searchParams: Promise<Record<string, string | string[] | undefined>>;
   }) {
-    const m = createMessages(locale), resolved = await services(), settings = resolved.settings.settings;
+    const m = createMessages(locale), resolved = await services().catch(() => null);
+    if (!resolved) return <PublicShell locale={locale} showAccount><SubscribeLayout>
+      <SubscribeIntro locale={locale} /><MemberNavigationRecovery /><p role="status">{m.text("account.unavailable")}</p>
+    </SubscribeLayout></PublicShell>;
+    const settings = resolved.settings.settings;
     const parameters = await searchParams, returnTo = memberReturnPath(parameters.return);
     const userAgent = (await headers()).get("user-agent") ?? "";
-    let member = null, view = null, subscription: SubscriptionStatus | null = null, offers: readonly SubscriptionPlanView[] = [], unavailable = !settings || !resolved.sessions;
-    if (resolved.sessions) {
+    const session = await readMemberPageSession(resolved, (await cookies()).get(memberCookieName(resolved.config.production))?.value);
+    // Authentication always has its own URL, before pricing or checkout reads can fail.
+    if (session.kind === "guest") redirect(memberAuthPath("login", returnTo));
+    if (session.kind === "verification") redirect(memberAuthPath("verify", returnTo));
+    if (session.kind === "reset") redirect(memberAuthPath("new-password", returnTo));
+    const member = session.kind === "member" ? session.member : null;
+    let view = null, subscription: SubscriptionStatus | null = null, offers: readonly SubscriptionPlanView[] = [], unavailable = !settings || session.kind === "unavailable";
+    if (member) {
       try {
-        member = await resolved.sessions.verify((await cookies()).get(memberCookieName(resolved.config.production))?.value);
         const subscriptionMember = member && !member.blocked && !member.administrator ? member : null;
         const salesOpen = settings && settings.paywallMode !== "off" && !(member && !member.blocked && member.administrator);
         // These stored reads are independent once identity is verified. Settle all three before
@@ -64,7 +75,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const trialNotice = trial && parameters.add !== "credit"
       ? <FreeTrialControl key={member?.accountId} locale={locale} trial={trial} days={settings?.trialDays ?? 0} /> : null;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
-      <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
+      <SubscribeIntro locale={locale} /><MemberNavigationRecovery {...(member ? { expectedPhone: member.blocked ? null : member.phone, expectedAdministrator: !!administrator } : {})} />
       {sharedSlipReturnPath(returnTo) && <div><ButtonLink href={returnTo!} prefetch={false}>{m.text("slipShare.return")}</ButtonLink></div>}<ApprovalRefresh waiting={false} refreshAt={trial?.state === "active" ? trial.endsAt : activeUntil} />
       {!checkoutAvailable && trialNotice}
       {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href={adminLandingPath} prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>

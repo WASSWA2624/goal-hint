@@ -15,7 +15,7 @@ import { createDiscoveryProxy } from '../src/server/seo/proxy.ts';
 registerHooks({ resolve(specifier, context, next) {
   return next(specifier === 'next/navigation' ? 'next/dist/client/components/navigation.react-server.js' : specifier, context);
 } });
-const { homeBrowseLinks, redirectLegacyFeedQuery } = await import('../src/server/seo/home-query.ts');
+const { homeBrowseLinks, redirectHomeQuery } = await import('../src/server/seo/home-query.ts');
 
 const today = parseReportingDate('2026-10-09');
 const approved = { deployment: 'production', index: true }, staging = { deployment: 'staging', index: false };
@@ -50,7 +50,7 @@ test('missing pages have their own noindex title and social tags and no canonica
   assert.match(source('app/not-found.tsx'), /^export const metadata = notFoundMetadata\(\);\r?$/mu);
 });
 
-test('the home title carries the brand the WebSite structured data names, with a separate factual description', () => {
+test('the Best Slips title carries the site brand and its own canonical collection URL', () => {
   const site = homeStructuredData()['@graph'].find(node => node['@type'] === 'WebSite').name;
   const home = bestSlipsMetadata('en', {}, () => approved);
   assert.equal(home.title, 'Best Slips — Daily football prediction slips | Goal Hint');
@@ -59,12 +59,12 @@ test('the home title carries the brand the WebSite structured data names, with a
   assert.equal(home.description, messages.text('bestSlips.metadataDescription'));
   assert.notEqual(home.description, messages.text('bestSlips.description'), 'The visible lede stays separate.');
   assert.match(home.description, /football prediction/u); assert.match(home.description, /results/u);
-  assert.equal(home.alternates.canonical, 'https://goalhint.com/en'); assert.equal(home.robots.index, true);
+  assert.equal(home.alternates.canonical, 'https://goalhint.com/en/best-slips'); assert.equal(home.robots.index, true);
   assert.equal(bestSlipsMetadata('en', {}, () => staging).robots.index, false);
   assert.match(source('app/_components/best-slips-route.tsx'), /return bestSlipsMetadata\(locale, query, policy\);/u);
 });
 
-test('an unavailable home links to nearby dated archives, help and results; available slips render nothing extra', () => {
+test('unavailable Best Slips links to nearby dated archives, help and results; available slips render nothing extra', () => {
   const day = parseReportingDate('2026-10-26');
   for (const state of ['odds-unavailable', 'model-unavailable', 'ready']) {
     assert.deepEqual(homeBrowseLinks({ day, state, slips: [] }, 'en'), [['/en/predictions/2026-10-25', 'feed.date.yesterday'],
@@ -80,21 +80,23 @@ test('an unavailable home links to nearby dated archives, help and results; avai
   assert.match(source('app/_components/best-slips-route.tsx'), /const browse = homeBrowseLinks\(result, locale\);[\s\S]*\{browse\.length > 0 && </u);
 });
 
-test('home query variants keep the canonical but are noindex; only feed keys permanently redirect to the feed', () => {
+test('Best Slips query variants keep their canonical but are noindex', () => {
   for (const variant of [{ ref: 'whatsapp' }, { igshid: 'x' }, { page: '2' }]) {
     const metadata = bestSlipsMetadata('en', variant, () => approved);
     assert.equal(metadata.robots.index, false, JSON.stringify(variant));
-    assert.equal(metadata.alternates.canonical, 'https://goalhint.com/en');
+    assert.equal(metadata.alternates.canonical, 'https://goalhint.com/en/best-slips');
   }
-  assert.equal(digest(() => redirectLegacyFeedQuery('en', { page: '2', league: ['a', 'b'] })), 'NEXT_REDIRECT;replace;/en/matches?page=2&league=a&league=b;308;');
+});
+
+test('home entries permanently redirect to Matches while preserving complete bookmarked and native form queries', () => {
+  assert.equal(digest(() => redirectHomeQuery('en', { page: '2', league: ['a', 'b'] })), 'NEXT_REDIRECT;replace;/en/matches?page=2&league=a&league=b;308;');
   // Mixed queries keep every parameter, so the feed's strict validation still sees what was asked for.
-  assert.equal(digest(() => redirectLegacyFeedQuery('en', { q: 'Home Club', ref: 'x' })), 'NEXT_REDIRECT;replace;/en/matches?q=Home+Club&ref=x;308;');
-  for (const key of feedQueryKeys) assert.match(digest(() => redirectLegacyFeedQuery('en', { [key]: '1' })), /^NEXT_REDIRECT;replace;\/en\/matches\?.+;308;$/u, key);
-  for (const variant of [{}, { ref: 'whatsapp' }, { igshid: 'x' }, { Page: '2' }, { empty: undefined }]) {
-    assert.equal(digest(() => redirectLegacyFeedQuery('en', variant)), null, JSON.stringify(variant));
+  assert.equal(digest(() => redirectHomeQuery('en', { q: 'Home Club', ref: 'x' })), 'NEXT_REDIRECT;replace;/en/matches?q=Home+Club&ref=x;308;');
+  assert.equal(digest(() => redirectHomeQuery('en', { period: 'today' })), 'NEXT_REDIRECT;replace;/en/matches?period=today;308;');
+  for (const key of feedQueryKeys) assert.match(digest(() => redirectHomeQuery('en', { [key]: '1' })), /^NEXT_REDIRECT;replace;\/en\/matches\?.+;308;$/u, key);
+  for (const locale of ['en', 'fr', 'en/../account']) for (const variant of [{}, { empty: undefined }]) {
+    assert.equal(digest(() => redirectHomeQuery(locale, variant)), 'NEXT_REDIRECT;replace;/en/matches;308;', JSON.stringify(variant));
   }
-  const route = source('app/_components/best-slips-route.tsx');
-  assert.doesNotMatch(route, /\bredirect\(/u, 'The legacy feed move is never a temporary redirect.');
 });
 
 test('share and click identifiers without an analytics network 308 to the clean URL with no fragment', () => {

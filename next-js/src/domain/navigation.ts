@@ -1,9 +1,9 @@
 import { addReportingDays, getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
 import { feedDefaults, parseFeedStatus, type FeedStatus } from "./feed-query.ts";
-import { homeHref, type InformationPage } from "./navigation-paths.ts";
+import { localePath, type InformationPage } from "./navigation-paths.ts";
 
 export { feedDefaults } from "./feed-query.ts";
-export { homeHref, matchesHref, performanceHref, informationHref, informationPages, normalizeNavigationLocation, type InformationPage } from "./navigation-paths.ts";
+export { localePath, homeHref, matchesHref, bestSlipsHref, performanceHref, informationHref, informationPages, normalizeNavigationLocation, type InformationPage } from "./navigation-paths.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
 export type AppSection = FeedEntry | "live" | "slips" | "best-slips" | "performance";
@@ -20,12 +20,12 @@ export function parseFeedView(date: unknown, status?: string | string[]): FeedVi
 }
 
 export function slipsHref(locale?: string): string {
-  return `${homeHref(locale)}/slips`;
+  return `${localePath(locale)}/slips`;
 }
 
 export function feedHref(view: FeedView, locale?: string): string {
   const parsed = parseFeedView(view.date, view.status);
-  const path = `${homeHref(locale)}/predictions/${parsed.date}`;
+  const path = `${localePath(locale)}/predictions/${parsed.date}`;
   return parsed.status === feedDefaults.today.status ? path : `${path}?status=${parsed.status}`;
 }
 
@@ -39,7 +39,7 @@ export function matchHref(fixtureId: string, slug: string, locale?: string): str
   if (!/^[a-zA-Z0-9_-]+$/.test(fixtureId) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     throw new RangeError("Match links require a safe fixture ID and canonical slug.");
   }
-  return `${homeHref(locale)}/matches/${fixtureId}/${slug}`;
+  return `${localePath(locale)}/matches/${fixtureId}/${slug}`;
 }
 
 /** The feed stores its current URL here so the match page can return to the same filters. */

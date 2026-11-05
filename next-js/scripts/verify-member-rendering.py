@@ -123,13 +123,13 @@ def verify_synthetic_api(origin):
         status, _, _ = post_fixture(origin, "forgot", {"phone": phone, "channel": channel})
         assert status == expected, (phone, channel, status)
     status, logged_in, _ = post_fixture(origin, "login", {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"})
-    assert status == 200 and logged_in["next"] == "/en"
+    assert status == 200 and logged_in["next"] == "/en/matches"
     status, registered, headers = post_fixture(origin, "register", {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"})
-    assert status == 200 and registered["next"] == "/en/account?view=verify&return=%2Fen"
+    assert status == 200 and registered["next"] == "/en/account?view=verify&return=%2Fen%2Fmatches"
     assert "HttpOnly" in headers.get("Set-Cookie", "")
     status, verified, _ = post_fixture(origin, "verify", {"code": "123456", "return": "/en"})
-    assert status == 200 and verified["next"] == "/en"
-    match("data-fixture-home", request(origin, verified["next"]).text)
+    assert status == 200 and verified["next"] == "/en/matches"
+    match("data-fixture-feed", request(origin, verified["next"]).text)
     status, reset, headers = post_fixture(origin, "reset-code", {"phone": "256700000101", "code": "123456"})
     assert status == 200 and reset["next"] == "/en/account?view=new-password"
     reset_page = visible_html(request(origin, reset["next"], headers={"Cookie": headers["Set-Cookie"].split(";", 1)[0]}).text)
@@ -165,16 +165,16 @@ def unified_login(origin):
         assert session["administrator"] is administrator
     for view in ["login", "register", "forgot"]:
         existing = request(origin, "/en/account?view=" + view, headers={"Cookie": "goal-hint-member=" + "d" * 43})
-        assert existing.status == 307 and existing.headers.get("Location") == "/admin/payments", view
+        assert existing.status == 307 and existing.headers.get("Location") == "/admin", view
     for scenario, expected in [("denied", 401), ("missing", 401), ("blocked", 401), ("rate-limited", 429), ("unavailable", 503)]:
         status, reply, headers = post_fixture(origin, "login", {"phone": admin_phone, "password": admin_password}, scenario)
         assert status == expected and "next" not in reply and not headers.get("Set-Cookie"), (scenario, status, reply)
-    for scenario, next_path in [("pending-verification", "/en/account?view=verify&return=%2Fen"), ("password-reset", "/en/account?view=new-password&return=%2Fen")]:
+    for scenario, next_path in [("pending-verification", "/en/account?view=verify&return=%2Fen%2Fmatches"), ("password-reset", "/en/account?view=new-password&return=%2Fen%2Fmatches")]:
         status, reply, headers = post_fixture(origin, "login", {"phone": "256700000101", "password": "Synthetic password"}, scenario)
         assert status == 200 and reply["next"] == next_path
         assert not any("analytics-exclude=1" in value for value in headers.get_all("Set-Cookie"))
     status, reply, headers = post_fixture(origin, "login", {"phone": admin_phone, "password": admin_password, "return": "https://outside.example"})
-    assert status == 200 and reply["next"] == "/admin/payments"
+    assert status == 200 and reply["next"] == "/admin"
     cookies = headers.get_all("Set-Cookie")
     assert any("goal-hint-analytics-exclude=1;" in value for value in cookies)
     assert any("goal-hint-analytics=;" in value and "Max-Age=0" in value for value in cookies)
@@ -335,6 +335,40 @@ def subscriber_dashboard(origin):
     print("Account workspace: all sections, concise facts, renewal/payment paths, bounded activity and private guards pass.", flush=True)
 
 
+def authentication_routes(origin):
+    home = request(origin, "/en")
+    assert home.status == 307 and home.headers.get("Location") == "/en/matches"
+    for state in ["signed-out", "off", "unavailable"]:
+        response = request(origin, f"/en/subscribe?state={state}&return=%2Fen%2Fbest-slips")
+        assert response.status == 307 and response.headers.get("Location") == "/en/account?view=login&return=%2Fen%2Fbest-slips", state
+    for state, view in [("unverified", "verify"), ("password-reset", "new-password")]:
+        response = request(origin, f"/en/subscribe?state={state}")
+        assert response.status == 307 and response.headers.get("Location") == f"/en/account?view={view}"
+    for state in ["session-unavailable", "reset-unavailable", "verification-unavailable"]:
+        for path in ["account", "subscribe"]:
+            response = request(origin, f"/en/{path}?state={state}")
+            assert response.status == 200
+            html = visible_html(response.text)
+            match("Member access is unavailable", html)
+            no_match("data-account-auth", html)
+    for view in ["login", "register", "verify", "new-password"]:
+        response = request(origin, f"/en/account?state=active&view={view}")
+        assert response.status == 307 and response.headers.get("Location") == "/en/matches"
+    pending = visible_html(request(origin, "/en/account?state=unverified&view=forgot").text)
+    match('data-account-verification="account"', pending)
+    no_match('action="/api/account/forgot"', pending)
+    outgoing = Request(origin + "/api/account/sign-out?destination=login", data=b"", method="POST",
+        headers={"Cookie": "goal-hint-member=" + "v" * 43, "Sec-Fetch-Site": "same-origin"})
+    try:
+        response = build_opener(NoRedirect()).open(outgoing, timeout=20)
+    except HTTPError as error:
+        response = error
+    with response:
+        assert response.status == 303 and response.headers["Location"] == "/en/account?view=login"
+        assert "Max-Age=0" in response.headers["Set-Cookie"]
+    print("Authentication routing: canonical login, restricted-session priority, explicit return to login, Matches home and failed-session reads pass.", flush=True)
+
+
 def main():
     options = parse_args("member account", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
@@ -349,10 +383,10 @@ def main():
         # build from repeating that whole-source check on memory-constrained hosts.
         config = directory / "next.config.mjs"
         config.write_text(config.read_text().replace("agentRules: false,", "agentRules: false, typescript: { ignoreBuildErrors: true },"))
-        build_fixture(directory, env=env, timeout=240)
+        build_fixture(directory, env=env, timeout=600)
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Login"), ("signed-out", "Phone number"),
-                ("signed-in", "256 700 000 101"), ("unavailable", "Member access is unavailable."),
+                ("signed-in", "256 700 000 101"), ("unavailable", "Login"),
                 ("active", "Time left"), ("ended", "Expired"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
             assert response.status == 200
@@ -393,7 +427,7 @@ def main():
         no_match(r'Use 8–128 characters|By logging in|You can stay logged in on two devices', register_html)
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
-        for state in ["signed-out", "unverified"]:
+        for state in ["signed-out"]:
             forgot = visible_html(request(server.origin, f"/en/account?state={state}&view=forgot&return=%2Fen%2Fmatches").text)
             delivery_step(forgot)
             for text in ["Reset password", "Registered number", "SMS", "WhatsApp"]:
@@ -410,7 +444,7 @@ def main():
             match(text, verify)
         match(r'action="/api/account/verification"', verify)
         no_match(r'action="/api/account/verify"', verify)
-        match(r'action="/api/account/sign-out"', verify)
+        match(r'action="/api/account/sign-out\?destination=login"', verify)
         no_match(r'value="[0-9]{6}"', verify)
         sms_only = visible_html(request(server.origin, "/en/account?state=sms-only").text)
         default_sms(sms_only)
@@ -435,6 +469,7 @@ def main():
         unified_login(server.origin)
         subscription_discovery(server.origin)
         subscriber_dashboard(server.origin)
+        authentication_routes(server.origin)
         print("Member HTML and synthetic APIs: private subscription status, visible expiry and renewal summaries, shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
         if options.serve:
             server.serve()

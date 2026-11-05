@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/controls";
 import { Surface } from "@/components/ui/layout";
 import { resetReviewAlerts } from "@/components/admin/payment-alert-sound";
 import { nativePaymentAlerts } from "@/domain/native-payment-alerts";
-import { getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
+import { getAdminSessionSnapshot, getMemberSessionSnapshot, getSubscriptionSnapshot, hasConfirmedMemberSession, refreshMemberSession, subscribeMemberSession } from "./member-session";
 import { clearProtectedDrafts } from "./draft-storage";
 
 /** Compact information-page treatment with a readable single column and phone-sized actions. */
@@ -24,17 +24,28 @@ export const MemberForm = styled.form`
 `;
 
 /** A restored page must recheck the server session, including after sign-out or a device eviction. */
-export function MemberNavigationRecovery() {
+export function MemberNavigationRecovery({ expectedPhone, expectedAdministrator }: { expectedPhone?: string | null; expectedAdministrator?: boolean } = {}) {
   const router = useRouter();
   useEffect(() => {
-    let previous = getSubscriptionSnapshot();
-    return subscribeMemberSession(() => {
-      const current = getSubscriptionSnapshot();
-      // Approval or expiry changes the gated content too; initial hydration needs no extra request.
-      if (previous && current && previous.activeUntil !== current.activeUntil) router.refresh();
-      previous = current;
-    });
-  }, [router]);
+    let previous = getSubscriptionSnapshot(), previousPhone = getMemberSessionSnapshot(), confirmed = hasConfirmedMemberSession();
+    let previousAdmin = getAdminSessionSnapshot(), initial = true, active = true;
+    const reconcile = () => {
+      if (!active || !hasConfirmedMemberSession()) return;
+      const current = getSubscriptionSnapshot(), currentPhone = getMemberSessionSnapshot();
+      const currentAdmin = getAdminSessionSnapshot();
+      // Revoke stale private content after another tab signs out or this session is evicted.
+      // Also cover a cookie change between the server render and the first browser identity read.
+      const initialMismatch = initial && (expectedPhone !== undefined && expectedPhone !== currentPhone
+        || expectedAdministrator !== undefined && expectedAdministrator !== currentAdmin);
+      if (initialMismatch || confirmed && (previousPhone !== currentPhone || previousAdmin !== currentAdmin || previous?.activeUntil !== current?.activeUntil)) router.refresh();
+      previous = current; previousPhone = currentPhone; previousAdmin = currentAdmin; confirmed = hasConfirmedMemberSession();
+      initial = false;
+    };
+    const unsubscribe = subscribeMemberSession(reconcile);
+    // The session store suppresses unchanged snapshots, so reconcile the initial read explicitly too.
+    void refreshMemberSession().then(reconcile);
+    return () => { active = false; unsubscribe(); };
+  }, [router, expectedPhone, expectedAdministrator]);
   useEffect(() => {
     const restore = (event: PageTransitionEvent) => { if (event.persisted) location.reload(); };
     window.addEventListener("pageshow", restore);
@@ -44,7 +55,7 @@ export function MemberNavigationRecovery() {
 }
 
 export function MemberSignOut({ children, logoutAction = "/api/account/sign-out", ...props }: ComponentProps<typeof Button> & {
-  logoutAction?: "/api/account/sign-out" | "/api/admin/logout";
+  logoutAction?: "/api/account/sign-out" | "/api/account/sign-out?destination=login" | "/api/admin/logout";
 }) {
   return <form method="post" action={logoutAction} onSubmit={event => {
     resetReviewAlerts();

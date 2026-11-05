@@ -1,5 +1,9 @@
-import { createBestSlipsRoute } from "@/app/_components/best-slips-route";
+import { redirectHomeQuery } from "@/server/seo/home-query";
 
-const route = createBestSlipsRoute();
-export const generateMetadata = route.generateMetadata;
-export default route.Page;
+export default async function HomePage({ params, searchParams }: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ locale }, query] = await Promise.all([params, searchParams]);
+  redirectHomeQuery(locale, query);
+}

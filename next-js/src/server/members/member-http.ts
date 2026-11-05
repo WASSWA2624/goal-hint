@@ -3,7 +3,7 @@ import "server-only";
 import { createPayments, type Payments } from "./payments.ts";
 import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
-import { signedOutPath } from "../../domain/member-navigation.ts";
+import { memberLoginPath, signedOutPath } from "../../domain/member-navigation.ts";
 import { cookie, isSameOrigin, json, privateHeaders, readCookie, redirect } from "../http/private-http.ts";
 import { createMemberSessions, memberCookieName, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
@@ -107,7 +107,9 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
     // Preserve an explicit anonymous choice in demo mode, where the first cookie-free
     // visit otherwise selects the seeded member. A normal login replaces this cookie.
     const demo = isDevelopmentDemo();
-    const next = signedOutPath, cleared = [cookie(config, name, demo ? "signed-out" : "", demo ? 34_560_000 : 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
+    // Abandoning a restricted account flow has an explicit fixed destination, never an arbitrary return URL.
+    const next = new URL(request.url).searchParams.get("destination") === "login" ? memberLoginPath : signedOutPath;
+    const cleared = [cookie(config, name, demo ? "signed-out" : "", demo ? 34_560_000 : 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
     const response = wantsJson(request) ? json({ next, phone: null }) : redirect(next);
     for (const value of cleared) response.headers.append("Set-Cookie", value);
     response.headers.set("Clear-Site-Data", '"cache"');

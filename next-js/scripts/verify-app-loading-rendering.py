@@ -57,7 +57,7 @@ def main():
             assert text in visible_html(early), text
         assert 'aria-busy="true"' in early
         assert request(server.origin, "/en/matches?page=0").status == 404
-        status, home = stream(server.origin, "/en")
+        status, home = stream(server.origin, "/en/best-slips")
         assert status == 200
         home_early = next(html for at, html in home if at < 1.3 and 'data-best-slips-loading' in html)
         assert 'data-slip-result="won"' in home_early and 'data-performance-period' in home_early

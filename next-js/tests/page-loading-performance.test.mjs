@@ -55,11 +55,13 @@ test('subscription, plans and payment reads start together after verified identi
 });
 
 test('subscription reads retain signed-out, blocked, closed and administrator guards', async () => {
-  for (const [identity, mode, expected] of [[null, 'test', ['plans']], [{ ...member, blocked: true }, 'test', ['plans']],
+  for (const [identity, mode, expected] of [[null, 'test', []], [{ ...member, blocked: true }, 'test', ['plans']],
     [member, 'off', ['subscription']], [{ ...member, administrator: true }, 'test', []]]) {
     const started = [];
     const read = (name, value) => async () => { started.push(name); return value; };
-    await route({ identity, mode, status: read('subscription', subscription), offers: read('plans', plans), view: read('payments', payment) })(props);
+    const rendering = route({ identity, mode, status: read('subscription', subscription), offers: read('plans', plans), view: read('payments', payment) })(props);
+    if (identity) await rendering;
+    else await assert.rejects(rendering, error => error.digest === 'NEXT_REDIRECT;replace;/en/account?view=login;307;');
     assert.deepEqual(started, expected);
   }
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getReportingDate, parseReportingDate, parseUtcInstant } from "../src/domain/calendar.ts";
 import {
-  feedHref, getFeedEntry, homeHref, informationHref, informationPages, matchHref, normalizeNavigationLocation, parseFeedView, slipsHref,
+  bestSlipsHref, feedHref, getFeedEntry, homeHref, informationHref, informationPages, localePath, matchHref, matchesHref, normalizeNavigationLocation, parseFeedView, performanceHref, slipsHref,
 } from "../src/domain/navigation.ts";
 import { getLocaleRedirect, isSupportedLocale, resolveLocale } from "../src/i18n/locales.ts";
 import { createMessages } from "../src/i18n/messages.ts";
@@ -12,11 +12,11 @@ import { dashboardDestination, navigationDestinations } from "../src/components/
 test("regular and admin headers share complete destinations, with Dashboard added for administrators", () => {
   const date = parseReportingDate("2026-10-25"), destinations = navigationDestinations(date, "en");
   assert.deepEqual(destinations.map(item => item.key), ["best-slips", "today", "slips", "performance", "help", "privacy", "terms", "contact", "invite-friends", "download"]);
-  assert.deepEqual(destinations.map(item => item.href), ["/en", "/en/matches", "/en/slips", "/en/performance", "/en/help", "/en/privacy", "/en/terms", "/en/contact", "/en/account?section=referrals", "/en/download"]);
+  assert.deepEqual(destinations.map(item => item.href), ["/en/best-slips", "/en/matches", "/en/slips", "/en/performance", "/en/help", "/en/privacy", "/en/terms", "/en/contact", "/en/account?section=referrals", "/en/download"]);
   assert.equal(destinations.at(-1).label, "Download app");
   const ownerDestinations = [...destinations, dashboardDestination("Dashboard")];
   assert.deepEqual(ownerDestinations.slice(0, -1), destinations);
-  assert.deepEqual(ownerDestinations.at(-1), { key: "dashboard", href: "/admin/payments", label: "Dashboard", tab: "Dashboard", icon: "dashboard", tone: "blue" });
+  assert.deepEqual(ownerDestinations.at(-1), { key: "dashboard", href: "/admin", label: "Dashboard", tab: "Dashboard", icon: "dashboard", tone: "blue" });
   const zoned = navigationDestinations(date, "en", "Africa/Kampala");
   assert.ok(zoned.find(item => item.key === "today").href.includes("tz=Africa%2FKampala"));
 });
@@ -81,7 +81,11 @@ test("English is the only published locale and all other message/link locales fa
   assert.equal(isSupportedLocale("en"), true);
   for (const locale of [undefined, "fr", "en-US", "EN", "__proto__", "en/../fr"]) {
     assert.equal(resolveLocale(locale), "en");
-    assert.equal(homeHref(locale), "/en");
+    assert.equal(localePath(locale), "/en");
+    assert.equal(homeHref(locale), "/en/matches");
+    assert.equal(matchesHref(locale), homeHref(locale));
+    assert.equal(bestSlipsHref(locale), "/en/best-slips");
+    assert.equal(performanceHref(locale), "/en/performance");
     assert.equal(slipsHref(locale), "/en/slips");
     assert.equal(createMessages(locale).text("navigation.today"), "Today");
   }

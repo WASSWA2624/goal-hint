@@ -10,18 +10,26 @@ export function normalizeNavigationLocation(location?: NavigationLocation): Navi
   return location === "live" || location === "results" ? "today" : location;
 }
 
-export function homeHref(locale?: string): string {
+export function localePath(locale?: string): string {
   return `/${resolveLocale(locale)}`;
 }
 
 export function matchesHref(locale?: string): string {
-  return `${homeHref(locale)}/matches`;
+  return `${localePath(locale)}/matches`;
+}
+
+export function homeHref(locale?: string): string {
+  return matchesHref(locale);
+}
+
+export function bestSlipsHref(locale?: string): string {
+  return `${localePath(locale)}/best-slips`;
 }
 
 export function performanceHref(locale?: string): string {
-  return `${homeHref(locale)}/performance`;
+  return `${localePath(locale)}/performance`;
 }
 
 export function informationHref(page: InformationPage, locale?: string): string {
-  return `${homeHref(locale)}/${page}`;
+  return `${localePath(locale)}/${page}`;
 }

@@ -18,6 +18,19 @@ test("Back returns from nested referral pages to the immediate eligible origin",
   assert.equal(contextReturnDistance(new URL(referrals), [`${origin}/en/account?view=login`, subscription]), null);
 });
 
+test("Best Slips collection participates in contextual Back without merging Matches or dated slips", () => {
+  const best = `${origin}/en/best-slips`, matches = `${origin}/en/matches`;
+  const dated = `${best}/2026-11-05/1`;
+  assert.equal(contextReturnDistance(new URL(subscription), [best, matches]), 1);
+  assert.equal(contextReturnDistance(new URL(dated), [best, matches]), 1);
+  assert.equal(contextReturnDistance(new URL(matches), [best]), 1);
+  assert.equal(contextReturnDistance(new URL(best), [`${best}?page=2`, `${best}#filters`, matches]), 3);
+  for (const invalid of ["/en/best-slips-extra", "/en/best-slips/not-a-date/1", "/en/best-slips/2026-11-05", "/en/best-slips/2026-11-05/1/private"]) {
+    assert.equal(contextReturnDistance(new URL(subscription), [`${origin}${invalid}`, best]), null);
+  }
+  assert.equal(contextReturnDistance(new URL(best), [`${origin}/en/account?view=login`, matches]), null);
+});
+
 test("older WebViews use marked entry history for checkout steps and referral return", () => {
   const location = { href: subscription };
   const entries = [{ state: { router: "checkout" }, href: subscription }];

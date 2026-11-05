@@ -20,14 +20,14 @@ test("shared-slip authentication returns survive required steps without changing
     headers: { "Sec-Fetch-Site": "same-origin", Origin: "https://goalhint.com", "Content-Type": "application/json" }, body: JSON.stringify({ return: target }) }));
   for (const action of ["login", "register", "verify", "reset"]) {
     assert.equal((await (await send(action, path)).json()).next, path);
-    for (const target of ["/en/slips", "//evil.test", path + "?x=1"]) assert.equal((await (await send(action, target)).json()).next, "/en");
+    for (const target of ["/en/slips", "//evil.test", path + "?x=1"]) assert.equal((await (await send(action, target)).json()).next, "/en/matches");
   }
   result.requiresVerification = true;
   assert.equal((await (await send("login", path)).json()).next, "/en/account?" + new URLSearchParams({ view: "verify", return: path }));
   delete result.requiresVerification; result.requiresPasswordChange = true;
   assert.equal((await (await send("login", path)).json()).next, "/en/account?" + new URLSearchParams({ view: "new-password", return: path }));
   delete result.requiresPasswordChange; result.administrator = true;
-  assert.equal((await (await send("login", path)).json()).next, "/admin/payments");
+  assert.equal((await (await send("login", path)).json()).next, "/admin");
 });
 test("image sharing preserves activation, native payloads, cancellation and explicit fallback", async t => {
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window"), oldNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");

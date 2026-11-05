@@ -7,6 +7,7 @@ import { Stack } from "@/components/ui/layout";
 import { bestSlipsQueryRules } from "@/domain/best-slips-query";
 import { bestSlipsRules } from "@/domain/best-slips";
 import { parseReportingDate } from "@/domain/calendar";
+import { bestSlipsHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
 import { gateBestSlips, readPublicBestSlipDay } from "@/server/slips/best-slips";
@@ -27,7 +28,7 @@ export function createPublicBestSlipRoute({ read = readPublicBestSlipDay, access
     if (!view) notFound();
     return <PublicShell locale={locale} current="best-slips" app compact><Stack $gap="md">
       <BestSlipCard view={view} day={day} locale={locale} signedIn={viewer.signedIn} />
-      <TextLink href={`/${locale}`} contextBack prefetch={false}>{createMessages(locale).text("navigation.back")}</TextLink>
+      <TextLink href={bestSlipsHref(locale)} contextBack prefetch={false}>{createMessages(locale).text("navigation.back")}</TextLink>
     </Stack></PublicShell>;
   };
 }
