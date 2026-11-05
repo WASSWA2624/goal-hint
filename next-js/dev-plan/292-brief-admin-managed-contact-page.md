@@ -26,3 +26,13 @@ Run support/contact domain and HTTP tests, admin settings regression tests, sche
 - Final compact layouts were rebuilt and rechecked in all eight public/admin theme and viewport combinations. After branch integration, TypeScript, full-project lint and 102 combined contact/settings/navigation/checkout/OCR regression tests passed.
 - The full production build succeeded with database access disabled. Two existing application-download filesystem tracing warnings remain. Checks against that built server passed all four Contact URL/query variants and the Privacy, Terms and Help backlinks.
 - Production deployment and application of the contact-page database migration remain separate release steps.
+
+## Follow-up verification — 5 November 2026
+
+The approved follow-up found the requested implementation already on `main`; no duplicate contact UI or settings logic was needed.
+
+- Re-ran the contact-page settings, contact HTTP, support contacts, desktop settings and demo settings suites: 23 passed, none failed or skipped.
+- TypeScript and full-project ESLint passed. The isolated production contact/admin fixture built and passed server-rendered hidden-contact exclusion and uncached public API checks.
+- Rechecked eight phone/desktop layouts across both themes, with no horizontal overflow or browser runtime errors. Admin saves updated the open Contact tab; page visibility hid the selected contact; an external change appeared after 7.175 seconds without navigation. Temporary read failure preserved the confirmed contacts, and hiding all contacts showed the empty state.
+- Local database verification passed. The existing development web process initially returned HTTP 503 for contacts despite readable migrated settings. A supported web-worker restart restored HTTP 200 with uncached public settings. Configuration bytes, the original demo launcher and MySQL process identities, and saved settings were preserved; this follow-up ran no migrations or data resets.
+- Documented the admin save workflow and the need to verify HTTP 200 from `/api/contact` separately from the HTML fallback checks. This verification does not establish hosted production deployment.
