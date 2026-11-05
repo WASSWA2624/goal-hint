@@ -16,6 +16,10 @@ GRANT DELETE ON `goal_hint_db`.`PaymentSubmission` TO 'goal_hint_app'@'applicati
 GRANT DELETE ON `goal_hint_db`.`AccessCode` TO 'goal_hint_app'@'application-host';
 GRANT DELETE ON `goal_hint_db`.`OwnerAuditEvent` TO 'goal_hint_app'@'application-host';
 
+-- Admin-confirmed plan deletion is limited to unused plans; foreign keys continue to RESTRICT all references.
+-- Apply before deploying Delete plan. No schema migration or additional history-table privileges are required.
+GRANT DELETE ON `goal_hint_db`.`SubscriptionPlan` TO 'goal_hint_app'@'application-host';
+
 -- Account credit: WalletEntry is an append-only ledger. Review after deploying 20261024210000_account_credit.
 -- No UPDATE or DELETE: its triggers refuse both, and permanent account deletion removes rows by foreign-key cascade.
 -- The new MemberAccount and PaymentSubmission columns are covered by existing table-scoped grants.

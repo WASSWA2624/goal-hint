@@ -11,6 +11,7 @@ export function auditEventLink(row: OwnerAuditRow): AuditEventLink | null {
   }
   if (row.targetType === "settings") return { href: "/admin/settings", label: "Open settings" };
   if (row.targetType === "plan") {
+    if (row.action === "plan_deleted") return { href: "/admin/plans", label: "View plans" };
     if (recordId.test(row.targetId)) return { href: `/admin/plans?planId=${encodeURIComponent(row.targetId)}`, label: "View plan" };
     return row.action === "plans_reordered" ? { href: "/admin/plans", label: "View plans" } : null;
   }

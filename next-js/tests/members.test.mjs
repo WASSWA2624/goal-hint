@@ -349,7 +349,7 @@ test("plans take a name of at most 40 characters, 1-366 days and UGX 100-10,000,
   assert.deepEqual([formatUgx(1000), formatUgx(10_000_000), formatPlanLength(1), formatPlanLength(30)], ["UGX 1,000", "UGX 10,000,000", "24 hours", "30 days"]);
 });
 
-test("plans and settings are never deleted; only permanent subscriber deletion removes related audit rows", async () => {
+test("settings are retained and permanent deletion stays inside its reviewed services", async () => {
   const root = fileURLToPath(new URL("../src/", import.meta.url));
   const files = [];
   const walk = async (directory) => {
@@ -363,9 +363,14 @@ test("plans and settings are never deleted; only permanent subscriber deletion r
   assert.ok(files.length > 100, `scanned ${files.length} files`);
   for (const file of files) {
     const text = await readFile(file, "utf8");
-    assert.doesNotMatch(text, /\b(subscriptionPlan|subscriptionSettings)\.delete(Many)?\(/u, file);
-    assert.doesNotMatch(text, /DELETE\s+FROM\s+`?(SubscriptionPlan|SubscriptionSettings)\b/iu, file);
-    if (path.relative(root, file).replaceAll(path.sep, "/") !== "server/admin/delete-subscriber.ts") {
+    const relative = path.relative(root, file).replaceAll(path.sep, "/");
+    assert.doesNotMatch(text, /\bsubscriptionSettings\.delete(Many)?\(/u, file);
+    assert.doesNotMatch(text, /DELETE\s+FROM\s+`?SubscriptionSettings\b/iu, file);
+    if (!["server/members/plans.ts", "server/demo/subscription-reset.ts"].includes(relative)) {
+      assert.doesNotMatch(text, /\bsubscriptionPlan\.delete(Many)?\(/u, file);
+      assert.doesNotMatch(text, /DELETE\s+FROM\s+`?SubscriptionPlan\b/iu, file);
+    }
+    if (relative !== "server/admin/delete-subscriber.ts") {
       assert.doesNotMatch(text, /\bownerAuditEvent\.delete(Many)?\(/u, file);
       assert.doesNotMatch(text, /DELETE\s+FROM\s+`?OwnerAuditEvent\b/iu, file);
     }

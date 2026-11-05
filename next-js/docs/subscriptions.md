@@ -45,6 +45,14 @@ Payment references display as `P1234` without a separator. Transaction IDs are n
 
 The user can call the administrator if approval is delayed. Optional support-chat links are user-initiated only; no WhatsApp message or SMS activates the account.
 
+## Plan deletion
+
+Admin → Plans → Delete checks the plan's linked payment records, access codes and automatic-renewal selections before presenting permanent deletion. An explicit confirmation is required. Plans with any references must be deactivated instead; historical snapshots, member access and payment records are retained. When paid access is on or in test mode, the last active plan cannot be deleted. The server checks these requirements again inside the deletion transaction and records `plan_deleted` in the audit trail.
+
+Deploy the additional `SubscriptionPlan` DELETE grant from `docs/deployment/manual-account-grants.sql` before enabling this flow with restricted application credentials. No schema migration is required.
+
+Development demo startup keeps the synthetic login identity and football/analytics examples without creating subscription offers, payment examples, paid access or wallet credit. Existing demo financial records require the scoped cleanup command; changing the seed does not remove stored records. The cleanup retains user accounts and unrelated trials, preserves standard package settings, and corrects known synthetic wallet credits through append-only ledger adjustments. It refuses ambiguous or non-demo financial dependencies. Back up the owned development database before applying it; this command is not a general production reset.
+
 ## Environment configuration
 
 Set the enabled status, receiving number, registered name and optional tested dial code for each wallet in Admin Settings under Payments. Changes use the protected admin save and audit. The checkout rechecks the stored settings when quoting and confirming a purchase. A wallet requires an enabled status, valid mobile number and registered name. Its checkout displays the confirmed transfer amount and payee details. Manual transfers use no provider API credentials.

@@ -16,6 +16,7 @@
     "demo:prepare": "python scripts/development.py --prepare-only",
     "demo:prepare:full": "python scripts/development.py --prepare-only --full",
     "demo:export": "node --conditions=react-server scripts/export-demo.mjs",
+    "demo:reset-subscriptions": "node --conditions=react-server scripts/reset-demo-subscriptions.mjs",
     "test:demo": "node --conditions=react-server --test tests/demo-*.test.mjs",
     "test:demo:integration": "python scripts/development.py --verify-only",
     "build": "next build && node scripts/build-offline-manifest.mjs",

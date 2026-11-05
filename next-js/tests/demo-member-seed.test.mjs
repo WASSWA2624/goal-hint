@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { hashCode } from "../src/server/members/access-codes.ts";
 import { seedDemoMember } from "../src/server/demo/member-seed.ts";
 import { demoMember } from "../src/server/demo/member.ts";
+import { memberSessionRules } from "../src/server/members/member-sessions.ts";
 
 const dayMs = 86_400_000, firstNow = Date.parse("2026-10-28T18:00:00Z");
 const tokenHash = createHash("sha256").update(demoMember.token).digest("hex");
@@ -22,9 +22,6 @@ function seedDatabase(t) {
     return { rows,
       async findUnique({ where }) { return structuredClone(rows.get(where[key]) ?? null); },
       async create({ data }) { assert.equal(rows.has(data[key]), false); rows.set(data[key], structuredClone(data)); return structuredClone(data); },
-      async update({ where, data }) {
-        const row = rows.get(where[key]); assert.ok(row); Object.assign(row, structuredClone(data)); return structuredClone(row);
-      },
       async upsert({ where, update, create }) {
         if (!rows.has(where[key])) rows.set(where[key], structuredClone(create));
         else Object.assign(rows.get(where[key]), structuredClone(update));
@@ -32,74 +29,48 @@ function seedDatabase(t) {
       },
     };
   }
-  const account = table("id"), access = table("id"), session = table("tokenHash"), entries = [];
+  const account = table("id"), session = table("tokenHash");
   session.updateMany = async ({ where, data }) => {
     const row = session.rows.get(where.tokenHash);
     if (!row || row.expiresAt > where.expiresAt.lte) return { count: 0 };
     Object.assign(row, structuredClone(data)); return { count: 1 };
   };
-  const tx = { subscriptionSettings: table("id"), subscriptionPlan: table("id"), memberAccount: account, accessCode: access, memberSession: session,
-    walletEntry: { count: async () => entries.length, create: async ({ data }) => { entries.push(structuredClone(data)); return data; } },
-    async $queryRaw(sql) {
-      const query = sql.join(" ");
-      if (query.includes("SELECT creditUgx")) return [{ creditUgx: account.rows.get(demoMember.accountId).creditUgx }];
-      assert.match(query, /SELECT entryNumber/u);
-      return entries.length ? [{ entryNumber: entries.at(-1).entryNumber }] : [];
-    },
-  };
-  return { account, access, session, entries, database: { transaction: async (operation) => operation(tx) } };
+  const tx = { subscriptionSettings: table("id"), memberAccount: account, memberSession: session };
+  return { account, session, database: { transaction: async (operation) => operation(tx) } };
 }
 
-test("repeated demo seeds preserve active periods, sessions and wallet history", async (t) => {
+test("demo bootstrap creates a normal sign-in identity without plans, paid access or synthetic credit", async (t) => {
+  // No financial table methods are supplied: an attempt to recreate them fails.
   const state = seedDatabase(t);
   await seedDemoMember(state.database, firstNow);
-  const access = state.access.rows.get(demoMember.accessCodeId), session = state.session.rows.get(tokenHash);
-  assert.equal(access.startsAt.getTime(), firstNow - dayMs);
-  assert.equal(access.endsAt.getTime(), firstNow + 365 * dayMs);
-  assert.equal(access.codeHash, hashCode(access.codeSalt, demoMember.accessCode));
-  assert.equal(state.account.rows.get(demoMember.accountId).phone, demoMember.phone);
+  const account = state.account.rows.get(demoMember.accountId), session = state.session.rows.get(tokenHash);
+  assert.equal(account.phone, demoMember.phone);
+  assert.equal(account.creditUgx, 0);
   assert.equal(session.authenticatedAt.getTime(), firstNow - dayMs);
-  assert.equal(session.accessCodeId, access.id);
-  // A normal member action may have changed the current session since bootstrap.
+  assert.equal(session.expiresAt.getTime(), firstNow + memberSessionRules.expiryMs);
+  assert.equal(session.accessCodeId, undefined);
+  assert.equal(session.codeEnteredAt, undefined);
+});
+
+test("repeated demo seeds preserve owner-edited account and active session state", async (t) => {
+  const state = seedDatabase(t);
+  await seedDemoMember(state.database, firstNow);
+  const account = state.account.rows.get(demoMember.accountId), session = state.session.rows.get(tokenHash);
+  account.ownerNote = "Owner edit";
+  account.creditUgx = 7500;
   session.lastSeenAt = new Date(firstNow + dayMs);
-  session.codeEnteredAt = null;
-  session.accessCodeId = null;
-  const originalAccess = structuredClone(access), originalSession = structuredClone(session);
+  const originalAccount = structuredClone(account), originalSession = structuredClone(session);
   await seedDemoMember(state.database, firstNow + 2 * dayMs);
-  assert.deepEqual(state.access.rows.get(access.id), originalAccess);
+  assert.deepEqual(state.account.rows.get(account.id), originalAccount);
   assert.deepEqual(state.session.rows.get(tokenHash), originalSession);
-  assert.equal(state.entries.length, 1);
-  assert.equal(state.account.rows.get(demoMember.accountId).creditUgx, 100_000);
 });
 
-test("expired demo access and session renew from the supplied wall clock without resetting identity or unlock fields", async (t) => {
+test("an expired demo session refreshes its normal sign-in lifetime without granting access", async (t) => {
   const state = seedDatabase(t);
   await seedDemoMember(state.database, firstNow);
-  const originalAccess = structuredClone(state.access.rows.get(demoMember.accessCodeId));
-  const originalSession = structuredClone(state.session.rows.get(tokenHash));
-  const renewedAt = originalAccess.endsAt.getTime();
-  await seedDemoMember(state.database, renewedAt);
-  const access = state.access.rows.get(demoMember.accessCodeId), session = state.session.rows.get(tokenHash);
-  assert.equal(access.startsAt.getTime(), renewedAt - dayMs);
-  assert.equal(access.endsAt.getTime(), renewedAt + 365 * dayMs);
-  assert.deepEqual(access.createdAt, originalAccess.createdAt);
-  assert.deepEqual(access.activatedAt, originalAccess.activatedAt);
-  assert.deepEqual(session, { ...originalSession, expiresAt: access.endsAt });
-  assert.equal(state.entries.length, 1);
-});
-
-test("an expired session extends to existing active access without moving the access period", async (t) => {
-  const state = seedDatabase(t);
-  await seedDemoMember(state.database, firstNow);
-  const originalAccess = structuredClone(state.access.rows.get(demoMember.accessCodeId));
-  const session = state.session.rows.get(tokenHash);
-  session.expiresAt = new Date(firstNow + dayMs);
-  session.codeEnteredAt = null;
-  session.accessCodeId = null;
-  const originalSession = structuredClone(session);
-  await seedDemoMember(state.database, firstNow + 2 * dayMs);
-  assert.deepEqual(state.access.rows.get(demoMember.accessCodeId), originalAccess);
-  assert.deepEqual(state.session.rows.get(tokenHash), { ...originalSession, expiresAt: originalAccess.endsAt });
+  const originalSession = structuredClone(state.session.rows.get(tokenHash)), nowMs = originalSession.expiresAt.getTime();
+  await seedDemoMember(state.database, nowMs);
+  assert.deepEqual(state.session.rows.get(tokenHash), { ...originalSession, expiresAt: new Date(nowMs + memberSessionRules.expiryMs) });
 });
 
 test("repeated catalog seeds respect a demo session deleted by sign-out", async (t) => {
@@ -108,13 +79,11 @@ test("repeated catalog seeds respect a demo session deleted by sign-out", async 
   state.session.rows.delete(tokenHash);
   await seedDemoMember(state.database, firstNow + dayMs);
   assert.equal(state.session.rows.has(tokenHash), false);
-  assert.equal(state.entries.length, 1);
 });
 
 test("the default demo member clock uses Date.now", async (t) => {
   const state = seedDatabase(t), nowMs = firstNow + 400 * dayMs;
   t.mock.method(Date, "now", () => nowMs);
   await seedDemoMember(state.database);
-  assert.equal(state.access.rows.get(demoMember.accessCodeId).endsAt.getTime(), nowMs + 365 * dayMs);
-  assert.equal(state.session.rows.get(tokenHash).expiresAt.getTime(), nowMs + 365 * dayMs);
+  assert.equal(state.session.rows.get(tokenHash).expiresAt.getTime(), nowMs + memberSessionRules.expiryMs);
 });

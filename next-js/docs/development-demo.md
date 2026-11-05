@@ -118,9 +118,10 @@ date materialization uses the same 20-match selection.
 Stored form and head-to-head lists can be shorter because the retained canonical
 schedule is a sample, while provider aggregates describe the larger fictional history.
 
-The demo enables synthetic public odds and local member access. The seeded
-member is **+256700000001**, password **DemoGoalHint2026!**, with synthetic access
-and wallet credit. Normal account/session and entitlement checks still apply.
+The demo enables synthetic public odds and a local sign-in identity. The seeded
+member is **+256700000001**, password **DemoGoalHint2026!**. Startup does not grant
+paid access, create subscription offers or add wallet credit. Normal account/session
+and entitlement checks still apply; administrators manage access through the normal tools.
 An explicit sign-out is respected. Set `GOAL_HINT_DEMO_MEMBER=false` before
 starting to exercise the signed-out experience. Synthetic editorial slips and
 saved examples retain their original forecast references and ordinary result
@@ -139,16 +140,32 @@ development environment-file precedence and process overrides. A configured hash
 keeps precedence over a plain password. No public demo administrator credential
 is installed. A valid configured administrator is provisioned in the isolated
 demo database through normal login; the original database is not connected.
-The demo includes 48 additional members with active, expired, blocked and reset
-states, multiple plans, pending/approved/rejected/superseded/reversed payments,
-access periods, wallet ledgers and owner audit entries. Analytics includes 61
+Startup does not create synthetic subscriber or financial examples. Analytics includes 61
 days of diverse synthetic visits, devices, locations, sources and conversions.
 These application records are separate from the unchanged provider payloads.
-They are inserted once; restarts preserve your review decisions and edits.
+Restarts preserve your existing account records, package settings and edits.
 Forecast-source diagnostics label their synthetic comparison replays and preserve
 the original forecast bodies and recorded source order.
 
 ## Inspect, export and verify
+
+Legacy demo subscription cleanup is separate from startup. The scoped
+`scripts/reset-demo-subscriptions.mjs` command defaults to a dry run and requires
+development demo mode, a verified loopback demo database and exactly six retained
+active packages (1, 7, 30, 90, 180 and 365 days). Apply only after backing up the
+owned database and reviewing the report. It deletes the five known demo offers
+and verified synthetic payment/access records, retains accounts and unrelated trials,
+and removes known synthetic spendable credit using compensating ledger entries.
+Original wallet/audit history remains intact. Unrecognized payment dependencies,
+transferred or already-spent synthetic funds block the reset for review. Deploying
+the source alone does not clean an existing database or change production data.
+
+Use the launcher's sanitized development environment with `DATABASE_URL` pointing
+to the verified owned demo listener; do not load a private application environment file.
+Preview with `node --conditions=react-server scripts/reset-demo-subscriptions.mjs --dry-run --expected-datadir <owned-mysql-directory>`.
+After backup and review, replace `--dry-run` with `--apply`. Applying requires the
+explicit directory and compares its resolved path to MySQL's `@@datadir` before
+modifying any records. Stop old seed writers or load the updated source first.
 
 While the demo server runs, inspect provider-shaped JSON directly:
 

@@ -12,14 +12,12 @@ import { getAnalyticsServices, verifyAdminSession } from "../src/server/analytic
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { fixtureAdminPhone, fixtureAdminPassword, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
 
-test("isolated demo populates protected owner screens through normal services and administrator authentication", {
+test("isolated demo keeps owner screens and analytics available without fabricating subscription records", {
   skip: process.env.DEMO_DATABASE_INTEGRATION !== "1", timeout: 240_000,
 }, async (t) => {
   t.after(installAdminFixtureEnvironment());
   const database = getDatabase(), nowMs = Date.now();
   t.after(disconnectDatabase);
-  await seedDemoMember(database, nowMs);
-  await seedDemoWorkspace(database, nowMs);
   const ids = Array.from({ length: 48 }, (_, index) => demoId("workspace-member", index));
   const today = getReportingDate(utcInstantFromEpochMilliseconds(nowMs));
   const visits = Array.from({ length: 61 }, (_, day) => Array.from({ length: 36 }, (_, visit) =>
@@ -27,23 +25,29 @@ test("isolated demo populates protected owner screens through normal services an
   async function counts() {
     return database.query(async (tx) => ({
       members: await tx.memberAccount.count({ where: { id: { in: ids } } }),
-      payments: await tx.paymentSubmission.count({ where: { accountId: { in: ids } } }),
-      wallet: await tx.walletEntry.count({ where: { accountId: { in: ids } } }),
+      plans: await tx.subscriptionPlan.findMany({ orderBy: { id: "asc" } }),
+      payments: await tx.paymentSubmission.count(),
+      access: await tx.accessCode.count(),
+      wallet: await tx.walletEntry.count(),
       visits: await tx.analyticsSession.count({ where: { id: { in: visits } } }),
       events: await tx.analyticsEvent.count({ where: { sessionId: { in: visits } } }),
     }));
   }
   const before = await counts();
-  assert.equal(before.members, 48); assert.ok(before.payments >= 48); assert.ok(before.wallet >= 48);
-  assert.ok(before.visits >= 2196); assert.ok(before.events > 4392);
+  await seedDemoMember(database, nowMs);
   await seedDemoWorkspace(database, nowMs);
-  assert.deepEqual(await counts(), before, "restarting does not duplicate visits or financial records");
+  const seeded = await counts();
+  for (const key of ["members", "plans", "payments", "access", "wallet"]) {
+    assert.deepEqual(seeded[key], before[key], `demo preparation preserves ${key} without adding financial examples`);
+  }
+  assert.ok(seeded.visits >= 2196); assert.ok(seeded.events > 4392);
+  await seedDemoMember(database, nowMs);
+  await seedDemoWorkspace(database, nowMs);
+  assert.deepEqual(await counts(), seeded, "restarting does not duplicate visits or financial records");
   const subscribers = createSubscribers(database), overview = await subscribers.overview();
-  assert.ok(overview.pending > 0); assert.ok(overview.active > 0); assert.ok(overview.monthRevenue > 0);
-  const detail = await subscribers.detail(ids[1]);
-  assert.ok(detail?.wallet.length); assert.ok(detail?.submissions.length); assert.ok(detail?.codes.length);
+  assert.ok(overview.pending >= 0); assert.ok(overview.active >= 0); assert.ok(overview.monthRevenue >= 0);
   const review = createPaymentReview(database);
-  for (const tab of ["pending", "approved", "rejected", "superseded"]) assert.ok((await review.list(tab)).payments.length > 0);
+  for (const tab of ["pending", "approved", "rejected", "superseded"]) assert.ok(Array.isArray((await review.list(tab)).payments));
   const report = await createAnalyticsReporter(database).report({ from: addReportingDays(today, -29), to: today, compare: "previous", filters: {} });
   assert.ok(report.summary.visits > 0); assert.ok(report.summary.conversions > 0);
   assert.ok(report.previous?.visits > 0); assert.ok(report.breakdowns.conversions.length > 0);
@@ -54,5 +58,5 @@ test("isolated demo populates protected owner screens through normal services an
   const login = await auth.login(fixtureAdminPhone, fixtureAdminPassword, "demo-workspace-integration");
   assert.equal(login.status, "authenticated"); assert.equal(login.administrator, true);
   assert.ok(await verifyAdminSession(services, login.token));
-  t.diagnostic("Owner overview, all payment tabs, subscriber history, reset queue, analytics and normal admin login passed.");
+  t.diagnostic("Owner overview, payment tabs, analytics and normal admin login passed without creating financial examples.");
 });

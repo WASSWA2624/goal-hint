@@ -24,9 +24,9 @@ export const fixturePaymentPlans = [fixturePlan,
 type FixturePlan = typeof fixturePlan;
 export type FixtureAccount = { id: string; phone: string | null; blockedAt: Date | null; blockedReason: string | null;
   ownerNote: string | null; erasedAt: Date | null; lastSignInAt: Date; trialRequestedAt: Date | null;
-  trialDismissedAt: Date | null };
+  trialDismissedAt: Date | null; autoRenewPlanId?: string | null };
 export type FixtureCode = { id: string; accountId: string; reference: string; planName: string; durationDays: number;
-  extensionDays: number; startsAt: Date; endsAt: Date; revokedAt: Date | null; source: string; createdAt: Date; paymentSubmissionId?: string };
+  extensionDays: number; startsAt: Date; endsAt: Date; revokedAt: Date | null; source: string; createdAt: Date; paymentSubmissionId?: string; planId?: string | null };
 type FixtureDevice = { accountId: string; createdAt: Date; lastSeenAt: Date; expiresAt: Date; unlocked: boolean };
 type FixtureReceiptClaim = { amountUgx: number; payerPhone: string; paidAt: Date; original: null;
   receipt: { amountUgx: number | null; senderPhone: string | null; receivedAt: Date | null; verifiedAt: Date | null; allocatedSubmissionId: string | null } };
@@ -77,7 +77,7 @@ function initialState(): FixtureState {
     trialRequestedAt: null, trialDismissedAt: null };
   const other = { ...primary, ownerNote: null };
   const codes: FixtureCode[] = [{ id: "00000000-0000-4000-8000-000000000300", accountId, reference: "CODE",
-    planName: "Weekly", durationDays: 7, extensionDays: 0, startsAt: at, endsAt: end, revokedAt: null, source: "payment", createdAt: at }];
+    planId, planName: "Weekly", durationDays: 7, extensionDays: 0, startsAt: at, endsAt: end, revokedAt: null, source: "payment", createdAt: at }];
   return structuredClone({ accounts: [primary,
     { ...other, id: "00000000-0000-4000-8000-000000000102", phone: "256700000118", lastSignInAt: new Date("2026-10-23T07:15:00Z") },
     { ...other, id: "00000000-0000-4000-8000-000000000103", phone: "256700000204", lastSignInAt: new Date("2026-10-22T18:32:00Z"), blockedAt: new Date("2026-10-22T19:00:00Z"), blockedReason: "Synthetic account review" },
@@ -210,10 +210,10 @@ export function fixtureSnapshot() {
     audits: state.audits.map(row => ({ accountId: row.accountId, action: row.action })), plans: state.plans.map(plan => plan.id) };
 }
 
-type AccountQuery = { where?: { phone?: string | { in?: string[] } } };
-type OwnedQuery = { where?: { accountId?: string; codeEnteredAt?: unknown } };
+type AccountQuery = { where?: { phone?: string | { in?: string[] }; autoRenewPlanId?: string } };
+type OwnedQuery = { where?: { accountId?: string; codeEnteredAt?: unknown; planId?: string } };
 type TextFilter = string | null | { in?: string[]; notIn?: string[]; contains?: string; not?: null; lt?: string; gt?: string };
-type PaymentWhere = { id?: TextFilter; submittedAt?: Date | { lt?: Date; gt?: Date }; accountId?: string; status?: TextFilter; reference?: TextFilter; payerPhone?: TextFilter;
+type PaymentWhere = { id?: TextFilter; planId?: string; submittedAt?: Date | { lt?: Date; gt?: Date }; accountId?: string; status?: TextFilter; reference?: TextFilter; payerPhone?: TextFilter;
   claimedTxnKey?: TextFilter; approvedTxnKey?: TextFilter; imageSha256?: TextFilter; network?: TextFilter; claimedNetwork?: TextFilter;
   transactionRef?: TextFilter; receiptClaims?: { some: { receipt?: { verifiedAt: { not: null }; allocatedSubmissionId: null } } };
   OR?: PaymentWhere[]; AND?: PaymentWhere[] };
@@ -228,6 +228,7 @@ function matchesText(value: string | null | undefined, filter: TextFilter | unde
 }
 function paymentRows(rows: FixturePayment[], query: PaymentQuery = {}) {
   const matches = (row: FixturePayment, where: PaymentWhere): boolean => (!where.accountId || row.accountId === where.accountId)
+    && (!where.planId || row.planId === where.planId)
     && (!where.submittedAt || (where.submittedAt instanceof Date ? +row.submittedAt === +where.submittedAt
       : (!where.submittedAt.lt || row.submittedAt < where.submittedAt.lt) && (!where.submittedAt.gt || row.submittedAt > where.submittedAt.gt)))
     && (["id", "status", "reference", "payerPhone", "claimedTxnKey", "approvedTxnKey", "imageSha256", "network", "claimedNetwork", "transactionRef"] as const)
@@ -290,11 +291,16 @@ function createClient(emptySubscribers: boolean) {
           account: { phone: fixtureAdminPhone, passwordHash: null, phoneVerifiedAt: now, blockedAt: null, erasedAt: null } };
       }, updateMany: async () => ({ count: 0 }) },
     subscriptionPlan: { findMany: async (query?: PlanQuery) => planRows(state.plans, query),
+      findUnique: async ({ where }: { where: { id: string } }) => state.plans.find(plan => plan.id === where.id) ?? null,
       findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
         const row = state.plans.find(plan => plan.id === where.id);if (!row) throw new Error("Synthetic plan not found.");return row;
       }, count: async (query?: PlanQuery) => planRows(state.plans, query).length,
       aggregate: async () => ({ _max: { sortOrder: state.plans.length ? Math.max(...state.plans.map(plan => plan.sortOrder)) : null } }),
       create: async ({ data }: { data: FixturePlan }) => { state.plans.push(data);return data; },
+      delete: async ({ where }: { where: { id: string } }) => {
+        const index = state.plans.findIndex(plan => plan.id === where.id);if (index < 0) throw new Error("Synthetic plan not found.");
+        return state.plans.splice(index, 1)[0]!;
+      },
       update: async ({ where, data }: { where: { id: string }; data: Partial<FixturePlan> }) => {
         const index = state.plans.findIndex(plan => plan.id === where.id);if (index < 0) throw new Error("Synthetic plan not found.");
         const row = { ...state.plans[index]!, ...data };state.plans[index] = row;return row;
@@ -315,6 +321,7 @@ function createClient(emptySubscribers: boolean) {
     memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = state.accounts.find(item => item.id === query.where.id);
       return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },
       aggregate: async () => ({ _sum: { creditUgx: null } }),
+      count: async (query: AccountQuery = {}) => state.accounts.filter(row => !query.where?.autoRenewPlanId || row.autoRenewPlanId === query.where.autoRenewPlanId).length,
       findMany: async (query: AccountQuery | SubscriberDirectoryFixtureQuery = {}) => {
         if ("select" in query && query.select?.codes) return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
         const where = query.where as AccountQuery["where"];
@@ -334,7 +341,8 @@ function createClient(emptySubscribers: boolean) {
     paymentNotificationOutbox: { findMany: async () => (state.notices ?? []).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
       count: async () => state.notices?.length ?? 0 },
     accessCode: { findMany: async (query?: OwnedQuery) => ownedRows(state.codes, query).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
-      aggregate: async () => ({ _sum: { amountReceivedUgx: 3000 } }), count: async () => state.codes.length },
+      aggregate: async () => ({ _sum: { amountReceivedUgx: 3000 } }),
+      count: async (query?: OwnedQuery) => ownedRows(state.codes, query).filter(row => !query?.where?.planId || row.planId === query.where.planId).length },
     subscriptionSettings: { findUnique: async () => settings, findUniqueOrThrow: async () => settings },
   };
 }
